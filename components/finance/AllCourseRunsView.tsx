@@ -521,7 +521,6 @@ const AllCourseRunsView: React.FC = () => {
           .map((r) => `${r.enrolmentId}: ${r.reason || 'skipped'}`)
           .join(' · ');
         setSyncToast(detail || 'No invoice jobs were queued for the selected enrolments.');
-        setSelectedEnrolmentIds([]);
         await fetchData();
         return;
       }
@@ -540,7 +539,6 @@ const AllCourseRunsView: React.FC = () => {
       setFmsInvProgressSucceeded(done);
       setFmsInvProgressFailed(totalFailed);
       setFmsInvProgressDone(true);
-      setSelectedEnrolmentIds([]);
       await fetchData();
 
       const detail =
@@ -594,7 +592,6 @@ const AllCourseRunsView: React.FC = () => {
         : '';
       setSyncToast(`QB emails sent: ${sent}.${failed ? ` ${failed} failed.` : ''}${detail ? ` ${detail}` : ''}`);
 
-      setSelectedEnrolmentIds([]);
       await fetchData();
     } catch (e) {
       setFmsSendFailed(selectedEnrolmentIds.length);
@@ -864,9 +861,21 @@ const AllCourseRunsView: React.FC = () => {
                 const enrId = r.enrolment_id?.trim() || null;
                 const isSelected = enrId ? selectedEnrolmentIds.includes(enrId) : false;
                 const isSent = !!(r.invoice_sent_at && String(r.invoice_sent_at).trim());
-                const rowTint = isSent ? 'bg-emerald-50/60 dark:bg-emerald-950/25' : '';
+                const rowTint = isSent
+                  ? 'bg-emerald-50/60 dark:bg-emerald-950/25'
+                  : isSelected
+                    ? 'bg-amber-50/90 dark:bg-amber-950/35'
+                    : '';
+                const hoverTint = isSent
+                  ? 'hover:bg-emerald-50/70 dark:hover:bg-emerald-950/30'
+                  : isSelected
+                    ? 'hover:bg-amber-100/80 dark:hover:bg-amber-950/45'
+                    : 'hover:bg-surface-hover';
                 return (
-                  <tr key={enrolmentKey} className={`border-b border-default hover:bg-surface-hover transition-colors ${rowTint}`}>
+                  <tr
+                    key={enrolmentKey}
+                    className={`border-b border-default transition-colors ${hoverTint} ${rowTint}`}
+                  >
                     <td className={`${cell} text-center align-middle`}>
                       <input
                         type="checkbox"

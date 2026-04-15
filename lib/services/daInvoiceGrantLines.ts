@@ -24,9 +24,9 @@ export async function loadSplitGrantDeductionsFromDb(
     pool.query(
       `SELECT grant_id,
              (CASE
-               WHEN COALESCE(NULLIF(approved_grant_amount, ''), '0')::float > 0
-                 THEN COALESCE(NULLIF(approved_grant_amount, ''), '0')::float
-               ELSE COALESCE(NULLIF(estimated_grant_amount, ''), '0')::float
+               WHEN COALESCE(NULLIF(TRIM(COALESCE(approved_grant_amount::text, '')), ''), '0')::float > 0
+                 THEN COALESCE(NULLIF(TRIM(COALESCE(approved_grant_amount::text, '')), ''), '0')::float
+               ELSE COALESCE(NULLIF(TRIM(COALESCE(estimated_grant_amount::text, '')), ''), '0')::float
              END) AS amt,
               funding_scheme_description
        FROM ssg_grants
@@ -39,9 +39,9 @@ export async function loadSplitGrantDeductionsFromDb(
     pool.query(
       `SELECT grant_id,
              (CASE
-               WHEN COALESCE(NULLIF(approved_grant_amount, ''), '0')::float > 0
-                 THEN COALESCE(NULLIF(approved_grant_amount, ''), '0')::float
-               ELSE COALESCE(NULLIF(estimated_grant_amount, ''), '0')::float
+               WHEN COALESCE(NULLIF(TRIM(COALESCE(approved_grant_amount::text, '')), ''), '0')::float > 0
+                 THEN COALESCE(NULLIF(TRIM(COALESCE(approved_grant_amount::text, '')), ''), '0')::float
+               ELSE COALESCE(NULLIF(TRIM(COALESCE(estimated_grant_amount::text, '')), ''), '0')::float
              END) AS amt,
               funding_scheme_description,
               funding_scheme_code
