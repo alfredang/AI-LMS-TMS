@@ -40,17 +40,8 @@ import { Card } from '../components/ui/Card';
 const TrainingProviderLayout: React.FC = () => {
   const { currentView, selectedCourse, adminPage, setAdminPage } = useLms();
   const appVersion = useAppVersion();
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
-
-  const handleToggleSidebar = () => {
-    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
-      setIsDesktopSidebarCollapsed(prev => !prev);
-    } else {
-      setIsMobileSidebarOpen(true);
-    }
-  };
 
   const renderContent = () => {
     // If a course is selected, show course detail
@@ -169,54 +160,32 @@ const TrainingProviderLayout: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
 
-      {/* Mobile header and sidebar toggle */}
-      <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
-        <button onClick={handleToggleSidebar} className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-          <Icon name={IconName.Menu} className="w-6 h-6" />
-        </button>
-        <h2 className="text-lg font-bold truncate">{getPageTitle()}</h2>
-      </div>
-
-      {/* Mobile Sidebar Overlay */}
-      {isMobileSidebarOpen && (
-        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/50"
-            aria-hidden="true"
-            onClick={() => setIsMobileSidebarOpen(false)}
-          />
-          {/* Sidebar Panel */}
-          <div className="relative flex flex-col w-72 max-w-[calc(100%-3rem)] h-full bg-surface shadow-xl">
-            <div className="p-4 flex justify-between items-center border-b dark:border-gray-700">
-              <h3 className="font-bold">Menu</h3>
-              <button
-                onClick={() => setIsMobileSidebarOpen(false)}
-                className="p-2 -mr-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-              >
-                <Icon name={IconName.Close} className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <TrainingProviderSidebar onNavigate={() => setIsMobileSidebarOpen(false)} onSelectWorkflow={setSelectedWorkflowId} />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Layout Container */}
       <div className="flex flex-1">
-        {/* Desktop Sidebar - collapsible */}
-        {!isDesktopSidebarCollapsed && (
-          <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
-            <div className="w-full flex flex-col h-full">
-              <div className="flex-1"><TrainingProviderSidebar onSelectWorkflow={setSelectedWorkflowId} /></div>
+        {/* Sidebar: collapsible */}
+        <div className="flex flex-shrink-0">
+          <aside className={`${isSidebarOpen ? 'w-64' : 'w-14'} bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px] transition-all duration-200`}>
+            {/* Toggle arrow at top */}
+            <div className={`flex ${isSidebarOpen ? 'justify-end' : 'justify-center'} px-2 py-2 border-b border-gray-200 dark:border-gray-700`}>
+              <button
+                onClick={() => setIsSidebarOpen(prev => !prev)}
+                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              >
+                <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
+            <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+              {isSidebarOpen && <TrainingProviderSidebar onSelectWorkflow={setSelectedWorkflowId} />}
+            </div>
+            {isSidebarOpen && <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>}
           </aside>
-        )}
+        </div>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-x-hidden">
+        <main className="flex-1 min-w-0 overflow-x-hidden">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {renderContent()}
           </div>

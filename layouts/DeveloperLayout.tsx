@@ -16,7 +16,7 @@ import { useAppVersion } from '@hooks/useAppVersion';
 const DeveloperLayout: React.FC = () => {
   const { currentView, selectedCourse, editingCourse, developerPage } = useLms();
   const appVersion = useAppVersion();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Handle full-width views (Profile and Help & Support)
   if (currentView === View.Profile || currentView === View.HelpAndSupport) {
@@ -38,7 +38,7 @@ const DeveloperLayout: React.FC = () => {
     if (selectedCourse) {
       return <CourseDetail />;
     }
-    if (currentView === View.Create) {
+    if (currentView === View.Create || developerPage === DeveloperPage.SeoMetadata) {
       return <SeoGeneratorView />;
     }
     if (
@@ -68,29 +68,26 @@ const DeveloperLayout: React.FC = () => {
 
       {/* Main Layout Container */}
       <div className="flex flex-1">
-        {/* Sidebar area: rail is always visible, panel slides in/out */}
+        {/* Sidebar area */}
         <div className="flex flex-shrink-0">
-          {/* Expanded sidebar panel */}
-          {isSidebarOpen && (
-            <aside className="w-64 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px]">
-              <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-                <DeveloperSidebar />
-              </div>
-              <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>
-            </aside>
-          )}
-          {/* Thin rail with toggle arrow always visible */}
-          <div className="w-8 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 h-[calc(100vh-64px)] sticky top-[64px] relative">
-            <button
-              onClick={() => setIsSidebarOpen(prev => !prev)}
-              className="fixed top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-              title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            >
-              <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+          <aside className={`${isSidebarOpen ? 'w-64' : 'w-14'} bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px] transition-all duration-200`}>
+            {/* Toggle arrow at top */}
+            <div className={`flex ${isSidebarOpen ? 'justify-end' : 'justify-center'} px-2 py-2 border-b border-gray-200 dark:border-gray-700`}>
+              <button
+                onClick={() => setIsSidebarOpen(prev => !prev)}
+                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              >
+                <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+              <DeveloperSidebar collapsed={!isSidebarOpen} />
+            </div>
+            {isSidebarOpen && <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>}
+          </aside>
         </div>
 
         {/* Main Content Area */}

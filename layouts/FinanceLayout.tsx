@@ -91,8 +91,7 @@ const FinanceLayout: React.FC = () => {
   const appVersion = useAppVersion();
   const page = ctxFinancePage as FinancePage;
   const setPage = (p: FinancePage) => ctxSetFinancePage(p);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     courseRunAutomations: true,
@@ -133,17 +132,8 @@ const FinanceLayout: React.FC = () => {
     }
   }, [page]);
 
-  const handleToggleSidebar = () => {
-    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
-      setIsDesktopSidebarCollapsed(prev => !prev);
-    } else {
-      setIsMobileSidebarOpen(true);
-    }
-  };
-
   const navigateTo = (p: FinancePage) => {
     setPage(p);
-    setIsMobileSidebarOpen(false);
   };
 
   const renderContent = () => {
@@ -554,81 +544,6 @@ const FinanceLayout: React.FC = () => {
     }
   };
 
-  const getPageTitle = () => {
-    switch (page) {
-      case 'allCourseRuns': return 'Consolidated Finance Data';
-      case 'autoProcessEnrolments': return 'Process Enrolments';
-      case 'autoManualEnrolment': return 'Manual Enrolment';
-      case 'autoCreateEnrolmentsErrorStatus': return 'Create Enrolments For Error Status';
-      case 'autoCreateEmployerEnrolment': return 'Create Employer Enrolment';
-      case 'autoAppendCancelledClassTrainees': return 'Append Cancelled Class Trainees';
-      case 'autoUpdateAssessment': return 'Update Assessment';
-      case 'autoProcessGrants': return 'Process Grants';
-      case 'autoUpdateGrantStatusTotal': return 'Update Grant Status & Total Grant';
-      case 'autoGrantQuery': return 'For Grant Query';
-      case 'autoDirectApplication': return 'For Direct Application';
-      case 'autoCheckDuplicatesDA': return 'Check Duplicates for DA';
-      case 'autoUpdateClaimIdAllCourseRun': return 'Update Claim ID In All Course Run';
-      case 'grantCalculator': return 'Grant Calculator';
-      case 'searchGrant': return 'Search Grant';
-      case 'viewGrant': return 'View Grant';
-      case 'claimManagement': return 'Claim Management';
-      case 'claimCheck': return 'Check / Add Claim';
-      case 'viewClaim': return 'View Claim';
-      case 'cancelClaim': return 'Cancel Claim';
-      case 'uploadDocument': return 'Upload Supporting Document';
-      case 'proformaInvoice': return 'ProForma Invoice';
-      case 'taxInvoice': return 'Tax Invoice';
-      case 'receipt': return 'Receipt';
-      case 'bizfile': return 'Bizfile — Business Profile';
-      case 'bizfileDirectorySearch': return 'Bizfile — Directory Search';
-      case 'bizfileNameSearch': return 'Bizfile — Name Search';
-      case 'bizfileVerification': return 'Bizfile — Entity Verification';
-      case 'bizfileKeyDates': return 'Bizfile — Registration Key Dates';
-      case 'bizfileAddress': return 'Bizfile — Registered Address';
-      case 'bizfileSsic': return 'Bizfile — SSIC Details';
-      case 'bizfileCapital': return 'Bizfile — Company Capital';
-      case 'bizfileShareholders': return 'Bizfile — Shareholders';
-      case 'qbCustomer': return 'QuickBooks — Customers';
-      case 'qbEstimate': return 'QuickBooks — Quotes';
-      case 'qbInvoice': return 'QuickBooks — Invoices';
-      case 'qbPayment': return 'QuickBooks — Payments';
-      case 'tpgManagement': return 'TPG Management';
-      case 'tpgCourseRun': return 'Course Run';
-      case 'tpgSession': return 'Session';
-      case 'tpgEnrolment': return 'Enrolment';
-      case 'tpgAttendance': return 'Attendance';
-      case 'tpgAssessment': return 'Assessment';
-      case 'tpgGrant': return 'Grant';
-      case 'tpgCreateClass': return 'Create New Class';
-      case 'tpgSearchCourseRuns': return 'Search Course Runs';
-      case 'tpgViewCourseRun': return 'View Course Run';
-      case 'tpgEditCourseRun': return 'Edit Course Run';
-      case 'tpgUploadCourseRuns': return 'Upload Course Runs';
-      case 'tpgDeleteCourseRun': return 'Delete Course Run';
-      case 'tpgAddSessions': return 'Add Sessions';
-      case 'tpgSessionTiming': return 'Session Timing';
-      case 'tpgCourseSessions': return 'Course Sessions';
-      case 'tpgEnrollLearners': return 'Enroll Learners';
-      case 'tpgUploadEnrolments': return 'Upload Enrolments';
-      case 'tpgSearchEnrolment': return 'Search Enrolment';
-      case 'tpgViewEnrolment': return 'View Enrolment';
-      case 'tpgUpdateEnrolment': return 'Update Enrolment';
-      case 'tpgCancelEnrolment': return 'Cancel Enrolment';
-      case 'tpgUpdateEnrolmentFees': return 'Update Enrolment Fees';
-      case 'tpgSessionAttendance': return 'Session Attendance';
-      case 'tpgCheckAttendance': return 'Check Attendance';
-      case 'tpgSubmitAssessment': return 'Submit Assessment';
-      case 'tpgUpdateAssessment': return 'Update Assessment';
-      case 'tpgSearchAssessments': return 'Search Assessments';
-      case 'tpgViewAssessment': return 'View Assessment';
-      case 'tpgSearchGrant': return 'Search Grant';
-      case 'tpgViewGrantStatus': return 'View Grant Status';
-      case 'workflowGuides': return 'Workflow Guides';
-      default: return 'Financial Dashboard';
-    }
-  };
-
   const activeClass = 'bg-blue-50 text-blue-600 border-l-3 border-blue-500 dark:bg-blue-600/20 dark:text-blue-400 dark:border-blue-500';
   const inactiveClass = 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white';
 
@@ -847,9 +762,6 @@ const FinanceLayout: React.FC = () => {
         ))}
       </NavSection>
 
-      <div className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
-        <p className="px-3 text-[10px] text-gray-400 dark:text-gray-300 font-mono">version {appVersion}</p>
-      </div>
     </nav>
   );
 
@@ -873,42 +785,31 @@ const FinanceLayout: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
 
-      {/* Mobile header and sidebar toggle */}
-      <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
-        <button onClick={handleToggleSidebar} className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-          <Icon name={IconName.Menu} className="w-6 h-6" />
-        </button>
-        <h2 className="text-lg font-bold truncate">{getPageTitle()}</h2>
-      </div>
-
-      {/* Mobile Sidebar Overlay */}
-      {isMobileSidebarOpen && (
-        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-black/50" aria-hidden="true" onClick={() => setIsMobileSidebarOpen(false)} />
-          <div className="relative flex flex-col w-72 max-w-[calc(100%-3rem)] h-full bg-surface shadow-xl">
-            <div className="p-4 flex justify-between items-center border-b dark:border-gray-700">
-              <h3 className="font-bold">Menu</h3>
-              <button onClick={() => setIsMobileSidebarOpen(false)} className="p-2 -mr-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-                <Icon name={IconName.Close} className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {sidebarContent}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Layout Container */}
       <div className="flex flex-1">
-        {/* Desktop Sidebar */}
-        {!isDesktopSidebarCollapsed && (
-          <aside className="hidden md:flex w-64 flex-shrink-0 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
-            <div className="w-full">
-              {sidebarContent}
+        {/* Sidebar: icon rail when collapsed, full panel when expanded */}
+        <div className="flex flex-shrink-0">
+          <aside className={`${isSidebarOpen ? 'w-64' : 'w-14'} bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px] transition-all duration-200`}>
+            {/* Toggle arrow at top */}
+            <div className={`flex ${isSidebarOpen ? 'justify-end' : 'justify-center'} px-2 py-2 border-b border-gray-200 dark:border-gray-700`}>
+              <button
+                onClick={() => setIsSidebarOpen(prev => !prev)}
+                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              >
+                <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
+            {isSidebarOpen && (
+              <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                {sidebarContent}
+              </div>
+            )}
+            {isSidebarOpen && <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>}
           </aside>
-        )}
+        </div>
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-x-hidden">
