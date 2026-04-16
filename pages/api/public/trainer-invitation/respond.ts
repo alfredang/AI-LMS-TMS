@@ -14,7 +14,7 @@ import {
   DEFAULT_TRAINER_DECLINE_BODY,
 } from '@/lib/trainerInvitations';
 import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSender';
-import { addLearnerToCalendarEvent } from '@/lib/autoEnrolDirectApplications';
+import { addTrainerToCalendarEvent } from '@/lib/autoEnrolDirectApplications';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
   const colors = {
@@ -335,14 +335,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // #77: Add trainer to Google Calendar event on accept.
       try {
-        const added = await addLearnerToCalendarEvent(
+        const result = await addTrainerToCalendarEvent(
           invitation.trainer_email,
           invitation.course_title,
           invitation.start_date
         );
         console.log(
-          added
-            ? `📅 [trainer-invitation/respond] Added ${invitation.trainer_email} to calendar for "${invitation.course_title}"`
+          result.added > 0
+            ? `📅 [trainer-invitation/respond] Added ${invitation.trainer_email} to ${result.added}/${result.found} calendar events for "${invitation.course_title}"`
             : `📅 [trainer-invitation/respond] Could not add to calendar (disabled, no match, or already attendee)`
         );
       } catch (calErr) {
