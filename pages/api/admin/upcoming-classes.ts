@@ -232,10 +232,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(classStatus);
       paramIndex++;
     } else if (classStatus === 'ActiveOnly') {
-      // Default Upcoming Classes view: hide cancelled runs so admins see
-      // only the classes that are actually going to happen. Pass
-      // classStatus=all explicitly to include cancelled classes.
-      filters.push(`cr.class_status IN ('Confirmed', 'Pending', 'Unconfirmed')`);
+      // Default Upcoming Classes view: hide cancelled runs, show only
+      // Confirmed/Pending with at least 1 learner enrolled.
+      filters.push(`cr.class_status IN ('Confirmed', 'Pending')`);
     }
 
     const classType = req.query.classType;
@@ -265,6 +264,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    // In ActiveOnly mode (default), only show classes with at least 1 learner
+    const minLearners = (classStatus === 'ActiveOnly' || !classStatus) ? 1 : 0;
 
     const baseQuery = `
       FROM course_run cr
@@ -314,6 +316,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ${tpgEmailExpr},
           cr.tpg_sync_status,
           cr.assigned_trainer_name
+        HAVING COUNT(e.id) >= ${minLearners}
         ORDER BY cr.start_date ASC NULLS LAST, cr.end_date ASC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
@@ -321,10 +324,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     const countResult = await pool.query(
-      `SELECT COUNT(DISTINCT cr.id) AS total_count
-       FROM course_run cr
-       JOIN course c ON cr.course_id = c.id
-       ${whereClause}`,
+      minLearners > 0
+        ? `SELECT COUNT(*) AS total_count FROM (
+             SELECT cr.id FROM course_run cr
+             JOIN course c ON cr.course_id = c.id
+             LEFT JOIN enrollment e ON e.course_run_id = cr.id
+             ${whereClause}
+             GROUP BY cr.id
+             HAVING COUNT(e.id) >= ${minLearners}
+           ) sub`
+        : `SELECT COUNT(DISTINCT cr.id) AS total_count
+           FROM course_run cr
+           JOIN course c ON cr.course_id = c.id
+           ${whereClause}`,
       params
     );
 
