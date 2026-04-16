@@ -3620,51 +3620,49 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 const tpgId = ssgTrainers?.[0]?.trainer?.idNumber;
                                 const handleRemoveTpgTrainer = () => {
                                     const runData = ssgApiResponse?.data?.course?.run;
-                                    if (!runData) {
-                                        showErrorPopup('Cannot remove — SSG course run data not loaded. Please refresh.');
-                                        return;
-                                    }
                                     showConfirmPopup(
-                                        `Remove ${tpgName} from SSG/TPG for this course run?`,
+                                        `Remove ${tpgName} from ${runData ? 'SSG/TPG and' : ''} the local database for this course run?`,
                                         async () => {
                                             setLoading(true);
                                             try {
-                                                const requestBody = {
-                                                    course: {
-                                                        courseReferenceNumber: courseReferenceNumber,
-                                                        trainingProvider: { uen: runData.organizationKey },
-                                                        run: {
-                                                            action: "update",
-                                                            registrationDates: { opening: runData.registrationOpeningDate || runData.registrationDates?.opening || 0, closing: runData.registrationClosingDate || runData.registrationDates?.closing || 0 },
-                                                            courseDates: { start: runData.courseStartDate || runData.courseDates?.start || 0, end: runData.courseEndDate || runData.courseDates?.end || 0 },
-                                                            scheduleInfoType: { code: "01", description: "Description" },
-                                                            scheduleInfo: "Schedule",
-                                                            venue: runData.venue || {},
-                                                            courseAdminEmail: runData.courseAdminEmail || currentUserEmail,
-                                                            courseVacancy: runData.courseVacancy || { code: "A", description: "Available" },
-                                                            file: { Name: "", content: "" },
-                                                            linkCourseRunTrainer: []
-                                                        }
-                                                    }
-                                                };
-                                                const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify(requestBody)
-                                                });
+                                                let ssgErrorMessage = '';
 
-                                                // Parse the body regardless of HTTP status — SSG returns HTTP 200 with
-                                                // `error: { code, message }` on silent failures. Same pattern as the
-                                                // assign flow above (backlog #60 fix).
-                                                const body = await response.json().catch(() => ({} as any));
-                                                const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
-                                                const httpErrorDetail = !response.ok
-                                                    ? (body?.details?.[0]?.message || body?.message || body?.error || '')
-                                                    : '';
-                                                const ssgErrorMessage: string = bodyError?.message || bodyError?.code || httpErrorDetail || '';
+                                                // Only call SSG API if we have SSG data loaded
+                                                if (runData) {
+                                                    const requestBody = {
+                                                        course: {
+                                                            courseReferenceNumber: courseReferenceNumber,
+                                                            trainingProvider: { uen: runData.organizationKey },
+                                                            run: {
+                                                                action: "update",
+                                                                registrationDates: { opening: runData.registrationOpeningDate || runData.registrationDates?.opening || 0, closing: runData.registrationClosingDate || runData.registrationDates?.closing || 0 },
+                                                                courseDates: { start: runData.courseStartDate || runData.courseDates?.start || 0, end: runData.courseEndDate || runData.courseDates?.end || 0 },
+                                                                scheduleInfoType: { code: "01", description: "Description" },
+                                                                scheduleInfo: "Schedule",
+                                                                venue: runData.venue || {},
+                                                                courseAdminEmail: runData.courseAdminEmail || currentUserEmail,
+                                                                courseVacancy: runData.courseVacancy || { code: "A", description: "Available" },
+                                                                file: { Name: "", content: "" },
+                                                                linkCourseRunTrainer: []
+                                                            }
+                                                        }
+                                                    };
+                                                    const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify(requestBody)
+                                                    });
+
+                                                    const body = await response.json().catch(() => ({} as any));
+                                                    const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
+                                                    const httpErrorDetail = !response.ok
+                                                        ? (body?.details?.[0]?.message || body?.message || body?.error || '')
+                                                        : '';
+                                                    ssgErrorMessage = bodyError?.message || bodyError?.code || httpErrorDetail || '';
+                                                }
 
                                                 if (!ssgErrorMessage) {
-                                                    // Real success — null local TPG columns
+                                                    // Clear local TPG columns
                                                     await fetch(getApiUrl('/api/admin/rename-trainer'), {
                                                         method: 'POST',
                                                         headers: { 'Content-Type': 'application/json' },
@@ -3676,11 +3674,12 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                         }),
                                                     });
                                                     // Non-destructive refetch to refresh the card
-                                                    const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
-                                                    if (updated.ok) setSsgApiResponse(await updated.json());
-                                                    showSuccessPopup('TPG trainer removed.');
+                                                    try {
+                                                        const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
+                                                        if (updated.ok) setSsgApiResponse(await updated.json());
+                                                    } catch { /* ignore refetch errors */ }
+                                                    showSuccessPopup(`TPG trainer removed${runData ? '' : ' (local only — SSG data was not loaded)'}.`);
                                                 } else {
-                                                    // Real SSG rejection — do NOT touch local
                                                     showErrorPopup(`SSG rejected the removal: ${ssgErrorMessage}. Local DB was NOT updated.`);
                                                 }
                                             } catch {
