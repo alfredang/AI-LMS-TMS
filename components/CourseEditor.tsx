@@ -1636,11 +1636,11 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             <div className="space-y-4">
                                 {course.topics?.length ? course.topics.map((topic, index) => (
                                     <div key={topic.id} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                                        <h4 className="text-lg font-semibold dark:text-white">{index + 1}. {topic.title}</h4>
+                                        <h4 className="text-lg font-semibold dark:text-white">{topic.title}</h4>
                                         {topic.subtopics?.length > 0 && (
                                             <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300">
                                                 {topic.subtopics.map((subtopic, subIndex) => (
-                                                    <li key={subtopic.id}>{index + 1}.{subIndex + 1} {subtopic.title}</li>
+                                                    <li key={subtopic.id}>{subtopic.title}</li>
                                                 ))}
                                             </ul>
                                         )}
