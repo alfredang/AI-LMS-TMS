@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import { normalizeSsgCreateEnrolmentData, runPostSsgEnrolSync } from '@/lib/services/postSsgEnrolSync';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import crypto from 'crypto';
 
 /**
@@ -27,7 +28,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
 
+    // Server-side UEN injection — never trust the frontend for this
+    const tp = await getTrainingPartnerIdentifiers();
+    const uen = credentials.uen || tp.uen;
+    const tpCode = uen ? `${uen}-01` : tp.code;
+
+    // Inject/override training partner in the payload
+    if (enrolment.trainingPartner) {
+      enrolment.trainingPartner.uen = enrolment.trainingPartner.uen || uen;
+      enrolment.trainingPartner.code = enrolment.trainingPartner.code || tpCode;
+    } else {
+      enrolment.trainingPartner = { uen, code: tpCode };
+    }
+
     const payload = { enrolment };
+    console.log('📤 Server-side final payload before encryption:', JSON.stringify(payload, null, 2));
 
     const encKey = Buffer.from(credentials.encryptionKey, 'base64');
     const iv = Buffer.from('SSGAPIInitVector', 'utf8');
@@ -57,11 +72,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let decrypted = decipher.update(rawBody, 'base64', 'utf8');
     decrypted += decipher.final('utf8');
     const parsed = JSON.parse(decrypted);
-    console.log('📦 Create enrolment SSG response:', JSON.stringify(parsed));
 
     if (parsed?.status && String(parsed.status) !== '200') {
-      return res.status(Number(parsed.status) || 400).json({ success: false, error: parsed?.error ?? `SSG status ${parsed.status}` });
+      console.error('❌ SSG Enrollment Internal Error:', JSON.stringify(parsed.error || parsed));
+      return res.status(Number(parsed.status) || 400).json({ 
+        success: false, 
+        error: (parsed?.error?.message || parsed?.error) ?? `SSG status ${parsed.status}`,
+        details: parsed?.error?.details || parsed?.error
+      });
     }
+
+    console.log('✅ Create enrolment SSG response:', JSON.stringify(parsed));
 
     const rawData = parsed?.data ?? parsed;
     const normalizedData = normalizeSsgCreateEnrolmentData(rawData);

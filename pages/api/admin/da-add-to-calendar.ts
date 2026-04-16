@@ -59,9 +59,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    // Load DA rows
     const rows = await pool.query(
       `SELECT da.id, da.trainee_email, da.course_title,
+              COALESCE(cr.id::text, da.course_run_id) as target_run_id,
               COALESCE(cr.start_date, da.course_start_date) as course_start_date,
               da.calendar_added
        FROM da_application da
@@ -104,12 +104,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         const syncResult = await addDaLearnerToCalendar(
           row.trainee_email,
-          row.id, // This is the internal DA application ID, the service will resolve the run UUID
+          row.target_run_id, 
           row.course_title,
           row.course_start_date
         );
 
-        if (syncResult.addedTo > 0 || syncResult.totalSessions > 0) {
+        if (syncResult.addedTo > 0) {
           await pool.query(`UPDATE da_application SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
           results.push({ id: row.id, success: true });
         } else {

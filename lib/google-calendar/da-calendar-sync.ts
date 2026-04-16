@@ -145,9 +145,12 @@ export async function addDaLearnerToCalendar(
     const strippedCourseTitle = stripPrefixes(courseTitle).toLowerCase();
     const learnerEmailLower = learnerEmail.trim().toLowerCase();
 
-    for (const targetDate of datesToSync) {
-      // Find ALL matching events for this specific date (handles multi-sessions per day)
-      const matchedEvents = allEvents.filter(evt => {
+    for (let i = 0; i < sortedDates.length; i++) {
+      const targetDate = sortedDates[i];
+      const dayNumber = i + 1;
+
+      // 1. Find ALL events on this date matching the core course title string
+      const dateAndTitleMatches = allEvents.filter(evt => {
         const evtTitleNormalized = stripPrefixes(evt.summary || '');
         // Search for the cleaned course title within the cleaned event title (most robust)
         const titleMatch = evtTitleNormalized.includes(strippedCourseTitle) || strippedCourseTitle.includes(evtTitleNormalized);
@@ -156,6 +159,17 @@ export async function addDaLearnerToCalendar(
         const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
         return evtDate === targetDate;
       });
+
+      // 2. Try to strictly differentiate parallel sessions using "Day N" in the raw summary
+      // This regex matches "Day 1", "Day-1", "Day: 1", "day1", etc.
+      const expectedDayRegex = new RegExp(`\\bday\\s*[-:]?\\s*${dayNumber}\\b`, 'i');
+      const strictDayMatches = dateAndTitleMatches.filter(evt => {
+         const rawSummary = (evt.summary || '').toLowerCase();
+         return expectedDayRegex.test(rawSummary);
+      });
+
+      // 3. Prefer strictly matched "Day X" events if found. Otherwise, fallback to the generic matches
+      const matchedEvents = strictDayMatches.length > 0 ? strictDayMatches : dateAndTitleMatches;
 
       if (matchedEvents.length > 0) {
         for (const matchedEvent of matchedEvents) {
@@ -228,13 +242,74 @@ export async function syncAllDaApplicantsToCalendar(courseRunUuid: string): Prom
     console.log(`🔄 [da-calendar-sync] Syncing ${daRes.rows.length} DA applicants for course run ${courseRunUuid}`);
 
     for (const da of daRes.rows) {
-      await addDaLearnerToCalendar(
+      const result = await addDaLearnerToCalendar(
         da.trainee_email,
         courseRunUuid,
         da.course_title || courseTitle
       );
+      if (result.addedTo > 0) {
+        await pool.query(
+          `UPDATE da_application SET calendar_added = true WHERE id = $1`,
+          [da.id]
+        );
+      }
     }
   } catch (err) {
     console.error(`❌ [da-calendar-sync] Batch sync failed:`, err);
+  }
+}
+
+/**
+ * Background retry mechanism to sweep for DA applications that are confirmed 
+ * but missed the calendar step (e.g. because the event didn't exist yet).
+ */
+export async function retryFailedCalendarSyncs(): Promise<void> {
+  try {
+    const daRes = await pool.query(
+      `SELECT id, trainee_email, course_title, course_run_id, course_start_date 
+       FROM da_application 
+       WHERE enrolment_status = 'Confirmed'
+         AND (calendar_added IS NOT TRUE)
+         AND trainee_email IS NOT NULL
+         AND LOWER(application_status) = 'confirm application'`
+    );
+
+    if (daRes.rows.length === 0) return;
+
+    console.log(`🔄 [da-calendar-sync] Retrying ${daRes.rows.length} missing calendar syncs...`);
+
+    let successCount = 0;
+    for (const da of daRes.rows) {
+      // Resolve internal course_run UUID
+      const runRes = await pool.query(
+        `SELECT id FROM course_run 
+         WHERE (id::text = $1 OR course_run_id = $1) 
+           AND is_deleted IS NOT TRUE LIMIT 1`,
+        [da.course_run_id]
+      );
+      
+      const courseRunUuid = runRes.rows[0]?.id;
+      
+      const calResults = await addDaLearnerToCalendar(
+        da.trainee_email,
+        courseRunUuid || da.course_run_id,
+        da.course_title || '',
+        da.course_start_date
+      );
+      
+      if (calResults.addedTo > 0) {
+        await pool.query(
+          `UPDATE da_application SET calendar_added = true WHERE id = $1`,
+          [da.id]
+        );
+        successCount++;
+      }
+    }
+    
+    if (successCount > 0) {
+      console.log(`✅ [da-calendar-sync] Successfully retried and added ${successCount} learners to the calendar.`);
+    }
+  } catch (err) {
+    console.error(`❌ [da-calendar-sync] Retry sweep failed:`, err);
   }
 }

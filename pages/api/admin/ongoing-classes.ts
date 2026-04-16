@@ -25,6 +25,7 @@ const ensureJunctionTable = async () => {
         UNIQUE(course_run_id, trainer_id)
     );
   `);
+  await pool.query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS tpg_sync_status TEXT`);
 };
 
 export default async function handler(
@@ -274,6 +275,7 @@ export default async function handler(
         COALESCE(cr.assigned_trainer_name, 'Unassigned') as "trainerName",
         cr.tpg_assigned_trainer_name as "assignedTrainerTpg",
         cr.tpg_assigned_trainer_email as "assignedTrainerTpgEmail",
+        cr.tpg_sync_status as "tpgSyncStatus",
         COALESCE(cr.assigned_trainer_name, '') as "assignedTrainerLocal",
         COALESCE(cr.assigned_trainer_email, '') as "assignedTrainerLocalEmail",
         COALESCE(trainee_count.count, 0) as "numOfTrainee"
