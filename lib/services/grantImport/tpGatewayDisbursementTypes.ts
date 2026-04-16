@@ -79,6 +79,7 @@ export type GrantImportBatchPreview = {
     ambiguousRows: number;
     invalidRows: number;
     duplicateFtxRows: number;
+    qbSyncedRows?: number;
   };
   enrolmentImpact: Array<{
     enrolmentId: string;

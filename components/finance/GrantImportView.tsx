@@ -59,6 +59,24 @@ const applyBadge = (s: string | null | undefined) => {
 const fmtMoney = (v: number | null | undefined) =>
   v == null ? '-' : `$${Number(v).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+const CircularProgress: React.FC<{ pct: number; label?: string }> = ({ pct, label }) => {
+  const p = Math.max(0, Math.min(100, Math.round(pct)));
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className="relative h-5 w-5 rounded-full"
+        style={{
+          background: `conic-gradient(currentColor ${p}%, rgba(255,255,255,0.25) 0)`,
+        }}
+      >
+        <div className="absolute inset-[2px] rounded-full bg-primary-foreground/0 dark:bg-slate-900 bg-white" />
+      </div>
+      <span className="text-xs font-semibold tabular-nums">{p}%</span>
+      {label ? <span className="text-xs text-on-surface-secondary">{label}</span> : null}
+    </div>
+  );
+};
+
 const GrantImportView: React.FC = () => {
   const { currentUser } = useLms();
   const actorUserId = currentUser?.id ? String(currentUser.id) : '';
@@ -67,13 +85,18 @@ const GrantImportView: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
   const [batchId, setBatchId] = useState<string | null>(null);
-  const [dryRun, setDryRun] = useState(true);
+  const showDryRunToggle = String(process.env.NEXT_PUBLIC_GRANT_IMPORT_SHOW_DRY_RUN || '').toLowerCase() === 'true';
+  const [dryRun, setDryRun] = useState(false);
   const [allowOverwrite, setAllowOverwrite] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applyResult, setApplyResult] = useState<any | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadJobId, setUploadJobId] = useState<string | null>(null);
+  const [uploadPct, setUploadPct] = useState(0);
+  const [uploadMsg, setUploadMsg] = useState('Processing…');
 
   const fileValidationError = useMemo(() => {
     if (!file) return null;
@@ -86,6 +109,7 @@ const GrantImportView: React.FC = () => {
     const rows = preview?.rows || [];
     const total = rows.length;
     const by = (k: string) => rows.filter((r) => String(r.match_status) === k).length;
+    const problem = by('unmatched') + by('ambiguous') + by('invalid');
     return {
       total,
       ready: by('ready'),
@@ -93,6 +117,7 @@ const GrantImportView: React.FC = () => {
       unmatched: by('unmatched'),
       ambiguous: by('ambiguous'),
       invalid: by('invalid'),
+      problem,
       selected: rows.filter((r) => r.selected_for_apply).length,
     };
   }, [preview]);
@@ -109,8 +134,12 @@ const GrantImportView: React.FC = () => {
   const upload = async () => {
     if (!file) return;
     setError(null);
+    setInfo(null);
     setApplyResult(null);
     setUploading(true);
+    setUploadJobId(null);
+    setUploadPct(0);
+    setUploadMsg('Uploading…');
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -121,15 +150,68 @@ const GrantImportView: React.FC = () => {
       });
       const json = await res.json();
       if (!res.ok || !json?.success) throw new Error(json?.error || 'Upload failed');
-      const data = json.data;
-      setBatchId(data?.batch?.id || null);
-      setPreview({ batch: data.batch, rows: data.rows, enrolmentImpact: data.enrolmentImpact });
+      const jobId = String(json?.data?.jobId || '').trim();
+      if (!jobId) throw new Error('Upload job did not start');
+      setUploadJobId(jobId);
     } catch (e: any) {
       setError(e?.message || 'Upload failed');
     } finally {
-      setUploading(false);
     }
   };
+
+  // Poll upload job progress until it finishes (accurate backend progress).
+  useEffect(() => {
+    if (!uploadJobId) return;
+    let cancelled = false;
+
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/grant-import/jobs/${encodeURIComponent(uploadJobId)}`, {
+          headers: { 'x-actor-user-id': actorUserId },
+        });
+        const json = await res.json();
+        if (!res.ok || !json?.success) throw new Error(json?.error || 'Failed to fetch upload progress');
+        const job = json.data as { status: string; pct: number; message: string; result?: any; error?: string };
+        if (cancelled) return;
+        setUploadPct(Number(job.pct) || 0);
+        setUploadMsg(String(job.message || 'Processing…'));
+
+        if (job.status === 'done') {
+          const data = job.result;
+          setBatchId(data?.batch?.id || null);
+          setPreview({ batch: data.batch, rows: data.rows, enrolmentImpact: data.enrolmentImpact });
+          const synced = Number(data?.summary?.qbSyncedRows || 0);
+          if (synced > 0) {
+            setInfo(`Updated in FMS: ${synced} row(s) (found in QuickBooks, not previously recorded in FMS).`);
+          }
+          setUploading(false);
+          setUploadJobId(null);
+          return;
+        }
+
+        if (job.status === 'failed') {
+          setError(String(job.error || 'Upload processing failed'));
+          setUploading(false);
+          setUploadJobId(null);
+          return;
+        }
+      } catch (e: any) {
+        if (cancelled) return;
+        setError(e?.message || 'Upload progress failed');
+        setUploading(false);
+        setUploadJobId(null);
+        return;
+      }
+
+      setTimeout(tick, 500);
+    };
+
+    setUploading(true);
+    void tick();
+    return () => {
+      cancelled = true;
+    };
+  }, [uploadJobId, actorUserId]);
 
   const handleDragEvents = (e: React.DragEvent<HTMLDivElement>, isOver: boolean) => {
     e.preventDefault();
@@ -193,6 +275,32 @@ const GrantImportView: React.FC = () => {
     await loadPreview(batchId);
   };
 
+  const setAllSelectable = async (selected: boolean) => {
+    if (!preview || !batchId) return;
+    const updates = preview.rows
+      .filter((r) => !['unmatched', 'ambiguous', 'invalid'].includes(String(r.match_status)))
+      .map((r) => ({ id: r.id, selected }));
+    if (updates.length === 0) return;
+    setPreview((p) =>
+      p
+        ? {
+            ...p,
+            rows: p.rows.map((r) =>
+              !['unmatched', 'ambiguous', 'invalid'].includes(String(r.match_status))
+                ? { ...r, selected_for_apply: selected }
+                : r
+            ),
+          }
+        : p
+    );
+    await fetch(`/api/grant-import/batches/${encodeURIComponent(batchId)}/rows`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-actor-user-id': actorUserId },
+      body: JSON.stringify({ updates }),
+    });
+    await loadPreview(batchId);
+  };
+
   const apply = async () => {
     if (!batchId) return;
     setError(null);
@@ -224,7 +332,6 @@ const GrantImportView: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-baseline justify-between gap-4">
         <h2 className="text-2xl font-bold text-on-surface">Bulk Grant Payment Sync</h2>
-        <div className="text-xs text-on-surface-secondary">Step 1 → Step 2 → Step 3</div>
       </div>
 
       <Card className="p-4 space-y-4">
@@ -312,6 +419,12 @@ const GrantImportView: React.FC = () => {
             </div>
           )}
 
+          {info && !error && (
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200 rounded-lg text-sm">
+              {info}
+            </div>
+          )}
+
           {batchId && (
             <div className="p-3 bg-surface-elevated rounded-lg text-xs text-on-surface-secondary">
               Batch: <span className="font-mono">{batchId}</span>
@@ -320,14 +433,7 @@ const GrantImportView: React.FC = () => {
 
           <div className="flex justify-end items-center">
             <Button type="submit" disabled={!file || uploading || !!fileValidationError || !actorUserId}>
-              {uploading ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Processing...
-                </div>
-              ) : (
-                'Upload & Process'
-              )}
+              {uploading ? 'Processing…' : 'Upload & Process'}
             </Button>
           </div>
 
@@ -344,23 +450,30 @@ const GrantImportView: React.FC = () => {
                 Review the preview rows and keep only <span className="font-semibold">READY</span> rows selected. Unmatched / Ambiguous /
                 Invalid rows cannot be applied.
               </div>
+              <div className="mt-2 text-xs text-amber-700">
+                <span className="font-semibold">Ambiguous</span> = Grant ID matches more than one record (needs manual fix).{' '}
+                <span className="font-semibold">Unmatched</span> = Grant ID / enrolment isn’t found in our system yet (add it first, then re-upload).
+              </div>
             </div>
           </Card>
 
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-            {[
-              { label: 'Total', value: counts.total },
-              { label: 'Ready', value: counts.ready },
-              { label: 'Already', value: counts.already },
-              { label: 'Unmatched', value: counts.unmatched },
-              { label: 'Ambiguous', value: counts.ambiguous },
-              { label: 'Invalid', value: counts.invalid },
-            ].map((x) => (
-              <Card key={x.label} className="p-3 text-center">
-                <div className="text-lg font-bold text-on-surface">{x.value}</div>
-                <div className="text-[11px] text-on-surface-secondary">{x.label}</div>
-              </Card>
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Card className="p-3 text-center">
+              <div className="text-lg font-bold text-on-surface">{counts.total}</div>
+              <div className="text-[11px] text-on-surface-secondary">Total</div>
+            </Card>
+            <Card className="p-3 text-center border border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-900/10">
+              <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{counts.ready}</div>
+              <div className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">Ready</div>
+            </Card>
+            <Card className="p-3 text-center border border-amber-500/30 bg-amber-50/40 dark:bg-amber-900/10">
+              <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{counts.already}</div>
+              <div className="text-[11px] text-amber-700/80 dark:text-amber-300/80">Already Applied</div>
+            </Card>
+            <Card className="p-3 text-center border border-red-500/30 bg-red-50/40 dark:bg-red-900/10">
+              <div className="text-lg font-bold text-red-700 dark:text-red-300">{counts.problem}</div>
+              <div className="text-[11px] text-red-700/80 dark:text-red-300/80">Need Attention</div>
+            </Card>
           </div>
 
           <Card className="p-5">
@@ -378,10 +491,12 @@ const GrantImportView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-3 flex-wrap justify-end">
-                <label className="flex items-center gap-2 text-xs text-on-surface-secondary">
-                  <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
-                  Dry-run (no QB writes)
-                </label>
+                {showDryRunToggle && (
+                  <label className="flex items-center gap-2 text-xs text-on-surface-secondary">
+                    <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
+                    Dry-run (no QB writes)
+                  </label>
+                )}
                 <label className="flex items-center gap-2 text-xs text-on-surface-secondary">
                   <input
                     type="checkbox"
@@ -457,7 +572,34 @@ const GrantImportView: React.FC = () => {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-default bg-surface-elevated">
-                    <th className="px-3 py-2 text-xs text-left">☑</th>
+                    <th className="px-3 py-2 text-xs text-left">
+                      {(() => {
+                        const rows = preview?.rows || [];
+                        const selectable = rows.filter((r) => !['unmatched', 'ambiguous', 'invalid'].includes(String(r.match_status)));
+                        const allSelected = selectable.length > 0 && selectable.every((r) => !!r.selected_for_apply);
+                        const someSelected = selectable.some((r) => !!r.selected_for_apply);
+                        const nextChecked = !allSelected;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => void setAllSelectable(nextChecked)}
+                            className="inline-flex items-center justify-center -m-2 p-2 rounded-md hover:bg-surface-hover cursor-pointer"
+                            title="Select / deselect all applicable rows"
+                            aria-label="Select / deselect all applicable rows"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={allSelected}
+                              ref={(el) => {
+                                if (el) el.indeterminate = !allSelected && someSelected;
+                              }}
+                              onChange={() => {}}
+                              className="pointer-events-none"
+                            />
+                          </button>
+                        );
+                      })()}
+                    </th>
                     <th className="px-3 py-2 text-xs text-left">#</th>
                     <th className="px-3 py-2 text-xs text-left">ENR</th>
                     <th className="px-3 py-2 text-xs text-left">GRN</th>
@@ -485,12 +627,24 @@ const GrantImportView: React.FC = () => {
                         }
                       >
                         <td className="px-3 py-2">
-                          <input
-                            type="checkbox"
-                            checked={!!r.selected_for_apply}
+                          <button
+                            type="button"
                             disabled={disabled}
-                            onChange={(e) => void toggleRow(r.id, e.target.checked)}
-                          />
+                            onClick={() => void toggleRow(r.id, !r.selected_for_apply)}
+                            className={`inline-flex items-center justify-center -m-2 p-2 rounded-md ${
+                              disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-surface-hover cursor-pointer'
+                            }`}
+                            title={disabled ? 'Not applicable row' : 'Select / deselect row'}
+                            aria-label={disabled ? 'Not applicable row' : 'Select / deselect row'}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!r.selected_for_apply}
+                              disabled={disabled}
+                              onChange={() => {}}
+                              className="pointer-events-none"
+                            />
+                          </button>
                         </td>
                         <td className="px-3 py-2 text-xs font-mono">{r.row_number}</td>
                         <td className="px-3 py-2 text-xs font-mono">{r.enrolment_id || '-'}</td>
@@ -522,6 +676,27 @@ const GrantImportView: React.FC = () => {
             </div>
           </Card>
         </>
+      )}
+
+      {uploading && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-[460px] max-w-[92vw] rounded-xl border border-default bg-surface p-6 shadow-2xl">
+            <div className="text-base font-semibold text-on-surface">Processing file…</div>
+            <div className="mt-1 text-xs text-on-surface-secondary">{uploadMsg}</div>
+
+            <div className="mt-5 flex items-center justify-center">
+              <CircularProgress pct={uploadPct} label={uploadMsg} />
+            </div>
+
+            <div className="mt-4 h-2 w-full rounded-full bg-surface-elevated overflow-hidden">
+              <div className="h-full bg-primary transition-all" style={{ width: `${Math.max(0, Math.min(100, uploadPct))}%` }} />
+            </div>
+
+            <div className="mt-3 text-[11px] text-on-surface-secondary text-center">
+              This step does read-only QuickBooks checks and builds the preview.
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

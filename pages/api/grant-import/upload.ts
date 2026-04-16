@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { requireFinanceOrAdmin } from '@/lib/services/grantImport/requireFinanceOrAdmin';
-import { stage1UploadParseValidateMatchAndPersist } from '@/lib/services/grantImport/grantImportStage1';
+import { createGrantImportUploadJob } from '@/lib/services/grantImport/grantImportUploadJob';
 
 export const config = {
   api: {
@@ -61,13 +61,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ success: false, error: 'Empty file uploaded' });
     }
 
-    const preview = await stage1UploadParseValidateMatchAndPersist({
-      filepath: first.filepath,
+    // Create an async job so frontend can show accurate progress.
+    // Do NOT delete the temp file here; the job runner will delete it after completion/TTL.
+    tempFilePath = null;
+    const { jobId } = createGrantImportUploadJob({
+      tempFilePath: first.filepath,
       filename: originalFilename,
       actorUserId,
     });
 
-    return res.status(200).json({ success: true, data: preview });
+    return res.status(200).json({ success: true, data: { jobId } });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Internal server error';
     return res.status(500).json({ success: false, error: msg });

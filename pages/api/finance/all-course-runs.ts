@@ -78,13 +78,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (search) {
       conditions.push(`(
-        se.trainee_name ILIKE $${paramIndex}
-        OR se.enrolment_id ILIKE $${paramIndex}
-        OR se.course_title ILIKE $${paramIndex}
-        OR se.course_reference ILIKE $${paramIndex}
-        OR se.course_run_id ILIKE $${paramIndex}
-        OR se.raw_data->'course'->'run'->>'id' ILIKE $${paramIndex}
-        OR se.trainee_nric ILIKE $${paramIndex}
+        COALESCE(se.trainee_name::text, '') ILIKE $${paramIndex}
+        OR COALESCE(se.enrolment_id::text, '') ILIKE $${paramIndex}
+        OR COALESCE(se.course_title::text, '') ILIKE $${paramIndex}
+        OR COALESCE(se.course_reference::text, '') ILIKE $${paramIndex}
+        OR COALESCE(se.course_run_id::text, '') ILIKE $${paramIndex}
+        OR COALESCE((se.raw_data->'course'->'run'->>'id')::text, '') ILIKE $${paramIndex}
+        OR COALESCE(se.trainee_nric::text, '') ILIKE $${paramIndex}
       )`);
       params.push(`%${search}%`);
       paramIndex++;

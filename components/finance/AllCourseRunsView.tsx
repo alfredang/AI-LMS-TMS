@@ -346,6 +346,8 @@ const StickyHeader: React.FC<{
   );
 };
 
+const TOTAL_COLS = 36; // update if headers change
+
 const AllCourseRunsView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -802,7 +804,7 @@ const AllCourseRunsView: React.FC = () => {
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-teal-300 dark:border-teal-600 ${groupHeaderColors.nbl}`}>Non-BL Grant</th>
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-orange-300 dark:border-orange-600 ${groupHeaderColors.tg}`}>TG</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-pink-300 dark:border-pink-600 ${groupHeaderColors.sfc}`}>SFC Claims</th>
-                <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-emerald-300 dark:border-emerald-600 ${groupHeaderColors.grant_pay}`}>Grant Payment</th>
+                <th colSpan={3} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-emerald-300 dark:border-emerald-600 ${groupHeaderColors.grant_pay}`}>Grant Payment</th>
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-gray-300 dark:border-gray-600 ${groupHeaderColors.fees}`}>Fees</th>
               </tr>
               {/* Column Headers */}
@@ -856,9 +858,7 @@ const AllCourseRunsView: React.FC = () => {
                 <th className={`${headerCell} text-right`}>Amount</th>
                 <th className={headerCell}>Payment Date</th>
                 <th className={headerCell}>Status</th>
-                {/* Grant Payment (5) */}
-                <th className={`${headerCell} text-right`}>Expected</th>
-                <th className={`${headerCell} text-right`}>Received</th>
+                {/* Grant Payment (3) */}
                 <th className={`${headerCell} text-right`}>Pending</th>
                 <th className={headerCell}>Status</th>
                 <th className={headerCell}>Last Import</th>
@@ -868,20 +868,21 @@ const AllCourseRunsView: React.FC = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={33} className="px-4 py-12 text-center text-on-surface-secondary">
+                <tr><td colSpan={TOTAL_COLS} className="px-4 py-12 text-center text-on-surface-secondary">
                   <div className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
                     Loading enrolments...
                   </div>
                 </td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={33} className="px-4 py-12 text-center text-on-surface-secondary">No enrolments found.</td></tr>
+                <tr><td colSpan={TOTAL_COLS} className="px-4 py-12 text-center text-on-surface-secondary">No enrolments found.</td></tr>
               ) : rows.map((r, i) => {
                 const totalTG = (Number(r.bl_amount) || 0) + (Number(r.nbl_amount) || 0);
                 const enrolmentKey = r.enrolment_id ?? `row-${i}`;
                 const enrId = r.enrolment_id?.trim() || null;
                 const isSelected = enrId ? selectedEnrolmentIds.includes(enrId) : false;
                 const isSent = !!(r.invoice_sent_at && String(r.invoice_sent_at).trim());
+                const fullyPaid = String(r.grant_payment_status || '').toUpperCase() === 'FULLY_PAID';
                 const rowTint = isSent
                   ? 'bg-emerald-50/60 dark:bg-emerald-950/25'
                   : isSelected
@@ -936,21 +937,29 @@ const AllCourseRunsView: React.FC = () => {
                     <td className={`${cell} text-on-surface-secondary`}>{r.invoice_sent_at ? formatDate(String(r.invoice_sent_at).slice(0, 10)) : '-'}</td>
                     {/* BL Grant */}
                     <td className={cell}>
-                      {r.bl_status ? (
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(r.bl_status)}`}>
-                          {r.bl_status}
+                      {fullyPaid ? (
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor('Completed')}`}>
+                          Completed
                         </span>
-                      ) : '-'}
+                      ) : r.bl_status ? (
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(r.bl_status)}`}>
+                            {r.bl_status}
+                          </span>
+                        ) : '-'}
                     </td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.bl_grant_id || '-'}</td>
                     <td className={`${cell} text-right tabular-nums`}>{r.bl_amount ? formatCurrency(r.bl_amount) : '-'}</td>
                     {/* Non-BL Grant */}
                     <td className={cell}>
-                      {r.nbl_status ? (
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(r.nbl_status)}`}>
-                          {r.nbl_status}
+                      {fullyPaid ? (
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor('Completed')}`}>
+                          Completed
                         </span>
-                      ) : '-'}
+                      ) : r.nbl_status ? (
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(r.nbl_status)}`}>
+                            {r.nbl_status}
+                          </span>
+                        ) : '-'}
                     </td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.nbl_grant_id || '-'}</td>
                     <td className={`${cell} text-on-surface-secondary`}>{r.nbl_scheme || '-'}</td>
@@ -969,8 +978,6 @@ const AllCourseRunsView: React.FC = () => {
                       ) : '-'}
                     </td>
                     {/* Grant Payment */}
-                    <td className={`${cell} text-right tabular-nums`}>{r.total_grant_expected != null ? formatCurrency(Number(r.total_grant_expected)) : '-'}</td>
-                    <td className={`${cell} text-right tabular-nums`}>{r.total_grant_received != null ? formatCurrency(Number(r.total_grant_received)) : '-'}</td>
                     <td className={`${cell} text-right tabular-nums`}>{r.total_grant_pending != null ? formatCurrency(Number(r.total_grant_pending)) : '-'}</td>
                     <td className={cell}>
                       {r.grant_payment_status ? (
