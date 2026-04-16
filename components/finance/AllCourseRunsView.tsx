@@ -27,6 +27,11 @@ interface CourseRunRow {
   employer_phone_country: string | null;
   employer_phone: string | null;
   fee_collection_status: string | null;
+  total_grant_expected?: number | null;
+  total_grant_received?: number | null;
+  total_grant_pending?: number | null;
+  grant_payment_status?: 'NOT_RECEIVED' | 'PARTIAL' | 'FULLY_PAID' | string | null;
+  last_grant_import_at?: string | null;
   bl_grant_id: string | null;
   bl_status: string | null;
   bl_amount: number | null;
@@ -97,6 +102,14 @@ const statusColor = (status: string | null): string => {
   return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
 };
 
+const grantPaymentBadge = (status: string | null | undefined): string => {
+  const s = String(status || '').trim().toUpperCase();
+  if (s === 'FULLY_PAID') return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
+  if (s === 'PARTIAL') return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
+  if (s === 'NOT_RECEIVED') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+  return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+};
+
 const PAGE_SIZE = 20;
 
 const fmtInvDuration = (s: number) =>
@@ -131,6 +144,7 @@ const groupHeaderColors: Record<string, string> = {
   nbl: 'bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300',
   tg: 'bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300',
   sfc: 'bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300',
+  grant_pay: 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300',
   fees: 'bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300',
 };
 
@@ -788,6 +802,7 @@ const AllCourseRunsView: React.FC = () => {
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-teal-300 dark:border-teal-600 ${groupHeaderColors.nbl}`}>Non-BL Grant</th>
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-orange-300 dark:border-orange-600 ${groupHeaderColors.tg}`}>TG</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-pink-300 dark:border-pink-600 ${groupHeaderColors.sfc}`}>SFC Claims</th>
+                <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-emerald-300 dark:border-emerald-600 ${groupHeaderColors.grant_pay}`}>Grant Payment</th>
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-gray-300 dark:border-gray-600 ${groupHeaderColors.fees}`}>Fees</th>
               </tr>
               {/* Column Headers */}
@@ -841,6 +856,12 @@ const AllCourseRunsView: React.FC = () => {
                 <th className={`${headerCell} text-right`}>Amount</th>
                 <th className={headerCell}>Payment Date</th>
                 <th className={headerCell}>Status</th>
+                {/* Grant Payment (5) */}
+                <th className={`${headerCell} text-right`}>Expected</th>
+                <th className={`${headerCell} text-right`}>Received</th>
+                <th className={`${headerCell} text-right`}>Pending</th>
+                <th className={headerCell}>Status</th>
+                <th className={headerCell}>Last Import</th>
                 {/* Fees (1) */}
                 <th className={headerCell}>Fee Collection</th>
               </tr>
@@ -947,6 +968,18 @@ const AllCourseRunsView: React.FC = () => {
                         </span>
                       ) : '-'}
                     </td>
+                    {/* Grant Payment */}
+                    <td className={`${cell} text-right tabular-nums`}>{r.total_grant_expected != null ? formatCurrency(Number(r.total_grant_expected)) : '-'}</td>
+                    <td className={`${cell} text-right tabular-nums`}>{r.total_grant_received != null ? formatCurrency(Number(r.total_grant_received)) : '-'}</td>
+                    <td className={`${cell} text-right tabular-nums`}>{r.total_grant_pending != null ? formatCurrency(Number(r.total_grant_pending)) : '-'}</td>
+                    <td className={cell}>
+                      {r.grant_payment_status ? (
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${grantPaymentBadge(r.grant_payment_status)}`}>
+                          {String(r.grant_payment_status)}
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td className={`${cell} text-on-surface-secondary`}>{r.last_grant_import_at ? formatDate(String(r.last_grant_import_at).slice(0, 10)) : '-'}</td>
                     {/* Fees */}
                     <td className={`${cell} text-on-surface-secondary`}>{r.fee_collection_status || '-'}</td>
                   </tr>

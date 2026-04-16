@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
 import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
+import { ensureSsgEnrolmentGrantRollupColumns } from '../../../lib/services/grantImport/ensureSsgEnrolmentGrantRollups';
 
 /** Normalized course run start date as YYYY-MM-DD text (matches sync-all-course-runs-from-ssg). */
 const RUN_START_NORM_SQL = `(
@@ -28,6 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     await ensureInvoiceJobsTable();
+    await ensureSsgEnrolmentGrantRollupColumns();
 
     const backfill = await pool.query(
       `SELECT ij.enrolment_id::text AS enrolment_id
@@ -149,6 +151,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         se.raw_data->'trainee'->'employer'->'contact'->'contactNumber'->>'countryCode' AS employer_phone_country,
         se.raw_data->'trainee'->'employer'->'contact'->'contactNumber'->>'phoneNumber' AS employer_phone,
         se.raw_data->'trainee'->'fees'->>'collectionStatus' AS fee_collection_status,
+        se.total_grant_expected,
+        se.total_grant_received,
+        se.total_grant_pending,
+        se.grant_payment_status,
+        se.last_grant_import_at,
         bl.grant_id AS bl_grant_id,
         bl.status AS bl_status,
         bl.estimated_grant_amount AS bl_amount,

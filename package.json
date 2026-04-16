@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "test": "node --import tsx --test tests/**/*.test.ts",
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js"
   },
@@ -62,6 +63,7 @@
     "playwright": "^1.59.1",
     "postcss": "^8.4.23",
     "tailwindcss": "^3.4.1",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
