@@ -562,25 +562,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     // Automation 1a: Add to Calendar (triggers if application_status is Confirmed)
                     if (appStatus === 'confirmed' && record.trainee_email) {
                         try {
-                            // Resolve course_run UUID from the SSG course_run_id
+                            // Resolve course_run UUID and check if course run is in the future
                             const crRes = await pool.query(
-                                `SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1`,
+                                `SELECT id, start_date FROM course_run WHERE course_run_id = $1 LIMIT 1`,
                                 [record.course_run_id]
                             );
                             const courseRunUuid = crRes.rows[0]?.id || record.course_run_id;
+                            const startDate = crRes.rows[0]?.start_date;
 
-                            const calResult = await addDaLearnerToCalendar(
-                                record.trainee_email,
-                                courseRunUuid,
-                                record.course_title,
-                                record.course_start_date
-                            );
-                            if (calResult.addedTo > 0) {
-                                console.log(`📅 Added ${record.trainee_email} to ${calResult.addedTo} calendar event(s)`);
-                                await pool.query(
-                                    `UPDATE da_application SET calendar_added = true WHERE application_id = $1`,
-                                    [record.application_id]
+                            // Skip calendar add for past course runs
+                            if (startDate && new Date(startDate) < new Date(new Date().toISOString().slice(0, 10))) {
+                                console.log(`⏭️ Skipping calendar add for ${record.trainee_email} — course run ${record.course_run_id} already started`);
+                            } else {
+                                const calResult = await addDaLearnerToCalendar(
+                                    record.trainee_email,
+                                    courseRunUuid,
+                                    record.course_title,
+                                    record.course_start_date
                                 );
+                                if (calResult.addedTo > 0) {
+                                    console.log(`📅 Added ${record.trainee_email} to ${calResult.addedTo} calendar event(s)`);
+                                    await pool.query(
+                                        `UPDATE da_application SET calendar_added = true WHERE application_id = $1`,
+                                        [record.application_id]
+                                    );
+                                }
                             }
                         } catch (calErr) {
                             console.error('Failed to sync to Calendar:', calErr);
