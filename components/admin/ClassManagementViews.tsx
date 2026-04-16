@@ -3661,8 +3661,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     ssgErrorMessage = bodyError?.message || bodyError?.code || httpErrorDetail || '';
                                                 }
 
-                                                if (!ssgErrorMessage) {
-                                                    // Clear local TPG columns
+                                                                // Always clear local TPG columns regardless of SSG result
                                                     await fetch(getApiUrl('/api/admin/rename-trainer'), {
                                                         method: 'POST',
                                                         headers: { 'Content-Type': 'application/json' },
@@ -3678,9 +3677,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                         const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
                                                         if (updated.ok) setSsgApiResponse(await updated.json());
                                                     } catch { /* ignore refetch errors */ }
-                                                    showSuccessPopup(`TPG trainer removed${runData ? '' : ' (local only — SSG data was not loaded)'}.`);
+                                                if (!ssgErrorMessage) {
+                                                    showSuccessPopup(`TPG trainer removed${runData ? '' : ' (local only)'}.`);
                                                 } else {
-                                                    showErrorPopup(`SSG rejected the removal: ${ssgErrorMessage}. Local DB was NOT updated.`);
+                                                    showInfoPopup(`Local TPG trainer cleared. Note: SSG returned: ${ssgErrorMessage}. You may need to update SSG separately.`);
                                                 }
                                             } catch {
                                                 showErrorPopup('Failed to remove TPG trainer.');
@@ -3697,17 +3697,108 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             <h4 className="text-lg font-medium text-gray-900 dark:text-white">Assigned Trainer (TPG)</h4>
                                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Auto-pulled from the SSG/TPG API.</p>
                                         </div>
-                                        {tpgName && (
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                className="bg-red-600 hover:bg-red-700 text-white"
-                                                onClick={handleRemoveTpgTrainer}
-                                                disabled={loading}
-                                            >
-                                                {loading ? 'Removing...' : 'Remove'}
-                                            </Button>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {tpgName && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    className="bg-red-600 hover:bg-red-700 text-white"
+                                                    onClick={handleRemoveTpgTrainer}
+                                                    disabled={loading}
+                                                >
+                                                    {loading ? 'Removing...' : 'Remove'}
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {/* Quick Reassign TPG Trainer */}
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <select
+                                            id="tpg-reassign-select"
+                                            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                                            defaultValue=""
+                                        >
+                                            <option value="">-- Reassign TPG Trainer --</option>
+                                            {availableTrainers.filter((t: any) => t.nric && t.nric !== 'NA').map((t: any) => (
+                                                <option key={t.user_id} value={t.user_id}>{t.trainer_name} (NRIC: {t.nric})</option>
+                                            ))}
+                                        </select>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            className="bg-purple-600 hover:bg-purple-700 text-white"
+                                            disabled={loading}
+                                            onClick={async () => {
+                                                const sel = document.getElementById('tpg-reassign-select') as HTMLSelectElement;
+                                                const userId = sel?.value;
+                                                if (!userId) { showErrorPopup('Please select a trainer to reassign.'); return; }
+                                                const match = availableTrainers.find((t: any) => t.user_id === userId);
+                                                if (!match?.nric || match.nric === 'NA') { showErrorPopup('Selected trainer has no NRIC on file.'); return; }
+                                                const trainerName = match.trainer_name;
+                                                const trainerEmail = match.email || '';
+                                                const nric = match.nric;
+
+                                                const runData = ssgApiResponse?.data?.course?.run;
+                                                if (!runData) {
+                                                    // No SSG data — save locally only
+                                                    await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName, trainerEmail })
+                                                    });
+                                                    showSuccessPopup(`TPG trainer updated locally to ${trainerName}. SSG data not available.`);
+                                                    return;
+                                                }
+
+                                                showConfirmPopup(`Assign ${trainerName} (NRIC: ${nric}) as TPG trainer via SSG?`, async () => {
+                                                    setLoading(true);
+                                                    try {
+                                                        const requestBody = {
+                                                            course: {
+                                                                courseReferenceNumber: courseReferenceNumber,
+                                                                trainingProvider: { uen: runData.organizationKey },
+                                                                run: {
+                                                                    action: "update",
+                                                                    registrationDates: { opening: runData.registrationOpeningDate || runData.registrationDates?.opening || 0, closing: runData.registrationClosingDate || runData.registrationDates?.closing || 0 },
+                                                                    courseDates: { start: runData.courseStartDate || runData.courseDates?.start || 0, end: runData.courseEndDate || runData.courseDates?.end || 0 },
+                                                                    scheduleInfoType: { code: "01", description: "Description" },
+                                                                    scheduleInfo: "Schedule",
+                                                                    venue: runData.venue || {},
+                                                                    courseAdminEmail: runData.courseAdminEmail || currentUserEmail,
+                                                                    courseVacancy: runData.courseVacancy || { code: "A", description: "Available" },
+                                                                    file: { Name: "", content: "" },
+                                                                    linkCourseRunTrainer: [{ trainer: { photo: { name: "", content: "" }, trainerType: { code: "1", description: "Existing" }, idNumber: nric } }]
+                                                                }
+                                                            }
+                                                        };
+                                                        const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
+                                                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody)
+                                                        });
+                                                        const body = await response.json().catch(() => ({} as any));
+                                                        const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
+                                                        const ssgErr = bodyError?.message || bodyError?.code || (!response.ok ? (body?.details?.[0]?.message || body?.message || '') : '');
+
+                                                        // Always update local TPG columns
+                                                        await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName, trainerEmail })
+                                                        });
+                                                        try {
+                                                            const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
+                                                            if (updated.ok) setSsgApiResponse(await updated.json());
+                                                        } catch { /* ignore */ }
+
+                                                        if (!ssgErr) {
+                                                            showSuccessPopup(`TPG trainer reassigned to ${trainerName}.`);
+                                                        } else {
+                                                            showInfoPopup(`Local TPG updated to ${trainerName}. SSG note: ${ssgErr}`);
+                                                        }
+                                                    } catch { showErrorPopup('Failed to reassign TPG trainer.'); }
+                                                    finally { setLoading(false); }
+                                                });
+                                            }}
+                                        >
+                                            {loading ? 'Assigning...' : 'Reassign TPG'}
+                                        </Button>
                                     </div>
                                     {tpgName ? (
                                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4">
