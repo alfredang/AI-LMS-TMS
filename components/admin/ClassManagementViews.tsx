@@ -6508,7 +6508,7 @@ const EnrolmentTable: React.FC<{
                                         {row.match ? (
                                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold" title={row.matchDetail}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>In Cal</span>
                                         ) : row.reason ? (
-                                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${row.reason === 'No Email' ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'}`}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>{row.reason}</span>
+                                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${row.reason === 'Not in Cal' ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'}`}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>{row.reason}</span>
                                         ) : <span className="text-gray-400">—</span>}
                                     </td>
                                 </tr>
