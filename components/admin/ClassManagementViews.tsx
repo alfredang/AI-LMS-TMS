@@ -1822,13 +1822,15 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         if (!courseToEdit?.id) return;
         try {
             setLoading(true);
+            // If junctionId is 'legacy', there's no junction row — remove all
+            // trainers (clears legacy scalar columns via syncLegacyColumns)
+            const body = junctionId === 'legacy'
+                ? { courseRunUuid: courseToEdit.id }
+                : { courseRunUuid: courseToEdit.id, junctionId };
             const res = await fetch('/api/admin/remove-trainer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    courseRunUuid: courseToEdit.id,
-                    junctionId,
-                }),
+                body: JSON.stringify(body),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to remove trainer');
