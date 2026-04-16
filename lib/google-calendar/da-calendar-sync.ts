@@ -210,6 +210,156 @@ export async function addDaLearnerToCalendar(
 }
 
 /**
+ * Removes a learner from all relevant Google Calendar events for a course run.
+ * Mirrors addDaLearnerToCalendar but removes the attendee instead of adding them.
+ */
+export async function removeDaLearnerFromCalendar(
+  learnerEmail: string,
+  courseRunUuid: string,
+  courseTitle: string,
+  fallbackStartDate?: string | Date | null
+): Promise<{ totalSessions: number; removedFrom: number }> {
+  const result = { totalSessions: 0, removedFrom: 0 };
+  if (!learnerEmail || !courseTitle) return result;
+
+  try {
+    // 1. Load Calendar Config
+    const tpRes = await pool.query(
+      `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
+    );
+    if (!tpRes.rows[0]?.sync_google_calendar) return result;
+
+    const credentials = await getGoogleCredentials(pool);
+    const oauth2Client = new google.auth.OAuth2(
+      credentials.clientId,
+      credentials.clientSecret,
+      'https://developers.google.com/oauthplayground'
+    );
+    oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    let calendarId = 'primary';
+    const calUrl = tpRes.rows[0].google_calendar_url || '';
+    if (calUrl) {
+      const cidMatch = calUrl.match(/[?&]cid=([^&]+)/);
+      if (cidMatch) {
+        try {
+          calendarId = Buffer.from(cidMatch[1], 'base64').toString('utf-8');
+        } catch {
+          calendarId = cidMatch[1];
+        }
+      } else if (calUrl.includes('@')) {
+        calendarId = calUrl;
+      }
+    }
+
+    // 2. Resolve Course Run dates (same logic as addDaLearnerToCalendar)
+    const sessionRes = await pool.query(
+      `SELECT start_date::text as start_date 
+       FROM course_session 
+       WHERE course_run_id = $1 AND (deleted IS NOT TRUE)
+       ORDER BY start_date ASC`,
+      [courseRunUuid]
+    );
+
+    let datesToSync: string[] = [];
+    if (sessionRes.rows.length > 0) {
+      datesToSync = sessionRes.rows.map(r => formatDbDate(r.start_date));
+    } else {
+      if (fallbackStartDate) {
+        datesToSync = [
+          fallbackStartDate instanceof Date
+            ? fallbackStartDate.toISOString().slice(0, 10)
+            : formatDbDate(String(fallbackStartDate))
+        ];
+      } else {
+        const crRes = await pool.query(
+          `SELECT start_date::text FROM course_run WHERE id = $1`,
+          [courseRunUuid]
+        );
+        if (crRes.rows[0]?.start_date) {
+          datesToSync = [formatDbDate(crRes.rows[0].start_date)];
+        }
+      }
+    }
+
+    datesToSync = Array.from(new Set(datesToSync.filter(Boolean)));
+    if (datesToSync.length === 0) return result;
+    result.totalSessions = datesToSync.length;
+
+    // 3. Fetch calendar events in bulk
+    const sortedDates = [...datesToSync].sort();
+    const minD = new Date(sortedDates[0] + 'T00:00:00Z');
+    minD.setDate(minD.getDate() - 3);
+    const maxD = new Date(sortedDates[sortedDates.length - 1] + 'T23:59:59Z');
+    maxD.setDate(maxD.getDate() + 3);
+
+    const eventsResponse = await calendar.events.list({
+      calendarId,
+      timeMin: minD.toISOString(),
+      timeMax: maxD.toISOString(),
+      singleEvents: true,
+      maxResults: 2500,
+    });
+
+    const allEvents = eventsResponse.data.items || [];
+    const strippedCourseTitle = stripPrefixes(courseTitle).toLowerCase();
+    const learnerEmailLower = learnerEmail.trim().toLowerCase();
+
+    for (let i = 0; i < sortedDates.length; i++) {
+      const targetDate = sortedDates[i];
+      const dayNumber = i + 1;
+
+      const dateAndTitleMatches = allEvents.filter(evt => {
+        const evtTitleNormalized = stripPrefixes(evt.summary || '');
+        const titleMatch = evtTitleNormalized.includes(strippedCourseTitle) || strippedCourseTitle.includes(evtTitleNormalized);
+        if (!titleMatch) return false;
+        const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
+        return evtDate === targetDate;
+      });
+
+      const expectedDayRegex = new RegExp(`\\bday\\s*[-:]?\\s*${dayNumber}\\b`, 'i');
+      const strictDayMatches = dateAndTitleMatches.filter(evt => {
+        const rawSummary = (evt.summary || '').toLowerCase();
+        return expectedDayRegex.test(rawSummary);
+      });
+
+      const matchedEvents = strictDayMatches.length > 0 ? strictDayMatches : dateAndTitleMatches;
+
+      if (matchedEvents.length > 0) {
+        for (const matchedEvent of matchedEvents) {
+          if (!matchedEvent.id) continue;
+          const existingAttendees = matchedEvent.attendees || [];
+          const isAttendee = existingAttendees.some(a => (a.email || '').toLowerCase() === learnerEmailLower);
+          if (isAttendee) {
+            try {
+              const updatedAttendees = existingAttendees.filter(a => (a.email || '').toLowerCase() !== learnerEmailLower);
+              await calendar.events.patch({
+                calendarId,
+                eventId: matchedEvent.id,
+                requestBody: {
+                  attendees: updatedAttendees,
+                },
+                sendUpdates: 'none',
+              });
+              result.removedFrom++;
+              console.log(`🗑️ [da-calendar-sync] Removed ${learnerEmail} from "${matchedEvent.summary}" on ${targetDate}`);
+            } catch (patchErr) {
+              console.error(`❌ [da-calendar-sync] Failed to remove ${learnerEmail} on ${targetDate}:`, patchErr);
+            }
+          }
+        }
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error(`❌ [da-calendar-sync] Fatal error removing from calendar:`, error);
+    return result;
+  }
+}
+
+/**
  * Syncs all confirmed DA applicants for a specific course run.
  * Triggered when a course's sessions are updated or during auto-enrollment.
  */

@@ -3,7 +3,8 @@ import pool from '../../../lib/db';
 import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
-import { bulkProcessDirectApplications, createNativeEnrolmentFromDA, addLearnerToCalendarEvent } from '../../../lib/autoEnrolDirectApplications';
+import { bulkProcessDirectApplications, createNativeEnrolmentFromDA } from '../../../lib/autoEnrolDirectApplications';
+import { addDaLearnerToCalendar, removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -547,7 +548,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             console.error('⚠️  auto-enrol kickoff setup failed (non-fatal):', err);
         }
 
-        // ---- OUR NEW DIRECT APPLICATION AUTOMATIONS ----
+        // ---- DIRECT APPLICATION AUTOMATIONS ----
         // Fire-and-forget sync for Calendar and Native Enrolments
         try {
             const allProcessedRecords = [...insertedRecords, ...updatedRecords];
@@ -555,20 +556,62 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Background async processing to avoid blocking UI response
             setImmediate(async () => {
                 for (const record of allProcessedRecords) {
-                    // Automation 1: Google Calendar Sync (triggers if Status/application_status is Confirmed)
-                    const isAppConfirmed = String(record.application_status || '').toLowerCase() === 'confirmed';
-                    if (isAppConfirmed && record.trainee_email) {
+                    const appStatus = String(record.application_status || '').toLowerCase();
+                    const oldStatus = String(record.old_status || '').toLowerCase();
+
+                    // Automation 1a: Add to Calendar (triggers if application_status is Confirmed)
+                    if (appStatus === 'confirmed' && record.trainee_email) {
                         try {
-                            await addLearnerToCalendarEvent(record.trainee_email, record.course_title, record.course_start_date);
-                            console.log(`📅 Automatically synced learner ${record.trainee_email} to Google Calendar event`);
-                            
-                            // Tick the CAL column in DA view
+                            // Resolve course_run UUID from the SSG course_run_id
+                            const crRes = await pool.query(
+                                `SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1`,
+                                [record.course_run_id]
+                            );
+                            const courseRunUuid = crRes.rows[0]?.id || record.course_run_id;
+
+                            const calResult = await addDaLearnerToCalendar(
+                                record.trainee_email,
+                                courseRunUuid,
+                                record.course_title,
+                                record.course_start_date
+                            );
+                            if (calResult.addedTo > 0) {
+                                console.log(`📅 Added ${record.trainee_email} to ${calResult.addedTo} calendar event(s)`);
+                                await pool.query(
+                                    `UPDATE da_application SET calendar_added = true WHERE application_id = $1`,
+                                    [record.application_id]
+                                );
+                            }
+                        } catch (calErr) {
+                            console.error('Failed to sync to Calendar:', calErr);
+                        }
+                    }
+
+                    // Automation 1b: Remove from Calendar (triggers if status changed TO Cancelled)
+                    if (appStatus === 'cancelled' && oldStatus && oldStatus !== 'cancelled' && record.trainee_email) {
+                        try {
+                            const crRes = await pool.query(
+                                `SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1`,
+                                [record.course_run_id]
+                            );
+                            const courseRunUuid = crRes.rows[0]?.id || record.course_run_id;
+
+                            const removeResult = await removeDaLearnerFromCalendar(
+                                record.trainee_email,
+                                courseRunUuid,
+                                record.course_title,
+                                record.course_start_date
+                            );
+                            if (removeResult.removedFrom > 0) {
+                                console.log(`🗑️ Removed ${record.trainee_email} from ${removeResult.removedFrom} calendar event(s)`);
+                            }
+                            // Untick the CAL column
                             await pool.query(
-                                `UPDATE da_application SET calendar_added = true WHERE application_id = $1`,
+                                `UPDATE da_application SET calendar_added = false WHERE application_id = $1`,
                                 [record.application_id]
                             );
                         } catch (calErr) {
-                            console.error('Failed to sync to Calendar:', calErr);
+                            console.error('Failed to remove from Calendar:', calErr);
                         }
                     }
 
