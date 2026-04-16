@@ -3368,11 +3368,15 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </Button>
                                     </div>
                                 </div>
-                                {assignedTrainersList.length > 0 ? (
+                                {(assignedTrainersList.length > 0 || localAssignedTrainerName) ? (
                                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
                                         <div className="space-y-2">
-                                            {/* Display ALL locally assigned trainers (previously sliced to 1). */}
-                                            {assignedTrainersList.map((t: any) => {
+                                            {/* Display ALL locally assigned trainers — junction first, scalar fallback */}
+                                            {(assignedTrainersList.length > 0 ? assignedTrainersList : [{
+                                              id: 'legacy',
+                                              trainer_name: localAssignedTrainerName,
+                                              trainer_email: localAssignedTrainerEmail,
+                                            }]).map((t: any) => {
                                                 const trainerDetail = availableTrainers.find((at: any) =>
                                                     (at.email && t.trainer_email && at.email.toLowerCase() === t.trainer_email.toLowerCase()) ||
                                                     (at.trainer_name && t.trainer_name && at.trainer_name.toLowerCase() === t.trainer_name.toLowerCase())
