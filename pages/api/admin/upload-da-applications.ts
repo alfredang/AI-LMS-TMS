@@ -269,7 +269,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Get existing application IDs, their statuses, and enrolment status to check for duplicates
         const existingResult = await pool.query(
-            `SELECT application_id, application_status, enrolment_status FROM da_application`
+            `SELECT application_id, application_status, enrolment_status, trainee_id, course_run_id FROM da_application`
         );
 
         const existingApps = new Map<string, { application_status: string; enrolment_status: string | null }>(
@@ -278,6 +278,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 enrolment_status: r.enrolment_status,
             }])
         );
+
+        // Build a map of trainee_id + course_run_id → application_status for same-person-same-course duplicate detection
+        // Key format: "TRAINEE_ID||COURSE_RUN_ID" (lowercased, trimmed)
+        const existingTraineeCourseMap = new Map<string, { application_id: string; application_status: string }>();
+        for (const r of existingResult.rows) {
+            const tid = (r.trainee_id || '').toString().trim().toLowerCase();
+            const crid = (r.course_run_id || '').toString().trim().toLowerCase();
+            if (tid && crid) {
+                const key = `${tid}||${crid}`;
+                // Keep the most relevant (non-cancelled) entry; if multiple exist, prefer active ones
+                const existing = existingTraineeCourseMap.get(key);
+                const status = (r.application_status || '').toLowerCase();
+                if (!existing || status !== 'cancelled') {
+                    existingTraineeCourseMap.set(key, {
+                        application_id: r.application_id,
+                        application_status: r.application_status,
+                    });
+                }
+            }
+        }
 
         // Transform and filter records
         const newRecords: Record<string, any>[] = [];
@@ -335,6 +355,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         duplicates.push(appId);
                     }
                     continue;
+                }
+
+                // Check for same trainee + course run duplicate (different application_id but same person+course)
+                const tid = (transformed.trainee_id || '').toString().trim().toLowerCase();
+                const crid = (transformed.course_run_id || '').toString().trim().toLowerCase();
+                if (tid && crid) {
+                    const tcKey = `${tid}||${crid}`;
+                    const existingTC = existingTraineeCourseMap.get(tcKey);
+                    if (existingTC) {
+                        const existingTCStatus = (existingTC.application_status || '').toLowerCase();
+                        // Only block if the existing row is still active (not cancelled)
+                        if (existingTCStatus !== 'cancelled') {
+                            console.log(`⚠️ Duplicate trainee+course: ${appId} — same trainee ${tid} already has active application ${existingTC.application_id} for course run ${crid}`);
+                            errors.push({
+                                row: i + 1,
+                                error: `Duplicate: ${transformed.trainee_name || tid} already has an active application (${existingTC.application_id}) for this course run`,
+                            });
+                            continue;
+                        }
+                    }
+                    // Track this new record for intra-batch duplicate detection
+                    existingTraineeCourseMap.set(tcKey, {
+                        application_id: appId,
+                        application_status: transformed.application_status || '',
+                    });
                 }
 
                 newRecords.push(transformed);
