@@ -3692,24 +3692,9 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 };
                                 return (
                                 <div>
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div>
-                                            <h4 className="text-lg font-medium text-gray-900 dark:text-white">Assigned Trainer (TPG)</h4>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Auto-pulled from the SSG/TPG API.</p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {tpgName && (
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    className="bg-red-600 hover:bg-red-700 text-white"
-                                                    onClick={handleRemoveTpgTrainer}
-                                                    disabled={loading}
-                                                >
-                                                    {loading ? 'Removing...' : 'Remove'}
-                                                </Button>
-                                            )}
-                                        </div>
+                                    <div className="mb-3">
+                                        <h4 className="text-lg font-medium text-gray-900 dark:text-white">Assigned Trainer (TPG)</h4>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Auto-pulled from the SSG/TPG API. Use "Reassign TPG" or "Assign to TPG" to change.</p>
                                     </div>
                                     {/* Quick Reassign TPG Trainer */}
                                     <div className="flex items-center gap-2 mb-3">
