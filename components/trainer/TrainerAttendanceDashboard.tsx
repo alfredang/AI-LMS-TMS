@@ -159,7 +159,7 @@ const SectionHeader: React.FC<{ title: string; count?: number; right?: React.Rea
 const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
   const router = useRouter();
   const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId } = useLms();
-  const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false);
+  const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false, true);
 
   // Admin-mode course run lookup
   const [adminInput, setAdminInput]             = useState('');

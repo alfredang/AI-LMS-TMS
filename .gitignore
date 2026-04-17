@@ -149,3 +149,6 @@ CLAUDE.md
 !.claude/skills/
 !.claude/skills/**
 .project/
+
+# Google Apps Script backups
+*.gs

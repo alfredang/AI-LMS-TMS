@@ -27,9 +27,21 @@ function stripPrefixes(title: string): string {
 /**
  * Normalise database date strings (YYYYMMDD or YYYY-MM-DD) to standard YYYY-MM-DD.
  */
-function formatDbDate(dateStr: string): string {
-  if (!dateStr) return '';
-  const clean = String(dateStr).trim();
+function formatDbDate(dateVal: string | Date): string {
+  if (!dateVal) return '';
+  
+  if (dateVal instanceof Date) {
+    // Force the JS Date object (which may be shifted to UTC inside the DB layer) 
+    // into a Singapore local time string to prevent the -8 hour backwards date-drift bug
+    const sgtStr = dateVal.toLocaleString("en-US", { timeZone: "Asia/Singapore" });
+    const localSgt = new Date(sgtStr);
+    const year = localSgt.getFullYear();
+    const month = String(localSgt.getMonth() + 1).padStart(2, '0');
+    const day = String(localSgt.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  const clean = String(dateVal).trim();
   if (/^\d{8}$/.test(clean)) {
     return `${clean.slice(0, 4)}-${clean.slice(4, 6)}-${clean.slice(6, 8)}`;
   }
@@ -103,11 +115,7 @@ export async function addDaLearnerToCalendar(
     } else {
       // Fallback logic
       if (fallbackStartDate) {
-        datesToSync = [
-          fallbackStartDate instanceof Date
-            ? fallbackStartDate.toISOString().slice(0, 10)
-            : formatDbDate(String(fallbackStartDate))
-        ];
+        datesToSync = [formatDbDate(fallbackStartDate)];
       } else {
         const crRes = await pool.query(
           `SELECT start_date::text FROM course_run WHERE id = $1`,
@@ -267,11 +275,7 @@ export async function removeDaLearnerFromCalendar(
       datesToSync = sessionRes.rows.map(r => formatDbDate(r.start_date));
     } else {
       if (fallbackStartDate) {
-        datesToSync = [
-          fallbackStartDate instanceof Date
-            ? fallbackStartDate.toISOString().slice(0, 10)
-            : formatDbDate(String(fallbackStartDate))
-        ];
+        datesToSync = [formatDbDate(fallbackStartDate)];
       } else {
         const crRes = await pool.query(
           `SELECT start_date::text FROM course_run WHERE id = $1`,
