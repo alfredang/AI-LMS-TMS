@@ -45,6 +45,30 @@ async function qbFindInvoiceByDocNumber(app: string | undefined, docNumber: stri
   return { id: String(row.Id), customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined };
 }
 
+async function qbFindInvoiceByLineDescriptionContains(
+  app: string | undefined,
+  grantId: string
+): Promise<{ id: string; customerRef?: string } | null> {
+  const raw = String(grantId || '').trim();
+  if (!raw) return null;
+  const safe = escapeQbQueryString(raw);
+  try {
+    const data = await callQbProxy({
+      action: 'query',
+      entity: 'invoice',
+      app,
+      query: `SELECT * FROM Invoice WHERE Line.Description LIKE '%${safe}%' MAXRESULTS 1`,
+    });
+    const inv = data?.QueryResponse?.Invoice;
+    const row = Array.isArray(inv) ? inv[0] : inv;
+    if (!row?.Id) return null;
+    return { id: String(row.Id), customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined };
+  } catch {
+    // Some QBO realms reject nested Line queries; treat as "not found" instead of failing apply.
+    return null;
+  }
+}
+
 async function listSsgGrantIdsForEnrolment(enrolmentId: string): Promise<string[]> {
   const id = String(enrolmentId || '').trim();
   if (!id) return [];
@@ -63,9 +87,14 @@ async function qbResolveInvoiceForGrantRow(input: {
   app: string | undefined;
   grantId: string;
   enrolmentId: string | null;
-}): Promise<{ id: string; customerRef?: string; resolvedBy: 'docNumber' | 'enrolment_grant_docNumber' } | null> {
+}): Promise<
+  | { id: string; customerRef?: string; resolvedBy: 'docNumber' | 'line_description' | 'enrolment_grant_docNumber' | 'enrolment_grant_line_description' }
+  | null
+> {
   const direct = await qbFindInvoiceByDocNumber(input.app, input.grantId);
   if (direct?.id) return { ...direct, resolvedBy: 'docNumber' };
+  const byDesc = await qbFindInvoiceByLineDescriptionContains(input.app, input.grantId);
+  if (byDesc?.id) return { ...byDesc, resolvedBy: 'line_description' };
 
   // Fallback: if invoice DocNumber is the "primary" GRN for the enrolment, try other GRNs for same enrolment.
   if (input.enrolmentId) {
@@ -73,6 +102,8 @@ async function qbResolveInvoiceForGrantRow(input: {
     for (const grn of grns) {
       const hit = await qbFindInvoiceByDocNumber(input.app, grn);
       if (hit?.id) return { ...hit, resolvedBy: 'enrolment_grant_docNumber' };
+      const hitDesc = await qbFindInvoiceByLineDescriptionContains(input.app, grn);
+      if (hitDesc?.id) return { ...hitDesc, resolvedBy: 'enrolment_grant_line_description' };
     }
   }
   return null;

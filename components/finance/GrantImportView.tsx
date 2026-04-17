@@ -253,6 +253,20 @@ const GrantImportView: React.FC = () => {
     await loadPreview(batchId);
   };
 
+  const patchRowSelections = async (batchId: string, updates: Array<{ id: string; selected: boolean }>) => {
+    const CHUNK = 500; // API limit in `pages/api/grant-import/batches/[batchId]/rows.ts`
+    for (let i = 0; i < updates.length; i += CHUNK) {
+      const chunk = updates.slice(i, i + CHUNK);
+      const res = await fetch(`/api/grant-import/batches/${encodeURIComponent(batchId)}/rows`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-actor-user-id': actorUserId },
+        body: JSON.stringify({ updates: chunk }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) throw new Error(json?.error || `Failed to update row selection (chunk ${i + 1}-${i + chunk.length})`);
+    }
+  };
+
   const selectAllReady = async (selected: boolean) => {
     if (!preview || !batchId) return;
     const updates = preview.rows
@@ -267,12 +281,13 @@ const GrantImportView: React.FC = () => {
           }
         : p
     );
-    await fetch(`/api/grant-import/batches/${encodeURIComponent(batchId)}/rows`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-actor-user-id': actorUserId },
-      body: JSON.stringify({ updates }),
-    });
-    await loadPreview(batchId);
+    try {
+      await patchRowSelections(batchId, updates);
+      await loadPreview(batchId);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to update selections');
+      await loadPreview(batchId);
+    }
   };
 
   const setAllSelectable = async (selected: boolean) => {
@@ -293,12 +308,13 @@ const GrantImportView: React.FC = () => {
           }
         : p
     );
-    await fetch(`/api/grant-import/batches/${encodeURIComponent(batchId)}/rows`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-actor-user-id': actorUserId },
-      body: JSON.stringify({ updates }),
-    });
-    await loadPreview(batchId);
+    try {
+      await patchRowSelections(batchId, updates);
+      await loadPreview(batchId);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to update selections');
+      await loadPreview(batchId);
+    }
   };
 
   const apply = async () => {
