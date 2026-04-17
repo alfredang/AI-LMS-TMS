@@ -250,22 +250,29 @@ export async function runAutomation(targetDate?: string) {
             };
 
             try {
-                // 2. Count total sessions for this Course Run (from local DB E-attendance)
-                const totalSessionsRes = await pool.query(`
-                    SELECT COUNT(*) as total
-                    FROM course_session
-                    WHERE course_run_id = $1
-                      AND deleted = false
+                // 2. Count sessions where attendance was actually taken (at least one
+                //    course_attendance row exists for that session). This avoids penalising
+                //    learners when the trainer only takes attendance once for a multi-session
+                //    day — e.g. a 1-day course with 3 sessions but QR attendance taken once.
+                const sessionsWithAttendanceRes = await pool.query(`
+                    SELECT COUNT(DISTINCT cs.id) as total
+                    FROM course_session cs
+                    WHERE cs.course_run_id = $1
+                      AND cs.deleted = false
+                      AND EXISTS (
+                          SELECT 1 FROM course_attendance ca
+                          WHERE ca.session_id = cs.id
+                      )
                 `, [run.db_uuid]);
 
-                const totalSessions = parseInt(totalSessionsRes.rows[0].total, 10);
+                const sessionsWithAttendance = parseInt(sessionsWithAttendanceRes.rows[0].total, 10);
 
-                if (totalSessions === 0) {
-                    // System logic changed: No sessions set up — SKIP certificate generation instead of auto-certifying.
-                    console.log(`[auto-create-certificates] ${run.course_run_id}: No sessions in E-attendance — skipping automated certificate generation.`);
+                if (sessionsWithAttendance === 0) {
+                    // No attendance taken for any session — skip certificate generation.
+                    console.log(`[auto-create-certificates] ${run.course_run_id}: No attendance taken for any session — skipping automated certificate generation.`);
                 } else {
-                    // Sessions exist — use local DB attendance to determine eligibility
-                    // 3. Fetch ALL confirmed learners with their attendance from local E-attendance
+                    // Sessions with attendance exist — use local DB attendance to determine eligibility
+                    // 3. Fetch ALL confirmed learners with their attendance from sessions where attendance was taken
                     const allLearnersRes = await pool.query(`
                         SELECT
                             e.id as enrolment_id,
@@ -277,6 +284,7 @@ export async function runAutomation(targetDate?: string) {
                         LEFT JOIN app_user au ON e.user_id = au.id
                         LEFT JOIN course_attendance ca ON (ca.nric = e.nric OR ca.user_id = e.user_id) AND ca.session_id IN (
                             SELECT id FROM course_session WHERE course_run_id = $1 AND deleted = false
+                              AND EXISTS (SELECT 1 FROM course_attendance ca2 WHERE ca2.session_id = course_session.id)
                         )
                         WHERE e.course_run_id = $1
                           AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
@@ -284,17 +292,17 @@ export async function runAutomation(targetDate?: string) {
                         GROUP BY e.id, e.nric, au.full_name, au.email, e.email
                     `, [run.db_uuid]);
 
-                    // 4. Filter learners who meet the attendance threshold
+                    // 4. Filter learners who meet the attendance threshold (based on sessions where attendance was taken)
                     const eligibleTrainees = allLearnersRes.rows.filter(trainee => {
                         const attendedCount = parseInt(trainee.attended_count, 10) || 0;
-                        const percent = (attendedCount / totalSessions) * 100;
+                        const percent = (attendedCount / sessionsWithAttendance) * 100;
                         return percent >= attendanceThreshold;
                     });
 
-                    console.log(`[auto-create-certificates] ${run.course_run_id}: ${totalSessions} sessions, ${allLearnersRes.rows.length} enrolled, ${eligibleTrainees.length} learners with ≥${attendanceThreshold}% attendance.`);
+                    console.log(`[auto-create-certificates] ${run.course_run_id}: ${sessionsWithAttendance} sessions with attendance taken, ${allLearnersRes.rows.length} enrolled, ${eligibleTrainees.length} learners with ≥${attendanceThreshold}% attendance.`);
 
                     for (const trainee of eligibleTrainees) {
-                        const attendancePercent = Math.round((parseInt(trainee.attended_count, 10) / totalSessions) * 100);
+                        const attendancePercent = Math.round((parseInt(trainee.attended_count, 10) / sessionsWithAttendance) * 100);
                         const traineeLogContext = {
                             ...logContext,
                             nric: trainee.nric,
