@@ -557,3 +557,35 @@ export async function ssgGrantExists(grantId: string): Promise<{ ok: boolean; ss
   return { ok: false };
 }
 
+export async function ssgGrantExistsMany(
+  grantIds: string[]
+): Promise<Map<string, { ok: boolean; ssgGrantRowId?: string }>> {
+  const out = new Map<string, { ok: boolean; ssgGrantRowId?: string }>();
+  const ids = Array.from(new Set(grantIds.map((x) => String(x || '').trim()).filter(Boolean)));
+  if (ids.length === 0) return out;
+
+  // Fetch all matching rows, then accept only grant_ids that map to exactly 1 row.
+  const r = await pool.query(
+    `SELECT grant_id::text AS grant_id, id::text AS id
+     FROM public.ssg_grants
+     WHERE grant_id = ANY($1::text[])`,
+    [ids]
+  );
+
+  const count = new Map<string, number>();
+  const firstId = new Map<string, string>();
+  for (const row of r.rows) {
+    const g = String(row.grant_id || '').trim();
+    if (!g) continue;
+    count.set(g, (count.get(g) || 0) + 1);
+    if (!firstId.has(g) && row.id) firstId.set(g, String(row.id));
+  }
+
+  for (const g of ids) {
+    const c = count.get(g) || 0;
+    if (c === 1) out.set(g, { ok: true, ssgGrantRowId: firstId.get(g) });
+    else out.set(g, { ok: false });
+  }
+  return out;
+}
+

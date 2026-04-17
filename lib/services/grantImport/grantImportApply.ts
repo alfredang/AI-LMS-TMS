@@ -7,7 +7,6 @@ import {
 } from './grantImportDb';
 import { recalcAndPersistGrantPaymentRollups } from './grantImportRollup';
 import pool from '@/lib/db';
-import { paymentMatchesGrantDisbursement as paymentLinksInvoiceAndAmount } from './grantImportQbMatch';
 
 type ProxyResponse<T = any> = { success: boolean; data?: T; error?: string; details?: unknown };
 
@@ -351,6 +350,20 @@ async function qbFindPaymentMethodIdByName(app: string | undefined, name: string
 
   QB_PAYMENT_METHOD_ID_BY_NAME_PROMISE.set(cacheKey, p);
   return p;
+}
+
+function paymentLinksInvoiceAndAmount(p: any, invoiceId: string, amount: number): boolean {
+  const lines = p?.Line;
+  const arr = Array.isArray(lines) ? lines : lines ? [lines] : [];
+  for (const ln of arr) {
+    const linked = ln?.LinkedTxn;
+    const larr = Array.isArray(linked) ? linked : linked ? [linked] : [];
+    const hasLink = larr.some((x: any) => String(x?.TxnType || '') === 'Invoice' && String(x?.TxnId || '') === String(invoiceId));
+    if (!hasLink) continue;
+    const a = Number(ln?.Amount);
+    if (Number.isFinite(a) && Math.abs(a - amount) < 0.01) return true;
+  }
+  return false;
 }
 
 async function qbReadPayment(

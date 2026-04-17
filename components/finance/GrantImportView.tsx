@@ -77,6 +77,15 @@ const CircularProgress: React.FC<{ pct: number; label?: string }> = ({ pct, labe
   );
 };
 
+function extractDoneTotal(message: string): { done: number; total: number } | null {
+  const m = String(message || '').match(/\((\d+)\s*\/\s*(\d+)\)/);
+  if (!m) return null;
+  const done = Number(m[1]);
+  const total = Number(m[2]);
+  if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0) return null;
+  return { done, total };
+}
+
 const GrantImportView: React.FC = () => {
   const { currentUser } = useLms();
   const actorUserId = currentUser?.id ? String(currentUser.id) : '';
@@ -97,6 +106,7 @@ const GrantImportView: React.FC = () => {
   const [uploadJobId, setUploadJobId] = useState<string | null>(null);
   const [uploadPct, setUploadPct] = useState(0);
   const [uploadMsg, setUploadMsg] = useState('Processing…');
+  const [uploadCounts, setUploadCounts] = useState<{ done: number; total: number } | null>(null);
 
   const fileValidationError = useMemo(() => {
     if (!file) return null;
@@ -140,6 +150,7 @@ const GrantImportView: React.FC = () => {
     setUploadJobId(null);
     setUploadPct(0);
     setUploadMsg('Uploading…');
+    setUploadCounts(null);
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -174,7 +185,9 @@ const GrantImportView: React.FC = () => {
         const job = json.data as { status: string; pct: number; message: string; result?: any; error?: string };
         if (cancelled) return;
         setUploadPct(Number(job.pct) || 0);
-        setUploadMsg(String(job.message || 'Processing…'));
+        const msg = String(job.message || 'Processing…');
+        setUploadMsg(msg);
+        setUploadCounts(extractDoneTotal(msg));
 
         if (job.status === 'done') {
           const data = job.result;
@@ -186,6 +199,7 @@ const GrantImportView: React.FC = () => {
           }
           setUploading(false);
           setUploadJobId(null);
+          setUploadCounts(null);
           return;
         }
 
@@ -193,6 +207,7 @@ const GrantImportView: React.FC = () => {
           setError(String(job.error || 'Upload processing failed'));
           setUploading(false);
           setUploadJobId(null);
+          setUploadCounts(null);
           return;
         }
       } catch (e: any) {
@@ -200,6 +215,7 @@ const GrantImportView: React.FC = () => {
         setError(e?.message || 'Upload progress failed');
         setUploading(false);
         setUploadJobId(null);
+        setUploadCounts(null);
         return;
       }
 
@@ -713,6 +729,11 @@ const GrantImportView: React.FC = () => {
           <div className="w-[460px] max-w-[92vw] rounded-xl border border-default bg-surface p-6 shadow-2xl">
             <div className="text-base font-semibold text-on-surface">Processing file…</div>
             <div className="mt-1 text-xs text-on-surface-secondary">{uploadMsg}</div>
+            {uploadCounts ? (
+              <div className="mt-1 text-xs text-on-surface-secondary">
+                {uploadCounts.done}/{uploadCounts.total}
+              </div>
+            ) : null}
 
             <div className="mt-5 flex items-center justify-center">
               <CircularProgress pct={uploadPct} label={uploadMsg} />
