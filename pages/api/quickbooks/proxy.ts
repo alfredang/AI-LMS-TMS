@@ -19,11 +19,16 @@ interface QBOCredentials {
   clientSecret: string;
   refreshToken: string;
   realmId: string;
-  accessToken?: string;
-  accessTokenExpiry?: number;
 }
 
-let cachedCreds: QBOCredentials | null = null;
+type CachedToken = { accessToken: string; accessTokenExpiry: number; refreshToken: string };
+
+/** Must not share one access token across app1/app2 (different client_id + refresh_token). */
+const accessTokenByCredsKey = new Map<string, CachedToken>();
+
+function credsCacheKey(c: QBOCredentials): string {
+  return `${c.clientId}|${c.realmId}|${c.refreshToken}`;
+}
 
 async function getQBOCredentials(appOverride?: string): Promise<QBOCredentials | null> {
   try {
@@ -70,8 +75,10 @@ async function getQBOCredentials(appOverride?: string): Promise<QBOCredentials |
 }
 
 async function getAccessToken(creds: QBOCredentials): Promise<string> {
-  if (cachedCreds?.accessToken && cachedCreds.accessTokenExpiry && Date.now() < cachedCreds.accessTokenExpiry) {
-    return cachedCreds.accessToken;
+  const key = credsCacheKey(creds);
+  const hit = accessTokenByCredsKey.get(key);
+  if (hit?.accessToken && hit.accessTokenExpiry && Date.now() < hit.accessTokenExpiry) {
+    return hit.accessToken;
   }
 
   const basic = Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString('base64');
@@ -105,12 +112,17 @@ async function getAccessToken(creds: QBOCredentials): Promise<string> {
     }
   }
 
-  cachedCreds = {
-    ...creds,
+  const newRefresh = data.refresh_token || creds.refreshToken;
+  const expiry = Date.now() + (data.expires_in ? data.expires_in * 1000 - 60000 : 3300000);
+  const newKey = `${creds.clientId}|${creds.realmId}|${newRefresh}`;
+  if (newKey !== key) {
+    accessTokenByCredsKey.delete(key);
+  }
+  accessTokenByCredsKey.set(newKey, {
     accessToken: data.access_token,
-    accessTokenExpiry: Date.now() + (data.expires_in ? data.expires_in * 1000 - 60000 : 3300000),
-    refreshToken: data.refresh_token || creds.refreshToken,
-  };
+    accessTokenExpiry: expiry,
+    refreshToken: newRefresh,
+  });
 
   return data.access_token;
 }

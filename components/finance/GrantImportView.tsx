@@ -623,14 +623,16 @@ const GrantImportView: React.FC = () => {
                     <th className="px-3 py-2 text-xs text-right">Amount</th>
                     <th className="px-3 py-2 text-xs text-left">Payment Date</th>
                     <th className="px-3 py-2 text-xs text-left">Bank Ref</th>
-                    <th className="px-3 py-2 text-xs text-left">Status</th>
-                    <th className="px-3 py-2 text-xs text-left">Apply</th>
+                    <th className="px-3 py-2 text-xs text-left">FMS status</th>
+                    <th className="px-3 py-2 text-xs text-left">QuickBooks</th>
                     <th className="px-3 py-2 text-xs text-left">Error</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-default">
                   {preview.rows.map((r) => {
                     const disabled = ['unmatched', 'ambiguous', 'invalid'].includes(String(r.match_status));
+                    const fmsStatus = r.fms_updated_live ? 'updated' : 'not updated';
+                    const qbStatus = r.qb_applied_live ? 'applied' : 'not applied';
                     return (
                       <tr
                         key={r.id}
@@ -672,13 +674,25 @@ const GrantImportView: React.FC = () => {
                         <td className="px-3 py-2 text-xs font-mono">{r.payment_date_parsed || '-'}</td>
                         <td className="px-3 py-2 text-xs font-mono">{r.bank_reference_id || '-'}</td>
                         <td className="px-3 py-2">
-                          <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${badge(String(r.match_status))}`}>
-                            {String(r.match_status)}
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${
+                              fmsStatus === 'updated'
+                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700/30 dark:text-gray-300'
+                            }`}
+                          >
+                            {fmsStatus}
                           </span>
                         </td>
                         <td className="px-3 py-2">
-                          <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${applyBadge(r.apply_status)}`}>
-                            {r.apply_status ? String(r.apply_status) : '-'}
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${
+                              qbStatus === 'applied'
+                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700/30 dark:text-gray-300'
+                            }`}
+                          >
+                            {qbStatus}
                           </span>
                         </td>
                         <td className="px-3 py-2 text-xs text-on-surface-secondary whitespace-pre-wrap max-w-[420px]">

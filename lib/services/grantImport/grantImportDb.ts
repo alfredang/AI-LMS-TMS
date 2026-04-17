@@ -498,6 +498,22 @@ export async function wasGrantAlreadyApplied(grantId: string): Promise<boolean> 
   return r.rows.length > 0;
 }
 
+export async function listAlreadyAppliedGrantIds(grantIds: string[]): Promise<Set<string>> {
+  await requireGrantImportSchema();
+  const out = new Set<string>();
+  const ids = Array.from(new Set(grantIds.map((x) => String(x || '').trim()).filter(Boolean)));
+  if (ids.length === 0) return out;
+  const r = await pool.query(
+    `SELECT DISTINCT grant_id::text AS grant_id
+     FROM public.grant_import_rows
+     WHERE grant_id = ANY($1::text[])
+       AND apply_status = 'applied'`,
+    [ids]
+  );
+  for (const row of r.rows) out.add(String(row.grant_id));
+  return out;
+}
+
 export async function sumAppliedReceivedByEnrolment(enrolmentIds: string[]): Promise<Map<string, number>> {
   await requireGrantImportSchema();
   const out = new Map<string, number>();

@@ -10,122 +10,8 @@ import {
   sumExpectedByEnrolmentFromSsgGrants,
   wasGrantAlreadyApplied,
 } from './grantImportDb';
-import pool from '@/lib/db';
 import { recalcAndPersistGrantPaymentRollups } from './grantImportRollup';
-
-type ProxyResponse<T = any> = { success: boolean; data?: T; error?: string; details?: unknown };
-
-function escapeQbQueryString(value: string): string {
-  return value.replace(/'/g, "''");
-}
-
-async function callQbProxy(body: Record<string, any>): Promise<any> {
-  const baseUrl = process.env.QBO_PROXY_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = (await resp.json().catch(() => null)) as ProxyResponse | null;
-  if (!resp.ok || !data?.success) {
-    throw new Error(data?.error || `QB proxy returned ${resp.status}`);
-  }
-  return data.data;
-}
-
-async function qbFindInvoiceByDocNumber(
-  app: string | undefined,
-  docNumber: string
-): Promise<{ id: string; customerRef?: string } | null> {
-  const safe = escapeQbQueryString(String(docNumber || '').trim());
-  if (!safe) return null;
-  const data = await callQbProxy({
-    action: 'query',
-    entity: 'invoice',
-    app,
-    query: `SELECT * FROM Invoice WHERE DocNumber = '${safe}' MAXRESULTS 1`,
-  });
-  const inv = data?.QueryResponse?.Invoice;
-  const row = Array.isArray(inv) ? inv[0] : inv;
-  if (!row?.Id) return null;
-  return { id: String(row.Id), customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined };
-}
-
-async function qbFindInvoiceByLineDescriptionContains(
-  app: string | undefined,
-  grantId: string
-): Promise<{ id: string; customerRef?: string } | null> {
-  const raw = String(grantId || '').trim();
-  if (!raw) return null;
-  const safe = escapeQbQueryString(raw);
-  try {
-    const data = await callQbProxy({
-      action: 'query',
-      entity: 'invoice',
-      app,
-      // Some QBO realms reject nested line queries; best-effort only.
-      query: `SELECT * FROM Invoice WHERE Line.Description LIKE '%${safe}%' MAXRESULTS 1`,
-    });
-    const inv = data?.QueryResponse?.Invoice;
-    const row = Array.isArray(inv) ? inv[0] : inv;
-    if (!row?.Id) return null;
-    return { id: String(row.Id), customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined };
-  } catch {
-    return null;
-  }
-}
-
-async function listSsgGrantIdsForEnrolment(enrolmentId: string): Promise<string[]> {
-  const id = String(enrolmentId || '').trim();
-  if (!id) return [];
-  const r = await pool.query(
-    `SELECT grant_id::text AS grant_id
-     FROM public.ssg_grants
-     WHERE LOWER(TRIM(COALESCE(enrollment_id::text, ''))) = LOWER(TRIM($1::text))
-       AND COALESCE(TRIM(COALESCE(grant_id::text, '')), '') <> ''
-     ORDER BY grant_id ASC`,
-    [id]
-  );
-  return r.rows.map((x: any) => String(x.grant_id)).filter(Boolean);
-}
-
-async function qbResolveInvoiceForGrantRow(input: {
-  app: string | undefined;
-  grantId: string;
-  enrolmentId: string | null;
-}): Promise<
-  | { id: string; customerRef?: string; resolvedBy: 'docNumber' | 'line_description' | 'enrolment_grant_docNumber' | 'enrolment_grant_line_description' }
-  | null
-> {
-  const direct = await qbFindInvoiceByDocNumber(input.app, input.grantId);
-  if (direct?.id) return { ...direct, resolvedBy: 'docNumber' };
-  const byDesc = await qbFindInvoiceByLineDescriptionContains(input.app, input.grantId);
-  if (byDesc?.id) return { ...byDesc, resolvedBy: 'line_description' };
-  if (input.enrolmentId) {
-    const grns = await listSsgGrantIdsForEnrolment(input.enrolmentId);
-    for (const grn of grns) {
-      const hit = await qbFindInvoiceByDocNumber(input.app, grn);
-      if (hit?.id) return { ...hit, resolvedBy: 'enrolment_grant_docNumber' };
-      const hitDesc = await qbFindInvoiceByLineDescriptionContains(input.app, grn);
-      if (hitDesc?.id) return { ...hitDesc, resolvedBy: 'enrolment_grant_line_description' };
-    }
-  }
-  return null;
-}
-
-async function qbQueryPaymentByRefNum(app: string | undefined, paymentRefNum: string): Promise<any | null> {
-  const safe = escapeQbQueryString(String(paymentRefNum || '').trim());
-  if (!safe) return null;
-  const data = await callQbProxy({
-    action: 'query',
-    entity: 'payment',
-    app,
-    query: `SELECT * FROM Payment WHERE PaymentRefNum = '${safe}' MAXRESULTS 1`,
-  });
-  const rows = data?.QueryResponse?.Payment;
-  const row = Array.isArray(rows) ? rows[0] : rows;
-  return row?.Id ? row : null;
-}
+import { findQbPaymentDetailsForImportRow } from './grantImportQbMatch';
 
 export async function stage1UploadParseValidateMatchAndPersist(input: {
   filepath: string;
@@ -189,25 +75,24 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
     }
 
     const alreadyAppliedLocal = await wasGrantAlreadyApplied(grn);
-    let qbAlreadyApplied = false;
+    // QuickBooks verification (preview): determine if a payment is already applied to THIS GRN's invoice
+    // by checking for a Payment linked to the invoice with matching amount+date.
     let qbPaymentId: string | null = null;
     let qbExistingAmount: number | null = null;
     let qbExistingPaymentDate: string | null = null;
-
-    // Read-only QB check (safe): if a payment already exists, mark as already_applied in preview.
-    // Best-effort: any QB errors become warnings and do not block upload/preview.
     try {
-      const inv = await qbResolveInvoiceForGrantRow({ app: appOverride, grantId: grn, enrolmentId: row.enrolmentId });
-      const refNum = String(row.bankReferenceId || row.financialTransactionId || '').trim();
-      if (inv?.id && refNum) {
-        const pay = await qbQueryPaymentByRefNum(appOverride, refNum);
-        if (pay?.Id) {
-          qbAlreadyApplied = true;
-          qbPaymentId = String(pay.Id);
-          const totalAmt = Number(pay.TotalAmt);
-          qbExistingAmount = Number.isFinite(totalAmt) ? totalAmt : null;
-          qbExistingPaymentDate = pay.TxnDate ? String(pay.TxnDate) : null;
-        }
+      const details = await findQbPaymentDetailsForImportRow({
+        grantId: grn,
+        enrolmentId: row.enrolmentId,
+        paymentDate: row.paymentDateParsed ?? null,
+        amount: row.amountParsed == null ? null : Number(row.amountParsed),
+        bankReferenceId: row.bankReferenceId ?? null,
+        preferredApp: appOverride,
+      });
+      if (details) {
+        qbPaymentId = details.paymentId;
+        qbExistingAmount = details.existingAmount;
+        qbExistingPaymentDate = details.existingPaymentDate;
       }
     } catch (e: unknown) {
       row.warnings.push({
@@ -216,12 +101,8 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
       });
     }
 
-    const alreadyApplied = alreadyAppliedLocal || qbAlreadyApplied;
-    // "Synced from QB" means QB had it, but FMS had not applied it before.
-    if (qbAlreadyApplied && !alreadyAppliedLocal) {
-      qbSyncedRows += 1;
-      if (row.enrolmentId) qbSyncedEnrolments.add(String(row.enrolmentId));
-    }
+    // Match status reflects FMS state only. QB state is reported via matchedQbObjectId for UI.
+    const alreadyApplied = alreadyAppliedLocal;
     matched.push({
       ...row,
       matchStatus: alreadyApplied ? 'already_applied' : 'ready',
