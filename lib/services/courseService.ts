@@ -61,11 +61,12 @@ export const courseService = {
     }
   },
 
-  // Get trainer courses — pass upcoming=true to limit to today→today+7 (for e-attendance)
-  async getTrainerCourses(trainerId: string, upcomingOnly = false) {
+  // Get trainer courses — pass upcoming=true to limit to today→today+7, activeOnly=true for current+upcoming
+  async getTrainerCourses(trainerId: string, upcomingOnly = false, activeOnly = false) {
     try {
       const params = new URLSearchParams({ trainerId });
       if (upcomingOnly) params.set('upcoming', 'true');
+      if (activeOnly) params.set('activeOnly', 'true');
       const response = await apiClient.get<Course[]>(
         `/api/courses/trainer-search?${params.toString()}`
       );
