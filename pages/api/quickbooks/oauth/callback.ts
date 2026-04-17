@@ -89,13 +89,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ];
 
     for (const { key, value } of upserts) {
-      await pool.query(
-        `INSERT INTO training_provider_api (training_provider_id, key_name, key_value)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (training_provider_id, key_name)
-         DO UPDATE SET key_value = $3`,
-        [tpId, key, value]
+      const existing = await pool.query(
+        `SELECT id FROM training_provider_api WHERE training_provider_id = $1 AND key_name = $2 LIMIT 1`,
+        [tpId, key]
       );
+      if (existing.rows.length > 0) {
+        await pool.query(
+          `UPDATE training_provider_api SET key_value = $1, updated_at = now() WHERE id = $2`,
+          [value, existing.rows[0].id]
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO training_provider_api (training_provider_id, key_name, key_value) VALUES ($1, $2, $3)`,
+          [tpId, key, value]
+        );
+      }
     }
 
     return res.status(200).send(htmlPage(

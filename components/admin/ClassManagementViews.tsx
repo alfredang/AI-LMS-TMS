@@ -1822,13 +1822,15 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         if (!courseToEdit?.id) return;
         try {
             setLoading(true);
+            // If junctionId is 'legacy', there's no junction row — remove all
+            // trainers (clears legacy scalar columns via syncLegacyColumns)
+            const body = junctionId === 'legacy'
+                ? { courseRunUuid: courseToEdit.id }
+                : { courseRunUuid: courseToEdit.id, junctionId };
             const res = await fetch('/api/admin/remove-trainer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    courseRunUuid: courseToEdit.id,
-                    junctionId,
-                }),
+                body: JSON.stringify(body),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to remove trainer');
@@ -3368,11 +3370,15 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </Button>
                                     </div>
                                 </div>
-                                {assignedTrainersList.length > 0 ? (
+                                {(assignedTrainersList.length > 0 || localAssignedTrainerName) ? (
                                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
                                         <div className="space-y-2">
-                                            {/* Display ALL locally assigned trainers (previously sliced to 1). */}
-                                            {assignedTrainersList.map((t: any) => {
+                                            {/* Display ALL locally assigned trainers — junction first, scalar fallback */}
+                                            {(assignedTrainersList.length > 0 ? assignedTrainersList : [{
+                                              id: 'legacy',
+                                              trainer_name: localAssignedTrainerName,
+                                              trainer_email: localAssignedTrainerEmail,
+                                            }]).map((t: any) => {
                                                 const trainerDetail = availableTrainers.find((at: any) =>
                                                     (at.email && t.trainer_email && at.email.toLowerCase() === t.trainer_email.toLowerCase()) ||
                                                     (at.trainer_name && t.trainer_name && at.trainer_name.toLowerCase() === t.trainer_name.toLowerCase())
@@ -3614,51 +3620,48 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 const tpgId = ssgTrainers?.[0]?.trainer?.idNumber;
                                 const handleRemoveTpgTrainer = () => {
                                     const runData = ssgApiResponse?.data?.course?.run;
-                                    if (!runData) {
-                                        showErrorPopup('Cannot remove — SSG course run data not loaded. Please refresh.');
-                                        return;
-                                    }
                                     showConfirmPopup(
-                                        `Remove ${tpgName} from SSG/TPG for this course run?`,
+                                        `Remove ${tpgName} from ${runData ? 'SSG/TPG and' : ''} the local database for this course run?`,
                                         async () => {
                                             setLoading(true);
                                             try {
-                                                const requestBody = {
-                                                    course: {
-                                                        courseReferenceNumber: courseReferenceNumber,
-                                                        trainingProvider: { uen: runData.organizationKey },
-                                                        run: {
-                                                            action: "update",
-                                                            registrationDates: { opening: runData.registrationOpeningDate || runData.registrationDates?.opening || 0, closing: runData.registrationClosingDate || runData.registrationDates?.closing || 0 },
-                                                            courseDates: { start: runData.courseStartDate || runData.courseDates?.start || 0, end: runData.courseEndDate || runData.courseDates?.end || 0 },
-                                                            scheduleInfoType: { code: "01", description: "Description" },
-                                                            scheduleInfo: "Schedule",
-                                                            venue: runData.venue || {},
-                                                            courseAdminEmail: runData.courseAdminEmail || currentUserEmail,
-                                                            courseVacancy: runData.courseVacancy || { code: "A", description: "Available" },
-                                                            file: { Name: "", content: "" },
-                                                            linkCourseRunTrainer: []
+                                                let ssgErrorMessage = '';
+
+                                                // Only call SSG API if we have SSG data loaded
+                                                if (runData) {
+                                                    const requestBody = {
+                                                        course: {
+                                                            courseReferenceNumber: courseReferenceNumber,
+                                                            trainingProvider: { uen: runData.organizationKey },
+                                                            run: {
+                                                                action: "update",
+                                                                registrationDates: { opening: runData.registrationOpeningDate || runData.registrationDates?.opening || 0, closing: runData.registrationClosingDate || runData.registrationDates?.closing || 0 },
+                                                                courseDates: { start: runData.courseStartDate || runData.courseDates?.start || 0, end: runData.courseEndDate || runData.courseDates?.end || 0 },
+                                                                scheduleInfoType: { code: "01", description: "Description" },
+                                                                scheduleInfo: "Schedule",
+                                                                venue: runData.venue || {},
+                                                                courseAdminEmail: runData.courseAdminEmail || currentUserEmail,
+                                                                courseVacancy: runData.courseVacancy || { code: "A", description: "Available" },
+                                                                file: { Name: "", content: "" },
+                                                                linkCourseRunTrainer: []
+                                                            }
                                                         }
-                                                    }
-                                                };
-                                                const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify(requestBody)
-                                                });
+                                                    };
+                                                    const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify(requestBody)
+                                                    });
 
-                                                // Parse the body regardless of HTTP status — SSG returns HTTP 200 with
-                                                // `error: { code, message }` on silent failures. Same pattern as the
-                                                // assign flow above (backlog #60 fix).
-                                                const body = await response.json().catch(() => ({} as any));
-                                                const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
-                                                const httpErrorDetail = !response.ok
-                                                    ? (body?.details?.[0]?.message || body?.message || body?.error || '')
-                                                    : '';
-                                                const ssgErrorMessage: string = bodyError?.message || bodyError?.code || httpErrorDetail || '';
+                                                    const body = await response.json().catch(() => ({} as any));
+                                                    const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
+                                                    const httpErrorDetail = !response.ok
+                                                        ? (body?.details?.[0]?.message || body?.message || body?.error || '')
+                                                        : '';
+                                                    ssgErrorMessage = bodyError?.message || bodyError?.code || httpErrorDetail || '';
+                                                }
 
-                                                if (!ssgErrorMessage) {
-                                                    // Real success — null local TPG columns
+                                                                // Always clear local TPG columns regardless of SSG result
                                                     await fetch(getApiUrl('/api/admin/rename-trainer'), {
                                                         method: 'POST',
                                                         headers: { 'Content-Type': 'application/json' },
@@ -3670,12 +3673,14 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                         }),
                                                     });
                                                     // Non-destructive refetch to refresh the card
-                                                    const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
-                                                    if (updated.ok) setSsgApiResponse(await updated.json());
-                                                    showSuccessPopup('TPG trainer removed.');
+                                                    try {
+                                                        const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
+                                                        if (updated.ok) setSsgApiResponse(await updated.json());
+                                                    } catch { /* ignore refetch errors */ }
+                                                if (!ssgErrorMessage) {
+                                                    showSuccessPopup(`TPG trainer removed${runData ? '' : ' (local only)'}.`);
                                                 } else {
-                                                    // Real SSG rejection — do NOT touch local
-                                                    showErrorPopup(`SSG rejected the removal: ${ssgErrorMessage}. Local DB was NOT updated.`);
+                                                    showInfoPopup(`Local TPG trainer cleared. Note: SSG returned: ${ssgErrorMessage}. You may need to update SSG separately.`);
                                                 }
                                             } catch {
                                                 showErrorPopup('Failed to remove TPG trainer.');
@@ -3687,22 +3692,98 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 };
                                 return (
                                 <div>
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div>
-                                            <h4 className="text-lg font-medium text-gray-900 dark:text-white">Assigned Trainer (TPG)</h4>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Auto-pulled from the SSG/TPG API.</p>
-                                        </div>
-                                        {tpgName && (
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                className="bg-red-600 hover:bg-red-700 text-white"
-                                                onClick={handleRemoveTpgTrainer}
-                                                disabled={loading}
-                                            >
-                                                {loading ? 'Removing...' : 'Remove'}
-                                            </Button>
-                                        )}
+                                    <div className="mb-3">
+                                        <h4 className="text-lg font-medium text-gray-900 dark:text-white">Assigned Trainer (TPG)</h4>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Auto-pulled from the SSG/TPG API. Use "Reassign TPG" or "Assign to TPG" to change.</p>
+                                    </div>
+                                    {/* Quick Reassign TPG Trainer */}
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <select
+                                            id="tpg-reassign-select"
+                                            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                                            defaultValue=""
+                                        >
+                                            <option value="">-- Reassign TPG Trainer --</option>
+                                            {availableTrainers.filter((t: any) => t.nric && t.nric !== 'NA').map((t: any) => (
+                                                <option key={t.user_id} value={t.user_id}>{t.trainer_name} (NRIC: {t.nric})</option>
+                                            ))}
+                                        </select>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            className="bg-purple-600 hover:bg-purple-700 text-white"
+                                            disabled={loading}
+                                            onClick={async () => {
+                                                const sel = document.getElementById('tpg-reassign-select') as HTMLSelectElement;
+                                                const userId = sel?.value;
+                                                if (!userId) { showErrorPopup('Please select a trainer to reassign.'); return; }
+                                                const match = availableTrainers.find((t: any) => t.user_id === userId);
+                                                if (!match?.nric || match.nric === 'NA') { showErrorPopup('Selected trainer has no NRIC on file.'); return; }
+                                                const trainerName = match.trainer_name;
+                                                const trainerEmail = match.email || '';
+                                                const nric = match.nric;
+
+                                                const runData = ssgApiResponse?.data?.course?.run;
+                                                if (!runData) {
+                                                    // No SSG data — save locally only
+                                                    await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName, trainerEmail })
+                                                    });
+                                                    showSuccessPopup(`TPG trainer updated locally to ${trainerName}. SSG data not available.`);
+                                                    return;
+                                                }
+
+                                                showConfirmPopup(`Assign ${trainerName} (NRIC: ${nric}) as TPG trainer via SSG?`, async () => {
+                                                    setLoading(true);
+                                                    try {
+                                                        const requestBody = {
+                                                            course: {
+                                                                courseReferenceNumber: courseReferenceNumber,
+                                                                trainingProvider: { uen: runData.organizationKey },
+                                                                run: {
+                                                                    action: "update",
+                                                                    registrationDates: { opening: runData.registrationOpeningDate || runData.registrationDates?.opening || 0, closing: runData.registrationClosingDate || runData.registrationDates?.closing || 0 },
+                                                                    courseDates: { start: runData.courseStartDate || runData.courseDates?.start || 0, end: runData.courseEndDate || runData.courseDates?.end || 0 },
+                                                                    scheduleInfoType: { code: "01", description: "Description" },
+                                                                    scheduleInfo: "Schedule",
+                                                                    venue: runData.venue || {},
+                                                                    courseAdminEmail: runData.courseAdminEmail || currentUserEmail,
+                                                                    courseVacancy: runData.courseVacancy || { code: "A", description: "Available" },
+                                                                    file: { Name: "", content: "" },
+                                                                    linkCourseRunTrainer: [{ trainer: { photo: { name: "", content: "" }, trainerType: { code: "1", description: "Existing" }, idNumber: nric } }]
+                                                                }
+                                                            }
+                                                        };
+                                                        const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
+                                                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody)
+                                                        });
+                                                        const body = await response.json().catch(() => ({} as any));
+                                                        const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
+                                                        const ssgErr = bodyError?.message || bodyError?.code || (!response.ok ? (body?.details?.[0]?.message || body?.message || '') : '');
+
+                                                        // Always update local TPG columns
+                                                        await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName, trainerEmail })
+                                                        });
+                                                        try {
+                                                            const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
+                                                            if (updated.ok) setSsgApiResponse(await updated.json());
+                                                        } catch { /* ignore */ }
+
+                                                        if (!ssgErr) {
+                                                            showSuccessPopup(`TPG trainer reassigned to ${trainerName}.`);
+                                                        } else {
+                                                            showInfoPopup(`Local TPG updated to ${trainerName}. SSG note: ${ssgErr}`);
+                                                        }
+                                                    } catch { showErrorPopup('Failed to reassign TPG trainer.'); }
+                                                    finally { setLoading(false); }
+                                                });
+                                            }}
+                                        >
+                                            {loading ? 'Assigning...' : 'Reassign TPG'}
+                                        </Button>
                                     </div>
                                     {tpgName ? (
                                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4">
@@ -6508,7 +6589,7 @@ const EnrolmentTable: React.FC<{
                                         {row.match ? (
                                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold" title={row.matchDetail}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>In Cal</span>
                                         ) : row.reason ? (
-                                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${row.reason === 'No Email' ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'}`}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>{row.reason}</span>
+                                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${row.reason === 'Not in Cal' ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'}`}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>{row.reason}</span>
                                         ) : <span className="text-gray-400">—</span>}
                                     </td>
                                 </tr>

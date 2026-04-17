@@ -173,7 +173,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return hasDate && hasCode;
       });
 
-      return { ...e, match: false, reason: eventExists ? 'No Email' : 'No Event' };
+      return { ...e, match: false, reason: eventExists ? 'Not in Cal' : 'No Event' };
     });
 
     return res.status(200).json({

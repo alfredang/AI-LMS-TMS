@@ -256,6 +256,7 @@ interface UpcomingClass {
     classType: string;
     invitationPaused: boolean;
     trainerInCalendar: boolean | null;
+    calendarNameMismatch: boolean;
     attendanceScore: number | null;
     trainersList: string;
 }
@@ -1131,7 +1132,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
                                                     {classItem.trainerInCalendar === true ? (
-                                                        <span className="text-green-500" title="Trainer matches calendar">✓</span>
+                                                        <span>
+                                                            <span className="text-green-500" title="Trainer matches calendar">✓</span>
+                                                            {classItem.calendarNameMismatch && (
+                                                                <span className="text-amber-500 ml-0.5" title="Course name might have changed (matched by course code)">⚠</span>
+                                                            )}
+                                                        </span>
                                                     ) : classItem.trainerInCalendar === false ? (
                                                         <span className="text-red-500" title="Trainer not in calendar">✗</span>
                                                     ) : (
@@ -1293,7 +1299,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{renderTrainerCell(classItem.assignedTrainerLocal, classItem.assignedTrainerLocalEmail)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
                                                 {classItem.trainerInCalendar === true ? (
-                                                    <span className="text-green-500" title="Trainer matches calendar">✓</span>
+                                                    <span>
+                                                        <span className="text-green-500" title="Trainer matches calendar">✓</span>
+                                                        {classItem.calendarNameMismatch && (
+                                                            <span className="text-amber-500 ml-0.5" title="Course name might have changed (matched by course code)">⚠</span>
+                                                        )}
+                                                    </span>
                                                 ) : classItem.trainerInCalendar === false ? (
                                                     <span className="text-red-500" title="Trainer not in calendar">✗</span>
                                                 ) : (
