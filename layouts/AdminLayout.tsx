@@ -37,6 +37,7 @@ import {
   ViewGrantStatusView,
   SubmitAssessmentView,
   UpdateAssessmentView,
+  BulkUpdateAssessmentView,
   ApplyNewClaimView,
   UploadCourseRunsView,
   SearchGrantView,
@@ -248,6 +249,7 @@ const AdminLayout: React.FC = () => {
     [AdminPage.TpgAssessment]: [
       { title: "Submit Assessment", description: "Submit learner assessment results to TPG.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.SubmitAssessment) },
       { title: "Update Assessment", description: "Update previously submitted assessment results.", icon: IconName.Create, onClick: () => setAdminPage(AdminPage.UpdateAssessment) },
+      { title: "Bulk Update Assessment", description: "Update assessment results for multiple learners at once.", icon: IconName.Create, onClick: () => setAdminPage(AdminPage.BulkUpdateAssessment) },
       { title: "Search Assessments", description: "Search assessment records and submission history.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.SearchAssessments) },
       { title: "View Assessment", description: "Open a submitted assessment record.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewAssessment) },
     ],
@@ -348,6 +350,8 @@ const AdminLayout: React.FC = () => {
         return <SubmitAssessmentView />;
       case AdminPage.UpdateAssessment:
         return <UpdateAssessmentView />;
+      case AdminPage.BulkUpdateAssessment:
+        return <BulkUpdateAssessmentView />;
       case AdminPage.UpdateEnrolmentFees:
         return <UpdateEnrolmentFeesView />;
       case AdminPage.ApplyNewClaim:
@@ -476,7 +480,7 @@ const AdminLayout: React.FC = () => {
         {/* Main Content Area */}
         <main className="flex-1 min-w-0 overflow-x-hidden">
           <div className={`w-full px-4 sm:px-6 lg:px-8 ${editingCourse ? 'pt-3 pb-8' : 'py-8'}`}>
-            {[AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.ClassDetail, AdminPage.ViewClassByDate, AdminPage.SearchCourseRuns, AdminPage.ViewCourseRun, AdminPage.EditCourseRun, AdminPage.UploadCourseRuns, AdminPage.DeleteCourseRun, AdminPage.AddSessions, AdminPage.CourseSessionTiming, AdminPage.CourseSessions, AdminPage.EnrollLearners, AdminPage.UploadEnrolments, AdminPage.SearchEnrolment, AdminPage.ViewEnrolment, AdminPage.UpdateEnrolment, AdminPage.CancelEnrolment, AdminPage.UpdateEnrolmentFees, AdminPage.CourseSessionAttendance, AdminPage.CheckAttendance, AdminPage.SubmitAssessment, AdminPage.UpdateAssessment, AdminPage.SearchAssessments, AdminPage.ViewAssessment, AdminPage.SearchGrant, AdminPage.ViewGrantStatus].includes(adminPage) && <SsgAppSelector />}
+            {[AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.ClassDetail, AdminPage.ViewClassByDate, AdminPage.SearchCourseRuns, AdminPage.ViewCourseRun, AdminPage.EditCourseRun, AdminPage.UploadCourseRuns, AdminPage.DeleteCourseRun, AdminPage.AddSessions, AdminPage.CourseSessionTiming, AdminPage.CourseSessions, AdminPage.EnrollLearners, AdminPage.UploadEnrolments, AdminPage.SearchEnrolment, AdminPage.ViewEnrolment, AdminPage.UpdateEnrolment, AdminPage.CancelEnrolment, AdminPage.UpdateEnrolmentFees, AdminPage.CourseSessionAttendance, AdminPage.CheckAttendance, AdminPage.SubmitAssessment, AdminPage.UpdateAssessment, AdminPage.BulkUpdateAssessment, AdminPage.SearchAssessments, AdminPage.ViewAssessment, AdminPage.SearchGrant, AdminPage.ViewGrantStatus].includes(adminPage) && <SsgAppSelector />}
             {renderContent()}
           </div>
         </main>

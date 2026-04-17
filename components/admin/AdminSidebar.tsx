@@ -246,6 +246,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <SubSection title="Assessment" isOpen={openSections.tpgAssessment} onToggle={() => toggleSection('tpgAssessment')}>
                     <NavItem page={AdminPage.SubmitAssessment} label="Submit Assessment" isSubItem />
                     <NavItem page={AdminPage.UpdateAssessment} label="Update Assessment" isSubItem />
+                    <NavItem page={AdminPage.BulkUpdateAssessment} label="Bulk Update Assessment" isSubItem />
                     <NavItem page={AdminPage.SearchAssessments} label="Search Assessments" isSubItem />
                     <NavItem page={AdminPage.ViewAssessment} label="View Assessment" isSubItem />
                 </SubSection>
