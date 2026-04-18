@@ -163,6 +163,7 @@ export enum TrainerPage {
   StatTools = 'statTools',
   DoeTools = 'doeTools',
   SpcTools = 'spcTools',
+  VideoCreationTools = 'videoCreationTools',
   SustainabilityTools = 'sustainabilityTools',
   BlockchainTools = 'blockchainTools',
   VirtualTools = 'virtualTools',

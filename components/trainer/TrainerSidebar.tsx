@@ -94,6 +94,10 @@ const SPC_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Process Capability',   icon: IconName.Analytics, href: 'https://alfredang.github.io/novaspc/#process-capability' },
 ];
 
+const VIDEO_CREATION_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'Video Creation', icon: IconName.Video, href: 'https://github.com/alfredang/videocreation' },
+];
+
 const SUSTAINABILITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Carbon Footprint Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/sgcarboncalculator/' },
 ];
@@ -207,6 +211,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
   const [statToolsOpen, setStatToolsOpen] = useState(trainerPage === TrainerPage.StatTools);
   const [doeToolsOpen, setDoeToolsOpen] = useState(trainerPage === TrainerPage.DoeTools);
   const [spcToolsOpen, setSpcToolsOpen] = useState(trainerPage === TrainerPage.SpcTools);
+  const [videoCreationToolsOpen, setVideoCreationToolsOpen] = useState(trainerPage === TrainerPage.VideoCreationTools);
   const [sustainabilityToolsOpen, setSustainabilityToolsOpen] = useState(trainerPage === TrainerPage.SustainabilityTools);
   const [blockchainToolsOpen, setBlockchainToolsOpen] = useState(trainerPage === TrainerPage.BlockchainTools);
   const [genAiOpen, setGenAiOpen] = useState(trainerPage === TrainerPage.GenAIAuthoring);
@@ -569,6 +574,51 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
           {!collapsed && spcToolsOpen && (
             <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
               {SPC_TOOL_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Video Creation Tools — expandable */}
+          <button
+            onClick={() => {
+              setVideoCreationToolsOpen(prev => !prev);
+              navigateTo(TrainerPage.VideoCreationTools);
+            }}
+            className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.VideoCreationTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Video}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.VideoCreationTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            {!collapsed && <span className="truncate">Video Creation Tools</span>}
+            {!collapsed && <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                videoCreationToolsOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.VideoCreationTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />}
+          </button>
+
+          {!collapsed && videoCreationToolsOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {VIDEO_CREATION_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
                   href={href}
