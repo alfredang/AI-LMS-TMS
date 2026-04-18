@@ -16,6 +16,12 @@ const DATA_ANALYTICS_TOOLS = [
     href: 'https://alfredang.github.io/anamolydetection2/',
   },
   {
+    title: 'Factor Analysis',
+    description: 'Identify underlying factors and relationships in multivariate datasets',
+    icon: IconName.Analytics,
+    href: 'https://multifactoranalysis.streamlit.app/',
+  },
+  {
     title: 'Mock Data Generator',
     description: 'Generate realistic mock data for testing and demonstrations',
     icon: IconName.FileText,
