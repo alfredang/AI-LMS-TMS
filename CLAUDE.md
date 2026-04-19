@@ -91,7 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 ### AI Services
 - **Nemo AI Agent** (`lib/nemo-tools.ts`) — Claude Agent SDK with 20+ tools for system operations, persistent memory in `data/nemo-memory.md`
 - **Gemini** (`lib/services/geminiService.ts`) — chatbot and content generation
-- **Claude Agent SDK** — CP Generator and SEO metadata generator (use `apiKey` option, not env vars)
+- **Claude Agent SDK** — CP Generator, Courseware Generator, SEO Metadata Generator, Nemo. Pass credentials via the `env` option on `query()` — the `apiKey` option is no longer supported. Use `buildClaudeEnv(token)` from `lib/anthropic-auth.ts`, which auto-routes by prefix: `sk-ant-oat*` subscription/OAuth tokens → `CLAUDE_CODE_OAUTH_TOKEN` (what `claude setup-token` produces), everything else → `ANTHROPIC_API_KEY`. The helper also strips the other auth env vars so stale Coolify values can't shadow the one we set. Tokens are stored in `training_provider_api` under `key_name = 'ANTHROPIC_API_KEY'` regardless of type. Localhost works without the env var because the CLI reads `~/.claude/.credentials.json`; Docker/Coolify has no such file.
 
 ### Scheduler (`lib/scheduler/scheduler.ts`)
 - node-cron with Asia/Singapore timezone
