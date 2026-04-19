@@ -47,7 +47,7 @@ Key guidelines:
 ${memory}${customPrompt ? '\n\n' + customPrompt : ''}`;
 }
 
-async function getApiKey(): Promise<{ key: string; envVar: string } | null> {
+async function getApiKey(): Promise<string | null> {
   try {
     const result = await pool.query(
       `SELECT key_value FROM training_provider_api
@@ -55,17 +55,12 @@ async function getApiKey(): Promise<{ key: string; envVar: string } | null> {
        AND key_name = 'ANTHROPIC_API_KEY'`
     );
     if (result.rows.length > 0 && result.rows[0].key_value) {
-      const key = result.rows[0].key_value;
-      const envVar = key.startsWith('sk-ant-oat') ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-      return { key, envVar };
+      return result.rows[0].key_value;
     }
   } catch (e) {
     console.error('Failed to fetch API key from DB:', e);
   }
-  if (process.env.ANTHROPIC_API_KEY) {
-    return { key: process.env.ANTHROPIC_API_KEY, envVar: 'ANTHROPIC_API_KEY' };
-  }
-  return null;
+  return process.env.ANTHROPIC_API_KEY || null;
 }
 
 // ─── Handler ────────────────────────────────────────────────────────────────
@@ -84,8 +79,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'currentUser.id required' });
   }
 
-  const apiConfig = await getApiKey();
-  if (!apiConfig) {
+  const apiKey = await getApiKey();
+  if (!apiKey) {
     return res.status(200).json({ text: 'API key not configured. Please set it in Company Settings > LLM Credentials.' });
   }
 
@@ -109,7 +104,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for await (const message of query({
       prompt: conversationHistory,
       options: {
-        env: { ...process.env, [apiConfig.envVar]: apiConfig.key },
+        apiKey,
         systemPrompt,
         maxTurns: 3,
         allowedTools: [],

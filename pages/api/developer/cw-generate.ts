@@ -405,7 +405,7 @@ Respond with ONLY the audit report, nothing else.`;
 
 // ─── Helpers ───
 
-async function getApiKey(): Promise<{ key: string; envVar: string } | null> {
+async function getApiKey(): Promise<string | null> {
   try {
     const result = await pool.query(
       `SELECT key_value FROM training_provider_api
@@ -413,26 +413,21 @@ async function getApiKey(): Promise<{ key: string; envVar: string } | null> {
        AND key_name = 'ANTHROPIC_API_KEY'`
     );
     if (result.rows.length > 0 && result.rows[0].key_value) {
-      const key = result.rows[0].key_value;
-      const envVar = key.startsWith('sk-ant-oat') ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-      return { key, envVar };
+      return result.rows[0].key_value;
     }
   } catch (e) {
     console.error('Failed to fetch API key from DB:', e);
   }
-  if (process.env.ANTHROPIC_API_KEY) {
-    return { key: process.env.ANTHROPIC_API_KEY, envVar: 'ANTHROPIC_API_KEY' };
-  }
-  return null;
+  return process.env.ANTHROPIC_API_KEY || null;
 }
 
-async function generateWithClaude(prompt: string, apiConfig: { key: string; envVar: string }, maxTurns: number = 5): Promise<string> {
+async function generateWithClaude(prompt: string, apiKey: string, maxTurns: number = 5): Promise<string> {
   let resultText = '';
 
   for await (const message of query({
     prompt,
     options: {
-      env: { ...process.env, [apiConfig.envVar]: apiConfig.key },
+      apiKey,
       allowedTools: [],
       maxTurns,
     },
@@ -514,8 +509,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Missing section parameter' });
   }
 
-  const apiConfig = await getApiKey();
-  if (!apiConfig) {
+  const apiKey = await getApiKey();
+  if (!apiKey) {
     return res.status(500).json({ error: 'API key not configured. Please set it in Company Settings > LLM Credentials.' });
   }
 
@@ -625,7 +620,7 @@ CRITICAL RULES:
 - EVERY Learning Unit MUST have Assessment_Methods listed (use the same methods as in Assessment_Methods_Details)
 - Return ONLY valid JSON, no markdown code blocks, no explanation`;
 
-        const jsonResult = await generateWithClaude(jsonPrompt, apiConfig);
+        const jsonResult = await generateWithClaude(jsonPrompt, apiKey);
 
         // Parse JSON from response
         let courseDataJson = null;
@@ -854,7 +849,7 @@ CRITICAL RULES:
         const truncatedContext = courseContext.length > 15000 ? courseContext.substring(0, 15000) + '\n[Truncated]' : courseContext;
         const prompt = buildPrompt(template, { course_context: truncatedContext });
         console.log(`[CW] AP/FG/LG prompt size: ${prompt.length} chars for ${docType}`);
-        const result = await generateWithClaude(prompt, apiConfig);
+        const result = await generateWithClaude(prompt, apiKey);
         return res.status(200).json({ success: true, result });
       }
 
@@ -873,7 +868,7 @@ IMPORTANT: Find the Training Hours, Assessment Hours, Learning Units, and Assess
           course_context: lpContext,
           num_training_days: String(numTrainingDays),
         });
-        const result = await generateWithClaude(prompt, apiConfig);
+        const result = await generateWithClaude(prompt, apiKey);
         return res.status(200).json({ success: true, result });
       }
 
@@ -933,7 +928,7 @@ Return ONLY valid JSON with this exact structure:
 
 CRITICAL: Return ONLY the JSON, no markdown blocks, no explanation.`;
 
-        const jsonResult = await generateWithClaude(jsonAssessPrompt, apiConfig);
+        const jsonResult = await generateWithClaude(jsonAssessPrompt, apiKey);
         console.log('[AssessmentAI] Raw Claude response length:', jsonResult.length);
         console.log('[AssessmentAI] First 500 chars:', jsonResult.substring(0, 500));
 
@@ -979,14 +974,14 @@ CRITICAL: Return ONLY the JSON, no markdown blocks, no explanation.`;
             course_context: courseContext,
             assessment_type: typeLabels[type] || type,
           });
-          results[type] = await generateWithClaude(prompt, apiConfig);
+          results[type] = await generateWithClaude(prompt, apiKey);
         }
         return res.status(200).json({ success: true, results });
       }
 
       case 'generate_slides': {
         const prompt = buildPrompt(GENERATE_SLIDES_PROMPT, { course_context: courseContext });
-        const result = await generateWithClaude(prompt, apiConfig);
+        const result = await generateWithClaude(prompt, apiKey);
         return res.status(200).json({ success: true, result });
       }
 
@@ -995,7 +990,7 @@ CRITICAL: Return ONLY the JSON, no markdown blocks, no explanation.`;
           course_context: courseContext,
           course_url: courseUrl,
         });
-        const result = await generateWithClaude(prompt, apiConfig);
+        const result = await generateWithClaude(prompt, apiKey);
         return res.status(200).json({ success: true, result });
       }
 
@@ -1008,7 +1003,7 @@ CRITICAL: Return ONLY the JSON, no markdown blocks, no explanation.`;
         const template = convertTemplates[convertType];
         if (!template) return res.status(400).json({ error: `Unknown convert type: ${convertType}` });
         const prompt = buildPrompt(template, { source_text: sourceText });
-        const result = await generateWithClaude(prompt, apiConfig);
+        const result = await generateWithClaude(prompt, apiKey);
         return res.status(200).json({ success: true, result });
       }
 
@@ -1026,7 +1021,7 @@ CRITICAL: Return ONLY the JSON, no markdown blocks, no explanation.`;
           cp_text: cpContent,
           additional_documents: additionalDocs,
         });
-        const result = await generateWithClaude(prompt, apiConfig);
+        const result = await generateWithClaude(prompt, apiKey);
         return res.status(200).json({ success: true, result });
       }
 

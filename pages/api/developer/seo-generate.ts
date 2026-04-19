@@ -60,7 +60,7 @@ Your output format is as follows:
 6. **SEO Meta Description:**
 7. **20 Job Roles** in bullet points related to the course`;
 
-async function getApiKey(): Promise<{ key: string; envVar: string } | null> {
+async function getApiKey(): Promise<string | null> {
   // Try DB first
   try {
     const result = await pool.query(
@@ -69,20 +69,13 @@ async function getApiKey(): Promise<{ key: string; envVar: string } | null> {
        AND key_name = 'ANTHROPIC_API_KEY'`
     );
     if (result.rows.length > 0 && result.rows[0].key_value) {
-      const key = result.rows[0].key_value;
-      // Subscription/OAuth tokens (sk-ant-oat*) use ANTHROPIC_AUTH_TOKEN
-      // Standard API keys (sk-ant-api*) use ANTHROPIC_API_KEY
-      const envVar = key.startsWith('sk-ant-oat') ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-      return { key, envVar };
+      return result.rows[0].key_value;
     }
   } catch (e) {
     console.error('Failed to fetch API key from DB:', e);
   }
   // Fallback to env var
-  if (process.env.ANTHROPIC_API_KEY) {
-    return { key: process.env.ANTHROPIC_API_KEY, envVar: 'ANTHROPIC_API_KEY' };
-  }
-  return null;
+  return process.env.ANTHROPIC_API_KEY || null;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -96,8 +89,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Missing type or fields' });
   }
 
-  const apiConfig = await getApiKey();
-  if (!apiConfig) {
+  const apiKey = await getApiKey();
+  if (!apiKey) {
     return res.status(500).json({ error: 'API key not configured. Please set it in Company Settings > LLM Credentials.' });
   }
 
@@ -120,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for await (const message of query({
       prompt,
       options: {
-        env: { ...process.env, [apiConfig.envVar]: apiConfig.key },
+        apiKey,
         allowedTools: [],
         maxTurns: 1,
       },

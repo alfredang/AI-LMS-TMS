@@ -268,7 +268,7 @@ Respond with ONLY the survey response sets, nothing else.`;
 
 // ─── Helpers ───
 
-async function getApiKey(): Promise<{ key: string; envVar: string } | null> {
+async function getApiKey(): Promise<string | null> {
   try {
     const result = await pool.query(
       `SELECT key_value FROM training_provider_api
@@ -276,26 +276,21 @@ async function getApiKey(): Promise<{ key: string; envVar: string } | null> {
        AND key_name = 'ANTHROPIC_API_KEY'`
     );
     if (result.rows.length > 0 && result.rows[0].key_value) {
-      const key = result.rows[0].key_value;
-      const envVar = key.startsWith('sk-ant-oat') ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-      return { key, envVar };
+      return result.rows[0].key_value;
     }
   } catch (e) {
     console.error('Failed to fetch API key from DB:', e);
   }
-  if (process.env.ANTHROPIC_API_KEY) {
-    return { key: process.env.ANTHROPIC_API_KEY, envVar: 'ANTHROPIC_API_KEY' };
-  }
-  return null;
+  return process.env.ANTHROPIC_API_KEY || null;
 }
 
-async function generateWithClaude(prompt: string, apiConfig: { key: string; envVar: string }): Promise<string> {
+async function generateWithClaude(prompt: string, apiKey: string): Promise<string> {
   let resultText = '';
 
   for await (const message of query({
     prompt,
     options: {
-      env: { ...process.env, [apiConfig.envVar]: apiConfig.key },
+      apiKey,
       allowedTools: [],
       maxTurns: 1,
     },
@@ -336,8 +331,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Missing section parameter' });
   }
 
-  const apiConfig = await getApiKey();
-  if (!apiConfig) {
+  const apiKey = await getApiKey();
+  if (!apiKey) {
     return res.status(500).json({ error: 'API key not configured. Please set it in Company Settings > LLM Credentials.' });
   }
 
@@ -389,7 +384,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const results: Record<string, string> = {};
       for (const method of methods) {
         const prompt = buildPrompt(INSTRUCTION_METHOD_PROMPT, { ...vars, method_name: method });
-        results[method] = await generateWithClaude(prompt, apiConfig);
+        results[method] = await generateWithClaude(prompt, apiKey);
       }
       return res.status(200).json({ success: true, results });
     }
@@ -402,7 +397,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const results: Record<string, string> = {};
       for (const method of methods) {
         const prompt = buildPrompt(ASSESSMENT_METHOD_PROMPT, { ...vars, method_name: method });
-        results[method] = await generateWithClaude(prompt, apiConfig);
+        results[method] = await generateWithClaude(prompt, apiKey);
       }
       return res.status(200).json({ success: true, results });
     }
@@ -429,7 +424,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const prompt = buildPrompt(template, vars);
-    const result = await generateWithClaude(prompt, apiConfig);
+    const result = await generateWithClaude(prompt, apiKey);
 
     return res.status(200).json({ success: true, result });
   } catch (error: any) {
