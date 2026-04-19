@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { getMemoryForSystemPrompt } from '../../../lib/nemo-memory';
 import pool from '../../../lib/db';
+import { buildClaudeEnv } from '../../../lib/anthropic-auth';
 
 // Extend API route timeout for agent SDK
 export const config = { maxDuration: 120 };
@@ -104,7 +105,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for await (const message of query({
       prompt: conversationHistory,
       options: {
-        env: { ...process.env, ANTHROPIC_API_KEY: apiKey },
+        env: buildClaudeEnv(apiKey),
         systemPrompt,
         maxTurns: 3,
         allowedTools: [],

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import pool from '../../../lib/db';
+import { buildClaudeEnv } from '../../../lib/anthropic-auth';
 
 const SEO_WSQ_TEMPLATE = `As a digital marketing consultant, your primary role is to assist small business owners in optimizing their websites for SEO and improving their digital marketing strategies to enhance lead generation. You should provide clear, actionable advice tailored to the challenges and opportunities typical for small businesses. Focus on offering strategies that are feasible and effective for smaller budgets and resources. Stay abreast of the latest SEO and digital marketing trends, ensuring your advice is current and practical. Personalize your responses to reflect an understanding of the unique dynamics and constraints small businesses face in digital marketing.
 
@@ -113,7 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for await (const message of query({
       prompt,
       options: {
-        env: { ...process.env, ANTHROPIC_API_KEY: apiKey },
+        env: buildClaudeEnv(apiKey),
         allowedTools: [],
         maxTurns: 1,
       },

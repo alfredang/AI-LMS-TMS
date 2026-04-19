@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import pool from '../../../lib/db';
+import { buildClaudeEnv } from '../../../lib/anthropic-auth';
 import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
 import { execSync } from 'child_process';
@@ -427,7 +428,7 @@ async function generateWithClaude(prompt: string, apiKey: string, maxTurns: numb
   for await (const message of query({
     prompt,
     options: {
-      env: { ...process.env, ANTHROPIC_API_KEY: apiKey },
+      env: buildClaudeEnv(apiKey),
       allowedTools: [],
       maxTurns,
     },
