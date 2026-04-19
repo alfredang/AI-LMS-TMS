@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Note:** `NEMO.md` at the repo root is unrelated — it's the product spec for **Nemo**, the in-app AI assistant exposed to Admin/Training Provider users. Not to be confused with the emerging `AGENTS.md` convention (vendor-neutral coding-agent instructions); we don't use that file here.
+
 ## Platform Context
 
 - **Company:** Tertiary Infotech Academy (Singapore-based IT training provider, UEN: 201509271W)
