@@ -145,6 +145,16 @@ export enum DeveloperPage {
   CpJobRoles = 'cpJobRoles',
   CpLessonPlan = 'cpLessonPlan',
   CpValidation = 'cpValidation',
+  // Courseware Generator
+  CwGenerator = 'cwGenerator',
+  CwExtractCourseInfo = 'cwExtractCourseInfo',
+  CwGenerateApFgLg = 'cwGenerateApFgLg',
+  CwGenerateLessonPlan = 'cwGenerateLessonPlan',
+  CwGenerateAssessment = 'cwGenerateAssessment',
+  CwGenerateSlides = 'cwGenerateSlides',
+  CwGenerateBrochure = 'cwGenerateBrochure',
+  CwConvertDocuments = 'cwConvertDocuments',
+  CwCoursewareAudit = 'cwCoursewareAudit',
 }
 
 export enum TrainerPage {
