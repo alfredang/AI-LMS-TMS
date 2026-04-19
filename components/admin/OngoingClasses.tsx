@@ -19,6 +19,11 @@ interface OngoingClass {
   endDate: string;
   trainerName: string;
   numOfTrainee: string;
+  assignedTrainerTpg?: string;
+  assignedTrainerTpgEmail?: string;
+  tpgSyncStatus?: string | null;
+  assignedTrainerLocal?: string;
+  assignedTrainerLocalEmail?: string;
 }
 
 interface Statistics {
@@ -575,7 +580,68 @@ const OngoingClasses: React.FC = () => {
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.assignedTrainerTpg || <span className="text-gray-400">—</span>}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                        {classItem.assignedTrainerTpg ? (
+                          classItem.assignedTrainerTpg
+                        ) : classItem.tpgSyncStatus === 'no_nric' ? (
+                          <span
+                            className="text-amber-500 text-xs cursor-pointer inline-flex items-center gap-1"
+                            title="To find the trainer's NRIC: 1) Check Google Drive 2) Search TPG Trainer Management 3) Ask someone with access (e.g. Ms. Tan and Dr. Ang) 4) Contact the trainer directly, or collect it on class day if physical"
+                            onClick={() => alert('To find the trainer\'s NRIC:\n\n1. Check Google Drive for their records\n2. Search TPG Trainer Management — their NRIC may be listed there\n3. Ask someone with access to their NRIC (e.g. Ms. Tan and Dr. Ang)\n4. Contact the trainer directly, or collect it on class day if physical')}
+                          >
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />
+                            No NRIC
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'no_tpg_profile' ? (
+                          <span className="text-red-400 text-xs inline-flex items-center gap-1">
+                            <span className="cursor-pointer" title="Trainer not in TPG — click for steps to add" onClick={() => alert('How to add a trainer to TPG:\n\n1. Login to TPG via Singpass (need Dr. Ang to give you access)\n2. Click "Course Runs"\n3. Click "Trainers" in the header menu\n4. Click "Add Trainer"\n5. Fill in the details — for Expertise and Experience, search the course at tertiarycourses.com.sg (trainer section for reference). Education: if unknown, put First Degree.\n6. Click "Add Trainer"\n7. Try assigning to TPG again — it should work.')}>
+                              No TPG Profile
+                            </span>
+                            <a href="https://www.tpgateway.gov.sg/" target="_blank" rel="noopener noreferrer" title="Open TPG">
+                              <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5 hover:text-red-300" />
+                            </a>
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'reg_date_passed' ? (
+                          <span className="text-amber-400 text-xs inline-flex items-center gap-1" title="Registration date passed — assign directly via TPG.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Reg Date Passed
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'course_cancelled' ? (
+                          <span className="text-gray-400 text-xs inline-flex items-center gap-1" title="Course run cancelled on SSG.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Cancelled (SSG)
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'course_expired' ? (
+                          <span className="text-gray-400 text-xs inline-flex items-center gap-1" title="Course run expired/completed on SSG.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Expired (SSG)
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'not_editable' ? (
+                          <span className="text-amber-400 text-xs inline-flex items-center gap-1" title="Not editable on SSG — assign directly via TPG.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Not Editable
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'run_not_found_ssg' ? (
+                          <span className="text-red-400 text-xs inline-flex items-center gap-1" title="Course run not found on SSG.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Not Found (SSG)
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'ssg_timeout' ? (
+                          <span className="text-amber-400 text-xs inline-flex items-center gap-1" title="SSG timed out — will retry next run.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />SSG Timeout
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'ssg_auth_error' ? (
+                          <span className="text-red-400 text-xs inline-flex items-center gap-1" title="SSG auth failed — check certificates.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Auth Error
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'ssg_decrypt_error' ? (
+                          <span className="text-red-400 text-xs inline-flex items-center gap-1" title="SSG decryption failed — check encryption key.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Decrypt Error
+                          </span>
+                        ) : classItem.tpgSyncStatus?.startsWith('error:') ? (
+                          <span className="text-red-400 text-xs cursor-pointer inline-flex items-center gap-1"
+                            title={classItem.tpgSyncStatus.replace('error:', '')}>
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Sync Error
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.assignedTrainerLocal || <span className="text-gray-400">—</span>}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
                         <Button

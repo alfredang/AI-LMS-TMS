@@ -1164,6 +1164,468 @@ export const UpdateAssessmentView: React.FC = () => {
     );
 };
 
+// All Course Runs sheet headers (0-indexed) — matches the Update Assessment tab column order
+const ALL_COURSE_RUNS_HEADERS = [
+    'Course Run', 'Course Code', 'Course Title', 'Start Date', 'End Date',
+    'Trainee', 'Trainee Email', 'Trainee Contact', 'Trainee ID', 'Trainee DOB',
+    'Sponsorship Type', 'UEN of Employer', 'Employer Name', 'Employer Phone Country Code',
+    'Employer Phone', 'Employer Contact Name', 'Employer Contact Email', 'Company Address',
+    'Enrolement Status', 'Enrolment Response', 'Enrolment ID', 'Grant Appl Date',
+    'Grant Status (BL)', 'Grant ID (BL)', 'Amount (BL)', 'Grant Status (MCES/SME/IBF)',
+    'Grant ID (MCES/SME)', 'Funding Scheme Code', 'Amount (MCES/SME)', 'Total TG Amount',
+    'TG Payment Status', 'SFC Claim ID', 'SFC Amount', 'SFC Payment Date',
+    'SFC Payout Request ID', 'SFC Application ID', 'SFC Payment Status', 'QB SFC Invoice Num',
+    'QB SFC Invoice Amount', 'QB SFC Status', 'TG Payment Date', 'Financial Transaction ID (BL)',
+    'Financial Transaction ID (MCES/SME)', 'Attendance', 'Assessment', 'Fee Collection Update Status',
+    'Assessment ID', 'Assessment ID Date', 'Skill Code', 'Assessment Update',
+    'QB Invoice # (Net Fee)', 'QB Net Fee Amount', 'Payment Type', 'QB Net Fee Status',
+    'QB Invoice # (Grant)', 'QB TG Status', 'Bank Reference ID (BL)', 'Course Fees',
+    'Bank Reference ID (MCES/SME)', 'Course Type', 'Unique Course Run ID', 'Invoice No.',
+    'Pay by SFC', 'Terms', 'Payable Fees', 'Invoice Creation',
+    'Column 65', 'Column 66', 'Column 67',
+];
+
+// Columns used by SSG API (highlighted in the table)
+const SSG_USED_COLS = new Set([0, 1, 4, 5, 8, 20, 46, 47, 48]);
+
+interface BulkAssessmentRow {
+    rawCols: string[];
+    // Editable per-row inputs (primary)
+    action: string;
+    result: string;
+    assessmentDate: string;
+    skillCode: string;
+    // Editable per-row inputs (advanced — auto-filled from paste)
+    courseRunId: string;
+    courseCode: string;
+    traineeFullName: string;
+    traineeId: string;
+    enrolmentId: string;
+}
+
+interface BulkAssessmentResult {
+    enrolmentId: string;
+    traineeFullName: string;
+    status: 'success' | 'error' | 'pending';
+    assessmentReferenceNumber?: string;
+    createdOn?: string;
+    updatedOn?: string;
+    error?: string;
+}
+
+export const BulkUpdateAssessmentView: React.FC = () => {
+    const [rows, setRows] = useState<BulkAssessmentRow[]>([]);
+    const [parseError, setParseError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [results, setResults] = useState<BulkAssessmentResult[]>([]);
+    const [error, setError] = useState<string | null>(null);
+    const [summary, setSummary] = useState<{ total: number; success: number; error: number } | null>(null);
+    const pasteRef = useRef<HTMLTextAreaElement>(null);
+
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const cellInputClasses = "w-full px-1.5 py-1 text-xs bg-white border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white";
+
+    // Column indices from "All Course Runs" sheet (0-indexed)
+    const COL = {
+        COURSE_RUN: 0, COURSE_CODE: 1, COURSE_TITLE: 2, END_DATE: 4,
+        TRAINEE: 5, TRAINEE_ID: 8, ENROLMENT_ID: 20,
+        ASSESSMENT_ID: 46, ASSESSMENT_ID_DATE: 47, SKILL_CODE: 48, ASSESSMENT_UPDATE: 49,
+    };
+
+    // Parse on paste, then clear the textarea
+    const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text');
+        if (!text.trim()) return;
+
+        const lines = text.trim().split('\n').filter(line => line.trim());
+        if (lines.length === 0) return;
+
+        const firstLine = lines[0].toLowerCase();
+        const hasHeader = firstLine.includes('course run') && firstLine.includes('course code');
+        const dataLines = hasHeader ? lines.slice(1) : lines;
+
+        if (dataLines.length === 0) { setParseError('Input error: only header row detected, no data rows.'); return; }
+
+        // Validate all rows have enough columns
+        const allCols = dataLines.map(line => line.split('\t'));
+        const badRows = allCols.filter(cols => cols.length < 21);
+
+        if (badRows.length === allCols.length) {
+            setParseError(`Input error: pasted data does not match the expected format. Expected 21+ tab-separated columns from "All Course Runs" sheet, but got ${badRows[0].length} columns. Make sure you are copying full rows from the Google Sheet.`);
+            return;
+        }
+
+        const parsed: BulkAssessmentRow[] = [];
+
+        for (let i = 0; i < allCols.length; i++) {
+            const cols = allCols[i].map(c => c.trim());
+            if (cols.length < 21) continue;
+
+            const existingSkillCode = cols[COL.SKILL_CODE] || '';
+            const existingDate = cols[COL.ASSESSMENT_ID_DATE] || '';
+
+            parsed.push({
+                rawCols: cols,
+                action: 'update',
+                result: 'Pass',
+                assessmentDate: existingDate || cols[COL.END_DATE] || '',
+                skillCode: existingSkillCode,
+                courseRunId: cols[COL.COURSE_RUN] || '',
+                courseCode: cols[COL.COURSE_CODE] || '',
+                traineeFullName: cols[COL.TRAINEE] || '',
+                traineeId: cols[COL.TRAINEE_ID] || '',
+                enrolmentId: cols[COL.ENROLMENT_ID] || '',
+            });
+        }
+
+        if (parsed.length === 0) {
+            setParseError('Input error: no valid rows found in pasted data.');
+            return;
+        }
+
+        setRows(prev => [...prev, ...parsed]);
+        setParseError(badRows.length > 0
+            ? `Parsed ${parsed.length} rows. Skipped ${badRows.length} row(s) with insufficient columns.`
+            : null
+        );
+        setResults([]);
+        setSummary(null);
+    };
+
+    const updateRow = (idx: number, field: keyof BulkAssessmentRow, value: string) => {
+        setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+    };
+
+    const removeRow = (idx: number) => {
+        setRows(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    const handleSubmit = async () => {
+        if (rows.length === 0) { setError('No rows to submit.'); return; }
+
+        const missing = rows.filter(r => !r.skillCode || !r.assessmentDate);
+        if (missing.length > 0) {
+            setError(`${missing.length} row(s) missing Skill Code or Assessment Date.`);
+            return;
+        }
+
+        setIsSubmitting(true);
+        setError(null);
+        setResults(rows.map(r => ({
+            enrolmentId: r.enrolmentId,
+            traineeFullName: r.traineeFullName,
+            status: 'pending' as const,
+        })));
+        setSummary(null);
+
+        try {
+            const response = await fetch('/api/assessments/ssg-bulk-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: rows.map(r => ({
+                        enrolmentReferenceNumber: r.enrolmentId,
+                        courseRunId: r.courseRunId,
+                        courseReferenceNumber: r.courseCode,
+                        traineeFullName: r.traineeFullName,
+                        traineeId: r.traineeId,
+                        action: r.action,
+                        result: r.result,
+                        assessmentDate: r.assessmentDate,
+                        skillCode: r.skillCode,
+                    })),
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                setError(data.error || 'Bulk update failed');
+                setResults([]);
+                return;
+            }
+
+            setResults((data.results || []).map((r: Record<string, unknown>) => ({
+                ...r,
+                enrolmentId: r.enrolmentReferenceNumber || r.enrolmentId,
+            })));
+            setSummary(data.summary || null);
+        } catch (err) {
+            console.error('Bulk assessment error:', err);
+            setError(err instanceof Error ? err.message : 'Failed to submit bulk assessment');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleClear = () => {
+        setRows([]);
+        setResults([]);
+        setError(null);
+        setParseError(null);
+        setSummary(null);
+    };
+
+    // Number of columns to display (up to what we have headers for, or raw data length)
+    const displayColCount = Math.min(ALL_COURSE_RUNS_HEADERS.length, rows[0]?.rawCols.length || ALL_COURSE_RUNS_HEADERS.length);
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Bulk Update Assessment</h2>
+
+            {/* Paste Data Card */}
+            <Card className="p-6 mb-6">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Paste Data from All Course Runs</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Copy rows from the FMS Google Sheet &quot;All Course Runs&quot; tab and paste below. Rows are parsed instantly and the paste box clears. You can paste multiple times to add more rows.
+                </p>
+
+                <textarea
+                    ref={pasteRef}
+                    onPaste={handlePaste}
+                    placeholder="Paste rows from Google Sheet here (they will appear in the table below)..."
+                    className={`${inputClasses} font-mono text-sm`}
+                    rows={3}
+                    disabled={isSubmitting}
+                />
+
+                <div className="flex items-center gap-3 mt-3">
+                    {rows.length > 0 && (
+                        <>
+                            <Button onClick={handleClear} variant="outline" disabled={isSubmitting}>
+                                Clear All ({rows.length})
+                            </Button>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                {rows.length} row{rows.length !== 1 ? 's' : ''} loaded
+                            </span>
+                        </>
+                    )}
+                </div>
+            </Card>
+
+            {/* Errors */}
+            {(error || parseError) && (
+                <Card className="p-4 mb-6 border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-700">
+                    <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error || parseError}</pre>
+                </Card>
+            )}
+
+            {/* Parsed Table with all columns + editable inputs */}
+            {rows.length > 0 && results.length === 0 && (
+                <Card className="p-6 mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-4">
+                            <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">
+                                {rows.length} Enrolment{rows.length !== 1 ? 's' : ''} to Process
+                            </h3>
+                            <button
+                                onClick={() => setShowAdvanced(!showAdvanced)}
+                                className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline"
+                            >
+                                {showAdvanced ? 'Hide' : 'Show'} advanced fields
+                            </button>
+                        </div>
+                        <Button onClick={handleSubmit} disabled={isSubmitting}>
+                            {isSubmitting ? 'Submitting...' : `Submit All (${rows.length})`}
+                        </Button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="text-sm border-collapse whitespace-nowrap">
+                            <thead>
+                                {/* Group headers row */}
+                                <tr className="border-b dark:border-gray-700">
+                                    <th className="sticky left-0 z-10 bg-gray-100 dark:bg-gray-800"></th>
+                                    <th colSpan={4} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 border-r-2 border-blue-300 dark:border-blue-600">
+                                        SSG Input Fields
+                                    </th>
+                                    {showAdvanced && (
+                                        <th colSpan={5} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20 border-r-2 border-orange-300 dark:border-orange-600">
+                                            Advanced (auto-filled)
+                                        </th>
+                                    )}
+                                    <th colSpan={displayColCount} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
+                                        Parsed Data from All Course Runs
+                                    </th>
+                                </tr>
+                                {/* Column headers row */}
+                                <tr className="border-b-2 dark:border-gray-600">
+                                    <th className="sticky left-0 z-10 bg-gray-100 dark:bg-gray-800 p-2 font-bold text-gray-600 dark:text-gray-300 text-left"></th>
+                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[90px] bg-blue-50 dark:bg-blue-900/20">Action</th>
+                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[80px] bg-blue-50 dark:bg-blue-900/20">Result</th>
+                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[150px] bg-blue-50 dark:bg-blue-900/20">Assessment Date <span className="font-normal text-[10px] text-gray-400">(DD/MM/YYYY)</span></th>
+                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[160px] bg-blue-50 dark:bg-blue-900/20 border-r-2 border-blue-300 dark:border-blue-600">Skill Code</th>
+                                    {showAdvanced && (
+                                        <>
+                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[100px] bg-orange-50/50 dark:bg-orange-900/10">Course Run ID</th>
+                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[130px] bg-orange-50/50 dark:bg-orange-900/10">Course Code</th>
+                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[150px] bg-orange-50/50 dark:bg-orange-900/10">Trainee Name</th>
+                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[110px] bg-orange-50/50 dark:bg-orange-900/10">Trainee ID</th>
+                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[140px] bg-orange-50/50 dark:bg-orange-900/10 border-r-2 border-orange-300 dark:border-orange-600">Enrolment ID</th>
+                                        </>
+                                    )}
+                                    {Array.from({ length: displayColCount }, (_, i) => (
+                                        <th key={i} className={`p-2 font-bold text-left text-xs ${SSG_USED_COLS.has(i) ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10' : 'text-gray-500 dark:text-gray-400'}`}>
+                                            {ALL_COURSE_RUNS_HEADERS[i] || `Col ${i}`}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map((row, idx) => {
+                                    const existingDate = row.rawCols[COL.ASSESSMENT_ID_DATE] || '';
+                                    const existingSkill = row.rawCols[COL.SKILL_CODE] || '';
+                                    // Format YYYY-MM-DD to DD/MM/YYYY
+                                    const formatDateDisplay = (d: string) => {
+                                        if (!d) return '';
+                                        const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                                        return m ? `${m[3]}/${m[2]}/${m[1]}` : d;
+                                    };
+                                    const dateChanged = row.assessmentDate !== existingDate;
+                                    const skillChanged = row.skillCode !== existingSkill;
+
+                                    return (
+                                        <tr key={idx} className="border-b dark:border-gray-700 hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
+                                            <td className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-800 p-1 text-center">
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-gray-400 text-xs w-5">{idx + 1}</span>
+                                                    <button
+                                                        onClick={() => removeRow(idx)}
+                                                        className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs px-1"
+                                                        title="Remove row"
+                                                        disabled={isSubmitting}
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            {/* Editable input cells */}
+                                            <td className="p-1 bg-blue-50/50 dark:bg-blue-900/10">
+                                                <select value={row.action} onChange={(e) => updateRow(idx, 'action', e.target.value)} className={cellInputClasses} disabled={isSubmitting}>
+                                                    <option value="update">Update</option>
+                                                    <option value="void">Void</option>
+                                                </select>
+                                            </td>
+                                            <td className="p-1 bg-blue-50/50 dark:bg-blue-900/10">
+                                                <select value={row.result} onChange={(e) => updateRow(idx, 'result', e.target.value)} className={cellInputClasses} disabled={isSubmitting}>
+                                                    <option value="Pass">Pass</option>
+                                                    <option value="Fail">Fail</option>
+                                                    <option value="Exempt">Exempt</option>
+                                                </select>
+                                            </td>
+                                            <td className="p-1 bg-blue-50/50 dark:bg-blue-900/10">
+                                                <input type="date" value={row.assessmentDate} onChange={(e) => updateRow(idx, 'assessmentDate', e.target.value)} className={`${cellInputClasses} ${dateChanged ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`} disabled={isSubmitting} />
+                                                <div className={`text-[10px] mt-0.5 ${!existingDate ? 'text-red-400 italic' : dateChanged ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'}`}>
+                                                    {existingDate ? `was: ${formatDateDisplay(existingDate)}` : 'existing cell is empty'}
+                                                </div>
+                                            </td>
+                                            <td className="p-1 bg-blue-50/50 dark:bg-blue-900/10 border-r-2 border-blue-300 dark:border-blue-600">
+                                                <input type="text" value={row.skillCode} onChange={(e) => updateRow(idx, 'skillCode', e.target.value)} className={`${cellInputClasses} ${skillChanged ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`} disabled={isSubmitting} />
+                                                <div className={`text-[10px] mt-0.5 ${!existingSkill ? 'text-red-400 italic' : skillChanged ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'}`}>
+                                                    {existingSkill ? `was: ${existingSkill}` : 'existing cell is empty'}
+                                                </div>
+                                            </td>
+                                            {/* Advanced editable inputs (hidden by default) */}
+                                            {showAdvanced && (() => {
+                                                const advancedFields: { field: keyof BulkAssessmentRow; colIdx: number; isLast?: boolean }[] = [
+                                                    { field: 'courseRunId', colIdx: COL.COURSE_RUN },
+                                                    { field: 'courseCode', colIdx: COL.COURSE_CODE },
+                                                    { field: 'traineeFullName', colIdx: COL.TRAINEE },
+                                                    { field: 'traineeId', colIdx: COL.TRAINEE_ID },
+                                                    { field: 'enrolmentId', colIdx: COL.ENROLMENT_ID, isLast: true },
+                                                ];
+                                                return advancedFields.map(({ field, colIdx, isLast }) => {
+                                                    const original = row.rawCols[colIdx] || '';
+                                                    const current = row[field] as string;
+                                                    const changed = current !== original;
+                                                    return (
+                                                        <td key={field} className={`p-1 bg-orange-50/30 dark:bg-orange-900/10 ${isLast ? 'border-r-2 border-orange-300 dark:border-orange-600' : ''}`}>
+                                                            <input type="text" value={current} onChange={(e) => updateRow(idx, field, e.target.value)} className={`${cellInputClasses} ${changed ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`} disabled={isSubmitting} />
+                                                            <div className={`text-[10px] mt-0.5 ${!original ? 'text-red-400 italic' : changed ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'}`}>
+                                                                {original ? `was: ${original}` : 'existing cell is empty'}
+                                                            </div>
+                                                        </td>
+                                                    );
+                                                });
+                                            })()}
+                                            {/* All columns from the sheet */}
+                                            {Array.from({ length: displayColCount }, (_, i) => (
+                                                <td key={i} className={`p-2 text-xs ${SSG_USED_COLS.has(i) ? 'bg-blue-50/30 dark:bg-blue-900/10 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                    {row.rawCols[i] || <span className="text-gray-300 dark:text-gray-600">—</span>}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+
+            {/* Results Table */}
+            {results.length > 0 && (
+                <Card className="p-6 mb-6">
+                    {summary && (
+                        <div className="flex gap-4 mb-4">
+                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+                                Total: {summary.total}
+                            </span>
+                            <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                                Success: {summary.success}
+                            </span>
+                            <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                                Errors: {summary.error}
+                            </span>
+                        </div>
+                    )}
+
+                    {isSubmitting && (
+                        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded text-sm text-blue-700 dark:text-blue-300">
+                            Processing {rows.length} assessments... This may take a while (2s delay between SSG calls).
+                        </div>
+                    )}
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b dark:border-gray-700">
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">#</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Enrolment ID</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Trainee</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Status</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Assessment Ref #</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Date</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Error</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {results.map((r, idx) => (
+                                    <tr key={idx} className={`border-b dark:border-gray-700 ${r.status === 'error' ? 'bg-red-50 dark:bg-red-900/10' : r.status === 'success' ? 'bg-green-50 dark:bg-green-900/10' : ''}`}>
+                                        <td className="p-2 text-gray-500">{idx + 1}</td>
+                                        <td className="p-2 font-mono text-xs">{r.enrolmentId}</td>
+                                        <td className="p-2">{r.traineeFullName}</td>
+                                        <td className="p-2">
+                                            {r.status === 'success' && <span className="text-green-600 dark:text-green-400 font-bold">Success</span>}
+                                            {r.status === 'error' && <span className="text-red-600 dark:text-red-400 font-bold">Error</span>}
+                                            {r.status === 'pending' && <span className="text-gray-400 italic">Pending...</span>}
+                                        </td>
+                                        <td className="p-2 font-mono text-xs">{r.assessmentReferenceNumber || '-'}</td>
+                                        <td className="p-2 text-xs">{r.createdOn ? `${r.createdOn}${r.updatedOn ? ` (updated ${r.updatedOn})` : ''}` : '-'}</td>
+                                        <td className="p-2 text-xs text-red-600 dark:text-red-400">{r.error || ''}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+        </div>
+    );
+};
+
 export const UpdateEnrolmentFeesView: React.FC = () => {
     const { trainingProviderProfile } = useLms();
     const [enrolmentReferenceNumber, setEnrolmentReferenceNumber] = useState<string>('');

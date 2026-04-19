@@ -14,19 +14,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const dateFrom = typeof req.query.dateFrom === 'string' && req.query.dateFrom ? req.query.dateFrom : null;
     const dateTo = typeof req.query.dateTo === 'string' && req.query.dateTo ? req.query.dateTo : null;
 
-    // Find upcoming course runs with local trainer but no TPG trainer
+    // Find course runs with local trainer — includes TPG empty, mismatches, and no-local (for cleanup)
+    // Covers both upcoming and ongoing (end_date >= today)
+    await pool.query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS tpg_sync_status TEXT`);
     const result = await pool.query(
       `SELECT cr.id, cr.course_run_id, cr.start_date, cr.end_date,
               c.title AS course_title, c.course_code,
               cr.class_status,
+              cr.tpg_assigned_trainer_name,
+              cr.tpg_assigned_trainer_email,
+              cr.tpg_sync_status,
               cr.assigned_trainer_name AS legacy_trainer_name,
               cr.assigned_trainer_email AS legacy_trainer_email,
               cr.assigned_trainer_id AS legacy_trainer_id
        FROM course_run cr
        JOIN course c ON c.id = cr.course_id
-       WHERE cr.start_date >= COALESCE($1::date, CURRENT_DATE)
+       WHERE cr.end_date >= COALESCE($1::date, CURRENT_DATE)
          AND cr.start_date <= COALESCE($2::date, CURRENT_DATE + INTERVAL '30 days')
-         AND (cr.tpg_assigned_trainer_name IS NULL OR cr.tpg_assigned_trainer_name = '')
          AND cr.class_status NOT IN ('Cancelled', 'Unconfirmed')
        ORDER BY cr.start_date ASC`,
       [dateFrom, dateTo]
@@ -126,10 +130,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const hasLocalTrainer = localTrainers.length > 0;
       const primaryTrainer = localTrainers[0] || null;
-      const canAssign = hasLocalTrainer && (primaryTrainer?.hasNric || false);
-      const reason = !hasLocalTrainer
+      const tpgName = (row.tpg_assigned_trainer_name || '').trim();
+      const localName = (primaryTrainer?.name || '').trim();
+
+      // Determine sync status for this row
+      let syncAction: 'assign' | 'override' | 'clear' | 'match' | 'skip';
+      if (!hasLocalTrainer && tpgName) {
+        syncAction = 'clear'; // TPG has trainer but no local — will clear
+      } else if (!hasLocalTrainer) {
+        syncAction = 'skip'; // no local, no TPG — nothing to do
+      } else if (!tpgName) {
+        syncAction = 'assign'; // TPG empty, local exists — will assign
+      } else if (tpgName.toLowerCase() === localName.toLowerCase()) {
+        syncAction = 'match'; // already in sync
+      } else {
+        syncAction = 'override'; // mismatch — will override
+      }
+
+      const canAssign = syncAction === 'assign' || syncAction === 'override' || syncAction === 'clear';
+      const reason = syncAction === 'skip'
         ? 'No local trainer assigned'
-        : !primaryTrainer?.hasNric
+        : syncAction === 'match'
+        ? 'Already synced'
+        : syncAction === 'assign' && !primaryTrainer?.hasNric
+        ? 'No NRIC on file for trainer'
+        : syncAction === 'override' && !primaryTrainer?.hasNric
         ? 'No NRIC on file for trainer'
         : '';
 
@@ -140,11 +165,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         courseCode: row.course_code,
         classStatus: row.class_status,
         startDate: row.start_date,
+        tpgTrainerName: tpgName || null,
+        tpgSyncStatus: row.tpg_sync_status || null,
+        syncAction,
         localTrainers,
-        canAssign,
+        canAssign: canAssign && (syncAction === 'clear' || (primaryTrainer?.hasNric || false)),
         reason,
       };
-    });
+    }).filter(r => r.syncAction !== 'skip');
 
     return res.status(200).json({ success: true, preview });
   } catch (err) {

@@ -3,7 +3,8 @@ import pool from '../../../lib/db';
 import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
-import { bulkProcessDirectApplications, createNativeEnrolmentFromDA, addLearnerToCalendarEvent } from '../../../lib/autoEnrolDirectApplications';
+import { bulkProcessDirectApplications, createNativeEnrolmentFromDA } from '../../../lib/autoEnrolDirectApplications';
+import { addDaLearnerToCalendar, removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -269,7 +270,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Get existing application IDs, their statuses, and enrolment status to check for duplicates
         const existingResult = await pool.query(
-            `SELECT application_id, application_status, enrolment_status FROM da_application`
+            `SELECT application_id, application_status, enrolment_status, trainee_id, course_run_id FROM da_application`
         );
 
         const existingApps = new Map<string, { application_status: string; enrolment_status: string | null }>(
@@ -278,6 +279,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 enrolment_status: r.enrolment_status,
             }])
         );
+
+        // Build a map of trainee_id + course_run_id → application_status for same-person-same-course duplicate detection
+        // Key format: "TRAINEE_ID||COURSE_RUN_ID" (lowercased, trimmed)
+        const existingTraineeCourseMap = new Map<string, { application_id: string; application_status: string }>();
+        for (const r of existingResult.rows) {
+            const tid = (r.trainee_id || '').toString().trim().toLowerCase();
+            const crid = (r.course_run_id || '').toString().trim().toLowerCase();
+            if (tid && crid) {
+                const key = `${tid}||${crid}`;
+                // Keep the most relevant (non-cancelled) entry; if multiple exist, prefer active ones
+                const existing = existingTraineeCourseMap.get(key);
+                const status = (r.application_status || '').toLowerCase();
+                if (!existing || status !== 'cancelled') {
+                    existingTraineeCourseMap.set(key, {
+                        application_id: r.application_id,
+                        application_status: r.application_status,
+                    });
+                }
+            }
+        }
 
         // Transform and filter records
         const newRecords: Record<string, any>[] = [];
@@ -335,6 +356,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         duplicates.push(appId);
                     }
                     continue;
+                }
+
+                // Check for same trainee + course run duplicate (different application_id but same person+course)
+                const tid = (transformed.trainee_id || '').toString().trim().toLowerCase();
+                const crid = (transformed.course_run_id || '').toString().trim().toLowerCase();
+                if (tid && crid) {
+                    const tcKey = `${tid}||${crid}`;
+                    const existingTC = existingTraineeCourseMap.get(tcKey);
+                    if (existingTC) {
+                        const existingTCStatus = (existingTC.application_status || '').toLowerCase();
+                        // Only block if the existing row is still active (not cancelled)
+                        if (existingTCStatus !== 'cancelled') {
+                            console.log(`⚠️ Duplicate trainee+course: ${appId} — same trainee ${tid} already has active application ${existingTC.application_id} for course run ${crid}`);
+                            errors.push({
+                                row: i + 1,
+                                error: `Duplicate: ${transformed.trainee_name || tid} already has an active application (${existingTC.application_id}) for this course run`,
+                            });
+                            continue;
+                        }
+                    }
+                    // Track this new record for intra-batch duplicate detection
+                    existingTraineeCourseMap.set(tcKey, {
+                        application_id: appId,
+                        application_status: transformed.application_status || '',
+                    });
                 }
 
                 newRecords.push(transformed);
@@ -502,7 +548,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             console.error('⚠️  auto-enrol kickoff setup failed (non-fatal):', err);
         }
 
-        // ---- OUR NEW DIRECT APPLICATION AUTOMATIONS ----
+        // ---- DIRECT APPLICATION AUTOMATIONS ----
         // Fire-and-forget sync for Calendar and Native Enrolments
         try {
             const allProcessedRecords = [...insertedRecords, ...updatedRecords];
@@ -510,20 +556,68 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Background async processing to avoid blocking UI response
             setImmediate(async () => {
                 for (const record of allProcessedRecords) {
-                    // Automation 1: Google Calendar Sync (triggers if Status/application_status is Confirmed)
-                    const isAppConfirmed = String(record.application_status || '').toLowerCase() === 'confirmed';
-                    if (isAppConfirmed && record.trainee_email) {
+                    const appStatus = String(record.application_status || '').toLowerCase();
+                    const oldStatus = String(record.old_status || '').toLowerCase();
+
+                    // Automation 1a: Add to Calendar (triggers if application_status is Confirmed)
+                    if (appStatus === 'confirmed' && record.trainee_email) {
                         try {
-                            await addLearnerToCalendarEvent(record.trainee_email, record.course_title, record.course_start_date);
-                            console.log(`📅 Automatically synced learner ${record.trainee_email} to Google Calendar event`);
-                            
-                            // Tick the CAL column in DA view
+                            // Resolve course_run UUID and check if course run is in the future
+                            const crRes = await pool.query(
+                                `SELECT id, start_date FROM course_run WHERE course_run_id = $1 LIMIT 1`,
+                                [record.course_run_id]
+                            );
+                            const courseRunUuid = crRes.rows[0]?.id || record.course_run_id;
+                            const startDate = crRes.rows[0]?.start_date;
+
+                            // Skip calendar add for past course runs
+                            if (startDate && new Date(startDate) < new Date(new Date().toISOString().slice(0, 10))) {
+                                console.log(`⏭️ Skipping calendar add for ${record.trainee_email} — course run ${record.course_run_id} already started`);
+                            } else {
+                                const calResult = await addDaLearnerToCalendar(
+                                    record.trainee_email,
+                                    courseRunUuid,
+                                    record.course_title,
+                                    record.course_start_date
+                                );
+                                if (calResult.addedTo > 0) {
+                                    console.log(`📅 Added ${record.trainee_email} to ${calResult.addedTo} calendar event(s)`);
+                                    await pool.query(
+                                        `UPDATE da_application SET calendar_added = true WHERE application_id = $1`,
+                                        [record.application_id]
+                                    );
+                                }
+                            }
+                        } catch (calErr) {
+                            console.error('Failed to sync to Calendar:', calErr);
+                        }
+                    }
+
+                    // Automation 1b: Remove from Calendar (triggers if status changed TO Cancelled)
+                    if (appStatus === 'cancelled' && oldStatus && oldStatus !== 'cancelled' && record.trainee_email) {
+                        try {
+                            const crRes = await pool.query(
+                                `SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1`,
+                                [record.course_run_id]
+                            );
+                            const courseRunUuid = crRes.rows[0]?.id || record.course_run_id;
+
+                            const removeResult = await removeDaLearnerFromCalendar(
+                                record.trainee_email,
+                                courseRunUuid,
+                                record.course_title,
+                                record.course_start_date
+                            );
+                            if (removeResult.removedFrom > 0) {
+                                console.log(`🗑️ Removed ${record.trainee_email} from ${removeResult.removedFrom} calendar event(s)`);
+                            }
+                            // Untick the CAL column
                             await pool.query(
-                                `UPDATE da_application SET calendar_added = true WHERE application_id = $1`,
+                                `UPDATE da_application SET calendar_added = false WHERE application_id = $1`,
                                 [record.application_id]
                             );
                         } catch (calErr) {
-                            console.error('Failed to sync to Calendar:', calErr);
+                            console.error('Failed to remove from Calendar:', calErr);
                         }
                     }
 

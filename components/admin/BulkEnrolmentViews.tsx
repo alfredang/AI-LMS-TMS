@@ -18,18 +18,14 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
                 <div className="flex items-center gap-2 mb-3">
                     <Icon name={IconName.X} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
                     <div className="font-semibold text-red-900 dark:text-red-200">
-                        Enrolment Created Unsuccessfully
+                        {error.message || 'Enrolment Created Unsuccessfully'}
                     </div>
                 </div>
                 <div className="pl-7 space-y-1.5">
                     {error.details.map((detail: any, idx: number) => {
-                        let message = detail.message || 'No message';
-
-                        // Remove technical error codes like "TGS-441 - "
-                        message = message.replace(/^[A-Z]+-\d+\s*-\s*/i, '').trim();
-
+                        let message = detail.message || JSON.stringify(detail);
                         return (
-                            <div key={idx} className="text-sm text-red-800 dark:text-red-300">
+                            <div key={idx} className="text-sm text-red-800 dark:text-red-300 font-mono bg-red-100 dark:bg-red-900/40 px-2 py-1 rounded inline-block">
                                 {message}
                             </div>
                         );
@@ -50,7 +46,7 @@ const ErrorMessageDisplay: React.FC<{ error: any }> = ({ error }) => {
                     </div>
                 </div>
                 <div className="pl-7 text-sm text-red-800 dark:text-red-300">
-                    {error.message.replace(/^[A-Z]+-\d+\s*-\s*/i, '')}
+                    {error.message}
                 </div>
             </div>
         );
@@ -123,46 +119,63 @@ export const BulkUploadEnrolmentView: React.FC = () => {
         handleFileChange(droppedFile);
     };
 
-    // Helper function to normalize dates to DD/MM/YYYY format
-    // Excel/xlsx often outputs dates in MM/DD/YYYY format, so we need to swap them
     const normalizeDateFormat = (dateStr: string | number): string => {
         if (!dateStr) return dateStr as string;
 
-        // Convert to string if it's a number
         const str = String(dateStr).trim();
 
-        // Check if it's in M/D/YYYY or MM/DD/YYYY format (need to swap to DD/MM/YYYY)
-        if (/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(str)) {
-            const parts = str.split(/[/-]/);
-            // Excel outputs MM/DD/YYYY, we need DD/MM/YYYY
-            // So parts[0] = month, parts[1] = day, parts[2] = year
-            const month = parts[0].padStart(2, '0');
-            const day = parts[1].padStart(2, '0');
-            const year = parts[2];
-            return `${day}/${month}/${year}`;
-        }
-
-        // Handle short year format like 1/3/01 or 3/1/01 (MM/DD/YY format from Excel)
-        if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2}$/.test(str)) {
-            const parts = str.split(/[/-]/);
-            // Excel outputs MM/DD/YY, we need DD/MM/YYYY
-            const month = parts[0].padStart(2, '0');
-            const day = parts[1].padStart(2, '0');
-            // Assume dates are in 2000s if year is 2-digit
-            const year = '20' + parts[2];
-            return `${day}/${month}/${year}`;
+        // Already in ISO -> return as is
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+             return str;
         }
 
         // Try to parse as Excel serial date (numeric value)
         const numValue = Number(str);
         if (!isNaN(numValue) && numValue > 1000) {
-            // Excel date serial number starts from 1900-01-01
             const excelEpoch = new Date(1899, 11, 30);
             const date = new Date(excelEpoch.getTime() + numValue * 86400000);
             const day = String(date.getDate()).padStart(2, '0');
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const year = date.getFullYear();
-            return `${day}/${month}/${year}`;
+            return `${year}-${month}-${day}`; // ISO format immediately
+        }
+
+        const parts = str.split(/[/-]/);
+        if (parts.length === 3) {
+            let part1 = parseInt(parts[0], 10);
+            let part2 = parseInt(parts[1], 10);
+            let part3 = parseInt(parts[2], 10);
+
+            let day = 1, month = 1, year = 2000;
+
+            // Is year first? (YYYY-MM-DD or YYYY/MM/DD)
+            if (parts[0].length === 4) {
+                year = part1;
+                month = part2;
+                day = part3;
+            } else {
+                // Year is last
+                year = part3;
+                if (year < 100) {
+                    year += year > 30 ? 1900 : 2000;
+                }
+
+                // Singapore defaults to DD/MM/YYYY. If part1 > 12, it MUST be the day.
+                // If part2 > 12, it MUST be the day (which means input was MM/DD/YYYY).
+                if (part2 > 12) {
+                    day = part2;
+                    month = part1;
+                } else {
+                    // Default to DD/MM/YYYY for SG format
+                    day = part1;
+                    month = part2;
+                }
+            }
+
+            // Ensure valid month/day ranges
+            if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            }
         }
 
         return str;
@@ -334,23 +347,32 @@ export const BulkUploadEnrolmentView: React.FC = () => {
             console.log('🔄 Processing', normalizedData.length, 'enrolments via SSG API directly...');
 
             // Convert DOB from DD/MM/YYYY or DD-MM-YYYY → YYYY-MM-DD for SSG API
+            // Note: Since normalizeDateFormat now returns strict YYYY-MM-DD, we just pass through.
             const convertDobToISO = (dob: string): string => {
                 if (!dob) return '';
                 const parts = dob.split(/[\/\-]/);
+                
+                // If it's already YYYY-MM-DD 
+                if (parts.length === 3 && parts[0].length === 4) {
+                    return dob;
+                }
+                
+                // Fallback (though normalizeDateFormat should have already fixed it)
                 if (parts.length === 3 && parts[2].length === 4) {
                     return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                 }
                 return dob;
             };
 
-            const trainingPartnerUen = trainingProviderProfile?.uen || '';
-            const trainingPartnerCode = trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : '';
+            const trainingPartnerUen = (trainingProviderProfile?.uen || process.env.NEXT_PUBLIC_TRAINING_PARTNER_UEN || '').trim();
+            const trainingPartnerCode = trainingPartnerUen ? `${trainingPartnerUen}-01` : (process.env.NEXT_PUBLIC_TRAINING_PARTNER_CODE || '').trim();
 
             const allItems: any[] = [];
 
             for (let i = 0; i < normalizedData.length; i++) {
                 const row = normalizedData[i] as any;
-                const sponsorshipType = (row[COL.sponsorshipType] || 'INDIVIDUAL').toUpperCase().trim();
+                const rawSponsorship = (row[COL.sponsorshipType] || 'INDIVIDUAL').toUpperCase().trim();
+                const sponsorshipType = rawSponsorship.includes('EMPLOYER') ? 'EMPLOYER' : 'INDIVIDUAL';
 
                 const trainee: any = {
                     id: String(row[COL.traineeId] || '').trim(),
@@ -359,9 +381,9 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                     dateOfBirth: convertDobToISO(row[COL.traineeDob] || ''),
                     emailAddress: (row[COL.traineeEmail] || '').trim(),
                     contactNumber: {
-                        countryCode: (row[COL.phoneCountryCode] || '+65').trim(),
+                        countryCode: (row[COL.phoneCountryCode] || '65').replace('+', '').trim(),
                         phoneNumber: String(row[COL.traineePhone] || '').trim(),
-                        ...(row[COL.phoneAreaCode] ? { areaCode: String(row[COL.phoneAreaCode]).trim() } : {})
+                        areaCode: row[COL.phoneAreaCode] ? String(row[COL.phoneAreaCode]).trim() : ''
                     },
                     enrolmentDate: new Date().toISOString().split('T')[0],
                     sponsorshipType,
@@ -378,9 +400,9 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                             fullName: (row[COL.employerContactName] || '').trim(),
                             emailAddress: (row[COL.employerContactEmail] || '').trim(),
                             contactNumber: {
-                                countryCode: (row[COL.employerPhoneCountryCode] || '+65').trim(),
+                                countryCode: (row[COL.employerPhoneCountryCode] || '65').replace('+', '').trim(),
                                 phoneNumber: String(row[COL.employerPhone] || '').trim(),
-                                ...(row[COL.employerPhoneAreaCode] ? { areaCode: String(row[COL.employerPhoneAreaCode]).trim() } : {})
+                                areaCode: row[COL.employerPhoneAreaCode] ? String(row[COL.employerPhoneAreaCode]).trim() : ''
                             }
                         }
                     };
@@ -400,6 +422,12 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                         trainee
                     }
                 };
+
+                if (!payload.enrolment.trainingPartner.uen) {
+                    throw new Error(`Row ${i + 1}: Training Provider UEN is missing. Please check your profile or environment variables.`);
+                }
+
+                console.log(`📤 sending SSG payload for row ${i + 1}:`, JSON.stringify(payload, null, 2));
 
                 let itemResult: any;
                 try {
@@ -440,8 +468,13 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                 const ssgHardError = !parsedResult?.success;
 
                 if (!ssgHardError) {
+                    if (parsedResult?.localEnrollmentSynced) {
+                        console.log(`✅ Row ${i + 1}: DB insert handled automatically by SSG server sync.`);
+                        continue;
+                    }
+
                     const enrolmentStatus = ssgStatus || 'Pending';
-                    console.log(`💾 Row ${i + 1}: email="${item.traineeEmail}" courseRun="${item.courseRunId}" status="${enrolmentStatus}" enrolmentId="${ssgRefNumber || ''}"`);
+                    console.log(`💾 Row ${i + 1}: email="${item.traineeEmail}" courseRun="${item.courseRunId}" status="${enrolmentStatus}" enrolmentId="${ssgRefNumber || ''}" (Manual DB Sync)`);
 
                     try {
                         const dbResponse = await fetch('/api/enrolments/bulk-create', {
@@ -489,6 +522,27 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                 setDbInsertErrors(rowDbErrors);
             }
             console.log('✅ Database insertion process completed');
+
+            // Auto-sync calendar flags for newly enrolled learners
+            const successCount = allItems.filter(item => item.parsedResult?.success).length;
+            if (successCount > 0) {
+                console.log(`📅 Auto-syncing calendar for ${successCount} successful enrolments...`);
+                try {
+                    const calRes = await fetch('/api/admin/enrolment-actions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'sync-calendar' }),
+                    });
+                    const calJson = await calRes.json();
+                    if (calJson.success) {
+                        console.log(`📅 Calendar sync complete: checked=${calJson.checked}, matched=${calJson.matched}`);
+                    } else {
+                        console.warn('📅 Calendar sync returned error (non-blocking):', calJson.error);
+                    }
+                } catch (calErr) {
+                    console.warn('📅 Calendar sync failed (non-blocking):', calErr);
+                }
+            }
 
             setUploadResult({ results: allItems });
 
@@ -770,9 +824,12 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                                                                         );
                                                                     } else if (record.parsedResult && !record.parsedResult.success) {
                                                                         // Error case
-                                                                        const errPayload = typeof record.parsedResult.error === 'string'
-                                                                            ? { message: record.parsedResult.error }
-                                                                            : record.parsedResult.error;
+                                                                        const errPayload = {
+                                                                            message: typeof record.parsedResult.error === 'string' 
+                                                                                ? record.parsedResult.error 
+                                                                                : (record.parsedResult.error?.message || 'An error occurred'),
+                                                                            details: record.parsedResult.details || record.parsedResult.error?.details
+                                                                        };
                                                                         return <ErrorMessageDisplay error={errPayload} />;
                                                                     } else if (record.parsedResult) {
                                                                         // parsedResult exists but no clear error or data - show parsed result
