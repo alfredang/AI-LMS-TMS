@@ -427,7 +427,7 @@ async function generateWithClaude(prompt: string, apiKey: string, maxTurns: numb
   for await (const message of query({
     prompt,
     options: {
-      apiKey,
+      env: { ...process.env, ANTHROPIC_API_KEY: apiKey },
       allowedTools: [],
       maxTurns,
     },

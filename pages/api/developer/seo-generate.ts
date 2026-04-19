@@ -113,7 +113,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for await (const message of query({
       prompt,
       options: {
-        apiKey,
+        env: { ...process.env, ANTHROPIC_API_KEY: apiKey },
         allowedTools: [],
         maxTurns: 1,
       },
