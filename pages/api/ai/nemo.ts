@@ -104,7 +104,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for await (const message of query({
       prompt: conversationHistory,
       options: {
-        apiKey,
+        env: { ...process.env, ANTHROPIC_API_KEY: apiKey },
         systemPrompt,
         maxTurns: 3,
         allowedTools: [],
