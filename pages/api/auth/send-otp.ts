@@ -100,6 +100,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     );
     oauth2Client.setCredentials({ refresh_token: google_refresh_token });
 
+    // Pre-warm the access token to avoid lazy-refresh failures on first call
+    try {
+      await oauth2Client.getAccessToken();
+      console.log('✅ Gmail OAuth access token refreshed successfully');
+    } catch (tokenError: any) {
+      console.error('❌ Failed to refresh Gmail OAuth access token:', tokenError?.message);
+      return res.status(500).json({ success: false, error: 'Email service authentication failed. Please try again.' });
+    }
+
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     const companyShortName = tp.company_shortname || company_name || 'Training Provider';
@@ -164,12 +173,29 @@ Warm regards
       .replace(/\//g, '_')
       .replace(/=+$/, '');
 
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodedMessage },
-    });
+    // Send with retry — Gmail API can transiently fail on first attempt after cold start
+    let lastSendError: any = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await gmail.users.messages.send({
+          userId: 'me',
+          requestBody: { raw: encodedMessage },
+        });
+        console.log(`✅ OTP email sent successfully to ${email} via Gmail OAuth (attempt ${attempt})`);
+        lastSendError = null;
+        break;
+      } catch (sendError: any) {
+        lastSendError = sendError;
+        console.error(`❌ Gmail send attempt ${attempt} failed:`, sendError?.message);
+        if (attempt < 2) {
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
+    }
 
-    console.log(`✅ OTP email sent successfully to ${email} via Gmail OAuth`);
+    if (lastSendError) {
+      throw lastSendError;
+    }
 
     return res.status(200).json({
       success: true,
