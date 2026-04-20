@@ -406,7 +406,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 20;
+    const itemsPerPage = 100;
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isCancelling, setIsCancelling] = useState(false);

@@ -295,6 +295,9 @@ export interface TrainingProviderProfile extends BaseProfile {
     autoGenerateQbInvoice: boolean;
     autoAddLearnerToCalendar: boolean;
     upcomingClassesThresholdDays: number;
+    certificateAttendanceThreshold: number;
+    casThreshold: number;
+    esThreshold: number;
   };
   securitySettings: {
     autoMaskSensitiveData: boolean;
