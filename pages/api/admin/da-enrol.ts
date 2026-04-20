@@ -5,6 +5,7 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/uti
 import crypto from 'crypto';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { buildEnrolmentPayload } from '../../../lib/ssg/buildEnrolmentPayload';
+import { createNativeEnrolmentFromDA } from '../../../lib/autoEnrolDirectApplications';
 
 /**
  * POST /api/admin/da-enrol
@@ -94,11 +95,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           continue;
         }
 
-        // Success — update da_application enrolment_status in DB
-        await pool.query(
-          `UPDATE da_application SET enrolment_status = 'Confirmed', updated_at = NOW() WHERE application_id = $1`,
-          [applicationId]
-        );
+        // Try to run Native Enrolment so the system is fully synced
+        try {
+          const appRes = await pool.query(`SELECT * FROM da_application WHERE application_id = $1`, [applicationId]);
+          if (appRes.rows[0]) {
+            await createNativeEnrolmentFromDA(appRes.rows[0], pool);
+          }
+        } catch (nativeErr) {
+          console.error(`⚠️ Native Enrolment sync failed for ${applicationId}:`, nativeErr);
+        }
 
         results.push({ application_id: applicationId, success: true });
 
