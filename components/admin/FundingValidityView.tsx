@@ -88,9 +88,12 @@ const FundingValidityView: React.FC = () => {
     );
   }, [fourMonthsAhead, today, wsqCourses]);
 
-  const totalToRenew = wsqCourses.filter(course => {
-    const checked = renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
-    return expiringSoonIds.has(course.id) && !checked;
+  const renewWithin3Months = wsqCourses.filter(course => {
+    const validityDate = parseValidityDate(course.fundingValidity);
+    if (!validityDate) return false;
+    const renewDate = new Date(validityDate);
+    renewDate.setMonth(renewDate.getMonth() - 3);
+    return renewDate >= today;
   }).length;
 
   const handleRenewToggle = async (courseId: string, checked: boolean) => {
@@ -183,8 +186,8 @@ const FundingValidityView: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-300 mt-1">Expired in 4 Months</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-purple-600">{totalToRenew}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">To Renew (Expired in 4 Months)</p>
+          <p className="text-4xl font-bold text-purple-600">{renewWithin3Months}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Renew Dates Within 3 Months</p>
         </Card>
       </div>
 
