@@ -50,8 +50,17 @@ function describeCron(expr: string): string {
 
     const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
 
-    const h = parseInt(hour, 10);
     const m = parseInt(minute, 10);
+    
+    // Handle "every X hours" pattern: "0 */3 * * *"
+    if (hour.startsWith('*/') && !isNaN(m)) {
+        const hInterval = parseInt(hour.substring(2), 10);
+        if (!isNaN(hInterval)) {
+            return `Every ${hInterval} hours`;
+        }
+    }
+
+    const h = parseInt(hour, 10);
     if (isNaN(h) || isNaN(m)) return expr;
 
     const period = h >= 12 ? 'PM' : 'AM';
