@@ -200,14 +200,14 @@ const FundingValidityView: React.FC = () => {
           <table className="w-full text-xs">
             <thead className="bg-gray-50 dark:bg-gray-900/40">
               <tr className="text-left text-gray-600 dark:text-gray-300">
-                <th className="px-3 py-2 font-semibold">Course Title</th>
-                <th className="px-3 py-2 font-semibold">Course Ref Code</th>
-                <th className="px-3 py-2 font-semibold">Type</th>
-                <th className="px-3 py-2 font-semibold text-right">CAS</th>
-                <th className="px-3 py-2 font-semibold text-right">ES</th>
-                <th className="px-3 py-2 font-semibold">Validity</th>
-                <th className="px-3 py-2 font-semibold">Renew Date</th>
-                <th className="px-3 py-2 font-semibold text-center">Renew</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Type</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Validity End Date</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Renew Date</th>
+                <th className="px-3 py-2 font-semibold text-right whitespace-nowrap">CAS</th>
+                <th className="px-3 py-2 font-semibold text-right whitespace-nowrap">ES</th>
+                <th className="px-3 py-2 font-semibold text-center whitespace-nowrap">Renew</th>
                 <th className="px-3 py-2 font-semibold text-center w-20"></th>
               </tr>
             </thead>
@@ -233,6 +233,29 @@ const FundingValidityView: React.FC = () => {
                     <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white">{course.title}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.courseCode || '—'}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{displayCourseType(course.courseType)}</td>
+                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editState.fundingValidity}
+                          onChange={e => setEditState(s => ({ ...s, fundingValidity: e.target.value }))}
+                          className={`${inputClass} w-32`}
+                        />
+                      ) : (
+                        <>
+                          <span>{formatValidityDate(course.fundingValidity)}</span>
+                          {expired && <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
+                          {!expired && expiringSoon && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
+                        </>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      {validityDate ? (() => {
+                        const renewDate = new Date(validityDate);
+                        renewDate.setMonth(renewDate.getMonth() - 3);
+                        return renewDate.toLocaleDateString('en-GB');
+                      })() : '—'}
+                    </td>
                     <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
                       {isEditing ? (
                         <input
@@ -258,29 +281,6 @@ const FundingValidityView: React.FC = () => {
                       ) : (
                         course.esScore != null ? course.esScore.toFixed(2) : '—'
                       )}
-                    </td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                      {isEditing ? (
-                        <input
-                          type="date"
-                          value={editState.fundingValidity}
-                          onChange={e => setEditState(s => ({ ...s, fundingValidity: e.target.value }))}
-                          className={`${inputClass} w-32`}
-                        />
-                      ) : (
-                        <>
-                          <span>{formatValidityDate(course.fundingValidity)}</span>
-                          {expired && <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
-                          {!expired && expiringSoon && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
-                        </>
-                      )}
-                    </td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                      {validityDate ? (() => {
-                        const renewDate = new Date(validityDate);
-                        renewDate.setMonth(renewDate.getMonth() - 3);
-                        return renewDate.toLocaleDateString('en-GB');
-                      })() : '—'}
                     </td>
                     <td className="px-3 py-1.5 text-center">
                       <input
