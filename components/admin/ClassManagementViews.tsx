@@ -7526,6 +7526,7 @@ export const CourseConfirmationEmailLogsView: React.FC = () => {
       sent:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
       skipped: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
       error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+      summary: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
     };
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? map.error}`}>

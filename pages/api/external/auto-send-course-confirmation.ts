@@ -52,7 +52,7 @@ async function ensureLogTable() {
 
 async function logResult(
     runId: string,
-    status: 'sent' | 'skipped' | 'error',
+    status: 'sent' | 'skipped' | 'error' | 'summary',
     details: {
         courseRunId?: string;
         courseTitle?: string;
@@ -122,7 +122,7 @@ async function sendConfirmationEmail(opts: {
         .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname || tp.name || 'Training Provider')
         .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '')
         .replace(/\{COMPANY_EMAIL\}/g, tp.companyEmail || '')
-        .replace(/\{COMPANY_PHONE\}/g, tpRow.company_phone || '');
+        .replace(/\{COMPANY_PHONE\}/g, tpRow.company_tel || '');
 
     const subject = replacePlaceholders(emailSubject || 'Final Course Confirmation — {COURSE_NAME}');
     const bodyText = replacePlaceholders(emailBody || `Dear {STUDENT_NAME},\n\nThis is to confirm your enrolment in {COURSE_NAME} starting on {COURSE_START_DATE}.\n\nPlease ensure you arrive on time.\n\nBest regards,\n{COMPANY_SHORT_NAME}`);
@@ -159,12 +159,19 @@ export async function runAutomation(taskId: string = 'auto_send_course_confirmat
     await ensureLogTable();
 
     const runId = crypto.randomUUID();
-    console.log(`[auto-send-confirmation] Starting run ${runId} (task: ${taskId}) at ${new Date().toISOString()}`);
+    const startedAt = Date.now();
+    console.log(`[auto-send-confirmation] Starting run ${runId} (task: ${taskId}) at ${new Date(startedAt).toISOString()}`);
+
+    let totalSent = 0;
+    let totalSkipped = 0;
+    let totalErrors = 0;
+    let courseRunsProcessed = 0;
+    let daysInAdvance = 3;
+    let fatalError: string | null = null;
 
     try {
         // 0. Read scheduler config for email template and days in advance
         let templatePrefix = 'final_course_confirmation';
-        let daysInAdvance = 3;
         try {
             const configRes = await pool.query(
                 `SELECT email_template, days_in_advance FROM scheduler_config WHERE id = $1`,
@@ -191,15 +198,14 @@ export async function runAutomation(taskId: string = 'auto_send_course_confirmat
 
         const tpResult = await pool.query(`
             SELECT email_user, google_client_id, google_client_secret, google_refresh_token,
-                   contact_person_name, company_phone, company_email,
+                   contact_person_name, company_tel, company_email,
                    ${subjectCol} as email_subject,
                    ${bodyCol} as email_body,
                    ${ccCol} as email_cc
             FROM training_provider LIMIT 1
         `);
         if (tpResult.rows.length === 0) {
-            console.error('[auto-send-confirmation] No training provider configured');
-            return { success: false, error: 'No training provider configured' };
+            throw new Error('No training provider configured');
         }
         const tpRow = tpResult.rows[0];
         const tp = await getTrainingPartnerIdentifiers();
@@ -209,8 +215,7 @@ export async function runAutomation(taskId: string = 'auto_send_course_confirmat
         const emailCc = tpRow.email_cc || '';
 
         if (!emailSubject && !emailBody) {
-            console.warn(`[auto-send-confirmation] No "${templatePrefix}" email template configured — skipping`);
-            return { success: false, error: `Email template "${templatePrefix}" not configured` };
+            throw new Error(`Email template "${templatePrefix}" not configured`);
         }
 
         // 2. Find course runs starting in N days
@@ -225,15 +230,8 @@ export async function runAutomation(taskId: string = 'auto_send_course_confirmat
         `, [daysInAdvance]);
 
         const courseRuns = courseRunsRes.rows;
+        courseRunsProcessed = courseRuns.length;
         console.log(`[auto-send-confirmation] Found ${courseRuns.length} course runs starting in ${daysInAdvance} days.`);
-
-        if (courseRuns.length === 0) {
-            return { success: true, runId, stats: { totalSent: 0, totalSkipped: 0, totalErrors: 0 } };
-        }
-
-        let totalSent = 0;
-        let totalSkipped = 0;
-        let totalErrors = 0;
 
         for (const run of courseRuns) {
             const logContext = {
@@ -267,7 +265,7 @@ export async function runAutomation(taskId: string = 'auto_send_course_confirmat
                 const learnersRes = await pool.query(`
                     SELECT
                         e.id as enrolment_id,
-                        COALESCE(au.full_name, au.name, e.nric, 'Learner') as learner_name,
+                        COALESCE(au.full_name, e.nric, 'Learner') as learner_name,
                         COALESCE(au.email, e.email) as learner_email
                     FROM enrollment e
                     LEFT JOIN app_user au ON e.user_id = au.id
@@ -331,20 +329,37 @@ export async function runAutomation(taskId: string = 'auto_send_course_confirmat
         }
 
         console.log(`[auto-send-confirmation] Run ${runId} completed. ${totalSent} sent, ${totalSkipped} skipped, ${totalErrors} errors.`);
-        return {
-            success: true,
-            runId,
-            stats: { totalSent, totalSkipped, totalErrors },
-        };
-
     } catch (error: any) {
         console.error('[auto-send-confirmation] Fatal Error:', error);
+        fatalError = error?.message || String(error);
+    }
+
+    // Always write a single summary row so the log viewer shows every run,
+    // including zero-match days and fatal-error runs.
+    const durationMs = Date.now() - startedAt;
+    const summaryLine = `${courseRunsProcessed} course run(s) processed, ${totalSent} sent, ${totalSkipped} skipped, ${totalErrors} error(s) (days_in_advance=${daysInAdvance}, duration=${durationMs}ms)`;
+    try {
+        await logResult(runId, fatalError ? 'error' : 'summary', {
+            errorMessage: fatalError ? `${fatalError} — ${summaryLine}` : summaryLine,
+        });
+    } catch (logErr: any) {
+        console.error('[auto-send-confirmation] Failed to write summary log row:', logErr?.message || logErr);
+    }
+
+    if (fatalError) {
         return {
             success: false,
+            runId,
             message: 'Internal processing error',
-            error: error.message,
+            error: fatalError,
+            stats: { totalSent, totalSkipped, totalErrors },
         };
     }
+    return {
+        success: true,
+        runId,
+        stats: { totalSent, totalSkipped, totalErrors },
+    };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
