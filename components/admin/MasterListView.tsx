@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
@@ -52,6 +52,7 @@ interface TraineeRow {
   payment_status: string;
   followup_by: string;
   remark: string;
+  cancelled: boolean;
 }
 
 interface ScheduleEntry {
@@ -71,16 +72,17 @@ interface ClassRun {
   qrAttendance: string;
   zoomId: string;
   meetingId: string;
-  startDate: string;
-  endDate: string;
+  classDate: string;
   venue: string;
+  notes: string;
+  calendarEventId: string; // Google Calendar event ID (stored as "{evtId}_{date}")
   scheduleEntries: ScheduleEntry[];
   trainees: TraineeRow[];
   headerColor: { bg: string; text: string };
 }
 
 type TraineeField = keyof TraineeRow;
-type ClassField = keyof Omit<ClassRun, 'id' | 'trainees' | 'scheduleEntries'>;
+type ClassField = keyof Omit<ClassRun, 'id' | 'trainees' | 'scheduleEntries' | 'calendarEventId'>;
 
 // ─── Header colour palette (random per class block) ──────────────────────────
 
@@ -110,7 +112,7 @@ const newTrainee = (): TraineeRow => ({
   name: '', contact_no: '', email: '', magento_order_no: '',
   virtual_reschedule: '', comments: '', date: '', grant: '',
   invoice_no: '', payment_mode: '', course_fee: '', nett_fee: '',
-  payment_status: '', followup_by: '', remark: '',
+  payment_status: '', followup_by: '', remark: '', cancelled: false,
 });
 
 
@@ -124,7 +126,7 @@ const newClass = (): ClassRun => {
     id,
     courseTitle: '', courseRunNo: '', trainer: '', trainerEmail: '',
     qrAttendance: '', zoomId: '', meetingId: '',
-    startDate: '', endDate: '', venue: '',
+    classDate: '', venue: '', notes: '', calendarEventId: '',
     scheduleEntries: [],
     trainees: [newTrainee()],
     headerColor: headerColorFromId(id),
@@ -137,6 +139,63 @@ const formatDisplayDate = (dateStr: string): string => {
   return date.toLocaleDateString('en-GB', {
     weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
   });
+};
+
+// Convert a stored entry_date value to a human-readable DD/MM/YYYY text string.
+// Handles ISO single, ISO datetime (with T), ISO range (~), comma-separated,
+// and already-formatted / free-text values (returned unchanged).
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Normalise any single token to YYYY-MM-DD, applying SGT offset for datetime strings.
+const toIsoDate = (s: string): string => {
+  s = s.trim();
+  if (s.includes('T')) {
+    const sgt = new Date(new Date(s).getTime() + 8 * 3_600_000);
+    return sgt.toISOString().slice(0, 10);
+  }
+  return s;
+};
+
+const toDisplayDate = (v: string): string => {
+  if (!v) return '';
+
+  // Range: split on ~, normalise each side, then format
+  if (v.includes('~')) {
+    const [rawS, rawE] = v.split('~');
+    const s = toIsoDate(rawS);
+    const e = toIsoDate(rawE);
+    if (ISO_DATE_RE.test(s) && ISO_DATE_RE.test(e)) {
+      return `${fmtDisplay(s)} – ${fmtDisplay(e)}`;
+    }
+    return v; // unrecognised range — leave as-is
+  }
+
+  // Comma-separated: normalise, deduplicate, sort, then group consecutive runs into ranges
+  // e.g. 19 Apr + 22–26 Apr  →  "19/04/2026, 22/04/2026 – 26/04/2026"
+  if (v.includes(',')) {
+    const parts = v.split(',').map(toIsoDate);
+    if (parts.every(p => ISO_DATE_RE.test(p))) {
+      const unique = [...new Set(parts)].sort();
+      if (unique.length === 1) return fmtDisplay(unique[0]);
+      // Build consecutive runs then format each run as single date or range
+      const runs: string[][] = [];
+      let run = [unique[0]];
+      for (let i = 1; i < unique.length; i++) {
+        const diff = (new Date(unique[i]).getTime() - new Date(unique[i - 1]).getTime()) / 86_400_000;
+        if (diff === 1) { run.push(unique[i]); } else { runs.push(run); run = [unique[i]]; }
+      }
+      runs.push(run);
+      return runs
+        .map(r => r.length === 1 ? fmtDisplay(r[0]) : `${fmtDisplay(r[0])} – ${fmtDisplay(r[r.length - 1])}`)
+        .join(', ');
+    }
+  }
+
+  // Single value
+  const normalised = toIsoDate(v);
+  if (ISO_DATE_RE.test(normalised)) return fmtDisplay(normalised);
+
+  return v; // already display-formatted or free text
 };
 
 // ─── Confirm dialog ───────────────────────────────────────────────────────────
@@ -191,26 +250,42 @@ interface InputCellProps {
   onFillAll?: (v: string) => void;
 }
 
-const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = '', align = 'left', digitsOnly = false, onFillAll }) => (
-  <td className={`relative px-1.5 py-1 border-r border-default last:border-r-0 group/cell ${align === 'center' ? 'text-center' : ''}`}>
-    <input
-      value={value}
-      onChange={e => onChange(digitsOnly ? e.target.value.replace(/\D/g, '') : e.target.value)}
-      placeholder={placeholder}
-      inputMode={digitsOnly ? 'numeric' : 'text'}
-      className={`w-full px-2 py-1 text-xs bg-transparent rounded focus:outline-none focus:bg-primary/5 focus:ring-1 focus:ring-primary/30 placeholder:text-on-surface-secondary/30 ${align === 'center' ? 'text-center' : ''}`}
-    />
-    {onFillAll && value && (
-      <button
-        onMouseDown={e => { e.preventDefault(); onFillAll(value); }}
-        title="Apply to all rows"
-        className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/cell:opacity-100 transition-opacity bg-primary/10 hover:bg-primary/20 text-primary rounded px-1 py-0.5 text-[9px] font-medium leading-none whitespace-nowrap"
-      >
-        fill all ↓
-      </button>
-    )}
-  </td>
-);
+const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = '', align = 'left', digitsOnly = false, onFillAll }) => {
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (taRef.current) {
+      taRef.current.style.height = 'auto';
+      taRef.current.style.height = `${taRef.current.scrollHeight}px`;
+    }
+  }, [value]);
+
+  return (
+    <td className={`relative px-1.5 py-1 border-r border-default last:border-r-0 group/cell ${align === 'center' ? 'text-center' : ''}`}>
+      <textarea
+        ref={taRef}
+        value={value}
+        rows={1}
+        onChange={e => {
+          const v = digitsOnly ? e.target.value.replace(/\D/g, '') : e.target.value;
+          onChange(v);
+        }}
+        placeholder={placeholder}
+        inputMode={digitsOnly ? 'numeric' : 'text'}
+        className={`w-full px-2 py-1 text-xs bg-transparent rounded focus:outline-none focus:bg-primary/5 focus:ring-1 focus:ring-primary/30 placeholder:text-on-surface-secondary/30 resize-none overflow-hidden leading-snug ${align === 'center' ? 'text-center' : ''}`}
+      />
+      {onFillAll && value && (
+        <button
+          onMouseDown={e => { e.preventDefault(); onFillAll(value); }}
+          title="Apply to all rows"
+          className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/cell:opacity-100 transition-opacity bg-primary/10 hover:bg-primary/20 text-primary rounded px-1 py-0.5 text-[9px] font-medium leading-none whitespace-nowrap"
+        >
+          fill all ↓
+        </button>
+      )}
+    </td>
+  );
+};
 
 // ─── Learner lookup cell (auto-fill name / email / contact_no) ───────────────
 
@@ -296,6 +371,73 @@ const LookupCell: React.FC<LookupCellProps> = ({ value, onChange, onAutofill, pl
   );
 };
 
+// ─── Trainer lookup input (autocomplete by name or email) ────────────────────
+
+const TrainerLookupInput: React.FC<{
+  value: string;
+  placeholder: string;
+  onChange: (v: string) => void;
+  onAutofill: (name: string, email: string) => void;
+}> = ({ value, placeholder, onChange, onAutofill }) => {
+  const [suggestions, setSuggestions] = useState<{ name: string; email: string }[]>([]);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const inputRef = useRef<HTMLInputElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const search = (q: string) => {
+    if (!q.trim()) { setSuggestions([]); setOpen(false); return; }
+    clearTimeout(timerRef.current!);
+    timerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/trainer-lookup?query=${encodeURIComponent(q)}`);
+        const json = await res.json();
+        if (json.success && json.data.length > 0) {
+          if (inputRef.current) {
+            const r = inputRef.current.getBoundingClientRect();
+            setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+          }
+          setSuggestions(json.data);
+          setOpen(true);
+        } else {
+          setSuggestions([]); setOpen(false);
+        }
+      } catch { setSuggestions([]); setOpen(false); }
+    }, 300);
+  };
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        value={value}
+        placeholder={placeholder}
+        onChange={e => { onChange(e.target.value); search(e.target.value); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="text-on-surface bg-transparent border-b border-dashed border-default focus:outline-none focus:border-primary placeholder:text-on-surface-secondary/30 w-48"
+      />
+      {open && createPortal(
+        <div
+          style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.width, zIndex: 9999 }}
+          className="bg-surface border border-default rounded-lg shadow-xl overflow-hidden max-h-48 overflow-y-auto"
+        >
+          {suggestions.map(s => (
+            <button
+              key={s.email}
+              onMouseDown={e => { e.preventDefault(); onAutofill(s.name, s.email); setOpen(false); setSuggestions([]); }}
+              className="w-full text-left px-3 py-2 hover:bg-surface-hover transition-colors border-b border-default last:border-b-0"
+            >
+              <p className="text-xs font-medium text-on-surface">{s.name}</p>
+              <p className="text-[10px] text-on-surface-secondary">{s.email}</p>
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
+  );
+};
+
 // ─── Select cell ─────────────────────────────────────────────────────────────
 
 const SelectCell: React.FC<{ value: string; onChange: (v: string) => void; options: string[] }> = ({ value, onChange, options }) => (
@@ -323,7 +465,7 @@ const fmtDisplay = (iso: string) => {
   return `${d}/${m}/${y}`;
 };
 
-const DateRangeCell: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
+const DateRangeCell: React.FC<{ value: string; onChange: (v: string) => void; onFillAll?: (v: string) => void; singleDate?: boolean; standalone?: boolean; compact?: boolean; placeholder?: string }> = ({ value, onChange, onFillAll, singleDate = false, standalone = false, compact = false, placeholder = 'Select Date' }) => {
   const isRange   = value.includes('~');
   const [rawStart, rawEnd] = isRange ? value.split('~') : [value, ''];
 
@@ -349,11 +491,15 @@ const DateRangeCell: React.FC<{ value: string; onChange: (v: string) => void }> 
     setViewMonth(base.getMonth());
     if (triggerRef.current) {
       const r = triggerRef.current.getBoundingClientRect();
-      const popupWidth = 288; // w-72
+      const popupWidth  = 288; // w-72
+      const popupHeight = 340; // approximate calendar height
       const left = r.right + popupWidth > window.innerWidth
         ? Math.max(4, r.right - popupWidth)
         : r.left;
-      setPos({ top: r.bottom + 6, left });
+      const top = r.bottom + 6 + popupHeight > window.innerHeight
+        ? Math.max(4, r.top - popupHeight - 6)
+        : r.bottom + 6;
+      setPos({ top, left });
     }
     setOpen(true);
   };
@@ -372,6 +518,11 @@ const DateRangeCell: React.FC<{ value: string; onChange: (v: string) => void }> 
   }, [open]);
 
   const handleDayClick = (dateStr: string) => {
+    if (singleDate) {
+      onChange(dateStr);
+      setOpen(false);
+      return;
+    }
     if (phase === 'start') {
       setTempStart(dateStr);
       setTempEnd('');
@@ -407,93 +558,147 @@ const DateRangeCell: React.FC<{ value: string; onChange: (v: string) => void }> 
   const prevMonth = () => viewMonth === 0  ? (setViewMonth(11), setViewYear(y => y - 1)) : setViewMonth(m => m - 1);
   const nextMonth = () => viewMonth === 11 ? (setViewMonth(0),  setViewYear(y => y + 1)) : setViewMonth(m => m + 1);
 
-  const displayLabel = rawStart
-    ? (rawEnd ? `${fmtDisplay(rawStart)} – ${fmtDisplay(rawEnd)}` : fmtDisplay(rawStart))
-    : 'Select Date';
+  // Comma-separated ISO dates (non-consecutive multi-day) — display each date formatted
+  const isMultiDate = !isRange && value.includes(',');
+  const displayLabel = isMultiDate
+    ? value.split(',').map(d => fmtDisplay(d.trim())).join(', ')
+    : rawStart
+      ? (rawEnd ? `${fmtDisplay(rawStart)} – ${fmtDisplay(rawEnd)}` : fmtDisplay(rawStart))
+      : placeholder;
+
+  const calendarPopup = open && createPortal(
+    <div
+      ref={popupRef}
+      style={{ top: pos.top, left: pos.left }}
+      className="fixed z-[9999] rounded-xl shadow-2xl p-4 w-72 select-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600"
+    >
+      {/* Month nav */}
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 text-lg font-bold leading-none">‹</button>
+        <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{CAL_MONTHS[viewMonth]} {viewYear}</span>
+        <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 text-lg font-bold leading-none">›</button>
+      </div>
+
+      {/* Day-of-week headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {CAL_DAYS.map(d => (
+          <div key={d} className="text-center text-[10px] font-semibold text-gray-400 dark:text-gray-500 py-1">{d}</div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} />;
+          const iso   = toIso(day);
+          const isS   = iso === tempStart;
+          const isE   = iso === effectiveEnd;
+          const inRng = !!tempStart && !!effectiveEnd && iso > tempStart && iso < effectiveEnd;
+          return (
+            <button
+              key={i}
+              onClick={() => handleDayClick(iso)}
+              onMouseEnter={() => phase === 'end' && setHover(iso)}
+              onMouseLeave={() => setHover('')}
+              className={[
+                'h-8 text-xs font-medium flex items-center justify-center transition-colors',
+                isS || isE
+                  ? 'bg-primary text-white font-bold rounded-full'
+                  : inRng
+                  ? 'bg-primary/15 text-primary rounded-none'
+                  : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-full',
+              ].join(' ')}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Hint */}
+      {!singleDate && (
+        <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-3 italic">
+          {phase === 'start' ? 'Select start date' : 'Select end date — or same date for single day'}
+        </p>
+      )}
+
+      {/* Clear */}
+      {rawStart && (
+        <button
+          onClick={() => { onChange(''); setOpen(false); }}
+          className="mt-2 w-full text-[11px] text-gray-400 hover:text-red-400 transition-colors text-center"
+        >
+          Clear
+        </button>
+      )}
+    </div>,
+    document.body,
+  );
+
+  const triggerButton = (
+    <button
+      ref={triggerRef}
+      onClick={openCalendar}
+      className={`text-xs px-2 py-1 rounded hover:bg-primary/10 transition-colors text-left whitespace-nowrap ${rawStart ? 'text-on-surface' : 'text-on-surface-secondary/30'}`}
+    >
+      {displayLabel}
+    </button>
+  );
+
+  if (compact) {
+    return (
+      <>
+        {triggerButton}
+        {calendarPopup}
+      </>
+    );
+  }
+
+  if (standalone) {
+    return (
+      <>
+        <div className="relative">
+          <Icon
+            name={IconName.Calendar}
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-secondary pointer-events-none"
+          />
+          <button
+            ref={triggerRef}
+            onClick={openCalendar}
+            className="pl-10 pr-3 py-2.5 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-on-surface w-full sm:w-52 text-left"
+          >
+            {rawStart
+              ? fmtDisplay(rawStart)
+              : <span className="text-on-surface-secondary/40">Select date</span>
+            }
+          </button>
+        </div>
+        {calendarPopup}
+      </>
+    );
+  }
 
   return (
     <td className="px-1.5 py-1 border-r border-default last:border-r-0">
-      <button
-        ref={triggerRef}
-        onClick={openCalendar}
-        className={`text-xs px-2 py-1 rounded hover:bg-primary/10 transition-colors text-left whitespace-nowrap ${rawStart ? 'text-on-surface' : 'text-on-surface-secondary/30'}`}
-      >
-        {displayLabel}
-      </button>
-
-      {open && createPortal(
-        <div
-          ref={popupRef}
-          style={{ top: pos.top, left: pos.left }}
-          className="fixed z-50 rounded-xl shadow-2xl p-4 w-72 select-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600"
-        >
-          {/* Month nav */}
-          <div className="flex items-center justify-between mb-3">
-            <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 text-lg font-bold leading-none">‹</button>
-            <span className="text-sm font-bold text-gray-800 dark:text-gray-100">{CAL_MONTHS[viewMonth]} {viewYear}</span>
-            <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 text-lg font-bold leading-none">›</button>
-          </div>
-
-          {/* Day-of-week headers */}
-          <div className="grid grid-cols-7 mb-1">
-            {CAL_DAYS.map(d => (
-              <div key={d} className="text-center text-[10px] font-semibold text-gray-400 dark:text-gray-500 py-1">{d}</div>
-            ))}
-          </div>
-
-          {/* Day cells */}
-          <div className="grid grid-cols-7 gap-y-0.5">
-            {cells.map((day, i) => {
-              if (!day) return <div key={i} />;
-              const iso   = toIso(day);
-              const isS   = iso === tempStart;
-              const isE   = iso === effectiveEnd;
-              const inRng = !!tempStart && !!effectiveEnd && iso > tempStart && iso < effectiveEnd;
-              return (
-                <button
-                  key={i}
-                  onClick={() => handleDayClick(iso)}
-                  onMouseEnter={() => phase === 'end' && setHover(iso)}
-                  onMouseLeave={() => setHover('')}
-                  className={[
-                    'h-8 text-xs font-medium flex items-center justify-center transition-colors',
-                    isS || isE
-                      ? 'bg-primary text-white font-bold rounded-full'
-                      : inRng
-                      ? 'bg-primary/15 text-primary rounded-none'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-full',
-                  ].join(' ')}
-                >
-                  {day}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Hint */}
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center mt-3 italic">
-            {phase === 'start' ? 'Select start date' : 'Select end date — or same date for single day'}
-          </p>
-
-          {/* Clear */}
-          {(rawStart) && (
-            <button
-              onClick={() => { onChange(''); setOpen(false); }}
-              className="mt-2 w-full text-[11px] text-gray-400 hover:text-red-400 transition-colors text-center"
-            >
-              Clear
-            </button>
-          )}
-        </div>,
-        document.body,
-      )}
+      <div className="flex items-center gap-1">
+        {triggerButton}
+        {onFillAll && value && (
+          <button
+            onMouseDown={e => { e.preventDefault(); onFillAll(value); }}
+            className="text-[9px] px-1 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors whitespace-nowrap"
+          >
+            fill all ↓
+          </button>
+        )}
+      </div>
+      {calendarPopup}
     </td>
   );
 };
 
 // ─── Column definitions ───────────────────────────────────────────────────────
 
-const COLUMNS: { key: TraineeField | '_no' | '_actions'; label: string; minW: string; placeholder?: string; align?: 'center'; digitsOnly?: boolean }[] = [
+const COLUMNS: { key: TraineeField | '_no' | '_cancelled' | '_actions'; label: string; minW: string; placeholder?: string; align?: 'center'; digitsOnly?: boolean }[] = [
   { key: '_no',               label: 'No.',                       minW: 'min-w-[2.5rem]',  align: 'center' },
   { key: 'name',              label: 'Name',                      minW: 'min-w-[10rem]',   placeholder: 'Full Name' },
   { key: 'contact_no',        label: 'Contact No.',               minW: 'min-w-[8rem]',    placeholder: '9XXXXXXX', digitsOnly: true },
@@ -510,8 +715,11 @@ const COLUMNS: { key: TraineeField | '_no' | '_actions'; label: string; minW: st
   { key: 'payment_status',    label: 'Payment Status',            minW: 'min-w-[8rem]',    placeholder: 'Paid / Pending' },
   { key: 'followup_by',       label: 'Followup By',               minW: 'min-w-[8rem]',    placeholder: 'Name' },
   { key: 'remark',            label: 'Remark',                    minW: 'min-w-[10rem]',   placeholder: 'Remarks' },
+  { key: '_cancelled',        label: 'C/W',                       minW: 'min-w-[3rem]',    align: 'center' },
   { key: '_actions',          label: '',                          minW: 'min-w-[2.5rem]',  align: 'center' },
 ];
+
+// ─── Duplicate modal ──────────────────────────────────────────────────────────
 
 // ─── Single class block ───────────────────────────────────────────────────────
 
@@ -521,12 +729,13 @@ interface ClassBlockProps {
   selectedDate: string;
   saving?: boolean;
   onClassChange: (field: ClassField, value: string) => void;
-  onTraineeChange: (traineeId: string, field: TraineeField, value: string) => void;
+  onTraineeChange: (traineeId: string, field: TraineeField, value: string | boolean) => void;
   onFillAll: (field: TraineeField, value: string) => void;
   onAddTrainee: () => void;
   onRemoveTrainee: (traineeId: string) => void;
   onRemoveClass: () => void;
   onMoveClass: (targetTab: ClassTab) => void;
+  onBulkAddTrainees: (trainees: { name: string; contact_no: string; email: string }[]) => void;
   onAddScheduleEntry: () => void;
   onScheduleEntryChange: (entryId: string, field: keyof Omit<ScheduleEntry, 'id'>, value: string | boolean) => void;
   onRemoveScheduleEntry: (entryId: string) => void;
@@ -535,22 +744,86 @@ interface ClassBlockProps {
 const ClassBlock: React.FC<ClassBlockProps> = ({
   classRun, activeTab, selectedDate, saving,
   onClassChange, onTraineeChange, onFillAll,
-  onAddTrainee, onRemoveTrainee, onRemoveClass, onMoveClass,
+  onAddTrainee, onRemoveTrainee, onRemoveClass, onMoveClass, onBulkAddTrainees,
   onAddScheduleEntry, onScheduleEntryChange, onRemoveScheduleEntry,
 }) => {
   const tabLabel = TABS.find(t => t.key === activeTab)?.label ?? '';
   const tabColors = TAB_COLORS[activeTab];
   const [confirmDeleteClass, setConfirmDeleteClass] = useState(false);
-  const [showMoveMenu, setShowMoveMenu] = useState(false);
 
+  // Detect duplicate rows by name, email, or contact_no (case-insensitive, non-empty)
+  const duplicateRowIds = useMemo(() => {
+    const seen = new Map<string, string[]>();
+    const dups = new Set<string>();
+    for (const t of classRun.trainees) {
+      const keys = [
+        t.name.trim().toLowerCase(),
+        t.email.trim().toLowerCase(),
+        t.contact_no.trim(),
+      ].filter(Boolean);
+      for (const k of keys) {
+        if (!seen.has(k)) seen.set(k, []);
+        seen.get(k)!.push(t.id);
+      }
+    }
+    for (const ids of seen.values()) {
+      if (ids.length > 1) ids.forEach(id => dups.add(id));
+    }
+    return dups;
+  }, [classRun.trainees]);
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [confirmDeleteRow, setConfirmDeleteRow] = useState<string | null>(null);
   const [confirmDeleteSession, setConfirmDeleteSession] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const autoImportedRef = useRef(false);
+
+  const handleImportTrainees = async () => {
+    setImporting(true);
+    try {
+      const params = new URLSearchParams({ course_title: classRun.courseTitle });
+      if (selectedDate) params.set('list_date', selectedDate);
+      if (classRun.courseRunNo) params.set('course_run_no', classRun.courseRunNo);
+      if (classRun.calendarEventId) params.set('calendar_event_id', classRun.calendarEventId);
+      const res = await fetch(`/api/admin/masterlist-learner-lookup?${params}`);
+      const json = await res.json();
+      if (json.success) {
+        console.log('[masterlist] import result — trainer:', json.trainer, '| learners:', json.data?.length);
+        // Auto-fill trainer field if found in guest list and not already set
+        if (json.trainer && !classRun.trainer.trim() && !classRun.trainerEmail.trim()) {
+          onClassChange('trainer', json.trainer.name || '');
+          onClassChange('trainerEmail', json.trainer.email || '');
+        }
+        if (Array.isArray(json.data) && json.data.length > 0) {
+          onBulkAddTrainees(json.data);
+        }
+      }
+    } catch (e) {
+      console.error('[masterlist] import trainees error:', e);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // Auto-import once when the block first mounts with no real trainee data yet.
+  // "No real data" = every trainee row has an empty name AND empty email.
+  useEffect(() => {
+    if (autoImportedRef.current) return;
+    const allEmpty = classRun.trainees.every(t => !t.name.trim() && !t.email.trim());
+    if (!allEmpty) { autoImportedRef.current = true; return; }
+    autoImportedRef.current = true;
+    handleImportTrainees();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="mb-8 overflow-x-clip">
       {confirmDeleteClass && (
         <ConfirmDialog
-          message="Delete this entire class and all its trainee rows?"
+          message={
+            classRun.classDate?.includes('~')
+              ? `Delete this class and all its linked days (${classRun.classDate})?`
+              : 'Delete this entire class and all its trainee rows?'
+          }
           details={[
             { label: 'Course Title', value: classRun.courseTitle },
             { label: 'Course Run No.', value: classRun.courseRunNo },
@@ -649,6 +922,23 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
               )}
             </div>
             <button
+              onClick={handleImportTrainees}
+              disabled={importing}
+              title="Import trainees from enrollments"
+              className={`p-1.5 rounded hover:bg-black/20 transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed ${classRun.headerColor.text}`}
+            >
+              {importing ? (
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v6m-3-3h6" />
+                </svg>
+              )}
+            </button>
+            <button
               onClick={() => setConfirmDeleteClass(true)}
               title="Remove this class"
               className={`p-1.5 rounded hover:bg-black/20 transition-colors opacity-70 hover:opacity-100 ${classRun.headerColor.text}`}
@@ -675,20 +965,35 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
             </tr>
           </thead>
           <tbody>
-            {classRun.trainees.map((t, idx) => (
+            {classRun.trainees.map((t, idx) => {
+              const isDup = duplicateRowIds.has(t.id);
+              return (
               <tr
                 key={t.id}
-                className="border-b border-default last:border-b-0 hover:bg-surface-hover/20 transition-colors"
+                className={`border-b border-default last:border-b-0 transition-colors ${
+                  isDup
+                    ? 'bg-red-50/70 dark:bg-red-900/15'
+                    : t.cancelled
+                    ? 'bg-gray-100 dark:bg-gray-800/60 opacity-50'
+                    : 'hover:bg-surface-hover/20'
+                }`}
               >
-                <td className="px-2 py-1 text-xs text-center text-on-surface-secondary border-r border-default select-none">
-                  {idx + 1}
+                {/* No. */}
+                <td className="px-2 py-1 text-xs text-center border-r border-default select-none">
+                  {isDup ? (
+                    <span title="Duplicate — same name, email or contact no. already exists in this class" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[9px] font-bold cursor-default">!</span>
+                  ) : (
+                    <span className="text-on-surface-secondary">{idx + 1}</span>
+                  )}
                 </td>
-                {(COLUMNS.filter(c => c.key !== '_no' && c.key !== '_actions') as typeof COLUMNS).map(col =>
+                {(COLUMNS.filter(c => c.key !== '_no' && c.key !== '_cancelled' && c.key !== '_actions') as typeof COLUMNS).map(col =>
                   col.key === 'date' ? (
-                    <DateRangeCell
+                    <InputCell
                       key={col.key}
                       value={t.date}
                       onChange={v => onTraineeChange(t.id, 'date', v)}
+                      placeholder="DD/MM/YYYY"
+                      onFillAll={v => onFillAll('date', v)}
                     />
                   ) : col.key === 'grant' ? (
                     <SelectCell
@@ -724,15 +1029,25 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                   ) : (
                     <InputCell
                       key={col.key}
-                      value={t[col.key as TraineeField]}
+                      value={t[col.key as TraineeField] as string}
                       onChange={v => onTraineeChange(t.id, col.key as TraineeField, v)}
-                      onFillAll={v => onFillAll(col.key as TraineeField, v)}
+                      onFillAll={col.key !== 'invoice_no' && col.key !== 'payment_mode' && col.key !== 'payment_status' && col.key !== 'magento_order_no' ? v => onFillAll(col.key as TraineeField, v) : undefined}
                       placeholder={col.placeholder}
                       align={col.align}
                       digitsOnly={col.digitsOnly}
                     />
                   )
                 )}
+                {/* Cancelled / Withdrawn toggle */}
+                <td className="px-2 py-1 text-center border-r border-default">
+                  <input
+                    type="checkbox"
+                    checked={t.cancelled}
+                    onChange={e => onTraineeChange(t.id, 'cancelled', e.target.checked)}
+                    title={t.cancelled ? 'Restore — mark as active' : 'Mark as cancelled / withdrawn'}
+                    className="w-3.5 h-3.5 cursor-pointer accent-gray-500"
+                  />
+                </td>
                 <td className="px-1.5 py-1 text-center border-r border-default last:border-r-0">
                   <button
                     onClick={() => setConfirmDeleteRow(t.id)}
@@ -743,7 +1058,8 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             <tr>
               <td colSpan={COLUMNS.length} className="px-3 py-2">
                 <button
@@ -759,7 +1075,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
         </table>
       </div>
 
-      {/* ── Footer: trainer info (left) + class schedule (right) ────────────── */}
+      {/* ── Footer: trainer info (left) + class schedule (right) ──────────────── */}
       <div className="border border-default border-t-0 rounded-b-lg flex">
 
         {/* Trainer info */}
@@ -770,22 +1086,35 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
           </div>
           <label className="flex items-center gap-2 text-xs text-on-surface-secondary">
             <span className="font-medium w-36 shrink-0">Trainer:</span>
-            <input
+            <TrainerLookupInput
               value={classRun.trainer}
-              onChange={e => onClassChange('trainer', e.target.value)}
               placeholder="Trainer Name"
-              className="text-on-surface bg-transparent border-b border-dashed border-default focus:outline-none focus:border-primary placeholder:text-on-surface-secondary/30 w-48"
+              onChange={v => onClassChange('trainer', v)}
+              onAutofill={(name, email) => { onClassChange('trainer', name); onClassChange('trainerEmail', email); }}
             />
           </label>
           <label className="flex items-center gap-2 text-xs text-on-surface-secondary">
             <span className="font-medium w-36 shrink-0">Trainer Email:</span>
-            <input
+            <TrainerLookupInput
               value={classRun.trainerEmail}
-              onChange={e => onClassChange('trainerEmail', e.target.value)}
               placeholder="trainer@example.com"
-              className="text-on-surface bg-transparent border-b border-dashed border-default focus:outline-none focus:border-primary placeholder:text-on-surface-secondary/30 w-48"
+              onChange={v => onClassChange('trainerEmail', v)}
+              onAutofill={(name, email) => { onClassChange('trainer', name); onClassChange('trainerEmail', email); }}
             />
           </label>
+          {activeTab === 'external' && (
+            <div className="mt-1 pt-2 border-t border-default">
+              <label className="flex items-center gap-2 text-xs text-on-surface-secondary">
+                <span className="font-medium w-36 shrink-0">Location:</span>
+                <input
+                  value={classRun.venue}
+                  onChange={e => onClassChange('venue', e.target.value)}
+                  placeholder="Venue / Location"
+                  className="text-on-surface bg-transparent border-b border-dashed border-default focus:outline-none focus:border-primary placeholder:text-on-surface-secondary/30 flex-1 min-w-0"
+                />
+              </label>
+            </div>
+          )}
           <div className="mt-1 pt-2 border-t border-default">
             <label className="flex items-center gap-2 text-xs text-on-surface-secondary">
               <span className="font-medium w-36 shrink-0">QR Attendance:</span>
@@ -808,20 +1137,30 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                   className="text-on-surface bg-transparent border-b border-dashed border-default focus:outline-none focus:border-primary placeholder:text-on-surface-secondary/30 w-36"
                 />
               </label>
-              <label className="flex items-center gap-2 text-xs text-on-surface-secondary ml-24">
+              <label className="flex items-center gap-2 text-xs text-on-surface-secondary flex-1 min-w-0">
                 <span className="font-medium shrink-0">Meeting ID:</span>
                 <input
                   value={classRun.meetingId}
                   onChange={e => onClassChange('meetingId', e.target.value)}
                   placeholder="Meeting ID"
-                  className="text-on-surface bg-transparent border-b border-dashed border-default focus:outline-none focus:border-primary placeholder:text-on-surface-secondary/30 w-36"
+                  className="text-on-surface bg-transparent border-b border-dashed border-default focus:outline-none focus:border-primary placeholder:text-on-surface-secondary/30 min-w-0 flex-1"
                 />
               </label>
             </div>
           )}
+          <div className="mt-1 pt-2 border-t border-default">
+            <textarea
+              value={classRun.notes}
+              onChange={e => onClassChange('notes', e.target.value.slice(0, 1000))}
+              placeholder="Notes (optional)…"
+              rows={2}
+              maxLength={1000}
+              className="w-full text-xs bg-transparent resize-none focus:outline-none placeholder:text-on-surface-secondary/30 text-on-surface leading-relaxed"
+            />
+          </div>
         </div>
 
-        {/* Class Schedule */}
+        {/* Class Schedule — far right */}
         <div className="w-[26rem] shrink-0 border-l border-default bg-surface-elevated/20 flex flex-col">
           <div className="px-4 py-2 border-b border-default bg-surface-elevated/60 flex items-center justify-between">
             <span className="text-xs font-semibold text-on-surface-secondary uppercase tracking-wide">Class Schedule</span>
@@ -907,9 +1246,10 @@ function rowsToClasses(rows: Record<string, any>[]): ClassRun[] {
         qrAttendance: row.qr_attendance ?? '',
         zoomId: row.zoom_id ?? '',
         meetingId: row.meeting_id ?? '',
-        startDate: row.start_date ?? '',
-        endDate: row.end_date ?? '',
+        classDate: row.class_date ?? '',
         venue: row.venue ?? '',
+        notes: row.notes ?? '',
+        calendarEventId: row.calendar_event_id ?? '',
         scheduleEntries: row.schedule_entries
           ? (typeof row.schedule_entries === 'string'
               ? JSON.parse(row.schedule_entries)
@@ -927,7 +1267,40 @@ function rowsToClasses(rows: Record<string, any>[]): ClassRun[] {
       magento_order_no: row.magento_order_no ?? '',
       virtual_reschedule: row.virtual_reschedule ?? '',
       comments: row.comments ?? '',
-      date: row.entry_date ?? '',
+      // Priority: class_date range > entry_date > list_date.
+      // When entry_date is a raw machine-generated ISO single date (YYYY-MM-DD or
+      // datetime with T), skip it and prefer the class_date range so multi-day classes
+      // show the full span (e.g. 20/04/2026 – 21/04/2026) on every row.
+      // User-edited display values (containing / or free text) are respected as-is.
+      // Priority for the Date cell:
+      //   1. User-edited display value in entry_date (contains / or is free text)
+      //   2. class_date range  (e.g. 20/04/2026 – 21/04/2026 for multi-day courses)
+      //   3. list_date         (the actual class date for single-day courses)
+      // Raw machine-generated ISO dates in entry_date (YYYY-MM-DD or T…Z) are skipped
+      // because they often reflect an enrollment/sync date, not the class date.
+      date: (() => {
+        const rawEntry = (row.entry_date ?? '').trim();
+        const rawClass = (row.class_date ?? '').trim();
+        const rawList  = (row.list_date  ?? '').trim();
+
+        if (!rawEntry) return toDisplayDate(rawClass) || toDisplayDate(rawList);
+
+        // Comma-separated ISO dates: actual class days from calendar sync — most accurate,
+        // use entry_date (e.g. "19/04/2026, 22/04/2026 – 26/04/2026") over the rough span
+        if (rawEntry.includes(',')) return toDisplayDate(rawEntry) || toDisplayDate(rawList);
+
+        // ISO range in entry_date — use directly
+        if (rawEntry.includes('~')) return toDisplayDate(rawEntry);
+
+        // Single ISO date or datetime — may be an enrollment/sync date, not the class date;
+        // prefer class_date range (or list_date for single-day classes)
+        if (rawEntry.includes('T') || ISO_DATE_RE.test(rawEntry)) {
+          return toDisplayDate(rawClass) || toDisplayDate(rawList);
+        }
+
+        // User-edited display value (contains / or free text) — respect as-is
+        return rawEntry;
+      })(),
       grant: row.grant ?? '',
       invoice_no: row.invoice_no ?? '',
       payment_mode: row.payment_mode ?? '',
@@ -936,19 +1309,45 @@ function rowsToClasses(rows: Record<string, any>[]): ClassRun[] {
       payment_status: row.payment_status ?? '',
       followup_by: row.followup_by ?? '',
       remark: row.remark ?? '',
+      cancelled: row.cancelled ?? false,
     });
   }
-  return Array.from(map.values());
+  const classes = Array.from(map.values());
+
+  // UI-level dedup: if two class blocks share the same normalised course title,
+  // keep only the one with real trainee data (has name/email). This guards
+  // against duplicate calendar events that slipped past the DB constraint.
+  const seenTitles = new Map<string, ClassRun>();
+  const deduped: ClassRun[] = [];
+  for (const cr of classes) {
+    const key = (cr.courseTitle || '').toLowerCase().trim();
+    if (!seenTitles.has(key)) {
+      seenTitles.set(key, cr);
+      deduped.push(cr);
+    } else {
+      // Keep whichever block has real trainee data
+      const existing = seenTitles.get(key)!;
+      const existingHasData = existing.trainees.some(t => t.name.trim() || t.email.trim());
+      const newHasData = cr.trainees.some(t => t.name.trim() || t.email.trim());
+      if (newHasData && !existingHasData) {
+        const idx = deduped.indexOf(existing);
+        deduped[idx] = cr;
+        seenTitles.set(key, cr);
+      }
+    }
+  }
+  return deduped;
 }
 
 // ─── Helpers: convert ClassRun → DB rows ─────────────────────────────────────
 
 function classToRows(cr: ClassRun, classType: ClassTab, listDate: string): Record<string, any>[] {
-  return cr.trainees.map(t => ({
+  return cr.trainees.map((t, idx) => ({
     class_id: cr.id,
     class_type: classType,
     list_date: listDate || null,
     course_title: cr.courseTitle || null,
+    course_run_no: cr.courseRunNo || null,
     trainer: cr.trainer || null,
     trainer_email: cr.trainerEmail || null,
     qr_attendance: cr.qrAttendance || null,
@@ -969,8 +1368,32 @@ function classToRows(cr: ClassRun, classType: ClassTab, listDate: string): Recor
     payment_status: t.payment_status || null,
     followup_by: t.followup_by || null,
     remark: t.remark || null,
+    cancelled: t.cancelled ?? false,
     schedule_entries: JSON.stringify(cr.scheduleEntries ?? []),
+    class_date: cr.classDate || null,
+    venue: cr.venue || null,
+    notes: cr.notes || null,
+    // Preserve calendar_event_id on the first row only (unique index allows one per class)
+    calendar_event_id: idx === 0 ? (cr.calendarEventId || null) : null,
   }));
+}
+
+// ─── Expand a DateRangeCell value to individual ISO date strings ──────────────
+
+function expandDateRange(value: string): string[] {
+  if (!value) return [];
+  if (value.includes('~')) {
+    const [start, end] = value.split('~');
+    const dates: string[] = [];
+    const d = new Date(start);
+    const endDate = new Date(end);
+    while (d <= endDate) {
+      dates.push(d.toISOString().slice(0, 10));
+      d.setDate(d.getDate() + 1);
+    }
+    return dates;
+  }
+  return [value];
 }
 
 // ─── Main view ────────────────────────────────────────────────────────────────
@@ -986,8 +1409,10 @@ const MasterListView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ClassTab>('virtual');
   const [tabData, setTabData] = useState<TabData>(emptyTabData);
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const syncedMonths = useRef<Set<string>>(new Set());
 
   const classes = tabData[activeTab];
 
@@ -1012,20 +1437,129 @@ const MasterListView: React.FC = () => {
     }
   }, []);
 
+  const fetchAllTabs = useCallback(async (date: string) => {
+    if (!date) { setTabData(emptyTabData()); return; }
+    setLoading(true);
+    try {
+      const results = await Promise.all(
+        TABS.map(async tab => {
+          try {
+            const res = await fetch(`/api/admin/masterlist?date=${date}&class_type=${tab.key}`);
+            const json = await res.json();
+            return { key: tab.key, data: json.success ? rowsToClasses(json.data) : [] as ClassRun[] };
+          } catch {
+            return { key: tab.key, data: [] as ClassRun[] };
+          }
+        }),
+      );
+      const next = emptyTabData();
+      results.forEach(r => { next[r.key as ClassTab] = r.data; });
+      setTabData(next);
+    } catch (e) {
+      console.error('[masterlist] fetchAllTabs error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const prevDateRef = useRef<string>('');
+
   useEffect(() => {
-    fetchClasses(selectedDate, activeTab);
-  }, [selectedDate, activeTab, fetchClasses]);
+    const dateChanged = selectedDate !== prevDateRef.current;
+    prevDateRef.current = selectedDate;
+
+    if (!selectedDate) { setTabData(emptyTabData()); return; }
+
+    if (dateChanged) {
+      const snapDate = selectedDate;
+      const willSync = !syncedMonths.current.has('done');
+
+      // Mark syncing BEFORE any fetch so the empty state immediately shows the
+      // "Syncing from Google Calendar…" indicator rather than "No classes yet"
+      if (willSync) {
+        syncedMonths.current.add('done');
+        setSyncing(true);
+      }
+
+      // Fetch existing masterlist data for all tabs, then kick off calendar sync
+      fetchAllTabs(snapDate).then(() => {
+        if (!willSync) return;
+
+        fetch('/api/admin/masterlist-calendar-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        })
+          .then(r => r.json())
+          .then(json => {
+            if (json.success && json.added > 0) {
+              // New classes were added from calendar — re-fetch all tabs to show them
+              return fetchAllTabs(snapDate);
+            }
+          })
+          .catch(e => console.error('[masterlist] calendar sync error:', e))
+          .finally(() => setSyncing(false));
+      });
+    } else {
+      // Only the active tab changed — fetch just that tab
+      fetchClasses(selectedDate, activeTab);
+    }
+  }, [selectedDate, activeTab, fetchClasses, fetchAllTabs]);
 
   // ── Auto-save a class block (debounced 800 ms) ────────────────────────────
 
   const saveClass = useCallback(async (cr: ClassRun, tab: ClassTab, date: string) => {
     setSaving(prev => ({ ...prev, [cr.id]: true }));
     try {
+      // Save the current day
       await fetch('/api/admin/masterlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rows: classToRows(cr, tab, date) }),
       });
+
+      // Propagate to linked days in the same date range.
+      // Match by BOTH classDate AND normalised courseTitle so we never accidentally
+      // overwrite a different course that happens to share the same date range (e.g. PL-900).
+      if (cr.classDate?.includes('~')) {
+        const normTitle = (s: string) =>
+          (s || '').replace(/^Day\s+\d+\s*[-–—]\s*/i, '').toLowerCase().trim();
+        const baseTitle = normTitle(cr.courseTitle);
+        const sortedDates = expandDateRange(cr.classDate).sort();
+
+        for (const otherDate of sortedDates.filter(d => d !== date)) {
+          try {
+            const res  = await fetch(`/api/admin/masterlist?date=${otherDate}&class_type=${tab}`);
+            const json = await res.json();
+            if (!json.success) continue;
+            // Only update an already-existing copy of THIS specific course
+            const existing = rowsToClasses(json.data).find(
+              c => c.classDate === cr.classDate && normTitle(c.courseTitle) === baseTitle,
+            );
+            if (!existing) continue;
+            const synced: ClassRun = {
+              ...cr,
+              id: existing.id,
+              // Preserve the other day's calendar event ID so calendar sync stays deduped
+              calendarEventId: existing.calendarEventId || cr.calendarEventId,
+              headerColor: existing.headerColor,
+              trainees: cr.trainees.map((t, i) => ({
+                ...t,
+                id: existing.trainees[i]?.id ?? crypto.randomUUID(),
+              })),
+              // Each day keeps its own class schedule
+              scheduleEntries: existing.scheduleEntries,
+            };
+            await fetch('/api/admin/masterlist', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ rows: classToRows(synced, tab, otherDate) }),
+            });
+          } catch (e) {
+            console.error('[masterlist] linked-day sync error:', e);
+          }
+        }
+      }
     } catch (e) {
       console.error('[masterlist] save error:', e);
     } finally {
@@ -1035,50 +1569,124 @@ const MasterListView: React.FC = () => {
 
   const scheduleSave = useCallback((cr: ClassRun, tab: ClassTab, date: string) => {
     clearTimeout(debounceTimers.current[cr.id]);
-    debounceTimers.current[cr.id] = setTimeout(() => saveClass(cr, tab, date), 2000);
+    debounceTimers.current[cr.id] = setTimeout(() => saveClass(cr, tab, date), 400);
   }, [saveClass]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
-  const handleAddClass = () => {
+  const handleCalendarSync = async () => {
+    setSyncing(true);
+    // Mark as done so the auto-sync on next date change doesn't re-run
+    syncedMonths.current.add('done');
+    try {
+      const res = await fetch('/api/admin/masterlist-calendar-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const json = await res.json();
+      if (json.success) {
+        await fetchAllTabs(selectedDate);
+      }
+    } catch (e) {
+      console.error('[masterlist] manual calendar sync error:', e);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleAddClass = async () => {
     const nc = newClass();
-    setClasses(prev => [...prev, nc]);
-    // Save the empty class shell immediately so it exists in DB
-    saveClass(nc, activeTab, selectedDate);
+    // Save to DB first, then re-fetch so UI reflects the persisted record
+    await saveClass(nc, activeTab, selectedDate);
+    fetchClasses(selectedDate, activeTab);
   };
 
   const handleRemoveClass = async (classId: string) => {
-    setClasses(prev => prev.filter(cr => cr.id !== classId));
+    const cr = tabData[activeTab].find(c => c.id === classId);
+
+    // Cancel any pending debounced save so it doesn't re-create the record after delete
+    clearTimeout(debounceTimers.current[classId]);
+    delete debounceTimers.current[classId];
+
+    // Optimistically remove from UI
+    setClasses(prev => prev.filter(c => c.id !== classId));
+
     try {
       await fetch(`/api/admin/masterlist?class_id=${classId}`, { method: 'DELETE' });
     } catch (e) {
       console.error('[masterlist] delete error:', e);
     }
+
+    // Cascade delete — remove linked copies on all other dates in the range
+    if (cr?.classDate?.includes('~')) {
+      const otherDates = expandDateRange(cr.classDate).filter(d => d !== selectedDate);
+      for (const date of otherDates) {
+        try {
+          const res = await fetch(`/api/admin/masterlist?date=${date}&class_type=${activeTab}`);
+          const json = await res.json();
+          if (!json.success) continue;
+          const linked = rowsToClasses(json.data).filter(c => c.classDate === cr.classDate);
+          for (const lc of linked) {
+            clearTimeout(debounceTimers.current[lc.id]);
+            delete debounceTimers.current[lc.id];
+            await fetch(`/api/admin/masterlist?class_id=${lc.id}`, { method: 'DELETE' });
+          }
+        } catch (e) {
+          console.error('[masterlist] cascade delete error:', e);
+        }
+      }
+    }
+
+    // Re-fetch to confirm UI matches DB (catches any edge cases)
+    fetchClasses(selectedDate, activeTab);
   };
 
   const handleMoveClass = async (classId: string, targetTab: ClassTab) => {
     const cr = tabData[activeTab].find(c => c.id === classId);
     if (!cr) return;
+    const sourceTab = activeTab;
     setLoading(true);
-    // Persist first so DB is ready before the tab switch triggers a fetch
     try {
+      // Move the current day
       await fetch(`/api/admin/masterlist?class_id=${classId}`, { method: 'DELETE' });
       await fetch('/api/admin/masterlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rows: classToRows(cr, targetTab, selectedDate) }),
       });
+
+      // Cascade move — update all linked days in the date range
+      if (cr.classDate?.includes('~')) {
+        const otherDates = expandDateRange(cr.classDate).filter(d => d !== selectedDate);
+        for (const date of otherDates) {
+          try {
+            const res = await fetch(`/api/admin/masterlist?date=${date}&class_type=${sourceTab}`);
+            const json = await res.json();
+            if (!json.success) continue;
+            const linked = rowsToClasses(json.data).filter(c => c.classDate === cr.classDate);
+            for (const lc of linked) {
+              await fetch(`/api/admin/masterlist?class_id=${lc.id}`, { method: 'DELETE' });
+              await fetch('/api/admin/masterlist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rows: classToRows(lc, targetTab, date) }),
+              });
+            }
+          } catch (e) {
+            console.error('[masterlist] cascade move error:', e);
+          }
+        }
+      }
     } catch (e) {
       console.error('[masterlist] move error:', e);
     }
-    // Move in local state then switch tab — fetch will now see correct DB state
-    setTabData(prev => ({
-      ...prev,
-      [activeTab]: prev[activeTab].filter(c => c.id !== classId),
-      [targetTab]: [...prev[targetTab], cr],
-    }));
+    // Switch to target tab and re-fetch both tabs from DB
     setActiveTab(targetTab);
-    // loading will be cleared by the fetchClasses triggered by setActiveTab
+    await Promise.all([
+      fetchClasses(selectedDate, sourceTab),
+      fetchClasses(selectedDate, targetTab),
+    ]);
   };
 
   const handleClassChange = (classId: string, field: ClassField, value: string) => {
@@ -1092,10 +1700,55 @@ const MasterListView: React.FC = () => {
 
   const handleAddTrainee = (classId: string) => {
     setClasses(prev => {
-      const updated = prev.map(cr => cr.id === classId
-        ? { ...cr, trainees: [...cr.trainees, newTrainee()] }
-        : cr,
-      );
+      const updated = prev.map(cr => {
+        if (cr.id !== classId) return cr;
+        // Inherit date from existing rows, or default to selectedDate as DD/MM/YYYY
+        const entryDate = cr.trainees.find(t => t.date)?.date || fmtDisplay(selectedDate);
+        return { ...cr, trainees: [...cr.trainees, { ...newTrainee(), date: entryDate }] };
+      });
+      const cr = updated.find(c => c.id === classId);
+      if (cr) scheduleSave(cr, activeTab, selectedDate);
+      return updated;
+    });
+  };
+
+  const handleBulkAddTrainees = (classId: string, incoming: { name: string; contact_no: string; email: string }[]) => {
+    setClasses(prev => {
+      const updated = prev.map(cr => {
+        if (cr.id !== classId) return cr;
+
+        // Capture the date from any existing row (including the placeholder) before
+        // filtering so it can be inherited by all newly imported trainees.
+        const entryDate = cr.trainees.find(t => t.date)?.date || '';
+
+        // Drop blank placeholder rows (empty name + empty email) before merging
+        // real learner data so they don't linger alongside the imported rows.
+        const existingReal = cr.trainees.filter(t => t.name.trim() || t.email.trim());
+
+        const existingEmails = new Set(existingReal.map(t => t.email.toLowerCase().trim()).filter(Boolean));
+        const existingNames  = new Set(existingReal.map(t => t.name.toLowerCase().trim()).filter(Boolean));
+
+        const toAdd = incoming.filter(({ email, name }) => {
+          if (email && existingEmails.has(email.toLowerCase().trim())) return false;
+          if (!email && name && existingNames.has(name.toLowerCase().trim())) return false;
+          return true;
+        });
+
+        if (toAdd.length === 0) {
+          // No new learners — restore placeholder if list would be empty
+          return existingReal.length > 0 ? { ...cr, trainees: existingReal } : cr;
+        }
+
+        const newTrainees = toAdd.map(({ name, contact_no, email }) => ({
+          ...newTrainee(),
+          name,
+          contact_no,
+          email,
+          date: entryDate,
+        }));
+
+        return { ...cr, trainees: [...existingReal, ...newTrainees] };
+      });
       const cr = updated.find(c => c.id === classId);
       if (cr) scheduleSave(cr, activeTab, selectedDate);
       return updated;
@@ -1114,7 +1767,7 @@ const MasterListView: React.FC = () => {
     });
   };
 
-  const handleTraineeChange = (classId: string, traineeId: string, field: TraineeField, value: string) => {
+  const handleTraineeChange = (classId: string, traineeId: string, field: TraineeField, value: string | boolean) => {
     setClasses(prev => {
       const updated = prev.map(cr => cr.id === classId
         ? { ...cr, trainees: cr.trainees.map(t => t.id === traineeId ? { ...t, [field]: value } : t) }
@@ -1202,17 +1855,35 @@ const MasterListView: React.FC = () => {
             <label className="text-xs font-medium text-on-surface-secondary uppercase tracking-wide">
               Select Date
             </label>
-            <div className="relative">
-              <Icon
-                name={IconName.Calendar}
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-secondary pointer-events-none"
-              />
-              <input
-                type="date"
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  const base = selectedDate ? new Date(selectedDate) : new Date();
+                  base.setDate(base.getDate() - 1);
+                  setSelectedDate(base.toISOString().slice(0, 10));
+                }}
+                className="flex items-center justify-center w-9 h-[42px] rounded-lg border border-default bg-surface hover:bg-surface-hover text-on-surface-secondary transition-colors text-sm font-bold shrink-0"
+                title="Previous day"
+              >
+                ‹
+              </button>
+              <DateRangeCell
                 value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
-                className="pl-10 pr-3 py-2.5 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-on-surface w-full sm:w-52"
+                onChange={setSelectedDate}
+                singleDate
+                standalone
               />
+              <button
+                onClick={() => {
+                  const base = selectedDate ? new Date(selectedDate) : new Date();
+                  base.setDate(base.getDate() + 1);
+                  setSelectedDate(base.toISOString().slice(0, 10));
+                }}
+                className="flex items-center justify-center w-9 h-[42px] rounded-lg border border-default bg-surface hover:bg-surface-hover text-on-surface-secondary transition-colors text-sm font-bold shrink-0"
+                title="Next day"
+              >
+                ›
+              </button>
             </div>
           </div>
 
@@ -1278,13 +1949,26 @@ const MasterListView: React.FC = () => {
             <span className="text-sm font-medium text-on-surface">{tabLabel}</span>
           </div>
 
-          <button
-            onClick={handleAddClass}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Icon name={IconName.Plus} className="w-4 h-4" />
-            Add New Class
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCalendarSync}
+              disabled={syncing}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-default bg-surface hover:bg-surface-hover text-on-surface text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Clear and re-import all classes from Google Calendar"
+            >
+              <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {syncing ? 'Syncing…' : 'Sync from Calendar'}
+            </button>
+            <button
+              onClick={handleAddClass}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              <Icon name={IconName.Plus} className="w-4 h-4" />
+              Add New Class
+            </button>
+          </div>
         </div>
 
         {/* Class blocks */}
@@ -1299,20 +1983,33 @@ const MasterListView: React.FC = () => {
         ) : classes.length === 0 ? (
           <Card className="overflow-hidden">
             <div className="px-4 py-16 text-center">
-              <div className="flex flex-col items-center gap-3 text-on-surface-secondary">
-                <div className="w-14 h-14 rounded-full bg-surface-elevated flex items-center justify-center">
-                  <Icon
-                    name={IconName.Calendar}
-                    className="w-7 h-7 text-on-surface-secondary opacity-50"
-                  />
+              {syncing ? (
+                <div className="flex flex-col items-center gap-3 text-on-surface-secondary">
+                  <svg className="animate-spin w-8 h-8 text-primary/60" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  <div>
+                    <p className="font-medium text-on-surface">Syncing from Google Calendar…</p>
+                    <p className="text-xs mt-0.5 text-on-surface-secondary">Importing your classes, just a moment</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium text-on-surface">No classes yet</p>
-                  <p className="text-xs mt-0.5">
-                    Click <span className="font-medium">Add New Class</span> to get started
-                  </p>
+              ) : (
+                <div className="flex flex-col items-center gap-3 text-on-surface-secondary">
+                  <div className="w-14 h-14 rounded-full bg-surface-elevated flex items-center justify-center">
+                    <Icon
+                      name={IconName.Calendar}
+                      className="w-7 h-7 text-on-surface-secondary opacity-50"
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium text-on-surface">No classes yet</p>
+                    <p className="text-xs mt-0.5">
+                      Click <span className="font-medium">Add New Class</span> to get started
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </Card>
         ) : (
@@ -1332,6 +2029,7 @@ const MasterListView: React.FC = () => {
               onRemoveTrainee={traineeId => handleRemoveTrainee(cr.id, traineeId)}
               onRemoveClass={() => handleRemoveClass(cr.id)}
               onMoveClass={targetTab => handleMoveClass(cr.id, targetTab)}
+              onBulkAddTrainees={trainees => handleBulkAddTrainees(cr.id, trainees)}
               onAddScheduleEntry={() => handleAddScheduleEntry(cr.id)}
               onScheduleEntryChange={(entryId, field, value) =>
                 handleScheduleEntryChange(cr.id, entryId, field, value)

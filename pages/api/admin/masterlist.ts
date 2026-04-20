@@ -8,6 +8,7 @@ const ENSURE_TABLE = `
     class_type      text NOT NULL,
     list_date       date,
     course_title    text,
+    course_run_no   text,
     trainer         text,
     trainer_email   text,
     qr_attendance   text,
@@ -37,17 +38,25 @@ const ENSURE_TABLE = `
   CREATE INDEX IF NOT EXISTS idx_masterlist_list_date  ON public.masterlist_table(list_date);
 `;
 
-const MIGRATE_COLUMNS = `
-  ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS qr_attendance   text;
-  ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS zoom_id         text;
-  ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS meeting_id      text;
-  ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS schedule_entries jsonb DEFAULT '[]'::jsonb;
-`;
+// Run each ALTER separately — node-postgres can silently drop statements after
+// the first when multiple are batched into one pool.query() call.
+const MIGRATE_COLUMNS = [
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS qr_attendance   text`,
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS zoom_id         text`,
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS meeting_id      text`,
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS schedule_entries jsonb DEFAULT '[]'::jsonb`,
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS course_run_no   text`,
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS class_date      text`,
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS venue           text`,
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS notes           text`,
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS cancelled       boolean DEFAULT false`,
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS calendar_event_id text`,
+];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     await pool.query(ENSURE_TABLE);
-    await pool.query(MIGRATE_COLUMNS);
+    for (const sql of MIGRATE_COLUMNS) await pool.query(sql);
   } catch (e) {
     console.error('[masterlist] table ensure error:', e);
   }
@@ -98,15 +107,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       for (const row of rows) {
         await client.query(
           `INSERT INTO public.masterlist_table
-            (class_id, class_type, list_date, course_title, trainer, trainer_email,
+            (class_id, class_type, list_date, course_title, course_run_no, trainer, trainer_email,
              qr_attendance, zoom_id, meeting_id,
              name, contact_no, email, magento_order_no, virtual_reschedule, comments,
              entry_date, "grant", invoice_no, payment_mode, course_fee, nett_fee,
-             payment_status, followup_by, remark, schedule_entries)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
+             payment_status, followup_by, remark, schedule_entries, class_date, venue, notes, cancelled,
+             calendar_event_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+           ON CONFLICT (calendar_event_id) WHERE calendar_event_id IS NOT NULL
+           DO UPDATE SET
+             class_id = EXCLUDED.class_id,
+             class_type = EXCLUDED.class_type,
+             list_date = EXCLUDED.list_date,
+             course_title = EXCLUDED.course_title,
+             course_run_no = EXCLUDED.course_run_no,
+             trainer = EXCLUDED.trainer,
+             trainer_email = EXCLUDED.trainer_email,
+             qr_attendance = EXCLUDED.qr_attendance,
+             zoom_id = EXCLUDED.zoom_id,
+             meeting_id = EXCLUDED.meeting_id,
+             name = EXCLUDED.name,
+             contact_no = EXCLUDED.contact_no,
+             email = EXCLUDED.email,
+             magento_order_no = EXCLUDED.magento_order_no,
+             virtual_reschedule = EXCLUDED.virtual_reschedule,
+             comments = EXCLUDED.comments,
+             entry_date = EXCLUDED.entry_date,
+             "grant" = EXCLUDED."grant",
+             invoice_no = EXCLUDED.invoice_no,
+             payment_mode = EXCLUDED.payment_mode,
+             course_fee = EXCLUDED.course_fee,
+             nett_fee = EXCLUDED.nett_fee,
+             payment_status = EXCLUDED.payment_status,
+             followup_by = EXCLUDED.followup_by,
+             remark = EXCLUDED.remark,
+             schedule_entries = EXCLUDED.schedule_entries,
+             class_date = EXCLUDED.class_date,
+             venue = EXCLUDED.venue,
+             notes = EXCLUDED.notes,
+             cancelled = EXCLUDED.cancelled,
+             updated_at = now()`,
           [
             row.class_id, row.class_type, row.list_date || null,
-            row.course_title || null, row.trainer || null, row.trainer_email || null,
+            row.course_title || null, row.course_run_no || null,
+            row.trainer || null, row.trainer_email || null,
             row.qr_attendance || null, row.zoom_id || null, row.meeting_id || null,
             row.name || null, row.contact_no || null, row.email || null,
             row.magento_order_no || null, row.virtual_reschedule || null, row.comments || null,
@@ -114,6 +158,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             row.payment_mode || null, row.course_fee || null, row.nett_fee || null,
             row.payment_status || null, row.followup_by || null, row.remark || null,
             row.schedule_entries ?? '[]',
+            row.class_date || null, row.venue || null, row.notes || null,
+            row.cancelled ?? false,
+            row.calendar_event_id || null,
           ],
         );
       }
