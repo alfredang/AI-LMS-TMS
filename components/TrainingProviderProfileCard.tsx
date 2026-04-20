@@ -1726,6 +1726,62 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             </p>
                         )}
                     </div>
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            CAS Threshold (%)
+                        </label>
+                        {isEditing ? (
+                            <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={formData.adminSettings.casThreshold ?? 70}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        adminSettings: {
+                                            ...prev.adminSettings,
+                                            casThreshold: Math.min(100, Math.max(0, parseInt(e.target.value || '70', 10) || 70)),
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="70"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface">
+                                {(formData.adminSettings.casThreshold ?? 70)}%
+                            </p>
+                        )}
+                    </div>
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            ES Threshold (%)
+                        </label>
+                        {isEditing ? (
+                            <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={formData.adminSettings.esThreshold ?? 40}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        adminSettings: {
+                                            ...prev.adminSettings,
+                                            esThreshold: Math.min(100, Math.max(0, parseInt(e.target.value || '40', 10) || 40)),
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="40"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface">
+                                {(formData.adminSettings.esThreshold ?? 40)}%
+                            </p>
+                        )}
+                    </div>
                     {Object.entries(adminSettingLabels).map(([key, label]) => (
                         <ToggleSwitch
                             key={key}
