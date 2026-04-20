@@ -33,6 +33,13 @@ const formatValidityDate = (value?: string | null) => {
   return date ? date.toLocaleDateString('en-GB') : 'N/A';
 };
 
+// Convert validity string to YYYY-MM-DD for date input
+const toDateInputValue = (value?: string | null) => {
+  const date = parseValidityDate(value);
+  if (!date) return '';
+  return date.toISOString().slice(0, 10);
+};
+
 const isRenewed = (value?: string | null) => !!value && value.trim().length > 0;
 
 const displayCourseType = (value?: string | null) => {
@@ -40,10 +47,19 @@ const displayCourseType = (value?: string | null) => {
   return value || 'CASL';
 };
 
+interface EditState {
+  casScore: string;
+  esScore: string;
+  fundingValidity: string;
+}
+
 const FundingValidityView: React.FC = () => {
-  const { courses, loading, error } = useDeveloperCourses();
+  const { courses, loading, error, refetch } = useDeveloperCourses();
   const [renewingIds, setRenewingIds] = useState<Record<string, boolean>>({});
   const [renewStateOverrides, setRenewStateOverrides] = useState<Record<string, boolean>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '' });
+  const [saving, setSaving] = useState(false);
 
   const today = startOfDay(new Date());
   const fourMonthsAhead = startOfDay(FOUR_MONTHS_AHEAD(today));
@@ -87,7 +103,7 @@ const FundingValidityView: React.FC = () => {
         renew: checked,
       });
     } catch (err) {
-      console.error('❌ Failed to update renewal status:', err);
+      console.error('Failed to update renewal status:', err);
       setRenewStateOverrides(prev => {
         const next = { ...prev };
         delete next[courseId];
@@ -96,6 +112,39 @@ const FundingValidityView: React.FC = () => {
       window.alert('Failed to update renewal status. Please try again.');
     } finally {
       setRenewingIds(prev => ({ ...prev, [courseId]: false }));
+    }
+  };
+
+  const startEdit = (course: any) => {
+    setEditingId(course.id);
+    setEditState({
+      casScore: course.casScore != null ? String(course.casScore) : '',
+      esScore: course.esScore != null ? String(course.esScore) : '',
+      fundingValidity: toDateInputValue(course.fundingValidity),
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    setSaving(true);
+    try {
+      await apiClient.put('/api/admin/update-course-validity', {
+        courseId: editingId,
+        casScore: editState.casScore || null,
+        esScore: editState.esScore || null,
+        fundingValidity: editState.fundingValidity || null,
+      });
+      setEditingId(null);
+      refetch();
+    } catch (err) {
+      console.error('Failed to save:', err);
+      window.alert('Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -117,6 +166,8 @@ const FundingValidityView: React.FC = () => {
       </div>
     );
   }
+
+  const inputClass = "w-full px-1.5 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
 
   return (
     <div>
@@ -156,6 +207,7 @@ const FundingValidityView: React.FC = () => {
                 <th className="px-3 py-2 font-semibold text-right">ES</th>
                 <th className="px-3 py-2 font-semibold">Validity</th>
                 <th className="px-3 py-2 font-semibold text-center">Renew</th>
+                <th className="px-3 py-2 font-semibold text-center w-20"></th>
               </tr>
             </thead>
             <tbody>
@@ -164,6 +216,7 @@ const FundingValidityView: React.FC = () => {
                 const expiringSoon = !!validityDate && validityDate >= today && validityDate <= fourMonthsAhead;
                 const expired = !!validityDate && validityDate < today;
                 const checked = renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
+                const isEditing = editingId === course.id;
 
                 return (
                   <tr
@@ -179,12 +232,47 @@ const FundingValidityView: React.FC = () => {
                     <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white">{course.title}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.courseCode || '—'}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{displayCourseType(course.courseType)}</td>
-                    <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">{course.casScore != null ? course.casScore.toFixed(2) : '—'}</td>
-                    <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">{course.esScore != null ? course.esScore.toFixed(2) : '—'}</td>
+                    <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editState.casScore}
+                          onChange={e => setEditState(s => ({ ...s, casScore: e.target.value }))}
+                          className={`${inputClass} w-16 text-right`}
+                        />
+                      ) : (
+                        course.casScore != null ? course.casScore.toFixed(2) : '—'
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editState.esScore}
+                          onChange={e => setEditState(s => ({ ...s, esScore: e.target.value }))}
+                          className={`${inputClass} w-16 text-right`}
+                        />
+                      ) : (
+                        course.esScore != null ? course.esScore.toFixed(2) : '—'
+                      )}
+                    </td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                      <span>{formatValidityDate(course.fundingValidity)}</span>
-                      {expired && <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
-                      {!expired && expiringSoon && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editState.fundingValidity}
+                          onChange={e => setEditState(s => ({ ...s, fundingValidity: e.target.value }))}
+                          className={`${inputClass} w-32`}
+                        />
+                      ) : (
+                        <>
+                          <span>{formatValidityDate(course.fundingValidity)}</span>
+                          {expired && <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
+                          {!expired && expiringSoon && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
+                        </>
+                      )}
                     </td>
                     <td className="px-3 py-1.5 text-center">
                       <input
@@ -195,6 +283,33 @@ const FundingValidityView: React.FC = () => {
                         className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
                         aria-label={`Mark ${course.title} for renewal`}
                       />
+                    </td>
+                    <td className="px-3 py-1.5 text-center whitespace-nowrap">
+                      {isEditing ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={saveEdit}
+                            disabled={saving}
+                            className="px-2 py-0.5 text-[10px] font-medium rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                          >
+                            {saving ? '...' : 'Save'}
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            disabled={saving}
+                            className="px-2 py-0.5 text-[10px] font-medium rounded bg-gray-500 text-white hover:bg-gray-600 disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => startEdit(course)}
+                          className="px-2 py-0.5 text-[10px] font-medium rounded bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          Edit
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
