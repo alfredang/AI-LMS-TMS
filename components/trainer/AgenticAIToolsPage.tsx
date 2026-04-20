@@ -38,6 +38,13 @@ const AGENTIC_AI_CATEGORIES = [
       { label: 'Synthesia', href: 'https://www.synthesia.io/' },
     ],
   },
+  {
+    title: 'Webhook Demo',
+    description: 'Interactive demo showcasing n8n webhook integrations and automated workflows.',
+    items: [
+      { label: 'Webhook Demo', href: 'https://alfredang.github.io/n8nnike/' },
+    ],
+  },
 ];
 
 const AgenticAIToolsPage: React.FC = () => {
