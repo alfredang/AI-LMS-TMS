@@ -88,13 +88,19 @@ const FundingValidityView: React.FC = () => {
     );
   }, [fourMonthsAhead, today, wsqCourses]);
 
-  const toBeRenewed = wsqCourses.filter(course => {
+  const isRenewDateAfterToday = (course: any) => {
     const validityDate = parseValidityDate(course.fundingValidity);
     if (!validityDate) return false;
     const renewDate = new Date(validityDate);
     renewDate.setMonth(renewDate.getMonth() - 3);
+    return renewDate >= today;
+  };
+
+  const toBeRenewed = wsqCourses.filter(isRenewDateAfterToday).length;
+
+  const yetToReview = wsqCourses.filter(course => {
     const checked = renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
-    return renewDate >= today && !checked;
+    return isRenewDateAfterToday(course) && !checked;
   }).length;
 
   const handleRenewToggle = async (courseId: string, checked: boolean) => {
@@ -183,12 +189,12 @@ const FundingValidityView: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-300 mt-1">WSQ Courses</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-purple-600">{toBeRenewed}</p>
+          <p className="text-4xl font-bold text-amber-500">{toBeRenewed}</p>
           <p className="text-gray-600 dark:text-gray-300 mt-1">Courses To Be Renewed</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-amber-500">{expiringSoonIds.size}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Expired in 4 Months</p>
+          <p className="text-4xl font-bold text-purple-600">{yetToReview}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Yet To Review</p>
         </Card>
       </div>
 
