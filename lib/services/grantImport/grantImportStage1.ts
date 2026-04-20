@@ -3,6 +3,7 @@ import { parseTpGatewayDisbursementXlsx, normalizeAndParseTpGatewayRow } from '.
 import { validateTpGatewayDisbursementRow } from './tpGatewayDisbursementValidator';
 import {
   findDuplicateFtx,
+  getAppliedQbPaymentIdsByGrantId,
   insertGrantImportBatch,
   insertGrantImportRows,
   listAlreadyAppliedGrantIds,
@@ -20,7 +21,12 @@ function escapeQbQueryString(value: string): string {
 }
 
 async function callQbProxy(body: Record<string, any>): Promise<any> {
-  const baseUrl = process.env.QBO_PROXY_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  // IMPORTANT: this runs server-side. Do not use NEXT_PUBLIC_BASE_URL here because in local dev
+  // it may point to production, causing server-to-server calls to hit the wrong environment.
+  const baseUrl =
+    process.env.QBO_PROXY_BASE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
+    'http://localhost:3000';
   const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -252,6 +258,7 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
   );
   const ssgExistsMap = await ssgGrantExistsMany(grantIdsUnique);
   const alreadyAppliedSet = await listAlreadyAppliedGrantIds(grantIdsUnique);
+  const appliedQbPaymentIds = await getAppliedQbPaymentIdsByGrantId(grantIdsUnique);
 
   // QB lookups are very expensive. For large uploads, defer QB checks to preview/apply.
   const qbCheckMode = String(process.env.GRANT_IMPORT_STAGE1_QB_CHECK || '').trim().toLowerCase();
@@ -297,10 +304,12 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
     const alreadyAppliedLocal = alreadyAppliedSet.has(grn);
     // QuickBooks verification (preview): determine if a payment is already applied to THIS GRN's invoice
     // by checking for a Payment linked to the invoice with matching amount+date.
-    let qbPaymentId: string | null = null;
+    let qbPaymentId: string | null = appliedQbPaymentIds.get(grn) ?? null;
     let qbExistingAmount: number | null = null;
     let qbExistingPaymentDate: string | null = null;
-    if (runQbChecks) {
+    if (qbPaymentId) {
+      // QB payment ID already persisted from a previous apply — no live API call needed.
+    } else if (runQbChecks) {
       try {
         const txnDate = String(row.paymentDateParsed || '').trim();
         const apps = appOverride === 'app2' ? ['app2', 'app1'] : ['app1', 'app2'];

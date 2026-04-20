@@ -418,6 +418,20 @@ export async function listApplyCandidates(batchId: string): Promise<
   return r.rows as any;
 }
 
+/** Clear prior apply results for selected rows so UI progress (done/total) reflects only the current run. */
+export async function clearApplyStateForSelectedRows(batchId: string): Promise<void> {
+  await requireGrantImportSchema();
+  await pool.query(
+    `UPDATE public.grant_import_rows
+     SET apply_status = NULL,
+         apply_error = NULL,
+         applied_at = NULL
+     WHERE batch_id = $1::uuid
+       AND selected_for_apply = true`,
+    [batchId]
+  );
+}
+
 export async function updateRowApplyResult(input: {
   rowId: string;
   applyStatus: 'pending' | 'applied' | 'skipped' | 'failed';
@@ -496,6 +510,24 @@ export async function wasGrantAlreadyApplied(grantId: string): Promise<boolean> 
     [grantId]
   );
   return r.rows.length > 0;
+}
+
+export async function getAppliedQbPaymentIdsByGrantId(grantIds: string[]): Promise<Map<string, string>> {
+  await requireGrantImportSchema();
+  const out = new Map<string, string>();
+  const ids = Array.from(new Set(grantIds.map((x) => String(x || '').trim()).filter(Boolean)));
+  if (ids.length === 0) return out;
+  const r = await pool.query(
+    `SELECT DISTINCT ON (grant_id) grant_id::text AS grant_id, matched_qb_object_id::text AS matched_qb_object_id
+     FROM public.grant_import_rows
+     WHERE grant_id = ANY($1::text[])
+       AND apply_status = 'applied'
+       AND matched_qb_object_id IS NOT NULL
+     ORDER BY grant_id, applied_at DESC`,
+    [ids]
+  );
+  for (const row of r.rows) out.set(String(row.grant_id), String(row.matched_qb_object_id));
+  return out;
 }
 
 export async function listAlreadyAppliedGrantIds(grantIds: string[]): Promise<Set<string>> {

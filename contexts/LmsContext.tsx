@@ -342,7 +342,18 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [adminPage]);
   const [ssgApp, setSsgApp] = useState<string>('app1');  // default, overridden by DB setting
   const [ssgAppLoaded, setSsgAppLoaded] = useState(false);
-  const [financePage, setFinancePage] = useState<string>('dashboard');
+  const FINANCE_PAGE_STORAGE_KEY = 'lms.financePage';
+  const [financePage, _setFinancePage] = useState<string>('dashboard');
+  const setFinancePage = (page: string) => {
+    _setFinancePage(page);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(FINANCE_PAGE_STORAGE_KEY, page);
+      } catch {
+        // ignore storage errors (e.g. blocked, quota)
+      }
+    }
+  };
   const [courseListPage, setCourseListPage] = useState(1);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: string; title: string; url: string; instructions?: string; questions?: Array<{ id: string; question: string; options: string[]; correctIndex: number }> }[]>([]);
@@ -407,6 +418,21 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
       .catch(() => setSsgAppLoaded(true));
   }, [ssgAppLoaded]);
+
+  // Persist FinanceLayout internal navigation across hard refreshes.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = window.localStorage.getItem(FINANCE_PAGE_STORAGE_KEY);
+      if (saved && typeof saved === 'string' && saved !== financePage) {
+        _setFinancePage(saved);
+      }
+    } catch {
+      // ignore storage errors
+    }
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Check for existing authentication on mount
   useEffect(() => {

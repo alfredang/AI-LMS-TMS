@@ -1,4 +1,5 @@
 import {
+  clearApplyStateForSelectedRows,
   insertGrantImportAuditLog,
   listApplyCandidates,
   markBatchStatus,
@@ -18,7 +19,12 @@ const QB_ACCOUNT_ID_BY_NAME_PROMISE = new Map<string, Promise<string | null>>();
 const QB_PAYMENT_METHOD_ID_BY_NAME_PROMISE = new Map<string, Promise<string | null>>();
 
 async function callQbProxy(body: Record<string, any>): Promise<any> {
-  const baseUrl = process.env.QBO_PROXY_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  // IMPORTANT: this runs server-side. Do not use NEXT_PUBLIC_BASE_URL here because in local dev
+  // it may point to production, causing server-to-server calls to hit the wrong environment.
+  const baseUrl =
+    process.env.QBO_PROXY_BASE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
+    'http://localhost:3000';
   const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -426,6 +432,9 @@ export async function applyGrantImportBatch(input: {
     details: { dryRun: input.dryRun, allowOverwriteAlreadyApplied: input.allowOverwriteAlreadyApplied },
   });
 
+  // Reset apply fields for this run so polling UI can show accurate done/total (terminal statuses only).
+  await clearApplyStateForSelectedRows(input.batchId);
+
   const rows = await listApplyCandidates(input.batchId);
   const selected = rows.filter((r) => r.selected_for_apply);
   const totalSelected = selected.length;
@@ -435,7 +444,10 @@ export async function applyGrantImportBatch(input: {
   let failed = 0;
   const results: Array<{ rowId: string; ok: boolean; status: 'applied' | 'skipped' | 'failed'; error?: string }> = [];
   const affectedEnrolments = new Set<string>();
-  const appOverride = (process.env.QBO_GRANT_IMPORT_APP || 'app1').trim() || 'app1';
+  // Prefer the same default-app logic as invoice generation:
+  // QUICKBOOKS_DEFAULT_APP (if configured) otherwise app1.
+  // QBO_GRANT_IMPORT_APP can still override when explicitly set.
+  const appOverride = (process.env.QBO_GRANT_IMPORT_APP || process.env.QUICKBOOKS_DEFAULT_APP || 'app1').trim() || 'app1';
 
   for (const row of selected) {
     const rowId = row.id;

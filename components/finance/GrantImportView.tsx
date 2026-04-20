@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -21,6 +21,9 @@ type PreviewRow = {
   selected_for_apply: boolean;
   apply_status: string | null;
   apply_error: string | null;
+  /** Set by preview API for live FMS/QB status */
+  fms_updated_live?: boolean;
+  qb_applied_live?: boolean;
 };
 
 type PreviewPayload = {
@@ -107,6 +110,9 @@ const GrantImportView: React.FC = () => {
   const [uploadPct, setUploadPct] = useState(0);
   const [uploadMsg, setUploadMsg] = useState('Processing…');
   const [uploadCounts, setUploadCounts] = useState<{ done: number; total: number } | null>(null);
+  const [applyCounts, setApplyCounts] = useState<{ done: number; total: number } | null>(null);
+  const [applyPct, setApplyPct] = useState(0);
+  const [applyMsg, setApplyMsg] = useState('Applying payments…');
 
   const fileValidationError = useMemo(() => {
     if (!file) return null;
@@ -132,14 +138,17 @@ const GrantImportView: React.FC = () => {
     };
   }, [preview]);
 
-  const loadPreview = async (id: string) => {
-    const res = await fetch(`/api/grant-import/batches/${encodeURIComponent(id)}/preview`, {
-      headers: { 'x-actor-user-id': actorUserId },
-    });
-    const json = await res.json();
-    if (!res.ok || !json?.success) throw new Error(json?.error || 'Failed to load preview');
-    setPreview(json.data);
-  };
+  const loadPreview = useCallback(
+    async (id: string) => {
+      const res = await fetch(`/api/grant-import/batches/${encodeURIComponent(id)}/preview`, {
+        headers: { 'x-actor-user-id': actorUserId },
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success) throw new Error(json?.error || 'Failed to load preview');
+      setPreview(json.data);
+    },
+    [actorUserId]
+  );
 
   const upload = async () => {
     if (!file) return;
@@ -336,6 +345,10 @@ const GrantImportView: React.FC = () => {
   const apply = async () => {
     if (!batchId) return;
     setError(null);
+    const totalSel = counts.selected;
+    setApplyCounts({ done: 0, total: Math.max(0, totalSel) });
+    setApplyPct(0);
+    setApplyMsg('Applying payments…');
     setApplying(true);
     try {
       const res = await fetch(`/api/grant-import/batches/${encodeURIComponent(batchId)}/apply`, {
@@ -351,8 +364,54 @@ const GrantImportView: React.FC = () => {
       setError(e?.message || 'Apply failed');
     } finally {
       setApplying(false);
+      setApplyCounts(null);
+      setApplyPct(0);
     }
   };
+
+  // Poll preview during apply so we can show done/total like Stage 1 (row apply_status updates in DB).
+  useEffect(() => {
+    if (!applying || !batchId) return;
+    void loadPreview(batchId).catch(() => {});
+    const id = setInterval(() => {
+      void loadPreview(batchId).catch(() => {});
+    }, 500);
+    return () => clearInterval(id);
+  }, [applying, batchId, loadPreview]);
+
+  useEffect(() => {
+    if (!applying || !preview) return;
+    const batchStatus = String((preview as { batch?: { status?: string } }).batch?.status || '');
+    const selected = preview.rows.filter((r) => r.selected_for_apply);
+    const total = selected.length;
+
+    // Until the server marks the batch as applying (or completed), row apply_status may still reflect a previous run.
+    if (batchStatus !== 'applying' && batchStatus !== 'completed') {
+      setApplyCounts((prev) => ({ done: 0, total: Math.max(total, prev?.total ?? 0) }));
+      setApplyPct(0);
+      setApplyMsg('Starting apply…');
+      return;
+    }
+
+    const done = selected.filter((r) => {
+      const s = String(r.apply_status || '').toLowerCase();
+      return s === 'applied' || s === 'skipped' || s === 'failed';
+    }).length;
+    setApplyCounts((prev) => {
+      const t = Math.max(total, prev?.total ?? 0);
+      return { done: Math.min(done, t), total: t };
+    });
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    setApplyPct(pct);
+    const pending = selected.filter((r) => String(r.apply_status || '').toLowerCase() === 'pending').length;
+    setApplyMsg(
+      pending > 0
+        ? `Processing… (${done}/${total})`
+        : total > 0 && done < total
+          ? `Working… (${done}/${total})`
+          : `Applying… (${done}/${total})`
+    );
+  }, [applying, preview]);
 
   useEffect(() => {
     if (!batchId) return;
@@ -745,6 +804,32 @@ const GrantImportView: React.FC = () => {
 
             <div className="mt-3 text-[11px] text-on-surface-secondary text-center">
               This step does read-only QuickBooks checks and builds the preview.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {applying && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-[460px] max-w-[92vw] rounded-xl border border-default bg-surface p-6 shadow-2xl">
+            <div className="text-base font-semibold text-on-surface">Applying payments (Step 2)…</div>
+            <div className="mt-1 text-xs text-on-surface-secondary">{applyMsg}</div>
+            {applyCounts && applyCounts.total > 0 ? (
+              <div className="mt-1 text-xs font-semibold tabular-nums text-on-surface">
+                {applyCounts.done}/{applyCounts.total}
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex items-center justify-center">
+              <CircularProgress pct={applyPct} label={applyMsg} />
+            </div>
+
+            <div className="mt-4 h-2 w-full rounded-full bg-surface-elevated overflow-hidden">
+              <div className="h-full bg-primary transition-all" style={{ width: `${Math.max(0, Math.min(100, applyPct))}%` }} />
+            </div>
+
+            <div className="mt-3 text-[11px] text-on-surface-secondary text-center">
+              Updates QuickBooks and FMS as each selected row finishes. You can leave this page open until it completes.
             </div>
           </div>
         </div>
