@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -406,6 +406,8 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const currentPageRef = useRef(currentPage);
+    currentPageRef.current = currentPage;
     const itemsPerPage = 100;
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
