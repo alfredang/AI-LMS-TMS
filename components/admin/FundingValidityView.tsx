@@ -194,7 +194,7 @@ const FundingValidityView: React.FC = () => {
         </Card>
         <Card className="p-6 text-center">
           <p className="text-4xl font-bold text-purple-600">{yetToReview}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Yet To Review</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Yet To Renew</p>
         </Card>
       </div>
 
