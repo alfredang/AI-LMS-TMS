@@ -7132,6 +7132,7 @@ export const TrainerFolderLogsView: React.FC = () => {
     );
 };
 export const AutoCreateCertificatesLogView: React.FC = () => {
+  const { setAdminPage } = useLms();
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -7163,16 +7164,24 @@ export const AutoCreateCertificatesLogView: React.FC = () => {
           <h2 className="text-2xl font-semibold text-on-surface">Auto-Create Certificates Logs</h2>
           <p className="text-sm text-on-surface-secondary mt-1">Logs for the daily 6:30 PM background generation of certificates.</p>
         </div>
-        <button
-          onClick={fetchLogs}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-surface-elevated text-on-surface-secondary border border-default rounded-md hover:bg-surface-hover text-sm"
-        >
-          <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchLogs}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-surface-elevated text-on-surface-secondary border border-default rounded-md hover:bg-surface-hover text-sm"
+          >
+            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
+          <button
+            onClick={() => setAdminPage(AdminPage.Scheduler)}
+            className="flex items-center gap-2 px-4 py-2 bg-surface-elevated text-on-surface-secondary border border-default rounded-md hover:bg-surface-hover text-sm"
+          >
+            ← Back to Scheduler
+          </button>
+        </div>
       </div>
 
       {error ? (

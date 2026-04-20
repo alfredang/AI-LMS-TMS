@@ -161,6 +161,7 @@ const TASK_LOG_PAGE: Record<string, AdminPage> = {
     auto_send_class_confirmation:     AdminPage.CourseConfirmationEmailLogs,
     auto_send_trainer_invitations:    AdminPage.AutoSendTrainerInvitationLog,
     auto_sanitise_data:               AdminPage.AutoSanitiseDataLog,
+    auto_create_certificates:         AdminPage.AutoCreateCertificatesLog,
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
