@@ -235,6 +235,8 @@ export interface Course {
   isUtapEligible?: boolean;
   fundingValidity?: string;
   renewedStatus?: string;
+  casScore?: number | null;
+  esScore?: number | null;
   isLeaderboardEnabled?: boolean;
   courseLink?: string;
   brochureLink?: string;
