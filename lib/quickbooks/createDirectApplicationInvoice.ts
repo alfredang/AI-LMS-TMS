@@ -25,6 +25,12 @@ export interface DaApplicationForInvoice {
   grant_id: string | null;
   application_id: string | null;
   qb_customer_ref: string | null;
+  // Per-grant breakdown
+  bl_grant_id: string | null;
+  bl_amount: string | number | null;
+  other_grant_id: string | null;
+  other_scheme_code: string | null;
+  other_amount: string | number | null;
 }
 
 export interface CreatedInvoice {
@@ -45,6 +51,8 @@ function addDays(isoDate: string, days: number): string {
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+
 
 function formatDate(d: string | Date | null | undefined): string {
   if (!d) return '—';
@@ -118,6 +126,12 @@ export async function createDirectApplicationInvoice(
 
   // Net payable = (fee - subsidy - credit) + gst
   const netAmount = Number((fullFee - subsidy - credit + gst).toFixed(2));
+
+  if (!fullFee || fullFee <= 0) {
+    throw new Error(
+      `full_course_fee is not set (fee=${fullFee}). Cannot generate invoice for this application.`
+    );
+  }
 
   if (!Number.isFinite(netAmount) || netAmount < 0) {
     throw new Error(
@@ -221,6 +235,7 @@ export async function createDirectApplicationInvoice(
 
   const invoiceBody = {
     CustomerRef: { value: customerRef },
+    BillEmail: { Address: app.trainee_email },
     TxnDate: txnDate,
     DueDate: dueDate,
     GlobalTaxCalculation: 'TaxExcluded',

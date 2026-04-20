@@ -15,11 +15,10 @@ const pool = new Pool({
     ? { rejectUnauthorized: false }
     : false,
 
-  // Connection pool settings optimized for serverless
-  // Keep these low for serverless environments
-  max: 5, // Reduced for serverless - each function instance has its own pool
+  // Connection pool settings
+  max: 10, // Allow more concurrent connections
   idleTimeoutMillis: 10000, // Close idle clients after 10 seconds
-  connectionTimeoutMillis: 10000, // Return an error if connection takes longer than 10 seconds
+  connectionTimeoutMillis: 15000, // Return an error if connection takes longer than 15 seconds
 });
 
 // Test connection
@@ -29,6 +28,13 @@ pool.on('connect', () => {
 
 pool.on('error', (err) => {
   console.error('❌ PostgreSQL connection error:', err);
+});
+
+// Auto-migrations: safe to run on every startup (all use IF NOT EXISTS)
+pool.query(`
+  ALTER TABLE da_application ADD COLUMN IF NOT EXISTS invoice_drive_file_id text;
+`).catch((err) => {
+  console.warn('⚠️ Auto-migration warning:', err.message);
 });
 
 export default pool;

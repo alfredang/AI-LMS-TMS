@@ -67,6 +67,7 @@ import AddSessionsView from '../components/admin/AddSessionsView';
 import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
 import SupportTicketsView from '../components/admin/SupportTicketsView';
 import SupportTicketDetailView from '../components/admin/SupportTicketDetailView';
+import MasterListView from '../components/admin/MasterListView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -444,6 +445,8 @@ const AdminLayout: React.FC = () => {
         return <SupportTicketsView />;
       case AdminPage.SupportTicketDetail:
         return <SupportTicketDetailView />;
+      case AdminPage.MasterList:
+        return <MasterListView />;
       default:
         return <AdminDashboard />;
     }
