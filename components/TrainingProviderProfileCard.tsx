@@ -1155,6 +1155,20 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             />
                         </div>
 
+                        <div>
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">
+                                GST Registration Number
+                            </label>
+                            <input
+                                type="text"
+                                name="gstRegistrationNumber"
+                                value={formData.fundingSettings.gstRegistrationNumber || ''}
+                                onChange={handleFundingChange}
+                                className={inputClasses}
+                                placeholder="e.g. 201509271W"
+                            />
+                        </div>
+
                         <div className="flex justify-between items-center p-3 bg-surface-elevated rounded-md border border-default">
                             <label className="text-sm text-on-surface">GST Registered</label>
                             <button
@@ -1184,6 +1198,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         <ProfileBioItem
                             label="GST Rate"
                             value={`${formData.fundingSettings.gstRate}%`}
+                        />
+                        <ProfileBioItem
+                            label="GST Registration Number"
+                            value={formData.fundingSettings.gstRegistrationNumber || '—'}
                         />
                         <ProfileBioItem
                             label="GST Registered"

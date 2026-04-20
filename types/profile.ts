@@ -318,6 +318,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     enhancedFunding: number;
     gstRate: number;
     isGstRegistered: boolean;
+    gstRegistrationNumber: string;
   };
   colorScheme?: string; // Stored as text/hex color in database
 }

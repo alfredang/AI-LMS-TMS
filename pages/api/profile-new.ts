@@ -716,7 +716,8 @@ async function getTrainingProviderProfile(userId: string) {
       normalFunding: (profileData.normal_fund_rate as 50 | 70) || 70,
       enhancedFunding: profileData.enhanced_fund_rate || 90,
       gstRate: profileData.gst_rate || 8.0,
-      isGstRegistered: profileData.gst_register || false
+      isGstRegistered: profileData.gst_register || false,
+      gstRegistrationNumber: profileData.gst_registration_number || profileData.uen || '',
     },
     colorScheme: colorScheme,
     created_at: new Date().toISOString(),
