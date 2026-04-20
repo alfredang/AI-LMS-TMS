@@ -53,6 +53,8 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { page: AdminPage.UpcomingCourseRunsLog, label: 'TGS Enrolments & Assign Trainers Log' },
         { page: AdminPage.SyncTrainerTpgLogs, label: 'Sync Trainer to TPG Log' },
         { page: AdminPage.AutoSendTrainerInvitationLog, label: 'Auto Send Trainer Invitation Log' },
+        { page: AdminPage.AutoSendCoursewareAttendanceLog, label: 'Auto Send Courseware & Attendance Log' },
+        { page: AdminPage.AutoSendCourseCompletionLog, label: 'Auto Send Course Completion Log' },
         { page: AdminPage.AutoSanitiseDataLog, label: 'Auto Sanitise Data Log' },
         { page: AdminPage.CourseConfirmationEmailLogs, label: 'Course Confirmation Email' },
     ];
