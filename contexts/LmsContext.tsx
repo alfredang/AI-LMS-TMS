@@ -8,7 +8,7 @@ import { resetTutorChat } from '@lib/services/geminiService';
 import { initializeColorScheme } from '@utils/colorUtils';
 
 // Function to fetch training provider info for all users
-const fetchTrainingProviderInfo = async (userId?: string): Promise<{ companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; referenceLinks?: any }> => {
+const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; referenceLinks?: any }> => {
   try {
     // If userId is provided, fetch specific organization info
     const url = userId 
@@ -34,6 +34,7 @@ const fetchTrainingProviderInfo = async (userId?: string): Promise<{ companyLogo
     }
 
     return {
+      uen: result.data.uen,
       companyLogoUrl: result.data.companyLogoUrl || '/images/default-company-logo.png',
       companyName: result.data.companyName || 'Training Provider',
       companyShortname: result.data.companyShortname,
@@ -441,6 +442,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             const providerInfo = await fetchTrainingProviderInfo(verificationResult.user.id);
             setTrainingProviderProfile({
+              uen: providerInfo.uen,
               companyLogoUrl: providerInfo.companyLogoUrl,
               companyName: providerInfo.companyName,
               companyShortname: providerInfo.companyShortname,
@@ -742,7 +744,6 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSelectedCourse(null);
     const newQuery: any = { ...router.query, adminPage: page };
     delete newQuery.courseId;
-    delete newQuery.view;
     router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
   }, [router]);
 
@@ -797,6 +798,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           const providerInfo = await fetchTrainingProviderInfo(user.id);
           setTrainingProviderProfile({
+            uen: providerInfo.uen,
             companyLogoUrl: providerInfo.companyLogoUrl,
             companyName: providerInfo.companyName,
             companyShortname: providerInfo.companyShortname,
@@ -839,6 +841,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             const providerInfo = await fetchTrainingProviderInfo(user.id);
             setTrainingProviderProfile({
+              uen: providerInfo.uen,
               companyLogoUrl: providerInfo.companyLogoUrl,
               companyName: providerInfo.companyName,
               companyShortname: providerInfo.companyShortname,

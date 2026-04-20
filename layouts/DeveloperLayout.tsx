@@ -11,6 +11,7 @@ import ProfileView from '../components/ProfileView';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import DeveloperSidebar from '../components/developer/DeveloperSidebar';
 import CpGeneratorView from '../components/developer/CpGeneratorView';
+import CwGeneratorView from '../components/developer/CwGeneratorView';
 import { useAppVersion } from '@hooks/useAppVersion';
 
 const DeveloperLayout: React.FC = () => {
@@ -58,6 +59,19 @@ const DeveloperLayout: React.FC = () => {
       developerPage === DeveloperPage.CpValidation
     ) {
       return <CpGeneratorView currentStep={developerPage} />;
+    }
+    // Courseware Generator pages
+    if (
+      developerPage === DeveloperPage.CwExtractCourseInfo ||
+      developerPage === DeveloperPage.CwGenerateApFgLg ||
+      developerPage === DeveloperPage.CwGenerateLessonPlan ||
+      developerPage === DeveloperPage.CwGenerateAssessment ||
+      developerPage === DeveloperPage.CwGenerateSlides ||
+      developerPage === DeveloperPage.CwGenerateBrochure ||
+      developerPage === DeveloperPage.CwConvertDocuments ||
+      developerPage === DeveloperPage.CwCoursewareAudit
+    ) {
+      return <CwGeneratorView currentStep={developerPage} />;
     }
     return <CourseList />;
   };

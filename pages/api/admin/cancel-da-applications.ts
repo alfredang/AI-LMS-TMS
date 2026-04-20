@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import { searchEnrolment, cancelEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
+import { removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
 
 /**
  * Build the search enrolment payload for a single DA application record.
@@ -183,6 +184,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     }
                 }
             }
+
+            // Remove cancelled learners from Google Calendar (fire-and-forget)
+            setImmediate(async () => {
+                for (const s of succeeded) {
+                    const daRow = applicationRows.find(r => r.application_id === s.application_id);
+                    if (!daRow?.trainee_email || !daRow?.course_title) continue;
+                    try {
+                        // Resolve course_run UUID
+                        const crRes = await pool.query(
+                            `SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1`,
+                            [daRow.course_run_id]
+                        );
+                        const courseRunUuid = crRes.rows[0]?.id || daRow.course_run_id;
+
+                        const removeResult = await removeDaLearnerFromCalendar(
+                            daRow.trainee_email,
+                            courseRunUuid,
+                            daRow.course_title,
+                            daRow.course_start_date
+                        );
+                        if (removeResult.removedFrom > 0) {
+                            console.log(`🗑️ Removed ${daRow.trainee_email} from ${removeResult.removedFrom} calendar event(s)`);
+                        }
+                        // Untick the CAL column
+                        await pool.query(
+                            `UPDATE da_application SET calendar_added = false WHERE application_id = $1`,
+                            [s.application_id]
+                        );
+                    } catch (calErr) {
+                        console.error(`⚠️ Failed to remove ${daRow.trainee_email} from calendar:`, calErr);
+                    }
+                }
+            });
         }
 
         if (failed.length > 0) {

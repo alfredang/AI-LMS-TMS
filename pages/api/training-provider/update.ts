@@ -731,6 +731,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Admin thresholds
       await autoCreateAndUpdate([
         { name: 'upcoming_classes_threshold_days', value: String(profileData.adminSettings?.upcomingClassesThresholdDays || 21) },
+        { name: 'certificate_attendance_threshold', value: String(profileData.adminSettings?.certificateAttendanceThreshold || 60) },
+        { name: 'gst_registration_number', value: profileData.fundingSettings?.gstRegistrationNumber || '' },
+        { name: 'cas_threshold', value: String(profileData.adminSettings?.casThreshold ?? 70) },
+        { name: 'es_threshold', value: String(profileData.adminSettings?.esThreshold ?? 40) },
       ]);
 
       // Handle API keys - delete existing and insert new ones (with selected model)

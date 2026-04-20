@@ -13,6 +13,7 @@ interface UpcomingClass {
   endDate: string;
   assignedTrainerTpg: string;
   assignedTrainerTpgEmail: string;
+  tpgSyncStatus: string | null;
   assignedTrainerLocal: string;
   assignedTrainerLocalEmail: string;
   nextAvailableTrainer: string;
@@ -162,6 +163,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_paused BOOLEAN DEFAULT false');
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_replies_blocked BOOLEAN DEFAULT false');
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS trainer_in_calendar BOOLEAN');
+    await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS tpg_sync_status TEXT');
 
     const includeOngoing = req.query.includeOngoing === 'true';
 
@@ -230,10 +232,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(classStatus);
       paramIndex++;
     } else if (classStatus === 'ActiveOnly') {
-      // Default Upcoming Classes view: hide cancelled runs so admins see
-      // only the classes that are actually going to happen. Pass
-      // classStatus=all explicitly to include cancelled classes.
-      filters.push(`cr.class_status IN ('Confirmed', 'Pending', 'Unconfirmed')`);
+      // Default Upcoming Classes view: hide cancelled runs, show only
+      // Confirmed/Pending with at least 1 learner enrolled.
+      filters.push(`cr.class_status IN ('Confirmed', 'Pending')`);
     }
 
     const classType = req.query.classType;
@@ -264,6 +265,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
+    // In ActiveOnly mode (default), only show classes with at least 1 learner
+    const minLearners = (classStatus === 'ActiveOnly' || !classStatus) ? 1 : 0;
+
     const baseQuery = `
       FROM course_run cr
       JOIN course c ON cr.course_id = c.id
@@ -291,6 +295,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.virtual_meeting_link,
           ${tpgNameExpr} AS assigned_trainer_tpg,
           ${tpgEmailExpr} AS assigned_trainer_tpg_email,
+          cr.tpg_sync_status,
           cr.assigned_trainer_name AS legacy_assigned_trainer_name,
           COUNT(e.id) AS num_of_trainee
         ${baseQuery}
@@ -309,7 +314,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.virtual_meeting_link,
           ${tpgNameExpr},
           ${tpgEmailExpr},
+          cr.tpg_sync_status,
           cr.assigned_trainer_name
+        HAVING COUNT(e.id) >= ${minLearners}
         ORDER BY cr.start_date ASC NULLS LAST, cr.end_date ASC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
@@ -317,10 +324,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     const countResult = await pool.query(
-      `SELECT COUNT(DISTINCT cr.id) AS total_count
-       FROM course_run cr
-       JOIN course c ON cr.course_id = c.id
-       ${whereClause}`,
+      minLearners > 0
+        ? `SELECT COUNT(*) AS total_count FROM (
+             SELECT cr.id FROM course_run cr
+             JOIN course c ON cr.course_id = c.id
+             LEFT JOIN enrollment e ON e.course_run_id = cr.id
+             ${whereClause}
+             GROUP BY cr.id
+             HAVING COUNT(e.id) >= ${minLearners}
+           ) sub`
+        : `SELECT COUNT(DISTINCT cr.id) AS total_count
+           FROM course_run cr
+           JOIN course c ON cr.course_id = c.id
+           ${whereClause}`,
       params
     );
 
@@ -565,6 +581,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         endDate: row.end_date,
         assignedTrainerTpg: row.assigned_trainer_tpg || '',
         assignedTrainerTpgEmail: row.assigned_trainer_tpg_email || '',
+        tpgSyncStatus: row.tpg_sync_status || null,
         assignedTrainerLocal: allLocalPairs[0]?.name || (row.legacy_assigned_trainer_name || '').toString().trim() || '',
         assignedTrainerLocalEmail: allLocalPairs[0]?.email || '',
         nextAvailableTrainer,

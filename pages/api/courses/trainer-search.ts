@@ -90,6 +90,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `;
     }
 
+    // Active only: current + upcoming classes (not ended yet)
+    if (req.query.activeOnly === 'true') {
+      sqlQuery += ` AND (cr.end_date IS NULL OR cr.end_date >= CURRENT_DATE)`;
+    }
+
     sqlQuery += ` ORDER BY cr.start_date DESC`;
 
     const result = await pool.query(sqlQuery, params);

@@ -551,11 +551,21 @@ async function getTrainingProviderProfile(userId: string) {
   } catch (e) { /* column doesn't exist yet */ }
 
   let upcomingClassesThresholdDays = 21;
+  let certificateAttendanceThreshold = 60;
+  let casThreshold = 70;
+  let esThreshold = 40;
   try {
-    const r = await pool.query(`SELECT upcoming_classes_threshold_days FROM training_provider WHERE id = $1`, [profileData.provider_id]);
-    const parsed = parseInt(String(r.rows[0]?.upcoming_classes_threshold_days || '21'), 10);
-    if (!Number.isNaN(parsed) && parsed > 0) upcomingClassesThresholdDays = parsed;
-  } catch (e) { /* column doesn't exist yet */ }
+    const r = await pool.query(`SELECT upcoming_classes_threshold_days, certificate_attendance_threshold, cas_threshold, es_threshold FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    const row = r.rows[0] || {};
+    const parsedDays = parseInt(String(row.upcoming_classes_threshold_days || '21'), 10);
+    if (!Number.isNaN(parsedDays) && parsedDays > 0) upcomingClassesThresholdDays = parsedDays;
+    const parsedCert = parseInt(String(row.certificate_attendance_threshold || '60'), 10);
+    if (!Number.isNaN(parsedCert) && parsedCert > 0) certificateAttendanceThreshold = parsedCert;
+    const parsedCas = parseInt(String(row.cas_threshold || '70'), 10);
+    if (!Number.isNaN(parsedCas) && parsedCas >= 0) casThreshold = parsedCas;
+    const parsedEs = parseInt(String(row.es_threshold || '40'), 10);
+    if (!Number.isNaN(parsedEs) && parsedEs >= 0) esThreshold = parsedEs;
+  } catch (e) { /* columns don't exist yet */ }
 
   // Safely fetch extra integration columns (each group independent so missing columns don't wipe others)
   let refLinks: any = {};
@@ -683,7 +693,10 @@ async function getTrainingProviderProfile(userId: string) {
       autoEnrolDirectApplications: profileData.auto_enrol_direct_applications || false,
       autoGenerateQbInvoice: profileData.auto_generate_qb_invoice || false,
       autoAddLearnerToCalendar: profileData.auto_add_learner_to_calendar || false,
-      upcomingClassesThresholdDays
+      upcomingClassesThresholdDays,
+      certificateAttendanceThreshold,
+      casThreshold,
+      esThreshold,
     },
     securitySettings: {
       autoMaskSensitiveData: profileData.auto_mask_sensitive_data || false,
@@ -703,7 +716,8 @@ async function getTrainingProviderProfile(userId: string) {
       normalFunding: (profileData.normal_fund_rate as 50 | 70) || 70,
       enhancedFunding: profileData.enhanced_fund_rate || 90,
       gstRate: profileData.gst_rate || 8.0,
-      isGstRegistered: profileData.gst_register || false
+      isGstRegistered: profileData.gst_register || false,
+      gstRegistrationNumber: profileData.gst_registration_number || profileData.uen || '',
     },
     colorScheme: colorScheme,
     created_at: new Date().toISOString(),

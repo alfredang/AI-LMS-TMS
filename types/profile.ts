@@ -295,6 +295,9 @@ export interface TrainingProviderProfile extends BaseProfile {
     autoGenerateQbInvoice: boolean;
     autoAddLearnerToCalendar: boolean;
     upcomingClassesThresholdDays: number;
+    certificateAttendanceThreshold: number;
+    casThreshold: number;
+    esThreshold: number;
   };
   securitySettings: {
     autoMaskSensitiveData: boolean;
@@ -315,6 +318,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     enhancedFunding: number;
     gstRate: number;
     isGstRegistered: boolean;
+    gstRegistrationNumber: string;
   };
   colorScheme?: string; // Stored as text/hex color in database
 }

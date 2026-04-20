@@ -29,7 +29,7 @@ import type { RunTrainerEditInfo } from '../../../lib/ssg/models/edit-delete-cou
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const RATE_LIMIT_MS = 2000;
 
-// ── Ensure log table ──────────────────────────────────────────────────────────
+// ── Ensure log table + tpg_sync_status column ────────────────────────────────
 
 async function ensureLogTable() {
   await pool.query(`
@@ -51,6 +51,9 @@ async function ensureLogTable() {
       error_message     TEXT
     )
   `);
+  // Column on course_run to surface sync failure reason in the UI
+  // Values: null (not attempted), 'synced', 'no_nric', 'no_tpg_profile', 'error:<msg>'
+  await pool.query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS tpg_sync_status TEXT`);
 }
 
 // ── Mask NRIC for logging (show first + last char only) ───────────────────────
@@ -58,6 +61,33 @@ async function ensureLogTable() {
 function maskNric(nric: string): string {
   if (!nric || nric.length < 3) return '***';
   return `${nric[0]}${'*'.repeat(nric.length - 2)}${nric[nric.length - 1]}`;
+}
+
+// ── Parse SSG error into a tpg_sync_status value ─────────────────────────────
+// Exported so run-bulk-tpg-assign.ts can reuse the same classification.
+
+export function classifySsgError(ssgErrorMsg: string, ssgStatus?: number): string {
+  const msg = (ssgErrorMsg || '').toLowerCase();
+
+  if (msg.includes('existing_trainer_notfound'))                                return 'no_tpg_profile';
+  if (msg.includes('field_error') && msg.includes('trainer'))                   return 'no_tpg_profile';
+  if (msg.includes('viewcourserun failed'))                                     return 'run_not_found_ssg';
+  if (msg.includes('registrationopeningdate') || (msg.includes('registration') && msg.includes('past')))
+                                                                                return 'reg_date_passed';
+  if (msg.includes('cancelled'))                                                return 'course_cancelled';
+  if (msg.includes('expired') || msg.includes('completed'))                     return 'course_expired';
+  if (msg.includes('not editable') || msg.includes('cannot edit') || msg.includes('noteditable'))
+                                                                                return 'not_editable';
+  if (msg.includes('timeout') || msg.includes('econnrefused') || msg.includes('enotfound'))
+                                                                                return 'ssg_timeout';
+  if (msg.includes('unauthorized') || msg.includes('403') || ssgStatus === 401 || ssgStatus === 403)
+                                                                                return 'ssg_auth_error';
+  if (msg.includes('decrypt'))                                                  return 'ssg_decrypt_error';
+  if (msg.includes('invalid input') || msg.includes('invalid parameter'))       return 'no_tpg_profile';
+  if (msg.includes('404') || msg.includes('not found') || msg.includes('page not found'))
+                                                                                return 'run_not_found_ssg';
+
+  return `error:${ssgErrorMsg.slice(0, 100)}`;
 }
 
 // ── Main runner ───────────────────────────────────────────────────────────────
@@ -80,22 +110,25 @@ export async function runSyncTrainerToTpg() {
   const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
   const courseApi = createSSGCourseAPI(ssgBaseUrl, credentials);
 
-  // ── Find eligible runs: has local trainer (junction OR scalar), no TPG trainer, upcoming ─
+  // ── Find eligible runs: has local trainer (junction OR scalar), upcoming ─────
+  // Includes runs where TPG is empty OR TPG doesn't match local (mismatch override).
+  // Skips runs where TPG already matches local.
   const runsResult = await pool.query<{
     id: string;
     course_run_id: string;
     course_ref_number: string;
     course_code: string;
+    tpg_assigned_trainer_name: string | null;
   }>(
     `SELECT DISTINCT cr.id, cr.course_run_id, c.course_code,
-            c.course_code AS course_ref_number
+            c.course_code AS course_ref_number,
+            cr.tpg_assigned_trainer_name
      FROM course_run cr
      JOIN course c ON c.id = cr.course_id
      LEFT JOIN course_run_trainer crt ON crt.course_run_id = cr.id
      WHERE cr.class_status = 'Confirmed'
-       AND cr.start_date >= (NOW() AT TIME ZONE 'Asia/Singapore')::date
+       AND cr.end_date >= (NOW() AT TIME ZONE 'Asia/Singapore')::date
        AND cr.start_date <= (NOW() AT TIME ZONE 'Asia/Singapore')::date + ($1 * INTERVAL '1 day')
-       AND (cr.tpg_assigned_trainer_name IS NULL OR cr.tpg_assigned_trainer_name = '')
        AND (
          crt.trainer_name IS NOT NULL
          OR (cr.assigned_trainer_name IS NOT NULL AND cr.assigned_trainer_name <> '')
@@ -104,7 +137,7 @@ export async function runSyncTrainerToTpg() {
     [thresholdDays]
   );
 
-  console.log(`🎓 sync-trainer-to-tpg: ${runsResult.rows.length} run(s) to sync`);
+  console.log(`🎓 sync-trainer-to-tpg: ${runsResult.rows.length} run(s) to check`);
 
   let successCount = 0, errors = 0, skipped = 0;
 
@@ -162,6 +195,19 @@ export async function runSyncTrainerToTpg() {
       if (candidates.length === 0) {
         skipped++;
         continue;
+      }
+
+      // ── Check if TPG already matches local — skip if so ────────────────────
+      const tpgName = (run.tpg_assigned_trainer_name || '').trim().toLowerCase();
+      const localPrimaryName = candidates[0].name.trim().toLowerCase();
+      if (tpgName && tpgName === localPrimaryName) {
+        // TPG matches local — nothing to do
+        skipped++;
+        continue;
+      }
+
+      if (tpgName) {
+        console.log(`  🔄 ${run.course_run_id} | MISMATCH: TPG="${run.tpg_assigned_trainer_name}" vs Local="${candidates[0].name}" — will override`);
       }
 
       // ── Resolve NRIC for each trainer ───────────────────────────────────────
@@ -261,6 +307,11 @@ export async function runSyncTrainerToTpg() {
       }
 
       if (allSkipped || trainerPayloads.length === 0) {
+        // All trainers had no NRIC — record the reason on course_run for UI
+        await pool.query(
+          `UPDATE course_run SET tpg_sync_status = 'no_nric', updated_at = NOW() WHERE id = $1`,
+          [run.id]
+        );
         skipped++;
         continue;
       }
@@ -281,15 +332,36 @@ export async function runSyncTrainerToTpg() {
         : JSON.stringify(editRes.data ?? {});
 
       if (hasEditError || (ssgStatus !== 200 && ssgStatus !== 201)) {
+        const ssgErrorMsg = editRes.error?.message || '';
+        const syncStatus = classifySsgError(ssgErrorMsg, ssgStatus);
+
         console.error(
-          `  ❌ ${run.course_run_id} | SSG edit failed (${ssgStatus}): ${editRes.error?.message || ssgResponseText}`
+          `  ❌ ${run.course_run_id} | SSG edit failed (${ssgStatus}): ${ssgErrorMsg || ssgResponseText}`
         );
+
+        // If this was a mismatch override attempt that failed, clear the stale TPG assignment
+        // so the UI shows the error instead of a wrong trainer name
+        if (tpgName) {
+          console.log(`  🧹 ${run.course_run_id} | clearing stale TPG trainer (was "${run.tpg_assigned_trainer_name}")`);
+          await pool.query(
+            `UPDATE course_run
+             SET tpg_assigned_trainer_name = NULL, tpg_assigned_trainer_email = NULL,
+                 tpg_sync_status = $2, updated_at = NOW()
+             WHERE id = $1`,
+            [run.id, syncStatus]
+          );
+        } else {
+          await pool.query(
+            `UPDATE course_run SET tpg_sync_status = $2, updated_at = NOW() WHERE id = $1`,
+            [run.id, syncStatus]
+          );
+        }
 
         await pool.query(
           `UPDATE sync_trainer_tpg_log
            SET status = 'error', ssg_status = $1, ssg_response = $2, error_message = $3
            WHERE run_id = $4 AND course_run_id = $5 AND status = 'pending'`,
-          [ssgStatus, ssgResponseText, (hasEditError && editRes.error?.message) || 'SSG edit failed', runId, run.course_run_id]
+          [ssgStatus, ssgResponseText, ssgErrorMsg || 'SSG edit failed', runId, run.course_run_id]
         );
 
         errors++;
@@ -304,6 +376,7 @@ export async function runSyncTrainerToTpg() {
         `UPDATE course_run
          SET tpg_assigned_trainer_name  = $2,
              tpg_assigned_trainer_email = $3,
+             tpg_sync_status = 'synced',
              updated_at = NOW()
          WHERE id = $1`,
         [run.id, primary.name, primary.email || null]
@@ -332,10 +405,43 @@ export async function runSyncTrainerToTpg() {
     }
   }
 
-  console.log(
-    `✅ sync-trainer-to-tpg done — ${successCount} synced, ${skipped} skipped, ${errors} error(s)`
+  // ── Cleanup: clear TPG assignment where no local trainer exists ──────────
+  // If a local trainer was removed but TPG still has someone, clear the stale
+  // TPG columns so the UI doesn't show a trainer that's no longer assigned.
+  const staleResult = await pool.query(
+    `SELECT cr.id, cr.course_run_id, cr.tpg_assigned_trainer_name
+     FROM course_run cr
+     LEFT JOIN course_run_trainer crt ON crt.course_run_id = cr.id
+     WHERE cr.class_status = 'Confirmed'
+       AND cr.end_date >= (NOW() AT TIME ZONE 'Asia/Singapore')::date
+       AND cr.start_date <= (NOW() AT TIME ZONE 'Asia/Singapore')::date + ($1 * INTERVAL '1 day')
+       AND (cr.tpg_assigned_trainer_name IS NOT NULL AND cr.tpg_assigned_trainer_name <> '')
+       AND crt.trainer_name IS NULL
+       AND (cr.assigned_trainer_name IS NULL OR cr.assigned_trainer_name = '')`,
+    [thresholdDays]
   );
-  return { runId, startedAt, thresholdDays, total: runsResult.rows.length, successCount, skipped, errors };
+
+  let cleared = 0;
+  for (const stale of staleResult.rows) {
+    console.log(`  🧹 ${stale.course_run_id} | no local trainer but TPG has "${stale.tpg_assigned_trainer_name}" — clearing`);
+    await pool.query(
+      `UPDATE course_run
+       SET tpg_assigned_trainer_name = NULL, tpg_assigned_trainer_email = NULL,
+           tpg_sync_status = NULL, updated_at = NOW()
+       WHERE id = $1`,
+      [stale.id]
+    );
+    cleared++;
+  }
+
+  if (cleared > 0) {
+    console.log(`  🧹 Cleared ${cleared} stale TPG assignment(s) with no local trainer`);
+  }
+
+  console.log(
+    `✅ sync-trainer-to-tpg done — ${successCount} synced, ${skipped} skipped, ${errors} error(s), ${cleared} stale cleared`
+  );
+  return { runId, startedAt, thresholdDays, total: runsResult.rows.length, successCount, skipped, errors, cleared };
 }
 
 // ── HTTP handler ──────────────────────────────────────────────────────────────

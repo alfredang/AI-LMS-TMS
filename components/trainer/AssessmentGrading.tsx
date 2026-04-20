@@ -29,11 +29,16 @@ const AssessmentGrading: React.FC = () => {
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
   const [selectedCourseRunId, setSelectedCourseRunId] = useState('');
-  
+
   const [students, setStudents] = useState<StudentData[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({});
   const [certVerification, setCertVerification] = useState<Record<string, { checking: boolean; exists?: boolean }>>({});
+
+  // Send Certificate state
+  const [selectedForCert, setSelectedForCert] = useState<Set<string>>(new Set());
+  const [sendingCerts, setSendingCerts] = useState(false);
+  const [certSendResult, setCertSendResult] = useState<{ message: string; results?: { name: string; status: string; error?: string }[] } | null>(null);
 
   useEffect(() => {
     if (currentUser?.email) {
@@ -69,11 +74,14 @@ const AssessmentGrading: React.FC = () => {
       return;
     }
     setLoadingStudents(true);
+    setCertSendResult(null);
     fetch(`/api/trainer/class-students?courseRunId=${selectedCourseRunId}`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
           setStudents(data);
+          // Default: select all learners for certificate sending
+          setSelectedForCert(new Set(data.map((s: StudentData) => s.enrolment_id)));
           // Verify certificates against Google Drive
           verifyCertificates(data);
         }
@@ -158,6 +166,62 @@ const AssessmentGrading: React.FC = () => {
     }
   };
 
+  const toggleCertSelection = (enrolmentId: string) => {
+    setSelectedForCert(prev => {
+      const next = new Set(prev);
+      if (next.has(enrolmentId)) next.delete(enrolmentId);
+      else next.add(enrolmentId);
+      return next;
+    });
+  };
+
+  const toggleAllCertSelection = () => {
+    if (selectedForCert.size === students.length) {
+      setSelectedForCert(new Set());
+    } else {
+      setSelectedForCert(new Set(students.map(s => s.enrolment_id)));
+    }
+  };
+
+  const handleSendCertificates = async () => {
+    if (selectedForCert.size === 0 || !selectedCourseRunId) return;
+
+    const confirmed = window.confirm(
+      `Send certificates to ${selectedForCert.size} selected learner(s)? This will generate and email certificates.`
+    );
+    if (!confirmed) return;
+
+    setSendingCerts(true);
+    setCertSendResult(null);
+
+    try {
+      const res = await fetch('/api/certificates/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseRunId: selectedCourseRunId,
+          enrolmentIds: Array.from(selectedForCert)
+        })
+      });
+      const data = await res.json();
+      setCertSendResult({ message: data.message, results: data.results });
+
+      // Refresh student list to show updated cert status
+      if (data.success) {
+        const refreshRes = await fetch(`/api/trainer/class-students?courseRunId=${selectedCourseRunId}`);
+        const refreshData = await refreshRes.json();
+        if (Array.isArray(refreshData)) {
+          setStudents(refreshData);
+          verifyCertificates(refreshData);
+        }
+      }
+    } catch (err: any) {
+      setCertSendResult({ message: `Error: ${err.message}` });
+    } finally {
+      setSendingCerts(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold dark:text-white">Assessment Grading</h1>
@@ -199,10 +263,59 @@ const AssessmentGrading: React.FC = () => {
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               Student Grading Roster
             </h2>
-            <div className="text-xs text-gray-500 bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
-              {students.length} Enrolments
+            <div className="flex items-center gap-3">
+              <div className="text-xs text-gray-500 bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
+                {students.length} Enrolments
+              </div>
+              {students.length > 0 && (
+                <button
+                  onClick={handleSendCertificates}
+                  disabled={sendingCerts || selectedForCert.size === 0}
+                  className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {sendingCerts ? (
+                    <>
+                      <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Icon name={IconName.Mail} className="w-3.5 h-3.5" />
+                      Send Certificate ({selectedForCert.size})
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
+
+          {/* Certificate send result banner */}
+          {certSendResult && (
+            <div className={`mx-5 mt-3 p-3 rounded-lg text-sm ${
+              certSendResult.results?.some(r => r.status === 'error')
+                ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                : 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
+            }`}>
+              <div className="flex justify-between items-center">
+                <span className="font-semibold">{certSendResult.message}</span>
+                <button onClick={() => setCertSendResult(null)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                  <Icon name={IconName.Close} className="w-4 h-4" />
+                </button>
+              </div>
+              {certSendResult.results && (
+                <ul className="mt-2 space-y-1">
+                  {certSendResult.results.map((r, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs">
+                      {r.status === 'sent' && <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5 text-green-500" />}
+                      {r.status === 'generated' && <Icon name={IconName.Clock} className="w-3.5 h-3.5 text-amber-500" />}
+                      {r.status === 'error' && <Icon name={IconName.Close} className="w-3.5 h-3.5 text-red-500" />}
+                      <span>{r.name}: {r.status === 'sent' ? 'Certificate sent' : r.status === 'generated' ? r.error : r.error}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           
           <div className="p-0">
             {loadingStudents ? (
@@ -216,6 +329,20 @@ const AssessmentGrading: React.FC = () => {
                 <p>No students enrolled in this class.</p>
               </div>
             ) : (
+              <>
+              {/* Select All row */}
+              <div className="px-5 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 flex items-center">
+                <input
+                  type="checkbox"
+                  checked={selectedForCert.size === students.length && students.length > 0}
+                  onChange={toggleAllCertSelection}
+                  className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 mr-3 cursor-pointer"
+                />
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {selectedForCert.size === students.length ? 'Deselect All' : 'Select All'}
+                </span>
+              </div>
+
               <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                 {students.map((student, idx) => {
                   const sId = student.enrolment_id || student.student_name;
@@ -223,6 +350,12 @@ const AssessmentGrading: React.FC = () => {
                   return (
                     <li key={sId} className="px-5 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                       <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedForCert.has(student.enrolment_id)}
+                          onChange={() => toggleCertSelection(student.enrolment_id)}
+                          className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 mr-3 cursor-pointer flex-shrink-0"
+                        />
                         <div className="flex-shrink-0 mr-4 text-gray-400 font-mono text-sm w-6 text-right">
                           {idx + 1}.
                         </div>
@@ -339,6 +472,7 @@ const AssessmentGrading: React.FC = () => {
                   );
                 })}
               </ul>
+              </>
             )}
           </div>
         </div>

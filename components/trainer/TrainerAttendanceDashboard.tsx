@@ -41,65 +41,6 @@ const StatusBadge: React.FC<{ value: string }> = ({ value }) => {
   return <span className={cls}>{value}</span>;
 };
 
-const QrCodePanel: React.FC<{ title: string; description: string; imageSrc: string }> = ({ title, description, imageSrc }) => {
-  const [open, setOpen] = React.useState(false);
-  return (
-    <>
-      <div className="flex flex-col items-start gap-3">
-        <p className="text-xs text-on-surface-secondary">{description}</p>
-        <button
-          onClick={() => setOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="7" height="7" rx="1" strokeWidth={2} />
-            <rect x="14" y="3" width="7" height="7" rx="1" strokeWidth={2} />
-            <rect x="3" y="14" width="7" height="7" rx="1" strokeWidth={2} />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 14h.01M14 17h3M17 14v3M20 14h.01M20 17h.01" />
-          </svg>
-          Show QR Code
-        </button>
-      </div>
-
-      {/* Modal overlay */}
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-5 max-w-sm w-full mx-4"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Close button */}
-            <button
-              onClick={() => setOpen(false)}
-              className="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              aria-label="Close"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center -mt-2">{description}</p>
-
-            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-inner">
-              <img
-                src={imageSrc}
-                alt={`${title} QR Code`}
-                className="w-64 h-64 object-contain"
-              />
-            </div>
-
-            <p className="text-xs text-gray-400 dark:text-gray-500">Tap outside or press × to close</p>
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
 
 const RefreshIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -159,7 +100,7 @@ const SectionHeader: React.FC<{ title: string; count?: number; right?: React.Rea
 const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
   const router = useRouter();
   const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId } = useLms();
-  const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false);
+  const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false, true);
 
   // Admin-mode course run lookup
   const [adminInput, setAdminInput]             = useState('');
@@ -174,7 +115,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [isFetchingSessions, setIsFetchingSessions]    = useState(false);
   const [fetchError, setFetchError]                    = useState<string | null>(null);
 
-  const [activeTab, setActiveTab]                      = useState<'qr' | 'elist' | 'traqom' | 'cert'>('qr');
+  const [activeTab, setActiveTab]                      = useState<'qr' | 'elist'>('qr');
 
   const [isLoadingAttendance, setIsLoadingAttendance]  = useState(false);
   const [showNric, setShowNric]                        = useState(false);
@@ -1005,7 +946,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     }
   };
 
-  const attendanceLinkUrl = (type: 'qr' | 'elist' | 'traqom' | 'cert') =>
+  const attendanceLinkUrl = (type: 'qr' | 'elist') =>
     type === 'qr'
       ? `https://www.myskillsfuture.gov.sg/spface/splogin/select-session?course-run-code=${digitalAttendanceId}`
       : `https://www.myskillsfuture.gov.sg/api/take-attendance/${digitalAttendanceId}`;
@@ -1338,11 +1279,11 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
 
       {/* ── Attendance Links ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">
-        <SectionHeader title="Attendance / TRAQOM / Cert QR Codes" />
+        <SectionHeader title="Attendance" />
         <div className="p-4">
           {/* Tab bar */}
           <div className="flex border-b border-default mb-4">
-            {(['qr', 'elist', 'traqom', 'cert'] as const).map(tab => (
+            {(['qr', 'elist'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -1352,25 +1293,12 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     : 'border-transparent text-on-surface-secondary hover:text-on-surface'
                 }`}
               >
-                {tab === 'qr' ? 'QR Attendance' : tab === 'elist' ? 'E-Attendance List' : tab === 'traqom' ? 'TRAQOM QR Code' : 'Cert QR Code'}
+                {tab === 'qr' ? 'QR Attendance' : 'E-Attendance List'}
               </button>
             ))}
           </div>
 
-          {/* TRAQOM tab — QR code */}
-          {activeTab === 'traqom' ? (
-            <QrCodePanel
-              title="TRAQOM Survey"
-              description="Show this QR code to learners to complete the TRAQOM survey."
-              imageSrc="/qr_codes/traqom_survey_qr_code.png"
-            />
-          ) : activeTab === 'cert' ? (
-            <QrCodePanel
-              title="Certificate Survey"
-              description="Show this QR code to learners to complete the certificate delivery survey."
-              imageSrc="/qr_codes/cert_delivery_qr_code.png"
-            />
-          ) : isFetchingDigitalId ? (
+          {isFetchingDigitalId ? (
             <div className="flex items-center gap-2 text-sm text-muted py-2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
               Loading attendance link...

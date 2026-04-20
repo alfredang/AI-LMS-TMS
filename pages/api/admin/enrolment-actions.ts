@@ -1,8 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import { google } from 'googleapis';
-import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
-import { addLearnerToCalendarEvent } from '../../../lib/autoEnrolDirectApplications';
+import { addDaLearnerToCalendar } from '../../../lib/google-calendar/da-calendar-sync';
 
 /**
  * POST /api/admin/enrolment-actions
@@ -17,33 +15,6 @@ import { addLearnerToCalendarEvent } from '../../../lib/autoEnrolDirectApplicati
  *   - add-to-calendar: { enrollmentIds } — adds learner emails to calendar events
  *   - generate-invoice: { enrollmentIds } — creates QB invoices (placeholder)
  */
-
-function stripPrefixes(title: string): string {
-  return (title || '')
-    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
-    .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
-    .trim();
-}
-
-async function getCalendarClient() {
-  const tpRes = await pool.query(`SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`);
-  const tpRow = tpRes.rows[0];
-  if (!tpRow?.sync_google_calendar) throw new Error('Google Calendar sync not enabled');
-
-  const credentials = await getGoogleCredentials(pool);
-  let calendarId = 'primary';
-  const calUrl = tpRow.google_calendar_url || '';
-  if (calUrl) {
-    const cidMatch = calUrl.match(/[?&]cid=([^&]+)/);
-    if (cidMatch) {
-      try { calendarId = Buffer.from(cidMatch[1], 'base64').toString('utf-8'); } catch { calendarId = cidMatch[1]; }
-    } else if (calUrl.includes('@')) { calendarId = calUrl; }
-  }
-
-  const oauth2Client = new google.auth.OAuth2(credentials.clientId, credentials.clientSecret, 'https://developers.google.com/oauthplayground');
-  oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
-  return { calendar: google.calendar({ version: 'v3', auth: oauth2Client }), calendarId };
-}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
@@ -63,11 +34,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ success: true });
     }
 
-    // Sync Calendar
+    // Sync Calendar — uses the same session-aware logic as Direct Applications
     if (action === 'sync-calendar') {
-      const { calendar, calendarId } = await getCalendarClient();
       const rows = await pool.query(`
         SELECT e.id, COALESCE(au.email, e.email) as email, c.title as course_title,
+               cr.id as course_run_uuid,
                TO_CHAR(cr.start_date AT TIME ZONE 'Asia/Singapore', 'YYYY-MM-DD') as start_date_iso
         FROM enrollment e
         JOIN course_run cr ON e.course_run_id = cr.id
@@ -80,72 +51,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `);
       if (rows.rows.length === 0) return res.status(200).json({ success: true, checked: 0, matched: 0 });
 
-      // Use SGT-normalized dates for calendar fetch window
-      const dates = rows.rows.map(r => r.start_date_iso || '').filter(Boolean).sort();
-      
-      let minD: Date;
-      let maxD: Date;
-
-      if (dates.length > 0) {
-          const firstDateStr = dates[0];
-          const lastDateStr = dates[dates.length - 1];
-          minD = new Date(firstDateStr + 'T00:00:00+08:00'); 
-          minD.setDate(minD.getDate() - 1);
-          maxD = new Date(lastDateStr + 'T23:59:59+08:00'); 
-          maxD.setDate(maxD.getDate() + 2);
-      } else {
-          // Fallback to current window if no dates found in records
-          minD = new Date(); minD.setDate(minD.getDate() - 30);
-          maxD = new Date(); maxD.setDate(maxD.getDate() + 90);
-      }
-
-      console.log(`📅 [sync-calendar] Fetching events from ${minD.toISOString()} to ${maxD.toISOString()} for ${rows.rows.length} enrolments`);
-
-
-      const evts = await calendar.events.list({ calendarId, timeMin: minD.toISOString(), timeMax: maxD.toISOString(), singleEvents: true, maxResults: 2500 });
-      const events = evts.data.items || [];
-      console.log(`📅 [sync-calendar] Found ${events.length} calendar events`);
+      console.log(`📅 [sync-calendar] Processing ${rows.rows.length} enrolments via addDaLearnerToCalendar...`);
 
       let matched = 0;
       for (const row of rows.rows) {
         if (!row.email || !row.course_title) continue;
-        const startIso = row.start_date_iso || '';
-        const stripped = stripPrefixes(row.course_title).toLowerCase();
-        const emailLower = row.email.trim().toLowerCase();
-
-        // Match: event title contains course title (or vice-versa) + event date matches start date
-        const evt = events.find(e => {
-          const evtTitle = stripPrefixes(e.summary || '').toLowerCase();
-          const titleMatch = evtTitle.includes(stripped) || stripped.includes(evtTitle);
-          if (!titleMatch) return false;
-          const evtDate = e.start?.dateTime?.slice(0, 10) || e.start?.date || '';
-          return evtDate === startIso;
-        });
-
-        if (evt) {
-          const isAttendee = (evt.attendees || []).some(a => (a.email || '').toLowerCase() === emailLower);
-          
-          if (isAttendee) {
+        try {
+          const calResult = await addDaLearnerToCalendar(
+            row.email,
+            row.course_run_uuid,
+            row.course_title,
+            row.start_date_iso
+          );
+          if (calResult.addedTo > 0) {
             await pool.query(`UPDATE enrollment SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
             // Also update DA record for the tick column
             await pool.query(`UPDATE da_application SET calendar_added = true WHERE LOWER(trainee_email) = LOWER($1) AND course_title = $2`, [row.email, row.course_title]);
             matched++;
-            console.log(`📅 [sync-calendar] ✓ ${row.email} found in "${evt.summary}" on ${startIso}`);
+            console.log(`📅 [sync-calendar] ✓ ${row.email} added to ${calResult.addedTo}/${calResult.totalSessions} session(s)`);
           } else {
-            // Found a matching event but learner is missing -> ADD THEM
-            console.log(`📅 [sync-calendar] + Adding ${row.email} to "${evt.summary}" on ${startIso}`);
-            try {
-              const success = await addLearnerToCalendarEvent(row.email, row.course_title, startIso);
-              if (success) {
-                await pool.query(`UPDATE enrollment SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
-                // Also update DA record for the tick column
-                await pool.query(`UPDATE da_application SET calendar_added = true WHERE LOWER(trainee_email) = LOWER($1) AND course_title = $2`, [row.email, row.course_title]);
-                matched++;
-              }
-            } catch (addErr) {
-              console.error(`❌ [sync-calendar] Failed to add ${row.email}:`, addErr);
-            }
+            console.log(`📅 [sync-calendar] ✗ ${row.email} — no matching calendar event found for "${row.course_title}"`);
           }
+        } catch (addErr) {
+          console.error(`❌ [sync-calendar] Failed to add ${row.email}:`, addErr);
         }
       }
       console.log(`📅 [sync-calendar] Done: checked=${rows.rows.length}, matched=${matched}`);
@@ -184,13 +112,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ success: true, matched: result.rows.length });
     }
 
-    // Add to Calendar
+    // Add to Calendar — uses the same session-aware logic as Direct Applications
     if (action === 'add-to-calendar') {
       const { enrollmentIds } = req.body;
       if (!Array.isArray(enrollmentIds)) return res.status(400).json({ success: false, error: 'enrollmentIds required' });
-      const { calendar, calendarId } = await getCalendarClient();
+
       const rows = await pool.query(`
         SELECT e.id, COALESCE(au.email, e.email) as email, c.title as course_title,
+               cr.id as course_run_uuid,
                TO_CHAR(cr.start_date AT TIME ZONE 'Asia/Singapore', 'YYYY-MM-DD') as start_date_iso,
                e.calendar_added
         FROM enrollment e
@@ -200,34 +129,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         WHERE e.id = ANY($1::uuid[])
       `, [enrollmentIds]);
 
-      const dates = rows.rows.map(r => r.start_date_iso || '').filter(Boolean).sort();
-      if (dates.length === 0) return res.status(200).json({ success: true, results: [] });
-      const minD = new Date(dates[0]); minD.setDate(minD.getDate() - 1);
-      const maxD = new Date(dates[dates.length - 1]); maxD.setDate(maxD.getDate() + 2);
-      const evts = await calendar.events.list({ calendarId, timeMin: minD.toISOString(), timeMax: maxD.toISOString(), singleEvents: true, maxResults: 500 });
-      const events = evts.data.items || [];
-
       const results: any[] = [];
       for (const row of rows.rows) {
         if (row.calendar_added) { results.push({ id: row.id, success: true }); continue; }
         if (!row.email || !row.course_title) { results.push({ id: row.id, success: false, error: 'Missing email/title' }); continue; }
-        const startIso = row.start_date_iso || '';
-        const stripped = stripPrefixes(row.course_title).toLowerCase();
-        const evt = events.find(e => {
-          const t = stripPrefixes(e.summary || '').toLowerCase();
-          return (t.includes(stripped) || stripped.includes(t)) && (e.start?.dateTime?.slice(0, 10) || e.start?.date || '') === startIso;
-        });
-        if (!evt || !evt.id) { results.push({ id: row.id, success: false, error: 'No matching event' }); continue; }
-        const existing = evt.attendees || [];
-        if (existing.some(a => (a.email || '').toLowerCase() === row.email.trim().toLowerCase())) {
-          await pool.query(`UPDATE enrollment SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
-          results.push({ id: row.id, success: true }); continue;
-        }
         try {
-          await calendar.events.patch({ calendarId, eventId: evt.id, requestBody: { attendees: [...existing, { email: row.email, responseStatus: 'needsAction' }] }, sendUpdates: 'none' });
-          await pool.query(`UPDATE enrollment SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
-          results.push({ id: row.id, success: true });
-        } catch (err: any) { results.push({ id: row.id, success: false, error: err.message }); }
+          const calResult = await addDaLearnerToCalendar(
+            row.email,
+            row.course_run_uuid,
+            row.course_title,
+            row.start_date_iso
+          );
+          if (calResult.addedTo > 0) {
+            await pool.query(`UPDATE enrollment SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [row.id]);
+            results.push({ id: row.id, success: true });
+          } else {
+            results.push({ id: row.id, success: false, error: 'No matching calendar event' });
+          }
+        } catch (err: any) {
+          results.push({ id: row.id, success: false, error: err.message });
+        }
       }
       return res.status(200).json({ success: true, results });
     }

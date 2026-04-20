@@ -76,6 +76,7 @@ export enum AdminPage {
   GrantCalculator = 'grantCalculator',
   SubmitAssessment = 'submitAssessment',
   UpdateAssessment = 'updateAssessment',
+  BulkUpdateAssessment = 'bulkUpdateAssessment',
   ApplyNewClaim = 'applyNewClaim',
   UploadCourseRuns = 'uploadCourseRuns',
   SearchGrant = 'searchGrant',
@@ -146,6 +147,16 @@ export enum DeveloperPage {
   CpJobRoles = 'cpJobRoles',
   CpLessonPlan = 'cpLessonPlan',
   CpValidation = 'cpValidation',
+  // Courseware Generator
+  CwGenerator = 'cwGenerator',
+  CwExtractCourseInfo = 'cwExtractCourseInfo',
+  CwGenerateApFgLg = 'cwGenerateApFgLg',
+  CwGenerateLessonPlan = 'cwGenerateLessonPlan',
+  CwGenerateAssessment = 'cwGenerateAssessment',
+  CwGenerateSlides = 'cwGenerateSlides',
+  CwGenerateBrochure = 'cwGenerateBrochure',
+  CwConvertDocuments = 'cwConvertDocuments',
+  CwCoursewareAudit = 'cwCoursewareAudit',
 }
 
 export enum TrainerPage {
@@ -163,6 +174,7 @@ export enum TrainerPage {
   StatTools = 'statTools',
   DoeTools = 'doeTools',
   SpcTools = 'spcTools',
+  VideoCreationTools = 'videoCreationTools',
   SustainabilityTools = 'sustainabilityTools',
   BlockchainTools = 'blockchainTools',
   VirtualTools = 'virtualTools',
@@ -224,6 +236,8 @@ export interface Course {
   isUtapEligible?: boolean;
   fundingValidity?: string;
   renewedStatus?: string;
+  casScore?: number | null;
+  esScore?: number | null;
   isLeaderboardEnabled?: boolean;
   courseLink?: string;
   brochureLink?: string;

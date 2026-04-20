@@ -1,7 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
-import { getSSGCredentials } from '@lib/ssg/services/credentials-service';
-import { createSSGCourseAPI, RunTrainerEditInfo, TrainerType } from '@lib/ssg/models/edit-delete-course-run';
+import { getSSGCredentialsService } from '@lib/ssg/services/credentials-service';
+import { createSSGCourseAPI } from '@lib/ssg/api/course-api';
+import { RunTrainerEditInfo, TrainerType } from '@lib/ssg/models/course-runs';
+import { classifySsgError } from '../external/sync-trainer-to-tpg';
 
 /**
  * POST /api/admin/run-bulk-tpg-assign
@@ -18,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const credentials = await getSSGCredentials();
+    const credentials = await getSSGCredentialsService().getSSGCredentials();
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
     const courseApi = createSSGCourseAPI(ssgBaseUrl, credentials);
 
@@ -26,7 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const results: any[] = [];
 
     for (const item of items) {
-      const { courseRunUuid, trainerName, trainerEmail, nric } = item;
+      const { courseRunUuid, trainerName, trainerEmail, nric, syncAction } = item;
 
       try {
         // Get course run details
@@ -44,7 +46,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const { course_run_id, course_code } = crResult.rows[0];
 
+        // Handle clear action: no local trainer, remove stale TPG assignment
+        if (syncAction === 'clear') {
+          await pool.query(
+            `UPDATE course_run
+             SET tpg_assigned_trainer_name = NULL, tpg_assigned_trainer_email = NULL,
+                 tpg_sync_status = NULL, updated_at = NOW()
+             WHERE id = $1`,
+            [courseRunUuid]
+          );
+          results.push({ courseRunUuid, courseRunId: course_run_id, status: 'cleared', message: 'Cleared stale TPG assignment (no local trainer)' });
+          sent++;
+          continue;
+        }
+
         if (!nric || nric === 'NA' || !nric.trim()) {
+          await pool.query(
+            `UPDATE course_run SET tpg_sync_status = 'no_nric', updated_at = NOW() WHERE id = $1`,
+            [courseRunUuid]
+          );
           results.push({ courseRunUuid, courseRunId: course_run_id, trainerName, status: 'skipped', message: 'No valid NRIC' });
           skipped++;
           continue;
@@ -68,16 +88,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (hasEditError) {
           // Check for Existing_Trainer_NotFound — save locally anyway per business rule
-          const isNotFound = editRes.error?.message?.includes('Existing_Trainer_NotFound');
-          if (isNotFound) {
+          const ssgErrorMsg = editRes.error?.message || '';
+          const syncStatus = classifySsgError(ssgErrorMsg, editRes.status);
+          if (syncStatus === 'no_tpg_profile') {
             await pool.query(
-              `UPDATE course_run SET tpg_assigned_trainer_name = $2, tpg_assigned_trainer_email = $3, updated_at = NOW() WHERE id = $1`,
-              [courseRunUuid, trainerName, trainerEmail || null]
+              `UPDATE course_run SET tpg_assigned_trainer_name = NULL, tpg_assigned_trainer_email = NULL, tpg_sync_status = 'no_tpg_profile', updated_at = NOW() WHERE id = $1`,
+              [courseRunUuid]
             );
-            results.push({ courseRunUuid, courseRunId: course_run_id, trainerName, status: 'partial', message: 'Saved locally — trainer not registered in SSG TP Profile' });
+            results.push({ courseRunUuid, courseRunId: course_run_id, trainerName, status: 'partial', message: 'Trainer not registered in SSG TP Profile' });
             sent++;
           } else {
-            results.push({ courseRunUuid, courseRunId: course_run_id, trainerName, status: 'error', message: editRes.error?.message || 'SSG rejected' });
+            await pool.query(
+              `UPDATE course_run SET tpg_sync_status = $2, updated_at = NOW() WHERE id = $1`,
+              [courseRunUuid, syncStatus]
+            );
+            results.push({ courseRunUuid, courseRunId: course_run_id, trainerName, status: 'error', message: ssgErrorMsg || 'SSG rejected' });
             errors++;
           }
           continue;
@@ -87,6 +112,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await pool.query(
           `UPDATE course_run
            SET tpg_assigned_trainer_name = $2, tpg_assigned_trainer_email = $3,
+               tpg_sync_status = 'synced',
                class_status = CASE WHEN class_status = 'Pending' THEN 'Confirmed' ELSE class_status END,
                updated_at = NOW()
            WHERE id = $1`,
