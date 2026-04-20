@@ -260,6 +260,7 @@ const Header: React.FC = () => {
       { view: View.Courses, label: 'Courses', icon: IconName.Courses },
       { view: View.Create, label: 'SEO Metadata Generator', icon: IconName.Create },
       { view: View.Dashboard, label: 'CP Generator', icon: IconName.FileText, developerPage: DeveloperPage.CpCourseDetails },
+      { view: View.Dashboard, label: 'Courseware Generator', icon: IconName.BookOpen, developerPage: DeveloperPage.CwExtractCourseInfo },
     ],
     [UserRole.Admin]: [
       { view: View.Admin, label: 'Admin Dashboard', icon: IconName.Admin, page: AdminPage.Dashboard },

@@ -1171,19 +1171,20 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                           ) : (
                             <table className="w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'auto' }}>
                                 <colgroup>
-                                    <col style={{ minWidth: '90px', width: '5%' }} />
-                                    <col style={{ minWidth: '250px' }} />
-                                    <col style={{ minWidth: '140px', width: '9%' }} />
-                                    <col style={{ minWidth: '100px', width: '6%' }} />
                                     <col style={{ minWidth: '80px', width: '5%' }} />
+                                    <col style={{ minWidth: '300px', width: '25%' }} />
+                                    <col style={{ minWidth: '120px', width: '8%' }} />
                                     <col style={{ minWidth: '90px', width: '6%' }} />
-                                    <col style={{ minWidth: '90px', width: '6%' }} />
-                                    <col style={{ minWidth: '60px', width: '4%' }} />
-                                    <col style={{ minWidth: '140px', width: '10%' }} />
-                                    <col style={{ minWidth: '140px', width: '10%' }} />
-                                    <col style={{ minWidth: '140px', width: '10%' }} />
-                                    <col style={{ minWidth: '180px', width: '12%' }} />
-                                    <col style={{ minWidth: '70px', width: '4%' }} />
+                                    <col style={{ minWidth: '70px', width: '5%' }} />
+                                    <col style={{ minWidth: '80px', width: '6%' }} />
+                                    <col style={{ minWidth: '80px', width: '6%' }} />
+                                    <col style={{ minWidth: '50px', width: '4%' }} />
+                                    <col style={{ minWidth: '120px', width: '9%' }} />
+                                    <col style={{ minWidth: '120px', width: '9%' }} />
+                                    <col style={{ minWidth: '30px', width: '2%' }} />
+                                    <col style={{ minWidth: '120px', width: '9%' }} />
+                                    <col style={{ minWidth: '120px', width: '9%' }} />
+                                    <col style={{ minWidth: '40px', width: '3%' }} />
                                 </colgroup>
                                 <thead ref={theadRef} className="bg-gray-50 dark:bg-gray-700/50">
                                     <tr className="border-b dark:border-gray-700">

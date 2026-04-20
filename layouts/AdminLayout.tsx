@@ -25,7 +25,7 @@ import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
 import ClassDetailView from '../components/admin/ClassDetailView';
 import { UpcomingClassesTable } from '../components/UpcomingClassesTable';
-import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, UpcomingEnrolmentView, NewEnrolmentView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, SyncTrainerTpgLogsView, AutoSendTrainerInvitationLogView, AutoSanitiseDataLogView } from '../components/admin/ClassManagementViews';
+import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, AddCourseRunView, AutomationLogsView, TrainerFolderLogsView, AutoCreateCertificatesLogView, BackfillEnrollmentsView, FetchUpcomingEnrolmentsView, UpcomingEnrolmentView, NewEnrolmentView, CourseRunDateSyncLogsView, UpcomingCourseRunsLogView, CourseConfirmationEmailLogsView, SyncTrainerTpgLogsView, AutoSendTrainerInvitationLogView, AutoSanitiseDataLogView, AutoSendCoursewareAttendanceLogView, AutoSendCourseCompletionLogView } from '../components/admin/ClassManagementViews';
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
@@ -67,6 +67,7 @@ import AddSessionsView from '../components/admin/AddSessionsView';
 import CourseSessionTimingView from '../components/admin/CourseSessionTimingView';
 import SupportTicketsView from '../components/admin/SupportTicketsView';
 import SupportTicketDetailView from '../components/admin/SupportTicketDetailView';
+import MasterListView from '../components/admin/MasterListView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -186,6 +187,8 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.UpcomingCourseRunsLog]: 'TGS Enrolments & Assign Trainers Log',
   [AdminPage.SyncTrainerTpgLogs]: 'Sync Trainer to TPG Log',
   [AdminPage.AutoSendTrainerInvitationLog]: 'Auto Send Trainer Invitation Log',
+  [AdminPage.AutoSendCoursewareAttendanceLog]: 'Auto Send Courseware and Attendance Log',
+  [AdminPage.AutoSendCourseCompletionLog]: 'Auto Send Course Completion Log',
   [AdminPage.AutoSanitiseDataLog]: 'Auto Sanitise Data Log',
   [AdminPage.CourseConfirmationEmailLogs]: 'Course Confirmation Email Logs',
   [AdminPage.BackfillEnrollments]: 'Backfill Enrollments',
@@ -412,6 +415,10 @@ const AdminLayout: React.FC = () => {
         return <SyncTrainerTpgLogsView />;
       case AdminPage.AutoSendTrainerInvitationLog:
         return <AutoSendTrainerInvitationLogView />;
+      case AdminPage.AutoSendCoursewareAttendanceLog:
+        return <AutoSendCoursewareAttendanceLogView />;
+      case AdminPage.AutoSendCourseCompletionLog:
+        return <AutoSendCourseCompletionLogView />;
       case AdminPage.AutoSanitiseDataLog:
         return <AutoSanitiseDataLogView />;
       case AdminPage.CourseConfirmationEmailLogs:
@@ -444,6 +451,8 @@ const AdminLayout: React.FC = () => {
         return <SupportTicketsView />;
       case AdminPage.SupportTicketDetail:
         return <SupportTicketDetailView />;
+      case AdminPage.MasterList:
+        return <MasterListView />;
       default:
         return <AdminDashboard />;
     }

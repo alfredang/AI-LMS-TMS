@@ -685,6 +685,19 @@ export async function processDirectApplication(
     }
   }
 
+  // Step 6: Create Native Enrolment in the LMS
+  try {
+    const updatedRowRes = await pool.query(`SELECT * FROM da_application WHERE id = $1`, [appId]);
+    if (updatedRowRes.rows[0]) {
+      await createNativeEnrolmentFromDA(updatedRowRes.rows[0], pool);
+    }
+  } catch (err) {
+    console.warn(
+      `⚠️  auto-enrol [${applicationId}] native enrolment creation failed (non-fatal):`,
+      err instanceof Error ? err.message : err
+    );
+  }
+
   return {
     id: appId,
     applicationId,
@@ -737,4 +750,88 @@ export async function bulkProcessDirectApplications(
   console.log(`✅ auto-enrol batch complete: ${succeeded}/${results.length} succeeded`);
 
   return results;
+}
+
+/**
+ * Creates Native Enrolment (enrollment and app_user) records inside the LMS from a DA application.
+ */
+export async function createNativeEnrolmentFromDA(record: any, dbPool: any) {
+  if (!record.course_run_id || !record.trainee_id || !record.trainee_email) return null;
+  try {
+    // Look up the course_id from course_run
+    // DA record.course_run_id often contains the external string ID (e.g. TGS-...)
+    // rather than the internal UUID. We check both.
+    const runRes = await dbPool.query(
+      `SELECT id as internal_id, course_id FROM course_run 
+       WHERE (id::text = $1 OR course_run_id = $1) AND is_deleted IS NOT TRUE LIMIT 1`,
+      [record.course_run_id]
+    );
+
+    const internalRunId = runRes.rows[0]?.internal_id;
+    const courseId = runRes.rows[0]?.course_id;
+    if (!courseId || !internalRunId) {
+      console.warn(`⚠️ [DA] Could not find course_run for ID: ${record.course_run_id}`);
+      return null;
+    }
+
+    // We must ensure the user has an app_user and learner_profile
+    // Look up by email first
+    const existingUser = await dbPool.query(
+      `SELECT id FROM app_user WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1) LIMIT 1`,
+      [record.trainee_email]
+    );
+
+    let userId = existingUser.rows[0]?.id;
+
+    if (!userId) {
+      // Create user if they don't exist, using empty password hash, we can let them reset it
+      const newUser = await dbPool.query(
+        `INSERT INTO app_user (id, email, full_name, password_hash, account_status, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, $2, '', 'active', NOW(), NOW())
+         RETURNING id`,
+        [record.trainee_email.toLowerCase(), record.trainee_name || '']
+      );
+      userId = newUser.rows[0].id;
+
+      await dbPool.query(`INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner') ON CONFLICT DO NOTHING`, [userId]);
+      await dbPool.query(`INSERT INTO learner_profile (user_id, nric, tel) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        [userId, record.trainee_id, record.trainee_phone || '']
+      );
+    }
+
+    const { rows } = await dbPool.query(
+      `INSERT INTO enrollment (
+          id, user_id, course_id, course_run_id, progress_percent, payment_status, 
+          assessment_status, enrolment_status, enrolment_date, email, nric, created_at, updated_at
+       )
+       VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', 'Confirmed', CURRENT_DATE, $4, $5, NOW(), NOW())
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      [
+        userId,
+        courseId,
+        internalRunId,
+        record.trainee_email,
+        record.trainee_id
+      ]
+    );
+
+    const enrolmentId = rows[0]?.id;
+
+    // Update the DA record to link it and show success
+    if (record.application_id) {
+      await dbPool.query(
+        `UPDATE da_application 
+         SET enrolment_status = 'Confirmed',
+             enrolment_id = $1
+         WHERE application_id = $2`,
+        [enrolmentId || null, record.application_id]
+      );
+    }
+
+    return enrolmentId || true;
+  } catch (err) {
+    console.error(`❌ createNativeEnrolmentFromDA failed:`, err);
+    return null;
+  }
 }

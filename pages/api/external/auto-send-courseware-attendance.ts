@@ -174,7 +174,7 @@ export async function runAutomation() {
 
         const tpResult = await pool.query(`
             SELECT email_user, google_client_id, google_client_secret, google_refresh_token,
-                   contact_person_name, company_phone, company_email,
+                   contact_person_name, company_tel AS company_phone, company_email,
                    courseware_attendance_email_subject as email_subject,
                    courseware_attendance_email_body as email_body,
                    courseware_attendance_email_cc as email_cc
@@ -250,7 +250,7 @@ export async function runAutomation() {
                 const learnersRes = await pool.query(`
                     SELECT
                         e.id as enrolment_id,
-                        COALESCE(au.full_name, au.name, e.nric, 'Learner') as learner_name,
+                        COALESCE(au.full_name, e.nric, 'Learner') as learner_name,
                         COALESCE(au.email, e.email) as learner_email
                     FROM enrollment e
                     LEFT JOIN app_user au ON e.user_id = au.id

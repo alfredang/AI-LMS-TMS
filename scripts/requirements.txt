@@ -1,0 +1,6 @@
+python-docx>=1.1.2
+docxtpl>=0.18.0
+requests>=2.32.3
+beautifulsoup4>=4.12.3
+openpyxl>=3.1.5
+playwright>=1.47.0

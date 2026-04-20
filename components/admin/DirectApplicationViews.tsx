@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -406,7 +406,9 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 20;
+    const currentPageRef = useRef(currentPage);
+    currentPageRef.current = currentPage;
+    const itemsPerPage = 100;
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isCancelling, setIsCancelling] = useState(false);
@@ -416,9 +418,115 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [isAddingToCal, setIsAddingToCal] = useState(false);
     const [isGeneratingInv, setIsGeneratingInv] = useState(false);
     const [isSyncingEnrol, setIsSyncingEnrol] = useState(false);
+    const [isSyncingGrants, setIsSyncingGrants] = useState(false);
     const [isSyncingCal, setIsSyncingCal] = useState(false);
     const [isSyncingInv, setIsSyncingInv] = useState(false);
     const [showPii, setShowPii] = useState(false);
+    const [invDriveFolderUrl, setInvDriveFolderUrl] = useState<string>('https://drive.google.com/drive/folders/1hBhu-Mr9HPUFdjpbZhN1GrwZBTWns_WK');
+
+    React.useEffect(() => {
+        fetch('/api/admin/da-invoice-drive-folder').then(r => r.json()).then(d => { if (d.folderUrl) setInvDriveFolderUrl(d.folderUrl); }).catch(() => {});
+    }, []);
+
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    const [toastMsg, setToastMsg] = useState<string | null>(null);
+    const [toastIsError, setToastIsError] = useState(false);
+    const [toastVisible, setToastVisible] = useState(false);
+    const toastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const showToast = React.useCallback((message: string, isError = false) => {
+        setToastMsg(message);
+        setToastIsError(isError);
+        setToastVisible(true);
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => {
+            setToastVisible(false);
+            setTimeout(() => setToastMsg(null), 300);
+        }, 5000);
+    }, []);
+
+    // ── Send Invoice Email modal state ────────────────────────────────────────
+    const [showSendEmailModal, setShowSendEmailModal] = useState(false);
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+    const [emailFilterCourseRun, setEmailFilterCourseRun] = useState('');
+    const [emailFilterCourseCode, setEmailFilterCourseCode] = useState('');
+    const [emailFilterCourseTitle, setEmailFilterCourseTitle] = useState('');
+    const [emailFilterStartDate, setEmailFilterStartDate] = useState('');
+    const [emailFilterEndDate, setEmailFilterEndDate] = useState('');
+    const [emailFilterName, setEmailFilterName] = useState('');
+    const [emailSendResult, setEmailSendResult] = useState<{ sent: number; failed: number; skipped: number } | null>(null);
+    const [emailSelectedIds, setEmailSelectedIds] = useState<Set<string>>(new Set());
+
+    const emailPreviewRows = applications.filter(app => {
+        if (!(app.invoice_id && String(app.invoice_id).trim())) return false;
+        if (emailFilterCourseRun && !(app.course_run_id || '').toLowerCase().includes(emailFilterCourseRun.toLowerCase())) return false;
+        if (emailFilterCourseCode && !(app.course_reference_number || '').toLowerCase().includes(emailFilterCourseCode.toLowerCase())) return false;
+        if (emailFilterCourseTitle && !(app.course_title || '').toLowerCase().includes(emailFilterCourseTitle.toLowerCase())) return false;
+        if (emailFilterName && !(app.trainee_name || '').toLowerCase().includes(emailFilterName.toLowerCase())) return false;
+        if (emailFilterStartDate && app.course_start_date) {
+            const start = new Date(app.course_start_date).toISOString().slice(0, 10);
+            if (start < emailFilterStartDate) return false;
+        }
+        if (emailFilterEndDate && app.course_start_date) {
+            const start = new Date(app.course_start_date).toISOString().slice(0, 10);
+            if (start > emailFilterEndDate) return false;
+        }
+        return true;
+    });
+
+    const hasEmailFilter = !!(emailFilterCourseRun || emailFilterCourseCode || emailFilterCourseTitle || emailFilterName || emailFilterStartDate || emailFilterEndDate);
+
+    // Keep selection in sync with preview rows (auto-select all when filter changes)
+    React.useEffect(() => {
+        setEmailSelectedIds(new Set(emailPreviewRows.map(a => a.id).filter(Boolean)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [emailFilterCourseRun, emailFilterCourseCode, emailFilterCourseTitle, emailFilterName, emailFilterStartDate, emailFilterEndDate]);
+
+    const emailAllSelected = emailPreviewRows.length > 0 && emailPreviewRows.every(a => emailSelectedIds.has(a.id));
+    const emailSomeSelected = emailPreviewRows.some(a => emailSelectedIds.has(a.id));
+
+    const toggleEmailSelectAll = () => {
+        if (emailAllSelected) {
+            setEmailSelectedIds(new Set());
+        } else {
+            setEmailSelectedIds(new Set(emailPreviewRows.map(a => a.id).filter(Boolean)));
+        }
+    };
+
+    const toggleEmailRow = (id: string) => {
+        setEmailSelectedIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+
+    const handleSendInvoiceEmails = async () => {
+        const ids = emailPreviewRows.map(app => app.id).filter(id => emailSelectedIds.has(id));
+        if (ids.length === 0) return;
+        setIsSendingEmail(true);
+        setEmailSendResult(null);
+        try {
+            const res = await fetch('/api/admin/da-send-invoice-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: ids }),
+            });
+            const json = await res.json();
+            const result = { sent: json.sent ?? 0, failed: json.failed ?? 0, skipped: json.skipped ?? 0 };
+            setEmailSendResult(result);
+            if (result.failed > 0) {
+                showToast(`${result.sent} sent · ${result.failed} failed · ${result.skipped} skipped`, true);
+            } else {
+                showToast(`${result.sent} invoice email${result.sent !== 1 ? 's' : ''} sent successfully${result.skipped > 0 ? ` · ${result.skipped} skipped` : ''}`);
+            }
+        } catch {
+            setEmailSendResult({ sent: 0, failed: ids.length, skipped: 0 });
+            showToast('Failed to send invoice emails. Please try again.', true);
+        } finally {
+            setIsSendingEmail(false);
+        }
+    };
 
     // ── Invoice progress modal state ──────────────────────────────────────────
     const [showInvProgress, setShowInvProgress] = useState(false);
@@ -467,7 +575,7 @@ export const ViewDirectApplicationView: React.FC = () => {
             const app = applications.find(a => a.application_id === appId);
             return app && !(app.invoice_id && String(app.invoice_id).trim());
         }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
-        if (ids.length === 0) { alert('No eligible applications selected (all already have invoices).'); return; }
+        if (ids.length === 0) { showToast('No eligible applications selected (all already have invoices).', true); return; }
         if (!window.confirm(`Generate QuickBooks invoice for ${ids.length} application(s)?`)) return;
 
         setIsGeneratingInv(true);
@@ -487,16 +595,33 @@ export const ViewDirectApplicationView: React.FC = () => {
             const succeeded = (json.results || []).filter((r: any) => r.success);
             const failed = (json.results || []).filter((r: any) => !r.success);
             const invoiceMap = new Map(succeeded.map((r: any) => [r.id, r.invoiceId]));
-            setApplications(prev => prev.map(a => invoiceMap.has(a.id) ? { ...a, invoice_id: invoiceMap.get(a.id) } : a));
             setInvProgressSucceeded(succeeded.length);
             setInvProgressFailed(failed.length);
             setInvProgressDone(true);
+            fetchApplications();
+            if (failed.length > 0) {
+                showToast(`${succeeded.length} invoice${succeeded.length !== 1 ? 's' : ''} generated · ${failed.length} failed`, true);
+            } else {
+                showToast(`${succeeded.length} invoice${succeeded.length !== 1 ? 's' : ''} generated successfully`);
+            }
         } catch {
             setInvProgressFailed(ids.length);
             setInvProgressDone(true);
+            showToast('Invoice generation failed. Please try again.', true);
         } finally {
             setIsGeneratingInv(false);
         }
+    };
+
+    const handleSyncGrants = async () => {
+        setIsSyncingGrants(true);
+        try {
+            const res = await fetch('/api/admin/da-sync-grants', { method: 'POST' });
+            const json = await res.json();
+            if (json.success) { alert(`Grants synced: ${json.totalGrantsUpserted} grant(s) across ${json.runsProcessed} course run(s).`); fetchApplications(); }
+            else alert(`Sync failed: ${json.error}`);
+        } catch { alert('Sync grants failed.'); }
+        finally { setIsSyncingGrants(false); }
     };
 
     const handleSyncEnrolment = async () => {
@@ -644,7 +769,20 @@ export const ViewDirectApplicationView: React.FC = () => {
         finally { setIsLoading(false); }
     };
 
-    React.useEffect(() => { fetchApplications(); }, []);
+    // Auto-fetch on component mount
+    React.useEffect(() => {
+        fetchApplications();
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('👀 Tab focused, refreshing direct applications for page:', currentPageRef.current);
+                fetchApplications();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
     React.useEffect(() => { setCurrentPage(1); }, [searchQuery]);
     React.useEffect(() => { setCurrentPage(1); }, [sortColumn, sortDirection]);
 
@@ -748,12 +886,18 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <button onClick={handleAddToCalendar} disabled={isAddingToCal || selectedIds.size === 0} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed">
                                 {isAddingToCal ? 'Adding...' : 'Add to Calendar'}
                             </button>
-                            <button onClick={handleGenerateInvoice} disabled={isGeneratingInv || selectedIds.size === 0} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed">
-                                {isGeneratingInv ? 'Generating...' : 'Generate Invoice'}
+                            <button disabled title="Temporarily disabled" className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-400 text-white opacity-50 cursor-not-allowed">
+                                Generate Invoice
+                            </button>
+                            <button disabled title="Temporarily disabled" className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-teal-400 text-white opacity-50 cursor-not-allowed">
+                                Send Invoice Email
                             </button>
                             <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
                             <button onClick={handleSyncEnrolment} disabled={isSyncingEnrol} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isSyncingEnrol ? 'Syncing...' : 'Sync Enrolment'}
+                            </button>
+                            <button disabled title="Temporarily disabled" className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-300 text-purple-400 dark:text-purple-500 opacity-50 cursor-not-allowed">
+                                Sync Grants
                             </button>
                             <button onClick={handleSyncCalendar} disabled={isSyncingCal} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isSyncingCal ? 'Syncing...' : 'Sync Calendar'}
@@ -871,18 +1015,23 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Sponsor</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Fee</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">GST</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant Amt</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant ID (BL)</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Amt (BL)</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant ID</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Scheme</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Amount</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">TG Amt</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">SF Claim ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">SF Cr</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Payable</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">SF Claim ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Qualification</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Certification</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Status</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Cancel By</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Enrol Status</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Enrol ID</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Invoice #</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">View Document</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
@@ -907,10 +1056,15 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.sponsorship_type || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_subsidy != null ? `$${parseFloat(app.skillsfuture_subsidy || 0).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.bl_grant_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.bl_amount != null ? `$${parseFloat(app.bl_amount).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.other_grant_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.other_scheme_code || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.other_amount != null ? `$${parseFloat(app.other_amount).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.tg_amount != null ? `$${parseFloat(app.tg_amount).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit_claim_id || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit != null ? `$${parseFloat(app.skillsfuture_credit || 0).toFixed(2)}` : '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">${parseFloat(app.payable_fee || 0).toFixed(2)}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit_claim_id || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_qualification || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_relevant_certification || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${getStatusColor(app.application_status || 'Pending')}`}>{app.application_status || 'Pending'}</span></td>
@@ -921,8 +1075,12 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                     ) : <span className="text-gray-400">—</span>}
                                                 </td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.enrolment_id || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.grant_id || '—'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.invoice_id || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap">
+                                                    {app.invoice_id
+                                                        ? <a href={app.invoice_drive_file_id ? `https://drive.google.com/file/d/${app.invoice_drive_file_id}/view` : invDriveFolderUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 transition-colors"><Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />View</a>
+                                                        : <span className="text-gray-400">—</span>}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -949,6 +1107,122 @@ export const ViewDirectApplicationView: React.FC = () => {
                         </div>
                     )}
                 </Card>
+            )}
+
+            {/* ── Send Invoice Email Modal ── */}
+            {showSendEmailModal && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" style={{ backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+                    <div className="bg-surface rounded-2xl shadow-2xl max-w-5xl w-full border border-default overflow-hidden mx-4">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-default bg-surface-elevated">
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-500/10"><Icon name={IconName.Mail} className="w-5 h-5 text-blue-500" /></div>
+                                <div>
+                                    <h3 className="text-base font-semibold text-on-surface">Send Invoice Emails</h3>
+                                    <p className="text-xs text-on-surface-secondary mt-0.5">Filter applications with generated invoices, or leave empty to send to all</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowSendEmailModal(false)} className="p-1.5 rounded-lg text-on-surface-secondary hover:text-on-surface hover:bg-surface-hover transition-colors"><Icon name={IconName.Close} className="w-4 h-4" /></button>
+                        </div>
+                        <div className="px-6 py-5 space-y-4">
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                <div>
+                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">Course Run</label>
+                                    <input type="text" value={emailFilterCourseRun} onChange={e => setEmailFilterCourseRun(e.target.value)} placeholder="e.g. CRS-RUN-001" className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface placeholder-gray-400 transition-shadow" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">Course Code</label>
+                                    <input type="text" value={emailFilterCourseCode} onChange={e => setEmailFilterCourseCode(e.target.value)} placeholder="e.g. TGS-2024-001234" className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface placeholder-gray-400 transition-shadow" />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">Course Title</label>
+                                    <input type="text" value={emailFilterCourseTitle} onChange={e => setEmailFilterCourseTitle(e.target.value)} placeholder="Search by course title..." className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface placeholder-gray-400 transition-shadow" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">Start Date</label>
+                                    <input type="date" value={emailFilterStartDate} onChange={e => setEmailFilterStartDate(e.target.value)} className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface transition-shadow" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">End Date</label>
+                                    <input type="date" value={emailFilterEndDate} onChange={e => setEmailFilterEndDate(e.target.value)} className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface transition-shadow" />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">Learner Name</label>
+                                    <input type="text" value={emailFilterName} onChange={e => setEmailFilterName(e.target.value)} placeholder="Search by learner name..." className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface placeholder-gray-400 transition-shadow" />
+                                </div>
+                            </div>
+                            <div className="border-t border-default" />
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-medium text-on-surface-secondary uppercase tracking-wider">
+                                        Preview {hasEmailFilter && emailPreviewRows.length > 0 ? `· ${emailPreviewRows.length} record${emailPreviewRows.length !== 1 ? 's' : ''}` : ''}
+                                    </span>
+                                </div>
+                                <div className="border border-default rounded-lg bg-surface-elevated overflow-hidden">
+                                    <div className="max-h-44 overflow-y-auto overflow-x-auto">
+                                        {!hasEmailFilter ? (
+                                            <div className="flex flex-col items-center justify-center py-8 text-on-surface-secondary">
+                                                <Icon name={IconName.Search} className="w-6 h-6 mb-2 opacity-40" />
+                                                <span className="text-xs">Enter a filter above to preview matching records</span>
+                                            </div>
+                                        ) : emailPreviewRows.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center py-8 text-on-surface-secondary">
+                                                <Icon name={IconName.Search} className="w-6 h-6 mb-2 opacity-40" />
+                                                <span className="text-xs">No matching records found</span>
+                                            </div>
+                                        ) : (
+                                            <table className="w-full text-xs">
+                                                <thead>
+                                                    <tr>
+                                                        <th className="px-3 py-2.5 w-8">
+                                                            <input type="checkbox" checked={emailAllSelected} ref={el => { if (el) el.indeterminate = emailSomeSelected && !emailAllSelected; }} onChange={toggleEmailSelectAll} className="rounded border-gray-400 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                                                        </th>
+                                                        {['Name', 'Email', 'Course Title', 'Course Run', 'Start Date', 'Invoice #'].map(h => (
+                                                            <th key={h} className="px-3 py-2.5 text-left font-semibold text-white/90 dark:text-white/80">{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-default bg-surface">
+                                                    {emailPreviewRows.map((app, i) => {
+                                                        const checked = emailSelectedIds.has(app.id);
+                                                        return (
+                                                            <tr key={app.id || i} onClick={() => toggleEmailRow(app.id)} className={`cursor-pointer hover:bg-surface-hover transition-colors ${checked ? 'bg-blue-500/5' : i % 2 === 1 ? 'bg-surface-elevated/50' : ''}`}>
+                                                                <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                                                                    <input type="checkbox" checked={checked} onChange={() => toggleEmailRow(app.id)} className="rounded border-gray-400 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                                                                </td>
+                                                                <td className="px-3 py-2 text-on-surface whitespace-nowrap">{app.trainee_name || '—'}</td>
+                                                                <td className="px-3 py-2 text-on-surface-secondary whitespace-nowrap">{app.trainee_email || '—'}</td>
+                                                                <td className="px-3 py-2 text-on-surface truncate max-w-[220px]" title={app.course_title}>{app.course_title || '—'}</td>
+                                                                <td className="px-3 py-2 text-on-surface-secondary font-mono whitespace-nowrap">{app.course_run_id || '—'}</td>
+                                                                <td className="px-3 py-2 text-on-surface-secondary whitespace-nowrap">{app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : '—'}</td>
+                                                                <td className="px-3 py-2 text-on-surface-secondary font-mono whitespace-nowrap">{app.invoice_id}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            {emailSendResult && (
+                                <div className={`rounded-lg px-4 py-3 text-sm border ${emailSendResult.failed > 0 ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800' : 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'}`}>
+                                    {emailSendResult.sent} sent · {emailSendResult.failed} failed · {emailSendResult.skipped} skipped (no invoice or email)
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex items-center justify-between px-6 py-4 border-t border-default bg-surface-elevated">
+                            <span className="text-xs text-on-surface-secondary">
+                                {emailSelectedIds.size > 0 ? `${emailSelectedIds.size} selected · email${emailSelectedIds.size !== 1 ? 's' : ''} will be sent` : 'No recipients selected'}
+                            </span>
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setShowSendEmailModal(false)} className="px-4 py-2 text-sm font-medium rounded-lg border border-default bg-surface hover:bg-surface-hover text-on-surface transition-colors">Cancel</button>
+                                <button onClick={handleSendInvoiceEmails} disabled={isSendingEmail || emailSelectedIds.size === 0} className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {isSendingEmail ? <><div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />Sending...</> : <><Icon name={IconName.Mail} className="w-4 h-4" />Send Emails</>}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* ── Invoice Generation Progress Modal ── */}
@@ -1039,6 +1313,20 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <button onClick={() => { setPendingPage(null); setShowPageModal(false); }} className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Cancel</button>
                             <button onClick={() => { if (pendingPage !== null) { setSelectedIds(new Set()); setCurrentPage(pendingPage); setPendingPage(null); setShowPageModal(false); } }} className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Confirm</button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Toast ── */}
+            {toastMsg && (
+                <div className={`fixed top-5 right-5 z-[9999] max-w-sm w-full transition-all duration-300 ${toastVisible ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'}`}>
+                    <div className={`flex items-start gap-3 px-4 py-3.5 rounded-xl shadow-lg border backdrop-blur-sm ${toastIsError ? 'bg-red-950/90 border-red-800/40 text-red-200' : 'bg-emerald-950/90 border-emerald-800/40 text-emerald-200'}`}>
+                        <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center ${toastIsError ? 'bg-red-500/20' : 'bg-emerald-500/20'}`}>
+                            {toastIsError
+                                ? <Icon name={IconName.Close} className="w-3 h-3 text-red-400" />
+                                : <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </div>
+                        <p className="text-sm leading-snug">{toastMsg}</p>
                     </div>
                 </div>
             )}

@@ -177,6 +177,14 @@ async function seedDefaults() {
             email_template: 'courseware_attendance',
         },
         {
+            id: 'auto_send_course_completion',
+            name: 'Auto Send Course Completion Email',
+            description: 'Sends course completion and thank you emails to confirmed learners in course runs ending today. Uses the Course Completion and Thank You template configured in Training Provider → Templates.',
+            cron_expression: '35 17 * * *', // 5:35 PM SGT daily
+            api_endpoint: '/api/external/auto-send-course-completion',
+            email_template: 'course_completion',
+        },
+        {
             id: 'auto_send_trainer_invitations',
             name: 'Auto Send Trainer Invitations',
             description: 'Scans all upcoming course runs within the lookahead window and, for any class that has no locally-assigned trainer, sends an invitation email to the next approved trainer who has not already been invited, declined, or assigned. Default schedule is Monday and Thursday at 10:00 AM SGT — adjust days and time from the Task Scheduler UI.',
@@ -277,6 +285,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_send_courseware_attendance', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-send-courseware-attendance');
+            return runAutomation();
+        });
+        directHandlers.set('auto_send_course_completion', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-send-course-completion');
             return runAutomation();
         });
         directHandlers.set('auto_send_trainer_invitations', async () => {

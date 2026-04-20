@@ -80,6 +80,7 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
         cpGenerator: false,
         cpPrepare: true,
         cpSubmit: false,
+        cwGenerator: false,
     });
 
     const toggleSection = (key: string) => {
@@ -163,6 +164,35 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
                         <NavItem page={DeveloperPage.CpLessonPlan} label="Lesson Plan" isSubItem />
                         <NavItem page={DeveloperPage.CpValidation} label="CP Validation" isSubItem />
                     </SubSection>
+                </NavSection>
+            )}
+
+            {collapsed ? (
+                <a
+                    href="#"
+                    title="Courseware Generator"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        setDeveloperPage(DeveloperPage.CwExtractCourseInfo);
+                        if (onNavigate) onNavigate();
+                    }}
+                    className={`group flex items-center justify-center px-0 rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
+                >
+                    <Icon
+                        name={IconName.BookOpen}
+                        className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${inactiveIconClass}`}
+                    />
+                </a>
+            ) : (
+                <NavSection title="Courseware Generator" icon={IconName.BookOpen} isOpen={openSections.cwGenerator} onToggle={() => toggleSection('cwGenerator')} collapsed={collapsed}>
+                    <NavItem page={DeveloperPage.CwExtractCourseInfo} label="Extract Course Info" isSubItem />
+                    <NavItem page={DeveloperPage.CwGenerateApFgLg} label="Generate AP/FG/LG" isSubItem />
+                    <NavItem page={DeveloperPage.CwGenerateLessonPlan} label="Generate Lesson Plan" isSubItem />
+                    <NavItem page={DeveloperPage.CwGenerateAssessment} label="Generate Assessment" isSubItem />
+                    <NavItem page={DeveloperPage.CwGenerateSlides} label="Generate Slides" isSubItem />
+                    <NavItem page={DeveloperPage.CwGenerateBrochure} label="Generate Brochure" isSubItem />
+                    <NavItem page={DeveloperPage.CwConvertDocuments} label="Convert Documents" isSubItem />
+                    <NavItem page={DeveloperPage.CwCoursewareAudit} label="Courseware Audit" isSubItem />
                 </NavSection>
             )}
         </nav>

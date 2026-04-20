@@ -189,6 +189,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" icon={IconName.Dashboard} />
 
             <NavSection title="Class Management" icon={IconName.Briefcase} collapsed={collapsed} isOpen={openSections.classManagement} onToggle={() => toggleSection('classManagement')}>
+                <NavItem page={AdminPage.MasterList} label="Master List" isSubItem />
                 <SubSection title="Classes" isOpen={openSections.cmClasses} onToggle={() => toggleSection('cmClasses')}>
                     <NavItem page={AdminPage.OngoingClasses} label="Ongoing Classes" isSubItem />
                     <NavItem page={AdminPage.UpcomingClasses} label="Upcoming Classes" isSubItem />

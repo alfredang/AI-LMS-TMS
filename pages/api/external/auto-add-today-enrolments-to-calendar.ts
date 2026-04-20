@@ -101,7 +101,7 @@ export async function runAutomation(): Promise<{
     `SELECT enrolment_reference, learner_name, learner_email, course_title,
             course_ref_code, course_run_id, start_date, status
      FROM ssg_enrolment_record
-     WHERE (enrolment_date AT TIME ZONE 'Asia/Singapore')::date = $1::date
+     WHERE enrolment_date = $1::date
        AND status = 'Confirmed'`,
     [todaySgt]
   )).rows;

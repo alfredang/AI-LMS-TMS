@@ -770,7 +770,6 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSelectedCourse(null);
     const newQuery: any = { ...router.query, adminPage: page };
     delete newQuery.courseId;
-    delete newQuery.view;
     router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
   }, [router]);
 

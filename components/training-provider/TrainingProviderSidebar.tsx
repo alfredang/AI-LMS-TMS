@@ -14,7 +14,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const { currentView, handleNavigation, selectedCourse, adminPage, setAdminPage } = useLms();
     const appVersion = useAppVersion();
 
-    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.CoursewareAttendanceEmailTemplate, View.ProformaInvoiceEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
+    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.CoursewareAttendanceEmailTemplate, View.CourseCompletionEmailTemplate, View.ProformaInvoiceEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
     const cronJobsViews = [View.Scheduler, View.SchedulerSummary];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
     const [workflowsOpen, setWorkflowsOpen] = useState(currentView === View.WorkflowGuides);
@@ -53,6 +53,8 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { page: AdminPage.UpcomingCourseRunsLog, label: 'TGS Enrolments & Assign Trainers Log' },
         { page: AdminPage.SyncTrainerTpgLogs, label: 'Sync Trainer to TPG Log' },
         { page: AdminPage.AutoSendTrainerInvitationLog, label: 'Auto Send Trainer Invitation Log' },
+        { page: AdminPage.AutoSendCoursewareAttendanceLog, label: 'Auto Send Courseware & Attendance Log' },
+        { page: AdminPage.AutoSendCourseCompletionLog, label: 'Auto Send Course Completion Log' },
         { page: AdminPage.AutoSanitiseDataLog, label: 'Auto Sanitise Data Log' },
         { page: AdminPage.CourseConfirmationEmailLogs, label: 'Course Confirmation Email' },
     ];
@@ -67,6 +69,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.FinalCourseConfirmationEmailTemplate, label: 'Final Class Confirm Email', icon: IconName.Send },
         { view: View.CourseConfirmationEmailTemplate, label: 'Class Confirm Email', icon: IconName.Send },
         { view: View.CoursewareAttendanceEmailTemplate, label: 'Courseware and Attendance Taking', icon: IconName.Send },
+        { view: View.CourseCompletionEmailTemplate, label: 'Course Completion and Thank You', icon: IconName.Award },
         { view: View.ProformaInvoiceEmailTemplate, label: 'Proforma Invoice Email', icon: IconName.FileText },
         { view: View.PrivacyPolicy, label: 'Privacy Policy', icon: IconName.Shield },
         { view: View.AcceptableUsePolicy, label: 'Acceptable Use Policy', icon: IconName.ClipboardCheck },
