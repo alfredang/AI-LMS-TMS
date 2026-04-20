@@ -206,6 +206,7 @@ const FundingValidityView: React.FC = () => {
                 <th className="px-3 py-2 font-semibold text-right">CAS</th>
                 <th className="px-3 py-2 font-semibold text-right">ES</th>
                 <th className="px-3 py-2 font-semibold">Validity</th>
+                <th className="px-3 py-2 font-semibold">Renew Date</th>
                 <th className="px-3 py-2 font-semibold text-center">Renew</th>
                 <th className="px-3 py-2 font-semibold text-center w-20"></th>
               </tr>
@@ -273,6 +274,13 @@ const FundingValidityView: React.FC = () => {
                           {!expired && expiringSoon && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
                         </>
                       )}
+                    </td>
+                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      {validityDate ? (() => {
+                        const renewDate = new Date(validityDate);
+                        renewDate.setMonth(renewDate.getMonth() - 3);
+                        return renewDate.toLocaleDateString('en-GB');
+                      })() : '—'}
                     </td>
                     <td className="px-3 py-1.5 text-center">
                       <input
