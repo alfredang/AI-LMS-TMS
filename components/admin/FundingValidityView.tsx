@@ -187,7 +187,7 @@ const FundingValidityView: React.FC = () => {
         </Card>
         <Card className="p-6 text-center">
           <p className="text-4xl font-bold text-purple-600">{renewWithin3Months}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Renew Dates Within 3 Months</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Courses To Be Renewed</p>
         </Card>
       </div>
 
