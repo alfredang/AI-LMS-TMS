@@ -531,17 +531,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 .filter((x: unknown): x is string => typeof x === 'string' && x.length > 0);
 
             if (insertedIds.length > 0) {
-                const tpRow = await pool.query(
-                    `SELECT auto_enrol_direct_applications FROM training_provider LIMIT 1`
-                );
-                if (tpRow.rows[0]?.auto_enrol_direct_applications) {
-                    console.log(`🚀 auto-enrol: queuing ${insertedIds.length} new applications for background processing`);
-                    setImmediate(() => {
-                        bulkProcessDirectApplications(insertedIds).catch(err => {
-                            console.error('❌ Background auto-enrol failed:', err);
-                        });
+                console.log(`🚀 auto-enrol: queuing ${insertedIds.length} new applications for background processing`);
+                setImmediate(() => {
+                    bulkProcessDirectApplications(insertedIds).catch(err => {
+                        console.error('❌ Background auto-enrol failed:', err);
                     });
-                }
+                });
             }
         } catch (err) {
             // Never fail the upload response because of auto-enrol setup errors.

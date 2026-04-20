@@ -16,7 +16,7 @@ const pool = new Pool({
     : false,
 
   // Connection pool settings
-  max: 10, // Allow more concurrent connections
+  max: 30, // Allow more concurrent connections
   idleTimeoutMillis: 10000, // Close idle clients after 10 seconds
   connectionTimeoutMillis: 15000, // Return an error if connection takes longer than 15 seconds
 });
