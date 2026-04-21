@@ -54,6 +54,7 @@ const DATA_ANALYTICS_ITEMS: { label: string; icon: IconName; href: string }[] = 
   { label: 'Pivot Visualization', icon: IconName.Analytics, href: 'https://alfredang.github.io/novapivot/' },
   { label: 'Anomaly Detection', icon: IconName.Warning, href: 'https://alfredang.github.io/anamolydetection2/' },
   { label: 'Factor Analysis', icon: IconName.Analytics, href: 'https://multifactoranalysis.streamlit.app/' },
+  { label: 'ML Classification', icon: IconName.Analytics, href: 'https://ml-classification-888.streamlit.app/' },
   { label: 'Mock Data Generator', icon: IconName.FileText, href: 'https://alfredang.github.io/mockdatagen/' },
 ];
 
