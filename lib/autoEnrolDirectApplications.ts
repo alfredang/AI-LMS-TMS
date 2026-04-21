@@ -477,7 +477,8 @@ export async function processDirectApplication(
 
   const applicationId: string = row.application_id || '';
 
-  if ((row.application_status || '').toLowerCase() !== 'confirm application' && !options?.forceInvoice) {
+  const currentStatus = (row.application_status || '').toLowerCase();
+  if (currentStatus !== 'confirm application' && currentStatus !== 'confirmed' && !options?.forceInvoice) {
     return {
       id: appId,
       applicationId,
@@ -825,7 +826,7 @@ export async function createNativeEnrolmentFromDA(record: any, dbPool: any) {
          SET enrolment_status = 'Confirmed',
              enrolment_id = $1
          WHERE application_id = $2`,
-        [enrolmentId || null, record.application_id]
+        [enrolmentId ? 'MANUAL' : null, record.application_id]
       );
     }
 
