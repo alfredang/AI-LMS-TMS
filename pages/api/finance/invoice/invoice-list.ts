@@ -24,7 +24,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const offset = (page - 1) * limit;
 
   try {
-    const conditions: string[] = [];
+    const conditions: string[] = [
+      `(e.enrolment_status IS NULL OR e.enrolment_status NOT IN ('Admin Removed', 'Cancelled'))`,
+    ];
     const params: (string | number)[] = [];
     let paramIndex = 1;
 

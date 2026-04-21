@@ -290,6 +290,7 @@ const BillingHistoryView: React.FC = () => {
                             ) : null}
 
                             {currentUser?.id &&
+                              currentUser.role !== 'learner' &&
                               row.type.toLowerCase().includes('invoice') &&
                               (row.enrolment_id || row.enrollment_id) && (
                                 <button

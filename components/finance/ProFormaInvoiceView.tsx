@@ -232,7 +232,7 @@ const ProFormaInvoiceView: React.FC = () => {
         if (genName.trim()) params.set('name', genName.trim());
         const res = await fetch(`/api/finance/invoice/invoice-list?${params.toString()}`);
         const json = await res.json();
-        if (json.success) { setPreviewRecords(json.data); setPreviewCount(json.total); setSelectedIds(new Set(json.data.map((r: ProFormaRecord) => r.id))); }
+        if (json.success) { setPreviewRecords(json.data); setPreviewCount(json.data.length); setSelectedIds(new Set(json.data.map((r: ProFormaRecord) => r.id))); }
       } catch (err) { console.error('[ProFormaInvoiceView] Preview error:', err); }
       finally { setPreviewLoading(false); }
     }, 400);

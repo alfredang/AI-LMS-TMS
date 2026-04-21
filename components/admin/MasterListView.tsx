@@ -120,6 +120,41 @@ const newScheduleEntry = (): ScheduleEntry => ({
   id: crypto.randomUUID(), label: '', startTime: '', endTime: '', done: false,
 });
 
+// Map an SSG mode_of_training code/name to the UI's session label dropdown.
+// Falls back to empty so the user can pick manually for categories we can't infer.
+const modeToScheduleLabel = (mode: any): string => {
+  const s = String(mode ?? '').trim().toLowerCase();
+  if (!s) return '';
+  if (s === '8' || s.includes('assess'))    return 'ASM';
+  if (s === '1' || s.includes('classroom')) return 'C/R';
+  if (s === '4' || s.includes('ojt') || s.includes('on the job')) return 'PP';
+  return '';
+};
+
+// Normalise a session.start_date coming back from the API (Date object from
+// pg, ISO datetime, ISO date, or YYYYMMDD) to YYYY-MM-DD so it can be
+// compared to the masterlist's selectedDate.
+const sessionDateToIso = (d: any): string => {
+  if (!d) return '';
+  if (d instanceof Date) {
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  const s = String(d).trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  return s;
+};
+
+// "HH:MM:SS" / "HH:MM" → "HH:MM" so it fits the <input type="time"> control.
+const sessionTimeToHHmm = (t: any): string => {
+  const m = String(t ?? '').trim().match(/^(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+};
+
 const newClass = (): ClassRun => {
   const id = crypto.randomUUID();
   return {
@@ -739,6 +774,7 @@ interface ClassBlockProps {
   onAddScheduleEntry: () => void;
   onScheduleEntryChange: (entryId: string, field: keyof Omit<ScheduleEntry, 'id'>, value: string | boolean) => void;
   onRemoveScheduleEntry: (entryId: string) => void;
+  onReplaceScheduleEntries: (entries: ScheduleEntry[]) => void;
 }
 
 const ClassBlock: React.FC<ClassBlockProps> = ({
@@ -746,6 +782,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
   onClassChange, onTraineeChange, onFillAll,
   onAddTrainee, onRemoveTrainee, onRemoveClass, onMoveClass, onBulkAddTrainees,
   onAddScheduleEntry, onScheduleEntryChange, onRemoveScheduleEntry,
+  onReplaceScheduleEntries,
 }) => {
   const tabLabel = TABS.find(t => t.key === activeTab)?.label ?? '';
   const tabColors = TAB_COLORS[activeTab];
@@ -815,6 +852,137 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-fill Class Schedule when a full 7-digit Course Run ID is entered.
+  // - Looks up the run in the local DB (falling back to SSG), then fetches
+  //   every session for that run.
+  // - This block gets only the sessions whose start_date matches selectedDate,
+  //   so a consecutive-day course shows the correct subset per day.
+  // - Other linked-day blocks in the same classDate range are also filled via
+  //   direct masterlist POSTs so that when the user navigates to Day 2/3/…,
+  //   the schedule is already there.
+  // - Skips the fetch entirely if the block already has schedule entries so
+  //   user-entered or previously-synced data isn't clobbered.
+  const lastFetchedRunRef = useRef<string>('');
+  const [fetchingSessions, setFetchingSessions] = useState(false);
+
+  useEffect(() => {
+    const run = (classRun.courseRunNo || '').trim();
+    if (!/^\d{7}$/.test(run)) return;
+    if (run === lastFetchedRunRef.current) return;
+    if (classRun.scheduleEntries.length > 0) {
+      // Already populated — remember the run so a later edit on an empty block
+      // still triggers a fetch when the value actually changes.
+      lastFetchedRunRef.current = run;
+      return;
+    }
+    lastFetchedRunRef.current = run;
+
+    let cancelled = false;
+    (async () => {
+      setFetchingSessions(true);
+      try {
+        const lookRes  = await fetch(`/api/admin/lookup-course-run?courseRunCode=${encodeURIComponent(run)}`);
+        const lookJson = await lookRes.json();
+        if (cancelled) return;
+        if (!lookJson.success || !lookJson.data?.courseRunId) {
+          console.warn('[masterlist] course run not found:', run);
+          return;
+        }
+
+        const courseRunUuid = lookJson.data.courseRunId;
+        const sessRes  = await fetch(`/api/admin/course-sessions/list-with-trainers?courseRunUuid=${encodeURIComponent(courseRunUuid)}`);
+        const sessJson = await sessRes.json();
+        if (cancelled) return;
+        if (!sessJson.success) return;
+
+        const all: any[] = sessJson.data?.sessions ?? [];
+        // Sort chronologically so the schedule reads top-to-bottom in course order.
+        const sorted = [...all].sort((a, b) => {
+          const da = sessionDateToIso(a.startDate);
+          const db = sessionDateToIso(b.startDate);
+          if (da !== db) return da < db ? -1 : 1;
+          const ta = sessionTimeToHHmm(a.startTime);
+          const tb = sessionTimeToHHmm(b.startTime);
+          return ta < tb ? -1 : ta > tb ? 1 : 0;
+        });
+
+        const buildEntries = (ss: any[]): ScheduleEntry[] =>
+          ss.slice(0, 10).map(s => ({
+            id: crypto.randomUUID(),
+            label: modeToScheduleLabel(s.modeOfTraining),
+            startTime: sessionTimeToHHmm(s.startTime),
+            endTime:   sessionTimeToHHmm(s.endTime),
+            done: false,
+          }));
+
+        // Sessions for the currently-viewed day.
+        const thisDay = sorted.filter(s => sessionDateToIso(s.startDate) === selectedDate);
+        // If nothing matches (e.g. single-day block where the session dates
+        // weren't stored against the same day), use the full list so the block
+        // still fills rather than showing "No sessions yet".
+        const thisEntries = thisDay.length > 0 ? buildEntries(thisDay) : buildEntries(sorted);
+
+        if (cancelled) return;
+        if (thisEntries.length > 0) onReplaceScheduleEntries(thisEntries);
+
+        // Fill course title if still blank.
+        const resolvedTitle = classRun.courseTitle.trim() || lookJson.data.title || '';
+        if (!cancelled && !classRun.courseTitle.trim() && lookJson.data.title) {
+          onClassChange('courseTitle', lookJson.data.title);
+        }
+
+        // Propagate per-date schedules to the other linked-day blocks in the
+        // same date range. Each day's block stores its own scheduleEntries, so
+        // we save each one directly to the masterlist endpoint. Blocks that
+        // already have entries are left alone.
+        if (!cancelled && classRun.classDate?.includes('~')) {
+          const normTitle = (s: string) => (s || '').replace(/^Day\s+\d+\s*[-–—]\s*/i, '').toLowerCase().trim();
+          const baseTitle = normTitle(resolvedTitle);
+          const otherDates = expandDateRange(classRun.classDate).filter(d => d !== selectedDate);
+
+          for (const otherDate of otherDates) {
+            if (cancelled) break;
+            const otherDaySessions = sorted.filter(s => sessionDateToIso(s.startDate) === otherDate);
+            if (otherDaySessions.length === 0) continue;
+            const otherEntries = buildEntries(otherDaySessions);
+
+            try {
+              const res  = await fetch(`/api/admin/masterlist?date=${otherDate}&class_type=${activeTab}`);
+              const json = await res.json();
+              if (!json.success) continue;
+              const linked = rowsToClasses(json.data).find(
+                c => c.classDate === classRun.classDate && normTitle(c.courseTitle) === baseTitle,
+              );
+              if (!linked) continue;
+              if (linked.scheduleEntries.length > 0) continue;
+
+              const synced: ClassRun = {
+                ...linked,
+                scheduleEntries: otherEntries,
+                courseRunNo: run,
+                courseTitle: linked.courseTitle || resolvedTitle,
+              };
+              await fetch('/api/admin/masterlist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rows: classToRows(synced, activeTab, otherDate) }),
+              });
+            } catch (e) {
+              console.error('[masterlist] linked-day auto-fill error:', e);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[masterlist] auto-fetch sessions error:', err);
+      } finally {
+        if (!cancelled) setFetchingSessions(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classRun.courseRunNo, selectedDate]);
+
   return (
     <div className="mb-8 overflow-x-clip">
       {confirmDeleteClass && (
@@ -878,6 +1046,11 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
               inputMode="numeric"
               className={`w-28 text-xs bg-transparent border-b border-dashed border-white/40 focus:outline-none focus:border-white ${classRun.headerColor.text} placeholder:opacity-40`}
             />
+            {fetchingSessions && (
+              <span className={`text-[10px] animate-pulse opacity-70 ${classRun.headerColor.text}`}>
+                Fetching sessions…
+              </span>
+            )}
           </div>
 
           {/* Course title — centred */}
@@ -1834,6 +2007,18 @@ const MasterListView: React.FC = () => {
     });
   };
 
+  const handleReplaceScheduleEntries = (classId: string, entries: ScheduleEntry[]) => {
+    setClasses(prev => {
+      const updated = prev.map(cr => cr.id === classId
+        ? { ...cr, scheduleEntries: entries }
+        : cr,
+      );
+      const cr = updated.find(c => c.id === classId);
+      if (cr) scheduleSave(cr, activeTab, selectedDate);
+      return updated;
+    });
+  };
+
   const tabLabel = TABS.find(t => t.key === activeTab)?.label ?? '';
 
   return (
@@ -2035,6 +2220,7 @@ const MasterListView: React.FC = () => {
                 handleScheduleEntryChange(cr.id, entryId, field, value)
               }
               onRemoveScheduleEntry={entryId => handleRemoveScheduleEntry(cr.id, entryId)}
+              onReplaceScheduleEntries={entries => handleReplaceScheduleEntries(cr.id, entries)}
             />
           ))
         )}
