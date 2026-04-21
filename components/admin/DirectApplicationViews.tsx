@@ -424,6 +424,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [showPii, setShowPii] = useState(false);
     const [invDriveFolderUrl, setInvDriveFolderUrl] = useState<string>('https://drive.google.com/drive/folders/1hBhu-Mr9HPUFdjpbZhN1GrwZBTWns_WK');
 
+    const [isSyncing, setIsSyncing] = useState(false);
     React.useEffect(() => {
         fetch('/api/admin/da-invoice-drive-folder').then(r => r.json()).then(d => { if (d.folderUrl) setInvDriveFolderUrl(d.folderUrl); }).catch(() => {});
     }, []);
@@ -772,16 +773,6 @@ export const ViewDirectApplicationView: React.FC = () => {
     // Auto-fetch on component mount
     React.useEffect(() => {
         fetchApplications();
-
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                console.log('👀 Tab focused, refreshing direct applications for page:', currentPageRef.current);
-                fetchApplications();
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, []);
     React.useEffect(() => { setCurrentPage(1); }, [searchQuery]);
     React.useEffect(() => { setCurrentPage(1); }, [sortColumn, sortDirection]);
@@ -893,6 +884,29 @@ export const ViewDirectApplicationView: React.FC = () => {
                                 Send Invoice Email
                             </button>
                             <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
+                            <button
+                                onClick={async () => {
+                                    if (!window.confirm('This will perform a live search across SSG for all records marked as MANUAL. Proceed?')) return;
+                                    setIsSyncing(true);
+                                    try {
+                                        const response = await fetch('/api/admin/da-live-ssg-recovery', { method: 'POST' });
+                                        const result = await response.json();
+                                        if (result.success) {
+                                            alert(`Recovery complete! Found: ${result.summary.found}, Missing: ${result.summary.notFound}, Errors: ${result.summary.errors}`);
+                                            fetchApplications();
+                                        } else throw new Error(result.error);
+                                    } catch (err) {
+                                        alert(`Recovery failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+                                    } finally {
+                                        setIsSyncing(false);
+                                    }
+                                }}
+                                disabled={isSyncing}
+                                className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:bg-purple-400"
+                                title="Perform live SSG search for MANUAL records to recover real enrolment IDs"
+                            >
+                                {isSyncing ? 'Recovering...' : 'Recover Enrolment IDs'}
+                            </button>
                             <button onClick={handleSyncEnrolment} disabled={isSyncingEnrol} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isSyncingEnrol ? 'Syncing...' : 'Sync Enrolment'}
                             </button>

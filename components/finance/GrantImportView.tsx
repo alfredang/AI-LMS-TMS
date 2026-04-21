@@ -113,6 +113,7 @@ const GrantImportView: React.FC = () => {
   const [applyCounts, setApplyCounts] = useState<{ done: number; total: number } | null>(null);
   const [applyPct, setApplyPct] = useState(0);
   const [applyMsg, setApplyMsg] = useState('Applying payments…');
+  const [rowFilter, setRowFilter] = useState<string>('all');
 
   const fileValidationError = useMemo(() => {
     if (!file) return null;
@@ -138,6 +139,15 @@ const GrantImportView: React.FC = () => {
     };
   }, [preview]);
 
+  const filteredRows = useMemo(() => {
+    if (!preview) return [];
+    const applyStatuses = ['applied', 'skipped', 'failed', 'pending'];
+    if (rowFilter === 'all') return preview.rows;
+    if (applyStatuses.includes(rowFilter))
+      return preview.rows.filter((r) => String(r.apply_status || '').toLowerCase() === rowFilter);
+    return preview.rows.filter((r) => String(r.match_status) === rowFilter);
+  }, [preview, rowFilter]);
+
   const loadPreview = useCallback(
     async (id: string) => {
       const res = await fetch(`/api/grant-import/batches/${encodeURIComponent(id)}/preview`, {
@@ -155,6 +165,7 @@ const GrantImportView: React.FC = () => {
     setError(null);
     setInfo(null);
     setApplyResult(null);
+    setRowFilter('all');
     setUploading(true);
     setUploadJobId(null);
     setUploadPct(0);
@@ -659,6 +670,44 @@ const GrantImportView: React.FC = () => {
           )}
 
           <Card className="overflow-hidden">
+            {/* Filter pill bar */}
+            <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-default bg-surface-elevated">
+              <span className="text-[11px] font-semibold text-on-surface-secondary uppercase tracking-wider mr-1">Filter:</span>
+              {(
+                [
+                  { key: 'all',            label: 'All',            count: preview.rows.length,                                                                     activeClass: 'bg-gray-700 text-white dark:bg-gray-200 dark:text-gray-900' },
+                  { key: 'ready',          label: 'Ready',          count: counts.ready,                                                                            activeClass: 'bg-emerald-600 text-white' },
+                  { key: 'already_applied',label: 'Already Applied',count: counts.already,                                                                          activeClass: 'bg-amber-500 text-white' },
+                  { key: 'unmatched',      label: 'Unmatched',      count: counts.unmatched,                                                                        activeClass: 'bg-red-500 text-white' },
+                  { key: 'ambiguous',      label: 'Ambiguous',      count: counts.ambiguous,                                                                        activeClass: 'bg-red-500 text-white' },
+                  { key: 'invalid',        label: 'Invalid',        count: counts.invalid,                                                                          activeClass: 'bg-gray-500 text-white' },
+                  ...(applyResult ? [
+                    { key: 'applied', label: 'Applied', count: preview.rows.filter((r) => String(r.apply_status || '') === 'applied').length, activeClass: 'bg-emerald-600 text-white' },
+                    { key: 'skipped', label: 'Skipped', count: preview.rows.filter((r) => String(r.apply_status || '') === 'skipped').length, activeClass: 'bg-amber-500 text-white' },
+                    { key: 'failed',  label: 'Failed',  count: preview.rows.filter((r) => String(r.apply_status || '') === 'failed').length,  activeClass: 'bg-red-500 text-white' },
+                  ] : []),
+                ] as Array<{ key: string; label: string; count: number; activeClass: string }>
+              ).map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setRowFilter(opt.key)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                    rowFilter === opt.key
+                      ? opt.activeClass
+                      : 'bg-surface text-on-surface-secondary border border-default hover:bg-surface-hover'
+                  }`}
+                >
+                  {opt.label} ({opt.count})
+                </button>
+              ))}
+              {rowFilter !== 'all' && (
+                <span className="ml-auto text-[11px] text-on-surface-secondary">
+                  Showing {filteredRows.length} of {preview.rows.length} rows
+                </span>
+              )}
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
@@ -704,7 +753,14 @@ const GrantImportView: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-default">
-                  {preview.rows.map((r) => {
+                  {filteredRows.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="px-4 py-6 text-center text-xs text-on-surface-secondary">
+                        No rows match the selected filter.
+                      </td>
+                    </tr>
+                  )}
+                  {filteredRows.map((r) => {
                     const disabled = ['unmatched', 'ambiguous', 'invalid'].includes(String(r.match_status));
                     const fmsStatus = r.fms_updated_live ? 'updated' : 'not updated';
                     const qbStatus = r.qb_applied_live ? 'applied' : 'not applied';
