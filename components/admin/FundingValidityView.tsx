@@ -231,7 +231,7 @@ const FundingValidityView: React.FC = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="min-w-full text-xs">
             <thead className="bg-gray-50 dark:bg-gray-900/40">
               <tr className="text-left text-gray-600 dark:text-gray-300">
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
@@ -265,7 +265,7 @@ const FundingValidityView: React.FC = () => {
                           : ''
                     }`}
                   >
-                    <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white">{course.title}</td>
+                    <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.courseCode || '—'}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{displayCourseType(course.courseType)}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
