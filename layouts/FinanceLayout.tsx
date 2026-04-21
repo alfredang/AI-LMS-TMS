@@ -58,6 +58,7 @@ import QBEstimateView from '../components/finance/QBEstimateView';
 import QBInvoiceView from '../components/finance/QBInvoiceView';
 import QBPaymentView from '../components/finance/QBPaymentView';
 import ProFormaInvoiceView from '../components/finance/ProFormaInvoiceView';
+import GrantImportView from '../components/finance/GrantImportView';
 
 import { ProfilePage } from '../components/ProfilePage';
 import { useLms } from '@contexts/LmsContext';
@@ -65,6 +66,7 @@ import { View } from '@app-types/index';
 
 type FinancePage =
   | 'dashboard' | 'allCourseRuns'
+  | 'grantImport'
   | 'grantCalculator' | 'searchGrant' | 'viewGrant'
   | 'claimManagement' | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
   | 'proformaInvoice' | 'taxInvoice' | 'receipt'
@@ -96,6 +98,7 @@ const FinanceLayout: React.FC = () => {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     courseRunAutomations: true,
     claimManagement: true,
+    grantPaymentSync: false,
     tpgManagement: false,
     tpgCourseRun: false,
     tpgSession: false,
@@ -130,6 +133,9 @@ const FinanceLayout: React.FC = () => {
     if (['proformaInvoice', 'taxInvoice', 'receipt'].includes(page)) {
       setOpenSections(prev => ({ ...prev, claimManagement: true, invoiceSub: true }));
     }
+    if (page === 'grantImport') {
+      setOpenSections(prev => ({ ...prev, claimManagement: true, grantPaymentSync: true }));
+    }
   }, [page]);
 
   const navigateTo = (p: FinancePage) => {
@@ -140,6 +146,8 @@ const FinanceLayout: React.FC = () => {
     switch (page) {
       case 'allCourseRuns':
         return <AllCourseRunsView />;
+      case 'grantImport':
+        return <GrantImportView />;
       // Finance automation pages
       case 'autoProcessEnrolments':
         return (
@@ -712,6 +720,9 @@ const FinanceLayout: React.FC = () => {
           <NavItem target="viewClaim" label="View Claim" isSubItem />
           <NavItem target="cancelClaim" label="Cancel Claim" isSubItem />
           <NavItem target="uploadDocument" label="Supporting Document" isSubItem />
+        </SubSection>
+        <SubSection title="Grant Payment" sectionKey="grantPaymentSync">
+          <NavItem target="grantImport" label="Bulk Grant Payment Sync" isSubItem />
         </SubSection>
         <SubSection title="Invoices" sectionKey="invoiceSub">
           <NavItem target="proformaInvoice" label="ProForma Invoice" isSubItem />

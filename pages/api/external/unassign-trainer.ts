@@ -43,6 +43,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ success: false, error: `Course run ${course_run_id} not found` });
     }
 
+    // Also clear the junction table
+    await pool.query(
+      `DELETE FROM course_run_trainer WHERE course_run_id = $1`,
+      [result.rows[0].id]
+    );
+
     return res.status(200).json({
       success: true,
       message: `Trainer unassigned from course run ${course_run_id}`,

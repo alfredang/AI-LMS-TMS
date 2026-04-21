@@ -8,6 +8,7 @@ interface QBOCredentials {
   clientId: string;
   clientSecret: string;
   refreshToken: string;
+  fallbackRefreshToken?: string;
   realmId: string;
 }
 
@@ -31,16 +32,28 @@ async function getQBOCredentials(appOverride?: string): Promise<(QBOCredentials 
     const map: Record<string, string> = {};
     for (const row of result.rows) map[row.key_name] = row.key_value;
 
-    const selectedApp = ((appOverride || map.QUICKBOOKS_DEFAULT_APP || 'app2').toLowerCase() === 'app1' ? 'app1' : 'app2') as 'app1' | 'app2';
+    // Default to app1 unless explicitly configured to app2.
+    // This matches the existing `/api/quickbooks/proxy` behavior and avoids surprises when only app1 creds are set up.
+    const selectedApp = ((appOverride || map.QUICKBOOKS_DEFAULT_APP || 'app1').toLowerCase() === 'app2' ? 'app2' : 'app1') as
+      | 'app1'
+      | 'app2';
     const clientId = selectedApp === 'app2' ? map.QUICKBOOKS_APP2_CLIENT_ID : map.QUICKBOOKS_APP1_CLIENT_ID;
     const clientSecret = selectedApp === 'app2' ? map.QUICKBOOKS_APP2_CLIENT_SECRET : map.QUICKBOOKS_APP1_CLIENT_SECRET;
-    const refreshToken =
-      (selectedApp === 'app2' ? map.QUICKBOOKS_APP2_REFRESH_TOKEN : map.QUICKBOOKS_APP1_REFRESH_TOKEN) ||
-      map.QUICKBOOKS_REFRESH_TOKEN;
+    const appSpecific =
+      (selectedApp === 'app2' ? map.QUICKBOOKS_APP2_REFRESH_TOKEN : map.QUICKBOOKS_APP1_REFRESH_TOKEN) || '';
+    const globalToken = map.QUICKBOOKS_REFRESH_TOKEN || '';
+    const refreshToken = (appSpecific || globalToken).trim();
     const realmId = map.QUICKBOOKS_REALM_ID;
 
     if (clientId && clientSecret && refreshToken && realmId) {
-      return { clientId, clientSecret, refreshToken, realmId, selectedApp };
+      return {
+        clientId,
+        clientSecret,
+        refreshToken,
+        fallbackRefreshToken: appSpecific && globalToken && appSpecific.trim() !== globalToken.trim() ? globalToken.trim() : undefined,
+        realmId,
+        selectedApp,
+      };
     }
   } catch {
     // ignore and fall back to env
@@ -62,21 +75,39 @@ async function getAccessToken(creds: QBOCredentials, appKey: string): Promise<st
   if (cachedToken && cachedToken.appKey === appKey && Date.now() < cachedToken.expiresAt) return cachedToken.token;
 
   const basic = Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString('base64');
-  const resp = await fetch(QBO_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${basic}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Accept: 'application/json',
-    },
-    body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(creds.refreshToken)}`,
-  });
+  const refreshOnce = async (refreshToken: string) => {
+    const resp = await fetch(QBO_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${basic}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`,
+    });
+    const text = await resp.text();
+    const parsed = text ? JSON.parse(text) : null;
+    return { ok: resp.ok, status: resp.status, data: parsed as any, rawText: text };
+  };
 
-  if (!resp.ok) throw new Error(`QBO token refresh failed: ${resp.status} ${await resp.text()}`);
-  const data: any = await resp.json();
+  let usedRefreshToken = creds.refreshToken;
+  let r1 = await refreshOnce(usedRefreshToken);
+  if (!r1.ok) {
+    const isInvalidGrant = String(r1.data?.error || '').toLowerCase() === 'invalid_grant';
+    if (isInvalidGrant && creds.fallbackRefreshToken) {
+      usedRefreshToken = creds.fallbackRefreshToken;
+      r1 = await refreshOnce(usedRefreshToken);
+    }
+  }
+
+  if (!r1.ok) {
+    throw new Error(`QBO token refresh failed: ${r1.status} ${r1.rawText}`);
+  }
+
+  const data: any = r1.data;
 
   // Best-effort refresh token rotation persistence
-  if (data.refresh_token && data.refresh_token !== creds.refreshToken) {
+  if (data.refresh_token && data.refresh_token !== usedRefreshToken) {
     try {
       await pool.query(
         `UPDATE training_provider_api
@@ -165,6 +196,61 @@ export async function qboCreateInvoice(appOverride: string | undefined, body: an
   const data = await qboFetchJson({ token, url, method: 'POST', body });
   const inv = data?.Invoice ?? data;
   return { id: String(inv?.Id ?? ''), docNumber: inv?.DocNumber ? String(inv.DocNumber) : undefined, raw: data };
+}
+
+export async function qboFindInvoiceByDocNumber(
+  appOverride: string | undefined,
+  docNumber: string
+): Promise<{ id: string; customerRef?: string; syncToken?: string; raw: any } | null> {
+  const safe = String(docNumber || '').replace(/'/g, "''").trim();
+  if (!safe) return null;
+  const data = await qboQuery(appOverride, `SELECT * FROM Invoice WHERE DocNumber = '${safe}' MAXRESULTS 1`);
+  const inv = data?.QueryResponse?.Invoice;
+  const row = Array.isArray(inv) ? inv[0] : inv;
+  if (!row?.Id) return null;
+  return {
+    id: String(row.Id),
+    customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined,
+    syncToken: row?.SyncToken ? String(row.SyncToken) : undefined,
+    raw: row,
+  };
+}
+
+export async function qboCreatePayment(
+  appOverride: string | undefined,
+  body: any
+): Promise<{ id: string; syncToken?: string; raw: any }> {
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/payment?minorversion=${MINOR_VERSION}`;
+  const data = await qboFetchJson({ token, url, method: 'POST', body });
+  const p = data?.Payment ?? data;
+  return { id: String(p?.Id ?? ''), syncToken: p?.SyncToken ? String(p.SyncToken) : undefined, raw: data };
+}
+
+export async function qboReadPayment(
+  appOverride: string | undefined,
+  paymentId: string
+): Promise<{ id: string; syncToken?: string; raw: any }> {
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/payment/${encodeURIComponent(paymentId)}?minorversion=${MINOR_VERSION}`;
+  const data = await qboFetchJson({ token, url, method: 'GET' });
+  const p = data?.Payment ?? data;
+  return { id: String(p?.Id ?? ''), syncToken: p?.SyncToken ? String(p.SyncToken) : undefined, raw: p };
+}
+
+export async function qboVoidPayment(appOverride: string | undefined, paymentId: string, syncToken: string): Promise<void> {
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/payment?operation=void&minorversion=${MINOR_VERSION}`;
+  await qboFetchJson({ token, url, method: 'POST', body: { Id: paymentId, SyncToken: syncToken } });
 }
 
 export async function qboSendInvoice(appOverride: string | undefined, invoiceId: string, sendTo?: string): Promise<void> {
