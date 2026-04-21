@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAppVersion } from '@hooks/useAppVersion';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -96,8 +96,10 @@ const FinanceLayout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    courseRunAutomations: true,
-    claimManagement: true,
+    courseRunAutomations: false,
+    claimManagement: false,
+    claimSub: false,
+    invoiceSub: false,
     grantPaymentSync: false,
     tpgManagement: false,
     tpgCourseRun: false,
@@ -118,25 +120,6 @@ const FinanceLayout: React.FC = () => {
   const toggleSection = (key: string) => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
-
-  // Auto-open sections when navigating from header
-  useEffect(() => {
-    if (page.startsWith('tpg')) {
-      setOpenSections(prev => ({ ...prev, tpgManagement: true }));
-    }
-    if (page.startsWith('auto') || page === 'allCourseRuns') {
-      setOpenSections(prev => ({ ...prev, courseRunAutomations: true }));
-    }
-    if (['claimCheck', 'viewClaim', 'cancelClaim', 'uploadDocument'].includes(page)) {
-      setOpenSections(prev => ({ ...prev, claimManagement: true, claimSub: true }));
-    }
-    if (['proformaInvoice', 'taxInvoice', 'receipt'].includes(page)) {
-      setOpenSections(prev => ({ ...prev, claimManagement: true, invoiceSub: true }));
-    }
-    if (page === 'grantImport') {
-      setOpenSections(prev => ({ ...prev, claimManagement: true, grantPaymentSync: true }));
-    }
-  }, [page]);
 
   const navigateTo = (p: FinancePage) => {
     setPage(p);
