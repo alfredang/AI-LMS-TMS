@@ -34,10 +34,7 @@ RUN python3 -m venv /opt/venv \
     && rm /tmp/requirements.txt
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Playwright chromium browser + required system libs. The brochure
-# generator (scripts/generate-brochure.py) and any other Streamlit-origin
-# Python helpers call Python Playwright from this venv; no Node Playwright
-# is used at runtime.
+# Install Playwright chromium browser + required system libs (for brochure PDF rendering)
 RUN playwright install --with-deps chromium
 
 # Copy only what Next.js standalone needs
