@@ -45,6 +45,13 @@ const AGENTIC_AI_CATEGORIES = [
       { label: 'Nike Enquiry Webform', href: 'https://alfredang.github.io/n8nnike/' },
     ],
   },
+  {
+    title: 'Multi Agent Demo',
+    description: 'Demonstration of multi-agent orchestration using n8n for collaborative AI workflows.',
+    items: [
+      { label: 'Multi Agent Demo', href: 'https://alfredang.github.io/n8nmultiagents/' },
+    ],
+  },
 ];
 
 const AgenticAIToolsPage: React.FC = () => {
