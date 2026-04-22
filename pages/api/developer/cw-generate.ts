@@ -2,90 +2,13 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import pool from '../../../lib/db';
 import { buildClaudeEnv } from '../../../lib/anthropic-auth';
-import * as XLSX from 'xlsx';
-import mammoth from 'mammoth';
-import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { parseCpFile } from '../../../lib/cp-parser';
 
-// ─── File Parsing Helpers (matching Streamlit's parse_cp_document logic) ───
-
-const MAX_PROMPT_CHARS = 80000;
-
-function trimDocxContent(text: string): string {
-  // Trim to relevant CP sections: Part 1 through Part 4 (matching Streamlit)
-  const startMatch = text.match(/Part\s*1[\s\S]*?Particulars\s*of\s*Course/i);
-  const endMatch = text.match(/Part\s*\d+[\s\S]*?Facilities\s*and\s*Resources/i);
-  if (startMatch && startMatch.index !== undefined) {
-    const startIdx = startMatch.index;
-    if (endMatch && endMatch.index !== undefined) {
-      const endIdx = endMatch.index + endMatch[0].length;
-      text = text.substring(startIdx, endIdx);
-    } else {
-      text = text.substring(startIdx);
-    }
-  }
-  // Collapse excessive newlines
-  return text.replace(/\n{3,}/g, '\n\n').trim();
-}
-
-function trimXlsxContent(text: string): string {
-  // Trim to relevant sections: Course Particulars through Declarations (matching Streamlit)
-  const startIdx = text.indexOf('1 - Course Particulars');
-  const endIdx = text.indexOf('4 - Declarations');
-  if (startIdx >= 0) {
-    text = endIdx >= 0 ? text.substring(startIdx, endIdx) : text.substring(startIdx);
-  }
-  return text.replace(/\n{3,}/g, '\n\n').trim();
-}
+// ─── File Parsing (pure TS, matches Streamlit's parse_cp_document behaviour) ───
 
 async function parseFileContent(base64Data: string, fileName: string): Promise<string> {
-  // Use Python parser (python-docx / openpyxl) — matches Streamlit's parse_cp_document exactly
-  const tmpDir = os.tmpdir();
-  const b64Path = path.join(tmpDir, `cp_b64_${Date.now()}.txt`);
-  const scriptPath = path.join(process.cwd(), 'scripts', 'parse-cp.py');
-
-  fs.writeFileSync(b64Path, base64Data, 'utf-8');
-
-  try {
-    const result = execSync(
-      `python "${scriptPath}" "${b64Path}" base64 "${fileName}"`,
-      { encoding: 'utf-8', timeout: 30000 }
-    );
-    const parsed = JSON.parse(result.trim());
-    if (parsed.error) throw new Error(parsed.error);
-    return parsed.text || '';
-  } catch (e: any) {
-    console.error('Python CP parser error:', e.message);
-    // Fallback to JS parsing
-    const buffer = Buffer.from(base64Data, 'base64');
-    let fbResult = '';
-    if (fileName.match(/\.xlsx?$/i)) {
-      const workbook = XLSX.read(buffer, { type: 'buffer' });
-      const allText: string[] = [];
-      for (const sheetName of workbook.SheetNames) {
-        const sheet = workbook.Sheets[sheetName];
-        const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-        if (rows.length > 0) {
-          const sheetText = rows
-            .filter(row => row.some((cell: any) => String(cell).trim()))
-            .map(row => row.map((cell: any) => String(cell).trim()).join(' | '))
-            .join('\n');
-          if (sheetText.trim()) allText.push(`## ${sheetName}\n${sheetText}`);
-        }
-      }
-      fbResult = trimXlsxContent(allText.join('\n\n'));
-    } else if (fileName.match(/\.docx$/i)) {
-      const extracted = await mammoth.extractRawText({ buffer: Buffer.from(base64Data, 'base64') });
-      fbResult = trimDocxContent(extracted.value);
-    } else {
-      fbResult = buffer.toString('utf8');
-    }
-    return fbResult;
-  } finally {
-    try { fs.unlinkSync(b64Path); } catch {}
-  }
+  const buffer = Buffer.from(base64Data, 'base64');
+  return parseCpFile(buffer, fileName);
 }
 
 // ─── Prompt Templates ───
@@ -422,16 +345,24 @@ async function getApiKey(): Promise<string | null> {
   return process.env.ANTHROPIC_API_KEY || null;
 }
 
-async function generateWithClaude(prompt: string, apiKey: string, maxTurns: number = 5): Promise<string> {
+async function generateWithClaude(
+  prompt: string,
+  apiKey: string,
+  maxTurns: number = 5,
+  model?: string,
+): Promise<string> {
   let resultText = '';
+
+  const options: Record<string, unknown> = {
+    env: buildClaudeEnv(apiKey),
+    allowedTools: [],
+    maxTurns,
+  };
+  if (model) options.model = model;
 
   for await (const message of query({
     prompt,
-    options: {
-      env: buildClaudeEnv(apiKey),
-      allowedTools: [],
-      maxTurns,
-    },
+    options: options as any,
   })) {
     if (message.type === 'assistant' && message.message?.content) {
       for (const block of message.message.content) {
@@ -567,35 +498,38 @@ Return ONLY a valid JSON object with this EXACT structure (fill ALL fields from 
   "TSC_Sector": "sector name",
   "Proficiency_Level": "Level X",
   "Skills_Framework": "framework name",
-  "Total_Training_Hours": "X hours",
-  "Total_Assessment_Hours": "X hours",
-  "Total_Course_Duration_Hours": "X hours",
+  "Total_Training_Hours": "X hrs",
+  "Total_Assessment_Hours": "X hrs",
+  "Total_Course_Duration_Hours": "X hrs",
   "Course_Overview": "1 short paragraph (2-3 sentences max) from the CP's About This Course section. Keep it concise.",
   "Course_Fee": "amount or N/A",
   "LO_Description": "1-2 sentences summarizing what learners will achieve. Keep concise.",
   "Learning_Units": [
     {
-      "LU_Title": "full LU title",
-      "LO": "full learning outcome text",
+      "LU_Title": "LU1: <full LU title>   (include the 'LUx: ' prefix exactly)",
+      "LO": "ELO1: <full learning outcome text>   (include the 'ELOx: ' or 'LOx: ' prefix exactly as it appears in the CP)",
       "Topics": [
-        {"Topic_Title": "topic name", "Bullet_Points": ["subtopic 1", "subtopic 2", "subtopic 3"]}
+        {
+          "Topic_Title": "<pedagogical theme name from the CP's Topics column, e.g. 'Business Requirements Analysis' or 'Python Setup and Environment'>",
+          "Bullet_Points": ["<short topic bullet 1 from the CP>", "<short topic bullet 2>", "<short topic bullet 3>"]
+        }
       ],
       "K_numbering_description": [
-        {"K_number": "K1", "Description": "knowledge statement text"}
+        {"K_number": "K1", "Description": "<plain knowledge statement text WITHOUT any trailing TSC reference code like (ICT-BAS-0055-1.1)>"}
       ],
       "A_numbering_description": [
-        {"A_number": "A1", "Description": "ability statement text"}
+        {"A_number": "A1", "Description": "<plain ability statement text WITHOUT any trailing TSC reference code like (ICT-BAS-0055-1.1)>"}
       ],
-      "Assessment_Methods": ["Written Exam", "Case Study"],
+      "Assessment_Methods": ["Written Assessment - Short Answer Questions", "Case Study"],
       "Instructional_Methods": ["Interactive presentation", "Case studies"]
     }
   ],
   "Assessment_Methods_Details": [
     {
-      "Assessment_Method": "full method name",
+      "Assessment_Method": "<full standardised method name — e.g. 'Written Assessment - Short Answer Questions', 'Practical Performance', 'Case Study'. NEVER include 'Others:' or any other prefix>",
       "Method_Abbreviation": "WA-SAQ or PP or CS or RP or OQ",
-      "Total_Delivery_Hours": "1 hour 10 min",
-      "Assessor_to_Candidate_Ratio": ["1:3 to 1:15"],
+      "Total_Delivery_Hours": "1 hr 10 min",
+      "Assessor_to_Candidate_Ratio": ["1:3 (Min)", "1:5 (Max)"],
       "Evidence": ["description of evidence per LO e.g. {'LO': 'ELO1', 'Evidence': 'Practical demonstration of...'}"],
       "Submission": ["Individual", "Open book"],
       "Marking_Process": ["Direct evidence of competency acquisition", "Learn by Doing approach"],
@@ -604,24 +538,62 @@ Return ONLY a valid JSON object with this EXACT structure (fill ALL fields from 
   ]
 }
 
-CRITICAL RULES:
-- Include ALL Learning Units with ALL their Topics, K statements, and A statements
-- IMPORTANT: Count EVERY topic carefully. If a CP has 3 LUs and each LU has 3-5 topics, the total should be 10-15 topics. Do NOT merge or skip topics. Each distinct topic listed in the CP must be a separate entry in the Topics array
-- Each Topic MUST have 2-5 Bullet_Points (subtopics)
-- For Total_Training_Hours: Sum ALL instructional components (Classroom + Practical/Practicum + E-Learning + Others). Example: If CR=7.5hrs + Practical=6hrs → Total_Training_Hours = "13.5 hours". NEVER use just one component.
-- For Total_Assessment_Hours: Use the total assessment hours from the CP summary
-- For Total_Course_Duration_Hours: Use the total duration from the CP (e.g., "16 hours")
-- For Assessment_Methods_Details: Sum EXACT minutes across all LOs for the same method, then convert to human-readable format
-  Example: If WA-SAQ has LO1=30min + LO2=40min = 70min total → "1 hour 10 min"
-  Example: If PP has LO1=60min + LO2=50min = 110min total → "1 hour 50 min"
-  NEVER round durations. Use exact calculated values like "1 hour 10 min", "1 hour 50 min", NOT "1 hour" or "2 hours"
-- Extract the EXACT Assessor_to_Candidate_Ratio from the CP (e.g. "1:3 to 1:15"), do NOT simplify to "1:20"
-- For Evidence Gathering Plan: For each assessment method (especially PP), generate Evidence entries per LO describing what practical evidence the learner must demonstrate. Include Submission methods, Marking Process, and Retention Period (usually "3 years")
-- For K statements: Map to Written Assessment methods (WA-SAQ). For A statements: Map to Practical methods (PP, CS, RP)
-- EVERY Learning Unit MUST have Assessment_Methods listed (use the same methods as in Assessment_Methods_Details)
-- Return ONLY valid JSON, no markdown code blocks, no explanation`;
+CRITICAL RULES — READ CAREFULLY (these mirror the Streamlit WSQ extractor):
 
-        const jsonResult = await generateWithClaude(jsonPrompt, apiKey);
+TOPICS vs KNOWLEDGE/ABILITY — MOST IMPORTANT:
+- Topics in a WSQ CP are PEDAGOGICAL THEMES (e.g. "Business Requirements Analysis", "Python Setup and Environment", "Data Anonymisation Techniques") that group related sub-bullets.
+- K statements are specialised KNOWLEDGE items (e.g. "K1: Programming and coding languages, logics and styles").
+- A statements are specialised ABILITY items (e.g. "A1: Analyse and translate business requirements of software into multiple functions").
+- DO NOT copy K statement descriptions OR A statement descriptions into Topic_Title. Those belong ONLY in K_numbering_description / A_numbering_description.
+- Topic_Title must be SHORT (2-6 words, noun phrase). If the CP's topic cell only lists the K/A description, invent a concise pedagogical grouping from the sub-bullets — do NOT use the K/A text verbatim.
+- Each LU must have 2-5 Topics. Each Topic must have 2-5 Bullet_Points (the short sub-bullet lines from the CP — not full sentences, not K/A descriptions).
+- Example (GOOD):
+    { "Topic_Title": "Business Requirements Analysis",
+      "Bullet_Points": ["Understanding business objectives in financial context","Translating requirements into programming solutions","Python applications in finance industry"] }
+- Example (BAD — do NOT do this):
+    { "Topic_Title": "K1: Programming and coding languages, logics and styles",
+      "Bullet_Points": ["Explanation of K1 ...","Elaboration of K1 ..."] }
+
+PREFIXES:
+- LU_Title MUST be prefixed with "LU1: ", "LU2: ", ... exactly once. If the CP already shows "LU1 Introduction to Python Programming", preserve or add the colon as "LU1: Introduction to Python Programming".
+- LO MUST be prefixed with the label the CP uses — "ELO1: ...", "ELO2: ..." if the CP says ELO, or "LO1: ..." if the CP says LO. Do not invent a prefix.
+
+TSC REFERENCE CODE STRIPPING:
+- If a K or A statement in the CP reads "Ethical principles in AI (ICT-BAS-0055-1.1)", output the Description as just "Ethical principles in AI". Strip any trailing "(XXX-XXX-NNNN-N.N)" style code.
+
+ASSESSMENT METHODS:
+- Assessment_Method must use the STANDARD full name. Never output "Others: Case Study" — output "Case Study". Never output "Others: Written Exam" — output "Written Assessment - Short Answer Questions".
+- Conversions: "Written Exam" → "Written Assessment - Short Answer Questions" (WA-SAQ). "Practical Exam" → "Practical Performance" (PP).
+- Method_Abbreviation: use WA-SAQ for any Written Assessment/Exam variant, PP for Practical Performance/Exam, CS for Case Study, OQ for Oral Questioning, OI for Oral Interview, RP for Role Play, DEM for Demonstration, PRJ for Project, ASGN for Assignment.
+
+COUNTS & COVERAGE:
+- Include ALL Learning Units with ALL their Topics, K statements, and A statements. If a CP has 3 LUs and each has 3-5 topics, total should be 10-15 topics.
+- EVERY Learning Unit MUST have Assessment_Methods listed (same methods as in Assessment_Methods_Details).
+- If the same K or A statement (same number and description) appears multiple times within the same LU, keep only ONE instance. If the same K or A appears in different LUs, keep both.
+
+NUMBERS & DURATIONS:
+- Time fields include units ("1 hr", "40 hrs", "2 hrs").
+- Total_Training_Hours = SUM of all instructional components (Classroom + Practical/Practicum + E-Learning + Others). Example: CR=7.5hrs + Practical=6hrs → "13.5 hrs". NEVER use just one component.
+- Total_Assessment_Hours from the CP assessment summary.
+- Total_Course_Duration_Hours from the CP duration total.
+- Assessment_Methods_Details Total_Delivery_Hours: sum EXACT minutes across all LOs for the same method, convert to human-readable ("1 hr 10 min", "1 hr 50 min"). Never round.
+- Extract EXACT Assessor_to_Candidate_Ratio from the CP (e.g. "1:3 (Min)", "1:5 (Max)"), do NOT simplify to "1:20".
+
+NORMALISATION:
+- Replace en/em dashes (–, —) with hyphens (-).
+- Convert curly quotes to straight quotes.
+- Replace other non-ASCII characters with ASCII equivalents where sensible.
+
+EVIDENCE:
+- For each assessment method (especially PP and CS), provide Evidence entries per LO describing what practical evidence the learner must demonstrate. Include Submission methods, Marking Process, and Retention Period (usually "3 years").
+- For PP/CS, Evidence may be a list of {"LO": "ELO1", "Evidence": "..."} dicts.
+
+Return ONLY valid JSON, no markdown code blocks, no explanation.`;
+
+        // Same Agent SDK config as seo-generate.ts / cp-generate.ts:
+        // no model override (SDK default), maxTurns=1, no tools. Keeps
+        // parity with the other subscription-token-powered generators.
+        const jsonResult = await generateWithClaude(jsonPrompt, apiKey, 1);
 
         // Parse JSON from response
         let courseDataJson = null;

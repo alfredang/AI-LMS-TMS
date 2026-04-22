@@ -32,13 +32,17 @@ const TEMPLATES: Record<CwDocType, string> = {
 
 const DEFAULT_LOGO_PATH = path.join(TEMPLATE_DIR, 'tertiary_logo.png');
 
+// Mirror of Python METHOD_ABBR in scripts/fill-template.py. Every "Written
+// Assessment / Exam" variant maps to WA-SAQ — that is the label the Streamlit
+// reference actually emits, and the ASR summary-table `√` / `-` logic in the
+// templates hinges on this matching exactly.
 const METHOD_ABBR: Record<string, string> = {
   'Written Assessment - Short Answer Questions': 'WA-SAQ',
-  'Written Assessment - Question and Answers': 'WA(Q&A)',
-  'Written Assessment (Question and Answers)': 'WA(Q&A)',
+  'Written Assessment - Question and Answers': 'WA-SAQ',
+  'Written Assessment (Question and Answers)': 'WA-SAQ',
   'Written Assessment': 'WA-SAQ',
-  'Written Exam': 'WA(Q&A)',
-  'WA(Q&A)': 'WA(Q&A)',
+  'Written Exam': 'WA-SAQ',
+  'WA(Q&A)': 'WA-SAQ',
   'Practical Performance': 'PP',
   'Practical Exam': 'PP',
   'Case Study': 'CS',
@@ -50,15 +54,6 @@ const METHOD_ABBR: Record<string, string> = {
   'Assignment': 'ASGN',
   'Online Test': 'OT',
 };
-
-// If the CP gave us an abbreviation but the method name actually says "Question
-// and Answers", prefer the WA(Q&A) form the Streamlit reference uses.
-function reconcileAbbreviation(method: string, abbr: string): string {
-  const m = method.toLowerCase();
-  if (/question\s*(?:and|&)\s*answer/i.test(method)) return 'WA(Q&A)';
-  if (m.includes('short answer')) return 'WA-SAQ';
-  return abbr;
-}
 
 const SECTOR_MAP: Record<string, { sector: string; framework: string }> = {
   ICT: { sector: 'Infocomm Technology', framework: 'ICT Skills Framework' },
@@ -271,6 +266,191 @@ function keepHeadingsWithNext(xml: string): string {
   );
 }
 
+// Dumb-but-reliable: delete any empty <w:p>...</w:p> that sits immediately
+// before a <w:tbl>. Runs repeatedly so chains of empty paragraphs before
+// a table all get removed. This makes any heading+table pair adjacent in
+// the XML, so Word cannot split them across pages.
+function glueVersionControlHeadingToTable(xml: string): string {
+  const pattern = /<w:p\b[^>]*>(?:(?!<w:p\b)[\s\S])*?<\/w:p>(?=\s*<w:tbl\b)/g;
+  let prev = '';
+  let out = xml;
+  // Iterate until the regex stops changing the doc — successive passes
+  // expose newly-adjacent empty paragraphs.
+  while (out !== prev) {
+    prev = out;
+    out = out.replace(pattern, (match) => {
+      const text = match.replace(/<[^>]+>/g, '').trim();
+      const hasDrawing = /<w:drawing\b|<w:pict\b/.test(match);
+      const hasPageBreak = /<w:br\b[^>]*w:type\s*=\s*"page"[^>]*\/?>/.test(match);
+      return !text && !hasDrawing && !hasPageBreak ? '' : match;
+    });
+  }
+  return out;
+}
+
+function spliceHeadingToTable(xml: string, pStart: number, pEnd: number): string {
+  // Find the next <w:tbl> after the heading
+  const tblIdx = xml.indexOf('<w:tbl', pEnd);
+  if (tblIdx < 0) return xml;
+  // Everything between pEnd and tblIdx is fair game to delete IF it's only
+  // empty paragraphs (text-empty, no drawing, no page break).
+  const between = xml.substring(pEnd, tblIdx);
+  // Strip paragraphs, keep any non-paragraph content (shouldn't be any, but be safe).
+  const pattern = /<w:p\b[^>]*\/>|<w:p\b[^>]*>[\s\S]*?<\/w:p>/g;
+  const cleaned = between.replace(pattern, (m) => {
+    const text = m.replace(/<[^>]+>/g, '').trim();
+    const hasDrawing = /<w:drawing\b|<w:pict\b/.test(m);
+    const hasPageBreak = /<w:br\b[^>]*w:type\s*=\s*"page"[^>]*\/?>/.test(m);
+    if (!text && !hasDrawing && !hasPageBreak) return '';
+    return m;
+  });
+  return xml.substring(0, pEnd) + cleaned + xml.substring(tblIdx);
+}
+
+// Remove empty paragraphs that sit between a Heading paragraph and the
+// immediately-following table. Word's page break logic otherwise puts the
+// heading at the bottom of a page, the empty paragraph right below it,
+// and pushes the (too-big-to-fit) table to the next page — leaving a
+// huge gap on the previous page. Deleting the separator paragraphs makes
+// the heading and table adjacent, so Word always paginates them together.
+function dropEmptyParagraphsBetweenHeadingAndTable(xml: string): string {
+  const bodyMatch = xml.match(/<w:body\b[^>]*>([\s\S]*)<\/w:body>/);
+  if (!bodyMatch) return xml;
+  const body = bodyMatch[1];
+  const items = splitBodyTopLevel(body);
+  const pieces = items.map((it) => body.substring(it.start, it.end));
+  const isHeading = (p: string) => /<w:pStyle\s+w:val="Heading\d"\/>/.test(p);
+  const isEmpty = (p: string) =>
+    !extractParaTextContent(p).trim() && !paraHasDrawing(p) && !paraHasPageBreak(p);
+  const keep: boolean[] = pieces.map(() => true);
+
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].tag !== 'p' || !isHeading(pieces[i])) continue;
+
+    // Walk forward: empty paragraphs we might drop, then check for a table.
+    const candidates: number[] = [];
+    let j = i + 1;
+    while (j < items.length && items[j].tag === 'p' && isEmpty(pieces[j])) {
+      candidates.push(j);
+      j++;
+    }
+    if (j < items.length && items[j].tag === 'tbl' && candidates.length > 0) {
+      for (const c of candidates) keep[c] = false;
+    }
+  }
+
+  if (keep.every(Boolean)) return xml;
+
+  let newBody = '';
+  let cursor = 0;
+  for (let i = 0; i < items.length; i++) {
+    newBody += body.substring(cursor, items[i].start);
+    if (keep[i]) newBody += pieces[i];
+    cursor = items[i].end;
+  }
+  newBody += body.substring(cursor);
+  const bodyAttrs = bodyMatch[0].match(/<w:body(\b[^>]*)>/)?.[1] ?? '';
+  return xml.replace(bodyMatch[0], `<w:body${bodyAttrs}>${newBody}</w:body>`);
+}
+
+// Word's `<w:keepNext/>` only binds a paragraph to the IMMEDIATE next
+// element. A FG/LG heading followed by an empty paragraph and then a
+// table therefore keeps the heading with the empty paragraph but lets
+// the table drift to the next page on its own.
+//
+// Propagate `<w:keepNext/>` forward through empty paragraphs until we
+// hit a non-empty paragraph or a table, so the whole heading-to-table
+// chain stays together on one page.
+function propagateKeepNextToEmptyParagraphs(xml: string): string {
+  const bodyMatch = xml.match(/<w:body\b[^>]*>([\s\S]*)<\/w:body>/);
+  if (!bodyMatch) return xml;
+  const body = bodyMatch[1];
+  const items = splitBodyTopLevel(body);
+  const pieces = items.map((it) => body.substring(it.start, it.end));
+  const hasKeepNext = (p: string) => /<w:keepNext\s*\/>/.test(p);
+  const paraIsEmpty = (p: string) =>
+    !extractParaTextContent(p).trim() && !paraHasDrawing(p) && !paraHasPageBreak(p);
+
+  const injectKeepNext = (p: string): string => {
+    if (hasKeepNext(p)) return p;
+    if (/<w:pPr>/.test(p)) {
+      return p.replace(/<w:pPr>/, '<w:pPr><w:keepNext/>');
+    }
+    // Paragraph has no pPr — add one right after the <w:p ...> open tag.
+    return p.replace(/<w:p\b([^>]*)>/, '<w:p$1><w:pPr><w:keepNext/></w:pPr>');
+  };
+
+  let changed = false;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].tag !== 'p' || !hasKeepNext(pieces[i])) continue;
+    for (let j = i + 1; j < items.length; j++) {
+      if (items[j].tag === 'tbl') break; // table reached — chain terminates cleanly
+      if (items[j].tag !== 'p') break;
+      if (!paraIsEmpty(pieces[j])) break; // non-empty paragraph — chain should not extend past it
+      const next = injectKeepNext(pieces[j]);
+      if (next !== pieces[j]) {
+        pieces[j] = next;
+        changed = true;
+      }
+    }
+  }
+  if (!changed) return xml;
+
+  let newBody = '';
+  let cursor = 0;
+  for (let i = 0; i < items.length; i++) {
+    newBody += body.substring(cursor, items[i].start);
+    newBody += pieces[i];
+    cursor = items[i].end;
+  }
+  newBody += body.substring(cursor);
+  const bodyAttrs = bodyMatch[0].match(/<w:body(\b[^>]*)>/)?.[1] ?? '';
+  return xml.replace(bodyMatch[0], `<w:body${bodyAttrs}>${newBody}</w:body>`);
+}
+
+// Guarantee the "Course Overview" Heading1 starts on its own page after the
+// Document Version Control table. We walk top-level body paragraphs one at
+// a time (NOT a regex — the previous regex matched across paragraph
+// boundaries and polluted the preceding empty paragraph's pPr with
+// <w:pageBreakBefore/>, which broke pagination of the version control
+// heading+table pair).
+function forceCourseOverviewPageBreak(xml: string): string {
+  const bodyMatch = xml.match(/<w:body\b[^>]*>([\s\S]*)<\/w:body>/);
+  if (!bodyMatch) return xml;
+  const body = bodyMatch[1];
+  const items = splitBodyTopLevel(body);
+  const pieces = items.map((it) => body.substring(it.start, it.end));
+  let changed = false;
+
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].tag !== 'p') continue;
+    const p = pieces[i];
+    // Must be a Heading1 paragraph (pStyle in pPr).
+    if (!/<w:pStyle\s+w:val="Heading1"\/>/.test(p)) continue;
+    // Must have visible text starting with "Course Overview".
+    const text = extractParaTextContent(p).replace(/\s+/g, ' ').trim();
+    if (!/^Course Overview\b/i.test(text)) continue;
+    // Skip if already has pageBreakBefore.
+    if (/<w:pageBreakBefore/.test(p)) continue;
+    // Inject <w:pageBreakBefore/> at the start of the pPr.
+    pieces[i] = p.replace(/<w:pPr>/, '<w:pPr><w:pageBreakBefore/>');
+    changed = true;
+  }
+
+  if (!changed) return xml;
+
+  let newBody = '';
+  let cursor = 0;
+  for (let i = 0; i < items.length; i++) {
+    newBody += body.substring(cursor, items[i].start);
+    newBody += pieces[i];
+    cursor = items[i].end;
+  }
+  newBody += body.substring(cursor);
+  const bodyAttrs = bodyMatch[0].match(/<w:body(\b[^>]*)>/)?.[1] ?? '';
+  return xml.replace(bodyMatch[0], `<w:body${bodyAttrs}>${newBody}</w:body>`);
+}
+
 // Paragraphs that contain ONLY Jinja block tags (no nested `<w:p>`, no
 // variables, no real text). Safe to unwrap — the block tag stays, the
 // paragraph wrapper is removed so the rendered doc doesn't accumulate
@@ -304,6 +484,47 @@ function unwrapTagOnlyContainers(xml: string, unwrapParagraphs = true): string {
     return `<w:tc${attrs}>${head}<w:p/>${rest}</w:tc>`;
   });
   return out;
+}
+
+// ── Data cleanup to match Streamlit CP Interpreter output ───────────────────
+// These normalisations exist because the Streamlit `cp_interpretation.md`
+// prompt produces clean fields directly (LU titles prefixed with "LUx:",
+// K/A descriptions without the trailing TSC reference code, assessment
+// method names without "Others:" etc.). Our TS extraction carries those
+// artefacts through, so we strip them at build-context time.
+
+const TSC_CODE_SUFFIX_RE = /\s*\(\s*[A-Z]{2,5}(?:-[A-Z0-9]{2,6}){1,3}-\d+\.\d+\s*\)\s*$/;
+
+function stripTscCodeSuffix(text: string): string {
+  if (!text) return '';
+  return String(text).replace(TSC_CODE_SUFFIX_RE, '').trim();
+}
+
+function stripOthersPrefix(text: string): string {
+  if (!text) return '';
+  return String(text).replace(/^\s*Others\s*:\s*/i, '').trim();
+}
+
+// Ensure an LU title displays as "LU{n}: Title" — matches Streamlit's
+// cp_interpretation.md requirement. Leaves existing "LU{n}" / "LU{n}:" prefixes
+// alone; otherwise prepends.
+function ensureLuPrefix(title: string, index: number): string {
+  const t = String(title || '').trim();
+  if (!t) return `LU${index + 1}`;
+  if (/^LU\s*\d+\s*[:\s]/i.test(t) || /^LU\s*\d+$/i.test(t)) return t;
+  return `LU${index + 1}: ${t}`;
+}
+
+// Strip the K/A statements parenthetical some CP extractors append to topic
+// titles (e.g. "Business Requirements Analysis (K2, A1)"). The Streamlit
+// template renders the title as a sub-heading, not a description, so the
+// trailing `(Kx, Ay)` visually clutters it.
+function stripTopicCodesSuffix(title: string): string {
+  if (!title) return '';
+  return String(title)
+    .replace(/\s*\(\s*(?:[KA]\d+(?:\s*,\s*)?)+\s*\)\s*$/, '')
+    .replace(/^\s*Topic\s+\d+\s*:\s*/i, '')
+    .trim();
 }
 
 // ── Helpers matching Python build_context() ──────────────────────────────────
@@ -356,9 +577,7 @@ function buildContext(data: Dict, _docType: CwDocType): Dict {
   const processedLus: Dict[] = [];
   sourceLus.forEach((lu, idx) => {
     const methods: string[] = (lu.Assessment_Methods || lu.assessmentMethods || []) as string[];
-    const methodAbbrs = methods
-      .map((m) => reconcileAbbreviation(m, getMethodAbbr(m) || m))
-      .filter(Boolean);
+    const methodAbbrs = methods.map((m) => getMethodAbbr(m)).filter(Boolean);
 
     const loFull = String(lu.LO || lu.learningOutcome || '');
     const loLabelMatch = loFull.match(/(E?LO\d+)/);
@@ -368,10 +587,13 @@ function buildContext(data: Dict, _docType: CwDocType): Dict {
     const kStatements: Dict[] = (lu.K_numbering_description || lu.kStatements || []) as Dict[];
     const aStatements: Dict[] = (lu.A_numbering_description || lu.aStatements || []) as Dict[];
 
+    const luTitleRaw = String(lu.LU_Title || lu.luTitle || '').trim();
+    const luTitle = ensureLuPrefix(luTitleRaw, idx);
+
     processedLus.push({
       LU_Number: lu.LU_Number || `LU${idx + 1}`,
       LO_Number: lu.LO_Number || `LO${idx + 1}`,
-      LU_Title: lu.LU_Title || lu.luTitle || '',
+      LU_Title: luTitle,
       // The docxtpl reference stores `unit.LO` as just the label ("ELO1") —
       // the Streamlit ASR / AP templates render `{{ unit.LO }}` expecting
       // that short form. Keep full text accessible as LO_Full for callers
@@ -380,16 +602,16 @@ function buildContext(data: Dict, _docType: CwDocType): Dict {
       LO_Full: loFull,
       LO_Label: loLabel,
       Topics: topics.map((t) => ({
-        Topic_Title: t.Topic_Title || t.title || '',
+        Topic_Title: stripTopicCodesSuffix(t.Topic_Title || t.title || ''),
         Bullet_Points: t.Bullet_Points || t.bulletPoints || [],
       })),
       K_numbering_description: kStatements.map((k) => ({
-        K_number: k.K_number || k.id || '',
-        Description: k.Description || k.description || '',
+        K_number: stripTscCodeSuffix(String(k.K_number || k.id || '')),
+        Description: stripTscCodeSuffix(String(k.Description || k.description || '')),
       })),
       A_numbering_description: aStatements.map((a) => ({
-        A_number: a.A_number || a.id || '',
-        Description: a.Description || a.description || '',
+        A_number: stripTscCodeSuffix(String(a.A_number || a.id || '')),
+        Description: stripTscCodeSuffix(String(a.Description || a.description || '')),
       })),
       Assessment_Methods: methodAbbrs,
       Assessment_Methods_Full: methods,
@@ -415,10 +637,21 @@ function buildContext(data: Dict, _docType: CwDocType): Dict {
     ),
   ).filter(Boolean);
 
+  // Mirror Python build_context (fill-template.py ~L426-437): if a LU has no
+  // methods, assign all methods from Assessment_Methods_Details, THEN normalise
+  // every entry to an abbreviation so the template's matrix logic
+  // (`if mtd.Method_Abbreviation in unit.Assessment_Methods`) matches.
   for (const lu of processedLus) {
     if (!lu.Assessment_Methods || lu.Assessment_Methods.length === 0) {
-      lu.Assessment_Methods = allMethodAbbrs;
+      lu.Assessment_Methods = allMethodAbbrs.slice();
     }
+    const fixed: string[] = [];
+    for (const m of lu.Assessment_Methods) {
+      const abbr = String(m).length > 6 ? getMethodAbbr(String(m)) : String(m);
+      if (abbr) fixed.push(abbr);
+    }
+    lu.Assessment_Methods = Array.from(new Set(fixed));
+    lu.Assessment_Methods_Abbr = lu.Assessment_Methods.join(', ');
   }
 
   // The template iterates Evidence/Submission/Marking_Process with
@@ -453,9 +686,8 @@ function buildContext(data: Dict, _docType: CwDocType): Dict {
   };
 
   const assessmentMethodsDetails = amDetailsSrc.map((am) => {
-    const method = String(am.Assessment_Method || am.method || '');
-    const rawAbbr = am.Method_Abbreviation || am.abbreviation || getMethodAbbr(method);
-    const abbr = reconcileAbbreviation(method, rawAbbr);
+    const method = stripOthersPrefix(String(am.Assessment_Method || am.method || ''));
+    const abbr = String(am.Method_Abbreviation || am.abbreviation || getMethodAbbr(method));
     const ratioRaw = am.Assessor_to_Candidate_Ratio || [];
     return {
       Assessment_Method: method,
@@ -592,11 +824,282 @@ function installLogoInZip(zip: PizZip, logoPath: string): string {
   return LOGO_REL_ID;
 }
 
-// Blank-page / empty-paragraph cleanup intentionally omitted — the Python
-// version used python-docx to walk structured elements. Implementing the same
-// via raw regex on XML is error-prone (non-greedy backtracking bleeds past
-// paragraph boundaries and eats real content). The rendered deck looks
-// nearly identical without it; revisit with a proper XML walker if needed.
+// Blank-page / empty-paragraph cleanup — port of the python-docx post-process
+// in scripts/fill-template.py (~L523-586). Two passes:
+//   1. If a paragraph contains a `<w:br w:type="page"/>` and the next 7
+//      siblings inside <w:body> are all empty paragraphs (≥3) with no table
+//      following, drop the page break.
+//   2. After that, collapse runs of >2 consecutive empty paragraphs at the
+//      body level, keeping paragraphs that hold a drawing/picture.
+//
+// We walk top-level <w:body> children only — nested <w:p> inside <w:tbl>
+// cells are left alone (they drive table cell layout). The walker is
+// depth-counting, not regex-greedy, so nested paragraphs inside tables can't
+// bleed into the sibling slice.
+
+function splitBodyTopLevel(body: string): Array<{ tag: string; start: number; end: number }> {
+  const items: Array<{ tag: string; start: number; end: number }> = [];
+  const openRe = /<w:(p|tbl|sectPr)\b[^>]*?>/g;
+  const selfClosingRe = /<w:(p|tbl|sectPr)\b[^>]*?\/>/g;
+  let i = 0;
+  while (i < body.length) {
+    openRe.lastIndex = i;
+    selfClosingRe.lastIndex = i;
+    const open = openRe.exec(body);
+    const selfClose = selfClosingRe.exec(body);
+    let match: RegExpExecArray | null = null;
+    if (open && selfClose) match = open.index <= selfClose.index ? open : selfClose;
+    else match = open || selfClose;
+    if (!match) break;
+
+    const tag = match[1];
+    const isSelfClosing = match[0].endsWith('/>');
+    if (isSelfClosing) {
+      items.push({ tag, start: match.index, end: match.index + match[0].length });
+      i = match.index + match[0].length;
+      continue;
+    }
+
+    let depth = 1;
+    const scanRe = new RegExp(`<w:${tag}\\b[^>]*?(\\/?)>|</w:${tag}>`, 'g');
+    scanRe.lastIndex = match.index + match[0].length;
+    let endPos = -1;
+    for (;;) {
+      const s = scanRe.exec(body);
+      if (!s) break;
+      const isClose = s[0].startsWith('</');
+      const isSC = s[0].endsWith('/>');
+      if (isClose) {
+        depth--;
+        if (depth === 0) {
+          endPos = s.index + s[0].length;
+          break;
+        }
+      } else if (!isSC) {
+        depth++;
+      }
+    }
+    if (endPos === -1) break;
+    items.push({ tag, start: match.index, end: endPos });
+    i = endPos;
+  }
+  return items;
+}
+
+function extractParaTextContent(paraXml: string): string {
+  let result = '';
+  const re = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(paraXml)) !== null) result += m[1];
+  return result;
+}
+
+function paraHasDrawing(paraXml: string): boolean {
+  return /<w:drawing\b/.test(paraXml) || /<w:pict\b/.test(paraXml);
+}
+
+function paraHasPageBreak(paraXml: string): boolean {
+  return /<w:br\b[^>]*w:type\s*=\s*"page"[^>]*\/?>/.test(paraXml);
+}
+
+function stripPageBreaks(paraXml: string): string {
+  return paraXml.replace(/<w:br\b[^>]*w:type\s*=\s*"page"[^>]*\/?>/g, '');
+}
+
+function cleanupBlankPages(docXml: string): string {
+  const bodyMatch = docXml.match(/<w:body\b[^>]*>([\s\S]*)<\/w:body>/);
+  if (!bodyMatch) return docXml;
+  const body = bodyMatch[1];
+  const items = splitBodyTopLevel(body);
+  if (items.length === 0) return docXml;
+
+  // Pass 1: remove REDUNDANT page breaks (back-to-back or separated only by
+  // empty paragraphs). Critically, we only strip a break if we find ANOTHER
+  // page break within the next 8 elements — that back-to-back pattern is
+  // what produces a visibly-blank page. A single page break separating two
+  // real sections (e.g. Version Control → Course Overview) is ALWAYS
+  // preserved; otherwise the cleanup would merge sections Streamlit keeps
+  // on separate pages.
+  const pieces = items.map((it) => body.substring(it.start, it.end));
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].tag !== 'p') continue;
+    if (!paraHasPageBreak(pieces[i])) continue;
+
+    let foundAnotherPageBreak = false;
+    let hitRealContent = false;
+    for (let j = i + 1; j < Math.min(i + 9, items.length); j++) {
+      if (items[j].tag === 'tbl') {
+        hitRealContent = true;
+        break;
+      }
+      if (items[j].tag === 'p') {
+        const t = extractParaTextContent(pieces[j]).trim();
+        if (t.length > 3) {
+          hitRealContent = true;
+          break;
+        }
+        if (paraHasPageBreak(pieces[j])) {
+          foundAnotherPageBreak = true;
+          break;
+        }
+      }
+    }
+    // Only strip if we found a DUPLICATE break (redundant) and NO real
+    // content between here and that duplicate.
+    if (foundAnotherPageBreak && !hitRealContent) {
+      pieces[i] = stripPageBreaks(pieces[i]);
+    }
+  }
+
+  // Pass 2: collapse runs of >2 consecutive empty paragraphs. Paragraphs
+  // that contain a page break (`<w:br w:type="page"/>`) are NEVER empty —
+  // they are the sole carriers of section separation. A paragraph with a
+  // drawing/pict is likewise preserved.
+  const keep: boolean[] = pieces.map(() => true);
+  let emptyCount = 0;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].tag !== 'p') {
+      emptyCount = 0;
+      continue;
+    }
+    const t = extractParaTextContent(pieces[i]).trim();
+    const hasStructure = paraHasDrawing(pieces[i]) || paraHasPageBreak(pieces[i]);
+    if (!t && !hasStructure) {
+      emptyCount++;
+      if (emptyCount > 2) keep[i] = false;
+    } else {
+      emptyCount = 0;
+    }
+  }
+
+  // Reassemble body. Preserve any whitespace/comments between items by using
+  // the original body as the backbone and substituting piece-by-piece.
+  let newBody = '';
+  let cursor = 0;
+  for (let i = 0; i < items.length; i++) {
+    newBody += body.substring(cursor, items[i].start);
+    if (keep[i]) newBody += pieces[i];
+    cursor = items[i].end;
+  }
+  newBody += body.substring(cursor);
+
+  return docXml.replace(bodyMatch[0], `<w:body${bodyMatch[0].match(/<w:body(\b[^>]*)>/)?.[1] ?? ''}>${newBody}</w:body>`);
+}
+
+// ── Table-cell paragraph cleanup ─────────────────────────────────────────────
+// Mirror of the body-level empty-paragraph collapse, scoped to each `<w:tc>`.
+//
+// Motivation: the AP template disables paragraph-level unwrap (see the
+// `unwrapTagOnlyContainers(..., docType !== 'ap')` call) because the AP
+// template contains inline `{% set %}` chains that break when unwrapped. As
+// a result, every `{% for %}` / `{% endfor %}` tag inside a cell leaves a
+// `<w:p>` behind, and after nunjucks renders, the cell ends up padded with
+// many empty paragraphs — producing the giant blank-space-inside-cell we
+// saw on the AP "Assessment Specification" page.
+//
+// We walk each table cell, find its direct-child paragraphs, and collapse
+// runs of >2 consecutive empty ones. A cell must keep ≥1 `<w:p>` for Word
+// to consider it valid OOXML, so we never drop the last remaining paragraph.
+
+function splitCellTopLevelP(inner: string): Array<{ start: number; end: number }> {
+  const items: Array<{ start: number; end: number }> = [];
+  const openRe = /<w:p\b[^>]*?>/g;
+  const selfClosingRe = /<w:p\b[^>]*?\/>/g;
+  let i = 0;
+  while (i < inner.length) {
+    openRe.lastIndex = i;
+    selfClosingRe.lastIndex = i;
+    const open = openRe.exec(inner);
+    const selfClose = selfClosingRe.exec(inner);
+    let match: RegExpExecArray | null = null;
+    if (open && selfClose) match = open.index <= selfClose.index ? open : selfClose;
+    else match = open || selfClose;
+    if (!match) break;
+
+    if (match[0].endsWith('/>')) {
+      items.push({ start: match.index, end: match.index + match[0].length });
+      i = match.index + match[0].length;
+      continue;
+    }
+
+    // `<w:p>` can contain nested blocks (tables inside cells, etc.) but
+    // within a `<w:tc>` it generally doesn't nest another `<w:p>`. Use
+    // depth-counting anyway to be safe.
+    let depth = 1;
+    const scanRe = /<w:p\b[^>]*?(\/?)>|<\/w:p>/g;
+    scanRe.lastIndex = match.index + match[0].length;
+    let endPos = -1;
+    for (;;) {
+      const s = scanRe.exec(inner);
+      if (!s) break;
+      const isClose = s[0].startsWith('</');
+      const isSC = s[0].endsWith('/>');
+      if (isClose) {
+        depth--;
+        if (depth === 0) {
+          endPos = s.index + s[0].length;
+          break;
+        }
+      } else if (!isSC) {
+        depth++;
+      }
+    }
+    if (endPos === -1) break;
+    items.push({ start: match.index, end: endPos });
+    i = endPos;
+  }
+  return items;
+}
+
+function cleanupTableCellEmptyParagraphs(docXml: string): string {
+  // Don't traverse into nested tables here — replace handles each `<w:tc>` in
+  // a single linear sweep, and tables inside cells get their own cells visited
+  // by the same regex. Non-greedy `[\s\S]*?` keeps us from swallowing across
+  // a `<w:tc>` boundary.
+  return docXml.replace(/<w:tc\b([^>]*)>([\s\S]*?)<\/w:tc>/g, (_m, attrs: string, inner: string) => {
+    const paras = splitCellTopLevelP(inner);
+    if (paras.length <= 1) return `<w:tc${attrs}>${inner}</w:tc>`;
+
+    const pieces = paras.map((p) => inner.substring(p.start, p.end));
+    const keep: boolean[] = pieces.map(() => true);
+    let emptyCount = 0;
+    let lastNonEmpty = -1;
+    // First pass: find last non-empty paragraph so we never drop it. A
+    // paragraph with a page break is treated as meaningful even if its
+    // text is empty.
+    for (let i = pieces.length - 1; i >= 0; i--) {
+      const t = extractParaTextContent(pieces[i]).trim();
+      if (t || paraHasDrawing(pieces[i]) || paraHasPageBreak(pieces[i])) {
+        lastNonEmpty = i;
+        break;
+      }
+    }
+    for (let i = 0; i < paras.length; i++) {
+      const t = extractParaTextContent(pieces[i]).trim();
+      const hasStructure = paraHasDrawing(pieces[i]) || paraHasPageBreak(pieces[i]);
+      if (!t && !hasStructure) {
+        emptyCount++;
+        if (emptyCount > 2) keep[i] = false;
+      } else {
+        emptyCount = 0;
+      }
+    }
+    // Guarantee ≥1 paragraph survives (Word requires it inside a cell).
+    const anyKept = keep.some(Boolean);
+    if (!anyKept && lastNonEmpty >= 0) keep[lastNonEmpty] = true;
+    if (!keep.some(Boolean)) keep[0] = true;
+
+    let rebuilt = '';
+    let cursor = 0;
+    for (let i = 0; i < paras.length; i++) {
+      rebuilt += inner.substring(cursor, paras[i].start);
+      if (keep[i]) rebuilt += pieces[i];
+      cursor = paras[i].end;
+    }
+    rebuilt += inner.substring(cursor);
+    return `<w:tc${attrs}>${rebuilt}</w:tc>`;
+  });
+}
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export interface FillTemplateOptions {
@@ -671,7 +1174,23 @@ export function fillTemplate(
       xml = xml.replace(logoRunRe, '');
     }
     xml = renderWithDocxtplCompat(xml, escaped);
-    if (name === 'word/document.xml') xml = keepHeadingsWithNext(xml);
+    if (name === 'word/document.xml') {
+      xml = keepHeadingsWithNext(xml);
+      xml = cleanupTableCellEmptyParagraphs(xml);
+      xml = cleanupBlankPages(xml);
+      // Keep the empty paragraph between a heading and its table — the
+      // Streamlit reference output has exactly that structure and Word
+      // paginates it correctly. Removing the empty paragraph (earlier
+      // attempt) actually broke Word's page layout, stranding the heading
+      // alone above the table's new page. We rely on `keepNext`
+      // propagation instead.
+      xml = propagateKeepNextToEmptyParagraphs(xml);
+      // LG / FG: ensure Course Overview starts on its own page. Run AFTER
+      // cleanup so a dropped page break can't leave the sections fused.
+      if (docType === 'lg' || docType === 'fg') {
+        xml = forceCourseOverviewPageBreak(xml);
+      }
+    }
     zip.file(name, xml);
   }
 
