@@ -35,6 +35,22 @@ const TAB_COLORS: Record<ClassTab, {
   cancelled:  { activeBg: 'bg-neutral-800',  activeText: 'text-white',      badgeBg: 'bg-neutral-200 dark:bg-neutral-700',   badgeText: 'text-neutral-700 dark:text-neutral-200',  borderAccent: 'border-l-neutral-800', headerBadgeBg: 'bg-neutral-400/40',   headerBadgeText: 'text-neutral-100', headerBg: 'bg-neutral-800',    headerText: 'text-neutral-100' },
 };
 
+type CellBgColor = '' | 'red' | 'yellow' | 'green';
+
+const BG_COLOR_CELL_CLASSES: Record<CellBgColor, string> = {
+  '':     '',
+  red:    'bg-red-200 dark:bg-red-900/50',
+  yellow: 'bg-yellow-200 dark:bg-yellow-900/50',
+  green:  'bg-green-200 dark:bg-green-900/50',
+};
+
+const BG_COLOR_SWATCH_CLASSES: Record<CellBgColor, string> = {
+  '':     'bg-transparent',
+  red:    'bg-red-400',
+  yellow: 'bg-yellow-400',
+  green:  'bg-green-400',
+};
+
 interface TraineeRow {
   id: string;
   name: string;
@@ -53,6 +69,8 @@ interface TraineeRow {
   followup_by: string;
   remark: string;
   cancelled: boolean;
+  invoice_no_color: CellBgColor;
+  payment_mode_color: CellBgColor;
 }
 
 interface ScheduleEntry {
@@ -113,6 +131,7 @@ const newTrainee = (): TraineeRow => ({
   virtual_reschedule: '', comments: '', date: '', grant: '',
   invoice_no: '', payment_mode: '', course_fee: '', nett_fee: '',
   payment_status: '', followup_by: '', remark: '', cancelled: false,
+  invoice_no_color: '', payment_mode_color: '',
 });
 
 
@@ -283,10 +302,14 @@ interface InputCellProps {
   align?: 'left' | 'center';
   digitsOnly?: boolean;
   onFillAll?: (v: string) => void;
+  bgColor?: CellBgColor;
+  onBgColorChange?: (c: CellBgColor) => void;
 }
 
-const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = '', align = 'left', digitsOnly = false, onFillAll }) => {
+const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = '', align = 'left', digitsOnly = false, onFillAll, bgColor = '', onBgColorChange }) => {
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const [colorMenuOpen, setColorMenuOpen] = useState(false);
+  const colorMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (taRef.current) {
@@ -295,8 +318,19 @@ const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = ''
     }
   }, [value]);
 
+  useEffect(() => {
+    if (!colorMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (colorMenuRef.current && !colorMenuRef.current.contains(e.target as Node)) {
+        setColorMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [colorMenuOpen]);
+
   return (
-    <td className={`relative px-1.5 py-1 border-r border-default last:border-r-0 group/cell ${align === 'center' ? 'text-center' : ''}`}>
+    <td className={`relative px-1.5 py-1 border-r border-default last:border-r-0 group/cell ${align === 'center' ? 'text-center' : ''} ${BG_COLOR_CELL_CLASSES[bgColor]}`}>
       <textarea
         ref={taRef}
         value={value}
@@ -317,6 +351,36 @@ const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = ''
         >
           fill all ↓
         </button>
+      )}
+      {onBgColorChange && (
+        <div
+          ref={colorMenuRef}
+          className={`absolute right-1 top-1 transition-opacity ${colorMenuOpen || bgColor ? 'opacity-100' : 'opacity-0 group-hover/cell:opacity-100'}`}
+        >
+          <button
+            type="button"
+            onClick={() => setColorMenuOpen(v => !v)}
+            title="Highlight colour"
+            className={`w-3.5 h-3.5 rounded-full ring-1 ring-on-surface-secondary/50 hover:ring-primary ${BG_COLOR_SWATCH_CLASSES[bgColor]}`}
+          />
+          {colorMenuOpen && (
+            <div className="absolute right-0 top-5 z-30 flex items-center gap-1 bg-surface border border-default rounded-md p-1 shadow-lg">
+              {(['', 'red', 'yellow', 'green'] as CellBgColor[]).map(c => (
+                <button
+                  key={c || 'none'}
+                  type="button"
+                  onClick={() => { onBgColorChange(c); setColorMenuOpen(false); }}
+                  title={c || 'none'}
+                  className={`w-4 h-4 rounded-full ring-1 ring-on-surface-secondary/40 hover:ring-2 hover:ring-primary ${BG_COLOR_SWATCH_CLASSES[c]} ${c === '' ? 'relative' : ''}`}
+                >
+                  {c === '' && (
+                    <span className="absolute inset-0 flex items-center justify-center text-on-surface-secondary text-[10px] leading-none">∅</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </td>
   );
@@ -1199,12 +1263,27 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                         } catch { /* silent — invoice field stays empty */ }
                       }}
                     />
+                  ) : (col.key === 'invoice_no' || col.key === 'payment_mode') ? (
+                    <InputCell
+                      key={col.key}
+                      value={t[col.key as TraineeField] as string}
+                      onChange={v => onTraineeChange(t.id, col.key as TraineeField, v)}
+                      placeholder={col.placeholder}
+                      align={col.align}
+                      digitsOnly={col.digitsOnly}
+                      bgColor={col.key === 'invoice_no' ? t.invoice_no_color : t.payment_mode_color}
+                      onBgColorChange={c => onTraineeChange(
+                        t.id,
+                        (col.key === 'invoice_no' ? 'invoice_no_color' : 'payment_mode_color') as TraineeField,
+                        c,
+                      )}
+                    />
                   ) : (
                     <InputCell
                       key={col.key}
                       value={t[col.key as TraineeField] as string}
                       onChange={v => onTraineeChange(t.id, col.key as TraineeField, v)}
-                      onFillAll={col.key !== 'invoice_no' && col.key !== 'payment_mode' && col.key !== 'payment_status' && col.key !== 'magento_order_no' ? v => onFillAll(col.key as TraineeField, v) : undefined}
+                      onFillAll={col.key !== 'payment_status' && col.key !== 'magento_order_no' ? v => onFillAll(col.key as TraineeField, v) : undefined}
                       placeholder={col.placeholder}
                       align={col.align}
                       digitsOnly={col.digitsOnly}
@@ -1483,6 +1562,8 @@ function rowsToClasses(rows: Record<string, any>[]): ClassRun[] {
       followup_by: row.followup_by ?? '',
       remark: row.remark ?? '',
       cancelled: row.cancelled ?? false,
+      invoice_no_color: (row.invoice_no_color ?? '') as CellBgColor,
+      payment_mode_color: (row.payment_mode_color ?? '') as CellBgColor,
     });
   }
   const classes = Array.from(map.values());
@@ -1536,6 +1617,8 @@ function classToRows(cr: ClassRun, classType: ClassTab, listDate: string): Recor
     grant: t.grant || null,
     invoice_no: t.invoice_no || null,
     payment_mode: t.payment_mode || null,
+    invoice_no_color: t.invoice_no_color || null,
+    payment_mode_color: t.payment_mode_color || null,
     course_fee: t.course_fee || null,
     nett_fee: t.nett_fee || null,
     payment_status: t.payment_status || null,
