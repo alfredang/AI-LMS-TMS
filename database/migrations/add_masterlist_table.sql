@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS public.masterlist_table (
     payment_status  text,
     followup_by     text,
     remark          text,
+    invoice_no_color   text,
+    payment_mode_color text,
     schedule_entries jsonb DEFAULT '[]'::jsonb NOT NULL,
 
     created_at      timestamp with time zone DEFAULT now() NOT NULL,
