@@ -8,11 +8,12 @@
 export async function register() {
     // Only run on the server side, not during build
     if (process.env.NEXT_RUNTIME === 'nodejs') {
-        if (process.env.NODE_ENV === 'production') {
+        // Always initialize the scheduler if it's the Node.js runtime
+        try {
             const { initScheduler } = await import('./lib/scheduler/scheduler');
             await initScheduler();
-        } else {
-            console.log('[Scheduler] Skipped — not running in production');
+        } catch (err) {
+            console.error('[Scheduler] Failed to initialize:', err);
         }
 
         // Warm up OpenClaw session to avoid ~15s cold start on first user message

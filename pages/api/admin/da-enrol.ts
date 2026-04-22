@@ -53,6 +53,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for (const app of applications) {
       const applicationId = app.application_id;
 
+      // Skip cancelled/rejected/failed applications
+      const appStatus = (app.application_status || '').toLowerCase();
+      if (['cancelled', 'rejected', 'failed'].includes(appStatus)) {
+        results.push({ application_id: applicationId, success: false, error: `Skipped: application status is "${app.application_status}"` });
+        continue;
+      }
+
       try {
         const payload = buildEnrolmentPayload(app, uen, tp.code);
 

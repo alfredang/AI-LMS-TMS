@@ -262,6 +262,30 @@ const WORKFLOWS: Workflow[] = [
       { title: '13. Certificates', detail: 'Generating and issuing training certificates. Issue WSQ certificates to competent learners, manage certificate records, and handle re-issuance requests.', type: 'success', url: 'https://alfredang.github.io/ssgwsqprocess/steps.html#certificates' },
     ],
   },
+  {
+    id: 'direct-application',
+    title: 'Direct Application Workflow',
+    icon: '📋',
+    color: 'border-sky-500 bg-sky-50 dark:bg-sky-900/10',
+    description: 'End-to-end automation for direct applications: TPG Excel upload, auto-enrolment, calendar synchronization, invoice generation, and master list updates.',
+    steps: [
+      { title: '1. Admin Uploads TPG Excel', detail: 'Admin downloads the Direct Application Excel from the TPGateway portal and uploads it to the TMS under "Upload Direct Application". The system parses the file and validates NRICs, course codes, and run IDs.', type: 'action' },
+      { title: '2. Auto Enrolment in SSG', detail: 'The system automatically triggers the SSG enrolment API for each valid record. If "Auto-Enrol" is enabled, the system submits the enrolment to SSG and retrieves the Enrolment ID (ENR-XXXX) in real-time.', type: 'logic' },
+      { title: '3. Calendar Event Synchronization', detail: 'The system checks for an existing Google Calendar event matching the course run. If no event exists, it creates one automatically. It then adds the learner\'s email address as a "needsAction" attendee to all sessions.', type: 'action' },
+      { title: '4. Invoice Generation & Delivery', detail: 'The system triggers QuickBooks Online to generate a tax invoice for the net fee. The invoice is automatically sent to the learner\'s email and a copy is stored in Google Drive for audit tracking.', type: 'email' },
+      { title: '5. Automatic Master List Update', detail: 'Once enrolled and synced, the learner is automatically added to the course run\'s Master List. This ensures the trainer and administrator have an up-to-date learner list for attendance and assessment.', type: 'success' },
+      { title: '6. Status Tracking (ENROL/CAL)', detail: 'The Direct Application dashboard updates the ENROL and CAL columns with green checkmarks to confirm that the SSG enrolment and Calendar synchronization are complete.', type: 'success' },
+    ],
+    endpoints: [
+      { method: 'POST', url: '/api/admin/upload-da-applications', description: 'Upload Excel and trigger initial processing' },
+      { method: 'POST', url: '/api/admin/da-add-to-calendar', description: 'Add specific learner to Google Calendar' },
+      { method: 'POST', url: '/api/admin/da-enrol', description: 'Manually trigger SSG enrolment' },
+    ],
+    dbTables: [
+      { name: 'da_application', description: 'Primary table for direct applications, tracking status and automation flags' },
+      { name: 'enrollment', description: 'Native enrollment table where successful DA records are linked' },
+    ],
+  },
 ];
 
 const stepColors: Record<StepType, { bg: string; border: string; icon: string; label: string }> = {

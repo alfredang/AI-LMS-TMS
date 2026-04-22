@@ -133,6 +133,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                         </button>
                         {wfAdminOpen && [
                             { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
+                            { id: 'direct-application', label: 'Direct Application', icon: '📋' },
                             { id: 'certificate', label: 'Certificate', icon: '🎓' },
                             { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
                         ].map(item => (

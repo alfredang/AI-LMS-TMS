@@ -554,7 +554,8 @@ export const ViewDirectApplicationView: React.FC = () => {
     };
 
     const handleAddToCalendar = async () => {
-        const ids = Array.from(selectedIds).filter(appId => { const app = applications.find(a => a.application_id === appId); return app && !app.calendar_added; }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
+        const cancelledStatuses = ['cancelled', 'rejected', 'failed'];
+        const ids = Array.from(selectedIds).filter(appId => { const app = applications.find(a => a.application_id === appId); return app && !app.calendar_added && !cancelledStatuses.includes((app.application_status || '').toLowerCase()); }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
         if (ids.length === 0) { alert('No eligible applications selected (all already added to calendar).'); return; }
         if (!window.confirm(`Add ${ids.length} learner(s) to their Google Calendar events?`)) return;
         setIsAddingToCal(true);

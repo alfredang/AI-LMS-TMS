@@ -6933,11 +6933,10 @@ export const TrainerFolderLogsView: React.FC = () => {
         setMessage(null);
         try {
             // Re-trigger the background function locally without scheduler API key requirement
-            const res = await fetch('/api/scheduler/execute', { 
+            const res = await fetch('/api/admin/scheduler', { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    authKey: process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback', // fallback for dev
                     taskId: 'auto_create_trainer_folders'
                 })
             });

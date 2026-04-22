@@ -68,7 +68,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               da.calendar_added
        FROM da_application da
        LEFT JOIN course_run cr ON da.course_run_id = cr.course_run_id
-       WHERE da.id = ANY($1::uuid[])`,
+       WHERE da.id = ANY($1::uuid[])
+         AND LOWER(COALESCE(da.application_status, '')) NOT IN ('cancelled', 'rejected', 'failed')`,
       [applicationIds]
     );
 

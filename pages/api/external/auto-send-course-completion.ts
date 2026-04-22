@@ -172,7 +172,7 @@ export async function runAutomation() {
                    TO_CHAR(cr.start_date, 'DD Mon YYYY') || ' - ' || TO_CHAR(cr.end_date, 'DD Mon YYYY') as course_dates
             FROM course_run cr
             JOIN course c ON cr.course_id = c.id
-            WHERE DATE(cr.end_date) = CURRENT_DATE
+            WHERE (cr.end_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore')::date = (NOW() AT TIME ZONE 'Asia/Singapore')::date
         `);
 
         const courseRuns = courseRunsRes.rows;
