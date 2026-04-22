@@ -30,22 +30,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const outputPath = path.join(os.tmpdir(), `brochure_${Date.now()}.pdf`);
 
   try {
-    // Resolve the Python binary by ABSOLUTE path — Coolify's container
-    // runtime sometimes strips the Dockerfile's `ENV PATH` so neither
-    // `python` nor `python3` are on PATH even though both binaries exist
-    // on disk. Probe the two locations we know the Dockerfile installs:
-    //   1. /opt/venv/bin/python3   (Python venv with Playwright, bs4, …)
-    //   2. /usr/bin/python3        (Debian system package)
-    // Fall back to bare `python3` on PATH as a last resort.
-    const pythonCandidates = [
-      process.env.PYTHON_BIN,
-      '/opt/venv/bin/python3',
-      '/usr/bin/python3',
-      'python3',
-    ].filter((p): p is string => !!p);
-    const pythonBin = pythonCandidates.find((p) => p === 'python3' || fs.existsSync(p)) || 'python3';
+    // Use `python3` explicitly — the Debian-slim production image has
+    // `python3` on PATH but not always `python`. The Dockerfile symlinks
+    // `/usr/bin/python3` → `/usr/bin/python`, but when the Python venv at
+    // `/opt/venv/bin` is first on PATH (it ships python3 but not python)
+    // the symlink is shadowed and the call fails with "python: not found".
+    const pythonBin = process.env.PYTHON_BIN || 'python3';
     const result = execSync(
-      `"${pythonBin}" "${scriptPath}" "${courseUrl}" "${templateDir}" "${outputPath}"`,
+      `${pythonBin} "${scriptPath}" "${courseUrl}" "${templateDir}" "${outputPath}"`,
       { encoding: 'utf-8', timeout: 120000, maxBuffer: 20 * 1024 * 1024 }
     );
 
