@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { buildEnrolmentPayload } from '../../../lib/ssg/buildEnrolmentPayload';
 import { createNativeEnrolmentFromDA } from '../../../lib/autoEnrolDirectApplications';
+import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
 
 /**
  * POST /api/admin/da-enrol
@@ -70,30 +71,79 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const httpResponse = await httpClient.request(builder.build());
 
-        if (httpResponse.status !== 200 && httpResponse.status !== 201) {
-          results.push({ application_id: applicationId, success: false, error: `SSG error ${httpResponse.status}` });
-          continue;
+        let rawBody = '';
+        if (httpResponse.data) {
+          rawBody = typeof httpResponse.data === 'string'
+            ? httpResponse.data
+            : JSON.stringify(httpResponse.data);
         }
 
-        const rawBody = typeof httpResponse.data === 'string'
-          ? httpResponse.data
-          : JSON.stringify(httpResponse.data);
+        if (!rawBody || rawBody.trim() === '') {
+           results.push({ application_id: applicationId, success: false, error: `SSG error ${httpResponse.status} (empty body)` });
+           continue;
+        }
 
-        const decipher = crypto.createDecipheriv('aes-256-cbc', encKey, iv);
-        let decrypted = decipher.update(rawBody, 'base64', 'utf8');
-        decrypted += decipher.final('utf8');
-        const parsed = JSON.parse(decrypted);
+        let parsed: any;
+        try {
+          const decipher = crypto.createDecipheriv('aes-256-cbc', encKey, iv);
+          let decrypted = decipher.update(rawBody, 'base64', 'utf8');
+          decrypted += decipher.final('utf8');
+          parsed = JSON.parse(decrypted);
+        } catch (err) {
+          results.push({ application_id: applicationId, success: false, error: `Failed to decrypt SSG response (status: ${httpResponse.status})` });
+          continue;
+        }
 
         console.log(`📦 SSG enrol [${applicationId}]:`, JSON.stringify(parsed));
 
         const hasError = parsed?.error && (parsed.error.code || parsed.error.message ||
           (parsed.error.details && parsed.error.details.length > 0));
 
+        let enrolmentReference = parsed?.data?.enrolment?.referenceNumber || parsed?.enrolment?.referenceNumber || parsed?.data?.referenceNumber || parsed?.referenceNumber;
+
         if (hasError) {
           const errMsg = parsed.error.details?.[0]?.message || parsed.error.message || 'Enrolment failed';
-          results.push({ application_id: applicationId, success: false, error: errMsg });
+          
+          if (errMsg.toLowerCase().includes('duplicate')) {
+             console.log(`ℹ️  da-enrol [${applicationId}]: Duplicate detected in SSG, searching for existing enrolment...`);
+             const searchPayload = {
+               enrolment: {
+                 course: payload.enrolment.course,
+                 trainee: payload.enrolment.trainee,
+                 trainingPartner: payload.enrolment.trainingPartner
+               },
+               parameters: { page: 0, pageSize: 10 }
+             };
+             
+             try {
+               const searchResult = await searchEnrolment(searchPayload as any);
+               if (searchResult.success && searchResult.referenceNumber) {
+                 console.log(`✅ da-enrol [${applicationId}]: Recovered duplicate enrolment reference: ${searchResult.referenceNumber}`);
+                 enrolmentReference = searchResult.referenceNumber;
+               } else {
+                 results.push({ application_id: applicationId, success: false, error: `Duplicate record found, but search failed to recover reference` });
+                 continue;
+               }
+             } catch (searchErr) {
+               results.push({ application_id: applicationId, success: false, error: `Duplicate record found, but search threw an error` });
+               continue;
+             }
+          } else {
+            results.push({ application_id: applicationId, success: false, error: errMsg });
+            continue;
+          }
+        }
+        
+        if (!enrolmentReference) {
+          results.push({ application_id: applicationId, success: false, error: 'no enrolment reference in SSG response' });
           continue;
         }
+
+        // Save enrolment_id to DB
+        await pool.query(
+          `UPDATE da_application SET enrolment_id = $1, auto_enrol_status = 'enroled', enrolment_status = 'Confirmed', updated_at = NOW() WHERE application_id = $2`,
+          [enrolmentReference, applicationId]
+        );
 
         // Try to run Native Enrolment so the system is fully synced
         try {

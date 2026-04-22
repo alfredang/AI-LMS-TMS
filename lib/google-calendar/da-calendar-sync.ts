@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import pool from '../db';
 import { getGoogleCredentials } from '../google-auth/googleAuth';
+import * as crypto from 'crypto';
 
 /**
  * Strip common prefixes from a calendar event summary so we can match it
@@ -23,6 +24,9 @@ function stripPrefixes(title: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+// Memory cache to bypass Google Calendar eventual consistency for newly created events
+const recentCreatedEventsCache = new Map<string, any>();
 
 /**
  * Normalise database date strings (YYYYMMDD or YYYY-MM-DD) to standard YYYY-MM-DD.
@@ -63,7 +67,9 @@ export async function addDaLearnerToCalendar(
   learnerEmail: string,
   courseRunUuid: string,
   courseTitle: string,
-  fallbackStartDate?: string | Date | null
+  fallbackStartDate?: string | Date | null,
+  fallbackCourseCode?: string,
+  fallbackRunId?: string
 ): Promise<{ totalSessions: number; addedTo: number }> {
   const result = { totalSessions: 0, addedTo: 0 };
   if (!learnerEmail || !courseTitle) return result;
@@ -99,30 +105,67 @@ export async function addDaLearnerToCalendar(
       }
     }
 
-    // 2. Resolve Course Run dates
+    // 2. Resolve Course Run dates and Metadata
+    const runMetaRes = await pool.query(
+      `SELECT 
+         cr.id as resolved_uuid,
+         cr.course_run_id, 
+         c.course_code,
+         c.title as db_course_title
+       FROM course_run cr
+       LEFT JOIN course c ON c.id = cr.course_id
+       WHERE (cr.id::text = $1 OR cr.course_run_id = $1)
+       LIMIT 1`,
+      [courseRunUuid]
+    );
+    const resolvedUuid = runMetaRes.rows[0]?.resolved_uuid || courseRunUuid;
+    
+    // If not found in DB, try to use the fallback values provided from the DA application
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseRunUuid);
+    const inferredRunId = !isUuid ? courseRunUuid : '';
+    
+    const ssgRunId = runMetaRes.rows[0]?.course_run_id || fallbackRunId || inferredRunId || '';
+    const courseCode = runMetaRes.rows[0]?.course_code || fallbackCourseCode || '';
+    const resolvedCourseTitle = courseTitle || runMetaRes.rows[0]?.db_course_title || '';
+
     // Fetch all active (not deleted) session dates for this course run
     const sessionRes = await pool.query(
-      `SELECT start_date::text as start_date 
+      `SELECT start_date::text as start_date, start_time, end_time
        FROM course_session 
-       WHERE course_run_id = $1 AND (deleted IS NOT TRUE)
+       WHERE course_run_id::text = $1 AND (deleted IS NOT TRUE)
        ORDER BY start_date ASC`,
-      [courseRunUuid]
+      [resolvedUuid]
     );
 
     let datesToSync: string[] = [];
+    let sessionMap: Record<string, { startTime: string; endTime: string }> = {};
+
     if (sessionRes.rows.length > 0) {
-      datesToSync = sessionRes.rows.map(r => formatDbDate(r.start_date));
+      sessionRes.rows.forEach(r => {
+        const d = formatDbDate(r.start_date);
+        if (d) {
+          datesToSync.push(d);
+          sessionMap[d] = {
+            startTime: r.start_time || '09:00',
+            endTime: r.end_time || '18:00'
+          };
+        }
+      });
     } else {
       // Fallback logic
       if (fallbackStartDate) {
-        datesToSync = [formatDbDate(fallbackStartDate)];
+        const d = formatDbDate(fallbackStartDate);
+        datesToSync = [d];
+        sessionMap[d] = { startTime: '09:00', endTime: '18:00' };
       } else {
         const crRes = await pool.query(
-          `SELECT start_date::text FROM course_run WHERE id = $1`,
+          `SELECT start_date::text FROM course_run WHERE id::text = $1 OR course_run_id = $1 LIMIT 1`,
           [courseRunUuid]
         );
         if (crRes.rows[0]?.start_date) {
-          datesToSync = [formatDbDate(crRes.rows[0].start_date)];
+          const d = formatDbDate(crRes.rows[0].start_date);
+          datesToSync = [d];
+          sessionMap[d] = { startTime: '09:00', endTime: '18:00' };
         }
       }
     }
@@ -149,7 +192,9 @@ export async function addDaLearnerToCalendar(
       maxResults: 2500,
     });
 
-    const allEvents = eventsResponse.data.items || [];
+    // Merge API events with recently created events from cache
+    const allEvents = [...(eventsResponse.data.items || []), ...Array.from(recentCreatedEventsCache.values())];
+    
     const strippedCourseTitle = stripPrefixes(courseTitle).toLowerCase();
     const learnerEmailLower = learnerEmail.trim().toLowerCase();
 
@@ -206,7 +251,93 @@ export async function addDaLearnerToCalendar(
           }
         }
       } else {
-        console.log(`ℹ️ [da-calendar-sync] No matching calendar event found for "${courseTitle}" on ${targetDate}`);
+        console.log(`ℹ️ [da-calendar-sync] No matching calendar event found for "${resolvedCourseTitle}" on ${targetDate}. Creating new event...`);
+        
+        // 1. Acquire advisory lock to prevent parallel workers from creating duplicates
+        const lockString = `cal-create-${courseRunUuid}-${targetDate}`;
+        const lockId = parseInt(crypto.createHash('sha256').update(lockString).digest('hex').slice(0, 15), 16);
+        
+        await pool.query('SELECT pg_advisory_lock($1)', [lockId]);
+        try {
+          // 2. Double check if it was created just now by a parallel process or is in cache
+          const cachedMissing = !Array.from(recentCreatedEventsCache.values()).some(evt => {
+            const evtTitleNormalized = stripPrefixes(evt.summary || '');
+            return (evtTitleNormalized.includes(strippedCourseTitle) || strippedCourseTitle.includes(evtTitleNormalized))
+              && (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '') === targetDate;
+          });
+
+          let stillMissing = cachedMissing;
+
+          if (stillMissing) {
+            const recheckResponse = await calendar.events.list({
+              calendarId,
+              timeMin: new Date(targetDate + 'T00:00:00Z').toISOString(),
+              timeMax: new Date(targetDate + 'T23:59:59Z').toISOString(),
+              singleEvents: true,
+              q: resolvedCourseTitle
+            });
+            
+            const recentEvents = recheckResponse.data.items || [];
+            stillMissing = !recentEvents.some(evt => {
+              const evtTitleNormalized = stripPrefixes(evt.summary || '');
+              return (evtTitleNormalized.includes(strippedCourseTitle) || strippedCourseTitle.includes(evtTitleNormalized))
+                && (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '') === targetDate;
+            });
+          }
+
+          if (stillMissing) {
+            // 3. Construct the event data
+            const titleParts = [resolvedCourseTitle];
+            if (ssgRunId) titleParts.push(ssgRunId);
+            if (sortedDates.length > 1) titleParts.push(`Day ${dayNumber}`);
+            const newTitle = titleParts.join(' - ');
+
+            const sTime = sessionMap[targetDate]?.startTime || '09:00';
+            const eTime = sessionMap[targetDate]?.endTime || '18:00';
+
+            const startDateTime = `${targetDate}T${sTime.padStart(5, '0')}:00`;
+            const endDateTime = `${targetDate}T${eTime.padStart(5, '0')}:00`;
+
+            const description = `Course Title: ${resolvedCourseTitle}\nCourse Code: ${courseCode || 'N/A'}\nCourse Run ID: ${ssgRunId || 'N/A'}\n\n*Auto-generated by LMS*`;
+
+            const newEvent = await calendar.events.insert({
+              calendarId,
+              requestBody: {
+                summary: newTitle,
+                description,
+                start: { dateTime: startDateTime, timeZone: 'Asia/Singapore' },
+                end: { dateTime: endDateTime, timeZone: 'Asia/Singapore' },
+                attendees: [
+                  { email: learnerEmail, responseStatus: 'needsAction' }
+                ]
+              },
+              sendUpdates: 'none'
+            });
+
+            if (newEvent.data.id) {
+              console.log(`✅ [da-calendar-sync] Successfully created new event "${newTitle}" and added ${learnerEmail}`);
+              result.addedTo++;
+              
+              // Cache to prevent duplicate creation on sequential rapid calls
+              recentCreatedEventsCache.set(newEvent.data.id, {
+                id: newEvent.data.id,
+                summary: newTitle,
+                start: { dateTime: startDateTime },
+                attendees: [{ email: learnerEmail, responseStatus: 'needsAction' }]
+              });
+              // Clear cache entry after 30 seconds
+              setTimeout(() => recentCreatedEventsCache.delete(newEvent.data.id as string), 30000);
+            }
+          } else {
+            console.log(`ℹ️ [da-calendar-sync] Event was created concurrently by another process. Skipping creation.`);
+            // It will be picked up on the next retry sweep, or we could add the attendee here.
+            // Since it's an edge case, we'll let the background retry job link the attendee.
+          }
+        } catch (createErr) {
+          console.error(`❌ [da-calendar-sync] Failed to create new event on ${targetDate}:`, createErr);
+        } finally {
+          await pool.query('SELECT pg_advisory_unlock($1)', [lockId]);
+        }
       }
     }
 
@@ -262,12 +393,18 @@ export async function removeDaLearnerFromCalendar(
     }
 
     // 2. Resolve Course Run dates (same logic as addDaLearnerToCalendar)
+    const runMetaRes = await pool.query(
+      `SELECT id as resolved_uuid FROM course_run WHERE (id::text = $1 OR course_run_id = $1) LIMIT 1`,
+      [courseRunUuid]
+    );
+    const resolvedUuid = runMetaRes.rows[0]?.resolved_uuid || courseRunUuid;
+
     const sessionRes = await pool.query(
       `SELECT start_date::text as start_date 
        FROM course_session 
-       WHERE course_run_id = $1 AND (deleted IS NOT TRUE)
+       WHERE course_run_id::text = $1 AND (deleted IS NOT TRUE)
        ORDER BY start_date ASC`,
-      [courseRunUuid]
+      [resolvedUuid]
     );
 
     let datesToSync: string[] = [];
@@ -278,7 +415,7 @@ export async function removeDaLearnerFromCalendar(
         datesToSync = [formatDbDate(fallbackStartDate)];
       } else {
         const crRes = await pool.query(
-          `SELECT start_date::text FROM course_run WHERE id = $1`,
+          `SELECT start_date::text FROM course_run WHERE id::text = $1 OR course_run_id = $1 LIMIT 1`,
           [courseRunUuid]
         );
         if (crRes.rows[0]?.start_date) {
@@ -372,7 +509,7 @@ export async function syncAllDaApplicantsToCalendar(courseRunUuid: string): Prom
     // 1. Resolve internal course_run_id (external string) to link with da_application
     const runRes = await pool.query(
       `SELECT course_run_id, (SELECT title FROM course WHERE id = course_run.course_id) as course_title 
-       FROM course_run WHERE id = $1`,
+       FROM course_run WHERE id::text = $1 OR course_run_id = $1 LIMIT 1`,
       [courseRunUuid]
     );
     if (runRes.rows.length === 0) return;

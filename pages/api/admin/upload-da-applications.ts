@@ -523,17 +523,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             webhookResult = await callSearchEnrolmentSSGBatch(webhookQueue, tp.uen, tp.code);
         }
 
-        // Fire-and-forget auto-enrol pipeline for newly-inserted rows, if the
-        // master toggle is enabled on the training provider.
+        // Fire-and-forget auto-enrol pipeline for all eligible records:
+        //   - Newly inserted records
+        //   - Updated records (status transitions)
+        //   - Duplicate records that already exist but were never auto-enrolled
         try {
-            const insertedIds = insertedRecords
-                .map(r => r?.id)
-                .filter((x: unknown): x is string => typeof x === 'string' && x.length > 0);
+            // Collect IDs from inserted + updated records
+            const processedIds = [...insertedRecords, ...updatedRecords]
+                .filter(r => {
+                    if (!r?.id) return false;
+                    const status = (r.application_status || '').toLowerCase();
+                    const alreadyEnrolled = r.auto_enrol_status && !['failed'].includes(r.auto_enrol_status);
+                    return (status === 'confirmed' || status === 'confirm application') && !alreadyEnrolled && !r.enrolment_id;
+                })
+                .map(r => r.id as string);
 
-            if (insertedIds.length > 0) {
-                console.log(`🚀 auto-enrol: queuing ${insertedIds.length} new applications for background processing`);
+            // Also pick up duplicates (same app_id, no status change) that still
+            // need enrolment — these are the records skipped by the status-transition
+            // check because their status hasn't changed (e.g. Confirmed → Confirmed).
+            let duplicateIds: string[] = [];
+            if (duplicates.length > 0) {
+                const dupResult = await pool.query(
+                    `SELECT id FROM da_application
+                     WHERE application_id = ANY($1)
+                       AND LOWER(application_status) IN ('confirmed', 'confirm application')
+                       AND (auto_enrol_status IS NULL OR auto_enrol_status = 'failed')
+                       AND enrolment_id IS NULL`,
+                    [duplicates]
+                );
+                duplicateIds = dupResult.rows.map((r: any) => r.id as string);
+            }
+
+            const allEligibleIds = [...new Set([...processedIds, ...duplicateIds])];
+
+            if (allEligibleIds.length > 0) {
+                // Pre-mark as 'pending' so we can distinguish "never triggered" from "triggered but failed"
+                await pool.query(
+                    `UPDATE da_application SET auto_enrol_status = 'pending', auto_enrol_error = NULL
+                     WHERE id = ANY($1) AND (auto_enrol_status IS NULL OR auto_enrol_status = 'failed')`,
+                    [allEligibleIds]
+                );
+
+                console.log(`🚀 auto-enrol: queuing ${allEligibleIds.length} applications for background processing (${processedIds.length} new/updated + ${duplicateIds.length} previously skipped)`);
                 setImmediate(() => {
-                    bulkProcessDirectApplications(insertedIds).catch(err => {
+                    bulkProcessDirectApplications(allEligibleIds).catch(err => {
                         console.error('❌ Background auto-enrol failed:', err);
                     });
                 });
