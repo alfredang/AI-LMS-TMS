@@ -30,8 +30,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const outputPath = path.join(os.tmpdir(), `brochure_${Date.now()}.pdf`);
 
   try {
+    // Use `python3` explicitly — the Debian-slim production image has
+    // `python3` on PATH but not always `python`. The Dockerfile symlinks
+    // `/usr/bin/python3` → `/usr/bin/python`, but when the Python venv at
+    // `/opt/venv/bin` is first on PATH (it ships python3 but not python)
+    // the symlink is shadowed and the call fails with "python: not found".
+    const pythonBin = process.env.PYTHON_BIN || 'python3';
     const result = execSync(
-      `python "${scriptPath}" "${courseUrl}" "${templateDir}" "${outputPath}"`,
+      `${pythonBin} "${scriptPath}" "${courseUrl}" "${templateDir}" "${outputPath}"`,
       { encoding: 'utf-8', timeout: 120000, maxBuffer: 20 * 1024 * 1024 }
     );
 
