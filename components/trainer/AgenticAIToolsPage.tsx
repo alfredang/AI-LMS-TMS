@@ -49,7 +49,7 @@ const AGENTIC_AI_CATEGORIES = [
     title: 'Multi Agent Demo',
     description: 'Demonstration of multi-agent orchestration using n8n for collaborative AI workflows.',
     items: [
-      { label: 'Multi Agent Demo', href: 'https://alfredang.github.io/n8nmultiagents/' },
+      { label: 'Nike Market Research', href: 'https://alfredang.github.io/n8nmultiagents/' },
     ],
   },
 ];
