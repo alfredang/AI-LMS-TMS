@@ -1,8 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { generateBrochure } from '../../../lib/cw-brochure';
 
 export const config = {
   api: {
@@ -25,43 +22,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'A valid http(s) course URL is required.' });
   }
 
-  const scriptPath = path.join(process.cwd(), 'scripts', 'generate-brochure.py');
-  const templateDir = path.join(process.cwd(), 'public', 'templates', 'brochure');
-  const outputPath = path.join(os.tmpdir(), `brochure_${Date.now()}.pdf`);
-
   try {
-    const result = execSync(
-      `python "${scriptPath}" "${courseUrl}" "${templateDir}" "${outputPath}"`,
-      { encoding: 'utf-8', timeout: 120000, maxBuffer: 20 * 1024 * 1024 }
-    );
-
-    const parsed = JSON.parse(result.trim());
-    if (parsed.error) {
-      return res.status(500).json({ error: parsed.error, trace: parsed.trace });
-    }
-
-    if (!fs.existsSync(outputPath)) {
-      return res.status(500).json({ error: 'PDF was not created.' });
-    }
-
-    const pdfBuffer = fs.readFileSync(outputPath);
-    const title = sanitizeFileName(parsed.course_title || 'Brochure');
-    const fileName = `Brochure_${parsed.tgs_ref || 'course'}_${title}.pdf`;
-
+    const result = await generateBrochure(courseUrl);
+    const title = sanitizeFileName(result.courseTitle || 'Brochure');
+    const fileName = `Brochure_${result.tgsRef || 'course'}_${title}.pdf`;
     return res.status(200).json({
       success: true,
-      courseTitle: parsed.course_title,
-      tgsRef: parsed.tgs_ref,
-      courseData: parsed.course_data,
+      courseTitle: result.courseTitle,
+      tgsRef: result.tgsRef,
+      courseData: result.courseData,
       document: {
         name: fileName,
-        data: pdfBuffer.toString('base64'),
+        data: result.buffer.toString('base64'),
       },
     });
   } catch (error: any) {
     console.error('Brochure generation error:', error);
     return res.status(500).json({ error: error.message || 'Failed to generate brochure' });
-  } finally {
-    try { fs.unlinkSync(outputPath); } catch {}
   }
 }
