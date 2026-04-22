@@ -1,8 +1,91 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { query } from '@anthropic-ai/claude-agent-sdk';
+import pool from '../../../lib/db';
+import { buildClaudeEnv } from '../../../lib/anthropic-auth';
+import { parseCpFile } from '../../../lib/cp-parser';
+import { fillTemplate, type CwDocType } from '../../../lib/cw-fill-template';
+import { generateLessonPlan } from '../../../lib/cw-lesson-plan';
+import { generateAssessments } from '../../../lib/cw-assessment';
+import {
+  generateAssessmentEvidence,
+  mergeEvidenceIntoDetails,
+  generateCoursewareNarrative,
+  mergeNarrativeIntoContext,
+} from '../../../lib/cw-evidence-agent';
+
+async function getApiKey(): Promise<string | null> {
+  try {
+    const result = await pool.query(
+      `SELECT key_value FROM training_provider_api
+       WHERE training_provider_id = (SELECT id FROM training_provider ORDER BY created_at DESC LIMIT 1)
+       AND key_name = 'ANTHROPIC_API_KEY'`,
+    );
+    if (result.rows.length > 0 && result.rows[0].key_value) return result.rows[0].key_value;
+  } catch (e) {
+    console.error('Failed to fetch API key from DB:', e);
+  }
+  return process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_CODE_OAUTH_TOKEN || null;
+}
+
+/**
+ * Enrich the courseData with Claude-generated content the templates need but
+ * the CP doesn't carry: assessment Evidence/Submission/Marking_Process for AP,
+ * and Course_Overview / LO_Description / Proficiency_Description for LG/FG.
+ *
+ * Both calls run in parallel via the same `@anthropic-ai/claude-agent-sdk`
+ * pattern as `seo-generate.ts` / `cp-generate.ts` — no Python.
+ */
+async function enrichContext(
+  contextData: any,
+  needs: { evidence: boolean; narrative: boolean },
+): Promise<any> {
+  const apiKey = await getApiKey();
+  if (!apiKey) return contextData;
+
+  const amDetails = contextData.Assessment_Methods_Details
+    || contextData.assessmentMethodsDetails
+    || [];
+
+  const tasks: Promise<any>[] = [];
+  tasks.push(
+    needs.evidence && amDetails.length
+      ? generateAssessmentEvidence(contextData, apiKey).catch((e) => {
+          console.error('[cw-generate-doc] evidence agent failed:', e.message);
+          return null;
+        })
+      : Promise.resolve(null),
+  );
+  tasks.push(
+    needs.narrative
+      ? generateCoursewareNarrative(contextData, apiKey).catch((e) => {
+          console.error('[cw-generate-doc] narrative agent failed:', e.message);
+          return null;
+        })
+      : Promise.resolve(null),
+  );
+
+  const [evidence, narrative] = await Promise.all(tasks);
+
+  let out = contextData;
+  if (evidence) {
+    const merged = mergeEvidenceIntoDetails(amDetails, evidence);
+    out = { ...out, Assessment_Methods_Details: merged, assessmentMethodsDetails: merged };
+  }
+  if (narrative) {
+    out = mergeNarrativeIntoContext(out, narrative);
+  }
+  return out;
+}
+
+const NEEDS_EVIDENCE: Record<string, boolean> = { ap: true, asr: true, ap_asr: true, all: true };
+const NEEDS_NARRATIVE: Record<string, boolean> = { lg: true, fg: true, ap: true, all: true, ap_asr: true };
+
+async function withEvidence(contextData: any, docType: string = 'all'): Promise<any> {
+  return enrichContext(contextData, {
+    evidence: !!NEEDS_EVIDENCE[docType],
+    narrative: !!NEEDS_NARRATIVE[docType],
+  });
+}
 
 export const config = {
   api: {
@@ -16,44 +99,18 @@ function sanitizeFileName(name: string): string {
 }
 
 function generateDoc(docType: string, courseData: any): { name: string; data: string } {
-  const tmpDir = os.tmpdir();
-  const contextPath = path.join(tmpDir, `cw_context_${Date.now()}.json`);
-  const outputPath = path.join(tmpDir, `cw_output_${Date.now()}_${docType}.docx`);
-  const scriptPath = path.join(process.cwd(), 'scripts', 'fill-template.py');
+  console.log(`[CW-DOC] Generating ${docType}, courseData keys:`, courseData ? Object.keys(courseData) : 'NULL');
+  console.log(`[CW-DOC] Course Title:`, courseData?.Course_Title || courseData?.courseTitle || 'MISSING');
+  console.log(`[CW-DOC] TGS Ref:`, courseData?.TGS_Ref_No || courseData?.tgsRefNo || 'MISSING');
+  console.log(`[CW-DOC] Learning Units:`, courseData?.Learning_Units?.length || courseData?.learningUnits?.length || 0);
 
-  try {
-    // Write context to temp JSON file
-    console.log(`[CW-DOC] Generating ${docType}, courseData keys:`, courseData ? Object.keys(courseData) : 'NULL');
-    console.log(`[CW-DOC] Course Title:`, courseData?.Course_Title || courseData?.courseTitle || 'MISSING');
-    console.log(`[CW-DOC] TGS Ref:`, courseData?.TGS_Ref_No || courseData?.tgsRefNo || 'MISSING');
-    console.log(`[CW-DOC] Learning Units:`, courseData?.Learning_Units?.length || courseData?.learningUnits?.length || 0);
-    fs.writeFileSync(contextPath, JSON.stringify(courseData || {}, null, 2), 'utf-8');
+  const docBuffer = fillTemplate(docType as CwDocType, courseData || {});
 
-    // Call Python script to fill template
-    const result = execSync(
-      `python "${scriptPath}" ${docType} "${contextPath}" "${outputPath}"`,
-      { encoding: 'utf-8', timeout: 30000 }
-    );
+  const tgsRef = courseData?.tgsRefNo || courseData?.TGS_Ref_No || 'doc';
+  const courseTitle = sanitizeFileName(courseData?.courseTitle || courseData?.Course_Title || 'Course');
+  const fileName = `${docType.toUpperCase()}_${tgsRef}_${courseTitle}_v1.docx`;
 
-    const parsed = JSON.parse(result.trim());
-    if (parsed.error) throw new Error(parsed.error);
-
-    // Read generated DOCX
-    if (!fs.existsSync(outputPath)) {
-      throw new Error('Output file was not created');
-    }
-
-    const docBuffer = fs.readFileSync(outputPath);
-    const tgsRef = courseData?.tgsRefNo || courseData?.TGS_Ref_No || 'doc';
-    const courseTitle = sanitizeFileName(courseData?.courseTitle || courseData?.Course_Title || 'Course');
-    const fileName = `${docType.toUpperCase()}_${tgsRef}_${courseTitle}_v1.docx`;
-
-    return { name: fileName, data: docBuffer.toString('base64') };
-  } finally {
-    // Cleanup temp files
-    try { fs.unlinkSync(contextPath); } catch {}
-    try { fs.unlinkSync(outputPath); } catch {}
-  }
+  return { name: fileName, data: docBuffer.toString('base64') };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -68,20 +125,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Missing docType' });
     }
 
-    // If raw CP file is provided, parse it to get exact text
+    // If raw CP file is provided, parse it to get exact text (pure TS)
     let rawCpText = extractedResult || '';
     if (cpFileBase64 && cpFileName) {
       try {
-        const parseScript = path.join(process.cwd(), 'scripts', 'parse-cp.py');
-        const b64TmpPath = path.join(os.tmpdir(), `cp_raw_${Date.now()}.txt`);
-        fs.writeFileSync(b64TmpPath, cpFileBase64, 'utf-8');
-        const parseResult = execSync(
-          `python "${parseScript}" "${b64TmpPath}" base64 "${cpFileName}"`,
-          { encoding: 'utf-8', timeout: 30000 }
-        );
-        const parsed = JSON.parse(parseResult.trim().split('\n').pop() || '{}');
-        if (parsed.text) rawCpText = parsed.text;
-        try { fs.unlinkSync(b64TmpPath); } catch {}
+        rawCpText = await parseCpFile(Buffer.from(cpFileBase64, 'base64'), cpFileName);
       } catch (e: any) {
         console.error('CP parse for LP error:', e.message);
       }
@@ -96,104 +144,126 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const documents: { name: string; data: string }[] = [];
 
     if (docType === 'ap_asr') {
-      documents.push(generateDoc('ap', contextData));
-      documents.push(generateDoc('asr', contextData));
+      const enriched = await withEvidence(contextData, 'ap_asr');
+      documents.push(generateDoc('ap', enriched));
+      documents.push(generateDoc('asr', enriched));
     } else if (docType === 'all') {
-      documents.push(generateDoc('lg', contextData));
-      documents.push(generateDoc('ap', contextData));
-      documents.push(generateDoc('asr', contextData));
-      documents.push(generateDoc('fg', contextData));
+      const enriched = await withEvidence(contextData, 'all');
+      documents.push(generateDoc('lg', enriched));
+      documents.push(generateDoc('ap', enriched));
+      documents.push(generateDoc('asr', enriched));
+      documents.push(generateDoc('fg', enriched));
     } else if (docType === 'lp') {
-      // Lesson Plan uses separate Python script with barrier algorithm
-      const lpScriptPath = path.join(process.cwd(), 'scripts', 'generate-lp.py');
-      const lpContextPath = path.join(os.tmpdir(), `lp_context_${Date.now()}.json`);
-      const lpOutputPath = path.join(os.tmpdir(), `lp_output_${Date.now()}.docx`);
+      // Lesson Plan — pure TypeScript port of the Streamlit barrier algorithm.
+      const lpContext = {
+        ...(contextData || {}),
+        // Ensure both camelCase and PascalCase variants are present so the
+        // lesson-plan helper finds fields whichever shape the UI uses.
+        Course_Title: contextData?.Course_Title || contextData?.courseTitle,
+        TGS_Ref_No: contextData?.TGS_Ref_No || contextData?.tgsRefNo,
+        Name_of_Organisation: contextData?.Name_of_Organisation || contextData?.organisationName,
+        Total_Course_Duration_Hours: contextData?.Total_Course_Duration_Hours || contextData?.totalTrainingHours,
+        Total_Training_Hours: contextData?.Total_Training_Hours || contextData?.totalTrainingHours,
+        Total_Assessment_Hours: contextData?.Total_Assessment_Hours || contextData?.totalAssessmentHours,
+        Learning_Units: contextData?.Learning_Units || contextData?.learningUnits || [],
+        Assessment_Methods_Details: contextData?.Assessment_Methods_Details || contextData?.assessmentMethodsDetails || [],
+      };
 
-      try {
-        fs.writeFileSync(lpContextPath, JSON.stringify(contextData || {}, null, 2), 'utf-8');
-        const lpResult = execSync(
-          `python "${lpScriptPath}" "${lpContextPath}" "${lpOutputPath}"`,
-          { encoding: 'utf-8', timeout: 30000 }
-        );
-        const lpParsed = JSON.parse(lpResult.trim());
-        if (lpParsed.error) throw new Error(lpParsed.error);
-
-        const lpBuffer = fs.readFileSync(lpOutputPath);
-        const tgsRef = contextData?.TGS_Ref_No || contextData?.tgsRefNo || 'doc';
-        const title = sanitizeFileName(contextData?.Course_Title || contextData?.courseTitle || 'Course');
-        const lpParsedData = JSON.parse(lpResult.trim());
-        documents.push({ name: `LP_${tgsRef}_${title}_v1.docx`, data: lpBuffer.toString('base64') });
-
-        // Also return schedule data for UI display
-        return res.status(200).json({ success: true, documents, schedule: lpParsedData });
-      } finally {
-        try { fs.unlinkSync(lpContextPath); } catch {}
-        try { fs.unlinkSync(lpOutputPath); } catch {}
-      }
+      const { buffer, schedule } = generateLessonPlan(lpContext);
+      const tgsRef = contextData?.TGS_Ref_No || contextData?.tgsRefNo || 'doc';
+      const title = sanitizeFileName(contextData?.Course_Title || contextData?.courseTitle || 'Course');
+      documents.push({
+        name: `LP_${tgsRef}_${title}_v1.docx`,
+        data: buffer.toString('base64'),
+      });
+      return res.status(200).json({
+        success: true,
+        documents,
+        schedule: { success: true, schedule },
+      });
     } else if (docType === 'assessment') {
-      // Auto-detect types from Assessment_Methods_Details and call Claude for each
       const amDetails = contextData.Assessment_Methods_Details || contextData.assessmentMethodsDetails || [];
-      console.log('[Assessment] Detected methods count:', amDetails.length);
-      console.log('[Assessment] contextData keys:', Object.keys(contextData));
       if (amDetails.length === 0) {
         return res.status(400).json({ error: `No assessment methods found in CP. courseData keys: ${Object.keys(contextData).join(', ')}` });
       }
+      const apiKey = await getApiKey();
+      if (!apiKey) return res.status(500).json({ error: 'Anthropic API key not configured.' });
 
-      // Call the AI generation endpoint to get questions for all types
-      const protocol = req.headers['x-forwarded-proto'] || 'http';
-      const host = req.headers.host;
-      const aiRes = await fetch(`${protocol}://${host}/api/developer/cw-generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          section: 'generate_assessment_all',
-          cpText: extractedResult,
-          courseData: contextData,
-        }),
+      // Direct Claude call — avoids a self-fetch (Node 18's fetch sometimes
+      // can't resolve `localhost` for same-host API calls).
+      const detectedTypes = amDetails.map((am: any) => {
+        const abbr = am.Method_Abbreviation || '';
+        const name = am.Assessment_Method || '';
+        const duration = am.Total_Delivery_Hours || '';
+        const displayCode = abbr === 'WA-SAQ' ? 'WA (SAQ)' : (abbr || name);
+        return { code: abbr || name, name: displayCode, duration };
       });
-      const aiData = await aiRes.json();
-      if (!aiRes.ok) throw new Error(aiData.error || 'Failed to generate assessment questions');
-      console.log('[Assessment] AI returned', aiData.assessments?.length || 0, 'assessment types');
+      const courseContext = JSON.stringify(contextData).slice(0, 15000);
+      const prompt = `You are an expert WSQ assessment question writer.
 
-      // Write context for Python DOCX generator
-      const assessmentContextPath = path.join(os.tmpdir(), `assess_ctx_${Date.now()}.json`);
-      const assessmentOutDir = path.join(os.tmpdir(), `assess_out_${Date.now()}`);
-      const assessScriptPath = path.join(process.cwd(), 'scripts', 'generate-assessment.py');
+Generate assessment questions for the following course and assessment types.
 
-      try {
-        fs.writeFileSync(assessmentContextPath, JSON.stringify({
-          course_title: contextData.Course_Title || contextData.courseTitle || 'Course',
-          company_name: contextData.Name_of_Organisation || contextData.organisationName || 'Tertiary Infotech Academy Pte Ltd',
-          company_uen: contextData.UEN || '201200696W',
-          assessments: aiData.assessments || [],
-        }, null, 2), 'utf-8');
+Course Data:
+${courseContext}
 
-        const result = execSync(
-          `python "${assessScriptPath}" "${assessmentContextPath}" "${assessmentOutDir}"`,
-          { encoding: 'utf-8', timeout: 60000 }
-        );
-        const parsed = JSON.parse(result.trim());
-        if (parsed.error) throw new Error(parsed.error);
+Assessment Types to Generate:
+${detectedTypes.map((t: any) => `- ${t.name} (${t.code}): ${t.duration}`).join('\n')}
 
-        // Read all generated DOCX files
-        for (const gen of parsed.generated) {
-          if (fs.existsSync(gen.question_path)) {
-            const buf = fs.readFileSync(gen.question_path);
-            documents.push({ name: path.basename(gen.question_path), data: buf.toString('base64') });
-            try { fs.unlinkSync(gen.question_path); } catch {}
-          }
-          if (fs.existsSync(gen.answer_path)) {
-            const buf = fs.readFileSync(gen.answer_path);
-            documents.push({ name: path.basename(gen.answer_path), data: buf.toString('base64') });
-            try { fs.unlinkSync(gen.answer_path); } catch {}
-          }
+For EACH assessment type, generate 3-5 questions with:
+- Realistic scenario (2-3 sentences)
+- Clear question statement
+- Map to specific K or A statements from the CP
+- Detailed answer bullets (3-5 points)
+
+Return ONLY valid JSON with this exact structure:
+{
+  "course_title": "extracted course title",
+  "assessments": [
+    {
+      "type": "WA (SAQ) or PP or CS etc",
+      "code": "WA-SAQ or PP or CS etc",
+      "duration": "1 hr 10 min",
+      "questions": [
+        {
+          "scenario": "realistic 2-3 sentence scenario",
+          "question_statement": "clear question",
+          "knowledge_id": "K1 (for Written types)",
+          "ability_id": ["A1", "A2"] (for Practical types),
+          "answer": ["bullet point 1", "bullet point 2", "bullet point 3"]
         }
-      } finally {
-        try { fs.unlinkSync(assessmentContextPath); } catch {}
-        try { fs.rmdirSync(assessmentOutDir); } catch {}
+      ]
+    }
+  ]
+}
+
+CRITICAL: Return ONLY the JSON, no markdown blocks, no explanation.`;
+
+      let raw = '';
+      for await (const message of query({
+        prompt,
+        options: { env: buildClaudeEnv(apiKey), allowedTools: [], maxTurns: 1 },
+      })) {
+        if (message.type === 'assistant' && (message as any).message?.content) {
+          for (const block of (message as any).message.content) if (block.type === 'text') raw += block.text;
+        }
+      }
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      let assessments: any[] = [];
+      if (jsonMatch) {
+        try { assessments = JSON.parse(jsonMatch[0]).assessments || []; } catch {}
+      }
+
+      const courseTitleStr = contextData.Course_Title || contextData.courseTitle || 'Course';
+      const generated = generateAssessments(assessments, courseTitleStr);
+      for (const g of generated) {
+        documents.push({ name: g.questionName, data: g.questionBuffer.toString('base64') });
+        documents.push({ name: g.answerName, data: g.answerBuffer.toString('base64') });
       }
     } else {
-      documents.push(generateDoc(docType, contextData));
+      const ctx = NEEDS_EVIDENCE[docType] || NEEDS_NARRATIVE[docType]
+        ? await withEvidence(contextData, docType)
+        : contextData;
+      documents.push(generateDoc(docType, ctx));
     }
 
     return res.status(200).json({ success: true, documents });
