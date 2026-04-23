@@ -581,7 +581,7 @@ NUMBERS & DURATIONS:
 - Total_Training_Hours = SUM of all instructional components (Classroom + Practical/Practicum + E-Learning + Others). Example: CR=7.5hrs + Practical=6hrs → "13.5 hrs". NEVER use just one component.
 - Total_Assessment_Hours from the CP assessment summary.
 - Total_Course_Duration_Hours from the CP duration total.
-- Assessment_Methods_Details Total_Delivery_Hours: sum EXACT minutes across all LOs for the same method, convert to human-readable ("1 hr 10 min", "1 hr 50 min"). Never round.
+- Assessment_Methods_Details Total_Delivery_Hours: PREFER the value the CP explicitly states in its "Total Delivery Hours" / assessment-summary row for that method (e.g. "WA-SAQ – 1 hr", "PP – 1 hr"). That is the authoritative figure — use it verbatim, even if per-LO breakdown rows show smaller values like "(PP) – 15 mins" (those are per-LO/per-section slices that shouldn't be reused as the total). ONLY when the CP has no summary row should you sum the per-LO minutes yourself, in which case format as "1 hr 10 min" / "1 hr 50 min" with no rounding.
 - Extract EXACT Assessor_to_Candidate_Ratio from the CP (e.g. "1:3 (Min)", "1:5 (Max)"), do NOT simplify to "1:20".
 
 NORMALISATION:
@@ -607,66 +607,40 @@ Return ONLY valid JSON, no markdown code blocks, no explanation.`;
           try {
             courseDataJson = JSON.parse(jsonMatch[0]);
 
-            // Post-process: fix assessment durations by extracting exact minutes from parsed CP text
+            // Post-process: try to pin Total_Delivery_Hours to the CP's
+            // explicit "Total Delivery Hours" SUMMARY row when present. The
+            // CP usually lists per-LO/per-section breakdowns ("(PP) – 15
+            // mins", "WA(Q&A) – 70 mins") AND a summary row ("WA-SAQ – 1 hr",
+            // "PP – 1 hr", "Total – 2 hr"). The summary is authoritative.
+            // We previously regex-walked per-LO patterns and overwrote
+            // Claude's output with the smaller mins value — that produced
+            // "PP: 15 min" when the CP clearly states "PP – 1 hr" in the
+            // summary. Now we only override when the regex finds an HOURS-
+            // formatted summary value.
             if (courseDataJson?.Assessment_Methods_Details && parsedCpText) {
-              // Find exact durations from CP text (e.g. "70 mins", "110 mins")
-              const durationMatches = parsedCpText.match(/(\w[\w\s()\/&]+?)\s*\|\s*[\d:]+\s*to\s*[\d:]+\s*\|\s*(\d+)\s*mins/gi);
-              if (durationMatches) {
-                for (const match of durationMatches) {
-                  const parts = match.split('|').map((s: string) => s.trim());
-                  if (parts.length >= 3) {
-                    const methodName = parts[0];
-                    const mins = parseInt(parts[2]);
-                    if (!isNaN(mins)) {
-                      const hours = Math.floor(mins / 60);
-                      const remainMins = mins % 60;
-                      let durStr = '';
-                      if (hours > 0 && remainMins > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''} ${remainMins} min`;
-                      else if (hours > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''}`;
-                      else durStr = `${mins} min`;
-
-                      // Match to Assessment_Methods_Details
-                      for (const am of courseDataJson.Assessment_Methods_Details) {
-                        if (methodName.toLowerCase().includes('wa') && (am.Method_Abbreviation?.includes('WA') || am.Assessment_Method?.toLowerCase().includes('written'))) {
-                          am.Total_Delivery_Hours = durStr;
-                        } else if (methodName.toLowerCase().includes('pp') && (am.Method_Abbreviation === 'PP' || am.Assessment_Method?.toLowerCase().includes('practical'))) {
-                          am.Total_Delivery_Hours = durStr;
-                        } else if (methodName.toLowerCase().includes('cs') && (am.Method_Abbreviation === 'CS' || am.Assessment_Method?.toLowerCase().includes('case'))) {
-                          am.Total_Delivery_Hours = durStr;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-
-              // Also try simpler pattern: "WA(Q&A) – 70 mins" or "PP– 110 mins"
-              const simpleMatches = parsedCpText.match(/(?:WA|PP|CS|RP|OQ|OI)[\w()\/&]*[–\-—\s]*(\d+)\s*mins?/gi);
-              if (simpleMatches) {
-                for (const match of simpleMatches) {
-                  const minsMatch = match.match(/(\d+)\s*mins?/i);
-                  const typeMatch = match.match(/^(WA|PP|CS|RP|OQ|OI)/i);
-                  if (minsMatch && typeMatch) {
-                    const mins = parseInt(minsMatch[1]);
-                    const type = typeMatch[1].toUpperCase();
-                    const hours = Math.floor(mins / 60);
-                    const remainMins = mins % 60;
-                    let durStr = '';
-                    if (hours > 0 && remainMins > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''} ${remainMins} min`;
-                    else if (hours > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''}`;
-                    else durStr = `${mins} min`;
-
-                    for (const am of courseDataJson.Assessment_Methods_Details) {
-                      const abbr = am.Method_Abbreviation || '';
-                      if ((type === 'WA' && abbr.includes('WA')) ||
-                          (type === 'PP' && abbr === 'PP') ||
-                          (type === 'CS' && abbr === 'CS') ||
-                          (type === 'RP' && abbr === 'RP') ||
-                          (type === 'OQ' && abbr === 'OQ') ||
-                          (type === 'OI' && abbr === 'OI')) {
-                        am.Total_Delivery_Hours = durStr;
-                      }
-                    }
+              // Match "WA-SAQ – 1 hr", "PP – 1 hr", "WA(Q&A) - 1 hour 30 min" etc.
+              // Always with an `hr`/`hour` unit so we can't pick up per-LO
+              // minutes by accident.
+              const summaryMatches = parsedCpText.matchAll(
+                /(WA[\w()\/&-]*|PP|CS|RP|OQ|OI|DEM|PRJ|ASGN)\s*[–\-—:]\s*(\d+\s*(?:hours?|hrs?)(?:\s*\d+\s*mins?)?)/gi,
+              );
+              for (const m of summaryMatches) {
+                const type = m[1].toUpperCase();
+                const value = m[2].trim();
+                for (const am of courseDataJson.Assessment_Methods_Details) {
+                  const abbr = (am.Method_Abbreviation || '').toUpperCase();
+                  const matchesAbbr =
+                    (type.startsWith('WA') && abbr.includes('WA')) ||
+                    (type === 'PP' && abbr === 'PP') ||
+                    (type === 'CS' && abbr === 'CS') ||
+                    (type === 'RP' && abbr === 'RP') ||
+                    (type === 'OQ' && abbr === 'OQ') ||
+                    (type === 'OI' && abbr === 'OI') ||
+                    (type === 'DEM' && abbr === 'DEM') ||
+                    (type === 'PRJ' && abbr === 'PRJ') ||
+                    (type === 'ASGN' && abbr === 'ASGN');
+                  if (matchesAbbr) {
+                    am.Total_Delivery_Hours = value;
                   }
                 }
               }
