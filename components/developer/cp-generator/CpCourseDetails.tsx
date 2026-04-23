@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../../ui/Card';
 import { useCp, INSTRUCTION_METHODS, ASSESSMENT_METHODS } from './CpContext';
+import { CP_SKILLS } from '../../../lib/cp-skills';
+import CpPromptTemplateEditor from './CpPromptTemplateEditor';
 
 // ─── Stepper Number Input (matches Streamlit's +/- number input) ───
 const StepperInput: React.FC<{
@@ -89,6 +91,41 @@ const CpCourseDetails: React.FC = () => {
   const [topicsOpen, setTopicsOpen] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Suggest Course Titles — local-only state; the brainstorm topic and
+  // generated titles don't need to persist across sessions like the rest
+  // of the CP state.
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [topicInput, setTopicInput] = useState('');
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState('');
+  const [suggestResult, setSuggestResult] = useState('');
+
+  const handleSuggestTitles = async () => {
+    if (!topicInput.trim()) {
+      setSuggestError('Please enter a course topic to brainstorm titles for.');
+      return;
+    }
+    setSuggestError('');
+    setSuggesting(true);
+    try {
+      const res = await fetch('/api/developer/cp-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          section: 'suggest_titles',
+          courseTopic: topicInput.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to suggest titles');
+      setSuggestResult(data.result);
+    } catch (err: any) {
+      setSuggestError(err.message);
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   const handleGenerateTopics = async () => {
     if (!cp.courseTitle.trim()) {
       setTopicError('Please enter a course title first.');
@@ -97,6 +134,9 @@ const CpCourseDetails: React.FC = () => {
     setTopicError('');
     setGenerating(true);
     try {
+      const selectedSkill = cp.uniqueSkillName
+        ? CP_SKILLS.find(s => s.name === cp.uniqueSkillName)
+        : undefined;
       const res = await fetch('/api/developer/cp-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -106,6 +146,7 @@ const CpCourseDetails: React.FC = () => {
           numTopics: cp.numTopics,
           framework: cp.framework,
           uniqueSkillName: cp.uniqueSkillName,
+          uniqueSkillDescription: selectedSkill?.description ?? '',
         }),
       });
       const data = await res.json();
@@ -119,9 +160,38 @@ const CpCourseDetails: React.FC = () => {
   };
 
   const handleSave = () => {
+    cp.setHasSavedCourseDetails(true);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
+
+  // Derived summary values — mirrors the Streamlit st.dataframe summary.
+  // All math stays in one place so the rendered table can't drift from the
+  // numbers the AI is asked to respect.
+  const minutesPerTopic = cp.numTopics > 0
+    ? Math.round(cp.courseDuration * 60 / cp.numTopics)
+    : 0;
+  const instrMinutesPerTopic = cp.numTopics > 0
+    ? Math.round(cp.instructionalHours * 60 / cp.numTopics)
+    : 0;
+  const durationPerInstrMethod = cp.numInstrMethods > 0
+    ? Math.round(cp.instructionalHours * 60 / cp.numInstrMethods)
+    : 0;
+  const durationPerAssessMethod = cp.numAssessMethods > 0
+    ? Math.round(cp.assessmentHours * 60 / cp.numAssessMethods)
+    : 0;
+  const summaryRows: [string, string][] = [
+    ['Course Duration', `${cp.courseDuration} hrs`],
+    ['Number of Topics', String(cp.numTopics)],
+    ['Duration per Topic', `${minutesPerTopic} mins`],
+    ['Instructional Duration', `${cp.instructionalHours} hrs`],
+    ['Instructional per Topic', `${instrMinutesPerTopic} mins`],
+    ['No. of Instructional Methods', String(cp.numInstrMethods)],
+    ['Duration per Instructional Method', `${durationPerInstrMethod} mins`],
+    ['Assessment Duration', `${cp.assessmentHours} hrs`],
+    ['No. of Assessment Methods', String(cp.numAssessMethods)],
+    ['Duration per Assessment Method', `${durationPerAssessMethod} mins`],
+  ];
 
   // Keep selected methods in sync with max count
   useEffect(() => {
@@ -183,6 +253,52 @@ const CpCourseDetails: React.FC = () => {
           />
         </div>
 
+        {/* Suggest Course Titles with AI — works for both WSQ and CASL.
+            Brainstorms 20 SEO-friendly titles from a user-entered topic. */}
+        <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+          <button
+            type="button"
+            onClick={() => setSuggestOpen(o => !o)}
+            className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors rounded-lg"
+          >
+            <svg className={`w-4 h-4 transition-transform ${suggestOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            Suggest Course Titles with AI
+          </button>
+          {suggestOpen && (
+            <div className="px-4 pb-4 space-y-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Enter a course topic to brainstorm 20 appealing, SEO-friendly course titles.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Course Topic</label>
+                <input
+                  type="text"
+                  value={topicInput}
+                  onChange={e => setTopicInput(e.target.value)}
+                  placeholder="e.g. Digital Marketing, Generative AI for Business, Agile Project Management"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <CpPromptTemplateEditor section="suggest_titles" />
+              <button
+                onClick={handleSuggestTitles}
+                disabled={suggesting}
+                className="w-full py-2.5 px-4 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition-all"
+              >
+                {suggesting ? 'Suggesting…' : 'Suggest Titles'}
+              </button>
+              {suggestError && <p className="text-sm text-red-500">{suggestError}</p>}
+              {suggestResult && (
+                <pre className="text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 rounded-lg p-3 whitespace-pre-wrap font-mono leading-relaxed border border-gray-200 dark:border-gray-700">
+                  {suggestResult}
+                </pre>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Framework-specific fields */}
         {cp.framework === 'wsq' ? (
           <div className="grid grid-cols-2 gap-4">
@@ -216,74 +332,9 @@ const CpCourseDetails: React.FC = () => {
               className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Select a skill...</option>
-              <option value="Accident and Incident Response Management">Accident and Incident Response Management</option>
-              <option value="Accounting Standards">Accounting Standards</option>
-              <option value="Adaptive Leadership">Adaptive Leadership</option>
-              <option value="Agile Project Management">Agile Project Management</option>
-              <option value="Artificial Intelligence Application">Artificial Intelligence Application</option>
-              <option value="Audit Compliance">Audit Compliance</option>
-              <option value="Big Data Analytics">Big Data Analytics</option>
-              <option value="Brand Management">Brand Management</option>
-              <option value="Business Continuity Management">Business Continuity Management</option>
-              <option value="Business Innovation">Business Innovation</option>
-              <option value="Business Negotiation">Business Negotiation</option>
-              <option value="Change Management">Change Management</option>
-              <option value="Cloud Computing">Cloud Computing</option>
-              <option value="Communication">Communication</option>
-              <option value="Computational Thinking">Computational Thinking</option>
-              <option value="Conflict Resolution">Conflict Resolution</option>
-              <option value="Content Marketing">Content Marketing</option>
-              <option value="Continuous Improvement Management">Continuous Improvement Management</option>
-              <option value="Creative Thinking">Creative Thinking</option>
-              <option value="Critical Thinking">Critical Thinking</option>
-              <option value="Customer Experience Management">Customer Experience Management</option>
-              <option value="Cyber Security">Cyber Security</option>
-              <option value="Data Analytics">Data Analytics</option>
-              <option value="Data Governance">Data Governance</option>
-              <option value="Data Visualisation">Data Visualisation</option>
-              <option value="Design Thinking">Design Thinking</option>
-              <option value="Digital Literacy">Digital Literacy</option>
-              <option value="Digital Marketing">Digital Marketing</option>
-              <option value="Digital Transformation">Digital Transformation</option>
-              <option value="Diversity Management">Diversity Management</option>
-              <option value="Emotional Intelligence">Emotional Intelligence</option>
-              <option value="Environmental Sustainability">Environmental Sustainability</option>
-              <option value="Financial Analysis">Financial Analysis</option>
-              <option value="Financial Management">Financial Management</option>
-              <option value="Global Mindset">Global Mindset</option>
-              <option value="Human Resource Management">Human Resource Management</option>
-              <option value="Innovation Management">Innovation Management</option>
-              <option value="Internet of Things">Internet of Things</option>
-              <option value="Leadership">Leadership</option>
-              <option value="Learning Agility">Learning Agility</option>
-              <option value="Machine Learning">Machine Learning</option>
-              <option value="Manpower Planning">Manpower Planning</option>
-              <option value="Marketing Strategy">Marketing Strategy</option>
-              <option value="Operations Management">Operations Management</option>
-              <option value="Organisational Design">Organisational Design</option>
-              <option value="People Development">People Development</option>
-              <option value="Performance Management">Performance Management</option>
-              <option value="Problem Solving">Problem Solving</option>
-              <option value="Process Improvement">Process Improvement</option>
-              <option value="Product Management">Product Management</option>
-              <option value="Programme Management">Programme Management</option>
-              <option value="Project Management">Project Management</option>
-              <option value="Quality Management">Quality Management</option>
-              <option value="Regulatory Compliance">Regulatory Compliance</option>
-              <option value="Robotics and Automation">Robotics and Automation</option>
-              <option value="Risk Management">Risk Management</option>
-              <option value="Sales Management">Sales Management</option>
-              <option value="Service Excellence">Service Excellence</option>
-              <option value="Software Development">Software Development</option>
-              <option value="Stakeholder Management">Stakeholder Management</option>
-              <option value="Strategic Planning">Strategic Planning</option>
-              <option value="Supply Chain Management">Supply Chain Management</option>
-              <option value="Sustainability Management">Sustainability Management</option>
-              <option value="Talent Management">Talent Management</option>
-              <option value="Team Building">Team Building</option>
-              <option value="Technology Integration">Technology Integration</option>
-              <option value="Transdisciplinary Thinking">Transdisciplinary Thinking</option>
-              <option value="Workplace Safety and Health">Workplace Safety and Health</option>
+              {CP_SKILLS.map(s => (
+                <option key={s.name} value={s.name}>{s.name}</option>
+              ))}
             </select>
           </div>
         )}
@@ -302,6 +353,28 @@ const CpCourseDetails: React.FC = () => {
           </button>
           {topicsOpen && (
             <div className="px-4 pb-4 space-y-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Auto-generate course topics based on the course title. You can edit the results afterwards.
+              </p>
+              <CpPromptTemplateEditor section="generate_topics" />
+              {cp.framework === 'casl' && cp.uniqueSkillName && (() => {
+                const selected = CP_SKILLS.find(s => s.name === cp.uniqueSkillName);
+                if (!selected) return null;
+                return (
+                  <div className="rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-900/20 p-3 space-y-1 text-sm">
+                    <p className="text-gray-800 dark:text-gray-200">
+                      <span className="font-semibold text-blue-700 dark:text-blue-300">Skill:</span>{' '}
+                      {selected.name}
+                    </p>
+                    {selected.description && (
+                      <p className="text-gray-700 dark:text-gray-300">
+                        <span className="font-semibold text-blue-700 dark:text-blue-300">Description:</span>{' '}
+                        {selected.description}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
               <button
                 onClick={handleGenerateTopics}
                 disabled={generating}
@@ -359,13 +432,51 @@ const CpCourseDetails: React.FC = () => {
         />
       </Card>
 
-      {/* Save Button */}
-      <button
-        onClick={handleSave}
-        className="w-full py-3 px-4 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-all shadow-md"
-      >
-        {saved ? 'Saved!' : 'Save Course Details'}
-      </button>
+      {/* Save + Clear */}
+      <div className="flex gap-3">
+        <button
+          onClick={handleSave}
+          className="flex-1 py-3 px-4 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-all shadow-md"
+        >
+          {saved ? 'Saved!' : 'Save Course Details'}
+        </button>
+        <button
+          onClick={() => {
+            if (window.confirm('Clear all CP Generator fields? This wipes every section (Course Details, About, What You\'ll Learn, etc.) and cannot be undone.')) {
+              cp.reset();
+            }
+          }}
+          className="py-3 px-4 rounded-lg text-sm font-semibold bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-all"
+        >
+          Clear All
+        </button>
+      </div>
+
+      {/* Saved course details summary — appears after Save, mirrors the
+          st.dataframe summary on the Streamlit "Course Details" page. */}
+      {cp.hasSavedCourseDetails && cp.courseTitle && (
+        <Card className="p-5 space-y-3">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white">{cp.courseTitle}</h3>
+          <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">
+                <tr>
+                  <th className="text-left px-4 py-2 font-semibold">Field</th>
+                  <th className="text-left px-4 py-2 font-semibold">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summaryRows.map(([field, value]) => (
+                  <tr key={field} className="border-t border-gray-200 dark:border-gray-700">
+                    <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{field}</td>
+                    <td className="px-4 py-2 text-gray-900 dark:text-white font-medium">{value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 };

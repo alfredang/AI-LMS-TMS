@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card } from '../../ui/Card';
 import { Button } from '../../ui/Button';
 import { useCp, LU_SEQUENCING_TYPES } from './CpContext';
+import CpPromptTemplateEditor from './CpPromptTemplateEditor';
 
 interface CpContentGeneratorProps {
   section: string;
@@ -109,18 +110,21 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{description}</p>
       </div>
 
-      {/* Course context summary */}
+      {/* Course context — blue info box matching Streamlit's st.info() */}
       {cp.courseTitle && (
-        <Card className="p-4 bg-gray-50 dark:bg-gray-800/50">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wider">Generating for</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">{cp.courseTitle}</p>
-              <p className="text-xs text-gray-500">{cp.numTopics} topics | {cp.courseDuration}h | {cp.framework.toUpperCase()}</p>
-            </div>
-          </div>
-        </Card>
+        <div className="rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50 dark:bg-blue-900/20 px-4 py-3 text-sm">
+          <p className="text-gray-800 dark:text-gray-200">
+            <span className="font-semibold text-blue-700 dark:text-blue-300">Course:</span>{' '}
+            {cp.courseTitle}
+          </p>
+          <p className="text-xs text-blue-700/70 dark:text-blue-300/70 mt-0.5">
+            {cp.numTopics} topics · {cp.courseDuration}h · {cp.framework.toUpperCase()}
+          </p>
+        </div>
       )}
+
+      {/* Prompt Template editor */}
+      <CpPromptTemplateEditor section={section} />
 
       {/* LU Sequencing type selector */}
       {section === 'lu_sequencing' && (
@@ -144,16 +148,25 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
         </Card>
       )}
 
-      {/* Generate button */}
+      {/* Generate / Regenerate — matches Streamlit's two-button pattern */}
       <div>
         {error && (
           <div className="mb-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
             {error}
           </div>
         )}
-        <Button onClick={handleGenerate} disabled={loading} className="w-full sm:w-auto">
-          {loading ? 'Generating with Claude AI...' : `Generate ${title}`}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={handleGenerate} disabled={loading} className="flex-1 sm:flex-none">
+            {loading ? 'Generating with Claude AI...' : 'Generate'}
+          </Button>
+          <button
+            onClick={handleGenerate}
+            disabled={loading || !hasContent}
+            className="flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-semibold bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors"
+          >
+            Regenerate
+          </button>
+        </div>
       </div>
 
       {/* Loading state */}

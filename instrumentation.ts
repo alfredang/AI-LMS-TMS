@@ -16,6 +16,16 @@ export async function register() {
             console.error('[Scheduler] Failed to initialize:', err);
         }
 
+        // Ensure the CP Generator prompt-template table exists. Idempotent —
+        // safe to run every boot; first-time deploys get the table without
+        // requiring a manual `npm run db:migrate` step.
+        try {
+            const { ensureCpPromptTemplateTable } = await import('./lib/cp-prompts-ensure-table');
+            await ensureCpPromptTemplateTable();
+        } catch (err) {
+            console.error('[CP] Failed to ensure cp_prompt_template table:', err);
+        }
+
         // Warm up OpenClaw session to avoid ~15s cold start on first user message
         const { sendToOpenClaw } = await import('./lib/openclaw-client');
         sendToOpenClaw({ messages: [{ role: 'user', content: 'ping' }], userId: 'warmup', timeoutMs: 30000 }).catch(() => {});
