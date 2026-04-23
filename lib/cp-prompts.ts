@@ -204,12 +204,12 @@ Course Topics:
 {course_topics}
 
 Guidelines:
-- Identify the specific industry sectors or domains that the course targets
-- Describe the current pressures, trends, or challenges facing these sectors that create the need for this training
-- Identify the target audience: specific job roles, professionals, or practitioners who would benefit
-- Explain why there is a skills gap or training need in these sectors
-- Write in a professional, factual tone suitable for a course proposal document
-- Write 2-3 cohesive paragraphs totalling 100-200 words
+- Identify the specific industry sectors or domains that the course targets, naming concrete sub-sectors, organisation types, or market segments where applicable
+- Describe in depth the current pressures, regulatory shifts, technology trends, market dynamics, or structural challenges facing these sectors that create the need for this training — reference Singapore's industry context where it strengthens the argument
+- Identify the target audience precisely: list specific job roles, professional designations, or practitioner categories who would benefit, and explain the responsibilities those roles carry
+- Explain why there is a skills gap or training need: cover both the workforce-readiness angle (what practitioners struggle with today) and the organisational angle (capability gaps holding teams back)
+- Use a substantive, evidence-grounded tone suitable for an SSG / WSQ course proposal — concrete enough that an industry reviewer would recognise the sector accurately
+- Write exactly 3 cohesive paragraphs totalling 280-400 words. Paragraph 1: sector context and pressures. Paragraph 2: target audience and the work they do. Paragraph 3: skills gap, training need, and how this course closes it.
 - Do NOT use bullet points, numbered lists, or headings
 - Do NOT use markdown formatting
 
