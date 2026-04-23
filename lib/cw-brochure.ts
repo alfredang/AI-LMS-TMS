@@ -19,41 +19,64 @@ import { chromium } from 'playwright';
 // In Coolify (and many container runtimes) /root is read-only or owned by a
 // different uid at runtime, so on-demand `playwright install chromium` fails
 // silently and the launch then errors with "Executable doesn't exist". /tmp
-// is universally writable. Set BEFORE the first call to chromium.* so
-// `executablePath()` returns the /tmp path.
+// is universally writable.
 const CHROMIUM_CACHE = process.env.PLAYWRIGHT_BROWSERS_PATH || '/tmp/ms-playwright';
 process.env.PLAYWRIGHT_BROWSERS_PATH = CHROMIUM_CACHE;
 
-// On-demand install of the Node playwright's Chromium binary. The previous
-// "fix it via Dockerfile" approach didn't take effect — Coolify appears to
-// build with Nixpacks rather than the Dockerfile, so /root/.cache stays
-// empty. This handler downloads chromium to /tmp on first request and
-// caches the success in a module-level flag.
-let chromiumReady = false;
+// Ordered list of candidate locations Playwright might resolve to —
+// /tmp first (our forced cache), then /root (the default). The launch
+// path is found by globbing under each location for the actual chromium
+// binary (folder names include the playwright revision so a wildcard
+// search is more reliable than guessing the version).
+const CHROMIUM_SEARCH_ROOTS = [CHROMIUM_CACHE, '/root/.cache/ms-playwright'];
 
-async function ensureChromium(): Promise<void> {
-  if (chromiumReady) return;
+// Recursively walk a directory looking for the chromium executable. Stops
+// at the first match.  Returns the absolute path or null.
+function findChromiumExecutable(rootDir: string): string | null {
+  if (!fs.existsSync(rootDir)) return null;
+  const targets = ['chrome-headless-shell', 'chrome', 'headless_shell'];
+  const stack = [rootDir];
+  while (stack.length) {
+    const dir = stack.pop()!;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        stack.push(full);
+      } else if (targets.includes(e.name)) {
+        return full;
+      }
+    }
+  }
+  return null;
+}
 
-  let expectedPath = '';
-  try {
-    expectedPath = chromium.executablePath();
-  } catch {
-    // executablePath() can throw if browser metadata is missing — fall through to install
+let cachedChromiumPath: string | null = null;
+
+// Resolve a chromium executable: search known locations, install on
+// demand if not found. Caches the resolved path in module scope.
+async function resolveChromiumExe(): Promise<string> {
+  if (cachedChromiumPath && fs.existsSync(cachedChromiumPath)) return cachedChromiumPath;
+
+  for (const root of CHROMIUM_SEARCH_ROOTS) {
+    const found = findChromiumExecutable(root);
+    if (found) {
+      cachedChromiumPath = found;
+      console.log(`[brochure] Found Chromium at ${found}`);
+      return found;
+    }
   }
 
-  if (expectedPath && fs.existsSync(expectedPath)) {
-    chromiumReady = true;
-    return;
-  }
-
-  // Make sure the cache dir exists and is writable before invoking the CLI.
+  // Make sure the cache dir exists and is writable.
   try { fs.mkdirSync(CHROMIUM_CACHE, { recursive: true }); } catch { /* ignore */ }
 
-  // Try multiple ways to launch the Playwright install CLI. Each candidate
-  // is run with PLAYWRIGHT_BROWSERS_PATH pointing at our writable cache so
-  // the binary lands where chromium.launch() will look. Next.js standalone
-  // bundles sometimes strip the `playwright` bin link, hence the
-  // node-direct fallbacks.
+  // Install on demand. Try multiple invocation styles in case the
+  // standalone bundle stripped the `playwright` bin link.
   const candidates = [
     'npx --yes playwright install chromium',
     'node node_modules/playwright/cli.js install chromium',
@@ -61,6 +84,7 @@ async function ensureChromium(): Promise<void> {
     '/usr/local/bin/playwright install chromium',
   ];
   console.log(`[brochure] Chromium missing — installing to ${CHROMIUM_CACHE} on demand...`);
+  let installed = false;
   let lastErr: any;
   for (const cmd of candidates) {
     try {
@@ -69,16 +93,34 @@ async function ensureChromium(): Promise<void> {
         timeout: 600_000,
         env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: CHROMIUM_CACHE },
       });
-      chromiumReady = true;
-      console.log(`[brochure] Chromium installed via: ${cmd}`);
-      return;
+      console.log(`[brochure] Chromium install command succeeded: ${cmd}`);
+      installed = true;
+      break;
     } catch (e) {
       lastErr = e;
     }
   }
+  if (!installed) {
+    throw new Error(
+      'Playwright Chromium is not installed and on-demand install failed. ' +
+      `Last error: ${lastErr?.message || lastErr}`,
+    );
+  }
+
+  // After install, search again — both /tmp (where we asked it to go)
+  // and /root/.cache (in case the env var was overridden somewhere
+  // upstream and the binary actually landed in the default location).
+  for (const root of CHROMIUM_SEARCH_ROOTS) {
+    const found = findChromiumExecutable(root);
+    if (found) {
+      cachedChromiumPath = found;
+      console.log(`[brochure] Chromium installed and located at ${found}`);
+      return found;
+    }
+  }
   throw new Error(
-    'Playwright Chromium is not installed and on-demand install failed. ' +
-    `Last error: ${lastErr?.message || lastErr}`,
+    'Playwright install reported success but no chromium binary was found in ' +
+    CHROMIUM_SEARCH_ROOTS.join(' or ') + '. Check container filesystem permissions.',
   );
 }
 
@@ -574,11 +616,14 @@ export function populateTemplate(templateHtml: string, data: BrochureData): stri
 // loads a `file://` path so the brochure's relative image references
 // (logo, header background) resolve to the same template directory.
 export async function renderPdf(htmlContent: string, templateDir: string, outputPath: string): Promise<void> {
-  await ensureChromium();
+  // Resolve and pass executablePath explicitly so we don't rely on
+  // Playwright's internal path resolution (which has been picking up
+  // /root/.cache despite the PLAYWRIGHT_BROWSERS_PATH override).
+  const exePath = await resolveChromiumExe();
   const tmpHtml = path.join(templateDir, `_tmp_brochure_${process.pid}_${Date.now()}.html`);
   fs.writeFileSync(tmpHtml, htmlContent, 'utf-8');
   try {
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({ headless: true, executablePath: exePath });
     try {
       const page = await browser.newPage();
       await page.goto(`file://${tmpHtml.replace(/\\/g, '/')}`, { waitUntil: 'networkidle' });
