@@ -15,12 +15,20 @@ import os from 'os';
 import path from 'path';
 import { chromium } from 'playwright';
 
-// Coolify's production image keeps shipping without the Node playwright's
-// Chromium binary (the Dockerfile install line apparently isn't applied —
-// possibly Coolify uses Nixpacks instead of the Dockerfile). Lazily download
-// the binary on first request so brochure generation works regardless of
-// how the runtime image was built. Cached after first successful resolution
-// so repeat requests pay no cost.
+// Force Playwright to use a writable cache under /tmp instead of /root/.cache.
+// In Coolify (and many container runtimes) /root is read-only or owned by a
+// different uid at runtime, so on-demand `playwright install chromium` fails
+// silently and the launch then errors with "Executable doesn't exist". /tmp
+// is universally writable. Set BEFORE the first call to chromium.* so
+// `executablePath()` returns the /tmp path.
+const CHROMIUM_CACHE = process.env.PLAYWRIGHT_BROWSERS_PATH || '/tmp/ms-playwright';
+process.env.PLAYWRIGHT_BROWSERS_PATH = CHROMIUM_CACHE;
+
+// On-demand install of the Node playwright's Chromium binary. The previous
+// "fix it via Dockerfile" approach didn't take effect — Coolify appears to
+// build with Nixpacks rather than the Dockerfile, so /root/.cache stays
+// empty. This handler downloads chromium to /tmp on first request and
+// caches the success in a module-level flag.
 let chromiumReady = false;
 
 async function ensureChromium(): Promise<void> {
@@ -38,20 +46,29 @@ async function ensureChromium(): Promise<void> {
     return;
   }
 
-  // Try `npx playwright install chromium`. Falls back to invoking the CLI
-  // module directly if `npx` can't find the playwright binary (Next.js
-  // standalone bundles sometimes strip bin links).
+  // Make sure the cache dir exists and is writable before invoking the CLI.
+  try { fs.mkdirSync(CHROMIUM_CACHE, { recursive: true }); } catch { /* ignore */ }
+
+  // Try multiple ways to launch the Playwright install CLI. Each candidate
+  // is run with PLAYWRIGHT_BROWSERS_PATH pointing at our writable cache so
+  // the binary lands where chromium.launch() will look. Next.js standalone
+  // bundles sometimes strip the `playwright` bin link, hence the
+  // node-direct fallbacks.
   const candidates = [
     'npx --yes playwright install chromium',
     'node node_modules/playwright/cli.js install chromium',
     'node /app/node_modules/playwright/cli.js install chromium',
     '/usr/local/bin/playwright install chromium',
   ];
-  console.log(`[brochure] Chromium missing at ${expectedPath || '<unknown>'} — installing on demand...`);
+  console.log(`[brochure] Chromium missing — installing to ${CHROMIUM_CACHE} on demand...`);
   let lastErr: any;
   for (const cmd of candidates) {
     try {
-      execSync(cmd, { stdio: 'inherit', timeout: 600_000 });
+      execSync(cmd, {
+        stdio: 'inherit',
+        timeout: 600_000,
+        env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: CHROMIUM_CACHE },
+      });
       chromiumReady = true;
       console.log(`[brochure] Chromium installed via: ${cmd}`);
       return;
