@@ -575,9 +575,12 @@ export const ViewDirectApplicationView: React.FC = () => {
 
     // ── Generate Invoice with progress modal ──────────────────────────────────
     const handleGenerateInvoice = async () => {
+        const cancelledStatuses = ['cancelled', 'rejected', 'failed'];
         const ids = Array.from(selectedIds).filter(appId => {
             const app = applications.find(a => a.application_id === appId);
-            return app && !(app.invoice_id && String(app.invoice_id).trim());
+            return app && 
+                   !(app.invoice_id && String(app.invoice_id).trim()) && 
+                   !cancelledStatuses.includes((app.application_status || '').toLowerCase());
         }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
         if (ids.length === 0) { showToast('No eligible applications selected (all already have invoices).', true); return; }
         if (!window.confirm(`Generate QuickBooks invoice for ${ids.length} application(s)?`)) return;

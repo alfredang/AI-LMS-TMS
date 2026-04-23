@@ -81,6 +81,20 @@ export async function addDaLearnerToCalendar(
     );
     if (!tpRes.rows[0]?.sync_google_calendar) return result;
 
+    // 1b. Verify the application is still active (not cancelled)
+    const activeAppRes = await pool.query(
+      `SELECT application_status FROM da_application 
+       WHERE LOWER(trainee_email) = LOWER($1) 
+         AND (course_run_id = $2 OR course_run_id = (SELECT course_run_id FROM course_run WHERE id::text = $2 LIMIT 1))
+         AND LOWER(application_status) IN ('confirmed', 'confirm application')
+       LIMIT 1`,
+      [learnerEmail, courseRunUuid]
+    );
+    if (activeAppRes.rows.length === 0) {
+      console.log(`📅 [addDaLearnerToCalendar] No active application for ${learnerEmail} in ${courseRunUuid} — skipping add`);
+      return result;
+    }
+
     const credentials = await getGoogleCredentials(pool);
     const oauth2Client = new google.auth.OAuth2(
       credentials.clientId,
@@ -569,6 +583,7 @@ export async function syncAllDaApplicantsToCalendar(courseRunUuid: string): Prom
        FROM da_application 
        WHERE (course_run_id = $1 OR course_run_id = $2)
          AND enrolment_status = 'Confirmed'
+         AND LOWER(application_status) NOT IN ('cancelled', 'rejected', 'failed')
          AND trainee_email IS NOT NULL`,
       [courseRunUuid, ssgRunId]
     );
@@ -607,7 +622,7 @@ export async function retryFailedCalendarSyncs(): Promise<void> {
        WHERE enrolment_status = 'Confirmed'
          AND (calendar_added IS NOT TRUE)
          AND trainee_email IS NOT NULL
-         AND LOWER(application_status) = 'confirm application'`
+         AND LOWER(application_status) IN ('confirm application', 'confirmed')`
     );
 
     if (daRes.rows.length === 0) return;
@@ -644,6 +659,40 @@ export async function retryFailedCalendarSyncs(): Promise<void> {
     
     if (successCount > 0) {
       console.log(`✅ [da-calendar-sync] Successfully retried and added ${successCount} learners to the calendar.`);
+    }
+
+    // NEW: Proactive removal for cancelled applications
+    const cancelledRes = await pool.query(
+      `SELECT id, trainee_email, course_title, course_run_id, course_start_date 
+       FROM da_application 
+       WHERE calendar_added IS TRUE
+         AND trainee_email IS NOT NULL
+         AND LOWER(application_status) IN ('cancelled', 'rejected', 'failed')`
+    );
+
+    if (cancelledRes.rows.length > 0) {
+      console.log(`🗑️ [da-calendar-sync] Found ${cancelledRes.rows.length} cancelled applications still marked as on calendar. Removing...`);
+      for (const da of cancelledRes.rows) {
+         // Resolve internal course_run UUID
+         const runRes = await pool.query(
+           `SELECT id FROM course_run 
+            WHERE (id::text = $1 OR course_run_id = $1) 
+              AND is_deleted IS NOT TRUE LIMIT 1`,
+           [da.course_run_id]
+         );
+         
+         const courseRunUuid = runRes.rows[0]?.id || da.course_run_id;
+         const removeRes = await removeDaLearnerFromCalendar(
+           da.trainee_email,
+           courseRunUuid,
+           da.course_title || '',
+           da.course_start_date
+         );
+
+         if (removeRes.removedFrom > 0 || removeRes.totalSessions > 0) {
+            await pool.query(`UPDATE da_application SET calendar_added = false WHERE id = $1`, [da.id]);
+         }
+      }
     }
   } catch (err) {
     console.error(`❌ [da-calendar-sync] Retry sweep failed:`, err);

@@ -247,6 +247,20 @@ async function addLearnerToCalendarEvent(
     return false;
   }
 
+  // Verify the application is still active (not cancelled)
+  const activeAppRes = await pool.query(
+    `SELECT application_status FROM da_application 
+     WHERE LOWER(trainee_email) = LOWER($1) 
+       AND LOWER(course_title) = LOWER($2)
+       AND LOWER(application_status) IN ('confirmed', 'confirm application')
+     LIMIT 1`,
+    [learnerEmail, courseTitle]
+  );
+  if (activeAppRes.rows.length === 0) {
+    console.log(`📅 [calendar-attendee] No active application for ${learnerEmail} in ${courseTitle} — skipping add`);
+    return false;
+  }
+
   const credentials = await getGoogleCredentials(pool);
 
   let calendarId = 'primary';
