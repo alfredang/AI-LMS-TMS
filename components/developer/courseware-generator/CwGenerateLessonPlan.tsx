@@ -113,7 +113,7 @@ const CwGenerateLessonPlan: React.FC = () => {
         <div className="p-4 rounded-lg bg-blue-900/20 border border-blue-700">
           <div className="flex items-center gap-3">
             <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full" />
-            <p className="text-sm text-blue-300">Generating lesson plan with barrier scheduling...</p>
+            <p className="text-sm text-blue-300">Generating the Lesson Plan...</p>
           </div>
         </div>
       )}
