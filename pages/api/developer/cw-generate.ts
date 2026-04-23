@@ -510,7 +510,7 @@ Return ONLY a valid JSON object with this EXACT structure (fill ALL fields from 
       "LO": "ELO1: <full learning outcome text>   (include the 'ELOx: ' or 'LOx: ' prefix exactly as it appears in the CP)",
       "Topics": [
         {
-          "Topic_Title": "<pedagogical theme name from the CP's Topics column, e.g. 'Business Requirements Analysis' or 'Python Setup and Environment'>",
+          "Topic_Title": "<EXACT topic text as it appears in the CP's Topics column — preserve verbatim wording, do NOT rephrase, summarise, or shorten>",
           "Bullet_Points": ["<short topic bullet 1 from the CP>", "<short topic bullet 2>", "<short topic bullet 3>"]
         }
       ],
@@ -541,16 +541,21 @@ Return ONLY a valid JSON object with this EXACT structure (fill ALL fields from 
 CRITICAL RULES — READ CAREFULLY (these mirror the Streamlit WSQ extractor):
 
 TOPICS vs KNOWLEDGE/ABILITY — MOST IMPORTANT:
-- Topics in a WSQ CP are PEDAGOGICAL THEMES (e.g. "Business Requirements Analysis", "Python Setup and Environment", "Data Anonymisation Techniques") that group related sub-bullets.
+- Topics in a WSQ CP appear in the CP's "Topics" column. Each topic is a row of text the CP author has written verbatim (e.g. "Ethical considerations and potential risks of generative AI interaction", "Apply ethical principles in decision-making related to AI", "Data anonymisation and de-identification techniques").
 - K statements are specialised KNOWLEDGE items (e.g. "K1: Programming and coding languages, logics and styles").
 - A statements are specialised ABILITY items (e.g. "A1: Analyse and translate business requirements of software into multiple functions").
 - DO NOT copy K statement descriptions OR A statement descriptions into Topic_Title. Those belong ONLY in K_numbering_description / A_numbering_description.
-- Topic_Title must be SHORT (2-6 words, noun phrase). If the CP's topic cell only lists the K/A description, invent a concise pedagogical grouping from the sub-bullets — do NOT use the K/A text verbatim.
-- Each LU must have 2-5 Topics. Each Topic must have 2-5 Bullet_Points (the short sub-bullet lines from the CP — not full sentences, not K/A descriptions).
-- Example (GOOD):
-    { "Topic_Title": "Business Requirements Analysis",
-      "Bullet_Points": ["Understanding business objectives in financial context","Translating requirements into programming solutions","Python applications in finance industry"] }
-- Example (BAD — do NOT do this):
+- **Topic_Title MUST be the EXACT topic text from the CP — preserve the original wording verbatim, including length. DO NOT shorten, summarise, paraphrase, or invent a "pedagogical theme" name. If the CP says "Apply ethical principles in decision-making related to AI", output that EXACT string. Long topic titles are fine — keep them long.**
+- Only fall back to inventing a short label if the CP's Topics cell is genuinely empty or only contains K/A bullets with no separate topic text — and even then, prefer the bullet text over a made-up name.
+- Each LU should have as many Topics as the CP lists (do not pad to 2-5 if the CP has fewer or more).
+- Bullet_Points are the short sub-bullet lines under each topic in the CP — leave empty if the CP doesn't show sub-bullets per topic.
+- Example (GOOD — preserves exact CP wording):
+    { "Topic_Title": "Apply ethical principles in decision-making related to AI",
+      "Bullet_Points": [] }
+- Example (BAD — do NOT shorten):
+    { "Topic_Title": "Ethical AI Decision-Making",
+      "Bullet_Points": [] }
+- Example (BAD — do NOT use K/A statement as topic):
     { "Topic_Title": "K1: Programming and coding languages, logics and styles",
       "Bullet_Points": ["Explanation of K1 ...","Elaboration of K1 ..."] }
 
