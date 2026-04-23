@@ -92,8 +92,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         let parsed: any;
         try {
+          // Handle wrapped error JSON from SSG Gateway (common on 400 errors)
+          let toDecrypt = rawBody;
+          if (rawBody.startsWith('{')) {
+            try {
+              const p = JSON.parse(rawBody);
+              if (p.error && typeof p.error === 'string') {
+                toDecrypt = p.error;
+              }
+            } catch { /* not valid JSON */ }
+          }
+
           const decipher = crypto.createDecipheriv('aes-256-cbc', encKey, iv);
-          let decrypted = decipher.update(rawBody, 'base64', 'utf8');
+          let decrypted = decipher.update(toDecrypt, 'base64', 'utf8');
           decrypted += decipher.final('utf8');
           parsed = JSON.parse(decrypted);
         } catch (err) {
