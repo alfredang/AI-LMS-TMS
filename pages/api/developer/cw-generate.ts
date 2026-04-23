@@ -510,7 +510,7 @@ Return ONLY a valid JSON object with this EXACT structure (fill ALL fields from 
       "LO": "ELO1: <full learning outcome text>   (include the 'ELOx: ' or 'LOx: ' prefix exactly as it appears in the CP)",
       "Topics": [
         {
-          "Topic_Title": "<pedagogical theme name from the CP's Topics column, e.g. 'Business Requirements Analysis' or 'Python Setup and Environment'>",
+          "Topic_Title": "<EXACT topic text as it appears in the CP's Topics column — preserve verbatim wording, do NOT rephrase, summarise, or shorten>",
           "Bullet_Points": ["<short topic bullet 1 from the CP>", "<short topic bullet 2>", "<short topic bullet 3>"]
         }
       ],
@@ -541,16 +541,21 @@ Return ONLY a valid JSON object with this EXACT structure (fill ALL fields from 
 CRITICAL RULES — READ CAREFULLY (these mirror the Streamlit WSQ extractor):
 
 TOPICS vs KNOWLEDGE/ABILITY — MOST IMPORTANT:
-- Topics in a WSQ CP are PEDAGOGICAL THEMES (e.g. "Business Requirements Analysis", "Python Setup and Environment", "Data Anonymisation Techniques") that group related sub-bullets.
+- Topics in a WSQ CP appear in the CP's "Topics" column. Each topic is a row of text the CP author has written verbatim (e.g. "Ethical considerations and potential risks of generative AI interaction", "Apply ethical principles in decision-making related to AI", "Data anonymisation and de-identification techniques").
 - K statements are specialised KNOWLEDGE items (e.g. "K1: Programming and coding languages, logics and styles").
 - A statements are specialised ABILITY items (e.g. "A1: Analyse and translate business requirements of software into multiple functions").
 - DO NOT copy K statement descriptions OR A statement descriptions into Topic_Title. Those belong ONLY in K_numbering_description / A_numbering_description.
-- Topic_Title must be SHORT (2-6 words, noun phrase). If the CP's topic cell only lists the K/A description, invent a concise pedagogical grouping from the sub-bullets — do NOT use the K/A text verbatim.
-- Each LU must have 2-5 Topics. Each Topic must have 2-5 Bullet_Points (the short sub-bullet lines from the CP — not full sentences, not K/A descriptions).
-- Example (GOOD):
-    { "Topic_Title": "Business Requirements Analysis",
-      "Bullet_Points": ["Understanding business objectives in financial context","Translating requirements into programming solutions","Python applications in finance industry"] }
-- Example (BAD — do NOT do this):
+- **Topic_Title MUST be the EXACT topic text from the CP — preserve the original wording verbatim, including length. DO NOT shorten, summarise, paraphrase, or invent a "pedagogical theme" name. If the CP says "Apply ethical principles in decision-making related to AI", output that EXACT string. Long topic titles are fine — keep them long.**
+- Only fall back to inventing a short label if the CP's Topics cell is genuinely empty or only contains K/A bullets with no separate topic text — and even then, prefer the bullet text over a made-up name.
+- Each LU should have as many Topics as the CP lists (do not pad to 2-5 if the CP has fewer or more).
+- Bullet_Points are the short sub-bullet lines under each topic in the CP — leave empty if the CP doesn't show sub-bullets per topic.
+- Example (GOOD — preserves exact CP wording):
+    { "Topic_Title": "Apply ethical principles in decision-making related to AI",
+      "Bullet_Points": [] }
+- Example (BAD — do NOT shorten):
+    { "Topic_Title": "Ethical AI Decision-Making",
+      "Bullet_Points": [] }
+- Example (BAD — do NOT use K/A statement as topic):
     { "Topic_Title": "K1: Programming and coding languages, logics and styles",
       "Bullet_Points": ["Explanation of K1 ...","Elaboration of K1 ..."] }
 
@@ -576,7 +581,7 @@ NUMBERS & DURATIONS:
 - Total_Training_Hours = SUM of all instructional components (Classroom + Practical/Practicum + E-Learning + Others). Example: CR=7.5hrs + Practical=6hrs → "13.5 hrs". NEVER use just one component.
 - Total_Assessment_Hours from the CP assessment summary.
 - Total_Course_Duration_Hours from the CP duration total.
-- Assessment_Methods_Details Total_Delivery_Hours: sum EXACT minutes across all LOs for the same method, convert to human-readable ("1 hr 10 min", "1 hr 50 min"). Never round.
+- Assessment_Methods_Details Total_Delivery_Hours: PREFER the value the CP explicitly states in its "Total Delivery Hours" / assessment-summary row for that method (e.g. "WA-SAQ – 1 hr", "PP – 1 hr"). That is the authoritative figure — use it verbatim, even if per-LO breakdown rows show smaller values like "(PP) – 15 mins" (those are per-LO/per-section slices that shouldn't be reused as the total). ONLY when the CP has no summary row should you sum the per-LO minutes yourself, in which case format as "1 hr 10 min" / "1 hr 50 min" with no rounding.
 - Extract EXACT Assessor_to_Candidate_Ratio from the CP (e.g. "1:3 (Min)", "1:5 (Max)"), do NOT simplify to "1:20".
 
 NORMALISATION:
@@ -602,66 +607,40 @@ Return ONLY valid JSON, no markdown code blocks, no explanation.`;
           try {
             courseDataJson = JSON.parse(jsonMatch[0]);
 
-            // Post-process: fix assessment durations by extracting exact minutes from parsed CP text
+            // Post-process: try to pin Total_Delivery_Hours to the CP's
+            // explicit "Total Delivery Hours" SUMMARY row when present. The
+            // CP usually lists per-LO/per-section breakdowns ("(PP) – 15
+            // mins", "WA(Q&A) – 70 mins") AND a summary row ("WA-SAQ – 1 hr",
+            // "PP – 1 hr", "Total – 2 hr"). The summary is authoritative.
+            // We previously regex-walked per-LO patterns and overwrote
+            // Claude's output with the smaller mins value — that produced
+            // "PP: 15 min" when the CP clearly states "PP – 1 hr" in the
+            // summary. Now we only override when the regex finds an HOURS-
+            // formatted summary value.
             if (courseDataJson?.Assessment_Methods_Details && parsedCpText) {
-              // Find exact durations from CP text (e.g. "70 mins", "110 mins")
-              const durationMatches = parsedCpText.match(/(\w[\w\s()\/&]+?)\s*\|\s*[\d:]+\s*to\s*[\d:]+\s*\|\s*(\d+)\s*mins/gi);
-              if (durationMatches) {
-                for (const match of durationMatches) {
-                  const parts = match.split('|').map((s: string) => s.trim());
-                  if (parts.length >= 3) {
-                    const methodName = parts[0];
-                    const mins = parseInt(parts[2]);
-                    if (!isNaN(mins)) {
-                      const hours = Math.floor(mins / 60);
-                      const remainMins = mins % 60;
-                      let durStr = '';
-                      if (hours > 0 && remainMins > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''} ${remainMins} min`;
-                      else if (hours > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''}`;
-                      else durStr = `${mins} min`;
-
-                      // Match to Assessment_Methods_Details
-                      for (const am of courseDataJson.Assessment_Methods_Details) {
-                        if (methodName.toLowerCase().includes('wa') && (am.Method_Abbreviation?.includes('WA') || am.Assessment_Method?.toLowerCase().includes('written'))) {
-                          am.Total_Delivery_Hours = durStr;
-                        } else if (methodName.toLowerCase().includes('pp') && (am.Method_Abbreviation === 'PP' || am.Assessment_Method?.toLowerCase().includes('practical'))) {
-                          am.Total_Delivery_Hours = durStr;
-                        } else if (methodName.toLowerCase().includes('cs') && (am.Method_Abbreviation === 'CS' || am.Assessment_Method?.toLowerCase().includes('case'))) {
-                          am.Total_Delivery_Hours = durStr;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-
-              // Also try simpler pattern: "WA(Q&A) – 70 mins" or "PP– 110 mins"
-              const simpleMatches = parsedCpText.match(/(?:WA|PP|CS|RP|OQ|OI)[\w()\/&]*[–\-—\s]*(\d+)\s*mins?/gi);
-              if (simpleMatches) {
-                for (const match of simpleMatches) {
-                  const minsMatch = match.match(/(\d+)\s*mins?/i);
-                  const typeMatch = match.match(/^(WA|PP|CS|RP|OQ|OI)/i);
-                  if (minsMatch && typeMatch) {
-                    const mins = parseInt(minsMatch[1]);
-                    const type = typeMatch[1].toUpperCase();
-                    const hours = Math.floor(mins / 60);
-                    const remainMins = mins % 60;
-                    let durStr = '';
-                    if (hours > 0 && remainMins > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''} ${remainMins} min`;
-                    else if (hours > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''}`;
-                    else durStr = `${mins} min`;
-
-                    for (const am of courseDataJson.Assessment_Methods_Details) {
-                      const abbr = am.Method_Abbreviation || '';
-                      if ((type === 'WA' && abbr.includes('WA')) ||
-                          (type === 'PP' && abbr === 'PP') ||
-                          (type === 'CS' && abbr === 'CS') ||
-                          (type === 'RP' && abbr === 'RP') ||
-                          (type === 'OQ' && abbr === 'OQ') ||
-                          (type === 'OI' && abbr === 'OI')) {
-                        am.Total_Delivery_Hours = durStr;
-                      }
-                    }
+              // Match "WA-SAQ – 1 hr", "PP – 1 hr", "WA(Q&A) - 1 hour 30 min" etc.
+              // Always with an `hr`/`hour` unit so we can't pick up per-LO
+              // minutes by accident.
+              const summaryMatches = parsedCpText.matchAll(
+                /(WA[\w()\/&-]*|PP|CS|RP|OQ|OI|DEM|PRJ|ASGN)\s*[–\-—:]\s*(\d+\s*(?:hours?|hrs?)(?:\s*\d+\s*mins?)?)/gi,
+              );
+              for (const m of summaryMatches) {
+                const type = m[1].toUpperCase();
+                const value = m[2].trim();
+                for (const am of courseDataJson.Assessment_Methods_Details) {
+                  const abbr = (am.Method_Abbreviation || '').toUpperCase();
+                  const matchesAbbr =
+                    (type.startsWith('WA') && abbr.includes('WA')) ||
+                    (type === 'PP' && abbr === 'PP') ||
+                    (type === 'CS' && abbr === 'CS') ||
+                    (type === 'RP' && abbr === 'RP') ||
+                    (type === 'OQ' && abbr === 'OQ') ||
+                    (type === 'OI' && abbr === 'OI') ||
+                    (type === 'DEM' && abbr === 'DEM') ||
+                    (type === 'PRJ' && abbr === 'PRJ') ||
+                    (type === 'ASGN' && abbr === 'ASGN');
+                  if (matchesAbbr) {
+                    am.Total_Delivery_Hours = value;
                   }
                 }
               }
