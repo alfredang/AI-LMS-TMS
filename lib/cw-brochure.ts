@@ -9,10 +9,61 @@
  */
 
 import * as cheerio from 'cheerio';
+import { execSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { chromium } from 'playwright';
+
+// Coolify's production image keeps shipping without the Node playwright's
+// Chromium binary (the Dockerfile install line apparently isn't applied —
+// possibly Coolify uses Nixpacks instead of the Dockerfile). Lazily download
+// the binary on first request so brochure generation works regardless of
+// how the runtime image was built. Cached after first successful resolution
+// so repeat requests pay no cost.
+let chromiumReady = false;
+
+async function ensureChromium(): Promise<void> {
+  if (chromiumReady) return;
+
+  let expectedPath = '';
+  try {
+    expectedPath = chromium.executablePath();
+  } catch {
+    // executablePath() can throw if browser metadata is missing — fall through to install
+  }
+
+  if (expectedPath && fs.existsSync(expectedPath)) {
+    chromiumReady = true;
+    return;
+  }
+
+  // Try `npx playwright install chromium`. Falls back to invoking the CLI
+  // module directly if `npx` can't find the playwright binary (Next.js
+  // standalone bundles sometimes strip bin links).
+  const candidates = [
+    'npx --yes playwright install chromium',
+    'node node_modules/playwright/cli.js install chromium',
+    'node /app/node_modules/playwright/cli.js install chromium',
+    '/usr/local/bin/playwright install chromium',
+  ];
+  console.log(`[brochure] Chromium missing at ${expectedPath || '<unknown>'} — installing on demand...`);
+  let lastErr: any;
+  for (const cmd of candidates) {
+    try {
+      execSync(cmd, { stdio: 'inherit', timeout: 600_000 });
+      chromiumReady = true;
+      console.log(`[brochure] Chromium installed via: ${cmd}`);
+      return;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw new Error(
+    'Playwright Chromium is not installed and on-demand install failed. ' +
+    `Last error: ${lastErr?.message || lastErr}`,
+  );
+}
 
 const FRAMEWORK_MAPPING: Record<string, string> = {
   ACC: 'Accountancy', RET: 'Retail', MED: 'Media', ICT: 'Infocomm Technology',
@@ -506,6 +557,7 @@ export function populateTemplate(templateHtml: string, data: BrochureData): stri
 // loads a `file://` path so the brochure's relative image references
 // (logo, header background) resolve to the same template directory.
 export async function renderPdf(htmlContent: string, templateDir: string, outputPath: string): Promise<void> {
+  await ensureChromium();
   const tmpHtml = path.join(templateDir, `_tmp_brochure_${process.pid}_${Date.now()}.html`);
   fs.writeFileSync(tmpHtml, htmlContent, 'utf-8');
   try {
