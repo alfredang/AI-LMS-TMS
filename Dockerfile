@@ -37,6 +37,15 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Install Playwright chromium browser + required system libs (for brochure PDF rendering)
 RUN playwright install --with-deps chromium
 
+# lib/cw-brochure.ts uses the npm `playwright` package (not the Python one) to
+# render the brochure PDF in Node. Node and Python playwrights look for the
+# Chromium binary in different cache subfolders, so we have to install the
+# Node-side browser separately. The Python venv is first on PATH (line above),
+# which would shadow the Node `playwright` CLI — invoke it via its absolute
+# install path instead. Chromium downloads to /root/.cache/ms-playwright.
+RUN npm install -g playwright@1.59.1 \
+    && /usr/local/bin/playwright install chromium
+
 # Copy only what Next.js standalone needs
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
