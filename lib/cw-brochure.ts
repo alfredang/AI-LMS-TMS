@@ -57,6 +57,59 @@ function findChromiumExecutable(rootDir: string): string | null {
 }
 
 let cachedChromiumPath: string | null = null;
+let depsInstalled = false;
+
+// Chromium needs a set of shared system libraries to launch (libglib,
+// libnss3, libgbm, libasound, fonts, etc.). Coolify's Next.js runtime image
+// ships a minimal Debian without them, so the binary downloads and
+// executes but immediately dies with "libglib-2.0.so.0: cannot open
+// shared object file". Install them via `playwright install-deps` (which
+// knows the full Chromium deps list for the current OS) with a direct
+// apt-get fallback if the CLI isn't reachable.
+async function ensureChromiumSystemDeps(): Promise<void> {
+  if (depsInstalled) return;
+
+  const cliCandidates = [
+    'npx --yes playwright install-deps chromium',
+    'node node_modules/playwright/cli.js install-deps chromium',
+    'node /app/node_modules/playwright/cli.js install-deps chromium',
+    '/usr/local/bin/playwright install-deps chromium',
+  ];
+  for (const cmd of cliCandidates) {
+    try {
+      execSync(cmd, { stdio: 'inherit', timeout: 300_000 });
+      depsInstalled = true;
+      console.log(`[brochure] Chromium system deps installed via: ${cmd}`);
+      return;
+    } catch {
+      // try next
+    }
+  }
+
+  // Direct apt-get fallback. This matches the Chromium deps list baked
+  // into Playwright's own install-deps for Debian/Ubuntu. Running as
+  // root inside the container so no sudo needed.
+  const aptPackages = [
+    'libglib2.0-0', 'libnss3', 'libnspr4', 'libdbus-1-3',
+    'libatk1.0-0', 'libatk-bridge2.0-0', 'libatspi2.0-0',
+    'libxcomposite1', 'libxdamage1', 'libxfixes3', 'libxrandr2',
+    'libgbm1', 'libxkbcommon0', 'libasound2',
+    'libpango-1.0-0', 'libcairo2', 'libfontconfig1', 'fonts-liberation',
+  ];
+  const aptCmd = `apt-get update && apt-get install -y --no-install-recommends ${aptPackages.join(' ')}`;
+  try {
+    execSync(aptCmd, { stdio: 'inherit', timeout: 300_000, shell: '/bin/bash' });
+    depsInstalled = true;
+    console.log('[brochure] Chromium system deps installed via apt-get');
+    return;
+  } catch (e: any) {
+    throw new Error(
+      'Chromium shared libraries are missing and could not be installed. ' +
+      'Run `playwright install-deps chromium` in the container, or add the ' +
+      `apt packages manually. Last error: ${e?.message || e}`,
+    );
+  }
+}
 
 // Resolve a chromium executable: search known locations, install on
 // demand if not found. Caches the resolved path in module scope.
@@ -620,6 +673,10 @@ export async function renderPdf(htmlContent: string, templateDir: string, output
   // Playwright's internal path resolution (which has been picking up
   // /root/.cache despite the PLAYWRIGHT_BROWSERS_PATH override).
   const exePath = await resolveChromiumExe();
+  // Install Chromium's shared library deps if they're missing on this
+  // host (Coolify's slim Debian doesn't ship libglib / libnss / etc.
+  // out of the box).
+  await ensureChromiumSystemDeps();
   const tmpHtml = path.join(templateDir, `_tmp_brochure_${process.pid}_${Date.now()}.html`);
   fs.writeFileSync(tmpHtml, htmlContent, 'utf-8');
   try {
