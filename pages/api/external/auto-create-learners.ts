@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { triggerProformaGeneration } from '../../../lib/services/proformaInvoiceService';
 
 /**
  * External API — Auto Create Learners
@@ -130,7 +131,7 @@ async function upsertLearner(
   courseRunId: string,
   courseId: string,
   enrolment: any,
-): Promise<{ created: boolean; userId: string }> {
+): Promise<{ created: boolean; userId: string; enrollmentId: string | null }> {
   const client = await pool.connect();
 
   const enrolmentRef: string | null = enrolment?.referenceNumber ?? null;
@@ -182,6 +183,8 @@ async function upsertLearner(
       [userId],
     );
 
+    let enrollmentId: string | null = null;
+
     if (enrolmentRef) {
       const updated = await client.query(
         `UPDATE enrollment SET
@@ -197,14 +200,15 @@ async function upsertLearner(
            course_sponsorship    = COALESCE($10::public.course_sponsorship, course_sponsorship),
            raw_data              = $11,
            updated_at            = NOW()
-         WHERE enrolment_id = $12`,
+         WHERE enrolment_id = $12
+         RETURNING id`,
         [userId, courseId, courseRunId, enrolmentStatus, enrolmentDate || null,
           nric?.trim() || null, email.trim().toLowerCase(), courseRef, tpCode, sponsorship,
           JSON.stringify(enrolment), enrolmentRef],
       );
 
       if ((updated.rowCount ?? 0) === 0) {
-        await client.query(
+        const inserted = await client.query(
           `INSERT INTO enrollment (
              user_id, course_id, course_run_id,
              enrolment_date, enrolment_id, enrolment_status,
@@ -221,14 +225,18 @@ async function upsertLearner(
              training_partner_code = COALESCE(EXCLUDED.training_partner_code, enrollment.training_partner_code),
              course_sponsorship    = COALESCE(EXCLUDED.course_sponsorship, enrollment.course_sponsorship),
              raw_data              = EXCLUDED.raw_data,
-             updated_at            = NOW()`,
+             updated_at            = NOW()
+           RETURNING id`,
           [userId, courseId, courseRunId, enrolmentDate || null, enrolmentRef, enrolmentStatus,
             nric?.trim() || null, email.trim().toLowerCase(), courseRef, tpCode, sponsorship,
             JSON.stringify(enrolment)],
         );
+        enrollmentId = inserted.rows[0]?.id ?? null;
+      } else {
+        enrollmentId = updated.rows[0]?.id ?? null;
       }
     } else {
-      await client.query(
+      const upserted = await client.query(
         `INSERT INTO enrollment (
            user_id, course_id, course_run_id,
            enrolment_date, enrolment_id, enrolment_status,
@@ -245,16 +253,18 @@ async function upsertLearner(
            training_partner_code = COALESCE(EXCLUDED.training_partner_code, enrollment.training_partner_code),
            course_sponsorship    = COALESCE(EXCLUDED.course_sponsorship, enrollment.course_sponsorship),
            raw_data              = EXCLUDED.raw_data,
-           updated_at            = NOW()`,
+           updated_at            = NOW()
+         RETURNING id`,
         [userId, courseId, courseRunId, enrolmentDate || null, enrolmentRef, enrolmentStatus,
           nric?.trim() || null, email.trim().toLowerCase(), courseRef, tpCode, sponsorship,
           JSON.stringify(enrolment)],
       );
+      enrollmentId = upserted.rows[0]?.id ?? null;
     }
 
     await client.query(`UPDATE app_user SET courses_updated_at = NOW() WHERE id = $1`, [userId]);
     await client.query('COMMIT');
-    return { created, userId };
+    return { created, userId, enrollmentId };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -368,7 +378,10 @@ export async function runAutomation() {
         }
 
         try {
-          const { created } = await upsertLearner(email, name, nric, run.db_id, run.course_id, enrolment);
+          const { created, enrollmentId } = await upsertLearner(email, name, nric, run.db_id, run.course_id, enrolment);
+          if (enrollmentId) {
+            triggerProformaGeneration(enrollmentId);
+          }
           if (created) {
             logEntry.createdCount++;
             logEntry.details.push({ enrolmentRef, email, name, status: 'created', accountExists: false });

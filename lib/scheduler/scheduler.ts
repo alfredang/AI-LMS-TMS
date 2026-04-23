@@ -213,6 +213,13 @@ async function seedDefaults() {
             cron_expression: '0 2 * * 0', // 2:00 AM SGT every Sunday
             api_endpoint: '/api/external/auto-sanitise-data',
         },
+        {
+            id: 'auto_generate_proforma_invoices',
+            name: 'Auto Generate Proforma Invoices',
+            description: 'Nightly sweep that generates a proforma invoice PDF for every active enrollment still missing pro_forma_url. Saves to the Google Drive proforma folder and writes the URL back to the enrollment row so it appears in Finance → Proforma Invoice and the learner\'s Billing History. Idempotent — enrollments that already have a proforma are skipped. Default 04:00 SGT daily.',
+            cron_expression: '0 4 * * *', // 4:00 AM SGT daily
+            api_endpoint: '/api/external/auto-generate-proforma-invoices',
+        },
     ];
 
     const ids = defaults.map(t => t.id);
@@ -305,6 +312,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_sanitise_data', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-sanitise-data');
+            return runAutomation();
+        });
+        directHandlers.set('auto_generate_proforma_invoices', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-generate-proforma-invoices');
             return runAutomation();
         });
     }
