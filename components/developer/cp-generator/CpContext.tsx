@@ -1,19 +1,43 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-// Instruction methods available for CP
+// Instruction methods available for CP — labels match Streamlit's
+// INSTRUCTION_METHODS_LIST verbatim (alfredang/wsq-casl-cp-generator,
+// app/ai_generator.py) so generated content references the same names.
 export const INSTRUCTION_METHODS = [
-  'Brainstorming', 'Case studies', 'Concept formation', 'Debates',
-  'Demonstrations/Modelling', 'Didactic questions', 'Discussions',
-  'Drill and Practice', 'Experiments', 'Explicit teaching', 'Field trips',
-  'Games', 'Independent reading', 'Interactive presentation', 'Peer teaching',
-  'Problem solving', 'Reflection', 'Role-play', 'Simulations',
+  'Brainstorming',
+  'Case studies',
+  'Concept formation',
+  'Debates',
+  'Demonstrations / Modelling',
+  'Didactic questions',
+  'Discussions',
+  'Drill and Practice',
+  'Experiments',
+  'Explicit teaching (Lecture) & Homework',
+  'Field trips',
+  'Games',
+  'Independent reading',
+  'Interactive presentation',
+  'Peer teaching / Peer practice',
+  'Problem solving',
+  'Reflection',
+  'Role-play',
+  'Simulations',
 ];
 
-// Assessment methods available for CP
+// Assessment methods available for CP — Streamlit-parity labels.
 export const ASSESSMENT_METHODS = [
-  'Written Exam', 'Online Test', 'Project', 'Assignments', 'Oral Interview',
-  'Demonstration', 'Practical Exam', 'Role Play', 'Oral Questioning',
-  'Case Studies', 'Reflection',
+  'Written Exam',
+  'Online Test',
+  'Project',
+  'Assignments',
+  'Oral Interview',
+  'Demonstration',
+  'Practical Exam',
+  'Role Play',
+  'Oral Questioning',
+  'Others: Case Studies',
+  'Others: Reflection',
 ];
 
 // LU Sequencing types
