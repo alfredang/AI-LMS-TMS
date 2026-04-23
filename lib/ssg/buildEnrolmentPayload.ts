@@ -24,7 +24,11 @@ export function buildEnrolmentPayload(
   const trainee: Record<string, any> = {
     idType: { type: buildIdType(String(app.trainee_id || ''), app.trainee_id_type) },
     id: String(app.trainee_id || ''),
-    dateOfBirth: app.date_of_birth ? String(app.date_of_birth).split('T')[0] : undefined,
+    dateOfBirth: app.date_of_birth ? (
+      app.date_of_birth instanceof Date 
+        ? app.date_of_birth.toISOString().split('T')[0] 
+        : String(app.date_of_birth).split('T')[0]
+    ) : undefined,
     fullName: String(app.trainee_name || ''),
     emailAddress: String(app.trainee_email || ''),
     sponsorshipType: buildSponsorshipType(app.sponsorship_type),

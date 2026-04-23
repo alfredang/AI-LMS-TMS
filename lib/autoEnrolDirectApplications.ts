@@ -157,8 +157,19 @@ async function ssgEncryptedPost(
 
   if (rawBody && rawBody.trim() !== '') {
     try {
+      // Handle wrapped error JSON from SSG Gateway (common on 400 errors)
+      let toDecrypt = rawBody;
+      if (rawBody.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(rawBody);
+          if (parsed.error && typeof parsed.error === 'string') {
+            toDecrypt = parsed.error;
+          }
+        } catch { /* not valid JSON, treat as raw */ }
+      }
+
       const decipher = crypto.createDecipheriv('aes-256-cbc', ctx.encKey, IV);
-      let decrypted = decipher.update(rawBody, 'base64', 'utf8');
+      let decrypted = decipher.update(toDecrypt, 'base64', 'utf8');
       decrypted += decipher.final('utf8');
       return JSON.parse(decrypted);
     } catch (err) {
