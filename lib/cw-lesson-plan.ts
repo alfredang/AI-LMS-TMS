@@ -2,8 +2,9 @@
  * Lesson Plan (LP) generator — pure TypeScript port of `scripts/generate-lp.py`.
  *
  * Produces the same two-phase output as the Streamlit reference:
- *   1. Cover page rendered from `LP_template_v2.docx` via our existing Jinja
- *      pipeline (`fillTemplate`) so the branding/logo/copyright match.
+ *   1. Cover page + Version Control Record rendered from `LP_template_v2.docx`
+ *      via our existing Jinja pipeline (`fillTemplate('lp', ...)`) so the
+ *      branding/logo/copyright match the Streamlit reference exactly.
  *   2. Per-day schedule tables appended programmatically using a barrier
  *      scheduling algorithm (9am-6pm day, 12:30-1:15 lunch, assessment
  *      block at 4-6pm on the last day).
@@ -53,10 +54,14 @@ function fmtTime(mins: number): string {
 }
 
 // ── Schedule types ──────────────────────────────────────────────────────────
+// `description` is rendered as one OR more paragraphs in the Description cell.
+// Multi-paragraph cells are required for LU rows that hold multiple topic
+// titles ("T1: …", "T2: …") and for assessment rows that list each method
+// on its own line — both behaviours match the Streamlit reference.
 interface Slot {
   timing: string;
   duration: string;
-  description: string;
+  description: string[];   // one entry per paragraph in the Description cell
   methods: string;
   is_lu_header?: boolean;
 }
@@ -94,6 +99,13 @@ export function buildSchedule(context: any): Schedule {
   if (!instrHours) instrHours = totalHours - assessHours;
   const numDays = totalHours >= 8 ? Math.max(1, Math.round(totalHours / 8)) : 1;
 
+  // Per-topic schedule blocks. Each topic = one row in the day table; LUs
+  // surface as gridSpan=4 header rows above their topics. Matches the
+  // layout the supervisor's screenshot shows (one T1 / T2 / T3 / T4 row
+  // per LU instead of all topics packed into a single multi-paragraph cell).
+  // The LU title is rendered as-is — if the upstream parser already prefixed
+  // it with "LU1:", the result is "LU1: LU1: Title", which is what the
+  // reference output shows and the supervisor wants preserved.
   const lus: any[] = context.Learning_Units || [];
   type TopicBlock = { lu_num: number; lu_title: string; topic_desc: string; methods: string };
   const topicBlocks: TopicBlock[] = [];
@@ -146,7 +158,7 @@ export function buildSchedule(context: any): Schedule {
         const contd = isContd ? " (Cont'd)" : '';
         slots.push({
           timing: '', duration: '', methods: '',
-          description: `LU${block.lu_num}: ${block.lu_title}${contd}`,
+          description: [`LU${block.lu_num}: ${block.lu_title}${contd}`],
           is_lu_header: true,
         });
         lastLuNum = block.lu_num;
@@ -155,14 +167,16 @@ export function buildSchedule(context: any): Schedule {
       if (!lunchDone && current >= LUNCH_START) {
         slots.push({
           timing: `${fmtTime(current)} - ${fmtTime(LUNCH_END)}`,
-          duration: `${LUNCH_DURATION} mins`, description: 'Lunch Break', methods: '-',
+          duration: `${LUNCH_DURATION} mins`,
+          description: ['Lunch Break'],
+          methods: '-',
         });
         current = LUNCH_END;
         lunchDone = true;
         if (isContd) {
           slots.push({
             timing: '', duration: '', methods: '',
-            description: `LU${block.lu_num}: ${block.lu_title} (Cont'd)`,
+            description: [`LU${block.lu_num}: ${block.lu_title} (Cont'd)`],
             is_lu_header: true,
           });
         }
@@ -182,7 +196,9 @@ export function buildSchedule(context: any): Schedule {
         if (dur > 0) {
           slots.push({
             timing: `${fmtTime(current)} - ${fmtTime(end)}`,
-            duration: `${Math.round(dur)} mins`, description: desc, methods: block.methods,
+            duration: `${Math.round(dur)} mins`,
+            description: [desc],
+            methods: block.methods,
           });
         }
         current = end;
@@ -192,7 +208,9 @@ export function buildSchedule(context: any): Schedule {
       } else if (available >= MIN_SESSION) {
         slots.push({
           timing: `${fmtTime(current)} - ${fmtTime(nextBarrier)}`,
-          duration: `${Math.round(available)} mins`, description: desc, methods: block.methods,
+          duration: `${Math.round(available)} mins`,
+          description: [desc],
+          methods: block.methods,
         });
         tRemaining -= available;
         isContd = true;
@@ -200,14 +218,18 @@ export function buildSchedule(context: any): Schedule {
       } else if (!lunchDone) {
         slots.push({
           timing: `${fmtTime(current)} - ${fmtTime(LUNCH_END)}`,
-          duration: `${LUNCH_DURATION} mins`, description: 'Lunch Break', methods: '-',
+          duration: `${LUNCH_DURATION} mins`,
+          description: ['Lunch Break'],
+          methods: '-',
         });
         current = LUNCH_END;
         lunchDone = true;
       } else {
         slots.push({
           timing: `${fmtTime(current)} - ${fmtTime(nextBarrier)}`,
-          duration: `${Math.round(available)} mins`, description: 'Break', methods: '-',
+          duration: `${Math.round(available)} mins`,
+          description: ['Break'],
+          methods: '-',
         });
         current = nextBarrier;
       }
@@ -217,37 +239,50 @@ export function buildSchedule(context: any): Schedule {
       if (current < LUNCH_START) {
         slots.push({
           timing: `${fmtTime(current)} - ${fmtTime(LUNCH_START)}`,
-          duration: `${Math.round(LUNCH_START - current)} mins`, description: 'Break', methods: '-',
+          duration: `${Math.round(LUNCH_START - current)} mins`,
+          description: ['Break'],
+          methods: '-',
         });
         current = LUNCH_START;
       }
       slots.push({
         timing: `${fmtTime(current)} - ${fmtTime(LUNCH_END)}`,
-        duration: `${LUNCH_DURATION} mins`, description: 'Lunch Break', methods: '-',
+        duration: `${LUNCH_DURATION} mins`,
+        description: ['Lunch Break'],
+        methods: '-',
       });
       current = LUNCH_END;
     }
 
     if (isLastDay && assessMins > 0) {
       const amDetails: any[] = context.Assessment_Methods_Details || [];
-      // Normalise "Written Assessment - Question and Answers" → "Written Assessment (Question and Answers)"
-      // to match the Streamlit reference's display format.
+      // Normalise "Written Assessment - Question and Answers" → "Written
+      // Assessment (Question and Answers)" — same display normalisation
+      // used by the Streamlit reference.
       const prettify = (name: string) =>
         name.replace(/Written Assessment\s*-\s*(Question and Answers|Short Answer Questions)/i, 'Written Assessment ($1)');
       const amNames = amDetails.map((a) => prettify(String(a.Assessment_Method || ''))).filter(Boolean);
-      const amDesc = amNames.length ? `Assessment: ${amNames.join(', ')}` : `Assessment (${assessMins} mins)`;
+      // Each method on its own paragraph, with a trailing `(N mins)` summary
+      // — matches the Streamlit reference cell layout exactly.
+      const amParas = amNames.length
+        ? [...amNames.map((n) => `Assessment: ${n}`), `(${assessMins} mins)`]
+        : [`Assessment (${assessMins} mins)`];
       const amStart = Math.max(current, DAY_END - assessMins);
       if (current < amStart) {
         slots.push({
           timing: `${fmtTime(current)} - ${fmtTime(amStart)}`,
-          duration: `${amStart - current} mins`, description: 'Break', methods: '-',
+          duration: `${amStart - current} mins`,
+          description: ['Break'],
+          methods: '-',
         });
         current = amStart;
       }
       const amEnd = Math.min(current + assessMins, DAY_END);
       slots.push({
         timing: `${fmtTime(current)} - ${fmtTime(amEnd)}`,
-        duration: `${amEnd - current} mins`, description: amDesc, methods: 'Assessment',
+        duration: `${amEnd - current} mins`,
+        description: amParas,
+        methods: 'Assessment',
       });
       current = amEnd;
     }
@@ -255,7 +290,9 @@ export function buildSchedule(context: any): Schedule {
     if (current < DAY_END) {
       slots.push({
         timing: `${fmtTime(current)} - ${fmtTime(DAY_END)}`,
-        duration: `${DAY_END - current} mins`, description: 'Break', methods: '-',
+        duration: `${DAY_END - current} mins`,
+        description: ['Break'],
+        methods: '-',
       });
     }
 
@@ -269,7 +306,21 @@ export function buildSchedule(context: any): Schedule {
 }
 
 // ── DOCX XML builders (mirror of Streamlit's `python-docx` additions) ──────
-const SZ = { normal: '20' }; // half-points: 20 = 10pt
+// Half-points (Word measures font size in half-points: 20 = 10pt). The
+// reference LP keeps the entire summary block (title + all lines) at 10pt
+// for a compact, clean look — only the title is bold.
+const SZ = {
+  title: '20',
+  summary: '20',
+  normal: '20',
+};
+
+// Format hours as `7 hrs` / `7.5 hrs` — drop trailing `.0` so whole numbers
+// look like integers, matching the Streamlit reference (`1 hrs`, not `1.0 hrs`).
+function fmtHours(h: number): string {
+  const rounded = Math.round(h * 10) / 10;
+  return `${rounded} hrs`;
+}
 
 function esc(s: string): string {
   return String(s)
@@ -280,33 +331,48 @@ function esc(s: string): string {
     .replace(/'/g, '&apos;');
 }
 
-function paraXml(text: string, opts: { bold?: boolean; size?: string } = {}): string {
+function paraXml(text: string, opts: { bold?: boolean; size?: string; pStyle?: string } = {}): string {
   const rPr = `<w:rPr>${opts.bold ? '<w:b/>' : ''}${opts.size ? `<w:sz w:val="${opts.size}"/><w:szCs w:val="${opts.size}"/>` : ''}</w:rPr>`;
-  return `<w:p><w:r>${rPr}<w:t xml:space="preserve">${esc(text)}</w:t></w:r></w:p>`;
+  const pPr = opts.pStyle ? `<w:pPr><w:pStyle w:val="${opts.pStyle}"/></w:pPr>` : '';
+  return `<w:p>${pPr}<w:r>${rPr}<w:t xml:space="preserve">${esc(text)}</w:t></w:r></w:p>`;
 }
 
-function cellXml(text: string, opts: { bold?: boolean; gridSpan?: number; size?: string } = {}): string {
+function cellXml(
+  content: string | string[],
+  opts: { bold?: boolean; gridSpan?: number; size?: string } = {},
+): string {
   const gridSpan = opts.gridSpan && opts.gridSpan > 1 ? `<w:gridSpan w:val="${opts.gridSpan}"/>` : '';
   const rPr = `<w:rPr>${opts.bold ? '<w:b/>' : ''}<w:sz w:val="${opts.size || SZ.normal}"/><w:szCs w:val="${opts.size || SZ.normal}"/></w:rPr>`;
-  return `<w:tc><w:tcPr>${gridSpan}</w:tcPr><w:p><w:r>${rPr}<w:t xml:space="preserve">${esc(text)}</w:t></w:r></w:p></w:tc>`;
+  // Multi-paragraph cells let Description carry separate "T1: …", "T2: …"
+  // lines and the assessment row's per-method breakdown — matches the
+  // Streamlit reference's `<w:p>`-per-line cell structure.
+  const lines = Array.isArray(content) ? content : [content];
+  const safeLines = lines.length ? lines : [''];
+  const paras = safeLines
+    .map((line) => `<w:p><w:r>${rPr}<w:t xml:space="preserve">${esc(line)}</w:t></w:r></w:p>`)
+    .join('');
+  return `<w:tc><w:tcPr>${gridSpan}</w:tcPr>${paras}</w:tc>`;
 }
 
 function scheduleXml(context: any, schedule: Schedule): string {
   const out: string[] = [];
   const courseTitle = context.Course_Title || '';
   const org = context.Name_of_Organisation || '';
-  const allMethods = new Set<string>();
+  // Match Streamlit: concatenate methods in LU order WITHOUT dedup or sort,
+  // so the summary line reflects each LU's listed methods in sequence.
+  const allMethodsList: string[] = [];
   for (const lu of context.Learning_Units || []) {
-    for (const m of lu.Instructional_Methods || []) allMethods.add(m);
+    for (const m of lu.Instructional_Methods || []) allMethodsList.push(m);
   }
 
-  out.push(paraXml(''));
-  out.push(paraXml(`Lesson Plan: ${courseTitle}`, { bold: true, size: '28' }));
-  out.push(paraXml(`Course Duration: ${schedule.num_days} Day(s) (9:00 AM - 6:00 PM daily)`, { size: SZ.normal }));
-  out.push(paraXml(`Total Training Hours: ${schedule.instructional_hours} hrs`, { size: SZ.normal }));
-  out.push(paraXml(`Total Assessment Hours: ${schedule.assessment_hours} hrs`, { size: SZ.normal }));
-  out.push(paraXml(`Instructional Methods: ${Array.from(allMethods).sort().join(', ') || 'N/A'}`, { size: SZ.normal }));
-  out.push(paraXml(`Organisation: ${org}`, { size: SZ.normal }));
+  // Order + sizes match the Streamlit reference verbatim: bold 14pt title,
+  // then 11pt body lines for organisation / duration / hours / methods.
+  out.push(paraXml(`Lesson Plan: ${courseTitle}`, { bold: true, size: SZ.title }));
+  out.push(paraXml(`Organisation: ${org}`, { size: SZ.summary }));
+  out.push(paraXml(`Course Duration: ${schedule.num_days} Day(s) (9:00 AM - 6:00 PM daily)`, { size: SZ.summary }));
+  out.push(paraXml(`Total Training Hours: ${fmtHours(schedule.instructional_hours)}`, { size: SZ.summary }));
+  out.push(paraXml(`Total Assessment Hours: ${fmtHours(schedule.assessment_hours)}`, { size: SZ.summary }));
+  out.push(paraXml(`Instructional Methods: ${allMethodsList.join(', ') || 'N/A'}`, { size: SZ.summary }));
 
   const tblGrid = `<w:tblGrid>${Array(4).fill('<w:gridCol w:w="2400"/>').join('')}</w:tblGrid>`;
   const tblPr =
@@ -327,7 +393,10 @@ function scheduleXml(context: any, schedule: Schedule): string {
   for (const dayNum of Object.keys(schedule.days).map(Number).sort((a, b) => a - b)) {
     const slots = schedule.days[dayNum];
     out.push(paraXml(''));
-    out.push(paraXml(`Day ${dayNum}`, { bold: true, size: '24' }));
+    // Heading2 style (matches the Streamlit reference) — applies the
+    // template's built-in heading formatting and lets Word's pagination
+    // keep the heading with the table that follows.
+    out.push(paraXml(`Day ${dayNum}`, { pStyle: 'Heading2' }));
 
     const headerRow = `<w:tr>${['Timing', 'Duration', 'Description', 'Instructional Methods']
       .map((h) => cellXml(h, { bold: true }))
@@ -335,12 +404,14 @@ function scheduleXml(context: any, schedule: Schedule): string {
 
     const dataRows = slots.map((slot) => {
       if (slot.is_lu_header) {
-        return `<w:tr>${cellXml(slot.description || '', { bold: true, gridSpan: 4 })}</w:tr>`;
+        // LU header is always a single line — pass `description[0]` so the
+        // gridSpan=4 cell renders one bold paragraph.
+        return `<w:tr>${cellXml(slot.description[0] || '', { bold: true, gridSpan: 4 })}</w:tr>`;
       }
       return `<w:tr>${[
         cellXml(slot.timing || ''),
         cellXml(slot.duration || ''),
-        cellXml(slot.description || ''),
+        cellXml(slot.description),       // string[] → multi-paragraph cell
         cellXml(slot.methods || ''),
       ].join('')}</w:tr>`;
     });
@@ -354,10 +425,11 @@ function scheduleXml(context: any, schedule: Schedule): string {
 // ── Entry ───────────────────────────────────────────────────────────────────
 export function generateLessonPlan(context: any): { buffer: Buffer; schedule: Schedule } {
   const schedule = buildSchedule(context);
-  const cover = fillTemplate('lg', {
+  const cover = fillTemplate('lp', {
     courseTitle: context.Course_Title,
     tgsRefNo: context.TGS_Ref_No,
     organisationName: context.Name_of_Organisation,
+    UEN: context.UEN,
     learningUnits: [],
     assessmentMethodsDetails: [],
   });

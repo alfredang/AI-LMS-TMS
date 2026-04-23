@@ -27,7 +27,10 @@ const TEMPLATES: Record<CwDocType, string> = {
   asr: 'ASR_TGS-Ref-No_Course-Title_v1.docx',
   fg: 'FG_TGS-Ref-No_Course-Title_v1.docx',
   lg: 'LG_TGS-Ref-No_Course-Title_v1.docx',
-  lp: 'LP_TGS-Ref-No_Course-Title_v1.docx',
+  // LP_template_v2.docx ships the cover + Version Control Record only; the
+  // per-day schedule tables are appended programmatically by lib/cw-lesson-plan.ts
+  // so the output mirrors the Streamlit reference structure exactly.
+  lp: 'LP_template_v2.docx',
 };
 
 const DEFAULT_LOGO_PATH = path.join(TEMPLATE_DIR, 'tertiary_logo.png');
