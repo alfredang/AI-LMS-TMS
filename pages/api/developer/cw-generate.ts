@@ -591,6 +591,9 @@ TSC REFERENCE CODE STRIPPING:
 ASSESSMENT METHODS — preserve CP wording verbatim (mirror Streamlit):
 - Assessment_Method MUST be the EXACT method name as the CP writes it. PRESERVE the "Others:" prefix when the CP uses it (e.g. output "Others: Case Study", NOT "Case Study"). PRESERVE the CP's choice of "Written Exam" vs "Written Assessment - Short Answer Questions" — do NOT rewrite one as the other.
 - Method_Abbreviation MUST be the EXACT abbreviation the CP uses for that method. If the CP writes "WE" for Written Exam, output "WE" — do NOT remap it to "WA-SAQ". If the CP writes "PP", output "PP". Only fall back to a sensible abbreviation if the CP doesn't supply one.
+- **CRITICAL — extract EVERY assessment method the CP lists.** WSQ CPs often list 3-5 methods (e.g. WA-SAQ, PP, CS, OQ, Oral Clarification, RP, Demonstration, Project, Assignment). Scan the entire CP — assessment summary table, per-LO assessment columns, "Mode of Assessment" column in the LU sequencing table, fee/duration breakdown rows, AND any free-text mentions. If you see ANY method abbreviation or name even once, INCLUDE IT in Assessment_Methods_Details. NEVER omit a method just because it appears in only one section. Output ONE entry per UNIQUE method.
+- The same applies to each LU's Assessment_Methods array: include EVERY method the CP says is used to assess that LU's outcomes. Don't truncate to the "main" methods.
+- Common methods to look out for: Written Assessment (Short-Answer Questions / Q&A), Practical Performance, Case Study, Oral Questioning, Oral Clarification, Oral Interview, Role Play, Demonstration, Project, Assignment, Online Test. If the CP uses a non-standard method name, output it verbatim too.
 - Assessor_to_Candidate_Ratio: extract the numeric ratio only (e.g. "1:20"). STRIP any "(Min)" / "(Max)" annotations. If the CP gives a range like "1:3 (Min) - 1:20 (Max)", output the MAXIMUM value alone: ["1:20"].
 
 COUNTS & COVERAGE:

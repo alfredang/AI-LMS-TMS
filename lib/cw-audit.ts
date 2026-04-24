@@ -419,25 +419,37 @@ function normaliseScalar(v: string | null | undefined): string {
 // Study" / "Case Study", etc. Map each to a single canonical abbreviation
 // so the audit comparator treats them as the same item.
 const METHOD_NAME_TO_ABBR: { match: RegExp; abbr: string }[] = [
+  // Order matters — the FIRST match wins. Put more specific patterns first
+  // (e.g. "oral clarification" before bare "OC", "oral questioning" before
+  // bare "OQ") so they don't get short-circuited by a generic abbreviation
+  // match earlier in the list.
   { match: /written\s*assessment/i, abbr: 'WA-SAQ' },
   { match: /written\s*exam/i, abbr: 'WA-SAQ' },
   { match: /\bWA[-\s]?SAQ\b/i, abbr: 'WA-SAQ' },
+  { match: /\bWA[(]?Q\s*&\s*A[)]?\b/i, abbr: 'WA-SAQ' },
   { match: /\bWE\b/i, abbr: 'WA-SAQ' },
   { match: /practical\s*performance/i, abbr: 'PP' },
   { match: /practical\s*exam/i, abbr: 'PP' },
   { match: /\bPP\b/i, abbr: 'PP' },
   { match: /case\s*study/i, abbr: 'CS' },
+  { match: /case\s*studies/i, abbr: 'CS' },
   { match: /\bCS\b/i, abbr: 'CS' },
   { match: /oral\s*questioning/i, abbr: 'OQ' },
-  { match: /\bOQ\b/i, abbr: 'OQ' },
+  { match: /oral\s*clarification/i, abbr: 'OC' },
   { match: /oral\s*interview/i, abbr: 'OI' },
+  { match: /\bOC\b/i, abbr: 'OC' },
+  { match: /\bOQ\b/i, abbr: 'OQ' },
   { match: /\bOI\b/i, abbr: 'OI' },
   { match: /role\s*play/i, abbr: 'RP' },
   { match: /\bRP\b/i, abbr: 'RP' },
   { match: /demonstration/i, abbr: 'DEM' },
+  { match: /\bDEM\b/i, abbr: 'DEM' },
   { match: /project/i, abbr: 'PRJ' },
+  { match: /\bPRJ\b/i, abbr: 'PRJ' },
   { match: /assignment/i, abbr: 'ASGN' },
+  { match: /\bASGN\b/i, abbr: 'ASGN' },
   { match: /online\s*test/i, abbr: 'OT' },
+  { match: /\bOT\b/i, abbr: 'OT' },
 ];
 
 function normaliseMethodName(name: string): string {
