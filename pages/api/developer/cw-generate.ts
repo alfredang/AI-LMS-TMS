@@ -489,28 +489,28 @@ TGS Reference Number: ${tgsRefCode}
 
 Return ONLY a valid JSON object with this EXACT structure (fill ALL fields from the CP):
 {
-  "Name_of_Organisation": "extracted company name",
-  "Course_Title": "extracted course title",
+  "Name_of_Organisation": "EXACT company name as written in the CP — preserve the original capitalisation (e.g. 'Tertiary Infotech Academy Pte Ltd', not 'TERTIARY INFOTECH PTE. LTD.'). Do NOT uppercase, abbreviate, or paraphrase.",
+  "Course_Title": "EXACT course title as written in the CP. Preserve case and wording verbatim.",
   "TGS_Ref_No": "${tgsRefCode || 'extracted TGS ref'}",
-  "TSC_Code": "extracted TSC code",
-  "TSC_Title": "extracted TSC title",
-  "TSC_Description": "1 short paragraph (2-3 sentences max) course description from the CP",
-  "TSC_Sector": "sector name",
-  "Proficiency_Level": "Level X",
-  "Skills_Framework": "framework name",
-  "Total_Training_Hours": "X hrs",
-  "Total_Assessment_Hours": "X hrs",
-  "Total_Course_Duration_Hours": "X hrs",
-  "Course_Overview": "1 short paragraph (2-3 sentences max) from the CP's About This Course section. Keep it concise.",
+  "TSC_Code": "extracted TSC code (e.g. 'ICT-BAS-0055-1.1')",
+  "TSC_Title": "EXACT TSC title text from the CP — verbatim, do not paraphrase.",
+  "TSC_Description": "EXACT TSC description text from the CP. Copy the wording verbatim — do NOT generate, summarise, or invent. If the CP TSC Description cell says 'Basic level competency in responsible AI practices', output exactly that.",
+  "TSC_Sector": "EXACT sector name from the CP (e.g. 'Infocomm Technology').",
+  "Proficiency_Level": "Level X (verbatim from CP)",
+  "Skills_Framework": "EXACT skills-framework name as written in the CP — preserve the full wording (e.g. 'Skills Framework for Infocomm Technology', not the shortened 'ICT Skills Framework'). Do NOT abbreviate.",
+  "Total_Training_Hours": "X hrs (verbatim from the CP's Total Training Hours field)",
+  "Total_Assessment_Hours": "X hrs (verbatim from the CP)",
+  "Total_Course_Duration_Hours": "X hrs (verbatim from the CP)",
+  "Course_Overview": "VERBATIM 'About This Course' paragraph from the CP — do not summarise or rewrite. Trim only leading/trailing whitespace.",
   "Course_Fee": "amount or N/A",
-  "LO_Description": "1-2 sentences summarizing what learners will achieve. Keep concise.",
+  "LO_Description": "EXACT learning outcome description text from the CP — verbatim.",
   "Learning_Units": [
     {
-      "LU_Title": "LU1: <full LU title>   (include the 'LUx: ' prefix exactly)",
-      "LO": "ELO1: <full learning outcome text>   (include the 'ELOx: ' or 'LOx: ' prefix exactly as it appears in the CP)",
+      "LU_Title": "<plain LU title text only — DO NOT include any 'LU1:' / 'LU2:' / 'LUx:' prefix. Output just the title (e.g. 'Ethical Principles of Generative AI'). The downstream renderers prepend the LU number themselves.>",
+      "LO": "ELO1: <EXACT learning outcome text from the CP's 'Learning Outcome' column for this LU — preserve VERBATIM, do NOT paraphrase, summarise, rephrase, or invent. If the CP says 'Apply ethical judgement to evaluate generative AI outputs and support responsible implementation decisions.', output exactly that. Include the 'ELOx: ' / 'LOx: ' prefix exactly as the CP labels it.>",
       "Topics": [
         {
-          "Topic_Title": "<EXACT topic text as it appears in the CP's Topics column — preserve verbatim wording, do NOT rephrase, summarise, or shorten>",
+          "Topic_Title": "<EXACT topic text as it appears in the CP's Topics column — preserve verbatim wording, do NOT rephrase, summarise, or shorten. DO NOT prepend 'T1:' / 'T2:' / 'Tx:' — the renderer adds the numbering when needed. Output just the title text.>",
           "Bullet_Points": ["<short topic bullet 1 from the CP>", "<short topic bullet 2>", "<short topic bullet 3>"]
         }
       ],
@@ -526,10 +526,10 @@ Return ONLY a valid JSON object with this EXACT structure (fill ALL fields from 
   ],
   "Assessment_Methods_Details": [
     {
-      "Assessment_Method": "<full standardised method name — e.g. 'Written Assessment - Short Answer Questions', 'Practical Performance', 'Case Study'. NEVER include 'Others:' or any other prefix>",
-      "Method_Abbreviation": "WA-SAQ or PP or CS or RP or OQ",
+      "Assessment_Method": "<EXACT method name as written in the CP — preserve verbatim including 'Others:' prefix when the CP uses it (e.g. 'Written Exam', 'Others: Case Study', 'Practical Performance'). Do NOT standardise or rewrite.>",
+      "Method_Abbreviation": "<EXACT abbreviation as the CP uses (e.g. 'WE' for Written Exam, 'CS' for Case Study, 'PP' for Practical Performance). Do NOT remap (e.g. do NOT change 'WE' to 'WA-SAQ').>",
       "Total_Delivery_Hours": "1 hr 10 min",
-      "Assessor_to_Candidate_Ratio": ["1:3 (Min)", "1:5 (Max)"],
+      "Assessor_to_Candidate_Ratio": ["<single ratio number e.g. '1:20' — strip any '(Min)' / '(Max)' annotations and pick the maximum value when the CP gives a range>"],
       "Evidence": ["description of evidence per LO e.g. {'LO': 'ELO1', 'Evidence': 'Practical demonstration of...'}"],
       "Submission": ["Individual", "Open book"],
       "Marking_Process": ["Direct evidence of competency acquisition", "Learn by Doing approach"],
@@ -548,7 +548,12 @@ TOPICS vs KNOWLEDGE/ABILITY — MOST IMPORTANT:
 - **Topic_Title MUST be the EXACT topic text from the CP — preserve the original wording verbatim, including length. DO NOT shorten, summarise, paraphrase, or invent a "pedagogical theme" name. If the CP says "Apply ethical principles in decision-making related to AI", output that EXACT string. Long topic titles are fine — keep them long.**
 - Only fall back to inventing a short label if the CP's Topics cell is genuinely empty or only contains K/A bullets with no separate topic text — and even then, prefer the bullet text over a made-up name.
 - Each LU should have as many Topics as the CP lists (do not pad to 2-5 if the CP has fewer or more).
-- Bullet_Points are the short sub-bullet lines under each topic in the CP — leave empty if the CP doesn't show sub-bullets per topic.
+- **NEVER produce duplicate topics in the same LU.** Each topic must appear EXACTLY ONCE — do not output both a shortened pedagogical name AND the full CP text for the same topic. If you're tempted to add a "summary" version alongside the verbatim CP text, drop the summary and keep ONLY the verbatim version. Two topics that share the same subject matter (even if one is shorter) are considered duplicates.
+- **Bullet_Points: when the CP has explicit sub-bullets under a topic, copy them verbatim.** When it doesn't (most CPs only carry a topic line), generate **2-4 short pedagogical sub-points (5-10 words each)** that elaborate on what that topic covers — these become the facilitator's bullet-list under each topic in the FG / LG. Do NOT exceed 4 bullets, do NOT write full sentences, and do NOT restate the topic title as a bullet.
+  - Example (GOOD) for topic "Ethical considerations and potential risks of generative AI interaction":
+      ["Understanding ethical challenges in AI interaction", "Identifying potential risks and consequences", "Evaluating AI outputs for ethical compliance"]
+  - Example (BAD — restating the topic):
+      ["Ethical considerations and potential risks of generative AI interaction"]
 - Example (GOOD — preserves exact CP wording):
     { "Topic_Title": "Apply ethical principles in decision-making related to AI",
       "Bullet_Points": [] }
@@ -560,16 +565,17 @@ TOPICS vs KNOWLEDGE/ABILITY — MOST IMPORTANT:
       "Bullet_Points": ["Explanation of K1 ...","Elaboration of K1 ..."] }
 
 PREFIXES:
-- LU_Title MUST be prefixed with "LU1: ", "LU2: ", ... exactly once. If the CP already shows "LU1 Introduction to Python Programming", preserve or add the colon as "LU1: Introduction to Python Programming".
-- LO MUST be prefixed with the label the CP uses — "ELO1: ...", "ELO2: ..." if the CP says ELO, or "LO1: ..." if the CP says LO. Do not invent a prefix.
+- LU_Title: PLAIN title text only — DO NOT include "LU1:" / "LU2:" / "LUx:" prefix. If the CP source already says "LU1: Introduction to Python Programming", strip the prefix and output just "Introduction to Python Programming". The downstream renderers (LP, FG, AP, LG) add the LU numbering themselves.
+- Topic_Title: PLAIN topic text only — DO NOT prepend "T1:" / "T2:" / "Tx:". Strip the prefix if the CP shows it.
+- LO: must contain the EXACT learning outcome sentence from the CP's "Learning Outcome" column for that LU, prefixed with the label the CP uses (e.g. "ELO1: Apply ethical judgement to evaluate generative AI outputs and support responsible implementation decisions."). DO NOT swap topic titles, K/A statements, or invented summary text into this field. If the CP shows the LO is one sentence, output that one sentence verbatim — not a list of topics.
 
 TSC REFERENCE CODE STRIPPING:
 - If a K or A statement in the CP reads "Ethical principles in AI (ICT-BAS-0055-1.1)", output the Description as just "Ethical principles in AI". Strip any trailing "(XXX-XXX-NNNN-N.N)" style code.
 
-ASSESSMENT METHODS:
-- Assessment_Method must use the STANDARD full name. Never output "Others: Case Study" — output "Case Study". Never output "Others: Written Exam" — output "Written Assessment - Short Answer Questions".
-- Conversions: "Written Exam" → "Written Assessment - Short Answer Questions" (WA-SAQ). "Practical Exam" → "Practical Performance" (PP).
-- Method_Abbreviation: use WA-SAQ for any Written Assessment/Exam variant, PP for Practical Performance/Exam, CS for Case Study, OQ for Oral Questioning, OI for Oral Interview, RP for Role Play, DEM for Demonstration, PRJ for Project, ASGN for Assignment.
+ASSESSMENT METHODS — preserve CP wording verbatim (mirror Streamlit):
+- Assessment_Method MUST be the EXACT method name as the CP writes it. PRESERVE the "Others:" prefix when the CP uses it (e.g. output "Others: Case Study", NOT "Case Study"). PRESERVE the CP's choice of "Written Exam" vs "Written Assessment - Short Answer Questions" — do NOT rewrite one as the other.
+- Method_Abbreviation MUST be the EXACT abbreviation the CP uses for that method. If the CP writes "WE" for Written Exam, output "WE" — do NOT remap it to "WA-SAQ". If the CP writes "PP", output "PP". Only fall back to a sensible abbreviation if the CP doesn't supply one.
+- Assessor_to_Candidate_Ratio: extract the numeric ratio only (e.g. "1:20"). STRIP any "(Min)" / "(Max)" annotations. If the CP gives a range like "1:3 (Min) - 1:20 (Max)", output the MAXIMUM value alone: ["1:20"].
 
 COUNTS & COVERAGE:
 - Include ALL Learning Units with ALL their Topics, K statements, and A statements. If a CP has 3 LUs and each has 3-5 topics, total should be 10-15 topics.

@@ -508,25 +508,26 @@ function stripOthersPrefix(text: string): string {
   return String(text).replace(/^\s*Others\s*:\s*/i, '').trim();
 }
 
-// Ensure an LU title displays as "LU{n}: Title" — matches Streamlit's
-// cp_interpretation.md requirement. Leaves existing "LU{n}" / "LU{n}:" prefixes
-// alone; otherwise prepends.
-function ensureLuPrefix(title: string, index: number): string {
+// Strip any "LU{n}:" / "LU{n} " prefix from an LU title so the FG / AP /
+// LG mapping cells render plain "Ethical Principles of Generative AI"
+// (matching Streamlit). The LP renderer prepends its own "LU{n}: " when
+// it builds the schedule, so the prefix-less form is the universal source.
+function stripLuPrefix(title: string, index: number): string {
   const t = String(title || '').trim();
-  if (!t) return `LU${index + 1}`;
-  if (/^LU\s*\d+\s*[:\s]/i.test(t) || /^LU\s*\d+$/i.test(t)) return t;
-  return `LU${index + 1}: ${t}`;
+  if (!t) return `Learning Unit ${index + 1}`;
+  return t.replace(/^LU\s*\d+\s*[:\s-]\s*/i, '').trim() || t;
 }
 
 // Strip the K/A statements parenthetical some CP extractors append to topic
-// titles (e.g. "Business Requirements Analysis (K2, A1)"). The Streamlit
-// template renders the title as a sub-heading, not a description, so the
-// trailing `(Kx, Ay)` visually clutters it.
+// titles (e.g. "Business Requirements Analysis (K2, A1)"). Also strips any
+// leading "T1:" / "Topic 1:" prefix — Streamlit renders the topic title as
+// a plain bold sub-heading; the renderer adds the numbering when needed.
 function stripTopicCodesSuffix(title: string): string {
   if (!title) return '';
   return String(title)
     .replace(/\s*\(\s*(?:[KA]\d+(?:\s*,\s*)?)+\s*\)\s*$/, '')
     .replace(/^\s*Topic\s+\d+\s*:\s*/i, '')
+    .replace(/^\s*T\s*\d+\s*:\s*/i, '')
     .trim();
 }
 
@@ -591,17 +592,22 @@ function buildContext(data: Dict, _docType: CwDocType): Dict {
     const aStatements: Dict[] = (lu.A_numbering_description || lu.aStatements || []) as Dict[];
 
     const luTitleRaw = String(lu.LU_Title || lu.luTitle || '').trim();
-    const luTitle = ensureLuPrefix(luTitleRaw, idx);
+    const luTitle = stripLuPrefix(luTitleRaw, idx);
 
     processedLus.push({
       LU_Number: lu.LU_Number || `LU${idx + 1}`,
       LO_Number: lu.LO_Number || `LO${idx + 1}`,
       LU_Title: luTitle,
-      // The docxtpl reference stores `unit.LO` as just the label ("ELO1") —
-      // the Streamlit ASR / AP templates render `{{ unit.LO }}` expecting
-      // that short form. Keep full text accessible as LO_Full for callers
-      // that want it.
-      LO: loLabel,
+      // `unit.LO` now carries the FULL learning outcome text from the CP
+      // (e.g. "ELO1: Apply ethical judgement to evaluate generative AI
+      // outputs and support responsible implementation decisions."). The
+      // FG / LG mapping cells render `{{ unit.LO }}` and the supervisor
+      // wants the verbatim CP wording to appear there. AP / ASR matrix
+      // tables also use `{{ unit.LO }}` — they'll now show the full text
+      // instead of just "ELO1"; the cell will wrap the longer string.
+      // `LO_Label` and `LO_Full` are still exposed for any future
+      // template tweak that needs the short or long form explicitly.
+      LO: loFull,
       LO_Full: loFull,
       LO_Label: loLabel,
       Topics: topics.map((t) => ({
@@ -689,7 +695,10 @@ function buildContext(data: Dict, _docType: CwDocType): Dict {
   };
 
   const assessmentMethodsDetails = amDetailsSrc.map((am) => {
-    const method = stripOthersPrefix(String(am.Assessment_Method || am.method || ''));
+    // Preserve the CP's verbatim method name including any "Others:" prefix —
+    // Streamlit keeps "Others: Case Study" in the ASR / FG / AP rendering;
+    // stripping it caused our audit to mismatch the CP's expected value.
+    const method = String(am.Assessment_Method || am.method || '').trim();
     const abbr = String(am.Method_Abbreviation || am.abbreviation || getMethodAbbr(method));
     const ratioRaw = am.Assessor_to_Candidate_Ratio || [];
     return {

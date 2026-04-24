@@ -315,11 +315,12 @@ const SZ = {
   normal: '20',
 };
 
-// Format hours as `7 hrs` / `7.5 hrs` — drop trailing `.0` so whole numbers
-// look like integers, matching the Streamlit reference (`1 hrs`, not `1.0 hrs`).
+// Format hours as `7 hours` / `1 hour` / `7.5 hours` — match Streamlit's
+// "hours"/"hour" wording (not "hrs"). Singular when the integer value is 1.
 function fmtHours(h: number): string {
   const rounded = Math.round(h * 10) / 10;
-  return `${rounded} hrs`;
+  const unit = rounded === 1 ? 'hour' : 'hours';
+  return `${rounded} ${unit}`;
 }
 
 function esc(s: string): string {

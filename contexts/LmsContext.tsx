@@ -671,6 +671,15 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       delete newQuery.courseId;
     }
 
+    // Skip the push if the resulting URL would be identical to the current
+    // one — Next.js 16 throws an "Invariant: attempted to hard navigate to
+    // the same URL" runtime error when you push the URL you're already on.
+    const currentQuery = router.query;
+    const sameQuery =
+      Object.keys(currentQuery).length === Object.keys(newQuery).length &&
+      Object.entries(newQuery).every(([k, v]) => String(currentQuery[k] ?? '') === String(v ?? ''));
+    if (sameQuery) return;
+
     // Update URL with a new history entry so browser back/forward works
     router.push({
       pathname: router.pathname,
@@ -764,14 +773,27 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [router, selectedCourse]);
 
+  // Helper: push only if the resulting query differs from the current one.
+  // Next.js 16 throws "Invariant: attempted to hard navigate to the same URL"
+  // when a router.push lands the user on the URL they're already viewing
+  // (e.g. clicking the sidebar item they're currently on).
+  const pushQueryIfDifferent = useCallback((newQuery: Record<string, any>) => {
+    const currentQuery = router.query;
+    const sameQuery =
+      Object.keys(currentQuery).length === Object.keys(newQuery).length &&
+      Object.entries(newQuery).every(([k, v]) => String(currentQuery[k] ?? '') === String(v ?? ''));
+    if (sameQuery) return;
+    router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
+  }, [router]);
+
   // Wrapped setAdminPage that clears courseId from URL and resets selected course
   const navigateAdminPage = useCallback((page: AdminPage) => {
     setAdminPage(page);
     setSelectedCourse(null);
     const newQuery: any = { ...router.query, adminPage: page };
     delete newQuery.courseId;
-    router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
-  }, [router]);
+    pushQueryIfDifferent(newQuery);
+  }, [router, pushQueryIfDifferent]);
 
   // Wrapped setTrainerPage to sync with URL
   const navigateTrainerPage = useCallback((page: TrainerPage) => {
@@ -781,8 +803,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     delete newQuery.courseId;
     // Clear stale view param so profile view doesn't persist
     delete newQuery.view;
-    router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
-  }, [router]);
+    pushQueryIfDifferent(newQuery);
+  }, [router, pushQueryIfDifferent]);
 
   // Wrapped setDeveloperPage to sync with URL
   const navigateDeveloperPage = useCallback((page: DeveloperPage) => {
@@ -791,8 +813,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newQuery: any = { ...router.query, developerPage: page };
     delete newQuery.courseId;
     delete newQuery.view;
-    router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
-  }, [router]);
+    pushQueryIfDifferent(newQuery);
+  }, [router, pushQueryIfDifferent]);
 
 
   // Login function
@@ -925,8 +947,13 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCertificate(null);
     setCalendarEvents([]);
 
-    // Clear URL parameters
-    router.replace('/', undefined, { shallow: true });
+    // Clear URL parameters — but only if we're not already at "/" with no
+    // query string. Next.js 16 throws "Invariant: attempted to hard
+    // navigate to the same URL" if you replace the URL you're already on.
+    const hasQuery = Object.keys(router.query).length > 0;
+    if (router.pathname !== '/' || hasQuery) {
+      router.replace('/', undefined, { shallow: true });
+    }
 
     console.log('✅ LmsContext: Logout completed');
   }, [router]);
