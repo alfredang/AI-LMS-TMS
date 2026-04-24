@@ -226,7 +226,7 @@ export async function runAutomation(taskId: string = 'auto_send_course_confirmat
                    TO_CHAR(cr.start_date, 'DD Mon YYYY') || ' - ' || TO_CHAR(cr.end_date, 'DD Mon YYYY') as course_dates
             FROM course_run cr
             JOIN course c ON cr.course_id = c.id
-            WHERE (cr.start_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore')::date = (NOW() AT TIME ZONE 'Asia/Singapore')::date + $1 * INTERVAL '1 day'
+            WHERE cr.start_date = (NOW() AT TIME ZONE 'Asia/Singapore')::date + $1 * INTERVAL '1 day'
         `, [daysInAdvance]);
 
         const courseRuns = courseRunsRes.rows;

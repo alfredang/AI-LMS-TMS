@@ -211,7 +211,7 @@ export async function runAutomation(targetDate?: string) {
                       TO_CHAR(cr.start_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') || ' - ' || TO_CHAR(cr.end_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') as course_dates
                FROM course_run cr
                JOIN course c ON cr.course_id = c.id
-               WHERE (cr.end_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore')::date = $1::date
+               WHERE cr.end_date = $1::date
                  AND (cr.class_status IS NULL OR cr.class_status::text NOT ILIKE 'cancelled')
                  AND EXISTS (
                      SELECT 1 FROM enrollment e
@@ -223,8 +223,8 @@ export async function runAutomation(targetDate?: string) {
                       TO_CHAR(cr.start_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') || ' - ' || TO_CHAR(cr.end_date AT TIME ZONE 'Asia/Singapore', 'DD Mon YYYY') as course_dates
                FROM course_run cr
                JOIN course c ON cr.course_id = c.id
-               WHERE (cr.end_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore')::date >= (NOW() AT TIME ZONE 'Asia/Singapore')::date - INTERVAL '7 days'
-                 AND (cr.end_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore')::date <= (NOW() AT TIME ZONE 'Asia/Singapore')::date
+               WHERE cr.end_date >= (NOW() AT TIME ZONE 'Asia/Singapore')::date - INTERVAL '7 days'
+                 AND cr.end_date <= (NOW() AT TIME ZONE 'Asia/Singapore')::date
                  AND (cr.class_status IS NULL OR cr.class_status::text NOT ILIKE 'cancelled')
                  AND EXISTS (
                      SELECT 1 FROM enrollment e
