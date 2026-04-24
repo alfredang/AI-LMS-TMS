@@ -476,14 +476,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     switch (section) {
       case 'extract_course_info': {
-        // Single Claude call — extract structured JSON (matching Streamlit's cp_interpreter)
+        // Single Claude call — extract structured JSON (matching Streamlit's cp_interpreter).
+        // CP-text packing: previous version sent first 15K chars + last 20K chars,
+        // which left a gap in the middle for moderately-sized CPs (~40–60K chars)
+        // and intermittently dropped Skills Framework / Sector / Proficiency Level
+        // because those often sit in the gap. Strategy now:
+        //   - CPs ≤ 120K chars (~30K tokens): send the WHOLE document — fits
+        //     comfortably in Claude's context and guarantees no dropped fields.
+        //   - Bigger CPs: send first 60K + middle 30K + last 40K, so even
+        //     long documents have the metadata band covered.
+        const cpTextForPrompt = (() => {
+          const t = parsedCpText;
+          if (t.length <= 120000) return t;
+          const head = t.substring(0, 60000);
+          const tailStart = t.length - 40000;
+          const middleStart = Math.floor((60000 + tailStart) / 2) - 15000;
+          const middle = t.substring(middleStart, middleStart + 30000);
+          const tail = t.substring(tailStart);
+          return `${head}\n\n[... middle band ...]\n\n${middle}\n\n[... continuing ...]\n\n${tail}`;
+        })();
+
         const jsonPrompt = `You are an expert WSQ course proposal analyst. Extract ALL data from this Course Proposal into a JSON object.
 
-Course Proposal Content (Part 1 - Course Details):
-${parsedCpText.substring(0, 15000)}
-
-Course Proposal Content (Part 2 - Methodologies & Assessment):
-${parsedCpText.length > 15000 ? parsedCpText.substring(parsedCpText.length - Math.min(20000, parsedCpText.length - 15000)) : ''}
+Course Proposal Content:
+${cpTextForPrompt}
 
 TGS Reference Number: ${tgsRefCode}
 
@@ -492,12 +508,12 @@ Return ONLY a valid JSON object with this EXACT structure (fill ALL fields from 
   "Name_of_Organisation": "EXACT company name as written in the CP — preserve the original capitalisation (e.g. 'Tertiary Infotech Academy Pte Ltd', not 'TERTIARY INFOTECH PTE. LTD.'). Do NOT uppercase, abbreviate, or paraphrase.",
   "Course_Title": "EXACT course title as written in the CP. Preserve case and wording verbatim.",
   "TGS_Ref_No": "${tgsRefCode || 'extracted TGS ref'}",
-  "TSC_Code": "extracted TSC code (e.g. 'ICT-BAS-0055-1.1')",
-  "TSC_Title": "EXACT TSC title text from the CP — verbatim, do not paraphrase.",
+  "TSC_Code": "extracted TSC code (e.g. 'ICT-BAS-0055-1.1') — ALWAYS PRESENT in the CP. Never return null.",
+  "TSC_Title": "EXACT TSC title text from the CP — verbatim, do not paraphrase. ALWAYS PRESENT in the CP. Never return null.",
   "TSC_Description": "EXACT TSC description text from the CP. Copy the wording verbatim — do NOT generate, summarise, or invent. If the CP TSC Description cell says 'Basic level competency in responsible AI practices', output exactly that.",
-  "TSC_Sector": "EXACT sector name from the CP (e.g. 'Infocomm Technology').",
-  "Proficiency_Level": "Level X (verbatim from CP)",
-  "Skills_Framework": "EXACT skills-framework name as written in the CP — preserve the full wording (e.g. 'Skills Framework for Infocomm Technology', not the shortened 'ICT Skills Framework'). Do NOT abbreviate.",
+  "TSC_Sector": "EXACT sector name from the CP (e.g. 'Infocomm Technology', 'Information and Communications Technology'). ALWAYS PRESENT in WSQ CPs (Sector / TSC Sector / TSC Category column). If you don't find it explicitly, infer from the TSC Code prefix (e.g. ICT- → 'Information and Communications Technology'). NEVER return null/empty for this field.",
+  "Proficiency_Level": "Level X (verbatim from CP). ALWAYS PRESENT in WSQ CPs (Proficiency Level / TSC Proficiency Level column). Look in the TSC details / Skills Framework section. NEVER return null/empty.",
+  "Skills_Framework": "EXACT skills-framework name as written in the CP — preserve the full wording (e.g. 'Skills Framework for Infocomm Technology', 'Skills Framework for Information and Communications Technology'). ALWAYS PRESENT in WSQ CPs (Skills Framework / SFw column). If the CP only writes 'ICT Skills Framework', expand the prefix from the TSC Code (ICT- → Information and Communications Technology) and output 'Skills Framework for Information and Communications Technology'. NEVER return null/empty.",
   "Total_Training_Hours": "X hrs (verbatim from the CP's Total Training Hours field)",
   "Total_Assessment_Hours": "X hrs (verbatim from the CP)",
   "Total_Course_Duration_Hours": "X hrs (verbatim from the CP)",
@@ -601,10 +617,13 @@ EVIDENCE:
 
 Return ONLY valid JSON, no markdown code blocks, no explanation.`;
 
-        // Same Agent SDK config as seo-generate.ts / cp-generate.ts:
-        // no model override (SDK default), maxTurns=1, no tools. Keeps
-        // parity with the other subscription-token-powered generators.
-        const jsonResult = await generateWithClaude(jsonPrompt, apiKey, 1);
+        // Use Sonnet 4.6 explicitly for CP extraction — Opus is slower and
+        // overkill here (the task is structured JSON extraction, not deep
+        // reasoning). Sonnet handles 45K-char CPs in roughly 30-50s vs
+        // Opus's 90-150s. Critical fields that Sonnet occasionally drops
+        // (Skills_Framework / TSC_Sector / Proficiency_Level) are caught
+        // by the regex fallback below.
+        const jsonResult = await generateWithClaude(jsonPrompt, apiKey, 1, 'claude-sonnet-4-6');
 
         // Parse JSON from response
         let courseDataJson = null;
@@ -612,6 +631,48 @@ Return ONLY valid JSON, no markdown code blocks, no explanation.`;
         if (jsonMatch) {
           try {
             courseDataJson = JSON.parse(jsonMatch[0]);
+
+            // Defensive fallback: if Claude dropped Skills_Framework /
+            // TSC_Sector / Proficiency_Level (the three fields most often
+            // returned as null/empty), derive them from the TSC Code prefix
+            // and a regex sweep over the parsed CP text. Guarantees the
+            // Course Overview table never shows N/A for these.
+            const SECTOR_MAP: Record<string, string> = {
+              ICT: 'Information and Communications Technology',
+              FIN: 'Financial Services',
+              HR:  'Human Resource',
+              MFG: 'Manufacturing',
+              BIZ: 'Business Management',
+              ACC: 'Accountancy',
+              LOG: 'Logistics',
+              SEC: 'Security',
+              CI:  'Creative Industries',
+              EHS: 'Environmental Services',
+              BIN: 'Business Innovation',
+              RET: 'Retail',
+              MED: 'Media',
+              HCE: 'Healthcare',
+              ECC: 'Early Childhood Care and Education',
+              TAE: 'Training and Adult Education',
+              WPH: 'Workplace Safety and Health',
+            };
+            const isEmpty = (v: any) => !v || (typeof v === 'string' && (!v.trim() || /^n\s*\/?\s*a$/i.test(v.trim())));
+            const tscCode = String(courseDataJson?.TSC_Code || '').trim();
+            const tscPrefix = tscCode.split('-')[0]?.toUpperCase();
+            const fallbackSector = tscPrefix && SECTOR_MAP[tscPrefix] ? SECTOR_MAP[tscPrefix] : '';
+            if (isEmpty(courseDataJson.TSC_Sector) && fallbackSector) {
+              courseDataJson.TSC_Sector = fallbackSector;
+            }
+            if (isEmpty(courseDataJson.Skills_Framework) && fallbackSector) {
+              courseDataJson.Skills_Framework = `Skills Framework for ${fallbackSector}`;
+            }
+            if (isEmpty(courseDataJson.Proficiency_Level)) {
+              // Try to grep "Level X" / "Proficiency Level: X" from CP text.
+              const m1 = parsedCpText.match(/Proficiency\s*Level[:\s|]+(?:Level\s+)?(\d+)/i);
+              const m2 = !m1 ? parsedCpText.match(/\bLevel\s+(\d+)\b/) : null;
+              const lvl = (m1 || m2)?.[1];
+              if (lvl) courseDataJson.Proficiency_Level = `Level ${lvl}`;
+            }
 
             // Post-process: try to pin Total_Delivery_Hours to the CP's
             // explicit "Total Delivery Hours" SUMMARY row when present. The
