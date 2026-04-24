@@ -534,16 +534,27 @@ export async function removeDaLearnerFromCalendar(
           if (isAttendee) {
             try {
               const updatedAttendees = existingAttendees.filter(a => (a.email || '').toLowerCase() !== learnerEmailLower);
-              await calendar.events.patch({
-                calendarId,
-                eventId: matchedEvent.id,
-                requestBody: {
-                  attendees: updatedAttendees,
-                },
-                sendUpdates: 'none',
-              });
-              result.removedFrom++;
-              console.log(`🗑️ [da-calendar-sync] Removed ${learnerEmail} from "${matchedEvent.summary}" on ${targetDate}`);
+              if (updatedAttendees.length === 0) {
+                // No attendees remaining — delete the empty event entirely
+                await calendar.events.delete({
+                  calendarId,
+                  eventId: matchedEvent.id,
+                  sendUpdates: 'none',
+                });
+                result.removedFrom++;
+                console.log(`🗑️ [da-calendar-sync] Removed ${learnerEmail} and deleted empty event "${matchedEvent.summary}" on ${targetDate}`);
+              } else {
+                await calendar.events.patch({
+                  calendarId,
+                  eventId: matchedEvent.id,
+                  requestBody: {
+                    attendees: updatedAttendees,
+                  },
+                  sendUpdates: 'none',
+                });
+                result.removedFrom++;
+                console.log(`🗑️ [da-calendar-sync] Removed ${learnerEmail} from "${matchedEvent.summary}" on ${targetDate}`);
+              }
             } catch (patchErr) {
               console.error(`❌ [da-calendar-sync] Failed to remove ${learnerEmail} on ${targetDate}:`, patchErr);
             }
