@@ -13,31 +13,68 @@ import path from 'path';
 
 const TEMPLATE_PATH = path.join(process.cwd(), 'public', 'templates', 'courseware', 'LG_TGS-Ref-No_Course-Title_v1.docx');
 
+// Display label used for the body title (line 1) AND the "This is the X"
+// instruction line (line 7) — Streamlit-parity. Always renders as
+// "Full Name (Abbr)" so the title is informative even when the CP only
+// supplied an abbreviation. Lookup tries the assessment's type first
+// (which is the verbatim CP name), then the code/abbreviation.
 const TYPE_LONG_NAMES: Record<string, string> = {
-  'WA (SAQ)': 'Written Assessment – Short Answer Questions (SAQ)',
-  'WA-SAQ': 'Written Assessment – Short Answer Questions (SAQ)',
-  'WA(Q&A)': 'Written Assessment – Short Answer Questions (SAQ)',
+  // Lookup by abbreviation
+  'WA-SAQ': 'Written Assessment – Short Answer Questions (WA-SAQ)',
+  'WA (SAQ)': 'Written Assessment – Short Answer Questions (WA-SAQ)',
+  'WA(Q&A)': 'Written Assessment – Short Answer Questions (WA-SAQ)',
+  'WE': 'Written Exam (WE)',
   PP: 'Practical Performance (PP)',
   CS: 'Case Study (CS)',
   PRJ: 'Project (PRJ)',
   ASGN: 'Assignment (ASGN)',
   OI: 'Oral Interview (OI)',
+  OQ: 'Oral Questioning (OQ)',
+  OC: 'Oral Clarification (OC)',
   DEM: 'Demonstration (DEM)',
   RP: 'Role Play (RP)',
-  OQ: 'Oral Questioning (OQ)',
+  OT: 'Online Test (OT)',
+  // Lookup by full name (verbatim CP name)
+  'Written Exam': 'Written Exam (WE)',
+  'Written Assessment': 'Written Assessment – Short Answer Questions (WA-SAQ)',
+  'Written Assessment - Short Answer Questions': 'Written Assessment – Short Answer Questions (WA-SAQ)',
+  'Practical Performance': 'Practical Performance (PP)',
+  'Practical Exam': 'Practical Performance (PP)',
+  'Case Study': 'Case Study (CS)',
+  'Others: Case Study': 'Case Study (CS)',
+  'Oral Questioning': 'Oral Questioning (OQ)',
+  'Oral Clarification': 'Oral Clarification (OC)',
+  'Oral Interview': 'Oral Interview (OI)',
+  'Role Play': 'Role Play (RP)',
+  Demonstration: 'Demonstration (DEM)',
+  Project: 'Project (PRJ)',
+  Assignment: 'Assignment (ASGN)',
+  'Online Test': 'Online Test (OT)',
 };
 
-const TYPE_SHORT_NAMES: Record<string, string> = {
-  'WA (SAQ)': 'Written Assessment (SAQ)',
-  'WA-SAQ': 'Written Assessment (SAQ)',
-  PP: 'Practical Performance',
-  CS: 'Case Study',
-  PRJ: 'Project',
-  ASGN: 'Assignment',
-  OI: 'Oral Interview',
-  DEM: 'Demonstration',
-  RP: 'Role Play',
-  OQ: 'Oral Questioning',
+// Same map alias for the (now identical) short-name lookup so both line 1
+// and line 7 of the body render the same display label.
+const TYPE_SHORT_NAMES = TYPE_LONG_NAMES;
+
+// Map full-name → standard abbreviation, used to build the file name in
+// Streamlit's "<ABBR> (<Full Name>) - <Course>.docx" format. If the
+// assessment data already provides the abbreviation in `code`, that wins.
+const TYPE_ABBR_OF: Record<string, string> = {
+  'Written Exam': 'WE',
+  'Written Assessment': 'WA-SAQ',
+  'Written Assessment - Short Answer Questions': 'WA-SAQ',
+  'Practical Performance': 'PP',
+  'Practical Exam': 'PP',
+  'Case Study': 'CS',
+  'Others: Case Study': 'CS',
+  'Oral Questioning': 'OQ',
+  'Oral Clarification': 'OC',
+  'Oral Interview': 'OI',
+  'Role Play': 'RP',
+  Demonstration: 'DEM',
+  Project: 'PRJ',
+  Assignment: 'ASGN',
+  'Online Test': 'OT',
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -230,7 +267,7 @@ function buildAnswerBody(assessment: AssessmentBundle, courseTitle: string): str
 }
 
 // ── DOCX assembly — reuse an existing template, replace body content ───────
-function assembleDocx(bodyXml: string): Buffer {
+function assembleDocx(bodyXml: string, orgName: string = ''): Buffer {
   const z = new PizZip(fs.readFileSync(TEMPLATE_PATH));
   let doc = (z.file('word/document.xml') as any).asText();
   // Wipe the template body (keep <w:sectPr> for page setup if present)
@@ -238,6 +275,52 @@ function assembleDocx(bodyXml: string): Buffer {
   const sectPr = sectPrMatch ? sectPrMatch[0] : '';
   doc = doc.replace(/<w:body>[\s\S]*<\/w:body>/, `<w:body>${bodyXml}${sectPr}</w:body>`);
   z.file('word/document.xml', doc);
+
+  // Streamlit's assessment doc has NO footer at all (no header either).
+  // The LG template carries a footer with copyright text that includes
+  // raw "{{Year}}, {{Name_of_Organisation}}" placeholders, which kept
+  // showing up unfilled in our assessment output. Match Streamlit by
+  // stripping the footer entirely:
+  //   1. Drop word/footer*.xml files from the zip.
+  //   2. Drop footer references from word/document.xml.rels.
+  //   3. Drop <w:footerReference> inside the document's <w:sectPr>.
+  //   4. Drop footer Override entries from [Content_Types].xml.
+  void orgName; // no longer used in this path
+  const footerKeys = Object.keys(z.files).filter((n) => /^word\/footer\d+\.xml$/.test(n));
+  const footerRelIds: string[] = [];
+  const relsKey = 'word/_rels/document.xml.rels';
+  const relsFile = z.file(relsKey) as any;
+  if (relsFile) {
+    let rels: string = relsFile.asText();
+    // Capture rIds for footer relationships before dropping them.
+    const relRe = /<Relationship\s+[^>]*?Type="[^"]*\/footer"[^>]*?\/>/g;
+    let m: RegExpExecArray | null;
+    while ((m = relRe.exec(rels)) !== null) {
+      const idMatch = m[0].match(/Id="([^"]+)"/);
+      if (idMatch) footerRelIds.push(idMatch[1]);
+    }
+    rels = rels.replace(relRe, '');
+    z.file(relsKey, rels);
+  }
+  // Drop the footer file(s) themselves.
+  for (const k of footerKeys) {
+    delete (z.files as any)[k];
+  }
+  // Strip <w:footerReference> from the document's section properties so
+  // Word doesn't try to load a footer that no longer exists.
+  let docNow = (z.file('word/document.xml') as any).asText();
+  docNow = docNow.replace(/<w:footerReference\b[^/]*\/>/g, '');
+  z.file('word/document.xml', docNow);
+  // Remove footer overrides from [Content_Types].xml.
+  const ctKey = '[Content_Types].xml';
+  const ctFile = z.file(ctKey) as any;
+  if (ctFile) {
+    let ct: string = ctFile.asText();
+    ct = ct.replace(/<Override\s+PartName="\/word\/footer\d+\.xml"[^/]*\/>/g, '');
+    z.file(ctKey, ct);
+  }
+  void footerRelIds; // captured for debugging if needed
+
   return z.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 
@@ -245,20 +328,29 @@ function assembleDocx(bodyXml: string): Buffer {
 export function generateAssessments(
   assessments: AssessmentBundle[],
   courseTitle: string,
+  orgName: string = '',
 ): GeneratedAssessment[] {
   const cleanTitle = sanitizeFilename(courseTitle);
   const out: GeneratedAssessment[] = [];
   for (const a of assessments) {
     const aType = a.type || a.code || 'Assessment';
-    const typeSafe = sanitizeFilename(aType);
+    // Streamlit pattern: "<ABBR> (<Full Name>) - <Course>.docx" (e.g.
+    // "WE (Written Exam) - Course.docx", "CS (Case Study) - Course.docx").
+    // Prefer the assessment's explicit code, then look up by the verbatim
+    // type name; fall back to the type alone if no abbreviation is known.
+    const abbr = (a.code && a.code !== aType ? a.code : '') || TYPE_ABBR_OF[aType] || '';
+    const fileLabel = abbr && abbr.toLowerCase() !== aType.toLowerCase()
+      ? `${abbr} (${aType})`
+      : aType;
+    const fileLabelSafe = sanitizeFilename(fileLabel);
     const qBody = buildQuestionBody(a, courseTitle);
     const aBody = buildAnswerBody(a, courseTitle);
     out.push({
       type: aType,
-      questionName: `${typeSafe} - ${cleanTitle}.docx`,
-      questionBuffer: assembleDocx(qBody),
-      answerName: `Answer to ${typeSafe} - ${cleanTitle}.docx`,
-      answerBuffer: assembleDocx(aBody),
+      questionName: `${fileLabelSafe} - ${cleanTitle}.docx`,
+      questionBuffer: assembleDocx(qBody, orgName),
+      answerName: `Answer to ${fileLabelSafe} - ${cleanTitle}.docx`,
+      answerBuffer: assembleDocx(aBody, orgName),
     });
   }
   return out;
