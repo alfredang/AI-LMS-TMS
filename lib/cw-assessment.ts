@@ -121,7 +121,7 @@ function paraXml(text: string, opts: RunOpts = {}): string {
     `<w:rPr>` +
     (opts.bold ? '<w:b/>' : '') +
     (opts.italic ? '<w:i/>' : '') +
-    `<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>` +
+    `<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>` +
     `<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>` +
     `</w:rPr>`;
   return `<w:p>${align}<w:r>${rPr}<w:t xml:space="preserve">${esc(text)}</w:t></w:r></w:p>`;
@@ -166,6 +166,15 @@ function buildRefString(q: AssessmentQuestion): string {
   return refs.length ? ` (${refs.join(', ')})` : '';
 }
 
+// Strip any trailing K/A code parens the model may have included in the
+// stem (e.g. "Define ... examples. (K3)") so we don't double-print when
+// buildRefString appends the code from the knowledge_id / ability_id field.
+function stripTrailingKACode(s: string): string {
+  return String(s || '')
+    .replace(/\s*\(\s*[KA]\d+(?:\s*,\s*[KA]\d+)*\s*\)\s*\.?\s*$/i, '')
+    .trimEnd();
+}
+
 function formatDuration(duration: string | undefined): string {
   if (!duration) return '';
   const d = String(duration).trim();
@@ -188,13 +197,15 @@ function buildQuestionBody(assessment: AssessmentBundle, courseTitle: string): s
   const code = assessment.code || aType;
   const duration = formatDuration(assessment.duration);
   const questions = assessment.questions || [];
-  const shortName = TYPE_SHORT_NAMES[aType] || TYPE_SHORT_NAMES[code] || aType;
-  const longName = TYPE_LONG_NAMES[aType] || TYPE_LONG_NAMES[code] || aType;
+  // Streamlit-parity: title and "This is the X" line both show JUST the
+  // abbreviation (e.g. "WE"), not the long name. Prefer the explicit code,
+  // fall back to a known abbreviation lookup, finally to the type name.
+  const displayLabel = (code && code !== aType ? code : '') || TYPE_ABBR_OF[aType] || aType;
   const numQ = questions.length;
 
   const parts: string[] = [];
   parts.push(paraXml(courseTitle, { size: 14, bold: true, align: 'center' }));
-  parts.push(paraXml(shortName, { size: 12, bold: true, align: 'center' }));
+  parts.push(paraXml(displayLabel, { size: 12, bold: true, align: 'center' }));
 
   parts.push(paraXml('A: Trainee Information:', { size: 12, bold: true }));
   parts.push(paraXml('Trainee Name (as Per NRIC): ______________________________', { size: 12 }));
@@ -202,7 +213,7 @@ function buildQuestionBody(assessment: AssessmentBundle, courseTitle: string): s
   parts.push(paraXml('Date: _______________', { size: 12 }));
 
   parts.push(paraXml('B: Assessment Instruction', { size: 12, bold: true }));
-  parts.push(paraXml(`This is the ${longName}`, { size: 12 }));
+  parts.push(paraXml(`This is the ${displayLabel}`, { size: 12 }));
   if (duration) parts.push(paraXml(`Duration: ${duration}`, { size: 12 }));
   parts.push(paraXml(`1. The assessor will pass the questions in hard copy to you. There are ${numQ} questions. You need to answer all the questions.`, { size: 12 }));
   parts.push(paraXml('2. This is an open-book exam that must be completed individually.', { size: 12 }));
@@ -214,7 +225,7 @@ function buildQuestionBody(assessment: AssessmentBundle, courseTitle: string): s
 
   questions.forEach((q, i) => {
     const scenario = q.scenario || '';
-    const qText = q.question_statement || q.question || '';
+    const qText = stripTrailingKACode(q.question_statement || q.question || '');
     const ref = buildRefString(q);
     if (scenario) parts.push(paraXml(scenario, { size: 12 }));
     parts.push(paraXml(`Q${i + 1}. ${qText}${ref}`, { size: 12, bold: true }));
@@ -237,16 +248,16 @@ function buildAnswerBody(assessment: AssessmentBundle, courseTitle: string): str
   const aType = assessment.type || assessment.code || '';
   const code = assessment.code || aType;
   const questions = assessment.questions || [];
-  const shortName = TYPE_SHORT_NAMES[aType] || TYPE_SHORT_NAMES[code] || aType;
+  const displayLabel = (code && code !== aType ? code : '') || TYPE_ABBR_OF[aType] || aType;
 
   const parts: string[] = [];
   parts.push(paraXml(`Answers to ${courseTitle}`, { size: 14, bold: true, align: 'center' }));
-  parts.push(paraXml(shortName, { size: 12, bold: true, align: 'center' }));
+  parts.push(paraXml(displayLabel, { size: 12, bold: true, align: 'center' }));
   parts.push(horizontalRuleXml());
 
   questions.forEach((q, i) => {
     const scenario = q.scenario || '';
-    const qText = q.question_statement || q.question || '';
+    const qText = stripTrailingKACode(q.question_statement || q.question || '');
     const ref = buildRefString(q);
     const answers = q.answer;
 
@@ -275,6 +286,26 @@ function assembleDocx(bodyXml: string, orgName: string = ''): Buffer {
   const sectPr = sectPrMatch ? sectPrMatch[0] : '';
   doc = doc.replace(/<w:body>[\s\S]*<\/w:body>/, `<w:body>${bodyXml}${sectPr}</w:body>`);
   z.file('word/document.xml', doc);
+
+  // Streamlit-parity: every run in the assessment doc renders in Arial.
+  // The LG template's docDefaults are Calibri, so any run that lacks an
+  // explicit rFonts override would inherit Calibri. Patch the document
+  // defaults in styles.xml to Arial so nothing slips through as Calibri.
+  const stylesKey = 'word/styles.xml';
+  const stylesFile = z.file(stylesKey) as any;
+  if (stylesFile) {
+    let styles: string = stylesFile.asText();
+    const arialFonts = '<w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>';
+    // Replace the <w:rFonts/> inside <w:rPrDefault> only.
+    styles = styles.replace(
+      /(<w:rPrDefault>\s*<w:rPr>)([\s\S]*?)(<\/w:rPr>\s*<\/w:rPrDefault>)/,
+      (_m, open, inner, close) => {
+        const innerNoFonts = inner.replace(/<w:rFonts\b[^/]*\/>/, '');
+        return `${open}${arialFonts}${innerNoFonts}${close}`;
+      },
+    );
+    z.file(stylesKey, styles);
+  }
 
   // Streamlit's assessment doc has NO footer at all (no header either).
   // The LG template carries a footer with copyright text that includes
