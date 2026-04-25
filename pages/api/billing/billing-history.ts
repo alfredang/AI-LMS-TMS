@@ -59,6 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         LIMIT 1
       ) ij ON true
       WHERE u.id = $1
+        AND (e.enrolment_status IS NULL OR e.enrolment_status NOT IN ('Admin Removed', 'Cancelled'))
       ORDER BY e.enrolment_date DESC NULLS LAST`,
       [userId]
     );

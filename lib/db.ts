@@ -1,6 +1,8 @@
 import { Pool } from 'pg';
+import * as dotenv from 'dotenv';
 
-// Check if DATABASE_URL is set
+dotenv.config({ path: '.env.local' });
+dotenv.config(); // Also try default .env
 if (!process.env.DATABASE_URL) {
   console.warn('⚠️ DATABASE_URL is not set. Database connections will fail.');
 }

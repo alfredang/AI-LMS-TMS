@@ -22,6 +22,7 @@ type DaFilterCategory = 'all' | 'inserted' | 'updated' | 'skipped' | 'failed';
 
 interface DaResultRow {
     action: 'inserted' | 'updated' | 'skipped' | 'failed';
+    id?: string;
     application_id: string;
     trainee_name: string;
     trainee_id: string;
@@ -142,8 +143,8 @@ export const UploadDirectApplicationView: React.FC = () => {
                     throw new Error(errorData.error || (response.status === 500 ? 'Server error.' : `Error ${response.status}`));
                 }
                 const result = await response.json();
-                (result.newRecords ?? []).forEach((r: any) => { flat.push({ action: 'inserted', application_id: r.application_id ?? '', trainee_name: r.trainee_name ?? '', trainee_id: r.trainee_id ?? '', message: 'Inserted successfully.' }); ins++; });
-                (result.updatedRecords ?? []).forEach((r: any) => { flat.push({ action: 'updated', application_id: r.application_id ?? '', trainee_name: r.trainee_name ?? '', trainee_id: r.trainee_id ?? '', message: `Status updated to "${r.application_status ?? ''}"` }); upd++; });
+                (result.newRecords ?? []).forEach((r: any) => { flat.push({ action: 'inserted', id: r.id ?? '', application_id: r.application_id ?? '', trainee_name: r.trainee_name ?? '', trainee_id: r.trainee_id ?? '', message: 'Inserted successfully.' }); ins++; });
+                (result.updatedRecords ?? []).forEach((r: any) => { flat.push({ action: 'updated', id: r.id ?? '', application_id: r.application_id ?? '', trainee_name: r.trainee_name ?? '', trainee_id: r.trainee_id ?? '', message: `Status updated to "${r.application_status ?? ''}"` }); upd++; });
                 (result.errors ?? []).forEach((e: any) => { flat.push({ action: 'failed', application_id: e.application_id ?? `Row ${e.row ?? '?'}`, trainee_name: '', trainee_id: '', message: e.error ?? 'Unknown error' }); fail++; });
                 const skipCount: number = result.duplicates ?? 0;
                 const skipIds: string[] = result.duplicateIds ?? [];
@@ -168,7 +169,8 @@ export const UploadDirectApplicationView: React.FC = () => {
     };
 
     const handleAutoEnrol = async () => {
-        const eligibleIds = allResults.filter(r => r.action === 'inserted' || r.action === 'updated').map(r => r.application_id).filter(Boolean);
+        const eligibleRows = allResults.filter(r => (r.action === 'inserted' || r.action === 'updated') && r.id);
+        const eligibleIds = eligibleRows.map(r => r.id!).filter(Boolean);
         if (eligibleIds.length === 0) return;
         setIsAutoEnrolling(true);
         try {
@@ -177,7 +179,7 @@ export const UploadDirectApplicationView: React.FC = () => {
             if (!json.success) throw new Error(json.error || 'Failed to trigger auto-enrol');
             setAutoEnrolQueued(json.queued || eligibleIds.length);
             setAutoEnrolPolling(true);
-            pollEnrolStatus(eligibleIds);
+            pollEnrolStatus(eligibleRows.map(r => r.application_id).filter(Boolean));
         } catch (err) { setError(err instanceof Error ? err.message : 'Auto-enrol failed'); }
         finally { setIsAutoEnrolling(false); }
     };
@@ -414,7 +416,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [isCancelling, setIsCancelling] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isEnrolling, setIsEnrolling] = useState(false);
-    const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
+    // [ARCHIVED] const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
     const [isAddingToCal, setIsAddingToCal] = useState(false);
     const [isGeneratingInv, setIsGeneratingInv] = useState(false);
     const [isSyncingEnrol, setIsSyncingEnrol] = useState(false);
@@ -424,6 +426,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [showPii, setShowPii] = useState(false);
     const [invDriveFolderUrl, setInvDriveFolderUrl] = useState<string>('https://drive.google.com/drive/folders/1hBhu-Mr9HPUFdjpbZhN1GrwZBTWns_WK');
 
+    const [isSyncing, setIsSyncing] = useState(false);
     React.useEffect(() => {
         fetch('/api/admin/da-invoice-drive-folder').then(r => r.json()).then(d => { if (d.folderUrl) setInvDriveFolderUrl(d.folderUrl); }).catch(() => {});
     }, []);
@@ -551,7 +554,8 @@ export const ViewDirectApplicationView: React.FC = () => {
     };
 
     const handleAddToCalendar = async () => {
-        const ids = Array.from(selectedIds).filter(appId => { const app = applications.find(a => a.application_id === appId); return app && !app.calendar_added; }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
+        const cancelledStatuses = ['cancelled', 'rejected', 'failed'];
+        const ids = Array.from(selectedIds).filter(appId => { const app = applications.find(a => a.application_id === appId); return app && !app.calendar_added && !cancelledStatuses.includes((app.application_status || '').toLowerCase()); }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
         if (ids.length === 0) { alert('No eligible applications selected (all already added to calendar).'); return; }
         if (!window.confirm(`Add ${ids.length} learner(s) to their Google Calendar events?`)) return;
         setIsAddingToCal(true);
@@ -571,9 +575,12 @@ export const ViewDirectApplicationView: React.FC = () => {
 
     // ── Generate Invoice with progress modal ──────────────────────────────────
     const handleGenerateInvoice = async () => {
+        const cancelledStatuses = ['cancelled', 'rejected', 'failed'];
         const ids = Array.from(selectedIds).filter(appId => {
             const app = applications.find(a => a.application_id === appId);
-            return app && !(app.invoice_id && String(app.invoice_id).trim());
+            return app && 
+                   !(app.invoice_id && String(app.invoice_id).trim()) && 
+                   !cancelledStatuses.includes((app.application_status || '').toLowerCase());
         }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
         if (ids.length === 0) { showToast('No eligible applications selected (all already have invoices).', true); return; }
         if (!window.confirm(`Generate QuickBooks invoice for ${ids.length} application(s)?`)) return;
@@ -738,12 +745,13 @@ export const ViewDirectApplicationView: React.FC = () => {
         finally { setIsEnrolling(false); }
     };
 
+    /* [ARCHIVED] Keep in case we want the background pipeline back
     const handleAutoEnrol = async () => {
         const selectedRows = applications.filter(app => selectedIds.has(app.application_id));
         const rowIds = selectedRows.map(app => app.id).filter(Boolean);
         if (rowIds.length === 0) { alert('No eligible applications selected.'); return; }
         if (!window.confirm(`Auto-Enrol will run for ${rowIds.length} application(s).\n\n1. Submit to SSG\n2. Look up grant ID\n3. Generate QB invoice (if enabled)\n\nContinue?`)) return;
-        setIsAutoEnrolling(true);
+        // setIsAutoEnrolling(true);
         try {
             const response = await fetch('/api/admin/auto-enrol-direct-applications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ applicationIds: rowIds }) });
             const body = await response.json();
@@ -751,8 +759,9 @@ export const ViewDirectApplicationView: React.FC = () => {
             alert(`Queued ${body.queued} application(s) for auto-enrol.`);
             setSelectedIds(new Set()); fetchApplications();
         } catch (err) { alert(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`); }
-        finally { setIsAutoEnrolling(false); }
+        // finally { setIsAutoEnrolling(false); }
     };
+    */
 
     const applyFilter = () => { if (filterColumn && filterValue.trim()) setActiveFilter({ column: filterColumn, value: filterValue.trim() }); setShowFilterDropdown(false); };
     const clearFilter = () => { setActiveFilter(null); setFilterColumn(''); setFilterValue(''); };
@@ -772,16 +781,6 @@ export const ViewDirectApplicationView: React.FC = () => {
     // Auto-fetch on component mount
     React.useEffect(() => {
         fetchApplications();
-
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                console.log('👀 Tab focused, refreshing direct applications for page:', currentPageRef.current);
-                fetchApplications();
-            }
-        };
-
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, []);
     React.useEffect(() => { setCurrentPage(1); }, [searchQuery]);
     React.useEffect(() => { setCurrentPage(1); }, [sortColumn, sortDirection]);
@@ -893,6 +892,29 @@ export const ViewDirectApplicationView: React.FC = () => {
                                 Send Invoice Email
                             </button>
                             <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
+                            <button
+                                onClick={async () => {
+                                    if (!window.confirm('This will perform a live search across SSG for all records marked as MANUAL. Proceed?')) return;
+                                    setIsSyncing(true);
+                                    try {
+                                        const response = await fetch('/api/admin/da-live-ssg-recovery', { method: 'POST' });
+                                        const result = await response.json();
+                                        if (result.success) {
+                                            alert(`Recovery complete! Found: ${result.summary.found}, Missing: ${result.summary.notFound}, Errors: ${result.summary.errors}`);
+                                            fetchApplications();
+                                        } else throw new Error(result.error);
+                                    } catch (err) {
+                                        alert(`Recovery failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+                                    } finally {
+                                        setIsSyncing(false);
+                                    }
+                                }}
+                                disabled={isSyncing}
+                                className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:bg-purple-400"
+                                title="Perform live SSG search for MANUAL records to recover real enrolment IDs"
+                            >
+                                {isSyncing ? 'Recovering...' : 'Recover Enrolment IDs'}
+                            </button>
                             <button onClick={handleSyncEnrolment} disabled={isSyncingEnrol} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isSyncingEnrol ? 'Syncing...' : 'Sync Enrolment'}
                             </button>
@@ -977,9 +999,12 @@ export const ViewDirectApplicationView: React.FC = () => {
                         {selectedIds.size > 0 && (
                             <>
                                 <span className="text-sm text-gray-600 dark:text-gray-300">{selectedIds.size} row(s) selected</span>
+                                {/* [ARCHIVED] Green button for background auto-enrol pipeline
                                 <button onClick={handleAutoEnrol} disabled={isAutoEnrolling || isCancelling || isDeleting || isEnrolling} className="inline-flex items-center px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-green-400">
                                     {isAutoEnrolling ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1.5" />Queuing...</> : 'Auto Enrol Selected'}
                                 </button>
+                                */}
+
                                 <button onClick={handleCancelEnrolment} disabled={isCancelling || isDeleting} className="inline-flex items-center px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-red-400">
                                     {isCancelling ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1.5" />Cancelling...</> : 'Cancel Enrolment'}
                                 </button>

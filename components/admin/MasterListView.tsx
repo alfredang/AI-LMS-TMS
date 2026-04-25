@@ -35,6 +35,22 @@ const TAB_COLORS: Record<ClassTab, {
   cancelled:  { activeBg: 'bg-neutral-800',  activeText: 'text-white',      badgeBg: 'bg-neutral-200 dark:bg-neutral-700',   badgeText: 'text-neutral-700 dark:text-neutral-200',  borderAccent: 'border-l-neutral-800', headerBadgeBg: 'bg-neutral-400/40',   headerBadgeText: 'text-neutral-100', headerBg: 'bg-neutral-800',    headerText: 'text-neutral-100' },
 };
 
+type CellBgColor = '' | 'red' | 'yellow' | 'green';
+
+const BG_COLOR_CELL_CLASSES: Record<CellBgColor, string> = {
+  '':     '',
+  red:    'bg-red-200 dark:bg-red-900/50',
+  yellow: 'bg-yellow-200 dark:bg-yellow-900/50',
+  green:  'bg-green-200 dark:bg-green-900/50',
+};
+
+const BG_COLOR_SWATCH_CLASSES: Record<CellBgColor, string> = {
+  '':     'bg-transparent',
+  red:    'bg-red-400',
+  yellow: 'bg-yellow-400',
+  green:  'bg-green-400',
+};
+
 interface TraineeRow {
   id: string;
   name: string;
@@ -53,6 +69,8 @@ interface TraineeRow {
   followup_by: string;
   remark: string;
   cancelled: boolean;
+  invoice_no_color: CellBgColor;
+  payment_mode_color: CellBgColor;
 }
 
 interface ScheduleEntry {
@@ -113,12 +131,48 @@ const newTrainee = (): TraineeRow => ({
   virtual_reschedule: '', comments: '', date: '', grant: '',
   invoice_no: '', payment_mode: '', course_fee: '', nett_fee: '',
   payment_status: '', followup_by: '', remark: '', cancelled: false,
+  invoice_no_color: '', payment_mode_color: '',
 });
 
 
 const newScheduleEntry = (): ScheduleEntry => ({
   id: crypto.randomUUID(), label: '', startTime: '', endTime: '', done: false,
 });
+
+// Map an SSG mode_of_training code/name to the UI's session label dropdown.
+// Falls back to empty so the user can pick manually for categories we can't infer.
+const modeToScheduleLabel = (mode: any): string => {
+  const s = String(mode ?? '').trim().toLowerCase();
+  if (!s) return '';
+  if (s === '8' || s.includes('assess'))    return 'ASM';
+  if (s === '1' || s.includes('classroom')) return 'C/R';
+  if (s === '4' || s.includes('ojt') || s.includes('on the job')) return 'PP';
+  return '';
+};
+
+// Normalise a session.start_date coming back from the API (Date object from
+// pg, ISO datetime, ISO date, or YYYYMMDD) to YYYY-MM-DD so it can be
+// compared to the masterlist's selectedDate.
+const sessionDateToIso = (d: any): string => {
+  if (!d) return '';
+  if (d instanceof Date) {
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  const s = String(d).trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  return s;
+};
+
+// "HH:MM:SS" / "HH:MM" → "HH:MM" so it fits the <input type="time"> control.
+const sessionTimeToHHmm = (t: any): string => {
+  const m = String(t ?? '').trim().match(/^(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+};
 
 const newClass = (): ClassRun => {
   const id = crypto.randomUUID();
@@ -248,10 +302,14 @@ interface InputCellProps {
   align?: 'left' | 'center';
   digitsOnly?: boolean;
   onFillAll?: (v: string) => void;
+  bgColor?: CellBgColor;
+  onBgColorChange?: (c: CellBgColor) => void;
 }
 
-const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = '', align = 'left', digitsOnly = false, onFillAll }) => {
+const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = '', align = 'left', digitsOnly = false, onFillAll, bgColor = '', onBgColorChange }) => {
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const [colorMenuOpen, setColorMenuOpen] = useState(false);
+  const colorMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (taRef.current) {
@@ -260,8 +318,19 @@ const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = ''
     }
   }, [value]);
 
+  useEffect(() => {
+    if (!colorMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (colorMenuRef.current && !colorMenuRef.current.contains(e.target as Node)) {
+        setColorMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [colorMenuOpen]);
+
   return (
-    <td className={`relative px-1.5 py-1 border-r border-default last:border-r-0 group/cell ${align === 'center' ? 'text-center' : ''}`}>
+    <td className={`relative px-1.5 py-1 border-r border-default last:border-r-0 group/cell ${align === 'center' ? 'text-center' : ''} ${BG_COLOR_CELL_CLASSES[bgColor]}`}>
       <textarea
         ref={taRef}
         value={value}
@@ -282,6 +351,36 @@ const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = ''
         >
           fill all ↓
         </button>
+      )}
+      {onBgColorChange && (
+        <div
+          ref={colorMenuRef}
+          className={`absolute right-1 top-1 transition-opacity ${colorMenuOpen || bgColor ? 'opacity-100' : 'opacity-0 group-hover/cell:opacity-100'}`}
+        >
+          <button
+            type="button"
+            onClick={() => setColorMenuOpen(v => !v)}
+            title="Highlight colour"
+            className={`w-3.5 h-3.5 rounded-full ring-1 ring-on-surface-secondary/50 hover:ring-primary ${BG_COLOR_SWATCH_CLASSES[bgColor]}`}
+          />
+          {colorMenuOpen && (
+            <div className="absolute right-0 top-5 z-30 flex items-center gap-1 bg-surface border border-default rounded-md p-1 shadow-lg">
+              {(['', 'red', 'yellow', 'green'] as CellBgColor[]).map(c => (
+                <button
+                  key={c || 'none'}
+                  type="button"
+                  onClick={() => { onBgColorChange(c); setColorMenuOpen(false); }}
+                  title={c || 'none'}
+                  className={`w-4 h-4 rounded-full ring-1 ring-on-surface-secondary/40 hover:ring-2 hover:ring-primary ${BG_COLOR_SWATCH_CLASSES[c]} ${c === '' ? 'relative' : ''}`}
+                >
+                  {c === '' && (
+                    <span className="absolute inset-0 flex items-center justify-center text-on-surface-secondary text-[10px] leading-none">∅</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </td>
   );
@@ -739,6 +838,7 @@ interface ClassBlockProps {
   onAddScheduleEntry: () => void;
   onScheduleEntryChange: (entryId: string, field: keyof Omit<ScheduleEntry, 'id'>, value: string | boolean) => void;
   onRemoveScheduleEntry: (entryId: string) => void;
+  onReplaceScheduleEntries: (entries: ScheduleEntry[]) => void;
 }
 
 const ClassBlock: React.FC<ClassBlockProps> = ({
@@ -746,6 +846,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
   onClassChange, onTraineeChange, onFillAll,
   onAddTrainee, onRemoveTrainee, onRemoveClass, onMoveClass, onBulkAddTrainees,
   onAddScheduleEntry, onScheduleEntryChange, onRemoveScheduleEntry,
+  onReplaceScheduleEntries,
 }) => {
   const tabLabel = TABS.find(t => t.key === activeTab)?.label ?? '';
   const tabColors = TAB_COLORS[activeTab];
@@ -815,6 +916,137 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-fill Class Schedule when a full 7-digit Course Run ID is entered.
+  // - Looks up the run in the local DB (falling back to SSG), then fetches
+  //   every session for that run.
+  // - This block gets only the sessions whose start_date matches selectedDate,
+  //   so a consecutive-day course shows the correct subset per day.
+  // - Other linked-day blocks in the same classDate range are also filled via
+  //   direct masterlist POSTs so that when the user navigates to Day 2/3/…,
+  //   the schedule is already there.
+  // - Skips the fetch entirely if the block already has schedule entries so
+  //   user-entered or previously-synced data isn't clobbered.
+  const lastFetchedRunRef = useRef<string>('');
+  const [fetchingSessions, setFetchingSessions] = useState(false);
+
+  useEffect(() => {
+    const run = (classRun.courseRunNo || '').trim();
+    if (!/^\d{7}$/.test(run)) return;
+    if (run === lastFetchedRunRef.current) return;
+    if (classRun.scheduleEntries.length > 0) {
+      // Already populated — remember the run so a later edit on an empty block
+      // still triggers a fetch when the value actually changes.
+      lastFetchedRunRef.current = run;
+      return;
+    }
+    lastFetchedRunRef.current = run;
+
+    let cancelled = false;
+    (async () => {
+      setFetchingSessions(true);
+      try {
+        const lookRes  = await fetch(`/api/admin/lookup-course-run?courseRunCode=${encodeURIComponent(run)}`);
+        const lookJson = await lookRes.json();
+        if (cancelled) return;
+        if (!lookJson.success || !lookJson.data?.courseRunId) {
+          console.warn('[masterlist] course run not found:', run);
+          return;
+        }
+
+        const courseRunUuid = lookJson.data.courseRunId;
+        const sessRes  = await fetch(`/api/admin/course-sessions/list-with-trainers?courseRunUuid=${encodeURIComponent(courseRunUuid)}`);
+        const sessJson = await sessRes.json();
+        if (cancelled) return;
+        if (!sessJson.success) return;
+
+        const all: any[] = sessJson.data?.sessions ?? [];
+        // Sort chronologically so the schedule reads top-to-bottom in course order.
+        const sorted = [...all].sort((a, b) => {
+          const da = sessionDateToIso(a.startDate);
+          const db = sessionDateToIso(b.startDate);
+          if (da !== db) return da < db ? -1 : 1;
+          const ta = sessionTimeToHHmm(a.startTime);
+          const tb = sessionTimeToHHmm(b.startTime);
+          return ta < tb ? -1 : ta > tb ? 1 : 0;
+        });
+
+        const buildEntries = (ss: any[]): ScheduleEntry[] =>
+          ss.slice(0, 10).map(s => ({
+            id: crypto.randomUUID(),
+            label: modeToScheduleLabel(s.modeOfTraining),
+            startTime: sessionTimeToHHmm(s.startTime),
+            endTime:   sessionTimeToHHmm(s.endTime),
+            done: false,
+          }));
+
+        // Sessions for the currently-viewed day.
+        const thisDay = sorted.filter(s => sessionDateToIso(s.startDate) === selectedDate);
+        // If nothing matches (e.g. single-day block where the session dates
+        // weren't stored against the same day), use the full list so the block
+        // still fills rather than showing "No sessions yet".
+        const thisEntries = thisDay.length > 0 ? buildEntries(thisDay) : buildEntries(sorted);
+
+        if (cancelled) return;
+        if (thisEntries.length > 0) onReplaceScheduleEntries(thisEntries);
+
+        // Fill course title if still blank.
+        const resolvedTitle = classRun.courseTitle.trim() || lookJson.data.title || '';
+        if (!cancelled && !classRun.courseTitle.trim() && lookJson.data.title) {
+          onClassChange('courseTitle', lookJson.data.title);
+        }
+
+        // Propagate per-date schedules to the other linked-day blocks in the
+        // same date range. Each day's block stores its own scheduleEntries, so
+        // we save each one directly to the masterlist endpoint. Blocks that
+        // already have entries are left alone.
+        if (!cancelled && classRun.classDate?.includes('~')) {
+          const normTitle = (s: string) => (s || '').replace(/^Day\s+\d+\s*[-–—]\s*/i, '').toLowerCase().trim();
+          const baseTitle = normTitle(resolvedTitle);
+          const otherDates = expandDateRange(classRun.classDate).filter(d => d !== selectedDate);
+
+          for (const otherDate of otherDates) {
+            if (cancelled) break;
+            const otherDaySessions = sorted.filter(s => sessionDateToIso(s.startDate) === otherDate);
+            if (otherDaySessions.length === 0) continue;
+            const otherEntries = buildEntries(otherDaySessions);
+
+            try {
+              const res  = await fetch(`/api/admin/masterlist?date=${otherDate}&class_type=${activeTab}`);
+              const json = await res.json();
+              if (!json.success) continue;
+              const linked = rowsToClasses(json.data).find(
+                c => c.classDate === classRun.classDate && normTitle(c.courseTitle) === baseTitle,
+              );
+              if (!linked) continue;
+              if (linked.scheduleEntries.length > 0) continue;
+
+              const synced: ClassRun = {
+                ...linked,
+                scheduleEntries: otherEntries,
+                courseRunNo: run,
+                courseTitle: linked.courseTitle || resolvedTitle,
+              };
+              await fetch('/api/admin/masterlist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rows: classToRows(synced, activeTab, otherDate) }),
+              });
+            } catch (e) {
+              console.error('[masterlist] linked-day auto-fill error:', e);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[masterlist] auto-fetch sessions error:', err);
+      } finally {
+        if (!cancelled) setFetchingSessions(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classRun.courseRunNo, selectedDate]);
+
   return (
     <div className="mb-8 overflow-x-clip">
       {confirmDeleteClass && (
@@ -878,6 +1110,11 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
               inputMode="numeric"
               className={`w-28 text-xs bg-transparent border-b border-dashed border-white/40 focus:outline-none focus:border-white ${classRun.headerColor.text} placeholder:opacity-40`}
             />
+            {fetchingSessions && (
+              <span className={`text-[10px] animate-pulse opacity-70 ${classRun.headerColor.text}`}>
+                Fetching sessions…
+              </span>
+            )}
           </div>
 
           {/* Course title — centred */}
@@ -1026,12 +1263,27 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                         } catch { /* silent — invoice field stays empty */ }
                       }}
                     />
+                  ) : (col.key === 'invoice_no' || col.key === 'payment_mode') ? (
+                    <InputCell
+                      key={col.key}
+                      value={t[col.key as TraineeField] as string}
+                      onChange={v => onTraineeChange(t.id, col.key as TraineeField, v)}
+                      placeholder={col.placeholder}
+                      align={col.align}
+                      digitsOnly={col.digitsOnly}
+                      bgColor={col.key === 'invoice_no' ? t.invoice_no_color : t.payment_mode_color}
+                      onBgColorChange={c => onTraineeChange(
+                        t.id,
+                        (col.key === 'invoice_no' ? 'invoice_no_color' : 'payment_mode_color') as TraineeField,
+                        c,
+                      )}
+                    />
                   ) : (
                     <InputCell
                       key={col.key}
                       value={t[col.key as TraineeField] as string}
                       onChange={v => onTraineeChange(t.id, col.key as TraineeField, v)}
-                      onFillAll={col.key !== 'invoice_no' && col.key !== 'payment_mode' && col.key !== 'payment_status' && col.key !== 'magento_order_no' ? v => onFillAll(col.key as TraineeField, v) : undefined}
+                      onFillAll={col.key !== 'payment_status' && col.key !== 'magento_order_no' ? v => onFillAll(col.key as TraineeField, v) : undefined}
                       placeholder={col.placeholder}
                       align={col.align}
                       digitsOnly={col.digitsOnly}
@@ -1310,6 +1562,8 @@ function rowsToClasses(rows: Record<string, any>[]): ClassRun[] {
       followup_by: row.followup_by ?? '',
       remark: row.remark ?? '',
       cancelled: row.cancelled ?? false,
+      invoice_no_color: (row.invoice_no_color ?? '') as CellBgColor,
+      payment_mode_color: (row.payment_mode_color ?? '') as CellBgColor,
     });
   }
   const classes = Array.from(map.values());
@@ -1363,6 +1617,8 @@ function classToRows(cr: ClassRun, classType: ClassTab, listDate: string): Recor
     grant: t.grant || null,
     invoice_no: t.invoice_no || null,
     payment_mode: t.payment_mode || null,
+    invoice_no_color: t.invoice_no_color || null,
+    payment_mode_color: t.payment_mode_color || null,
     course_fee: t.course_fee || null,
     nett_fee: t.nett_fee || null,
     payment_status: t.payment_status || null,
@@ -1834,6 +2090,18 @@ const MasterListView: React.FC = () => {
     });
   };
 
+  const handleReplaceScheduleEntries = (classId: string, entries: ScheduleEntry[]) => {
+    setClasses(prev => {
+      const updated = prev.map(cr => cr.id === classId
+        ? { ...cr, scheduleEntries: entries }
+        : cr,
+      );
+      const cr = updated.find(c => c.id === classId);
+      if (cr) scheduleSave(cr, activeTab, selectedDate);
+      return updated;
+    });
+  };
+
   const tabLabel = TABS.find(t => t.key === activeTab)?.label ?? '';
 
   return (
@@ -2035,6 +2303,7 @@ const MasterListView: React.FC = () => {
                 handleScheduleEntryChange(cr.id, entryId, field, value)
               }
               onRemoveScheduleEntry={entryId => handleRemoveScheduleEntry(cr.id, entryId)}
+              onReplaceScheduleEntries={entries => handleReplaceScheduleEntries(cr.id, entries)}
             />
           ))
         )}

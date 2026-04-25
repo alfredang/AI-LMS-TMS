@@ -22,7 +22,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const rows = await pool.query(
-      `SELECT id, invoice_id FROM da_application WHERE id = ANY($1::uuid[])`,
+      `SELECT id, invoice_id 
+       FROM da_application 
+       WHERE id = ANY($1::uuid[])
+         AND LOWER(COALESCE(application_status, '')) NOT IN ('cancelled', 'rejected', 'failed')`,
       [applicationIds]
     );
 

@@ -6933,11 +6933,10 @@ export const TrainerFolderLogsView: React.FC = () => {
         setMessage(null);
         try {
             // Re-trigger the background function locally without scheduler API key requirement
-            const res = await fetch('/api/scheduler/execute', { 
+            const res = await fetch('/api/admin/scheduler', { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    authKey: process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback', // fallback for dev
                     taskId: 'auto_create_trainer_folders'
                 })
             });
@@ -8366,7 +8365,7 @@ const AutoSendEmailLogView: React.FC<{
                 <table className="min-w-full text-xs">
                   <thead className="bg-gray-50 dark:bg-slate-700/30">
                     <tr>
-                      {['Course Code', 'Course Title', 'Learner Name', 'Learner Email', 'Status', 'Error'].map(h => (
+                      {['Course Run ID', 'Course Code', 'Course Title', 'Learner Name', 'Learner Email', 'Status', 'Error'].map(h => (
                         <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -8374,6 +8373,7 @@ const AutoSendEmailLogView: React.FC<{
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                     {rows.map(row => (
                       <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
                         <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_code ?? '—'}</td>
                         <td className="px-3 py-2 max-w-[260px] truncate" title={row.course_title ?? ''}>{row.course_title ?? '—'}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{row.learner_name ?? '—'}</td>

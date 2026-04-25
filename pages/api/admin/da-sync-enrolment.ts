@@ -30,7 +30,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           (da.trainee_id IS NOT NULL AND da.trainee_id <> '' AND UPPER(e.nric) = UPPER(da.trainee_id))
           OR (da.trainee_email IS NOT NULL AND da.trainee_email <> '' AND LOWER(COALESCE((SELECT au.email FROM app_user au WHERE au.id = e.user_id), e.email)) = LOWER(da.trainee_email))
         )
-        AND (da.enrolment_id IS NULL OR da.enrolment_id = '')
+        AND (
+          da.enrolment_id IS NULL 
+          OR da.enrolment_id = '' 
+          OR da.enrolment_id = 'MANUAL'
+          OR da.enrolment_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        )
         AND e.enrolment_id IS NOT NULL
         AND e.enrolment_id <> ''
       RETURNING da.id, da.application_id, e.enrolment_id as matched_enrolment_id, e.enrolment_status as matched_status

@@ -284,7 +284,7 @@ export async function runAutomation() {
             cr.start_date, cr.end_date
      FROM course_run cr
      JOIN course c ON c.id = cr.course_id
-     WHERE DATE(cr.start_date) = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')::date + INTERVAL '1 day'
+     WHERE cr.start_date = (NOW() AT TIME ZONE 'Asia/Singapore')::date + INTERVAL '1 day'
      ORDER BY cr.start_date ASC`,
   );
 

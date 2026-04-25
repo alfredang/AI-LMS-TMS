@@ -120,7 +120,7 @@ const CwGenerateAssessment: React.FC = () => {
         <div className="p-4 rounded-lg bg-blue-900/20 border border-blue-700">
           <div className="flex items-center gap-3">
             <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full" />
-            <p className="text-sm text-blue-300">AI Agent generating assessments... (approximately 40-60 seconds)</p>
+            <p className="text-sm text-blue-300">Generating Assessments...</p>
           </div>
           <p className="text-xs text-gray-400 mt-1">You can navigate to other pages. Results will be ready when you return.</p>
         </div>

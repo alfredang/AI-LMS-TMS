@@ -29,6 +29,65 @@ export const AUDIT_DOCUMENT_TYPES = [
   { key: 'lp', label: 'Lesson Plan (LP)' },
 ];
 
+// Courseware doc types selectable per uploaded audit file. Mirrors
+// AUDIT_DOC_TYPES in lib/cw-audit.ts.
+export const AUDIT_COURSEWARE_DOC_TYPES = ['AP', 'ASR', 'FG', 'LG', 'LP'] as const;
+export type AuditCoursewareDocType = (typeof AUDIT_COURSEWARE_DOC_TYPES)[number];
+
+// Field keys + labels for the audit checklist UI (must stay aligned with
+// AUDIT_FIELD_KEYS / AUDIT_FIELD_LABELS in lib/cw-audit.ts).
+export const AUDIT_FIELD_OPTIONS: { key: string; label: string }[] = [
+  { key: 'tgs_ref_code', label: 'TGS Reference Code' },
+  { key: 'course_title', label: 'Course Title' },
+  { key: 'company_name', label: 'Company Name' },
+  { key: 'tsc_ref_code', label: 'TSC Reference Code' },
+  { key: 'tsc_title', label: 'TSC Title' },
+  { key: 'training_hours', label: 'Training Hours' },
+  { key: 'assessment_hours', label: 'Assessment Hours' },
+  { key: 'total_hours', label: 'Total Hours' },
+  { key: 'learning_outcomes', label: 'Learning Outcomes' },
+  { key: 'topics', label: 'Topics' },
+  { key: 'assessment_methods', label: 'Assessment Methods' },
+  { key: 'instructional_methods', label: 'Instructional Methods' },
+];
+
+// Per-uploaded-doc entry held in audit state: the actual File for upload
+// + the type the user chose from the dropdown.
+export interface AuditDocEntry {
+  file: File;
+  docType: AuditCoursewareDocType;
+}
+
+// Shape of /api/developer/cw-audit response — kept here so the UI can
+// render strongly-typed result data.
+export interface AuditFieldComparison {
+  field: string;
+  label: string;
+  status: 'match' | 'mismatch' | 'missing' | 'na';
+  expected: string | string[] | null;
+  got: string | string[] | null;
+}
+export interface AuditDocComparison {
+  fileName: string;
+  docType: AuditCoursewareDocType;
+  fields: AuditFieldComparison[];
+  passCount: number;
+  failCount: number;
+  missingCount: number;
+}
+export interface AuditResultPayload {
+  cpFields: Record<string, any>;
+  tgsCode: string | null;
+  comparisons: AuditDocComparison[];
+  summary: {
+    totalDocs: number;
+    totalFields: number;
+    totalPass: number;
+    totalFail: number;
+    totalMissing: number;
+  };
+}
+
 export interface LearningUnit {
   luTitle: string;
   topics: { title: string; bulletPoints: string[] }[];
@@ -109,11 +168,17 @@ export interface CwState {
   convertResult: string;
   setConvertResult: (v: string) => void;
 
-  // Audit
-  auditDocuments: Record<string, string>;
-  setAuditDocuments: (v: Record<string, string>) => void;
-  auditResult: string;
-  setAuditResult: (v: string) => void;
+  // Audit — file-upload-based (Streamlit-parity).
+  auditCpFile: File | null;
+  setAuditCpFile: (v: File | null) => void;
+  auditTgsCode: string;
+  setAuditTgsCode: (v: string) => void;
+  auditDocs: AuditDocEntry[];
+  setAuditDocs: (v: AuditDocEntry[]) => void;
+  auditChecklist: string[];
+  setAuditChecklist: (v: string[]) => void;
+  auditResultData: AuditResultPayload | null;
+  setAuditResultData: (v: AuditResultPayload | null) => void;
 }
 
 const CwContext = createContext<CwState | null>(null);
@@ -141,8 +206,11 @@ export const CwProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [brochureResult, setBrochureResult] = useState('');
   const [convertSourceText, setConvertSourceText] = useState('');
   const [convertResult, setConvertResult] = useState('');
-  const [auditDocuments, setAuditDocuments] = useState<Record<string, string>>({});
-  const [auditResult, setAuditResult] = useState('');
+  const [auditCpFile, setAuditCpFile] = useState<File | null>(null);
+  const [auditTgsCode, setAuditTgsCode] = useState('');
+  const [auditDocs, setAuditDocs] = useState<AuditDocEntry[]>([]);
+  const [auditChecklist, setAuditChecklist] = useState<string[]>(AUDIT_FIELD_OPTIONS.map((f) => f.key));
+  const [auditResultData, setAuditResultData] = useState<AuditResultPayload | null>(null);
 
   return (
     <CwContext.Provider value={{
@@ -162,8 +230,11 @@ export const CwProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       brochureResult, setBrochureResult,
       convertSourceText, setConvertSourceText,
       convertResult, setConvertResult,
-      auditDocuments, setAuditDocuments,
-      auditResult, setAuditResult,
+      auditCpFile, setAuditCpFile,
+      auditTgsCode, setAuditTgsCode,
+      auditDocs, setAuditDocs,
+      auditChecklist, setAuditChecklist,
+      auditResultData, setAuditResultData,
     }}>
       {children}
     </CwContext.Provider>

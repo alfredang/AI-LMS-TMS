@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAppVersion } from '@hooks/useAppVersion';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -97,8 +97,10 @@ const FinanceLayout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    courseRunAutomations: true,
-    claimManagement: true,
+    courseRunAutomations: false,
+    claimManagement: false,
+    claimSub: false,
+    invoiceSub: false,
     grantPaymentSync: false,
     tpgManagement: false,
     tpgCourseRun: false,
@@ -120,6 +122,7 @@ const FinanceLayout: React.FC = () => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+<<<<<<< HEAD
   // Auto-open sections when navigating from header
   useEffect(() => {
     if (page.startsWith('tpg')) {
@@ -139,6 +142,8 @@ const FinanceLayout: React.FC = () => {
     }
   }, [page]);
 
+=======
+>>>>>>> origin/main
   const navigateTo = (p: FinancePage) => {
     setPage(p);
   };

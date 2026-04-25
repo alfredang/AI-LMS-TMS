@@ -97,7 +97,7 @@ export async function runDateSync() {
        TO_CHAR(cr.end_date,   'YYYY-MM-DD')    AS db_end_date
      FROM course_run cr
      JOIN course c ON c.id = cr.course_id
-     WHERE DATE(cr.start_date) = CURRENT_DATE
+     WHERE cr.start_date = (NOW() AT TIME ZONE 'Asia/Singapore')::date
        AND cr.course_run_id IS NOT NULL
        AND cr.course_run_id <> ''
      ORDER BY cr.start_date ASC`

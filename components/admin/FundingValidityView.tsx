@@ -57,6 +57,8 @@ const FundingValidityView: React.FC = () => {
   const { courses, loading, error, refetch } = useDeveloperCourses();
   const [renewingIds, setRenewingIds] = useState<Record<string, boolean>>({});
   const [renewStateOverrides, setRenewStateOverrides] = useState<Record<string, boolean>>({});
+  const [whitelistingIds, setWhitelistingIds] = useState<Record<string, boolean>>({});
+  const [whitelistStateOverrides, setWhitelistStateOverrides] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '' });
   const [saving, setSaving] = useState(false);
@@ -122,6 +124,28 @@ const FundingValidityView: React.FC = () => {
       window.alert('Failed to update renewal status. Please try again.');
     } finally {
       setRenewingIds(prev => ({ ...prev, [courseId]: false }));
+    }
+  };
+
+  const handleWhitelistToggle = async (courseId: string, checked: boolean) => {
+    setWhitelistStateOverrides(prev => ({ ...prev, [courseId]: checked }));
+    setWhitelistingIds(prev => ({ ...prev, [courseId]: true }));
+
+    try {
+      await apiClient.put('/api/admin/course-whitelist-status', {
+        courseId,
+        whitelist: checked,
+      });
+    } catch (err) {
+      console.error('Failed to update whitelist status:', err);
+      setWhitelistStateOverrides(prev => {
+        const next = { ...prev };
+        delete next[courseId];
+        return next;
+      });
+      window.alert('Failed to update whitelist status. Please try again.');
+    } finally {
+      setWhitelistingIds(prev => ({ ...prev, [courseId]: false }));
     }
   };
 
@@ -207,7 +231,7 @@ const FundingValidityView: React.FC = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="min-w-full text-xs">
             <thead className="bg-gray-50 dark:bg-gray-900/40">
               <tr className="text-left text-gray-600 dark:text-gray-300">
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
@@ -217,6 +241,7 @@ const FundingValidityView: React.FC = () => {
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Renew Date</th>
                 <th className="px-3 py-2 font-semibold text-right whitespace-nowrap">CAS</th>
                 <th className="px-3 py-2 font-semibold text-right whitespace-nowrap">ES</th>
+                <th className="px-3 py-2 font-semibold text-center whitespace-nowrap">Whitelist</th>
                 <th className="px-3 py-2 font-semibold text-center whitespace-nowrap">Renew</th>
                 <th className="px-3 py-2 font-semibold text-center w-20"></th>
               </tr>
@@ -240,7 +265,7 @@ const FundingValidityView: React.FC = () => {
                           : ''
                     }`}
                   >
-                    <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white">{course.title}</td>
+                    <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.courseCode || '—'}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{displayCourseType(course.courseType)}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
@@ -259,11 +284,12 @@ const FundingValidityView: React.FC = () => {
                         </>
                       )}
                     </td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                    <td className="px-3 py-1.5 whitespace-nowrap">
                       {validityDate ? (() => {
                         const renewDate = new Date(validityDate);
                         renewDate.setMonth(renewDate.getMonth() - 3);
-                        return renewDate.toLocaleDateString('en-GB');
+                        const isPast = renewDate < new Date();
+                        return <span className={isPast ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-300'}>{renewDate.toLocaleDateString('en-GB')}</span>;
                       })() : '—'}
                     </td>
                     <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
@@ -291,6 +317,16 @@ const FundingValidityView: React.FC = () => {
                       ) : (
                         course.esScore != null ? course.esScore.toFixed(2) : '—'
                       )}
+                    </td>
+                    <td className="px-3 py-1.5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={whitelistStateOverrides[course.id] ?? !!course.whitelistStatus}
+                        disabled={!!whitelistingIds[course.id]}
+                        onChange={(e) => handleWhitelistToggle(course.id, e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                        aria-label={`Whitelist ${course.title}`}
+                      />
                     </td>
                     <td className="px-3 py-1.5 text-center">
                       <input

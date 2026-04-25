@@ -33,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const result = await pool.query(
         `SELECT id FROM da_application
          WHERE (auto_enrol_status IS NULL OR auto_enrol_status = 'failed')
-           AND LOWER(application_status) = 'confirm application'
+           AND LOWER(application_status) IN ('confirm application', 'confirmed')
          ORDER BY created_at ASC`
       );
       ids = result.rows.map(r => r.id);

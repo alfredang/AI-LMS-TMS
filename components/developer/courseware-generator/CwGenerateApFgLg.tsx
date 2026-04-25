@@ -19,8 +19,6 @@ const CwGenerateApFgLg: React.FC = () => {
   const [generatedDocs, setGeneratedDocs] = useState<GeneratedDoc[]>([]);
 
   const hasContext = !!cw.extractedResult;
-  const courseTitle = cw.courseData?.courseTitle || 'Not extracted yet';
-  const numLUs = cw.courseData?.learningUnits?.length || 0;
 
   const handleDownload = (doc: GeneratedDoc) => {
     const byteChars = atob(doc.data);
@@ -93,22 +91,9 @@ const CwGenerateApFgLg: React.FC = () => {
         </p>
       </div>
 
-      {/* Course Info Status */}
-      {hasContext ? (
-        <Card className="p-4 bg-green-900/20 border border-green-700">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-green-400">Course Info Loaded</p>
-              <p className="text-xs text-gray-400">{courseTitle} | {numLUs} Learning Units</p>
-            </div>
-          </div>
-        </Card>
-      ) : (
+      {/* Course Info Status — hidden when context is loaded. Only warn
+          when the user hasn't extracted a CP yet. */}
+      {!hasContext && (
         <Card className="p-4 bg-yellow-900/20 border border-yellow-700">
           <div className="flex items-center gap-3">
             <svg className="w-6 h-6 text-yellow-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -159,7 +144,7 @@ const CwGenerateApFgLg: React.FC = () => {
         <div className="p-4 rounded-lg bg-blue-900/20 border border-blue-700">
           <div className="flex items-center gap-3">
             <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full" />
-            <p className="text-sm text-blue-300">Generating courseware documents from WSQ templates...</p>
+            <p className="text-sm text-blue-300">Generating the Courseware...</p>
           </div>
         </div>
       )}
