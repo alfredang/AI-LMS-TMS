@@ -59,6 +59,7 @@ import QBInvoiceView from '../components/finance/QBInvoiceView';
 import QBPaymentView from '../components/finance/QBPaymentView';
 import ProFormaInvoiceView from '../components/finance/ProFormaInvoiceView';
 import GrantImportView from '../components/finance/GrantImportView';
+import SfcPaymentSyncView from '../components/finance/SfcPaymentSyncView';
 
 import { ProfilePage } from '../components/ProfilePage';
 import { useLms } from '@contexts/LmsContext';
@@ -66,7 +67,7 @@ import { View } from '@app-types/index';
 
 type FinancePage =
   | 'dashboard' | 'allCourseRuns'
-  | 'grantImport'
+  | 'grantImport' | 'sfcPaymentSync'
   | 'grantCalculator' | 'searchGrant' | 'viewGrant'
   | 'claimManagement' | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
   | 'proformaInvoice' | 'taxInvoice' | 'receipt'
@@ -133,7 +134,7 @@ const FinanceLayout: React.FC = () => {
     if (['proformaInvoice', 'taxInvoice', 'receipt'].includes(page)) {
       setOpenSections(prev => ({ ...prev, claimManagement: true, invoiceSub: true }));
     }
-    if (page === 'grantImport') {
+    if (page === 'grantImport' || page === 'sfcPaymentSync') {
       setOpenSections(prev => ({ ...prev, claimManagement: true, grantPaymentSync: true }));
     }
   }, [page]);
@@ -148,6 +149,8 @@ const FinanceLayout: React.FC = () => {
         return <AllCourseRunsView />;
       case 'grantImport':
         return <GrantImportView />;
+      case 'sfcPaymentSync':
+        return <SfcPaymentSyncView />;
       // Finance automation pages
       case 'autoProcessEnrolments':
         return (
@@ -723,6 +726,7 @@ const FinanceLayout: React.FC = () => {
         </SubSection>
         <SubSection title="Grant Payment" sectionKey="grantPaymentSync">
           <NavItem target="grantImport" label="Bulk Grant Payment Sync" isSubItem />
+          <NavItem target="sfcPaymentSync" label="SFC Payment Sync" isSubItem />
         </SubSection>
         <SubSection title="Invoices" sectionKey="invoiceSub">
           <NavItem target="proformaInvoice" label="ProForma Invoice" isSubItem />

@@ -43,9 +43,13 @@ interface CourseRunRow {
   sfc_amount: number | null;
   sfc_payment_date: string | null;
   sfc_status: string | null;
+  sfc_claim_payment_status?: string | null;
+  sfc_qb_payment_id?: string | null;
+  qbo_sfc_status?: string | null;
   invoice_id?: string | null;
   invoice_no?: string | null;
   invoice_sent_at?: string | null;
+  is_da?: boolean | null;
 }
 
 interface Stats {
@@ -346,7 +350,7 @@ const StickyHeader: React.FC<{
   );
 };
 
-const TOTAL_COLS = 36; // update if headers change
+const TOTAL_COLS = 40; // update if headers change
 
 const AllCourseRunsView: React.FC = () => {
   const [search, setSearch] = useState('');
@@ -380,6 +384,8 @@ const AllCourseRunsView: React.FC = () => {
   const [fmsSendFailed, setFmsSendFailed] = useState(0);
   const [fmsSendTotal, setFmsSendTotal] = useState(0);
   const [fmsSendStartTime, setFmsSendStartTime] = useState(0);
+  const lastVerifiedIdsRef = useRef<string>('');
+  const backfillRanRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const theadRef = useRef<HTMLTableSectionElement>(null);
@@ -418,6 +424,62 @@ const AllCourseRunsView: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // On first mount: silently backfill QB invoice IDs for all enrolments missing one.
+  // Pass 1 fixes local status issues; Pass 2 searches by DocNumber; Pass 3 bulk-scans QB.
+  // Refreshes the table automatically when any IDs are linked.
+  useEffect(() => {
+    if (backfillRanRef.current) return;
+    backfillRanRef.current = true;
+    void (async () => {
+      try {
+        const res = await fetch('/api/finance/invoice-jobs/backfill-from-qb', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const json = await res.json();
+        if (!res.ok || !json?.success) return;
+        const d = json.data as { localFixed: number; pass2Resolved: number; pass3Resolved: number; total: number };
+        if ((d.total ?? 0) > 0) await fetchData();
+      } catch {
+        // silent — never blocks the UI
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After each data load, silently verify that recorded QB invoices still exist.
+  // Uses lastVerifiedIdsRef to avoid re-checking the same set of invoices twice
+  // (prevents infinite loops when a cleared invoice triggers a re-fetch).
+  useEffect(() => {
+    if (loading) return;
+
+    const invoicedIds = rows
+      .filter((r) => r.invoice_id && r.enrolment_id)
+      .map((r) => r.enrolment_id as string)
+      .slice(0, 30);
+
+    const idsKey = invoicedIds.slice().sort().join(',');
+
+    // Skip if this exact set of invoice IDs was already checked
+    if (!idsKey || idsKey === lastVerifiedIdsRef.current) return;
+    lastVerifiedIdsRef.current = idsKey;
+
+    void (async () => {
+      try {
+        const res = await fetch('/api/finance/invoice-jobs/verify-qb', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enrolmentIds: invoicedIds }),
+        });
+        const json = await res.json();
+        if (res.ok && json?.data?.cleared > 0) {
+          await fetchData();
+        }
+      } catch {
+        // Silent — verification is best-effort, never blocks the UI
+      }
+    })();
+  }, [rows, loading, fetchData]);
+
   useEffect(() => {
     if (!syncToast) return;
     const t = setTimeout(() => setSyncToast(null), 8000);
@@ -427,6 +489,7 @@ const AllCourseRunsView: React.FC = () => {
   const runSync = async () => {
     setSyncing(true);
     setSyncToast(null);
+    lastVerifiedIdsRef.current = ''; // allow re-verification after SSG sync
     try {
       const todayIso = new Date().toISOString().slice(0, 10);
       const defaultFromIso = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
@@ -777,6 +840,7 @@ const AllCourseRunsView: React.FC = () => {
         </div>
       )}
 
+
       {/* Error */}
       {error && (
         <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-sm">
@@ -799,11 +863,11 @@ const AllCourseRunsView: React.FC = () => {
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-blue-300 dark:border-blue-600 ${groupHeaderColors.course}`}>Course</th>
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-green-300 dark:border-green-600 ${groupHeaderColors.trainee}`}>Trainee</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-purple-300 dark:border-purple-600 ${groupHeaderColors.sponsor}`}>Employer</th>
-                <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
+                <th colSpan={6} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
                 <th colSpan={3} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-indigo-300 dark:border-indigo-600 ${groupHeaderColors.bl}`}>BL Grant</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-teal-300 dark:border-teal-600 ${groupHeaderColors.nbl}`}>Non-BL Grant</th>
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-orange-300 dark:border-orange-600 ${groupHeaderColors.tg}`}>TG</th>
-                <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-pink-300 dark:border-pink-600 ${groupHeaderColors.sfc}`}>SFC Claims</th>
+                <th colSpan={7} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-pink-300 dark:border-pink-600 ${groupHeaderColors.sfc}`}>SFC Claims</th>
                 <th colSpan={3} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-emerald-300 dark:border-emerald-600 ${groupHeaderColors.grant_pay}`}>Grant Payment</th>
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-gray-300 dark:border-gray-600 ${groupHeaderColors.fees}`}>Fees</th>
               </tr>
@@ -836,9 +900,10 @@ const AllCourseRunsView: React.FC = () => {
                 <th className={headerCell}>UEN</th>
                 <th className={headerCell}>Employer</th>
                 <th className={headerCell}>Employer Contact</th>
-                {/* Enrolment (4) */}
+                {/* Enrolment (5) */}
                 <th className={headerCell}>Status</th>
                 <th className={headerCell}>Enrolment ID</th>
+                <th className={headerCell}>DA</th>
                 <th className={headerCell}>Invoice ID</th>
                 <th className={headerCell}>Invoice No</th>
                 <th className={headerCell}>Sent</th>
@@ -853,11 +918,14 @@ const AllCourseRunsView: React.FC = () => {
                 <th className={`${headerCell} text-right`}>Amount</th>
                 {/* TG Total (1) */}
                 <th className={`${headerCell} text-right`}>Total TG</th>
-                {/* SFC Claims (4) */}
+                {/* SFC Claims (7) */}
                 <th className={headerCell}>Claim ID</th>
                 <th className={`${headerCell} text-right`}>Amount</th>
                 <th className={headerCell}>Payment Date</th>
-                <th className={headerCell}>Status</th>
+                <th className={headerCell}>Claim Status</th>
+                <th className={headerCell}>FMS Payment</th>
+                <th className={headerCell}>QB SFC</th>
+                <th className={headerCell}>QB Payment ID</th>
                 {/* Grant Payment (3) */}
                 <th className={`${headerCell} text-right`}>Pending</th>
                 <th className={headerCell}>Status</th>
@@ -932,6 +1000,11 @@ const AllCourseRunsView: React.FC = () => {
                       </span>
                     </td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.enrolment_id || '-'}</td>
+                    <td className={cell}>
+                      {r.is_da ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">DA</span>
+                      ) : null}
+                    </td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_id || '-'}</td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_no || '-'}</td>
                     <td className={`${cell} text-on-surface-secondary`}>{r.invoice_sent_at ? formatDate(String(r.invoice_sent_at).slice(0, 10)) : '-'}</td>
@@ -976,6 +1049,23 @@ const AllCourseRunsView: React.FC = () => {
                           {r.sfc_status}
                         </span>
                       ) : '-'}
+                    </td>
+                    <td className={cell}>
+                      {r.sfc_claim_payment_status ? (
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${r.sfc_claim_payment_status === 'PAID' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300'}`}>
+                          {r.sfc_claim_payment_status}
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td className={cell}>
+                      {r.qbo_sfc_status ? (
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${r.qbo_sfc_status === 'Paid' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'}`}>
+                          {r.qbo_sfc_status}
+                        </span>
+                      ) : '-'}
+                    </td>
+                    <td className={`${cell} text-on-surface-secondary font-mono text-xs max-w-[100px] truncate`} title={r.sfc_qb_payment_id || ''}>
+                      {r.sfc_qb_payment_id || '-'}
                     </td>
                     {/* Grant Payment */}
                     <td className={`${cell} text-right tabular-nums`}>{r.total_grant_pending != null ? formatCurrency(Number(r.total_grant_pending)) : '-'}</td>
