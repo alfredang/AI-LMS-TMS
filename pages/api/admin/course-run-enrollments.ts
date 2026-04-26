@@ -19,6 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          au.id AS user_id,
          au.full_name,
          au.email,
+         au.secondary_email,
          lp.nric,
          lp.tel,
          e.course_sponsorship AS sponsorship_type,
