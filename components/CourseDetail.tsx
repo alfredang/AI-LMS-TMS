@@ -295,13 +295,7 @@ const AssessmentsSection: React.FC<{
             }
 
             try {
-                const params = new URLSearchParams({
-                    userId: currentUser.id,
-                    courseRunId: courseRunId,
-                });
-                if (currentUser.email) params.set('userEmail', currentUser.email);
-
-                const response = await fetch(`/api/assessments/submit-link?${params.toString()}`);
+                const response = await fetch(`/api/assessments/submit-link?userId=${currentUser.id}&courseRunId=${courseRunId}`);
                 if (!response.ok) {
                     // Don't throw - just log and continue (table might not exist yet)
                     console.warn('⚠️ Could not fetch link assessment submissions - table may not exist yet');
@@ -380,7 +374,6 @@ const AssessmentsSection: React.FC<{
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         userId: currentUser?.id,
-                        userEmail: currentUser?.email,
                         courseRunId,
                         assessmentType,
                         fileName: file.name,
