@@ -8,11 +8,22 @@
 export async function register() {
     // Only run on the server side, not during build
     if (process.env.NEXT_RUNTIME === 'nodejs') {
-        if (process.env.NODE_ENV === 'production') {
+        // Always initialize the scheduler if it's the Node.js runtime
+        try {
             const { initScheduler } = await import('./lib/scheduler/scheduler');
             await initScheduler();
-        } else {
-            console.log('[Scheduler] Skipped — not running in production');
+        } catch (err) {
+            console.error('[Scheduler] Failed to initialize:', err);
+        }
+
+        // Ensure the CP Generator prompt-template table exists. Idempotent —
+        // safe to run every boot; first-time deploys get the table without
+        // requiring a manual `npm run db:migrate` step.
+        try {
+            const { ensureCpPromptTemplateTable } = await import('./lib/cp-prompts-ensure-table');
+            await ensureCpPromptTemplateTable();
+        } catch (err) {
+            console.error('[CP] Failed to ensure cp_prompt_template table:', err);
         }
 
         // Warm up OpenClaw session to avoid ~15s cold start on first user message

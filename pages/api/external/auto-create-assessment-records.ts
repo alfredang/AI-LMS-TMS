@@ -117,7 +117,7 @@ export async function runAutomation() {
          FROM course_run cr
          JOIN course c ON c.id = cr.course_id
          LEFT JOIN trainer_profile tp ON tp.user_id = cr.assigned_trainer_id
-         WHERE DATE(cr.start_date) = CURRENT_DATE
+         WHERE cr.start_date = (NOW() AT TIME ZONE 'Asia/Singapore')::date
            AND cr.course_run_id IS NOT NULL
            AND cr.course_run_id <> ''
            AND (cr.class_status IS NULL OR cr.class_status::text NOT ILIKE 'cancelled')

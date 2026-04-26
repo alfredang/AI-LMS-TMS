@@ -1,8 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { execSync } from 'child_process';
-import fs from 'fs';
+import { generateBrochure } from '../../../lib/cw-brochure';
 import path from 'path';
-import os from 'os';
 
 export const config = {
   api: {
@@ -25,34 +23,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'A valid http(s) course URL is required.' });
   }
 
-  const scriptPath = path.join(process.cwd(), 'scripts', 'generate-brochure.py');
-  const templateDir = path.join(process.cwd(), 'public', 'templates', 'brochure');
-  const outputPath = path.join(os.tmpdir(), `brochure_${Date.now()}.pdf`);
-
+  // Pure-Node implementation — scrapes via cheerio, renders via the npm
+  // `playwright` package. No Python dependency, so Coolify deploys without
+  // python3 on PATH still produce brochures successfully.
   try {
-    const result = execSync(
-      `python "${scriptPath}" "${courseUrl}" "${templateDir}" "${outputPath}"`,
-      { encoding: 'utf-8', timeout: 120000, maxBuffer: 20 * 1024 * 1024 }
-    );
-
-    const parsed = JSON.parse(result.trim());
-    if (parsed.error) {
-      return res.status(500).json({ error: parsed.error, trace: parsed.trace });
-    }
-
-    if (!fs.existsSync(outputPath)) {
-      return res.status(500).json({ error: 'PDF was not created.' });
-    }
-
-    const pdfBuffer = fs.readFileSync(outputPath);
-    const title = sanitizeFileName(parsed.course_title || 'Brochure');
-    const fileName = `Brochure_${parsed.tgs_ref || 'course'}_${title}.pdf`;
+    const templateDir = path.join(process.cwd(), 'public', 'templates', 'brochure');
+    const { data, pdfBuffer } = await generateBrochure(courseUrl, templateDir);
+    const title = sanitizeFileName(data.course_title || 'Brochure');
+    const fileName = `Brochure_${data.tgs_reference_no || 'course'}_${title}.pdf`;
 
     return res.status(200).json({
       success: true,
-      courseTitle: parsed.course_title,
-      tgsRef: parsed.tgs_ref,
-      courseData: parsed.course_data,
+      courseTitle: data.course_title,
+      tgsRef: data.tgs_reference_no,
+      courseData: {
+        tsc_code: data.tsc_code,
+        tsc_title: data.tsc_title,
+        tsc_framework: data.tsc_framework,
+        duration_hrs: data.duration_hrs,
+        session_days: data.session_days,
+        gst_exclusive_price: data.gst_exclusive_price,
+        gst_inclusive_price: data.gst_inclusive_price,
+        num_topics: data.course_details_topics.length,
+        num_outcomes: data.learning_outcomes.length,
+      },
       document: {
         name: fileName,
         data: pdfBuffer.toString('base64'),
@@ -61,7 +55,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (error: any) {
     console.error('Brochure generation error:', error);
     return res.status(500).json({ error: error.message || 'Failed to generate brochure' });
-  } finally {
-    try { fs.unlinkSync(outputPath); } catch {}
   }
 }

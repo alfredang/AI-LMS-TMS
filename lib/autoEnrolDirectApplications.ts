@@ -21,6 +21,7 @@ import { getSSGCredentialsService } from './ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from './ssg/utils/http-utils';
 import { getTrainingPartnerIdentifiers } from './trainingPartnerIdentifiers';
 import { buildEnrolmentPayload } from './ssg/buildEnrolmentPayload';
+import { searchEnrolment } from './ssg/services/enrolment-service';
 import {
   createDirectApplicationInvoice,
   type DaApplicationForInvoice,
@@ -140,19 +141,51 @@ async function ssgEncryptedPost(
 
   const httpResponse = await ctx.httpClient.request(builder.build());
 
-  if (httpResponse.status !== 200 && httpResponse.status !== 201) {
+  const isError = httpResponse.status !== 200 && httpResponse.status !== 201 && httpResponse.status !== 400;
+  if (isError) {
     throw new Error(`SSG ${path} returned ${httpResponse.status}`);
   }
 
-  const rawBody = typeof httpResponse.data === 'string'
-    ? httpResponse.data
-    : JSON.stringify(httpResponse.data);
+  let rawBody = '';
+  if (httpResponse.data) {
+    rawBody = typeof httpResponse.data === 'string'
+      ? httpResponse.data
+      : JSON.stringify(httpResponse.data);
+  } else if (httpResponse.status === 400) {
+    throw new Error(`SSG ${path} returned 400 with no body`);
+  }
 
-  const decipher = crypto.createDecipheriv('aes-256-cbc', ctx.encKey, IV);
-  let decrypted = decipher.update(rawBody, 'base64', 'utf8');
-  decrypted += decipher.final('utf8');
+  if (rawBody && rawBody.trim() !== '') {
+    try {
+      // Handle wrapped error JSON from SSG Gateway (common on 400 errors)
+      let toDecrypt = rawBody;
+      if (rawBody.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(rawBody);
+          if (parsed.error && typeof parsed.error === 'string') {
+            toDecrypt = parsed.error;
+          }
+        } catch { /* not valid JSON, treat as raw */ }
+      }
 
-  return JSON.parse(decrypted);
+      const decipher = crypto.createDecipheriv('aes-256-cbc', ctx.encKey, IV);
+      let decrypted = decipher.update(toDecrypt, 'base64', 'utf8');
+      decrypted += decipher.final('utf8');
+      return JSON.parse(decrypted);
+    } catch (err) {
+      if (httpResponse.status === 400) {
+        throw new Error(`SSG ${path} returned 400 (failed to decrypt body: ${err instanceof Error ? err.message : 'Unknown error'})`);
+      }
+      // If it's a 200/201 but decryption fails
+      throw new Error(`Failed to decrypt SSG response: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  if (httpResponse.status === 400) {
+    throw new Error(`SSG ${path} returned 400 with empty body`);
+  }
+
+  return {};
 }
 
 function extractEnrolmentReference(parsed: any): string | null {
@@ -211,6 +244,20 @@ async function addLearnerToCalendarEvent(
   const tpRow = tpRes.rows[0];
   if (!tpRow?.sync_google_calendar) {
     console.log(`📅 [calendar-attendee] sync_google_calendar is off — skipping`);
+    return false;
+  }
+
+  // Verify the application is still active (not cancelled)
+  const activeAppRes = await pool.query(
+    `SELECT application_status FROM da_application 
+     WHERE LOWER(trainee_email) = LOWER($1) 
+       AND LOWER(course_title) = LOWER($2)
+       AND LOWER(application_status) IN ('confirmed', 'confirm application')
+     LIMIT 1`,
+    [learnerEmail, courseTitle]
+  );
+  if (activeAppRes.rows.length === 0) {
+    console.log(`📅 [calendar-attendee] No active application for ${learnerEmail} in ${courseTitle} — skipping add`);
     return false;
   }
 
@@ -507,9 +554,33 @@ export async function processDirectApplication(
       console.log(`📦 auto-enrol [${applicationId}]:`, JSON.stringify(parsed));
 
       const errMsg = hasSsgError(parsed);
-      if (errMsg) throw new Error(errMsg);
+      if (errMsg) {
+        if (errMsg.toLowerCase().includes('duplicate')) {
+          console.log(`ℹ️  auto-enrol [${applicationId}]: Duplicate detected in SSG, searching for existing enrolment...`);
+          const p = payload as any;
+          const searchPayload = {
+            enrolment: {
+              course: p.enrolment.course,
+              trainee: p.enrolment.trainee,
+              trainingPartner: p.enrolment.trainingPartner
+            },
+            parameters: { page: 0, pageSize: 10 }
+          };
 
-      enrolmentReference = extractEnrolmentReference(parsed);
+          const searchResult = await searchEnrolment(searchPayload as any);
+          if (searchResult.success && searchResult.referenceNumber) {
+            console.log(`✅ auto-enrol [${applicationId}]: Recovered duplicate enrolment reference: ${searchResult.referenceNumber}`);
+            enrolmentReference = searchResult.referenceNumber;
+          } else {
+            throw new Error(`Duplicate record found, but search failed to recover reference`);
+          }
+        } else {
+          throw new Error(errMsg);
+        }
+      } else {
+        enrolmentReference = extractEnrolmentReference(parsed);
+      }
+
       if (!enrolmentReference) {
         throw new Error('no enrolment reference in SSG response');
       }

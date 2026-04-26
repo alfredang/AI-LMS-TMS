@@ -2,90 +2,13 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import pool from '../../../lib/db';
 import { buildClaudeEnv } from '../../../lib/anthropic-auth';
-import * as XLSX from 'xlsx';
-import mammoth from 'mammoth';
-import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { parseCpFile } from '../../../lib/cp-parser';
 
-// ─── File Parsing Helpers (matching Streamlit's parse_cp_document logic) ───
-
-const MAX_PROMPT_CHARS = 80000;
-
-function trimDocxContent(text: string): string {
-  // Trim to relevant CP sections: Part 1 through Part 4 (matching Streamlit)
-  const startMatch = text.match(/Part\s*1[\s\S]*?Particulars\s*of\s*Course/i);
-  const endMatch = text.match(/Part\s*\d+[\s\S]*?Facilities\s*and\s*Resources/i);
-  if (startMatch && startMatch.index !== undefined) {
-    const startIdx = startMatch.index;
-    if (endMatch && endMatch.index !== undefined) {
-      const endIdx = endMatch.index + endMatch[0].length;
-      text = text.substring(startIdx, endIdx);
-    } else {
-      text = text.substring(startIdx);
-    }
-  }
-  // Collapse excessive newlines
-  return text.replace(/\n{3,}/g, '\n\n').trim();
-}
-
-function trimXlsxContent(text: string): string {
-  // Trim to relevant sections: Course Particulars through Declarations (matching Streamlit)
-  const startIdx = text.indexOf('1 - Course Particulars');
-  const endIdx = text.indexOf('4 - Declarations');
-  if (startIdx >= 0) {
-    text = endIdx >= 0 ? text.substring(startIdx, endIdx) : text.substring(startIdx);
-  }
-  return text.replace(/\n{3,}/g, '\n\n').trim();
-}
+// ─── File Parsing (pure TS, matches Streamlit's parse_cp_document behaviour) ───
 
 async function parseFileContent(base64Data: string, fileName: string): Promise<string> {
-  // Use Python parser (python-docx / openpyxl) — matches Streamlit's parse_cp_document exactly
-  const tmpDir = os.tmpdir();
-  const b64Path = path.join(tmpDir, `cp_b64_${Date.now()}.txt`);
-  const scriptPath = path.join(process.cwd(), 'scripts', 'parse-cp.py');
-
-  fs.writeFileSync(b64Path, base64Data, 'utf-8');
-
-  try {
-    const result = execSync(
-      `python "${scriptPath}" "${b64Path}" base64 "${fileName}"`,
-      { encoding: 'utf-8', timeout: 30000 }
-    );
-    const parsed = JSON.parse(result.trim());
-    if (parsed.error) throw new Error(parsed.error);
-    return parsed.text || '';
-  } catch (e: any) {
-    console.error('Python CP parser error:', e.message);
-    // Fallback to JS parsing
-    const buffer = Buffer.from(base64Data, 'base64');
-    let fbResult = '';
-    if (fileName.match(/\.xlsx?$/i)) {
-      const workbook = XLSX.read(buffer, { type: 'buffer' });
-      const allText: string[] = [];
-      for (const sheetName of workbook.SheetNames) {
-        const sheet = workbook.Sheets[sheetName];
-        const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-        if (rows.length > 0) {
-          const sheetText = rows
-            .filter(row => row.some((cell: any) => String(cell).trim()))
-            .map(row => row.map((cell: any) => String(cell).trim()).join(' | '))
-            .join('\n');
-          if (sheetText.trim()) allText.push(`## ${sheetName}\n${sheetText}`);
-        }
-      }
-      fbResult = trimXlsxContent(allText.join('\n\n'));
-    } else if (fileName.match(/\.docx$/i)) {
-      const extracted = await mammoth.extractRawText({ buffer: Buffer.from(base64Data, 'base64') });
-      fbResult = trimDocxContent(extracted.value);
-    } else {
-      fbResult = buffer.toString('utf8');
-    }
-    return fbResult;
-  } finally {
-    try { fs.unlinkSync(b64Path); } catch {}
-  }
+  const buffer = Buffer.from(base64Data, 'base64');
+  return parseCpFile(buffer, fileName);
 }
 
 // ─── Prompt Templates ───
@@ -422,16 +345,24 @@ async function getApiKey(): Promise<string | null> {
   return process.env.ANTHROPIC_API_KEY || null;
 }
 
-async function generateWithClaude(prompt: string, apiKey: string, maxTurns: number = 5): Promise<string> {
+async function generateWithClaude(
+  prompt: string,
+  apiKey: string,
+  maxTurns: number = 5,
+  model?: string,
+): Promise<string> {
   let resultText = '';
+
+  const options: Record<string, unknown> = {
+    env: buildClaudeEnv(apiKey),
+    allowedTools: [],
+    maxTurns,
+  };
+  if (model) options.model = model;
 
   for await (const message of query({
     prompt,
-    options: {
-      env: buildClaudeEnv(apiKey),
-      allowedTools: [],
-      maxTurns,
-    },
+    options: options as any,
   })) {
     if (message.type === 'assistant' && message.message?.content) {
       for (const block of message.message.content) {
@@ -545,57 +476,76 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     switch (section) {
       case 'extract_course_info': {
-        // Single Claude call — extract structured JSON (matching Streamlit's cp_interpreter)
+        // Single Claude call — extract structured JSON (matching Streamlit's cp_interpreter).
+        // CP-text packing: previous version sent first 15K chars + last 20K chars,
+        // which left a gap in the middle for moderately-sized CPs (~40–60K chars)
+        // and intermittently dropped Skills Framework / Sector / Proficiency Level
+        // because those often sit in the gap. Strategy now:
+        //   - CPs ≤ 120K chars (~30K tokens): send the WHOLE document — fits
+        //     comfortably in Claude's context and guarantees no dropped fields.
+        //   - Bigger CPs: send first 60K + middle 30K + last 40K, so even
+        //     long documents have the metadata band covered.
+        const cpTextForPrompt = (() => {
+          const t = parsedCpText;
+          if (t.length <= 120000) return t;
+          const head = t.substring(0, 60000);
+          const tailStart = t.length - 40000;
+          const middleStart = Math.floor((60000 + tailStart) / 2) - 15000;
+          const middle = t.substring(middleStart, middleStart + 30000);
+          const tail = t.substring(tailStart);
+          return `${head}\n\n[... middle band ...]\n\n${middle}\n\n[... continuing ...]\n\n${tail}`;
+        })();
+
         const jsonPrompt = `You are an expert WSQ course proposal analyst. Extract ALL data from this Course Proposal into a JSON object.
 
-Course Proposal Content (Part 1 - Course Details):
-${parsedCpText.substring(0, 15000)}
-
-Course Proposal Content (Part 2 - Methodologies & Assessment):
-${parsedCpText.length > 15000 ? parsedCpText.substring(parsedCpText.length - Math.min(20000, parsedCpText.length - 15000)) : ''}
+Course Proposal Content:
+${cpTextForPrompt}
 
 TGS Reference Number: ${tgsRefCode}
 
 Return ONLY a valid JSON object with this EXACT structure (fill ALL fields from the CP):
 {
-  "Name_of_Organisation": "extracted company name",
-  "Course_Title": "extracted course title",
+  "Name_of_Organisation": "EXACT company name as written in the CP — preserve the original capitalisation (e.g. 'Tertiary Infotech Academy Pte Ltd', not 'TERTIARY INFOTECH PTE. LTD.'). Do NOT uppercase, abbreviate, or paraphrase.",
+  "Course_Title": "EXACT course title as written in the CP. Preserve case and wording verbatim.",
   "TGS_Ref_No": "${tgsRefCode || 'extracted TGS ref'}",
-  "TSC_Code": "extracted TSC code",
-  "TSC_Title": "extracted TSC title",
-  "TSC_Description": "1 short paragraph (2-3 sentences max) course description from the CP",
-  "TSC_Sector": "sector name",
-  "Proficiency_Level": "Level X",
-  "Skills_Framework": "framework name",
-  "Total_Training_Hours": "X hours",
-  "Total_Assessment_Hours": "X hours",
-  "Total_Course_Duration_Hours": "X hours",
-  "Course_Overview": "1 short paragraph (2-3 sentences max) from the CP's About This Course section. Keep it concise.",
+  "TSC_Code": "extracted TSC code (e.g. 'ICT-BAS-0055-1.1') — ALWAYS PRESENT in the CP. Never return null.",
+  "TSC_Title": "EXACT TSC title text from the CP — verbatim, do not paraphrase. ALWAYS PRESENT in the CP. Never return null.",
+  "TSC_Description": "EXACT TSC description text from the CP. Copy the wording verbatim — do NOT generate, summarise, or invent. If the CP TSC Description cell says 'Basic level competency in responsible AI practices', output exactly that.",
+  "TSC_Sector": "EXACT sector name from the CP (e.g. 'Infocomm Technology', 'Information and Communications Technology'). ALWAYS PRESENT in WSQ CPs (Sector / TSC Sector / TSC Category column). If you don't find it explicitly, infer from the TSC Code prefix (e.g. ICT- → 'Information and Communications Technology'). NEVER return null/empty for this field.",
+  "Proficiency_Level": "Level X (verbatim from CP). ALWAYS PRESENT in WSQ CPs (Proficiency Level / TSC Proficiency Level column). Look in the TSC details / Skills Framework section. NEVER return null/empty.",
+  "Skills_Framework": "EXACT skills-framework name as written in the CP — preserve the full wording (e.g. 'Skills Framework for Infocomm Technology', 'Skills Framework for Information and Communications Technology'). ALWAYS PRESENT in WSQ CPs (Skills Framework / SFw column). If the CP only writes 'ICT Skills Framework', expand the prefix from the TSC Code (ICT- → Information and Communications Technology) and output 'Skills Framework for Information and Communications Technology'. NEVER return null/empty.",
+  "Total_Training_Hours": "X hrs (verbatim from the CP's Total Training Hours field)",
+  "Total_Assessment_Hours": "X hrs (verbatim from the CP)",
+  "Total_Course_Duration_Hours": "X hrs (verbatim from the CP)",
+  "Course_Overview": "VERBATIM 'About This Course' paragraph from the CP — do not summarise or rewrite. Trim only leading/trailing whitespace.",
   "Course_Fee": "amount or N/A",
-  "LO_Description": "1-2 sentences summarizing what learners will achieve. Keep concise.",
+  "LO_Description": "EXACT learning outcome description text from the CP — verbatim.",
   "Learning_Units": [
     {
-      "LU_Title": "full LU title",
-      "LO": "full learning outcome text",
+      "LU_Title": "<plain LU title text only — DO NOT include any 'LU1:' / 'LU2:' / 'LUx:' prefix. Output just the title (e.g. 'Ethical Principles of Generative AI'). The downstream renderers prepend the LU number themselves.>",
+      "LO": "ELO1: <EXACT learning outcome text from the CP's 'Learning Outcome' column for this LU — preserve VERBATIM, do NOT paraphrase, summarise, rephrase, or invent. If the CP says 'Apply ethical judgement to evaluate generative AI outputs and support responsible implementation decisions.', output exactly that. Include the 'ELOx: ' / 'LOx: ' prefix exactly as the CP labels it.>",
       "Topics": [
-        {"Topic_Title": "topic name", "Bullet_Points": ["subtopic 1", "subtopic 2", "subtopic 3"]}
+        {
+          "Topic_Title": "<EXACT topic text as it appears in the CP's Topics column — preserve verbatim wording, do NOT rephrase, summarise, or shorten. DO NOT prepend 'T1:' / 'T2:' / 'Tx:' — the renderer adds the numbering when needed. Output just the title text.>",
+          "Bullet_Points": ["<short topic bullet 1 from the CP>", "<short topic bullet 2>", "<short topic bullet 3>"]
+        }
       ],
       "K_numbering_description": [
-        {"K_number": "K1", "Description": "knowledge statement text"}
+        {"K_number": "K1", "Description": "<plain knowledge statement text WITHOUT any trailing TSC reference code like (ICT-BAS-0055-1.1)>"}
       ],
       "A_numbering_description": [
-        {"A_number": "A1", "Description": "ability statement text"}
+        {"A_number": "A1", "Description": "<plain ability statement text WITHOUT any trailing TSC reference code like (ICT-BAS-0055-1.1)>"}
       ],
-      "Assessment_Methods": ["Written Exam", "Case Study"],
+      "Assessment_Methods": ["Written Assessment - Short Answer Questions", "Case Study"],
       "Instructional_Methods": ["Interactive presentation", "Case studies"]
     }
   ],
   "Assessment_Methods_Details": [
     {
-      "Assessment_Method": "full method name",
-      "Method_Abbreviation": "WA-SAQ or PP or CS or RP or OQ",
-      "Total_Delivery_Hours": "1 hour 10 min",
-      "Assessor_to_Candidate_Ratio": ["1:3 to 1:15"],
+      "Assessment_Method": "<EXACT method name as written in the CP — preserve verbatim including 'Others:' prefix when the CP uses it (e.g. 'Written Exam', 'Others: Case Study', 'Practical Performance'). Do NOT standardise or rewrite.>",
+      "Method_Abbreviation": "<EXACT abbreviation as the CP uses (e.g. 'WE' for Written Exam, 'CS' for Case Study, 'PP' for Practical Performance). Do NOT remap (e.g. do NOT change 'WE' to 'WA-SAQ').>",
+      "Total_Delivery_Hours": "1 hr 10 min",
+      "Assessor_to_Candidate_Ratio": ["<single ratio number e.g. '1:20' — strip any '(Min)' / '(Max)' annotations and pick the maximum value when the CP gives a range>"],
       "Evidence": ["description of evidence per LO e.g. {'LO': 'ELO1', 'Evidence': 'Practical demonstration of...'}"],
       "Submission": ["Individual", "Open book"],
       "Marking_Process": ["Direct evidence of competency acquisition", "Learn by Doing approach"],
@@ -604,24 +554,79 @@ Return ONLY a valid JSON object with this EXACT structure (fill ALL fields from 
   ]
 }
 
-CRITICAL RULES:
-- Include ALL Learning Units with ALL their Topics, K statements, and A statements
-- IMPORTANT: Count EVERY topic carefully. If a CP has 3 LUs and each LU has 3-5 topics, the total should be 10-15 topics. Do NOT merge or skip topics. Each distinct topic listed in the CP must be a separate entry in the Topics array
-- Each Topic MUST have 2-5 Bullet_Points (subtopics)
-- For Total_Training_Hours: Sum ALL instructional components (Classroom + Practical/Practicum + E-Learning + Others). Example: If CR=7.5hrs + Practical=6hrs → Total_Training_Hours = "13.5 hours". NEVER use just one component.
-- For Total_Assessment_Hours: Use the total assessment hours from the CP summary
-- For Total_Course_Duration_Hours: Use the total duration from the CP (e.g., "16 hours")
-- For Assessment_Methods_Details: Sum EXACT minutes across all LOs for the same method, then convert to human-readable format
-  Example: If WA-SAQ has LO1=30min + LO2=40min = 70min total → "1 hour 10 min"
-  Example: If PP has LO1=60min + LO2=50min = 110min total → "1 hour 50 min"
-  NEVER round durations. Use exact calculated values like "1 hour 10 min", "1 hour 50 min", NOT "1 hour" or "2 hours"
-- Extract the EXACT Assessor_to_Candidate_Ratio from the CP (e.g. "1:3 to 1:15"), do NOT simplify to "1:20"
-- For Evidence Gathering Plan: For each assessment method (especially PP), generate Evidence entries per LO describing what practical evidence the learner must demonstrate. Include Submission methods, Marking Process, and Retention Period (usually "3 years")
-- For K statements: Map to Written Assessment methods (WA-SAQ). For A statements: Map to Practical methods (PP, CS, RP)
-- EVERY Learning Unit MUST have Assessment_Methods listed (use the same methods as in Assessment_Methods_Details)
-- Return ONLY valid JSON, no markdown code blocks, no explanation`;
+CRITICAL RULES — READ CAREFULLY (these mirror the Streamlit WSQ extractor):
 
-        const jsonResult = await generateWithClaude(jsonPrompt, apiKey);
+TOPICS vs KNOWLEDGE/ABILITY — MOST IMPORTANT:
+- Topics in a WSQ CP appear in the CP's "Topics" column. Each topic is a row of text the CP author has written verbatim (e.g. "Ethical considerations and potential risks of generative AI interaction", "Apply ethical principles in decision-making related to AI", "Data anonymisation and de-identification techniques").
+- K statements are specialised KNOWLEDGE items (e.g. "K1: Programming and coding languages, logics and styles").
+- A statements are specialised ABILITY items (e.g. "A1: Analyse and translate business requirements of software into multiple functions").
+- DO NOT copy K statement descriptions OR A statement descriptions into Topic_Title. Those belong ONLY in K_numbering_description / A_numbering_description.
+- **Topic_Title MUST be the EXACT topic text from the CP — preserve the original wording verbatim, including length. DO NOT shorten, summarise, paraphrase, or invent a "pedagogical theme" name. If the CP says "Apply ethical principles in decision-making related to AI", output that EXACT string. Long topic titles are fine — keep them long.**
+- Only fall back to inventing a short label if the CP's Topics cell is genuinely empty or only contains K/A bullets with no separate topic text — and even then, prefer the bullet text over a made-up name.
+- Each LU should have as many Topics as the CP lists (do not pad to 2-5 if the CP has fewer or more).
+- **NEVER produce duplicate topics in the same LU.** Each topic must appear EXACTLY ONCE — do not output both a shortened pedagogical name AND the full CP text for the same topic. If you're tempted to add a "summary" version alongside the verbatim CP text, drop the summary and keep ONLY the verbatim version. Two topics that share the same subject matter (even if one is shorter) are considered duplicates.
+- **Bullet_Points: when the CP has explicit sub-bullets under a topic, copy them verbatim.** When it doesn't (most CPs only carry a topic line), generate **2-4 short pedagogical sub-points (5-10 words each)** that elaborate on what that topic covers — these become the facilitator's bullet-list under each topic in the FG / LG. Do NOT exceed 4 bullets, do NOT write full sentences, and do NOT restate the topic title as a bullet.
+  - Example (GOOD) for topic "Ethical considerations and potential risks of generative AI interaction":
+      ["Understanding ethical challenges in AI interaction", "Identifying potential risks and consequences", "Evaluating AI outputs for ethical compliance"]
+  - Example (BAD — restating the topic):
+      ["Ethical considerations and potential risks of generative AI interaction"]
+- Example (GOOD — preserves exact CP wording):
+    { "Topic_Title": "Apply ethical principles in decision-making related to AI",
+      "Bullet_Points": [] }
+- Example (BAD — do NOT shorten):
+    { "Topic_Title": "Ethical AI Decision-Making",
+      "Bullet_Points": [] }
+- Example (BAD — do NOT use K/A statement as topic):
+    { "Topic_Title": "K1: Programming and coding languages, logics and styles",
+      "Bullet_Points": ["Explanation of K1 ...","Elaboration of K1 ..."] }
+
+PREFIXES:
+- LU_Title: PLAIN title text only — DO NOT include "LU1:" / "LU2:" / "LUx:" prefix. If the CP source already says "LU1: Introduction to Python Programming", strip the prefix and output just "Introduction to Python Programming". The downstream renderers (LP, FG, AP, LG) add the LU numbering themselves.
+- Topic_Title: PLAIN topic text only — DO NOT prepend "T1:" / "T2:" / "Tx:". Strip the prefix if the CP shows it.
+- LO: must contain the EXACT learning outcome sentence from the CP's "Learning Outcome" column for that LU, prefixed with the label the CP uses (e.g. "ELO1: Apply ethical judgement to evaluate generative AI outputs and support responsible implementation decisions."). DO NOT swap topic titles, K/A statements, or invented summary text into this field. If the CP shows the LO is one sentence, output that one sentence verbatim — not a list of topics.
+
+TSC REFERENCE CODE STRIPPING:
+- If a K or A statement in the CP reads "Ethical principles in AI (ICT-BAS-0055-1.1)", output the Description as just "Ethical principles in AI". Strip any trailing "(XXX-XXX-NNNN-N.N)" style code.
+
+ASSESSMENT METHODS — preserve CP wording verbatim (mirror Streamlit):
+- Assessment_Method MUST be the EXACT method name as the CP writes it. PRESERVE the "Others:" prefix when the CP uses it (e.g. output "Others: Case Study", NOT "Case Study"). PRESERVE the CP's choice of "Written Exam" vs "Written Assessment - Short Answer Questions" — do NOT rewrite one as the other.
+- Method_Abbreviation MUST be the EXACT abbreviation the CP uses for that method. If the CP writes "WE" for Written Exam, output "WE" — do NOT remap it to "WA-SAQ". If the CP writes "PP", output "PP". Only fall back to a sensible abbreviation if the CP doesn't supply one.
+- **Extract every assessment method the CP LISTS as a method — but ONLY from genuine method-listing places.** Valid sources are: the assessment summary table / "Assessment Methods" table, the per-LO assessment-method columns in the Instructional Design or Sequencing table, the "Mode of Assessment" column, the assessment-duration / fee breakdown rows, and the Annex A / Annex B / "3 - Summary" sheet. **DO NOT** invent methods from free-text descriptions, instructional notes, or assessor-tool mentions. If a method name only appears inside the description of another method (e.g. "Oral Clarification" mentioned as a clarifying tool used WITHIN a Written Assessment, not as a standalone assessment), do NOT add it as a separate method. The number of distinct methods in the output should equal the number of distinct rows in the assessment table.
+- The same applies to each LU's Assessment_Methods array: include the methods the CP's Mode-of-Assessment column actually assigns to that LU.
+- Common method names that ARE legitimate methods when listed in the assessment table: Written Assessment (Short-Answer Questions / Q&A), Written Exam, Practical Performance, Practical Exam, Case Study, Oral Questioning, Oral Interview, Role Play, Demonstration, Project, Assignment, Online Test. "Oral Clarification" is usually NOT a standalone assessment method — it is most often a clarification technique used during another assessment. Only include it if the CP explicitly lists it in the Assessment Method column / table (not the description text).
+- Assessor_to_Candidate_Ratio: extract the numeric ratio only (e.g. "1:20"). STRIP any "(Min)" / "(Max)" annotations. If the CP gives a range like "1:3 (Min) - 1:20 (Max)", output the MAXIMUM value alone: ["1:20"].
+
+COUNTS & COVERAGE:
+- Include ALL Learning Units with ALL their Topics, K statements, and A statements. If a CP has 3 LUs and each has 3-5 topics, total should be 10-15 topics.
+- EVERY Learning Unit MUST have Assessment_Methods listed (same methods as in Assessment_Methods_Details).
+- If the same K or A statement (same number and description) appears multiple times within the same LU, keep only ONE instance. If the same K or A appears in different LUs, keep both.
+
+NUMBERS & DURATIONS:
+- Time fields include units ("1 hr", "40 hrs", "2 hrs").
+- Total_Training_Hours = SUM of all instructional components (Classroom + Practical/Practicum + E-Learning + Others). Example: CR=7.5hrs + Practical=6hrs → "13.5 hrs". NEVER use just one component.
+- Total_Assessment_Hours from the CP assessment summary.
+- Total_Course_Duration_Hours from the CP duration total.
+- Assessment_Methods_Details Total_Delivery_Hours: PREFER the value the CP explicitly states in its "Total Delivery Hours" / assessment-summary row for that method (e.g. "WA-SAQ – 1 hr", "PP – 1 hr"). That is the authoritative figure — use it verbatim, even if per-LO breakdown rows show smaller values like "(PP) – 15 mins" (those are per-LO/per-section slices that shouldn't be reused as the total). ONLY when the CP has no summary row should you sum the per-LO minutes yourself, in which case format as "1 hr 10 min" / "1 hr 50 min" with no rounding.
+- Extract EXACT Assessor_to_Candidate_Ratio from the CP (e.g. "1:3 (Min)", "1:5 (Max)"), do NOT simplify to "1:20".
+
+NORMALISATION:
+- Replace en/em dashes (–, —) with hyphens (-).
+- Convert curly quotes to straight quotes.
+- Replace other non-ASCII characters with ASCII equivalents where sensible.
+
+EVIDENCE:
+- For each assessment method (especially PP and CS), provide Evidence entries per LO describing what practical evidence the learner must demonstrate. Include Submission methods, Marking Process, and Retention Period (usually "3 years").
+- For PP/CS, Evidence may be a list of {"LO": "ELO1", "Evidence": "..."} dicts.
+
+Return ONLY valid JSON, no markdown code blocks, no explanation.`;
+
+        // Use Sonnet 4.6 explicitly for CP extraction — Opus is slower and
+        // overkill here (the task is structured JSON extraction, not deep
+        // reasoning). Sonnet handles 45K-char CPs in roughly 30-50s vs
+        // Opus's 90-150s. Critical fields that Sonnet occasionally drops
+        // (Skills_Framework / TSC_Sector / Proficiency_Level) are caught
+        // by the regex fallback below.
+        const jsonResult = await generateWithClaude(jsonPrompt, apiKey, 1, 'claude-sonnet-4-6');
 
         // Parse JSON from response
         let courseDataJson = null;
@@ -630,66 +635,82 @@ CRITICAL RULES:
           try {
             courseDataJson = JSON.parse(jsonMatch[0]);
 
-            // Post-process: fix assessment durations by extracting exact minutes from parsed CP text
+            // Defensive fallback: if Claude dropped Skills_Framework /
+            // TSC_Sector / Proficiency_Level (the three fields most often
+            // returned as null/empty), derive them from the TSC Code prefix
+            // and a regex sweep over the parsed CP text. Guarantees the
+            // Course Overview table never shows N/A for these.
+            const SECTOR_MAP: Record<string, string> = {
+              ICT: 'Information and Communications Technology',
+              FIN: 'Financial Services',
+              HR:  'Human Resource',
+              MFG: 'Manufacturing',
+              BIZ: 'Business Management',
+              ACC: 'Accountancy',
+              LOG: 'Logistics',
+              SEC: 'Security',
+              CI:  'Creative Industries',
+              EHS: 'Environmental Services',
+              BIN: 'Business Innovation',
+              RET: 'Retail',
+              MED: 'Media',
+              HCE: 'Healthcare',
+              ECC: 'Early Childhood Care and Education',
+              TAE: 'Training and Adult Education',
+              WPH: 'Workplace Safety and Health',
+            };
+            const isEmpty = (v: any) => !v || (typeof v === 'string' && (!v.trim() || /^n\s*\/?\s*a$/i.test(v.trim())));
+            const tscCode = String(courseDataJson?.TSC_Code || '').trim();
+            const tscPrefix = tscCode.split('-')[0]?.toUpperCase();
+            const fallbackSector = tscPrefix && SECTOR_MAP[tscPrefix] ? SECTOR_MAP[tscPrefix] : '';
+            if (isEmpty(courseDataJson.TSC_Sector) && fallbackSector) {
+              courseDataJson.TSC_Sector = fallbackSector;
+            }
+            if (isEmpty(courseDataJson.Skills_Framework) && fallbackSector) {
+              courseDataJson.Skills_Framework = `Skills Framework for ${fallbackSector}`;
+            }
+            if (isEmpty(courseDataJson.Proficiency_Level)) {
+              // Try to grep "Level X" / "Proficiency Level: X" from CP text.
+              const m1 = parsedCpText.match(/Proficiency\s*Level[:\s|]+(?:Level\s+)?(\d+)/i);
+              const m2 = !m1 ? parsedCpText.match(/\bLevel\s+(\d+)\b/) : null;
+              const lvl = (m1 || m2)?.[1];
+              if (lvl) courseDataJson.Proficiency_Level = `Level ${lvl}`;
+            }
+
+            // Post-process: try to pin Total_Delivery_Hours to the CP's
+            // explicit "Total Delivery Hours" SUMMARY row when present. The
+            // CP usually lists per-LO/per-section breakdowns ("(PP) – 15
+            // mins", "WA(Q&A) – 70 mins") AND a summary row ("WA-SAQ – 1 hr",
+            // "PP – 1 hr", "Total – 2 hr"). The summary is authoritative.
+            // We previously regex-walked per-LO patterns and overwrote
+            // Claude's output with the smaller mins value — that produced
+            // "PP: 15 min" when the CP clearly states "PP – 1 hr" in the
+            // summary. Now we only override when the regex finds an HOURS-
+            // formatted summary value.
             if (courseDataJson?.Assessment_Methods_Details && parsedCpText) {
-              // Find exact durations from CP text (e.g. "70 mins", "110 mins")
-              const durationMatches = parsedCpText.match(/(\w[\w\s()\/&]+?)\s*\|\s*[\d:]+\s*to\s*[\d:]+\s*\|\s*(\d+)\s*mins/gi);
-              if (durationMatches) {
-                for (const match of durationMatches) {
-                  const parts = match.split('|').map((s: string) => s.trim());
-                  if (parts.length >= 3) {
-                    const methodName = parts[0];
-                    const mins = parseInt(parts[2]);
-                    if (!isNaN(mins)) {
-                      const hours = Math.floor(mins / 60);
-                      const remainMins = mins % 60;
-                      let durStr = '';
-                      if (hours > 0 && remainMins > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''} ${remainMins} min`;
-                      else if (hours > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''}`;
-                      else durStr = `${mins} min`;
-
-                      // Match to Assessment_Methods_Details
-                      for (const am of courseDataJson.Assessment_Methods_Details) {
-                        if (methodName.toLowerCase().includes('wa') && (am.Method_Abbreviation?.includes('WA') || am.Assessment_Method?.toLowerCase().includes('written'))) {
-                          am.Total_Delivery_Hours = durStr;
-                        } else if (methodName.toLowerCase().includes('pp') && (am.Method_Abbreviation === 'PP' || am.Assessment_Method?.toLowerCase().includes('practical'))) {
-                          am.Total_Delivery_Hours = durStr;
-                        } else if (methodName.toLowerCase().includes('cs') && (am.Method_Abbreviation === 'CS' || am.Assessment_Method?.toLowerCase().includes('case'))) {
-                          am.Total_Delivery_Hours = durStr;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-
-              // Also try simpler pattern: "WA(Q&A) – 70 mins" or "PP– 110 mins"
-              const simpleMatches = parsedCpText.match(/(?:WA|PP|CS|RP|OQ|OI)[\w()\/&]*[–\-—\s]*(\d+)\s*mins?/gi);
-              if (simpleMatches) {
-                for (const match of simpleMatches) {
-                  const minsMatch = match.match(/(\d+)\s*mins?/i);
-                  const typeMatch = match.match(/^(WA|PP|CS|RP|OQ|OI)/i);
-                  if (minsMatch && typeMatch) {
-                    const mins = parseInt(minsMatch[1]);
-                    const type = typeMatch[1].toUpperCase();
-                    const hours = Math.floor(mins / 60);
-                    const remainMins = mins % 60;
-                    let durStr = '';
-                    if (hours > 0 && remainMins > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''} ${remainMins} min`;
-                    else if (hours > 0) durStr = `${hours} hour${hours > 1 ? 's' : ''}`;
-                    else durStr = `${mins} min`;
-
-                    for (const am of courseDataJson.Assessment_Methods_Details) {
-                      const abbr = am.Method_Abbreviation || '';
-                      if ((type === 'WA' && abbr.includes('WA')) ||
-                          (type === 'PP' && abbr === 'PP') ||
-                          (type === 'CS' && abbr === 'CS') ||
-                          (type === 'RP' && abbr === 'RP') ||
-                          (type === 'OQ' && abbr === 'OQ') ||
-                          (type === 'OI' && abbr === 'OI')) {
-                        am.Total_Delivery_Hours = durStr;
-                      }
-                    }
+              // Match "WA-SAQ – 1 hr", "PP – 1 hr", "WA(Q&A) - 1 hour 30 min" etc.
+              // Always with an `hr`/`hour` unit so we can't pick up per-LO
+              // minutes by accident.
+              const summaryMatches = parsedCpText.matchAll(
+                /(WA[\w()\/&-]*|PP|CS|RP|OQ|OI|DEM|PRJ|ASGN)\s*[–\-—:]\s*(\d+\s*(?:hours?|hrs?)(?:\s*\d+\s*mins?)?)/gi,
+              );
+              for (const m of summaryMatches) {
+                const type = m[1].toUpperCase();
+                const value = m[2].trim();
+                for (const am of courseDataJson.Assessment_Methods_Details) {
+                  const abbr = (am.Method_Abbreviation || '').toUpperCase();
+                  const matchesAbbr =
+                    (type.startsWith('WA') && abbr.includes('WA')) ||
+                    (type === 'PP' && abbr === 'PP') ||
+                    (type === 'CS' && abbr === 'CS') ||
+                    (type === 'RP' && abbr === 'RP') ||
+                    (type === 'OQ' && abbr === 'OQ') ||
+                    (type === 'OI' && abbr === 'OI') ||
+                    (type === 'DEM' && abbr === 'DEM') ||
+                    (type === 'PRJ' && abbr === 'PRJ') ||
+                    (type === 'ASGN' && abbr === 'ASGN');
+                  if (matchesAbbr) {
+                    am.Total_Delivery_Hours = value;
                   }
                 }
               }

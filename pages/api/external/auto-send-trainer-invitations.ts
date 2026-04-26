@@ -133,8 +133,8 @@ export async function runAutomation(): Promise<AutomationSummary> {
   const eligibleRes = await pool.query(
     `SELECT cr.id
      FROM course_run cr
-     WHERE cr.start_date >= CURRENT_DATE
-       AND cr.start_date <= CURRENT_DATE + ($1::int * INTERVAL '1 day')
+     WHERE cr.start_date >= (NOW() AT TIME ZONE 'Asia/Singapore')::date
+       AND cr.start_date <= (NOW() AT TIME ZONE 'Asia/Singapore')::date + ($1::int * INTERVAL '1 day')
        AND COALESCE(cr.invitation_paused, false) = false
        AND NOT EXISTS (
          SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id

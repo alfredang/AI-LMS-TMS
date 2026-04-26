@@ -110,16 +110,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         for (const record of records) {
             const appId = record.application_id;
+            const daRow = applicationRows.find(r => r.application_id === appId);
 
             try {
                 // Step 1: Search for the enrolment reference number
                 const searchResult = await searchEnrolment(record.ssgPayload as any);
 
                 if (!searchResult.success || !searchResult.referenceNumber) {
+                    // If SSG can't find the enrolment, check if local status is already Cancelled
+                    // This means it was cancelled externally (e.g. via SSG portal) — sync local DB
+                    const localAppStatus = (daRow?.application_status || '').toLowerCase();
+                    if (searchResult.status === 'not_found' && (localAppStatus === 'cancelled' || daRow?.enrolment_id)) {
+                        console.log(`ℹ️ [cancel-da] ${appId}: Enrolment not found in SSG — treating as already cancelled`);
+                        succeeded.push({
+                            application_id: appId,
+                            enrolment_ref: daRow?.enrolment_id || '',
+                            enrolment_status: 'Cancelled',
+                        });
+                        continue;
+                    }
                     const errMsg = searchResult.status === 'not_found'
                         ? 'Enrolment not found in SSG'
                         : (searchResult.error || 'Search failed');
                     failed.push({ application_id: appId, error: errMsg });
+                    continue;
+                }
+
+                // Check if SSG already reports enrolment as cancelled
+                const ssgStatus = (searchResult as any).enrolmentStatus || (searchResult as any).status || '';
+                if (ssgStatus.toLowerCase() === 'cancelled') {
+                    console.log(`ℹ️ [cancel-da] ${appId}: SSG reports enrolment already cancelled (ref: ${searchResult.referenceNumber})`);
+                    succeeded.push({
+                        application_id: appId,
+                        enrolment_ref: searchResult.referenceNumber,
+                        enrolment_status: 'Cancelled',
+                    });
                     continue;
                 }
 
@@ -130,6 +155,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 );
 
                 if (!cancelResult.success) {
+                    // If cancel fails with "already cancelled" type error, treat as success
+                    const cancelErr = (cancelResult.error || '').toLowerCase();
+                    if (cancelErr.includes('cancel') || cancelErr.includes('not found') || cancelErr.includes('does not exist')) {
+                        console.log(`ℹ️ [cancel-da] ${appId}: SSG cancel returned "${cancelResult.error}" — treating as already cancelled`);
+                        succeeded.push({
+                            application_id: appId,
+                            enrolment_ref: searchResult.referenceNumber,
+                            enrolment_status: 'Cancelled',
+                        });
+                        continue;
+                    }
                     failed.push({ application_id: appId, error: cancelResult.error || 'Cancel failed' });
                     continue;
                 }

@@ -63,10 +63,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `SELECT da.id, da.trainee_email, da.course_title,
               COALESCE(cr.id::text, da.course_run_id) as target_run_id,
               COALESCE(cr.start_date, da.course_start_date) as course_start_date,
+              da.course_reference_number,
+              da.course_run_id as da_raw_run_id,
               da.calendar_added
        FROM da_application da
        LEFT JOIN course_run cr ON da.course_run_id = cr.course_run_id
-       WHERE da.id = ANY($1::uuid[])`,
+       WHERE da.id = ANY($1::uuid[])
+         AND LOWER(COALESCE(da.application_status, '')) NOT IN ('cancelled', 'rejected', 'failed')`,
       [applicationIds]
     );
 
@@ -106,7 +109,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           row.trainee_email,
           row.target_run_id, 
           row.course_title,
-          row.course_start_date
+          row.course_start_date,
+          row.course_reference_number,
+          row.da_raw_run_id
         );
 
         if (syncResult.addedTo > 0) {
