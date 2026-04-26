@@ -25,7 +25,6 @@ const ENSURE_TABLE = `
     invoice_no      text,
     payment_mode    text,
     course_fee      text,
-    nett_fee        text,
     payment_status  text,
     followup_by     text,
     remark          text,
@@ -114,10 +113,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             (class_id, class_type, list_date, course_title, course_run_no, trainer, trainer_email,
              qr_attendance, zoom_id, meeting_id,
              name, contact_no, email, magento_order_no, virtual_reschedule, comments,
-             entry_date, "grant", invoice_no, payment_mode, course_fee, nett_fee,
+             entry_date, "grant", invoice_no, payment_mode, course_fee,
              payment_status, followup_by, remark, schedule_entries, class_date, venue, notes, cancelled,
              calendar_event_id, invoice_no_color, payment_mode_color)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
            ON CONFLICT (calendar_event_id) WHERE calendar_event_id IS NOT NULL
            DO UPDATE SET
              class_id = EXCLUDED.class_id,
@@ -141,7 +140,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
              invoice_no = EXCLUDED.invoice_no,
              payment_mode = EXCLUDED.payment_mode,
              course_fee = EXCLUDED.course_fee,
-             nett_fee = EXCLUDED.nett_fee,
              payment_status = EXCLUDED.payment_status,
              followup_by = EXCLUDED.followup_by,
              remark = EXCLUDED.remark,
@@ -161,7 +159,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             row.name || null, row.contact_no || null, row.email || null,
             row.magento_order_no || null, row.virtual_reschedule || null, row.comments || null,
             row.entry_date || null, row.grant || null, row.invoice_no || null,
-            row.payment_mode || null, row.course_fee || null, row.nett_fee || null,
+            row.payment_mode || null, row.course_fee || null,
             row.payment_status || null, row.followup_by || null, row.remark || null,
             row.schedule_entries ?? '[]',
             row.class_date || null, row.venue || null, row.notes || null,
