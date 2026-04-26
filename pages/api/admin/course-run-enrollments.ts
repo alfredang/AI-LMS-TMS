@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          au.email,
          au.secondary_email,
          lp.nric,
-         lp.tel,
+         COALESCE(NULLIF(lp.tel, ''), (SELECT m.contact_no FROM masterlist_table m WHERE m.course_run_no = cr.course_run_id AND (LOWER(m.email) = LOWER(au.email) OR LOWER(m.email) = LOWER(au.secondary_email)) LIMIT 1)) AS tel,
          e.course_sponsorship AS sponsorship_type,
          e.enrolment_id,
          COALESCE((SELECT sg.grant_id FROM ssg_grants sg WHERE sg.enrollment_id = e.enrolment_id ORDER BY sg.created_date DESC LIMIT 1), e.grant_id) AS grant_id,
@@ -29,6 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          (SELECT sc.claim_amount FROM ssg_claims sc WHERE sc.enrollment_id = e.enrolment_id ORDER BY sc.created_date DESC LIMIT 1) AS sf_claim_amount
        FROM enrollment e
        JOIN app_user au ON au.id = e.user_id
+       JOIN course_run cr ON cr.id = e.course_run_id
        LEFT JOIN learner_profile lp ON lp.user_id = au.id
        WHERE e.course_run_id = $1
          AND e.enrolment_status IS DISTINCT FROM 'Admin Removed'
