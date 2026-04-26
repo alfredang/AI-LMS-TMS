@@ -3193,7 +3193,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     <td className="py-3 px-3 font-mono text-xs">{learner.enrolment_id || '-'}</td>
                                                     <td className="py-3 px-3 font-mono text-xs">{learner.grant_id || '-'}</td>
                                                     <td className="py-3 px-3 text-right">{learner.grant_amount != null ? `$${Number(learner.grant_amount).toFixed(2)}` : '-'}</td>
-                                                    <td className="py-3 px-3 text-right">{learner.sf_claim_amount != null ? `$${Number(learner.sf_claim_amount).toFixed(2)}` : '-'}</td>
+                                                    <td className="py-3 px-3 text-right">{`$${Number(learner.sf_claim_amount || 0).toFixed(2)}`}</td>
                                                 </tr>
                                                 );
                                             })}
