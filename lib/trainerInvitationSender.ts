@@ -52,6 +52,8 @@ export type TrainerInvitationSendStatus =
   | 'skipped_no_email'
   | 'skipped_already_pending'
   | 'skipped_class_not_found'
+  | 'skipped_paused'
+  | 'skipped_no_learners'
   | 'error';
 
 export interface TrainerInvitationSendResult {
@@ -200,6 +202,21 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
       courseRunId: classRow.course_run_id,
       courseTitle: classRow.course_title,
       message: 'Invitations paused for this course run',
+    };
+  }
+
+  // Block invitations when there are no learners enrolled
+  const learnerCountRes = await pool.query(
+    `SELECT COUNT(*) AS cnt FROM enrollment WHERE course_run_id = $1`,
+    [courseRunUuid]
+  );
+  if (Number(learnerCountRes.rows[0]?.cnt) === 0) {
+    return {
+      status: 'skipped_no_learners',
+      courseRunUuid,
+      courseRunId: classRow.course_run_id,
+      courseTitle: classRow.course_title,
+      message: 'No learners enrolled — trainer invitation not sent',
     };
   }
 

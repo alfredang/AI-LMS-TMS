@@ -113,7 +113,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           `UPDATE course_run
            SET tpg_assigned_trainer_name = $2, tpg_assigned_trainer_email = $3,
                tpg_sync_status = 'synced',
-               class_status = CASE WHEN class_status = 'Pending' THEN 'Confirmed' ELSE class_status END,
+               class_status = CASE
+                 WHEN class_status = 'Pending'
+                      AND EXISTS (SELECT 1 FROM enrollment e WHERE e.course_run_id = course_run.id)
+                 THEN 'Confirmed' ELSE class_status END,
                updated_at = NOW()
            WHERE id = $1`,
           [courseRunUuid, trainerName, trainerEmail || null]

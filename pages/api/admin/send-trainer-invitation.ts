@@ -39,6 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       case 'skipped_no_approved_trainers':
       case 'skipped_all_invited':
       case 'skipped_no_email':
+      case 'skipped_no_learners':
         return res.status(400).json({ success: false, error: result.message, result });
       case 'error':
       default:
