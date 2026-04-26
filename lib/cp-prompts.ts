@@ -141,24 +141,15 @@ Guidelines:
 - Explain industry relevance and career impact (employment opportunities, job upgrading, professional development)
 - The target learner level is generally beginner to intermediate; reflect this in the description
 - Keep the tone professional, engaging, and encouraging
-- Write exactly ONE cohesive paragraph of 80-120 words
+- Write exactly 2 cohesive paragraphs of 350 words
+-Give a high level overview of your course
+-Highlight the benefits your course offers including skills, competencies and needs that the course will address
+-Explain how the course is relevant to the industry and how it may impact the learner's career in terms of employment/job upgrading opportunities
+-Indicate if the course is for beginner, intermediate or advanced learners
 - Do NOT use bullet points, numbered lists, or headings
 - Do NOT include the course title in the opening words; weave it in naturally or refer to "this course"
 - Do NOT use markdown formatting
-- IMPORTANT: The entire response must NOT exceed 2000 characters
-
-Examples:
-
-Example 1:
-• This course is designed for professionals from a wide range of industries who want to learn how to apply the principles of design thinking to identify and solve complex problems. Whether you're a manager, team leader or individual contributor, this course will provide you with the tools and techniques you need to approach problems with a fresh perspective and come up with innovative solutions.
-
-Example 2:
-• Unlock the power of strategic marketing and sales expertise in our Sales and Marketing Mastery course. Ideal for marketers and sales professionals, learn to apply strategic principles, execute sales techniques, and interpret consumer behaviour data. Gain hands-on skills to create effective campaigns, engage customers, and drive sales growth.
-
-Example 3:
-• Designed for aspiring financial professionals, our finance course empowers you to analyse data, evaluate cost strategies, and monitor controls. Develop vital skills for making informed decisions that drive organisational success.
-
-Respond with ONLY the paragraph text, nothing else.`;
+- IMPORTANT: The entire response must NOT exceed 2000 characters`;
 
 const WHAT_YOULL_LEARN_PROMPT = `You are an expert course description writer for professional training and continuing education programmes. Write a "What You'll Learn" section for the following course.
 
