@@ -54,7 +54,6 @@ const BillingHistoryView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [brokenLinks, setBrokenLinks] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -289,35 +288,6 @@ const BillingHistoryView: React.FC = () => {
                               </button>
                             ) : null}
 
-                            {currentUser?.id &&
-                              currentUser.role !== 'learner' &&
-                              row.type.toLowerCase().includes('invoice') &&
-                              (row.enrolment_id || row.enrollment_id) && (
-                                <button
-                                  onClick={async () => {
-                                    const key = `${row.enrollment_id}-${row.type}-download`;
-                                    setDownloadingId(key);
-                                    try {
-                                      const enr = encodeURIComponent(String(row.enrolment_id || row.enrollment_id));
-                                      const uid = encodeURIComponent(String(currentUser.id));
-                                      // Direct download via backend (prefers Drive, falls back to QB PDF API)
-                                      window.open(`/api/billing/invoice-pdf?userId=${uid}&enrolmentId=${enr}`, '_blank');
-                                    } finally {
-                                      setTimeout(() => setDownloadingId(null), 800);
-                                    }
-                                  }}
-                                  disabled={downloadingId === `${row.enrollment_id}-${row.type}-download`}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-60"
-                                  title="Download invoice PDF"
-                                >
-                                  {downloadingId === `${row.enrollment_id}-${row.type}-download` ? (
-                                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-emerald-700 dark:border-emerald-400" />
-                                  ) : (
-                                    <Icon name={IconName.Download} className="w-3.5 h-3.5" />
-                                  )}
-                                  {downloadingId === `${row.enrollment_id}-${row.type}-download` ? 'Preparing…' : 'Download'}
-                                </button>
-                              )}
                           </div>
                         )
                       ) : (

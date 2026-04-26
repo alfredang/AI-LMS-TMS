@@ -64,7 +64,6 @@ interface TraineeRow {
   invoice_no: string;
   payment_mode: string;
   course_fee: string;
-  nett_fee: string;
   payment_status: string;
   followup_by: string;
   remark: string;
@@ -129,7 +128,7 @@ const newTrainee = (): TraineeRow => ({
   id: crypto.randomUUID(),
   name: '', contact_no: '', email: '', magento_order_no: '',
   virtual_reschedule: '', comments: '', date: '', grant: '',
-  invoice_no: '', payment_mode: '', course_fee: '', nett_fee: '',
+  invoice_no: '', payment_mode: '', course_fee: '',
   payment_status: '', followup_by: '', remark: '', cancelled: false,
   invoice_no_color: '', payment_mode_color: '',
 });
@@ -798,24 +797,23 @@ const DateRangeCell: React.FC<{ value: string; onChange: (v: string) => void; on
 // ─── Column definitions ───────────────────────────────────────────────────────
 
 const COLUMNS: { key: TraineeField | '_no' | '_cancelled' | '_actions'; label: string; minW: string; placeholder?: string; align?: 'center'; digitsOnly?: boolean }[] = [
-  { key: '_no',               label: 'No.',                       minW: 'min-w-[2.5rem]',  align: 'center' },
-  { key: 'name',              label: 'Name',                      minW: 'min-w-[10rem]',   placeholder: 'Full Name' },
-  { key: 'contact_no',        label: 'Contact No.',               minW: 'min-w-[8rem]',    placeholder: '9XXXXXXX', digitsOnly: true },
-  { key: 'email',             label: 'Email',                     minW: 'min-w-[12rem]',   placeholder: 'email@example.com' },
-  { key: 'magento_order_no',  label: 'Magento Order #',           minW: 'min-w-[9rem]',    placeholder: 'Order #' },
-  { key: 'virtual_reschedule',label: 'Virtual / Reschedule',      minW: 'min-w-[9rem]',    placeholder: 'Virtual' },
-  { key: 'comments',          label: 'Comments',                  minW: 'min-w-[10rem]',   placeholder: 'Comments' },
-  { key: 'date',              label: 'Date',                      minW: 'min-w-[8rem]',    placeholder: 'DD/MM/YYYY' },
-  { key: 'grant',             label: 'Grant (Yes/No)',                     minW: 'min-w-[6rem]',    placeholder: '', align: 'center' },
-  { key: 'invoice_no',        label: 'Invoice No. / E-Invoice #', minW: 'min-w-[10rem]',   placeholder: 'TCXX-XXXX-XXXXXX' },
-  { key: 'payment_mode',      label: 'Payment Mode',              minW: 'min-w-[8rem]',    placeholder: 'e.g. PayNow' },
-  { key: 'course_fee',        label: 'Course Fee (excl. GST)',    minW: 'min-w-[9rem]',    placeholder: '$0.00' },
-  { key: 'nett_fee',          label: 'Nett Fee',                  minW: 'min-w-[7rem]',    placeholder: '$0.00' },
-  { key: 'payment_status',    label: 'Payment Status',            minW: 'min-w-[8rem]',    placeholder: 'Paid / Pending' },
-  { key: 'followup_by',       label: 'Followup By',               minW: 'min-w-[8rem]',    placeholder: 'Name' },
-  { key: 'remark',            label: 'Remark',                    minW: 'min-w-[10rem]',   placeholder: 'Remarks' },
-  { key: '_cancelled',        label: 'C/W',                       minW: 'min-w-[3rem]',    align: 'center' },
-  { key: '_actions',          label: '',                          minW: 'min-w-[2.5rem]',  align: 'center' },
+  { key: '_no',               label: 'No.',                       minW: 'min-w-[2rem]',    align: 'center' },
+  { key: 'name',              label: 'Name',                      minW: 'min-w-[8rem]',    placeholder: 'Full Name' },
+  { key: 'contact_no',        label: 'Contact No.',               minW: 'min-w-[5rem]',    placeholder: '9XXXXXXX', digitsOnly: true },
+  { key: 'email',             label: 'Email',                     minW: 'min-w-[10rem]',   placeholder: 'email@example.com' },
+  { key: 'magento_order_no',  label: 'Magento Order #',           minW: 'min-w-[7rem]',    placeholder: 'Order #' },
+  { key: 'virtual_reschedule',label: 'Virtual / Reschedule',      minW: 'min-w-[7rem]',    placeholder: 'Virtual' },
+  { key: 'comments',          label: 'Comments',                  minW: 'min-w-[8rem]',    placeholder: 'Comments' },
+  { key: 'date',              label: 'Date',                      minW: 'min-w-[6.5rem]',  placeholder: 'DD/MM/YYYY' },
+  { key: 'grant',             label: 'Grant (Yes/No)',            minW: 'min-w-[5rem]',    placeholder: '', align: 'center' },
+  { key: 'invoice_no',        label: 'Invoice No. / E-Invoice #', minW: 'min-w-[8.5rem]',  placeholder: 'TCXX-XXXX-XXXXXX' },
+  { key: 'payment_mode',      label: 'Payment Mode',              minW: 'min-w-[6.5rem]',  placeholder: 'e.g. PayNow' },
+  { key: 'course_fee',        label: 'Course Fee (excl. GST)',    minW: 'min-w-[7rem]',    placeholder: '$0.00' },
+  { key: 'payment_status',    label: 'Payment Status',            minW: 'min-w-[6.5rem]',  placeholder: 'Paid / Pending' },
+  { key: 'followup_by',       label: 'Followup By',               minW: 'min-w-[6.5rem]',  placeholder: 'Name' },
+  { key: 'remark',            label: 'Remark',                    minW: 'min-w-[8rem]',    placeholder: 'Remarks' },
+  { key: '_cancelled',        label: 'C/W',                       minW: 'min-w-[2.5rem]',  align: 'center' },
+  { key: '_actions',          label: 'Remove',                    minW: 'min-w-[3rem]',    align: 'center' },
 ];
 
 // ─── Duplicate modal ──────────────────────────────────────────────────────────
@@ -827,6 +825,7 @@ interface ClassBlockProps {
   activeTab: ClassTab;
   selectedDate: string;
   saving?: boolean;
+  searchQuery?: string;
   onClassChange: (field: ClassField, value: string) => void;
   onTraineeChange: (traineeId: string, field: TraineeField, value: string | boolean) => void;
   onFillAll: (field: TraineeField, value: string) => void;
@@ -842,7 +841,7 @@ interface ClassBlockProps {
 }
 
 const ClassBlock: React.FC<ClassBlockProps> = ({
-  classRun, activeTab, selectedDate, saving,
+  classRun, activeTab, selectedDate, saving, searchQuery = '',
   onClassChange, onTraineeChange, onFillAll,
   onAddTrainee, onRemoveTrainee, onRemoveClass, onMoveClass, onBulkAddTrainees,
   onAddScheduleEntry, onScheduleEntryChange, onRemoveScheduleEntry,
@@ -1204,6 +1203,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
           <tbody>
             {classRun.trainees.map((t, idx) => {
               const isDup = duplicateRowIds.has(t.id);
+              const isSearchHit = !!searchQuery && traineeMatchesQuery(t, searchQuery);
               return (
               <tr
                 key={t.id}
@@ -1212,6 +1212,8 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                     ? 'bg-red-50/70 dark:bg-red-900/15'
                     : t.cancelled
                     ? 'bg-gray-100 dark:bg-gray-800/60 opacity-50'
+                    : isSearchHit
+                    ? 'bg-yellow-100/80 dark:bg-yellow-900/30'
                     : 'hover:bg-surface-hover/20'
                 }`}
               >
@@ -1557,7 +1559,6 @@ function rowsToClasses(rows: Record<string, any>[]): ClassRun[] {
       invoice_no: row.invoice_no ?? '',
       payment_mode: row.payment_mode ?? '',
       course_fee: row.course_fee ?? '',
-      nett_fee: row.nett_fee ?? '',
       payment_status: row.payment_status ?? '',
       followup_by: row.followup_by ?? '',
       remark: row.remark ?? '',
@@ -1620,7 +1621,6 @@ function classToRows(cr: ClassRun, classType: ClassTab, listDate: string): Recor
     invoice_no_color: t.invoice_no_color || null,
     payment_mode_color: t.payment_mode_color || null,
     course_fee: t.course_fee || null,
-    nett_fee: t.nett_fee || null,
     payment_status: t.payment_status || null,
     followup_by: t.followup_by || null,
     remark: t.remark || null,
@@ -1660,6 +1660,25 @@ const emptyTabData = (): TabData => ({
   virtual: [], evening: [], external: [], woodsSquare: [], reschedule: [], cancelled: [], bukitTimah: [],
 });
 
+const traineeMatchesQuery = (t: TraineeRow, q: string): boolean => {
+  if (!q) return true;
+  return [
+    t.name, t.email, t.contact_no, t.magento_order_no,
+    t.invoice_no, t.payment_mode, t.comments, t.remark,
+    t.followup_by, t.date,
+  ].some(v => (v || '').toLowerCase().includes(q));
+};
+
+const classMatchesQuery = (cr: ClassRun, q: string): boolean => {
+  if (!q) return true;
+  const classFields = [
+    cr.courseTitle, cr.courseRunNo, cr.trainer, cr.trainerEmail,
+    cr.classDate, cr.venue, cr.notes,
+  ];
+  if (classFields.some(v => (v || '').toLowerCase().includes(q))) return true;
+  return cr.trainees.some(t => traineeMatchesQuery(t, q));
+};
+
 const MasterListView: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [activeTab, setActiveTab] = useState<ClassTab>('virtual');
@@ -1667,8 +1686,118 @@ const MasterListView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const syncedMonths = useRef<Set<string>>(new Set());
+
+  const normalisedQuery = searchQuery.trim().toLowerCase();
+  const isSearching = normalisedQuery.length > 0;
+
+  const filteredTabData = useMemo(() => {
+    if (!isSearching) return tabData;
+    const next = emptyTabData();
+    (Object.keys(tabData) as ClassTab[]).forEach(key => {
+      next[key] = tabData[key].filter(cr => classMatchesQuery(cr, normalisedQuery));
+    });
+    return next;
+  }, [tabData, normalisedQuery, isSearching]);
+
+  // Note: search no longer filters the classes shown in the active tab —
+  // navigation happens via the suggestions dropdown. `filteredTabData` is
+  // still computed to power that dropdown and the trainee-row highlights.
+
+  // Suggestions panel — shown when search matches span 2+ tabs so the user
+  // can pick which class to jump to. Rendered via a portal at fixed position
+  // so the parent Card's `overflow-hidden` doesn't clip it.
+  const [suggestionsOpen, setSuggestionsOpen] = useState(true);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  const suggestionsPanelRef = useRef<HTMLDivElement>(null);
+  const [suggestionsPos, setSuggestionsPos] = useState({ top: 0, left: 0, width: 0 });
+
+  useEffect(() => { setSuggestionsOpen(true); }, [normalisedQuery]);
+
+  useEffect(() => {
+    if (!suggestionsOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (searchBoxRef.current && searchBoxRef.current.contains(target)) return;
+      if (suggestionsPanelRef.current && suggestionsPanelRef.current.contains(target)) return;
+      setSuggestionsOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [suggestionsOpen]);
+
+  useEffect(() => {
+    if (!suggestionsOpen) return;
+    const update = () => {
+      const el = searchBoxRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setSuggestionsPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [suggestionsOpen, normalisedQuery]);
+
+  const tabsWithMatchCount = useMemo(() => {
+    if (!isSearching) return 0;
+    let count = 0;
+    TABS.forEach(t => { if (filteredTabData[t.key].length > 0) count++; });
+    return count;
+  }, [filteredTabData, isSearching]);
+
+  const totalMatchCount = useMemo(() => {
+    if (!isSearching) return 0;
+    let total = 0;
+    TABS.forEach(t => { total += filteredTabData[t.key].length; });
+    return total;
+  }, [filteredTabData, isSearching]);
+
+  const showSuggestionsList = isSearching && suggestionsOpen && totalMatchCount > 0;
+
+  // Switching tabs triggers a re-fetch (loading=true), so the target class
+  // block isn't in the DOM immediately. Stash the desired class id and let an
+  // effect scroll once the new tab has rendered. The scrollTrigger counter
+  // forces the effect to re-run even when the user picks a class on the
+  // tab that's already active (where setActiveTab is a no-op).
+  const pendingScrollIdRef = useRef<string | null>(null);
+  const [scrollTrigger, setScrollTrigger] = useState(0);
+  const [highlightedClassId, setHighlightedClassId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (loading) return;
+    const id = pendingScrollIdRef.current;
+    if (!id) return;
+    // Wait one frame for the new tab's class blocks to lay out, then scroll.
+    const raf = requestAnimationFrame(() => {
+      const el = document.getElementById(`masterlist-class-${id}`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      pendingScrollIdRef.current = null;
+      setHighlightedClassId(id);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [loading, activeTab, tabData, scrollTrigger]);
+
+  // Clear the flash highlight after a couple of seconds.
+  useEffect(() => {
+    if (!highlightedClassId) return;
+    const timer = setTimeout(() => setHighlightedClassId(null), 1800);
+    return () => clearTimeout(timer);
+  }, [highlightedClassId]);
+
+  const handleJumpToClass = (tab: ClassTab, classId: string) => {
+    pendingScrollIdRef.current = classId;
+    setSuggestionsOpen(false);
+    setActiveTab(tab);
+    setScrollTrigger(n => n + 1);
+  };
 
   const classes = tabData[activeTab];
 
@@ -2164,6 +2293,84 @@ const MasterListView: React.FC = () => {
               Clear
             </button>
           )}
+
+          <div className="flex flex-col gap-1.5 w-full sm:flex-1 sm:max-w-md sm:ml-auto">
+            <label className="text-xs font-medium text-on-surface-secondary uppercase tracking-wide">
+              Search
+            </label>
+            <div ref={searchBoxRef} className="relative">
+              <Icon
+                name={IconName.Search}
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-secondary pointer-events-none"
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onFocus={() => setSuggestionsOpen(true)}
+                placeholder="Search by course title or course run"
+                className="w-full h-[42px] pl-9 pr-9 rounded-lg border border-default bg-surface text-sm text-on-surface placeholder:text-on-surface-secondary/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+              {isSearching && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  title="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-surface-hover text-on-surface-secondary"
+                >
+                  <Icon name={IconName.Close} className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {showSuggestionsList && typeof window !== 'undefined' && createPortal(
+                <div
+                  ref={suggestionsPanelRef}
+                  style={{
+                    position: 'fixed',
+                    top: suggestionsPos.top,
+                    left: suggestionsPos.left,
+                    width: suggestionsPos.width,
+                    zIndex: 1000,
+                  }}
+                  className="max-h-80 overflow-y-auto rounded-lg border border-default bg-surface shadow-lg"
+                >
+                  <div className="px-3 py-1.5 text-[11px] text-on-surface-secondary border-b border-default bg-surface-elevated">
+                    {totalMatchCount} {totalMatchCount === 1 ? 'match' : 'matches'}
+                    {tabsWithMatchCount > 1 && <> across {tabsWithMatchCount} class types</>}
+                    {' '}— click to jump
+                  </div>
+                  {TABS.filter(t => filteredTabData[t.key].length > 0).map(tab => {
+                    const c = TAB_COLORS[tab.key];
+                    return (
+                      <div key={tab.key}>
+                        <div className={`px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${c.badgeBg} ${c.badgeText}`}>
+                          {tab.label}
+                          <span className="ml-1.5 opacity-70 normal-case">({filteredTabData[tab.key].length})</span>
+                        </div>
+                        {filteredTabData[tab.key].map(cr => (
+                          <button
+                            key={cr.id}
+                            onClick={() => handleJumpToClass(tab.key, cr.id)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-surface-hover border-b border-default last:border-b-0 transition-colors"
+                          >
+                            <div className="font-medium text-on-surface truncate">
+                              {cr.courseTitle || '(Untitled course)'}
+                            </div>
+                            <div className="text-xs text-on-surface-secondary mt-0.5 truncate">
+                              {cr.courseRunNo && <>Run {cr.courseRunNo}</>}
+                              {cr.courseRunNo && cr.classDate && <> · </>}
+                              {cr.classDate}
+                              {cr.trainer && <> · {cr.trainer}</>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>,
+                document.body,
+              )}
+            </div>
+          </div>
         </div>
 
         {selectedDate && (
@@ -2184,6 +2391,7 @@ const MasterListView: React.FC = () => {
         {TABS.map(tab => {
           const c = TAB_COLORS[tab.key];
           const isActive = activeTab === tab.key;
+          const total = tabData[tab.key].length;
           return (
             <button
               key={tab.key}
@@ -2195,13 +2403,13 @@ const MasterListView: React.FC = () => {
               }`}
             >
               {tab.label}
-              {tabData[tab.key].length > 0 && (
+              {total > 0 && (
                 <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
                   isActive
                     ? 'bg-white/20 text-white'
                     : `${c.badgeBg} ${c.badgeText}`
                 }`}>
-                  {tabData[tab.key].length}
+                  {total}
                 </span>
               )}
             </button>
@@ -2282,12 +2490,21 @@ const MasterListView: React.FC = () => {
           </Card>
         ) : (
           classes.map((cr) => (
-            <ClassBlock
+            <div
               key={cr.id}
+              id={`masterlist-class-${cr.id}`}
+              className={`scroll-mt-20 transition-shadow duration-500 rounded-lg ${
+                highlightedClassId === cr.id
+                  ? 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+                  : ''
+              }`}
+            >
+            <ClassBlock
               classRun={cr}
               activeTab={activeTab}
               selectedDate={selectedDate}
               saving={saving[cr.id] ?? false}
+              searchQuery={normalisedQuery}
               onClassChange={(field, value) => handleClassChange(cr.id, field, value)}
               onTraineeChange={(traineeId, field, value) =>
                 handleTraineeChange(cr.id, traineeId, field, value)
@@ -2305,6 +2522,7 @@ const MasterListView: React.FC = () => {
               onRemoveScheduleEntry={entryId => handleRemoveScheduleEntry(cr.id, entryId)}
               onReplaceScheduleEntries={entries => handleReplaceScheduleEntries(cr.id, entries)}
             />
+            </div>
           ))
         )}
       </div>
