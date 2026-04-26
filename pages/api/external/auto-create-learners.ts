@@ -379,9 +379,10 @@ export async function runAutomation() {
 
         try {
           const { created, enrollmentId } = await upsertLearner(email, name, nric, run.db_id, run.course_id, enrolment);
-          if (enrollmentId) {
-            triggerProformaGeneration(enrollmentId);
-          }
+          // Auto-generation of proforma invoices on enrollment events is currently disabled.
+          // if (enrollmentId) {
+          //   triggerProformaGeneration(enrollmentId);
+          // }
           if (created) {
             logEntry.createdCount++;
             logEntry.details.push({ enrolmentRef, email, name, status: 'created', accountExists: false });

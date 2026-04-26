@@ -180,9 +180,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query('COMMIT');
 
-    if (newEnrollmentId) {
-      triggerProformaGeneration(newEnrollmentId);
-    }
+    // Auto-generation of proforma invoices on enrollment events is currently disabled.
+    // if (newEnrollmentId) {
+    //   triggerProformaGeneration(newEnrollmentId);
+    // }
 
     res.status(200).json({ success: true, message: enrollmentRestored ? 'Student re-enrolled successfully' : 'Student enrolled successfully' });
   } catch (error) {

@@ -238,6 +238,13 @@ async function seedDefaults() {
             [task.id, task.name, task.description, task.cron_expression, task.api_endpoint, task.email_template || null, task.days_in_advance ?? null]
         );
     }
+
+    // Keep the proforma task visible in the Scheduler UI, but force the nightly cron off.
+    await pool.query(
+        `UPDATE scheduler_config
+         SET enabled = FALSE, updated_at = NOW()
+         WHERE id = 'auto_generate_proforma_invoices'`
+    );
 }
 
 // ── Direct handler registry ───────────────────────────────────────────────────
@@ -409,6 +416,11 @@ function scheduleTask(task: SchedulerTask) {
     if (existing) {
         existing.stop();
         schedulerState.activeJobs.delete(task.id);
+    }
+
+    if (task.id === 'auto_generate_proforma_invoices') {
+        console.log(`⏰ [Scheduler] "${task.name}" auto-scheduling is disabled by code`);
+        return;
     }
 
     if (!task.enabled) {
