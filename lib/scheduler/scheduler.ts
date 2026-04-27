@@ -216,9 +216,16 @@ async function seedDefaults() {
         {
             id: 'auto_generate_proforma_invoices',
             name: 'Auto Generate Proforma Invoices',
-            description: 'Nightly sweep that generates a proforma invoice PDF for every active enrollment still missing pro_forma_url. Saves to the Google Drive proforma folder and writes the URL back to the enrollment row so it appears in Finance → Proforma Invoice and the learner\'s Billing History. Idempotent — enrollments that already have a proforma are skipped. Default 04:00 SGT daily.',
+            description: 'Nightly sweep that generates a proforma invoice PDF for every active enrollment still missing pro_forma_url. Saves to the Google Drive proforma folder and writes the URL back to the enrollment row so it appears in Finance → Proforma Invoice and the learner\'s Billing History. Idempotent - enrollments that already have a proforma are skipped. Default 04:00 SGT daily.',
             cron_expression: '0 4 * * *', // 4:00 AM SGT daily
             api_endpoint: '/api/external/auto-generate-proforma-invoices',
+        },
+        {
+            id: 'auto_generate_da_invoices',
+            name: 'Auto Generate DA Invoices',
+            description: 'Daily sweep that posts QuickBooks invoices (main tax + Grant + SFC) for every confirmed, SSG-enrolled Direct Application still missing one or more of them, then sends unsent main tax invoice emails once via QuickBooks. Catches rows whose grant wasn\'t yet issued by SSG at manual-generate time and rows left in "failed" state by a transient QBO hiccup. Idempotent. Default 23:00 SGT daily.',
+            cron_expression: '0 23 * * *', // 11:00 PM SGT daily
+            api_endpoint: '/api/external/auto-generate-da-invoices',
         },
     ];
 
@@ -234,17 +241,11 @@ async function seedDefaults() {
              VALUES ($1, $2, $3, $4, $5, $6, $7)
              ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
-                description = EXCLUDED.description`,
+                description = EXCLUDED.description,
+                cron_expression = EXCLUDED.cron_expression`,
             [task.id, task.name, task.description, task.cron_expression, task.api_endpoint, task.email_template || null, task.days_in_advance ?? null]
         );
     }
-
-    // Keep the proforma task visible in the Scheduler UI, but force the nightly cron off.
-    await pool.query(
-        `UPDATE scheduler_config
-         SET enabled = FALSE, updated_at = NOW()
-         WHERE id = 'auto_generate_proforma_invoices'`
-    );
 }
 
 // ── Direct handler registry ───────────────────────────────────────────────────
@@ -323,6 +324,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_generate_proforma_invoices', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-generate-proforma-invoices');
+            return runAutomation();
+        });
+        directHandlers.set('auto_generate_da_invoices', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-generate-da-invoices');
             return runAutomation();
         });
     }
@@ -418,10 +423,6 @@ function scheduleTask(task: SchedulerTask) {
         schedulerState.activeJobs.delete(task.id);
     }
 
-    if (task.id === 'auto_generate_proforma_invoices') {
-        console.log(`⏰ [Scheduler] "${task.name}" auto-scheduling is disabled by code`);
-        return;
-    }
 
     if (!task.enabled) {
         console.log(`⏰ [Scheduler] "${task.name}" is disabled — skipping`);
