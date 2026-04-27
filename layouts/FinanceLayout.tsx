@@ -122,7 +122,6 @@ const FinanceLayout: React.FC = () => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-<<<<<<< HEAD
   // Auto-open sections when navigating from header
   useEffect(() => {
     if (page.startsWith('tpg')) {
@@ -142,8 +141,6 @@ const FinanceLayout: React.FC = () => {
     }
   }, [page]);
 
-=======
->>>>>>> origin/main
   const navigateTo = (p: FinancePage) => {
     setPage(p);
   };
