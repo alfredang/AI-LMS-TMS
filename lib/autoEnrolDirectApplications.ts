@@ -890,12 +890,13 @@ export async function createNativeEnrolmentFromDA(record: any, dbPool: any) {
 
     const enrolmentId = rows[0]?.id;
 
-    // Update the DA record to link it and show success
+    // Update the DA record to link it and show success.
+    // Only set enrolment_id to 'MANUAL' if it doesn't already have a real SSG reference.
     if (record.application_id) {
       await dbPool.query(
         `UPDATE da_application 
          SET enrolment_status = 'Confirmed',
-             enrolment_id = $1
+             enrolment_id = COALESCE(NULLIF(enrolment_id, ''), $1)
          WHERE application_id = $2`,
         [enrolmentId ? 'MANUAL' : null, record.application_id]
       );
