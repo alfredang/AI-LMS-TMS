@@ -312,9 +312,31 @@ export async function createDirectApplicationInvoice(
     },
   });
 
+  // BillAddr is set to the learner's name on every invoice — the QB Customer
+  // is the fixed "WSQ Individual (Not for Company)" bucket, but the printed
+  // billing address should identify the actual trainee. Line2–5 are blanked
+  // so QBO doesn't merge in stale lines from the customer record.
+  //
+  // ShipAddr is intentionally blanked — DA invoices have no shipping concept,
+  // and QBO will otherwise inherit the customer's default ShipAddr and render
+  // a "Shipping to" box on the PDF.
+  const billingAddressLine = String(app.trainee_name || '').trim() || MAIN_INVOICE_CUSTOMER_NAME;
   const invoiceBody = {
     CustomerRef: { value: customerRef },
-    BillAddr: { Line1: MAIN_INVOICE_CUSTOMER_NAME },
+    BillAddr: {
+      Line1: billingAddressLine,
+      Line2: '',
+      Line3: '',
+      Line4: '',
+      Line5: '',
+    },
+    ShipAddr: {
+      Line1: '',
+      Line2: '',
+      Line3: '',
+      Line4: '',
+      Line5: '',
+    },
     BillEmail: { Address: app.trainee_email },
     TxnDate: txnDate,
     DueDate: dueDate,
