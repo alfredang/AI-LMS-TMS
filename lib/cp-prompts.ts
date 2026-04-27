@@ -423,8 +423,8 @@ T2: [Topic Name] - [Brief description]
 ...
 
 (3) Duration for each topic
-Topic 1: [duration]mins
-Topic 2: [duration]mins
+Topic 1: [Topic Name] - [duration]mins
+Topic 2: [Topic Name] - [duration]mins
 ...`;
 
 const ENTRY_REQUIREMENTS_PROMPT = `You are an expert course description writer for professional training and continuing education programmes. Write a "Minimum Entry Requirement" section for the following course.
@@ -487,15 +487,15 @@ Course Topics:
 {course_topics}
 
 Course Duration: {course_duration} hours ({num_days} day(s))
-Instructional Duration: {instructional_hours} hours
-Assessment Duration: {assessment_hours} hours
+Instructional Duration: {instructional_duration} hours
+Assessment Duration: {assessment_duration} hours
 Instructional Methods: {instructional_methods}
-Assessment Methods: {assessment_methods_list}
+Assessment Methods: {assessment_methods}
 
 Guidelines:
 - Create a day-by-day lesson plan with time slots from 9:00 AM to 6:00 PM
 - Include a 45-minute lunch break at 12:30 PM - 1:15 PM each day
-- Each topic gets EQUAL time: {instructional_hours} hours * 60 / number of topics
+- Each topic gets EQUAL time: {instructional_duration} hours * 60 / number of topics
 - Topics can split into 2 sessions across lunch or day boundaries (e.g. "T2 (Cont'd)")
 - Assessment: fixed at 4:00 PM - 6:00 PM on last day
 - Fill remaining time with breaks to fit exactly 9:00 AM - 6:00 PM
@@ -633,7 +633,7 @@ export const CP_PROMPT_PLACEHOLDERS: Record<CpPromptSection, readonly string[]> 
   course_outline: ['course_title', 'course_topics', 'instructional_methods', 'duration_per_topic'],
   entry_requirements: ['course_title', 'course_topics', 'special_requirements'],
   job_roles: ['course_title', 'course_topics'],
-  lesson_plan: ['course_title', 'course_topics', 'course_duration', 'num_days', 'instructional_hours', 'assessment_hours', 'instructional_methods', 'assessment_methods_list'],
+  lesson_plan: ['course_title', 'course_topics', 'course_duration', 'num_days', 'instructional_duration', 'assessment_duration', 'instructional_methods', 'assessment_methods'],
   validation: ['course', 'industry', 'learning_outcomes'],
 };
 

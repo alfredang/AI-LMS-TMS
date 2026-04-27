@@ -166,9 +166,10 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     // Tab state for navigation
     const [activeTab, setActiveTab] = useState<'courseRun' | 'sessions' | 'enrollments' | 'trainer'>('courseRun');
     const [enrolledLearners, setEnrolledLearners] = useState<Array<{
-        user_id: string; full_name: string; email: string; nric: string | null;
-        tel: string | null; sponsorship_type: string | null; enrolment_id: string | null;
-        grant_id: string | null; grant_amount: number | null; sf_claim_amount: number | null;
+        user_id: string; full_name: string; email: string; secondary_email: string | null;
+        nric: string | null; tel: string | null; sponsorship_type: string | null;
+        enrolment_id: string | null; grant_id: string | null; grant_amount: number | null;
+        sf_claim_amount: number | null;
     }>>([]);
     const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
     const [visibleNrics, setVisibleNrics] = useState<Set<string>>(new Set());
@@ -3179,7 +3180,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                             )}
                                                         </span>
                                                     </td>
-                                                    <td className="py-3 px-3">{learner.email}</td>
+                                                    <td className="py-3 px-3">
+                                                        <div>{learner.email}</div>
+                                                        {learner.secondary_email && <div className="text-xs text-gray-400 dark:text-gray-500">{learner.secondary_email}</div>}
+                                                    </td>
                                                     <td className="py-3 px-3">{learner.tel || '-'}</td>
                                                     <td className="py-3 px-3">
                                                         {learner.sponsorship_type === 'Employer' ? (
@@ -3193,7 +3197,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                     <td className="py-3 px-3 font-mono text-xs">{learner.enrolment_id || '-'}</td>
                                                     <td className="py-3 px-3 font-mono text-xs">{learner.grant_id || '-'}</td>
                                                     <td className="py-3 px-3 text-right">{learner.grant_amount != null ? `$${Number(learner.grant_amount).toFixed(2)}` : '-'}</td>
-                                                    <td className="py-3 px-3 text-right">{learner.sf_claim_amount != null ? `$${Number(learner.sf_claim_amount).toFixed(2)}` : '-'}</td>
+                                                    <td className="py-3 px-3 text-right">{`$${Number(learner.sf_claim_amount || 0).toFixed(2)}`}</td>
                                                 </tr>
                                                 );
                                             })}

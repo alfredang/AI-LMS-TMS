@@ -1509,7 +1509,7 @@ export async function createNativeEnrolmentFromDA(record: any, dbPool: any) {
       await dbPool.query(
         `UPDATE da_application
          SET enrolment_status = 'Confirmed',
-             enrolment_id = $1
+             enrolment_id = COALESCE(NULLIF(enrolment_id, ''), $1)
          WHERE application_id = $2`,
         [preservedEnrolmentId || (enrolmentId ? 'MANUAL' : null), record.application_id]
       );

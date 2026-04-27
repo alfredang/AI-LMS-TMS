@@ -167,16 +167,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sc.claim_amount AS sfc_amount,
         sc.payment_date AS sfc_payment_date,
         sc.claim_status AS sfc_status,
+        sc.claim_payment_status AS sfc_claim_payment_status,
+        sc.qb_payment_id AS sfc_qb_payment_id,
         NULLIF(TRIM(COALESCE(ij.qbo_invoice_id::text, '')), '') AS invoice_id,
         COALESCE(
           NULLIF(TRIM(COALESCE(ij.invoice_no, '')), ''),
           NULLIF(TRIM(COALESCE(ij.qbo_doc_number, '')), ''),
           NULLIF(TRIM(COALESCE(ij.qbo_invoice_id::text, '')), '')
         ) AS invoice_no,
-        ij.invoice_sent_at AS invoice_sent_at
+        ij.invoice_sent_at AS invoice_sent_at,
+        ij.qbo_sfc_status AS qbo_sfc_status,
+        (da_chk.found IS NOT NULL) AS is_da
       FROM ssg_enrolments se
       LEFT JOIN LATERAL (
-        SELECT inv.invoice_no, inv.qbo_invoice_id, inv.qbo_doc_number, inv.invoice_sent_at
+        SELECT inv.invoice_no, inv.qbo_invoice_id, inv.qbo_doc_number, inv.invoice_sent_at, inv.qbo_sfc_status
         FROM public.invoice_jobs inv
         WHERE inv.status = 'done'
           AND LOWER(TRIM(COALESCE(inv.enrolment_id::text, ''))) = LOWER(TRIM(COALESCE(se.enrolment_id::text, '')))
@@ -198,12 +202,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         LIMIT 1
       ) nbl ON true
       LEFT JOIN LATERAL (
-        SELECT claim_id, claim_amount, payment_date, claim_status
+        SELECT claim_id, claim_amount, payment_date, claim_status, claim_payment_status, qb_payment_id
         FROM ssg_claims
         WHERE enrollment_id = se.enrolment_id
         ORDER BY claim_id DESC
         LIMIT 1
       ) sc ON true
+      LEFT JOIN LATERAL (
+        SELECT 1 AS found
+        FROM public.da_application da
+        WHERE LOWER(TRIM(COALESCE(da.enrolment_id,''))) = LOWER(TRIM(COALESCE(se.enrolment_id,'')))
+        LIMIT 1
+      ) da_chk ON true
       ${whereClause}
       ORDER BY se.enrolment_id ${sort}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}

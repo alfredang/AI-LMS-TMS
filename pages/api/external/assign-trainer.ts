@@ -122,11 +122,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [resolvedTrainerId, resolvedTrainerName, trainer_email.trim(), courseRunUuid]
     );
 
-    // Auto-confirm if pending
+    // Auto-confirm if pending AND has at least one learner enrolled
     await pool.query(
       `UPDATE course_run
        SET class_status = 'Confirmed', updated_at = NOW()
-       WHERE id = $1 AND class_status = 'Pending'`,
+       WHERE id = $1 AND class_status = 'Pending'
+         AND EXISTS (SELECT 1 FROM enrollment e WHERE e.course_run_id = $1)`,
       [courseRunUuid]
     );
 

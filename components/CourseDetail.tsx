@@ -844,6 +844,11 @@ const AssessmentsSection: React.FC<{
 
     return (
         <ContentSection title="Assessment">
+            {userRole === UserRole.Learner && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Download the assessment file as a Microsoft Word or make a new Google Doc copy, complete all questions, then upload the finished file below.
+                </p>
+            )}
             {/* Other file-based assessments (excluding Written/Practical which are shown separately with toggle) */}
             {filteredFileAssessments && filteredFileAssessments.length > 0 && (
                 <ul className="space-y-4">
@@ -872,7 +877,8 @@ const AssessmentsSection: React.FC<{
             {(() => {
                 const effectiveWrittenLink = (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
                     ? course.assessmentMethods.writtenAssessment.link
-                    : course.writtenAssessmentLink;
+                    // Only fall back to legacy link when assessmentMethods is not configured at all
+                    : (!course.assessmentMethods ? course.writtenAssessmentLink : null);
                 return effectiveWrittenLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
@@ -988,7 +994,8 @@ const AssessmentsSection: React.FC<{
             {(() => {
                 const effectivePracticalLink = (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
                     ? course.assessmentMethods.practicalExam.link
-                    : course.practicalPerformanceAssessmentLink;
+                    // Only fall back to legacy link when assessmentMethods is not configured at all
+                    : (!course.assessmentMethods ? course.practicalPerformanceAssessmentLink : null);
                 return effectivePracticalLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">

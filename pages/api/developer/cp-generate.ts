@@ -50,7 +50,12 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<strin
       env: buildClaudeEnv(apiKey),
       allowedTools: [],
       maxTurns: 1,
-    },
+      // Sonnet 4.6 is 2-3× faster than the default Opus for the structured
+      // CP-section generators (lesson plan, learning outcomes, instructional
+      // methods etc.) while keeping output quality. Same model the CP
+      // extractor + assessment generator use.
+      model: 'claude-sonnet-4-6',
+    } as any,
   })) {
     if (message.type === 'assistant' && message.message?.content) {
       for (const block of message.message.content) {
@@ -116,6 +121,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       luSequencingType = 'Step by Step',
       learningOutcomes = '',
       courseOutline = '',
+      // Streamlit-parity Generate Topics inputs. Both optional — when omitted
+      // we fall back to the legacy "derive days from numTopics" behaviour so
+      // existing callers don't break.
+      numDays = '',
+      specialRequirements = '',
     } = req.body;
 
     // Duration per topic in minutes (Streamlit course-outline template expects mins).
@@ -156,19 +166,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     // Streamlit-parity variables for the Generate Topics prompt.
-    // Derive days from numTopics so "max 3 per day" stays consistent with the
-    // user's chosen topic count, even though the Next.js UI takes hours (not
-    // days) as input.
+    // Prefer the explicit numDays input from the UI (Streamlit-style "No. of
+    // Days" field) and derive max topics from it (max 3 per day per the
+    // template rules). When numDays is omitted, fall back to deriving from
+    // numTopics so older callers still work.
     const numTopicsNum = Math.max(1, Number(numTopics) || 1);
-    const derivedDays = Math.max(1, Math.ceil(numTopicsNum / 3));
+    const explicitDays = Number(numDays);
+    const effectiveDays = Number.isFinite(explicitDays) && explicitDays > 0
+      ? Math.max(1, Math.round(explicitDays))
+      : Math.max(1, Math.ceil(numTopicsNum / 3));
+    const effectiveMaxTopics = Number.isFinite(explicitDays) && explicitDays > 0
+      ? effectiveDays * 3
+      : numTopicsNum;
     const hasSkill = Boolean(uniqueSkillName && uniqueSkillDescription);
-    vars.num_days = String(derivedDays);
-    vars.max_topics = String(numTopicsNum);
+    vars.num_days = String(effectiveDays);
+    vars.max_topics = String(effectiveMaxTopics);
     vars.skill_context = hasSkill
       ? `\nCASL Skill Description (use this as context to generate relevant topics):\n${uniqueSkillDescription}\n`
       : '';
     vars.skill_guideline = hasSkill ? ' and the CASL skill description above' : '';
-    vars.special_requirements = '';
+    // Wrap user-entered special requirements in a labelled block so the model
+    // sees them clearly within the prompt body. Empty when not provided.
+    const specReqStr = String(specialRequirements || '').trim();
+    vars.special_requirements = specReqStr
+      ? `\nSpecial Requirements (must be addressed in the generated topics):\n${specReqStr}\n`
+      : '';
 
     // Method sections generate once per selected method, sharing the same
     // template plus a per-method `method_name` variable.

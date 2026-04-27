@@ -1,0 +1,64 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { requireFinanceOrAdmin } from '@/lib/services/grantImport/requireFinanceOrAdmin';
+import { getSfcImportBatch, getSfcImportRows } from '@/lib/services/sfcImport/sfcImportDb';
+import pool from '@/lib/db';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', ['GET']);
+    return res.status(405).json({ success: false, error: 'Method not allowed' });
+  }
+
+  const batchId = parseInt(String(req.query.batchId || ''), 10);
+  if (!Number.isFinite(batchId) || batchId <= 0) {
+    return res.status(400).json({ success: false, error: 'batchId is required' });
+  }
+
+  try {
+    await requireFinanceOrAdmin(req);
+
+    const batch = await getSfcImportBatch(batchId);
+    if (!batch) return res.status(404).json({ success: false, error: 'Batch not found' });
+
+    const rows = await getSfcImportRows(batchId);
+
+    // Enrich rows with live FMS claim_payment_status
+    const claimIds = Array.from(new Set(rows.map((r: any) => String(r.claim_id || '')).filter(Boolean)));
+    let fmsStatusMap = new Map<string, string>();
+    if (claimIds.length > 0) {
+      const r = await pool.query(
+        `SELECT claim_id::text AS claim_id, COALESCE(claim_payment_status, 'NOT_RECEIVED') AS claim_payment_status
+         FROM public.ssg_claims WHERE claim_id = ANY($1::text[])`,
+        [claimIds]
+      );
+      for (const row of r.rows) {
+        fmsStatusMap.set(String(row.claim_id), String(row.claim_payment_status));
+      }
+    }
+
+    // Enrich rows with DA flag (enrolment_id exists in da_application)
+    const enrolmentIds = Array.from(new Set(rows.map((r: any) => String(r.matched_enrolment_id || '')).filter(Boolean)));
+    const daEnrolmentSet = new Set<string>();
+    if (enrolmentIds.length > 0) {
+      const daRes = await pool.query(
+        `SELECT DISTINCT enrolment_id::text AS enrolment_id
+         FROM public.da_application
+         WHERE enrolment_id = ANY($1::text[])`,
+        [enrolmentIds]
+      );
+      for (const row of daRes.rows) daEnrolmentSet.add(String(row.enrolment_id));
+    }
+
+    const enrichedRows = rows.map((r: any) => ({
+      ...r,
+      fms_updated: fmsStatusMap.get(String(r.claim_id || '')) === 'PAID',
+      qb_updated: !!r.matched_qb_payment_id,
+      is_da: daEnrolmentSet.has(String(r.matched_enrolment_id || '')),
+    }));
+
+    return res.status(200).json({ success: true, data: { batch, rows: enrichedRows } });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Internal server error';
+    return res.status(500).json({ success: false, error: msg });
+  }
+}

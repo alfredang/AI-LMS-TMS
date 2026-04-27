@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppVersion } from '@hooks/useAppVersion';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -59,6 +59,7 @@ import QBInvoiceView from '../components/finance/QBInvoiceView';
 import QBPaymentView from '../components/finance/QBPaymentView';
 import ProFormaInvoiceView from '../components/finance/ProFormaInvoiceView';
 import GrantImportView from '../components/finance/GrantImportView';
+import SfcPaymentSyncView from '../components/finance/SfcPaymentSyncView';
 
 import { ProfilePage } from '../components/ProfilePage';
 import { useLms } from '@contexts/LmsContext';
@@ -66,7 +67,7 @@ import { View } from '@app-types/index';
 
 type FinancePage =
   | 'dashboard' | 'allCourseRuns'
-  | 'grantImport'
+  | 'grantImport' | 'sfcPaymentSync'
   | 'grantCalculator' | 'searchGrant' | 'viewGrant'
   | 'claimManagement' | 'claimCheck' | 'viewClaim' | 'cancelClaim' | 'uploadDocument'
   | 'proformaInvoice' | 'taxInvoice' | 'receipt'
@@ -121,6 +122,25 @@ const FinanceLayout: React.FC = () => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // Auto-open sections when navigating from header
+  useEffect(() => {
+    if (page.startsWith('tpg')) {
+      setOpenSections(prev => ({ ...prev, tpgManagement: true }));
+    }
+    if (page.startsWith('auto') || page === 'allCourseRuns') {
+      setOpenSections(prev => ({ ...prev, courseRunAutomations: true }));
+    }
+    if (['claimCheck', 'viewClaim', 'cancelClaim', 'uploadDocument'].includes(page)) {
+      setOpenSections(prev => ({ ...prev, claimManagement: true, claimSub: true }));
+    }
+    if (['proformaInvoice', 'taxInvoice', 'receipt'].includes(page)) {
+      setOpenSections(prev => ({ ...prev, claimManagement: true, invoiceSub: true }));
+    }
+    if (page === 'grantImport' || page === 'sfcPaymentSync') {
+      setOpenSections(prev => ({ ...prev, claimManagement: true, grantPaymentSync: true }));
+    }
+  }, [page]);
+
   const navigateTo = (p: FinancePage) => {
     setPage(p);
   };
@@ -131,6 +151,8 @@ const FinanceLayout: React.FC = () => {
         return <AllCourseRunsView />;
       case 'grantImport':
         return <GrantImportView />;
+      case 'sfcPaymentSync':
+        return <SfcPaymentSyncView />;
       // Finance automation pages
       case 'autoProcessEnrolments':
         return (
@@ -706,6 +728,7 @@ const FinanceLayout: React.FC = () => {
         </SubSection>
         <SubSection title="Grant Payment" sectionKey="grantPaymentSync">
           <NavItem target="grantImport" label="Bulk Grant Payment Sync" isSubItem />
+          <NavItem target="sfcPaymentSync" label="SFC Payment Sync" isSubItem />
         </SubSection>
         <SubSection title="Invoices" sectionKey="invoiceSub">
           <NavItem target="proformaInvoice" label="ProForma Invoice" isSubItem />

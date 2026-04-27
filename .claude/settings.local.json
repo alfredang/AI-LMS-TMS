@@ -11,7 +11,10 @@
       "Bash(fi)",
       "Bash(done)",
       "Bash(where npm)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npx tsc *)",
+      "Bash(xargs grep *)",
+      "Bash(node -e ' *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\PC\\Downloads\\LmsTmsSystem"

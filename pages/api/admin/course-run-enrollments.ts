@@ -19,12 +19,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          au.id AS user_id,
          au.full_name,
          au.email,
+         au.secondary_email,
          lp.nric,
          lp.tel,
          e.course_sponsorship AS sponsorship_type,
          e.enrolment_id,
-         (SELECT sg.grant_id FROM ssg_grants sg WHERE sg.enrollment_id = e.enrolment_id ORDER BY sg.created_date DESC LIMIT 1) AS grant_id,
-         (SELECT COALESCE(sg.approved_grant_amount, sg.estimated_grant_amount) FROM ssg_grants sg WHERE sg.enrollment_id = e.enrolment_id ORDER BY sg.created_date DESC LIMIT 1) AS grant_amount,
+         COALESCE((SELECT sg.grant_id FROM ssg_grants sg WHERE sg.enrollment_id = e.enrolment_id ORDER BY sg.created_date DESC LIMIT 1), e.grant_id) AS grant_id,
+         COALESCE((SELECT COALESCE(NULLIF(sg.approved_grant_amount, 0), sg.estimated_grant_amount) FROM ssg_grants sg WHERE sg.enrollment_id = e.enrolment_id ORDER BY sg.created_date DESC LIMIT 1), e.grant_amount::numeric) AS grant_amount,
          (SELECT sc.claim_amount FROM ssg_claims sc WHERE sc.enrollment_id = e.enrolment_id ORDER BY sc.created_date DESC LIMIT 1) AS sf_claim_amount
        FROM enrollment e
        JOIN app_user au ON au.id = e.user_id

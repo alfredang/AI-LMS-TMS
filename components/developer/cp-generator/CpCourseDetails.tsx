@@ -5,44 +5,56 @@ import { CP_SKILLS } from '../../../lib/cp-skills';
 import CpPromptTemplateEditor from './CpPromptTemplateEditor';
 
 // ─── Stepper Number Input (matches Streamlit's +/- number input) ───
+// `step` defaults to 1 for whole-number inputs (No. of Topics, Course
+// Duration etc.). Pass step=0.5 to get Streamlit's half-day stepping
+// for the No. of Days field, where values like 1.5 / 2.5 are valid.
 const StepperInput: React.FC<{
   label: string;
   value: number;
   onChange: (v: number) => void;
   min?: number;
   max?: number;
-}> = ({ label, value, onChange, min = 0, max = 999 }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
-    <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(min, value - 1))}
-        disabled={value <= min}
-        className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg font-medium"
-      >
-        −
-      </button>
-      <input
-        type="number"
-        value={value}
-        onChange={e => {
-          const n = Number(e.target.value);
-          if (!isNaN(n)) onChange(Math.min(max, Math.max(min, n)));
-        }}
-        className="flex-1 text-center py-2 bg-transparent text-gray-900 dark:text-white text-sm border-none focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-      />
-      <button
-        type="button"
-        onClick={() => onChange(Math.min(max, value + 1))}
-        disabled={value >= max}
-        className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg font-medium"
-      >
-        +
-      </button>
+  step?: number;
+}> = ({ label, value, onChange, min = 0, max = 999, step = 1 }) => {
+  // Round to step precision so floating-point errors (0.1+0.2=0.3000…0004)
+  // don't produce ugly values like "1.5000000000001".
+  const decimals = step >= 1 ? 0 : Math.max(0, -Math.floor(Math.log10(step)));
+  const round = (v: number) => Number(v.toFixed(decimals));
+  const display = decimals > 0 ? value.toFixed(decimals) : String(value);
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
+      <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+        <button
+          type="button"
+          onClick={() => onChange(round(Math.max(min, value - step)))}
+          disabled={value <= min}
+          className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg font-medium"
+        >
+          −
+        </button>
+        <input
+          type="number"
+          step={step}
+          value={display}
+          onChange={e => {
+            const n = Number(e.target.value);
+            if (!isNaN(n)) onChange(round(Math.min(max, Math.max(min, n))));
+          }}
+          className="flex-1 text-center py-2 bg-transparent text-gray-900 dark:text-white text-sm border-none focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+        <button
+          type="button"
+          onClick={() => onChange(round(Math.min(max, value + step)))}
+          disabled={value >= max}
+          className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg font-medium"
+        >
+          +
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── Pill Toggle Selector (click to select/deselect) ───
 const PillSelector: React.FC<{
@@ -90,6 +102,18 @@ const CpCourseDetails: React.FC = () => {
   const [topicError, setTopicError] = useState('');
   const [topicsOpen, setTopicsOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Generate Topics inputs — Streamlit-parity. Days drives max-topics
+  // (max 3 per day per the prompt template). Default seeded from the user's
+  // course duration assuming a standard 8-hour day, but they can override
+  // independently for this generation. specialRequirements is one-shot —
+  // appended to the prompt only when filled in.
+  const [topicNumDays, setTopicNumDays] = useState<number>(
+    Math.max(1, Math.round((cp.courseDuration || 16) / 8)),
+  );
+  const [specialRequirements, setSpecialRequirements] = useState('');
+  // Half-day stepping support: 1.5 days × 3 = 4.5 max topics → ceil to 5.
+  const topicMaxTopics = Math.max(1, Math.ceil(topicNumDays * 3));
 
   // Suggest Course Titles — local-only state; the brainstorm topic and
   // generated titles don't need to persist across sessions like the rest
@@ -147,6 +171,8 @@ const CpCourseDetails: React.FC = () => {
           framework: cp.framework,
           uniqueSkillName: cp.uniqueSkillName,
           uniqueSkillDescription: selectedSkill?.description ?? '',
+          numDays: topicNumDays,
+          specialRequirements: specialRequirements,
         }),
       });
       const data = await res.json();
@@ -165,32 +191,36 @@ const CpCourseDetails: React.FC = () => {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  // Derived summary values — mirrors the Streamlit st.dataframe summary.
-  // All math stays in one place so the rendered table can't drift from the
-  // numbers the AI is asked to respect.
+  // Derived summary values — mirrors the Streamlit st.dataframe summary
+  // verbatim (label text, units, and "per Day" math). Day count is derived
+  // from courseDuration assuming a standard 8-hour day, matching Streamlit.
+  const numDaysForSummary = Math.max(1, Math.round((cp.courseDuration || 0) / 8));
   const minutesPerTopic = cp.numTopics > 0
     ? Math.round(cp.courseDuration * 60 / cp.numTopics)
     : 0;
   const instrMinutesPerTopic = cp.numTopics > 0
     ? Math.round(cp.instructionalHours * 60 / cp.numTopics)
     : 0;
-  const durationPerInstrMethod = cp.numInstrMethods > 0
-    ? Math.round(cp.instructionalHours * 60 / cp.numInstrMethods)
+  // Streamlit reports this as "per Day" — total instructional minutes
+  // divided across methods AND days, not just methods.
+  const durationPerInstrMethodPerDay = cp.numInstrMethods > 0
+    ? Math.round(cp.instructionalHours * 60 / cp.numInstrMethods / numDaysForSummary)
     : 0;
   const durationPerAssessMethod = cp.numAssessMethods > 0
     ? Math.round(cp.assessmentHours * 60 / cp.numAssessMethods)
     : 0;
   const summaryRows: [string, string][] = [
-    ['Course Duration', `${cp.courseDuration} hrs`],
+    ['Total Course Duration', `${cp.courseDuration * 60} mins`],
     ['Number of Topics', String(cp.numTopics)],
     ['Duration per Topic', `${minutesPerTopic} mins`],
     ['Instructional Duration', `${cp.instructionalHours} hrs`],
     ['Instructional per Topic', `${instrMinutesPerTopic} mins`],
     ['No. of Instructional Methods', String(cp.numInstrMethods)],
-    ['Duration per Instructional Method', `${durationPerInstrMethod} mins`],
-    ['Assessment Duration', `${cp.assessmentHours} hrs`],
+    ['Duration per Instructional Method per Day', `${durationPerInstrMethodPerDay} mins`],
+    // Streamlit shows "N/A" instead of "0 hrs/mins" when these are zero.
+    ['Assessment Duration', cp.assessmentHours > 0 ? `${cp.assessmentHours} hrs` : 'N/A'],
     ['No. of Assessment Methods', String(cp.numAssessMethods)],
-    ['Duration per Assessment Method', `${durationPerAssessMethod} mins`],
+    ['Duration per Assessment Method', cp.numAssessMethods > 0 ? `${durationPerAssessMethod} mins` : 'N/A'],
   ];
 
   // Keep selected methods in sync with max count
@@ -375,6 +405,37 @@ const CpCourseDetails: React.FC = () => {
                   </div>
                 );
               })()}
+              {/* No. of Days — drives max topics (3 per day per template rules).
+                  Streamlit-parity: half-day stepping (0.5) so values like 1.5
+                  or 2.5 are valid, matching the Streamlit number_input. Min
+                  drops to 0.5 to support half-day courses. */}
+              <StepperInput
+                label="No. of Days"
+                value={topicNumDays}
+                onChange={setTopicNumDays}
+                min={0.5}
+                max={20}
+                step={0.5}
+              />
+
+              {/* Special Requirements — one-shot prompt addendum, appended to
+                  the generation prompt only when non-empty. */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Special Requirements (optional)</label>
+                <textarea
+                  value={specialRequirements}
+                  onChange={e => setSpecialRequirements(e.target.value)}
+                  placeholder="e.g. Must include a topic on safety regulations, focus on hands-on practical skills, etc."
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                AI will generate <span className="font-semibold">2-3 topics per day</span> for{' '}
+                <span className="font-semibold">{topicNumDays} day(s)</span> (max {topicMaxTopics} topics)
+              </p>
+
               <button
                 onClick={handleGenerateTopics}
                 disabled={generating}

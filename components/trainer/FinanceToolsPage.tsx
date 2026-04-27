@@ -27,6 +27,12 @@ const FINANCE_TOOLS = [
     icon: IconName.Analytics,
     href: 'https://alfredang.github.io/financialtrend/',
   },
+  {
+    title: 'Credit Loan Analysis',
+    description: 'Analyze credit loan scenarios with amortization schedules, interest calculations, and repayment insights',
+    icon: IconName.Analytics,
+    href: 'https://creditloananalysis.streamlit.app/',
+  },
 ];
 
 const FinanceToolsPage: React.FC = () => {
