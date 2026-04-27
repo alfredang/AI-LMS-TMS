@@ -225,14 +225,14 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
               disabled={downloading !== null}
               className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
             >
-              {downloading === 'docx' ? 'Preparing .docx…' : 'Download Lesson Plan (.docx)'}
+              Download Lesson Plan (.docx)
             </button>
             <button
               onClick={() => handleDownloadLessonPlan('pdf')}
               disabled={downloading !== null}
               className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
             >
-              {downloading === 'pdf' ? 'Preparing .pdf…' : 'Download Lesson Plan (.pdf)'}
+              Download Lesson Plan (.pdf)
             </button>
           </div>
         </Card>
