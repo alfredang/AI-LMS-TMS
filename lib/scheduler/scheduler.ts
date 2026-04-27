@@ -100,6 +100,7 @@ async function seedDefaults() {
         api_endpoint: string;
         email_template?: string;
         days_in_advance?: number;
+        default_enabled?: boolean;
     }> = [
         {
             id: 'auto_create_trainer_folders',
@@ -219,6 +220,7 @@ async function seedDefaults() {
             description: 'Nightly sweep that generates a proforma invoice PDF for every active enrollment still missing pro_forma_url. Saves to the Google Drive proforma folder and writes the URL back to the enrollment row so it appears in Finance → Proforma Invoice and the learner\'s Billing History. Idempotent - enrollments that already have a proforma are skipped. Default 04:00 SGT daily.',
             cron_expression: '0 4 * * *', // 4:00 AM SGT daily
             api_endpoint: '/api/external/auto-generate-proforma-invoices',
+            default_enabled: false,
         },
         {
             id: 'auto_generate_da_invoices',
@@ -226,6 +228,7 @@ async function seedDefaults() {
             description: 'Daily sweep that posts QuickBooks invoices (main tax + Grant + SFC) for every confirmed, SSG-enrolled Direct Application still missing one or more of them, then sends unsent main tax invoice emails once via QuickBooks. Catches rows whose grant wasn\'t yet issued by SSG at manual-generate time and rows left in "failed" state by a transient QBO hiccup. Idempotent. Default 23:00 SGT daily.',
             cron_expression: '0 23 * * *', // 11:00 PM SGT daily
             api_endpoint: '/api/external/auto-generate-da-invoices',
+            default_enabled: false,
         },
     ];
 
@@ -237,13 +240,13 @@ async function seedDefaults() {
 
     for (const task of defaults) {
         await pool.query(
-            `INSERT INTO scheduler_config (id, name, description, cron_expression, api_endpoint, email_template, days_in_advance)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO scheduler_config (id, name, description, cron_expression, api_endpoint, email_template, days_in_advance, enabled)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
                 cron_expression = EXCLUDED.cron_expression`,
-            [task.id, task.name, task.description, task.cron_expression, task.api_endpoint, task.email_template || null, task.days_in_advance ?? null]
+            [task.id, task.name, task.description, task.cron_expression, task.api_endpoint, task.email_template || null, task.days_in_advance ?? null, task.default_enabled ?? true]
         );
     }
 }
