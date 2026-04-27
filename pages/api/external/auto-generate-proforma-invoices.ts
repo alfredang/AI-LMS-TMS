@@ -25,6 +25,8 @@ const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-
  */
 export async function runAutomation() {
     await ensureProformaLogTable();
+    await pool.query('ALTER TABLE enrollment ADD COLUMN IF NOT EXISTS pro_forma_url TEXT');
+    await pool.query('ALTER TABLE enrollment ADD COLUMN IF NOT EXISTS proforma_invoice_number TEXT');
 
     const runId = crypto.randomUUID();
     const startedAt = new Date();
