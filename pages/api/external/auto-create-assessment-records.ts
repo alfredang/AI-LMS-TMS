@@ -139,8 +139,39 @@ export async function runAutomation() {
     let created = 0, existing = 0, errors = 0;
     const results: any[] = [];
 
+    // Pre-fetch course_run_ids that were already successfully processed today.
+    // Guards against duplicate folder creation when the task runs multiple times
+    // (e.g. server restart at cron boundary) — the Google Drive Search API has
+    // eventual consistency and the in-memory folderCache is lost on restart.
+    const alreadyProcessedRes = await pool.query(
+        `SELECT DISTINCT course_run_id FROM auto_create_trainer_folder_log
+         WHERE status IN ('created', 'existing')
+           AND created_at::date = (NOW() AT TIME ZONE 'Asia/Singapore')::date`
+    );
+    const alreadyProcessed = new Set(alreadyProcessedRes.rows.map(r => r.course_run_id));
+
     for (const run of runs) {
         console.log(`\n📋 Processing: "${run.course_title}" [${run.course_code}] | run: ${run.course_run_id}`);
+
+        // Skip if already processed today (prevents duplicates on re-runs)
+        if (alreadyProcessed.has(run.course_run_id)) {
+            console.log(`  ⏭️ Already processed today — skipping`);
+            existing++;
+            results.push({
+                runId,
+                courseRunId: run.course_run_id,
+                courseTitle: run.course_title,
+                courseCode: run.course_code,
+                startDate: run.start_date,
+                endDate: run.end_date,
+                trainerName: run.trainer_name,
+                trainerSource: run.trainer_source,
+                folderName: null,
+                status: 'existing',
+                errorMessage: 'Already processed in an earlier run today',
+            });
+            continue;
+        }
 
         const logEntry: any = {
             runId,
