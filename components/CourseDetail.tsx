@@ -877,7 +877,8 @@ const AssessmentsSection: React.FC<{
             {(() => {
                 const effectiveWrittenLink = (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
                     ? course.assessmentMethods.writtenAssessment.link
-                    : course.writtenAssessmentLink;
+                    // Only fall back to legacy link when assessmentMethods is not configured at all
+                    : (!course.assessmentMethods ? course.writtenAssessmentLink : null);
                 return effectiveWrittenLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
@@ -993,7 +994,8 @@ const AssessmentsSection: React.FC<{
             {(() => {
                 const effectivePracticalLink = (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
                     ? course.assessmentMethods.practicalExam.link
-                    : course.practicalPerformanceAssessmentLink;
+                    // Only fall back to legacy link when assessmentMethods is not configured at all
+                    : (!course.assessmentMethods ? course.practicalPerformanceAssessmentLink : null);
                 return effectivePracticalLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">

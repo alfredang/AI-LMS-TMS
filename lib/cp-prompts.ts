@@ -423,8 +423,8 @@ T2: [Topic Name] - [Brief description]
 ...
 
 (3) Duration for each topic
-Topic 1: [duration]mins
-Topic 2: [duration]mins
+Topic 1: [Topic Name] - [duration]mins
+Topic 2: [Topic Name] - [duration]mins
 ...`;
 
 const ENTRY_REQUIREMENTS_PROMPT = `You are an expert course description writer for professional training and continuing education programmes. Write a "Minimum Entry Requirement" section for the following course.

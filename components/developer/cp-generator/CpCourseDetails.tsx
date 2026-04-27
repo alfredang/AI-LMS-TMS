@@ -5,44 +5,56 @@ import { CP_SKILLS } from '../../../lib/cp-skills';
 import CpPromptTemplateEditor from './CpPromptTemplateEditor';
 
 // ─── Stepper Number Input (matches Streamlit's +/- number input) ───
+// `step` defaults to 1 for whole-number inputs (No. of Topics, Course
+// Duration etc.). Pass step=0.5 to get Streamlit's half-day stepping
+// for the No. of Days field, where values like 1.5 / 2.5 are valid.
 const StepperInput: React.FC<{
   label: string;
   value: number;
   onChange: (v: number) => void;
   min?: number;
   max?: number;
-}> = ({ label, value, onChange, min = 0, max = 999 }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
-    <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(min, value - 1))}
-        disabled={value <= min}
-        className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg font-medium"
-      >
-        −
-      </button>
-      <input
-        type="number"
-        value={value}
-        onChange={e => {
-          const n = Number(e.target.value);
-          if (!isNaN(n)) onChange(Math.min(max, Math.max(min, n)));
-        }}
-        className="flex-1 text-center py-2 bg-transparent text-gray-900 dark:text-white text-sm border-none focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-      />
-      <button
-        type="button"
-        onClick={() => onChange(Math.min(max, value + 1))}
-        disabled={value >= max}
-        className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg font-medium"
-      >
-        +
-      </button>
+  step?: number;
+}> = ({ label, value, onChange, min = 0, max = 999, step = 1 }) => {
+  // Round to step precision so floating-point errors (0.1+0.2=0.3000…0004)
+  // don't produce ugly values like "1.5000000000001".
+  const decimals = step >= 1 ? 0 : Math.max(0, -Math.floor(Math.log10(step)));
+  const round = (v: number) => Number(v.toFixed(decimals));
+  const display = decimals > 0 ? value.toFixed(decimals) : String(value);
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
+      <div className="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+        <button
+          type="button"
+          onClick={() => onChange(round(Math.max(min, value - step)))}
+          disabled={value <= min}
+          className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg font-medium"
+        >
+          −
+        </button>
+        <input
+          type="number"
+          step={step}
+          value={display}
+          onChange={e => {
+            const n = Number(e.target.value);
+            if (!isNaN(n)) onChange(round(Math.min(max, Math.max(min, n))));
+          }}
+          className="flex-1 text-center py-2 bg-transparent text-gray-900 dark:text-white text-sm border-none focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+        <button
+          type="button"
+          onClick={() => onChange(round(Math.min(max, value + step)))}
+          disabled={value >= max}
+          className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg font-medium"
+        >
+          +
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── Pill Toggle Selector (click to select/deselect) ───
 const PillSelector: React.FC<{
@@ -100,7 +112,8 @@ const CpCourseDetails: React.FC = () => {
     Math.max(1, Math.round((cp.courseDuration || 16) / 8)),
   );
   const [specialRequirements, setSpecialRequirements] = useState('');
-  const topicMaxTopics = Math.max(1, topicNumDays * 3);
+  // Half-day stepping support: 1.5 days × 3 = 4.5 max topics → ceil to 5.
+  const topicMaxTopics = Math.max(1, Math.ceil(topicNumDays * 3));
 
   // Suggest Course Titles — local-only state; the brainstorm topic and
   // generated titles don't need to persist across sessions like the rest
@@ -393,15 +406,16 @@ const CpCourseDetails: React.FC = () => {
                 );
               })()}
               {/* No. of Days — drives max topics (3 per day per template rules).
-                  Streamlit-parity: separate from cp.numTopics so the user can
-                  generate topics for a specific day count without disturbing
-                  the canonical numTopics that powers the summary table. */}
+                  Streamlit-parity: half-day stepping (0.5) so values like 1.5
+                  or 2.5 are valid, matching the Streamlit number_input. Min
+                  drops to 0.5 to support half-day courses. */}
               <StepperInput
                 label="No. of Days"
                 value={topicNumDays}
                 onChange={setTopicNumDays}
-                min={1}
+                min={0.5}
                 max={20}
+                step={0.5}
               />
 
               {/* Special Requirements — one-shot prompt addendum, appended to
