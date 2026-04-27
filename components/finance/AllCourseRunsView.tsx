@@ -49,6 +49,7 @@ interface CourseRunRow {
   invoice_id?: string | null;
   invoice_no?: string | null;
   invoice_sent_at?: string | null;
+  grn_doc_number?: string | null;
   is_da?: boolean | null;
 }
 
@@ -562,9 +563,6 @@ const AllCourseRunsView: React.FC = () => {
 
   const queueQboInvoices = async () => {
     if (selectedEnrolmentIds.length === 0) return;
-    if (!window.confirm(`Generate QuickBooks invoice(s) for ${selectedEnrolmentIds.length} enrolment(s)?`)) {
-      return;
-    }
 
     setQueueing(true);
     setSyncToast(null);
@@ -906,6 +904,7 @@ const AllCourseRunsView: React.FC = () => {
                 <th className={headerCell}>DA</th>
                 <th className={headerCell}>Invoice ID</th>
                 <th className={headerCell}>Invoice No</th>
+                <th className={headerCell}>GRN Ref</th>
                 <th className={headerCell}>Sent</th>
                 {/* BL Grant (3) */}
                 <th className={headerCell}>Status</th>
@@ -1007,6 +1006,7 @@ const AllCourseRunsView: React.FC = () => {
                     </td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_id || '-'}</td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_no || '-'}</td>
+                    <td className={`${cell} text-on-surface-secondary font-mono`}>{r.grn_doc_number || '-'}</td>
                     <td className={`${cell} text-on-surface-secondary`}>{r.invoice_sent_at ? formatDate(String(r.invoice_sent_at).slice(0, 10)) : '-'}</td>
                     {/* BL Grant */}
                     <td className={cell}>

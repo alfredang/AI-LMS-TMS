@@ -9,6 +9,8 @@ export interface GrantDeductionLine {
   grantId: string;
   /** Full Description field for QBO (includes Grant Ref#) */
   description: string;
+  /** QB Item Name to use for this line (e.g. 'WSQ funding (Baseline)', 'WSQ funding (MCES)') */
+  itemName: string;
 }
 
 /**
@@ -63,6 +65,7 @@ export async function loadSplitGrantDeductionsFromDb(
       amount: Number(bl.amt),
       grantId: gid,
       description: `Less: WSQ funding (Baseline)\nGrant Ref#: ${gid}`,
+      itemName: 'WSQ funding (Baseline)',
     });
   }
 
@@ -70,6 +73,7 @@ export async function loadSplitGrantDeductionsFromDb(
     grant_id?: string;
     amt?: number;
     funding_scheme_description?: string | null;
+    funding_scheme_code?: string | null;
   } | undefined;
   if (nbl && Number(nbl.amt) > 0) {
     const gid = String(nbl.grant_id ?? '—');
@@ -78,6 +82,7 @@ export async function loadSplitGrantDeductionsFromDb(
       amount: Number(nbl.amt),
       grantId: gid,
       description: `Less: WSQ funding (${label})\nGrant Ref#: ${gid}`,
+      itemName: 'WSQ funding (MCES)',
     });
   }
 
@@ -97,6 +102,7 @@ export function buildFallbackCombinedGrantLine(
       amount: combinedSubsidy,
       grantId: gid,
       description: `Less: WSQ funding (Baseline)\nGrant Ref#: ${gid}`,
+      itemName: 'WSQ funding (Baseline)',
     },
   ];
 }

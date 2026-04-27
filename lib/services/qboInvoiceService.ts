@@ -187,6 +187,19 @@ export async function qboQuery(appOverride: string | undefined, query: string): 
   return qboFetchJson({ token, url });
 }
 
+export async function qboFindTermByName(
+  appOverride: string | undefined,
+  termName: string
+): Promise<{ id: string; name?: string; raw: any } | null> {
+  const safe = String(termName || '').replace(/'/g, "''").trim();
+  if (!safe) return null;
+  const data = await qboQuery(appOverride, `SELECT * FROM Term WHERE Name = '${safe}' MAXRESULTS 1`);
+  const t = data?.QueryResponse?.Term;
+  const row = Array.isArray(t) ? t[0] : t;
+  if (!row?.Id) return null;
+  return { id: String(row.Id), name: row?.Name ? String(row.Name) : undefined, raw: row };
+}
+
 export async function qboCreateInvoice(appOverride: string | undefined, body: any): Promise<{ id: string; docNumber?: string; raw: any }> {
   const creds = await getQBOCredentials(appOverride);
   if (!creds) throw new Error('QuickBooks credentials not configured');
@@ -384,6 +397,52 @@ export async function qboFindItemBySku(appOverride: string | undefined, sku: str
   const item = data?.QueryResponse?.Item?.[0];
   if (!item) return null;
   return { id: String(item.Id), name: String(item.Name || sku), unitPrice: Number(item.UnitPrice || 0) };
+}
+
+/**
+ * Find a QB customer by exact DisplayName. Throws a descriptive error if not found.
+ * Use this for fixed customers (e.g. "WSQ Individual (Not for Company)") that must be pre-created in QB.
+ */
+export async function qboFindCustomerByDisplayName(appOverride: string | undefined, displayName: string): Promise<string> {
+  const safe = displayName.replace(/'/g, "''");
+  const data = await qboQuery(appOverride, `SELECT * FROM Customer WHERE DisplayName = '${safe}' MAXRESULTS 1`);
+  const c = data?.QueryResponse?.Customer?.[0];
+  if (c?.Id) return String(c.Id);
+  throw new Error(
+    `QuickBooks customer "${displayName}" not found. Please create this customer in QuickBooks first (Customers → New Customer).`
+  );
+}
+
+/**
+ * Find a QB customer by exact DisplayName, creating it if not found.
+ * Use this for system customers (e.g. "WSG") that should exist but may need auto-creation.
+ */
+export async function qboFindOrCreateCustomerByDisplayName(appOverride: string | undefined, displayName: string): Promise<string> {
+  const safe = displayName.replace(/'/g, "''");
+  const data = await qboQuery(appOverride, `SELECT * FROM Customer WHERE DisplayName = '${safe}' MAXRESULTS 1`);
+  const c = data?.QueryResponse?.Customer?.[0];
+  if (c?.Id) return String(c.Id);
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/customer?minorversion=${MINOR_VERSION}`;
+  const created = await qboFetchJson({ token, url, method: 'POST', body: { DisplayName: displayName } });
+  const cust = created?.Customer ?? created;
+  if (!cust?.Id) throw new Error('QBO customer create returned no Id');
+  return String(cust.Id);
+}
+
+/**
+ * Find a QB item by exact Name (not SKU). Returns null if not found.
+ * Use this for grant/funding items (e.g. "WSQ funding (Baseline)", "WSQ funding (MCES)").
+ */
+export async function qboFindItemByName(appOverride: string | undefined, name: string): Promise<{ id: string; name: string; unitPrice: number } | null> {
+  const safe = name.replace(/'/g, "''");
+  const data = await qboQuery(appOverride, `SELECT * FROM Item WHERE Name = '${safe}' MAXRESULTS 1`);
+  const item = data?.QueryResponse?.Item?.[0];
+  if (!item) return null;
+  return { id: String(item.Id), name: String(item.Name || name), unitPrice: Number(item.UnitPrice || 0) };
 }
 
 export async function qboFindOrCreateCustomerByEmail(appOverride: string | undefined, email: string, displayName: string): Promise<string> {

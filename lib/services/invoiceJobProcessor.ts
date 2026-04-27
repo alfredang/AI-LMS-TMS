@@ -7,16 +7,36 @@ import { resolveGrantDeductionLinesForInvoice } from './daInvoiceGrantLines';
 import {
   qboCreateInvoice,
   qboFetchInvoicePdf,
+  qboFindCustomerByDisplayName,
+  qboFindInvoiceByDocNumber,
+  qboFindItemByName,
   qboFindItemBySku,
-  qboFindOrCreateCustomerByEmail,
+  qboFindOrCreateCustomerByDisplayName,
+  qboFindTermByName,
   qboResolveInvoiceLineTaxCodeRef,
   qboResolveOosTaxCodeRef,
   qboSendInvoice,
 } from './qboInvoiceService';
 import { shouldSendQboInvoiceEmailFromQuickBooks } from './qboInvoiceEmailPolicy';
 
+// Grant QB items are fixed ("WSQ funding (Baseline)", "WSQ funding (MCES)").
+// Cache their IDs at module level so subsequent invoice jobs don't re-query QB.
+const _grantItemCache = new Map<string, string>();
+const _skuItemCache = new Map<string, { id: string; name: string; unitPrice: number }>();
+let _cachedWsqiCustomerId: string | null = null;
+let _cachedTaxCodeGst: string | null = null;
+let _cachedTaxCodeOos: string | null = null;
+let _cachedSfcItemId: string | null = null;
+let _cachedDueOnReceiptTermId: string | null = null;
+
 function safeText(v: unknown): string {
   return typeof v === 'string' ? v : String(v ?? '');
+}
+
+function maskNric(nric: string | null | undefined): string {
+  const s = String(nric || '').trim();
+  if (!s || s === '—') return '—';
+  return s.length > 4 ? '****' + s.slice(-4) : s;
 }
 
 function formatDate(d: string | Date | null | undefined): string {
@@ -266,7 +286,9 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
 
   // 1) Best-effort grant refresh (populates ssg_grants for BL / Non-BL split)
   try {
-    await refreshGrantsForEnrolments([enrolmentId]);
+    // Do not block invoice generation on SSG sync latency.
+    // `resolveGrantDeductionLinesForInvoice` can still use existing rows (or fall back).
+    void refreshGrantsForEnrolments([enrolmentId]);
   } catch (e) {
     console.warn('[invoice-job] Grant refresh failed (non-blocking):', e);
   }
@@ -277,26 +299,63 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     grantIdFallback: da.grant_id ?? null,
   });
 
-  // 2) Find QBO item by SKU
-  const item = await qboFindItemBySku(undefined, courseCode);
+  // 2) Sequential QB lookups — parallel QB calls race each other for the OAuth token refresh
+  //    which causes timeouts. Sequential calls reuse the same cached token after the first refresh.
+  const cachedSku = _skuItemCache.get(courseCode);
+  const item = cachedSku ?? (await qboFindItemBySku(undefined, courseCode));
   if (!item) throw new Error(`QuickBooks item not found for SKU: ${courseCode}`);
   if (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0) {
     throw new Error(
       `QuickBooks item "${item.name}" (SKU ${courseCode}) has unit price ${item.unitPrice}. Set a positive Unit Price on the Item in QuickBooks.`
     );
   }
+  if (!cachedSku) {
+    // Keep cache bounded in case of many course codes.
+    if (_skuItemCache.size > 200) _skuItemCache.clear();
+    _skuItemCache.set(courseCode, { id: item.id, name: item.name, unitPrice: item.unitPrice });
+  }
 
+  const customerId =
+    _cachedWsqiCustomerId ??
+    (await qboFindCustomerByDisplayName(undefined, 'WSQ Individual (Not for Company)'));
+  if (!customerId) throw new Error('QuickBooks customer not found: WSQ Individual (Not for Company)');
+  _cachedWsqiCustomerId = customerId;
+
+  const taxCodeGst = _cachedTaxCodeGst ?? (await qboResolveInvoiceLineTaxCodeRef(undefined));
+  const taxCodeOos = _cachedTaxCodeOos ?? (await qboResolveOosTaxCodeRef(undefined));
+  _cachedTaxCodeGst = taxCodeGst;
+  _cachedTaxCodeOos = taxCodeOos;
+
+  // Terms: Due on receipt
+  if (!_cachedDueOnReceiptTermId) {
+    const term = await qboFindTermByName(undefined, 'Due on receipt');
+    if (term?.id) _cachedDueOnReceiptTermId = term.id;
+  }
+
+  // Grant item lookups — cached at module level so only fetched once per server lifecycle
+  const grantItemIdCache = new Map<string, string>();
+  for (const g of grantDeductionLines) {
+    if (!grantItemIdCache.has(g.itemName)) {
+      const cached = _grantItemCache.get(g.itemName);
+      if (cached) {
+        grantItemIdCache.set(g.itemName, cached);
+      } else {
+        const found = await qboFindItemByName(undefined, g.itemName);
+        if (!found) throw new Error(`QuickBooks item "${g.itemName}" not found. Create this item in QuickBooks (Sales → Products & Services).`);
+        _grantItemCache.set(g.itemName, found.id);
+        grantItemIdCache.set(g.itemName, found.id);
+      }
+    }
+  }
+
+  // DB lookups don't need the QB token — run after token is warmed
   const ctx = await loadInvoiceContext(enrolmentId, userId, learnerEmail, courseCode);
+
   const actualFullCourseFee =
     (hasDa && fullCourseFee > 0) ? fullCourseFee :
       (ctx.feeExGst > 0 ? ctx.feeExGst : item.unitPrice);
 
-  // 3) Find/Create customer
-  const customerId = await qboFindOrCreateCustomerByEmail(undefined, learnerEmail, ctx.traineeName);
-
-  // 4) Build invoice lines
-  const taxCodeGst = await qboResolveInvoiceLineTaxCodeRef(undefined);
-  const taxCodeOos = await qboResolveOosTaxCodeRef(undefined);
+  // Build invoice lines
   const lines: any[] = [];
 
   // Line 1: Full course fee with rich description
@@ -313,7 +372,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
       `Course Name: ${hasDa ? (da.course_title ?? ctx.courseTitle) : ctx.courseTitle}`,
       `(${hasDa ? (da.course_reference_number ?? ctx.courseRef) : ctx.courseRef})`,
       `Participant Name: ${hasDa ? (da.trainee_name ?? ctx.traineeName) : ctx.traineeName}`,
-      `NRIC: ${hasDa ? (da.trainee_id ?? ctx.traineeNric ?? '—') : (ctx.traineeNric ?? '—')}`,
+      `NRIC: ${maskNric(hasDa ? (da.trainee_id ?? ctx.traineeNric) : ctx.traineeNric)}`,
       (() => {
         const start = formatDate(hasDa ? da.course_start_date : ctx.startDate);
         const end = formatDate(hasDa ? da.course_end_date : ctx.endDate);
@@ -324,13 +383,13 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     ].join('\n'),
   });
 
-  // Lines 2+: WSQ grants (Baseline + Non-Baseline when present in ssg_grants)
+  // Lines 2+: WSQ grants — named QB items ("WSQ funding (Baseline)" / "WSQ funding (MCES)")
   for (const g of grantDeductionLines) {
     lines.push({
       Amount: -g.amount,
       DetailType: 'SalesItemLineDetail',
       SalesItemLineDetail: {
-        ItemRef: { value: item.id },
+        ItemRef: { value: grantItemIdCache.get(g.itemName)! },
         Qty: 1,
         UnitPrice: -g.amount,
         TaxCodeRef: { value: taxCodeOos },
@@ -339,27 +398,68 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     });
   }
 
-  // SkillsFuture Credit (always show, even if 0)
+  // SkillsFuture Credit
+  // QBO is picky: `DetailType: "DescriptionOnly"` often rejects `Amount` (code 2010).
+  // Use a standard SalesItemLineDetail negative line so the deduction always applies.
   const sfcCredit = hasDa ? sfcCreditDa : ctx.sfcAmount;
+  if (Number.isFinite(sfcCredit) && sfcCredit > 0) {
+    // Prefer a dedicated item if it exists in QBO, otherwise fall back to the course item.
+    // (Keeps the invoice readable when QBO has an "SFC Credit" / "SkillsFuture Credit" item configured.)
+    let sfcItemId = _cachedSfcItemId;
+    if (!sfcItemId) {
+      const byName =
+        (await qboFindItemByName(undefined, 'SFC Credit')) ||
+        (await qboFindItemByName(undefined, 'SkillsFuture Credit')) ||
+        (await qboFindItemByName(undefined, 'Skillsfuture Credit'));
+      if (byName?.id) {
+        sfcItemId = byName.id;
+        _cachedSfcItemId = byName.id;
+      }
+    }
+    lines.push({
+      Amount: -sfcCredit,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: {
+        ItemRef: { value: sfcItemId || item.id },
+        Qty: 1,
+        UnitPrice: -sfcCredit,
+        TaxCodeRef: { value: taxCodeOos },
+      },
+      Description: `To Less Skillsfuture Credit : $${sfcCredit.toFixed(2)}`,
+    });
+  }
+
+  // Net amount (balance due) = fee + GST(9%) - grants - SFC.
+  // Keep consistent with proforma generation (`0.09`).
+  const gstRate = 0.09;
+  const netAmount =
+    (Number.isFinite(actualFullCourseFee) ? actualFullCourseFee : 0) * (1 + gstRate) -
+    (Number.isFinite(grantSubsidy) ? grantSubsidy : 0) -
+    (Number.isFinite(sfcCredit) ? sfcCredit : 0);
+  const netAmountClamped = Number.isFinite(netAmount) ? Math.max(0, netAmount) : 0;
+
+  // Always show a 4th row message (informational only; no amount field to avoid QBO parse errors).
   lines.push({
-    Amount: -sfcCredit,
-    DetailType: 'SalesItemLineDetail',
-    SalesItemLineDetail: {
-      ItemRef: { value: item.id },
-      Qty: 1,
-      UnitPrice: -sfcCredit,
-      TaxCodeRef: { value: taxCodeOos },
-    },
-    Description: hasDa
-      ? `SkillsFuture Credit Usage/Claim:\nApplication ID: ${da.application_id ?? '—'}`
-      : `SkillsFuture Credit Usage/Claim:\nClaim ID: ${ctx.sfcClaimId ?? '—'}`,
+    DetailType: 'DescriptionOnly',
+    DescriptionLineDetail: {},
+    Description: `To Less Skillsfuture Credit : $${netAmountClamped.toFixed(2)}`,
   });
 
   const gtc = process.env.QBO_INVOICE_GLOBAL_TAX_CALC?.trim();
+  const billToName = (hasDa ? (da.trainee_name ?? ctx.traineeName) : ctx.traineeName) || learnerEmail;
   const invoiceBody: Record<string, unknown> = {
     CustomerRef: { value: customerId },
     Line: lines,
     BillEmail: { Address: learnerEmail },
+    CustomerMemo: {
+      value: `Skillsfuture Claimable Amount : $${netAmountClamped.toFixed(2)}`,
+    },
+    ...( _cachedDueOnReceiptTermId ? { SalesTermRef: { value: _cachedDueOnReceiptTermId } } : {} ),
+    // Override QBO Customer default addresses (which can include placeholder text).
+    // Finance requirement: invoice billing address should show trainee name only,
+    // and shipping details should not be populated.
+    BillAddr: { Line1: billToName },
+    ShipAddr: { Line1: '' },
     PrivateNote: `SSG enrolment: ${enrolmentId}`,
   };
   if (gtc && gtc.toLowerCase() !== 'omit') {
@@ -396,35 +496,91 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     );
   }
 
-  // 5) Optionally email invoice from QBO (off by default — set QBO_SEND_INVOICE_EMAIL=true)
-  if (shouldSendQboInvoiceEmailFromQuickBooks()) {
-    await step('QBO send invoice', () => qboSendInvoice(undefined, invoiceId));
-  } else {
-    console.log('[invoice-job] Skipping QBO customer email (set QBO_SEND_INVOICE_EMAIL=true to enable)');
-  }
-
-  // 6) Download PDF
-  const pdf = await step('QBO fetch invoice PDF', () => qboFetchInvoicePdf(undefined, invoiceId));
-
-  // 7) Upload to Drive
-  const fallbackNo = buildTmsInvoiceNo(enrolmentId, new Date(), 0);
-  const fileName = `QB_invoice_${safeText(invoiceNo || docNumber || fallbackNo)}.pdf`;
-  const drive = await step('Google Drive upload', () => uploadInvoicePdfToDrive({ pdf, fileName }));
-
-  try {
-    await upsertSsgEnrolmentFromLocalEnrollment(enrolmentId);
-  } catch (e) {
-    console.warn('[invoice-job] ssg_enrolments upsert (non-blocking):', e);
-  }
-
-  // 8) Mark done
+  // 5) Mark done as soon as the invoice exists in QBO.
+  // PDF + Drive upload can be slow; do it after the job is "done" to keep Finance UX responsive.
   await pool.query(
     `UPDATE public.invoice_jobs
      SET status = 'done',
-         drive_file_id = $2,
-         drive_web_view_link = $3,
          updated_at = now()
      WHERE id = $1`,
-    [jobId, drive.fileId, drive.webViewLink]
+    [jobId]
   );
+
+  // 6) Post-steps (do not block job completion)
+  void (async () => {
+    // Optionally email invoice from QBO (off by default — set QBO_SEND_INVOICE_EMAIL=true)
+    try {
+      if (shouldSendQboInvoiceEmailFromQuickBooks()) {
+        await step('QBO send invoice', () => qboSendInvoice(undefined, invoiceId));
+      } else {
+        console.log('[invoice-job] Skipping QBO customer email (set QBO_SEND_INVOICE_EMAIL=true to enable)');
+      }
+    } catch (e) {
+      console.warn('[invoice-job] QBO send invoice (post-step):', e);
+    }
+
+    // Download PDF + upload to Drive
+    try {
+      const pdf = await step('QBO fetch invoice PDF', () => qboFetchInvoicePdf(undefined, invoiceId));
+      const fallbackNo = buildTmsInvoiceNo(enrolmentId, new Date(), 0);
+      const fileName = `QB_invoice_${safeText(invoiceNo || docNumber || fallbackNo)}.pdf`;
+      const drive = await step('Google Drive upload', () => uploadInvoicePdfToDrive({ pdf, fileName }));
+      await pool.query(
+        `UPDATE public.invoice_jobs
+         SET drive_file_id = $2,
+             drive_web_view_link = $3,
+             updated_at = now()
+         WHERE id = $1`,
+        [jobId, drive.fileId, drive.webViewLink]
+      );
+    } catch (e) {
+      console.warn('[invoice-job] PDF/Drive (post-step):', e);
+    }
+
+    // Keep ssg_enrolments in sync (best-effort)
+    try {
+      await upsertSsgEnrolmentFromLocalEnrollment(enrolmentId);
+    } catch (e) {
+      console.warn('[invoice-job] ssg_enrolments upsert (post-step):', e);
+    }
+
+    // Create GRN invoice in QB (post-step — errors here don't fail invoice generation)
+    const existingGrnRef = job.grn_doc_number ? String(job.grn_doc_number).trim() || null : null;
+    if (!existingGrnRef && grantDeductionLines.length > 0) {
+      try {
+        const primaryGrnRef = grantDeductionLines[0].grantId !== '—' ? grantDeductionLines[0].grantId : null;
+        if (primaryGrnRef) {
+          const existingGrn = await qboFindInvoiceByDocNumber(undefined, primaryGrnRef);
+          if (!existingGrn?.id) {
+            const wsgCustomerId = await qboFindOrCreateCustomerByDisplayName(undefined, 'WSG');
+            const grnLines = grantDeductionLines.map((g) => ({
+              Amount: g.amount,
+              DetailType: 'SalesItemLineDetail',
+              SalesItemLineDetail: {
+                ItemRef: { value: grantItemIdCache.get(g.itemName)! },
+                Qty: 1,
+                UnitPrice: g.amount,
+                TaxCodeRef: { value: taxCodeOos },
+              },
+              Description: g.description.replace(/^Less: /, ''),
+            }));
+            const grnBody: Record<string, unknown> = {
+              CustomerRef: { value: wsgCustomerId },
+              DocNumber: primaryGrnRef,
+              Line: grnLines,
+              PrivateNote: `SSG enrolment: ${enrolmentId}`,
+            };
+            if (gtc && gtc.toLowerCase() !== 'omit') grnBody.GlobalTaxCalculation = gtc;
+            await qboCreateInvoice(undefined, grnBody);
+          }
+          await pool.query(
+            `UPDATE public.invoice_jobs SET grn_doc_number = $2, updated_at = now() WHERE id = $1`,
+            [jobId, primaryGrnRef]
+          );
+        }
+      } catch (e) {
+        console.warn('[invoice-job] GRN invoice creation (post-step):', e);
+      }
+    }
+  })();
 }
