@@ -50,7 +50,12 @@ async function generateWithClaude(prompt: string, apiKey: string): Promise<strin
       env: buildClaudeEnv(apiKey),
       allowedTools: [],
       maxTurns: 1,
-    },
+      // Sonnet 4.6 is 2-3× faster than the default Opus for the structured
+      // CP-section generators (lesson plan, learning outcomes, instructional
+      // methods etc.) while keeping output quality. Same model the CP
+      // extractor + assessment generator use.
+      model: 'claude-sonnet-4-6',
+    } as any,
   })) {
     if (message.type === 'assistant' && message.message?.content) {
       for (const block of message.message.content) {
