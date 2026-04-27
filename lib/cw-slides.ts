@@ -1252,31 +1252,34 @@ function formatActivity(activity: ContentMapEntry['activity']): string[] {
 }
 
 // Quality gate — does this content block have substantive items?
-// A block is "thin" when:
-//   - fewer than 2 items, OR
-//   - all items have empty/very short desc (< 12 chars) AND no value, OR
-//   - more than half the items have generic placeholder labels
-//     ("Pros", "Cons", "Point 1", "Item 1", "Step 1", etc.)
-// Thin blocks get rendered as plain text-bullet slides instead of empty
-// AntV diagrams (the empty "VS" comparison + "Point 1 / Key aspect 1"
-// grid the user complained about).
+// Quality gate — only reject GENUINELY empty/garbage blocks. Earlier the
+// gate was too strict ("desc < 12 chars" / ">50% placeholders" both rejected),
+// which dropped ~70% of blocks in production decks and left courses with 2-3
+// infographics per topic instead of 6-8. The bar now is just:
+//   - block missing entirely, OR
+//   - no items at all, OR
+//   - items array is purely placeholders (Pros/Cons-only with no children
+//     and no descs — the original bug that produced empty "VS" arrows).
+// Anything with at least one substantive item (a real label, or a desc
+// with any text, or a numeric value) is allowed through.
 function isBlockThin(block: ContentBlock | undefined): boolean {
   if (!block) return true;
   const items = block.data?.items;
-  if (!Array.isArray(items) || items.length < 2) return true;
-  const placeholderRe = /^(?:pros?|cons?|advantages?|disadvantages?|good|bad|yes|no|before|after|old|new|point\s*\d+|item\s*\d+|step\s*\d+|sub\s*\d+|key\s*point|placeholder|n\/a|\+|−|-|a|b|x|y)\s*$/i;
-  let placeholderCount = 0;
-  let substantiveCount = 0;
+  if (!Array.isArray(items) || items.length === 0) return true;
+
+  const placeholderRe = /^(?:pros?|cons?|good|bad|yes|no|\+|−|-|a|b|x|y|n\/a|placeholder)\s*$/i;
+  let allPlaceholder = true;
   for (const it of items) {
     const label = String(it.label ?? '').trim();
     const desc = String(it.desc ?? '').trim();
     const hasValue = typeof it.value === 'number' && Number.isFinite(it.value);
-    if (placeholderRe.test(label)) placeholderCount++;
-    if (desc.length >= 12 || hasValue) substantiveCount++;
+    const isPlaceholder = !label || (placeholderRe.test(label) && !desc && !hasValue);
+    if (!isPlaceholder) {
+      allPlaceholder = false;
+      break;
+    }
   }
-  if (placeholderCount > items.length / 2) return true;
-  if (substantiveCount === 0) return true;
-  return false;
+  return allPlaceholder;
 }
 
 function assemble(
@@ -1297,25 +1300,21 @@ function assemble(
         const blocks = content?.content_blocks ?? [];
         const activity = formatActivity(content?.activity);
         const infos = fuzzyGetContent(infographicMap, t.topic_title) ?? [];
-        // STRICT quality requirement — every content slide MUST carry a real
-        // rendered AntV infographic PNG. We drop any assignment where:
-        //   1. There's no PNG (Playwright failed / block had no items), OR
-        //   2. The underlying block is "thin" (would render as an empty "VS"
-        //      circle or "Point 1 / Key aspect 1" placeholder).
-        // The deck ends up shorter when content quality is mixed, but every
-        // surviving content slide is a substantive infographic.
+        // Quality gate — only DROP a slide entirely when the underlying
+        // block is genuinely empty/garbage (isBlockThin). For blocks where
+        // the AntV PNG render failed but the content itself is real, fall
+        // back to a clean text-bullet slide so the deck still surfaces the
+        // material. This keeps slide counts close to the per-day target
+        // while still preventing useless empty "VS" placeholder slides.
         type SlideEntry = { position: number; title: string; image_path: string | null; caption: string; fallback_bullets: string[] };
         const infographicSlides: SlideEntry[] = [];
         for (const a of t.infographic_assignments) {
           const block = blocks[a.content_block_index];
-          const info = infos.find((i) => i.slide_position === a.slide_position);
-          const thin = isBlockThin(block);
-          const hasGeneratedImage = !!info?.generated && !!info.image_path;
-          if (thin || !hasGeneratedImage) continue;
+          if (isBlockThin(block)) continue; // genuinely empty — drop
 
           const items = block?.data?.items ?? [];
           const fallback = items
-            .filter((it) => String(it.desc ?? '').trim().length >= 5 || typeof it.value === 'number')
+            .filter((it) => String(it.desc ?? '').trim().length >= 3 || typeof it.value === 'number' || String(it.label ?? '').trim().length >= 3)
             .slice(0, 6)
             .map((it) => {
               const desc = String(it.desc ?? '').trim();
@@ -1324,10 +1323,13 @@ function assemble(
               return desc || label;
             });
 
+          const info = infos.find((i) => i.slide_position === a.slide_position);
+          const hasGeneratedImage = !!info?.generated && !!info.image_path;
+
           infographicSlides.push({
             position: a.slide_position,
             title: a.sub_title,
-            image_path: info!.image_path,
+            image_path: hasGeneratedImage ? info!.image_path : null,
             caption: block?.caption || '',
             fallback_bullets: fallback.length ? fallback : [a.sub_title],
           });
@@ -2076,13 +2078,19 @@ function addTopicSlides(
   addSectionSlide(pres, parts.join(' | '));
   slidesAdded++;
 
-  // Infographic content slides — STRICT: only emit a slide when we have a
-  // real PNG. Assemble already filtered out thin/missing-image entries, so
-  // we just need to render what's left as full infographic slides. No more
-  // text-only fallback slides anywhere in the deck.
+  // Infographic content slides. Prefer the rendered PNG when available;
+  // when Playwright failed for a particular block but the content itself
+  // is substantive, fall back to a clean text-bullet slide so the topic
+  // still surfaces that material. Only blocks `assemble` already filtered
+  // (genuinely empty) reach this loop, so no garbage slides slip through.
   for (const s of topic.infographic_slides) {
-    if (!s.image_path || !fs.existsSync(s.image_path)) continue;
-    addInfographicSlide(pres, s.title, s.image_path, s.caption || '', company);
+    if (s.image_path && fs.existsSync(s.image_path)) {
+      addInfographicSlide(pres, s.title, s.image_path, s.caption || '', company);
+    } else if (s.fallback_bullets?.length) {
+      addTitleBodySlide(pres, s.title, s.fallback_bullets, company);
+    } else {
+      continue;
+    }
     slidesAdded++;
   }
 
