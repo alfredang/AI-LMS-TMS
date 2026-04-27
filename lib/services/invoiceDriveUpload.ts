@@ -21,6 +21,29 @@ async function getInvoicesFolderId(): Promise<string> {
   return (process.env.GOOGLE_DRIVE_INVOICES_FOLDER_ID || '1hBhu-Mr9HPUFdjpbZhN1GrwZBTWns_WK').trim();
 }
 
+/**
+ * Returns true if the given Drive file id resolves to a readable file.
+ * Used to detect stale `*_drive_file_id` values (file was deleted / moved /
+ * trashed in Drive since we last uploaded) so we can re-upload instead of
+ * leaving broken links in the DB.
+ */
+export async function driveFileExists(fileId: string | null | undefined): Promise<boolean> {
+  const id = String(fileId || '').trim();
+  if (!id) return false;
+  try {
+    const drive = await getDriveClient();
+    const res = await drive.files.get({ fileId: id, fields: 'id, trashed' });
+    if (!res.data?.id) return false;
+    if (res.data.trashed === true) return false;
+    return true;
+  } catch (err: any) {
+    // 404 = file was deleted or never existed; anything else we propagate.
+    const status = err?.code || err?.response?.status;
+    if (status === 404) return false;
+    throw err;
+  }
+}
+
 export async function uploadInvoicePdfToDrive(params: {
   pdf: Buffer;
   fileName: string;

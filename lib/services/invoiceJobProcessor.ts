@@ -34,6 +34,13 @@ function formatDate(d: string | Date | null | undefined): string {
   });
 }
 
+function maskNric(value: string | null | undefined): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '-';
+  if (raw.length <= 4) return raw;
+  return 'X'.repeat(raw.length - 4) + raw.slice(-4);
+}
+
 type InvoiceContext = {
   courseTitle: string;
   courseRef: string;
@@ -313,7 +320,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
       `Course Name: ${hasDa ? (da.course_title ?? ctx.courseTitle) : ctx.courseTitle}`,
       `(${hasDa ? (da.course_reference_number ?? ctx.courseRef) : ctx.courseRef})`,
       `Participant Name: ${hasDa ? (da.trainee_name ?? ctx.traineeName) : ctx.traineeName}`,
-      `NRIC: ${hasDa ? (da.trainee_id ?? ctx.traineeNric ?? '—') : (ctx.traineeNric ?? '—')}`,
+      `NRIC: ${maskNric(hasDa ? (da.trainee_id ?? ctx.traineeNric) : ctx.traineeNric)}`,
       (() => {
         const start = formatDate(hasDa ? da.course_start_date : ctx.startDate);
         const end = formatDate(hasDa ? da.course_end_date : ctx.endDate);

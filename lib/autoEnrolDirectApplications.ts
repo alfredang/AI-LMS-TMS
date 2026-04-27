@@ -26,7 +26,19 @@ import {
   createDirectApplicationInvoice,
   type DaApplicationForInvoice,
 } from './quickbooks/createDirectApplicationInvoice';
+import {
+  buildDaGrantInvoicePdfFileName,
+  createDirectApplicationGrantInvoice,
+} from './quickbooks/createDirectApplicationGrantInvoice';
+import {
+  buildDaSfcInvoicePdfFileName,
+  createDirectApplicationSfcInvoice,
+} from './quickbooks/createDirectApplicationSfcInvoice';
 import { refreshGrantsForEnrolments } from './services/billingSync';
+import { loadSplitGrantDeductionsFromDb } from './services/daInvoiceGrantLines';
+import { driveFileExists, uploadInvoicePdfToDrive } from './services/invoiceDriveUpload';
+import { ensureInvoiceJobsTable } from './services/invoiceJobs';
+import { qboFetchInvoicePdf, qboReadInvoice } from './services/qboInvoiceService';
 import { shouldSendQboInvoiceEmailFromQuickBooks } from './services/qboInvoiceEmailPolicy';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from './google-auth/googleAuth';
@@ -52,6 +64,41 @@ export interface DaPipelineResult {
 
 const IV = Buffer.from('SSGAPIInitVector', 'utf8');
 const BATCH_SIZE = 5;
+
+function buildDaInvoicePdfFileName(docNumber: string | null | undefined, invoiceId: string): string {
+  const raw = String(docNumber || invoiceId || '').trim() || 'invoice';
+  return `DA_QB_invoice_${raw}`;
+}
+
+function hasIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+function isManualMarker(value: unknown): boolean {
+  return String(value || '').trim().toUpperCase() === 'MANUAL';
+}
+
+function hasRealInvoiceId(value: unknown): value is string {
+  return hasIdentifier(value) && !isManualMarker(value);
+}
+
+function toMoney(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function isQboObjectNotFoundError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err || '');
+  return /\bObject Not Found\b/i.test(message) || /\(code 610\)/i.test(message) || /\berror 610\b/i.test(message);
+}
+
+function isRealSsgEnrolmentId(value: unknown): value is string {
+  return /^ENR-/i.test(String(value || '').trim());
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -80,6 +127,162 @@ async function markFailed(
     auto_enrol_status: 'failed',
     auto_enrol_error: `${step}: ${message}`.slice(0, 1000),
   });
+}
+
+async function createNativeEnrolmentForPipeline(appId: string): Promise<void> {
+  const updatedRowRes = await pool.query(`SELECT * FROM da_application WHERE id = $1`, [appId]);
+  if (updatedRowRes.rows[0]) {
+    await createNativeEnrolmentFromDA(updatedRowRes.rows[0], pool);
+  }
+}
+
+async function syncDaMainInvoiceToBillingHistory(appId: string): Promise<void> {
+  await ensureInvoiceJobsTable();
+
+  const result = await pool.query(
+    `SELECT
+        da.enrolment_id,
+        da.trainee_email,
+        da.course_reference_number,
+        da.invoice_id,
+        da.invoice_doc_number,
+        da.invoice_drive_file_id,
+        da.invoice_drive_web_view_link,
+        da.trainee_id,
+        da.trainee_name,
+        e.user_id AS user_id,
+        COALESCE(c.course_code, da.course_reference_number) AS course_code
+     FROM da_application da
+     LEFT JOIN app_user u
+       ON LOWER(TRIM(u.email::text)) = LOWER(TRIM(da.trainee_email::text))
+       OR LOWER(TRIM(COALESCE(u.secondary_email::text, ''))) = LOWER(TRIM(da.trainee_email::text))
+     LEFT JOIN course_run cr
+       ON cr.id::text = da.course_run_id::text
+       OR cr.course_run_id::text = da.course_run_id::text
+     LEFT JOIN course c ON c.id = cr.course_id
+     LEFT JOIN enrollment e
+       ON e.user_id = u.id
+      AND e.course_run_id = cr.id
+     WHERE da.id = $1
+     ORDER BY e.updated_at DESC NULLS LAST
+     LIMIT 1`,
+    [appId]
+  );
+
+  const row = result.rows[0];
+  if (!row?.enrolment_id || !isRealSsgEnrolmentId(row.enrolment_id) || !hasRealInvoiceId(row.invoice_id)) {
+    return;
+  }
+
+  let learnerUserId = row.user_id || null;
+  if (!learnerUserId && row.trainee_email) {
+    const email = String(row.trainee_email).trim().toLowerCase();
+    const existingUser = await pool.query(
+      `SELECT id
+         FROM app_user
+        WHERE LOWER(TRIM(email::text)) = LOWER(TRIM($1::text))
+           OR LOWER(TRIM(COALESCE(secondary_email::text, ''))) = LOWER(TRIM($1::text))
+        ORDER BY updated_at DESC NULLS LAST
+        LIMIT 1`,
+      [email]
+    );
+
+    learnerUserId = existingUser.rows[0]?.id || null;
+    if (!learnerUserId) {
+      const createdUser = await pool.query(
+        `INSERT INTO app_user (id, email, full_name, password_hash, account_status, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, $2, '', 'active', NOW(), NOW())
+         RETURNING id`,
+        [email, row.trainee_name || email]
+      );
+      learnerUserId = createdUser.rows[0]?.id || null;
+    }
+
+    if (learnerUserId) {
+      await pool.query(
+        `INSERT INTO user_role_map (user_id, role)
+         VALUES ($1, 'Learner')
+         ON CONFLICT DO NOTHING`,
+        [learnerUserId]
+      );
+      await pool.query(
+        `INSERT INTO learner_profile (user_id, nric, tel)
+         VALUES ($1, $2, '')
+         ON CONFLICT (user_id) DO UPDATE SET
+           nric = COALESCE(learner_profile.nric, EXCLUDED.nric)`,
+        [learnerUserId, row.trainee_id || null]
+      );
+    }
+  }
+
+  if (!learnerUserId || !row.trainee_email || !row.course_code) {
+    const missing = [
+      !learnerUserId && 'learner user account',
+      !row.trainee_email && 'trainee_email',
+      !row.course_code && 'course_code',
+    ].filter(Boolean).join(', ');
+    throw new Error(`Cannot sync invoice to learner billing history: missing ${missing}`);
+  }
+
+  await pool.query(
+    `INSERT INTO public.invoice_jobs (
+        batch_id,
+        status,
+        enrolment_id,
+        user_id,
+        learner_email,
+        course_code,
+        attempts,
+        qbo_invoice_id,
+        qbo_doc_number,
+        invoice_no,
+        drive_file_id,
+        drive_web_view_link,
+        last_attempt_at,
+        updated_at
+     )
+     VALUES (
+        'direct_application',
+        'done',
+        $1,
+        $2,
+        $3,
+        $4,
+        1,
+        $5,
+        $6,
+        $6,
+        $7,
+        $8,
+        now(),
+        now()
+     )
+     ON CONFLICT (enrolment_id) DO UPDATE SET
+       batch_id = COALESCE(public.invoice_jobs.batch_id, EXCLUDED.batch_id),
+       status = 'done',
+       user_id = EXCLUDED.user_id,
+       learner_email = EXCLUDED.learner_email,
+       course_code = EXCLUDED.course_code,
+       attempts = GREATEST(public.invoice_jobs.attempts, 1),
+       last_error = NULL,
+       qbo_invoice_id = EXCLUDED.qbo_invoice_id,
+       qbo_doc_number = EXCLUDED.qbo_doc_number,
+       invoice_no = COALESCE(public.invoice_jobs.invoice_no, EXCLUDED.invoice_no),
+       drive_file_id = EXCLUDED.drive_file_id,
+       drive_web_view_link = EXCLUDED.drive_web_view_link,
+       last_attempt_at = now(),
+       updated_at = now()`,
+    [
+      String(row.enrolment_id).trim(),
+      learnerUserId,
+      String(row.trainee_email).trim(),
+      String(row.course_code).trim(),
+      String(row.invoice_id).trim(),
+      row.invoice_doc_number ? String(row.invoice_doc_number).trim() : null,
+      row.invoice_drive_file_id || null,
+      row.invoice_drive_web_view_link || null,
+    ]
+  );
 }
 
 interface SsgCredentialLike {
@@ -504,10 +707,47 @@ export async function addTrainerToCalendarEvent(
 export async function processDirectApplication(
   appId: string,
   sharedCtx?: SSGContext,
-  options?: { forceInvoice?: boolean }
+  options?: { forceInvoice?: boolean; suppressInvoiceEmail?: boolean; sendInvoiceEmail?: boolean }
 ): Promise<DaPipelineResult> {
   const rowRes = await pool.query(
-    `SELECT * FROM da_application WHERE id = $1`,
+    `SELECT
+        da.*,
+        sg.bl_grant_id,
+        sg.bl_amount,
+        sg.other_grant_id,
+        sg.other_scheme_code,
+        sg.other_amount,
+        sg.tg_amount
+     FROM da_application da
+     LEFT JOIN (
+        SELECT
+            LOWER(TRIM(enrollment_id)) AS enrolment_key,
+            MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) IN ('BL','BASELINE')
+                     OR  UPPER(COALESCE(funding_scheme_code,'')) LIKE '%BASELINE%'
+                THEN grant_id END) AS bl_grant_id,
+            MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) IN ('BL','BASELINE')
+                     OR  UPPER(COALESCE(funding_scheme_code,'')) LIKE '%BASELINE%'
+                THEN CASE WHEN COALESCE(approved_grant_amount,0) > 0 THEN approved_grant_amount
+                          ELSE COALESCE(estimated_grant_amount,0) END END) AS bl_amount,
+            MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) NOT IN ('BL','BASELINE')
+                     AND UPPER(COALESCE(funding_scheme_code,'')) NOT LIKE '%BASELINE%'
+                     AND funding_scheme_code IS NOT NULL
+                THEN grant_id END) AS other_grant_id,
+            MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) NOT IN ('BL','BASELINE')
+                     AND UPPER(COALESCE(funding_scheme_code,'')) NOT LIKE '%BASELINE%'
+                     AND funding_scheme_code IS NOT NULL
+                THEN funding_scheme_code END) AS other_scheme_code,
+            MAX(CASE WHEN UPPER(COALESCE(funding_scheme_code,'')) NOT IN ('BL','BASELINE')
+                     AND UPPER(COALESCE(funding_scheme_code,'')) NOT LIKE '%BASELINE%'
+                     AND funding_scheme_code IS NOT NULL
+                THEN CASE WHEN COALESCE(approved_grant_amount,0) > 0 THEN approved_grant_amount
+                          ELSE COALESCE(estimated_grant_amount,0) END END) AS other_amount,
+            SUM(CASE WHEN COALESCE(approved_grant_amount,0) > 0 THEN approved_grant_amount
+                     ELSE COALESCE(estimated_grant_amount,0) END) AS tg_amount
+        FROM ssg_grants
+        GROUP BY LOWER(TRIM(enrollment_id))
+     ) sg ON sg.enrolment_key = LOWER(TRIM(da.enrolment_id))
+     WHERE da.id = $1`,
     [appId]
   );
   const row = rowRes.rows[0];
@@ -537,10 +777,11 @@ export async function processDirectApplication(
   }
 
   const tpRes = await pool.query(
-    `SELECT auto_generate_qb_invoice, auto_add_learner_to_calendar FROM training_provider LIMIT 1`
+    `SELECT auto_generate_qb_invoice, auto_add_learner_to_calendar, auto_send_invoice_email FROM training_provider LIMIT 1`
   );
   const autoInvoice: boolean = !!tpRes.rows[0]?.auto_generate_qb_invoice;
   const autoCalendar: boolean = !!tpRes.rows[0]?.auto_add_learner_to_calendar;
+  const autoSendInvoiceEmail: boolean = !!tpRes.rows[0]?.auto_send_invoice_email;
 
   await updateRow(appId, { auto_enrol_status: 'pending', auto_enrol_error: null });
 
@@ -666,6 +907,14 @@ export async function processDirectApplication(
         console.warn(`⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`, err instanceof Error ? err.message : err);
       }
     }
+    try {
+      await createNativeEnrolmentForPipeline(appId);
+    } catch (err) {
+      console.warn(
+        `⚠️  auto-enrol [${applicationId}] native enrolment creation failed (non-fatal):`,
+        err instanceof Error ? err.message : err
+      );
+    }
     return {
       id: appId,
       applicationId,
@@ -676,38 +925,60 @@ export async function processDirectApplication(
     };
   }
 
-  let invoiceId: string | null = null;
+  let invoiceId: string | null = hasRealInvoiceId(row.invoice_id) ? row.invoice_id : null;
+  // Prefer the cached DocNumber on the DA row — avoids a qboReadInvoice hop on
+  // every re-run and is reliable enough that pipeline steps depending on it
+  // (supplemental grant/SFC PO#, Drive filename) don't need to fall back to
+  // QBO. Set at create time below; older rows may be null and will be
+  // backfilled via the lookup block further down.
+  let invoiceDocNumber: string | null = row.invoice_doc_number || null;
+  // Track the QB customer ref across the pipeline — `row` is an in-memory
+  // snapshot and doesn't pick up the UPDATE we issue after the main invoice
+  // create, so the supplemental grant/SFC steps need this local copy.
+  let customerRef: string | null = row.qb_customer_ref || null;
   try {
-    const forInvoice: DaApplicationForInvoice & { enrolment_id?: string } = {
-      id: row.id,
-      trainee_name: row.trainee_name,
-      trainee_email: row.trainee_email,
-      course_title: row.course_title,
-      course_reference_number: row.course_reference_number,
-      course_start_date: row.course_start_date
-        ? new Date(row.course_start_date).toISOString().slice(0, 10)
-        : null,
-      full_course_fee: row.full_course_fee,
-      gst: row.gst,
-      skillsfuture_subsidy: row.skillsfuture_subsidy,
-      skillsfuture_credit: row.skillsfuture_credit,
-      qb_customer_ref: row.qb_customer_ref,
-      // Add missing fields with fallback to null or appropriate value
-      trainee_id: row.trainee_id ?? null,
-      course_end_date: row.course_end_date ? new Date(row.course_end_date).toISOString().slice(0, 10) : null,
-      course_run_id: row.course_run_id ?? null,
-      grant_id: grantId ?? null,
-      application_id: row.application_id ?? null,
-      enrolment_id: enrolmentReference ?? undefined,
-    };
-    const created = await createDirectApplicationInvoice(forInvoice);
-    invoiceId = created.invoiceId;
+    if (!invoiceId) {
+      const forInvoice: DaApplicationForInvoice & { enrolment_id?: string } = {
+        id: row.id,
+        trainee_name: row.trainee_name,
+        trainee_email: row.trainee_email,
+        course_title: row.course_title,
+        course_reference_number: row.course_reference_number,
+        course_start_date: row.course_start_date
+          ? new Date(row.course_start_date).toISOString().slice(0, 10)
+          : null,
+        full_course_fee: row.full_course_fee,
+        gst: row.gst,
+        skillsfuture_subsidy: row.skillsfuture_subsidy,
+        skillsfuture_credit: row.skillsfuture_credit,
+        qb_customer_ref: row.qb_customer_ref,
+        // Add missing fields with fallback to null or appropriate value
+        trainee_id: row.trainee_id ?? null,
+        course_end_date: row.course_end_date ? new Date(row.course_end_date).toISOString().slice(0, 10) : null,
+        course_run_id: row.course_run_id ?? null,
+        grant_id: grantId ?? null,
+        application_id: row.application_id ?? null,
+        bl_grant_id: null,
+        bl_amount: null,
+        other_grant_id: null,
+        other_scheme_code: null,
+        other_amount: null,
+        enrolment_id: enrolmentReference ?? undefined,
+      };
+      const created = await createDirectApplicationInvoice(forInvoice);
+      invoiceId = created.invoiceId;
+      invoiceDocNumber = created.docNumber || null;
+      customerRef = created.customerRef;
 
-    await updateRow(appId, {
-      invoice_id: created.invoiceId,
-      qb_customer_ref: created.customerRef,
-      auto_enrol_status: 'invoiced',
-    });
+      await updateRow(appId, {
+        invoice_id: created.invoiceId,
+        invoice_doc_number: invoiceDocNumber,
+        qb_customer_ref: created.customerRef,
+        auto_enrol_status: 'invoiced',
+      });
+    } else {
+      console.log(`auto-enrol [${applicationId}] reusing existing invoice: ${invoiceId}`);
+    }
   } catch (err) {
     await markFailed(appId, 'invoice', err);
     return {
@@ -722,11 +993,295 @@ export async function processDirectApplication(
     };
   }
 
+  // Upload main invoice PDF to Drive if we haven't yet — or if the previously
+  // stored Drive file is missing (deleted/trashed/moved). `driveFileExists`
+  // lets the pipeline self-heal stale `invoice_drive_file_id` values.
+  const mainDriveFileOk = row.invoice_drive_file_id
+    ? await driveFileExists(row.invoice_drive_file_id)
+    : false;
+  if (invoiceId && !mainDriveFileOk) {
+    try {
+      if (!invoiceDocNumber) {
+        const existingInvoice = await qboReadInvoice(undefined, invoiceId);
+        invoiceDocNumber = existingInvoice.docNumber || null;
+        if (invoiceDocNumber) {
+          await updateRow(appId, { invoice_doc_number: invoiceDocNumber });
+        }
+      }
+
+      const pdf = await qboFetchInvoicePdf(undefined, invoiceId);
+      const driveUpload = await uploadInvoicePdfToDrive({
+        pdf,
+        fileName: buildDaInvoicePdfFileName(invoiceDocNumber, invoiceId),
+      });
+
+      await updateRow(appId, {
+        invoice_drive_file_id: driveUpload.fileId,
+        invoice_drive_web_view_link: driveUpload.webViewLink,
+      });
+    } catch (err) {
+      await markFailed(appId, 'invoice_drive', err);
+      return {
+        id: appId,
+        applicationId,
+        success: false,
+        finalStatus: 'failed',
+        enrolmentId: enrolmentReference,
+        grantId: grantId || undefined,
+        invoiceId,
+        error: err instanceof Error ? err.message : String(err),
+        failedStep: 'invoice_drive',
+      };
+    }
+  }
+
   // Step 4: Send invoice email via QBO proxy (non-fatal; off by default — same as invoice jobs)
+  // Only the split grant rows tied to this enrolment should trigger the
+  // supplemental Grant invoice. This matches the visible "Grant ID (BL)" and
+  // "Grant ID" columns in the admin table, instead of the legacy single
+  // da_application.grant_id field.
+  const { lines: effectiveGrantLines } = await loadSplitGrantDeductionsFromDb(enrolmentReference);
+  const effectiveGrantId = effectiveGrantLines[0]?.grantId?.trim() || '';
+  const fallbackGrantId =
+    effectiveGrantId ||
+    (hasIdentifier(row.bl_grant_id) ? row.bl_grant_id : '') ||
+    (hasIdentifier(row.other_grant_id) ? row.other_grant_id : '') ||
+    (hasIdentifier(row.grant_id) ? row.grant_id : '');
+  const hasVisibleGrantData =
+    hasIdentifier(row.bl_grant_id) ||
+    toMoney(row.bl_amount) > 0 ||
+    hasIdentifier(row.other_grant_id) ||
+    hasIdentifier(row.other_scheme_code) ||
+    toMoney(row.other_amount) > 0 ||
+    toMoney(row.tg_amount) > 0 ||
+    (hasIdentifier(row.grant_id) && (toMoney(row.grant_amount) > 0 || toMoney(row.skillsfuture_subsidy) > 0));
+  const shouldGenerateGrantInvoice = effectiveGrantLines.length > 0 || hasVisibleGrantData;
+  const effectiveSfcClaimId = hasIdentifier(row.skillsfuture_credit_claim_id) ? row.skillsfuture_credit_claim_id : '';
+  const shouldGenerateSfcInvoice = hasIdentifier(row.skillsfuture_credit_claim_id) || toMoney(row.skillsfuture_credit) > 0;
+  const sfcReferenceId = effectiveSfcClaimId || String(row.application_id || '').trim();
+  const supplementalErrors: { step: string; message: string }[] = [];
+  let existingGrantInvoiceId = hasIdentifier(row.grant_invoice_id) ? row.grant_invoice_id : '';
+  let existingGrantDriveFileId = hasIdentifier(row.grant_invoice_drive_file_id) ? row.grant_invoice_drive_file_id : '';
+  let existingSfcInvoiceId = hasIdentifier(row.sfc_invoice_id) ? row.sfc_invoice_id : '';
+  let existingSfcDriveFileId = hasIdentifier(row.sfc_invoice_drive_file_id) ? row.sfc_invoice_drive_file_id : '';
+
+  if (shouldGenerateGrantInvoice && existingGrantInvoiceId) {
+    try {
+      await qboReadInvoice(undefined, existingGrantInvoiceId);
+    } catch (err) {
+      if (!isQboObjectNotFoundError(err)) throw err;
+      console.warn(
+        `auto-enrol [${applicationId}] grant invoice id ${existingGrantInvoiceId} is stale in QBO; clearing and regenerating`
+      );
+      existingGrantInvoiceId = '';
+      existingGrantDriveFileId = '';
+      await updateRow(appId, {
+        grant_invoice_id: null,
+        grant_invoice_drive_file_id: null,
+        grant_invoice_drive_web_view_link: null,
+      });
+    }
+  }
+
+  if (shouldGenerateSfcInvoice && existingSfcInvoiceId) {
+    try {
+      await qboReadInvoice(undefined, existingSfcInvoiceId);
+    } catch (err) {
+      if (!isQboObjectNotFoundError(err)) throw err;
+      console.warn(`auto-enrol [${applicationId}] sfc invoice id ${existingSfcInvoiceId} is stale in QBO; clearing and regenerating`);
+      existingSfcInvoiceId = '';
+      existingSfcDriveFileId = '';
+      await updateRow(appId, {
+        sfc_invoice_id: null,
+        sfc_invoice_drive_file_id: null,
+        sfc_invoice_drive_web_view_link: null,
+      });
+    }
+  }
+
+  // Resolve main invoice DocNumber so we can pass it as PO# on the supplemental
+  // grant and SFC invoices. Skipped if neither supplemental invoice is needed
+  // or if we already know the DocNumber from the create step above.
+  if (
+    invoiceId &&
+    !invoiceDocNumber &&
+    ((shouldGenerateGrantInvoice && !existingGrantInvoiceId) || (shouldGenerateSfcInvoice && !existingSfcInvoiceId))
+  ) {
+    try {
+      const existingInvoice = await qboReadInvoice(undefined, invoiceId);
+      invoiceDocNumber = existingInvoice.docNumber || null;
+      if (invoiceDocNumber) {
+        await updateRow(appId, { invoice_doc_number: invoiceDocNumber });
+      }
+    } catch (err) {
+      await markFailed(appId, 'invoice_lookup', err);
+      return {
+        id: appId,
+        applicationId,
+        success: false,
+        finalStatus: 'failed',
+        enrolmentId: enrolmentReference,
+        grantId: grantId || undefined,
+        invoiceId,
+        error: err instanceof Error ? err.message : String(err),
+        failedStep: 'invoice_lookup',
+      };
+    }
+  }
+
+  // Step 4a: Supplemental Grant invoice in QuickBooks (staff-only, not emailed).
+  //   DocNumber = Baseline grant_id from ssg_grants. Line items = one per grant
+  //   scheme (BL + Non-BL), positive amounts, OOS tax. PO# references back to
+  //   the main tax invoice.
+  if (shouldGenerateGrantInvoice && !existingGrantInvoiceId) {
+    try {
+      const grantInvoice = await createDirectApplicationGrantInvoice({
+        enrolmentId: enrolmentReference,
+        mainInvoiceDocNumber: invoiceDocNumber,
+        fallbackGrantId: fallbackGrantId || null,
+        fallbackTotalAmount: toMoney(row.tg_amount) || toMoney(row.grant_amount) || toMoney(row.skillsfuture_subsidy),
+        fallbackBlGrantId: hasIdentifier(row.bl_grant_id) ? row.bl_grant_id : null,
+        fallbackBlAmount: toMoney(row.bl_amount),
+        fallbackOtherGrantId: hasIdentifier(row.other_grant_id) ? row.other_grant_id : null,
+        fallbackOtherSchemeCode: hasIdentifier(row.other_scheme_code) ? row.other_scheme_code : null,
+        fallbackOtherAmount: toMoney(row.other_amount),
+      });
+
+      if (grantInvoice) {
+        await updateRow(appId, { grant_invoice_id: grantInvoice.invoiceId });
+        existingGrantInvoiceId = grantInvoice.invoiceId;
+
+        const grantDriveFileOk = existingGrantDriveFileId
+          ? await driveFileExists(existingGrantDriveFileId)
+          : false;
+        if (!grantDriveFileOk) {
+          const grantPdf = await qboFetchInvoicePdf(undefined, grantInvoice.invoiceId);
+          const grantDriveUpload = await uploadInvoicePdfToDrive({
+            pdf: grantPdf,
+            fileName: buildDaGrantInvoicePdfFileName(grantInvoice.docNumber),
+          });
+          await updateRow(appId, {
+            grant_invoice_drive_file_id: grantDriveUpload.fileId,
+            grant_invoice_drive_web_view_link: grantDriveUpload.webViewLink,
+          });
+          existingGrantDriveFileId = grantDriveUpload.fileId;
+        }
+      }
+    } catch (err) {
+      await markFailed(appId, 'grant_invoice', err);
+      supplementalErrors.push({
+        step: 'grant_invoice',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  } else if (
+    shouldGenerateGrantInvoice &&
+    existingGrantInvoiceId &&
+    !(existingGrantDriveFileId ? await driveFileExists(existingGrantDriveFileId) : false)
+  ) {
+    // Recovery path — QB invoice already exists but Drive upload never ran.
+    try {
+      const grantPdf = await qboFetchInvoicePdf(undefined, existingGrantInvoiceId);
+      const grantDriveUpload = await uploadInvoicePdfToDrive({
+        pdf: grantPdf,
+        fileName: buildDaGrantInvoicePdfFileName(fallbackGrantId || row.grant_id || 'grant'),
+      });
+      await updateRow(appId, {
+        grant_invoice_drive_file_id: grantDriveUpload.fileId,
+        grant_invoice_drive_web_view_link: grantDriveUpload.webViewLink,
+      });
+      existingGrantDriveFileId = grantDriveUpload.fileId;
+    } catch (err) {
+      await markFailed(appId, 'grant_invoice_drive', err);
+      supplementalErrors.push({
+        step: 'grant_invoice_drive',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // Step 4b: Supplemental SFC invoice in QuickBooks (staff-only, not emailed).
+  //   DocNumber = SSG claim id. Single positive line, OOS tax.
+  //   Terms = "25 Days SFC" (must exist in QBO). PO# = main invoice DocNumber.
+  if (shouldGenerateSfcInvoice && !existingSfcInvoiceId) {
+    try {
+      const sfcInvoice = await createDirectApplicationSfcInvoice({
+        enrolmentId: enrolmentReference,
+        mainInvoiceDocNumber: invoiceDocNumber,
+        sfcClaimId: effectiveSfcClaimId,
+        applicationId: row.application_id ?? null,
+        fallbackAmount: toMoney(row.skillsfuture_credit),
+      });
+
+      if (sfcInvoice) {
+        await updateRow(appId, { sfc_invoice_id: sfcInvoice.invoiceId });
+        existingSfcInvoiceId = sfcInvoice.invoiceId;
+
+        const sfcDriveFileOk = existingSfcDriveFileId
+          ? await driveFileExists(existingSfcDriveFileId)
+          : false;
+        if (!sfcDriveFileOk) {
+          const sfcPdf = await qboFetchInvoicePdf(undefined, sfcInvoice.invoiceId);
+          const sfcDriveUpload = await uploadInvoicePdfToDrive({
+            pdf: sfcPdf,
+            fileName: buildDaSfcInvoicePdfFileName(sfcInvoice.docNumber),
+          });
+          await updateRow(appId, {
+            sfc_invoice_drive_file_id: sfcDriveUpload.fileId,
+            sfc_invoice_drive_web_view_link: sfcDriveUpload.webViewLink,
+          });
+          existingSfcDriveFileId = sfcDriveUpload.fileId;
+        }
+      }
+    } catch (err) {
+      await markFailed(appId, 'sfc_invoice', err);
+      supplementalErrors.push({
+        step: 'sfc_invoice',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  } else if (
+    shouldGenerateSfcInvoice &&
+    existingSfcInvoiceId &&
+    !(existingSfcDriveFileId ? await driveFileExists(existingSfcDriveFileId) : false)
+  ) {
+    // Recovery path — QB invoice already exists but Drive upload never ran.
+    try {
+      const sfcPdf = await qboFetchInvoicePdf(undefined, existingSfcInvoiceId);
+      const sfcDriveUpload = await uploadInvoicePdfToDrive({
+        pdf: sfcPdf,
+        fileName: buildDaSfcInvoicePdfFileName(sfcReferenceId || 'sfc'),
+      });
+      await updateRow(appId, {
+        sfc_invoice_drive_file_id: sfcDriveUpload.fileId,
+        sfc_invoice_drive_web_view_link: sfcDriveUpload.webViewLink,
+      });
+      existingSfcDriveFileId = sfcDriveUpload.fileId;
+    } catch (err) {
+      await markFailed(appId, 'sfc_invoice_drive', err);
+      supplementalErrors.push({
+        step: 'sfc_invoice_drive',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   if (row.trainee_email && invoiceId) {
-    if (shouldSendQboInvoiceEmailFromQuickBooks()) {
+    const shouldSend =
+      !options?.suppressInvoiceEmail &&
+      autoSendInvoiceEmail &&
+      (options?.sendInvoiceEmail || shouldSendQboInvoiceEmailFromQuickBooks());
+    if (shouldSend) {
       try {
         await callInvoiceSend(invoiceId, row.trainee_email);
+        await pool.query(
+          `UPDATE public.invoice_jobs
+              SET invoice_sent_at = COALESCE(invoice_sent_at, now()),
+                  invoice_sent_to = COALESCE(invoice_sent_to, $2),
+                  updated_at = now()
+            WHERE qbo_invoice_id = $1`,
+          [String(invoiceId).trim(), String(row.trainee_email).trim()]
+        ).catch(() => {});
       } catch (err) {
         console.warn(
           `⚠️  auto-enrol [${applicationId}] invoice send failed (non-fatal):`,
@@ -734,9 +1289,12 @@ export async function processDirectApplication(
         );
       }
     } else {
-      console.log(
-        `ℹ️  auto-enrol [${applicationId}] skipping invoice email — set QBO_SEND_INVOICE_EMAIL=true to send`
-      );
+      const reason = options?.suppressInvoiceEmail
+        ? '(suppressed for manual generate / cron sweep)'
+        : !autoSendInvoiceEmail
+          ? '(auto_send_invoice_email toggle is OFF in DA admin view)'
+          : '— set QBO_SEND_INVOICE_EMAIL=true to send';
+      console.log(`ℹ️  auto-enrol [${applicationId}] skipping invoice email ${reason}`);
     }
   }
 
@@ -759,15 +1317,43 @@ export async function processDirectApplication(
 
   // Step 6: Create Native Enrolment in the LMS
   try {
-    const updatedRowRes = await pool.query(`SELECT * FROM da_application WHERE id = $1`, [appId]);
-    if (updatedRowRes.rows[0]) {
-      await createNativeEnrolmentFromDA(updatedRowRes.rows[0], pool);
-    }
+    await createNativeEnrolmentForPipeline(appId);
   } catch (err) {
     console.warn(
       `⚠️  auto-enrol [${applicationId}] native enrolment creation failed (non-fatal):`,
       err instanceof Error ? err.message : err
     );
+  }
+
+  try {
+    await syncDaMainInvoiceToBillingHistory(appId);
+  } catch (err) {
+    await markFailed(appId, 'billing_history_sync', err);
+    return {
+      id: appId,
+      applicationId,
+      success: false,
+      finalStatus: 'failed',
+      enrolmentId: enrolmentReference,
+      grantId: grantId || undefined,
+      invoiceId: invoiceId || undefined,
+      error: err instanceof Error ? err.message : String(err),
+      failedStep: 'billing_history_sync',
+    };
+  }
+
+  if (supplementalErrors.length > 0) {
+    return {
+      id: appId,
+      applicationId,
+      success: false,
+      finalStatus: 'failed',
+      enrolmentId: enrolmentReference,
+      grantId: grantId || undefined,
+      invoiceId,
+      error: supplementalErrors.map(e => `${e.step}: ${e.message}`).join(' | '),
+      failedStep: supplementalErrors[0]?.step,
+    };
   }
 
   return {
@@ -802,7 +1388,7 @@ export async function bulkProcessDirectApplications(
     const batch = appIds.slice(i, i + BATCH_SIZE);
     for (const appId of batch) {
       try {
-        const result = await processDirectApplication(appId, sharedCtx);
+        const result = await processDirectApplication(appId, sharedCtx, { sendInvoiceEmail: true });
         results.push(result);
       } catch (err) {
         console.error(`❌ auto-enrol [${appId}] unexpected error:`, err);
@@ -871,33 +1457,61 @@ export async function createNativeEnrolmentFromDA(record: any, dbPool: any) {
       );
     }
 
+    const ssgEnrolmentReference = isRealSsgEnrolmentId(record.enrolment_id)
+      ? String(record.enrolment_id).trim()
+      : null;
+
     const { rows } = await dbPool.query(
       `INSERT INTO enrollment (
           id, user_id, course_id, course_run_id, progress_percent, payment_status, 
-          assessment_status, enrolment_status, enrolment_date, email, nric, created_at, updated_at
+          assessment_status, enrolment_status, enrolment_date, email, nric,
+          enrolment_id, course_reference, created_at, updated_at
        )
-       VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', 'Confirmed', CURRENT_DATE, $4, $5, NOW(), NOW())
-       ON CONFLICT DO NOTHING
+       VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', 'Confirmed', CURRENT_DATE, $4, $5, $6, $7, NOW(), NOW())
+       ON CONFLICT (user_id, course_run_id) DO UPDATE SET
+          enrolment_status = 'Confirmed',
+          enrolment_id = COALESCE(EXCLUDED.enrolment_id, enrollment.enrolment_id),
+          email = COALESCE(EXCLUDED.email, enrollment.email),
+          nric = COALESCE(EXCLUDED.nric, enrollment.nric),
+          course_reference = COALESCE(EXCLUDED.course_reference, enrollment.course_reference),
+          updated_at = NOW()
        RETURNING id`,
       [
         userId,
         courseId,
         internalRunId,
         record.trainee_email,
-        record.trainee_id
+        record.trainee_id,
+        ssgEnrolmentReference,
+        record.course_reference_number || null
       ]
     );
 
     const enrolmentId = rows[0]?.id;
 
-    // Update the DA record to link it and show success
+    // Preserve the real SSG ENR-... reference on the DA row if we already
+    // have one. `MANUAL` is only a fallback marker for manual/native-only
+    // rows that do not have an SSG enrolment reference to keep.
     if (record.application_id) {
+      let preservedEnrolmentId = ssgEnrolmentReference;
+
+      if (!preservedEnrolmentId) {
+        const currentDaRes = await dbPool.query(
+          `SELECT enrolment_id FROM da_application WHERE application_id = $1 LIMIT 1`,
+          [record.application_id]
+        );
+        const currentDaEnrolmentId = currentDaRes.rows[0]?.enrolment_id;
+        if (isRealSsgEnrolmentId(currentDaEnrolmentId)) {
+          preservedEnrolmentId = String(currentDaEnrolmentId).trim();
+        }
+      }
+
       await dbPool.query(
-        `UPDATE da_application 
+        `UPDATE da_application
          SET enrolment_status = 'Confirmed',
              enrolment_id = $1
          WHERE application_id = $2`,
-        [enrolmentId ? 'MANUAL' : null, record.application_id]
+        [preservedEnrolmentId || (enrolmentId ? 'MANUAL' : null), record.application_id]
       );
     }
 
