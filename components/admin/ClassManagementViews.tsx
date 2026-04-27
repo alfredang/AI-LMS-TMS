@@ -6352,7 +6352,6 @@ const EnrolmentTable: React.FC<{
     const [showPii, setShowPii] = useState(false);
     const [isAddingToCal, setIsAddingToCal] = useState(false);
     const [isSyncingCal, setIsSyncingCal] = useState(false);
-    const [isSyncingInv, setIsSyncingInv] = useState(false);
     const [isSyncingGrants, setIsSyncingGrants] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [localData, setLocalData] = useState<any[]>([]);
@@ -6407,17 +6406,6 @@ const EnrolmentTable: React.FC<{
             onRefresh();
         } catch { alert('Sync calendar failed.'); }
         finally { setIsSyncingCal(false); }
-    };
-
-    const handleSyncInv = async () => {
-        setIsSyncingInv(true);
-        try {
-            const res = await fetch('/api/admin/enrolment-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync-invoice' }) });
-            const json = await res.json();
-            alert(json.success ? `Sync: ${json.matched} invoice(s) matched.` : `Failed: ${json.error}`);
-            onRefresh();
-        } catch { alert('Sync invoice failed.'); }
-        finally { setIsSyncingInv(false); }
     };
 
     const handleSyncGrants = async () => {
@@ -6514,7 +6502,6 @@ const EnrolmentTable: React.FC<{
                 <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
                 <button onClick={handleSyncGrants} disabled={isSyncingGrants} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50">{isSyncingGrants ? 'Syncing...' : 'Sync Grants'}</button>
                 <button onClick={handleSyncCal} disabled={isSyncingCal} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50">{isSyncingCal ? 'Syncing...' : 'Sync Calendar'}</button>
-                <button onClick={handleSyncInv} disabled={isSyncingInv} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-500 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50">{isSyncingInv ? 'Syncing...' : 'Sync Invoice'}</button>
             </div>
 
             {/* Table */}
@@ -7386,7 +7373,7 @@ export const UpcomingCourseRunsLogView: React.FC = () => {
 
       {runResult && (
         <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
-          ✅ Done — processed <strong>{runResult.processed}</strong> run(s) within <strong>{runResult.thresholdDays}</strong>-day window: {runResult.successCount} succeeded, {runResult.errors} error(s).
+          ✅ Done — processed <strong>{runResult.processed}</strong> run(s) within <strong>{runResult.thresholdDays}</strong>-day window: {runResult.success} succeeded, {runResult.errors} error(s).
         </div>
       )}
       {runError && (
@@ -8408,5 +8395,243 @@ export const AutoSendCourseCompletionLogView: React.FC = () => (
     description={<>Daily at 5:35 PM SGT. Sends the <strong>Course Completion and Thank You</strong> email template to all confirmed learners enrolled in course runs ending today. Use <strong>Run Now</strong> to trigger manually.</>}
     logsEndpoint="/api/admin/auto-send-course-completion-logs"
     runEndpoint="/api/admin/run-auto-send-course-completion"
+  />
+);
+
+type ScheduledInvoiceLogRow = {
+  id: number;
+  run_id: string;
+  created_at: string;
+  status: string;
+  application_id?: string | null;
+  enrolment_id?: string | null;
+  enrollment_id?: string | null;
+  learner_name?: string | null;
+  course_code?: string | null;
+  course_title?: string | null;
+  invoice_number?: string | null;
+  drive_url?: string | null;
+  stage?: string | null;
+  failed_step?: string | null;
+  message?: string | null;
+  reason?: string | null;
+  error_message?: string | null;
+};
+
+const ScheduledInvoiceLogView: React.FC<{
+  title: string;
+  description: React.ReactNode;
+  logsEndpoint: string;
+  runEndpoint: string;
+  type: 'proforma' | 'da';
+}> = ({ title, description, logsEndpoint, runEndpoint, type }) => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<ScheduledInvoiceLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<Record<string, number> | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${logsEndpoint}?limit=500`);
+      const json = await res.json();
+      if (json.success) setLogs(json.data || []);
+    } catch {
+      // Keep the page quiet; manual refresh can retry.
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch(runEndpoint, { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult(json.stats || {});
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const batches = useMemo(() => {
+    const map = new Map<string, ScheduledInvoiceLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    const cls = ['generated', 'success'].includes(status)
+      ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+      : status === 'error'
+        ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+        : status === 'skipped'
+          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+          : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{status}</span>;
+  };
+
+  const runSummary = runResult
+    ? Object.entries(runResult)
+        .filter(([, value]) => typeof value === 'number')
+        .map(([key, value]) => `${key.replace(/^total/, '')}: ${value}`)
+        .join(', ')
+    : null;
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">{title}</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running...' : 'Run Now'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Scheduler)}>
+            Back to Scheduler
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{description}</p>
+
+      {runSummary && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          Done - {runSummary}.
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading...</p>}
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to trigger this cron manually.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const successCount = rows.filter(r => ['generated', 'success'].includes(r.status)).length;
+        const skippedCount = rows.filter(r => r.status === 'skipped').length;
+        const errorCount = rows.filter(r => r.status === 'error').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
+                {successCount > 0 && <span className="text-xs text-green-600 dark:text-green-400">{successCount} ok</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '^' : 'v'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {(type === 'proforma'
+                        ? ['Enrolment ID', 'Learner', 'Course Code', 'Course Title', 'Invoice No.', 'Drive', 'Status', 'Message']
+                        : ['Application ID', 'Enrolment ID', 'Stage', 'Status', 'Failed Step', 'Message', 'Error']
+                      ).map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        {type === 'proforma' ? (
+                          <>
+                            <td className="px-3 py-2 font-mono whitespace-nowrap">{row.enrolment_id ?? row.enrollment_id ?? '-'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{row.learner_name ?? '-'}</td>
+                            <td className="px-3 py-2 font-mono whitespace-nowrap">{row.course_code ?? '-'}</td>
+                            <td className="px-3 py-2 max-w-[260px] truncate" title={row.course_title ?? ''}>{row.course_title ?? '-'}</td>
+                            <td className="px-3 py-2 font-mono whitespace-nowrap">{row.invoice_number ?? '-'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{row.drive_url ? <a className="text-blue-600 hover:underline" href={row.drive_url} target="_blank" rel="noreferrer">Open</a> : '-'}</td>
+                            <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                            <td className="px-3 py-2 max-w-[320px] truncate" title={row.reason ?? row.error_message ?? ''}>{row.reason ?? row.error_message ?? ''}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-3 py-2 font-mono whitespace-nowrap">{row.application_id ?? '-'}</td>
+                            <td className="px-3 py-2 font-mono whitespace-nowrap">{row.enrolment_id ?? '-'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{row.stage ?? '-'}</td>
+                            <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{row.failed_step ?? '-'}</td>
+                            <td className="px-3 py-2 max-w-[320px] truncate" title={row.message ?? ''}>{row.message ?? ''}</td>
+                            <td className="px-3 py-2 max-w-[320px] truncate" title={row.error_message ?? ''}>{row.error_message ?? ''}</td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export const AutoGenerateProformaInvoicesLogView: React.FC = () => (
+  <ScheduledInvoiceLogView
+    title="Auto Generate Proforma Invoices Log"
+    description={<>Daily at 4:00 AM SGT. Generates proforma invoices for active enrollments still missing a proforma URL. Use <strong>Run Now</strong> to trigger manually.</>}
+    logsEndpoint="/api/admin/auto-generate-proforma-invoices-logs"
+    runEndpoint="/api/admin/run-auto-generate-proforma-invoices"
+    type="proforma"
+  />
+);
+
+export const AutoGenerateDaInvoicesLogView: React.FC = () => (
+  <ScheduledInvoiceLogView
+    title="Auto Generate DA Invoices Log"
+    description={<>Daily at 11:00 PM SGT. Generates missing DA QuickBooks invoices and sends unsent main invoice emails once. Use <strong>Run Now</strong> to trigger manually.</>}
+    logsEndpoint="/api/admin/auto-generate-da-invoices-logs"
+    runEndpoint="/api/admin/run-auto-generate-da-invoices"
+    type="da"
   />
 );
