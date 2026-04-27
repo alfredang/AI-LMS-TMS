@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppVersion } from '@hooks/useAppVersion';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
