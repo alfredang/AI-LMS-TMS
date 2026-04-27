@@ -152,3 +152,6 @@ CLAUDE.md
 
 # Google Apps Script backups
 *.gs
+
+# n8n workflow exports (local artifacts)
+n8nworkflows/
