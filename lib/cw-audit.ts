@@ -279,10 +279,35 @@ RULES:
   - DO NOT extract from "Legend" / "Glossary" / footnote rows that simply explain what abbreviations stand for (e.g. ignore "Legend: WA-SAQ: Written Assessment, PP: Practical Performance, CS: Case Study, OQ: Oral Questioning, RP: Role Play"). Identify legend rows by the "Legend:" label; everything in that row is a definition list, not the document's actual methods.
   - When a method appears as an abbreviation in column headers (e.g. "WE" or "CS"), include it in the output exactly as written — do not expand it.
   - **OUTPUT method names EXACTLY as they appear in the document, character-for-character. PRESERVE "Others:" prefixes (e.g. output "Others: Case Study", not "Case Study"). DO NOT expand abbreviations to standardised long names — if the doc says "Written Exam", output "Written Exam".**
-- **CRITICAL — for topics:**
-  - Extract ONLY the top-level topic TITLES (e.g. "Ethical considerations and potential risks of generative AI interaction", "Ethical principles in AI", "Apply ethical principles in decision-making related to AI").
-  - DO NOT include the elaboration / sub-bullet points that appear UNDER each topic in the FG / LG mapping cell (e.g. ignore short bullets like "Understanding ethical challenges in AI interaction", "Identifying potential risks and consequences"). Those are facilitator notes, not topic titles.
-  - In the FG / LG cell, the bold lines starting with capital letters are topic titles; the indented bullets that follow are NOT topics. Keep the bold titles only.
+- **CRITICAL — for topics (most important rule):**
+  - The CP lists 10-20 granular topic titles. The FG / LG document groups
+    them under Learning Unit (LU) chapter headings, structured like this:
+        Getting Started with Excel              <- LU TITLE (skip — chapter heading)
+        Topics:                                  <- header marker
+        Explore Excel interface                  <- TOPIC TITLE (extract)
+          Navigate Excel ribbons, tabs, ...      <- elaboration sub-bullet (skip)
+          Customise the Excel environment        <- elaboration sub-bullet (skip)
+        Enter and validate data using Power Query <- TOPIC TITLE (extract)
+          Connect to data sources                <- elaboration sub-bullet (skip)
+        Use formulas and functions               <- TOPIC TITLE (extract)
+        Basic Data Analysis using Excel          <- next LU TITLE (skip)
+        Topics:
+        Use LOOKUP and REFERENCE functions       <- TOPIC TITLE (extract)
+        ...etc
+  - **Extract every entry that appears DIRECTLY UNDER a "Topics:" header**
+    (or equivalent label like "Topic Titles" / "Topics Covered"). Skip the
+    LU chapter headings themselves.
+  - **Skip indented elaboration sub-bullets** that fall UNDER each topic
+    title. They are short (3-8 words) explanatory points, not topic titles.
+  - **Skip generic chapter labels** like "Getting Started with Excel",
+    "Basic Data Analysis using Excel" — these are LU titles wrapping a
+    group of topics, not topics themselves. Tell-tale sign: they end with
+    "with Excel" / "using Excel" or read as a chapter name, AND the more
+    specific topic titles appear immediately below them.
+  - The result should match the CP's topic list ~1:1 in count and wording.
+    If the CP has 15 topics and you've only extracted 5, you're picking
+    LU chapter headings instead of the topic titles below them — go back
+    and extract the lines under each "Topics:" marker.
 - Return empty arrays [] if no items found for list fields
 - Be thorough - scan the entire document content`;
 
