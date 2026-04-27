@@ -63,6 +63,7 @@ const FINANCE_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Financial Planning & Analysis', icon: IconName.Analytics, href: 'https://alfredang.github.io/novafinance/' },
   { label: 'Financial Ratio Calculators', icon: IconName.Analytics, href: 'https://alfredang.github.io/novafinancialratiocalculator/' },
   { label: 'Financial Trend Analysis', icon: IconName.Analytics, href: 'https://alfredang.github.io/financialtrend/' },
+  { label: 'Credit Loan Anal...', icon: IconName.Analytics, href: 'https://creditloananalysis.streamlit.app/' },
 ];
 
 const STAT_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -131,6 +132,7 @@ const GENAI_LINK_GROUPS: { category: string; items: { label: string; icon: IconN
       { label: 'Nano Banana',        icon: IconName.Create, href: 'https://gemini.google.com/app' },
       { label: 'Microsoft Designer', icon: IconName.Create, href: 'https://designer.microsoft.com/' },
       { label: 'Leonardo',           icon: IconName.Create, href: 'https://app.leonardo.ai/' },
+      { label: 'Face Swap',          icon: IconName.Create, href: 'https://huggingface.co/spaces/alfredang/faceswap' },
     ],
   },
   {
