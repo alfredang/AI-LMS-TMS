@@ -412,9 +412,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const hasLocalTrainer = !!(allLocalPairs[0]?.name);
       const hasLegacyLocalTrainer = !!((row.legacy_assigned_trainer_name || '').toString().trim());
       const hasTpgTrainer = !!((row.tpg_assigned_trainer_name || '').toString().trim());
+      const hasLearners = Number(row.num_learners) > 0;
       const derivedStatus = (row.class_status === 'Cancelled' || row.class_status === 'Unconfirmed')
         ? row.class_status
-        : ((hasLocalTrainer || hasLegacyLocalTrainer || hasTpgTrainer) ? 'Confirmed' : 'Pending');
+        : ((hasLocalTrainer || hasLegacyLocalTrainer || hasTpgTrainer) && hasLearners ? 'Confirmed' : 'Pending');
 
       // Persist sticky-Confirmed/Pending (never overwrites Cancelled).
       // Dedupe writes across multi-session multi-date rows for the same course run.

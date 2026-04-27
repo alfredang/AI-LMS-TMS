@@ -36,6 +36,51 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
   const contentState = useContentState(section);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [downloading, setDownloading] = useState<'docx' | 'pdf' | null>(null);
+
+  // Download handler — only used by the lesson_plan section. Streams the file
+  // back from the API and triggers a browser download via an object URL.
+  const handleDownloadLessonPlan = async (format: 'docx' | 'pdf') => {
+    if (!contentState.value.trim()) {
+      setError('Generate the lesson plan first before downloading.');
+      return;
+    }
+    setError('');
+    setDownloading(format);
+    try {
+      const res = await fetch(`/api/developer/cp-lesson-plan-${format}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: contentState.value,
+          courseTitle: cp.courseTitle,
+          courseDuration: cp.courseDuration,
+          instructionalHours: cp.instructionalHours,
+          assessmentHours: cp.assessmentHours,
+          instructionalMethods: cp.selectedInstrMethods,
+        }),
+      });
+      if (!res.ok) {
+        // The API returns JSON on error, a binary blob on success.
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Download failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const safeTitle = (cp.courseTitle || 'lesson_plan').replace(/[^A-Za-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '') || 'lesson_plan';
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeTitle}_Lesson_Plan.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message || 'Download failed');
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   // For instructional/assessment methods, we handle multiple results
   const isMethodSection = section === 'instructional_methods' || section === 'assessment_methods';
@@ -168,6 +213,30 @@ const CpContentGenerator: React.FC<CpContentGeneratorProps> = ({ section, title,
           </button>
         </div>
       </div>
+
+      {/* Downloads — Lesson Plan only. Mirrors the Streamlit reference layout:
+          appears between Generate and the AI-generated text once content exists. */}
+      {section === 'lesson_plan' && hasContent && (
+        <Card className="p-5">
+          <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">Downloads</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => handleDownloadLessonPlan('docx')}
+              disabled={downloading !== null}
+              className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              {downloading === 'docx' ? 'Preparing .docx…' : 'Download Lesson Plan (.docx)'}
+            </button>
+            <button
+              onClick={() => handleDownloadLessonPlan('pdf')}
+              disabled={downloading !== null}
+              className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              {downloading === 'pdf' ? 'Preparing .pdf…' : 'Download Lesson Plan (.pdf)'}
+            </button>
+          </div>
+        </Card>
+      )}
 
       {/* Loading state */}
       {loading && (

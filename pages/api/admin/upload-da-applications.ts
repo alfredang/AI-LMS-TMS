@@ -523,11 +523,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             webhookResult = await callSearchEnrolmentSSGBatch(webhookQueue, tp.uen, tp.code);
         }
 
-        // Fire-and-forget auto-enrol pipeline for all eligible records:
+        // Fire-and-forget auto-enrol pipeline for all eligible records is disabled.
         //   - Newly inserted records
         //   - Updated records (status transitions)
         //   - Duplicate records that already exist but were never auto-enrolled
-        try {
+        if (false) {
             // Collect IDs from inserted + updated records
             const processedIds = [...insertedRecords, ...updatedRecords]
                 .filter(r => {
@@ -571,14 +571,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     });
                 });
             }
-        } catch (err) {
-            // Never fail the upload response because of auto-enrol setup errors.
-            console.error('⚠️  auto-enrol kickoff setup failed (non-fatal):', err);
         }
 
         // ---- DIRECT APPLICATION AUTOMATIONS ----
-        // Fire-and-forget sync for Calendar and Native Enrolments
-        try {
+        // Fire-and-forget sync for Calendar and Native Enrolments is disabled.
+        if (false) {
             const allProcessedRecords = [...insertedRecords, ...updatedRecords];
             
             // Background async processing to avoid blocking UI response
@@ -659,8 +656,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     }
                 }
             });
-        } catch (autoErr) {
-            console.error('Error triggering new DA automations', autoErr);
         }
 
         return res.status(200).json({

@@ -21,6 +21,12 @@ const FINANCE_TOOLS = [
     icon: IconName.Analytics,
     href: 'https://alfredang.github.io/novafinancialratiocalculator/',
   },
+  {
+    title: 'Financial Trend Analysis',
+    description: 'Visualize and analyze financial trends with interactive charts and data insights',
+    icon: IconName.Analytics,
+    href: 'https://alfredang.github.io/financialtrend/',
+  },
 ];
 
 const FinanceToolsPage: React.FC = () => {

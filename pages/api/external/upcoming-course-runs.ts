@@ -524,7 +524,10 @@ export async function runUpcomingCourseRuns() {
                assigned_trainer_email    = $4,
                tpg_assigned_trainer_name  = CASE WHEN $5 THEN $3 ELSE tpg_assigned_trainer_name END,
                tpg_assigned_trainer_email = CASE WHEN $5 THEN $4 ELSE tpg_assigned_trainer_email END,
-               class_status = CASE WHEN class_status = 'Pending' THEN 'Confirmed' ELSE class_status END,
+               class_status = CASE
+                 WHEN class_status = 'Pending'
+                      AND EXISTS (SELECT 1 FROM enrollment e WHERE e.course_run_id = course_run.id)
+                 THEN 'Confirmed' ELSE class_status END,
                updated_at                = NOW()
            WHERE id = $1`,
           [run.id, primary.id, primary.name, primary.email, fromSSG]

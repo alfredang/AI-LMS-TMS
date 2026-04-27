@@ -35,6 +35,9 @@ const AssessmentGrading: React.FC = () => {
   const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({});
   const [certVerification, setCertVerification] = useState<Record<string, { checking: boolean; exists?: boolean }>>({});
 
+  // Mark All Competent state
+  const [markingAllCompetent, setMarkingAllCompetent] = useState(false);
+
   // Send Certificate state
   const [selectedForCert, setSelectedForCert] = useState<Set<string>>(new Set());
   const [sendingCerts, setSendingCerts] = useState(false);
@@ -183,6 +186,47 @@ const AssessmentGrading: React.FC = () => {
     }
   };
 
+  const handleMarkAllCompetent = async () => {
+    const notCompetent = students.filter(s => !s.is_competent);
+    if (notCompetent.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Mark all ${notCompetent.length} remaining learner(s) as COMPETENT?`
+    );
+    if (!confirmed) return;
+
+    setMarkingAllCompetent(true);
+
+    // Optimistic update
+    const updatedStudents = students.map(s => ({
+      ...s,
+      is_competent: true,
+      competent_status: 'Competent',
+    }));
+    setStudents(updatedStudents);
+
+    try {
+      await Promise.all(
+        notCompetent.map(student =>
+          fetch('/api/trainer/grade-student', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              enrolmentId: student.enrolment_id,
+              source: student.source,
+              isCompetent: true,
+            }),
+          })
+        )
+      );
+    } catch (e) {
+      console.error('Failed to mark all competent', e);
+      alert('Some updates may have failed. Please check individual statuses.');
+    } finally {
+      setMarkingAllCompetent(false);
+    }
+  };
+
   const handleSendCertificates = async () => {
     if (selectedForCert.size === 0 || !selectedCourseRunId) return;
 
@@ -267,6 +311,25 @@ const AssessmentGrading: React.FC = () => {
               <div className="text-xs text-gray-500 bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
                 {students.length} Enrolments
               </div>
+              {students.length > 0 && (
+                <button
+                  onClick={handleMarkAllCompetent}
+                  disabled={markingAllCompetent || students.every(s => s.is_competent)}
+                  className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {markingAllCompetent ? (
+                    <>
+                      <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
+                      Marking...
+                    </>
+                  ) : (
+                    <>
+                      <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5" />
+                      Mark All Competent
+                    </>
+                  )}
+                </button>
+              )}
               {students.length > 0 && (
                 <button
                   onClick={handleSendCertificates}

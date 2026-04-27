@@ -2664,6 +2664,28 @@ export const SearchGrantView: React.FC = () => {
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
+    const getLearnerName = (grants: any[]) => {
+        const candidates = grants.flatMap((grant: any) => [
+            grant?.learnerName,
+            grant?.learner_name,
+            grant?.traineeName,
+            grant?.trainee_name,
+            grant?.enrolment?.learnerName,
+            grant?.enrolment?.learner_name,
+            grant?.enrolment?.traineeName,
+            grant?.enrolment?.trainee_name,
+            grant?.enrolment?.trainee?.fullName,
+            grant?.enrolment?.trainee?.full_name,
+            grant?.enrolment?.trainee?.name,
+            grant?.trainee?.fullName,
+            grant?.trainee?.full_name,
+            grant?.trainee?.name,
+        ]);
+
+        const found = candidates.find((value: any) => typeof value === 'string' && value.trim());
+        return found ? found.trim() : '—';
+    };
+
     const handleSearch = async () => {
         if (!courseRunId.trim()) {
             setSearchError('Please enter Course Run ID');
@@ -2797,13 +2819,14 @@ export const SearchGrantView: React.FC = () => {
                                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
                                             <thead className="bg-gray-50 dark:bg-gray-700">
                                                 <tr>
-                                                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider">Enrolment</th>
+                                                    <th colSpan={2} className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider">Enrolment</th>
                                                     <th colSpan={3} className="px-3 py-2 text-center text-xs font-semibold text-blue-700 dark:text-blue-400 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider bg-blue-50 dark:bg-blue-900/20">Baseline (BL)</th>
                                                     <th colSpan={4} className="px-3 py-2 text-center text-xs font-semibold text-purple-700 dark:text-purple-400 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider bg-purple-50 dark:bg-purple-900/20">MCES / SME / IBF</th>
                                                     <th className="px-3 py-2 text-center text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider bg-green-50 dark:bg-green-900/20">Total</th>
                                                 </tr>
                                                 <tr>
-                                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Enrolment ID</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">Enrolment ID</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Name</th>
                                                     <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap bg-blue-50 dark:bg-blue-900/20">Grant Status</th>
                                                     <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap bg-blue-50 dark:bg-blue-900/20">Grant ID (BL)</th>
                                                     <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600 bg-blue-50 dark:bg-blue-900/20">Amount (BL)</th>
@@ -2819,9 +2842,11 @@ export const SearchGrantView: React.FC = () => {
                                                     const bl      = grants.find((g: any) => BL_CODES.includes(g.fundingScheme?.code));
                                                     const mces    = grants.find((g: any) => !BL_CODES.includes(g.fundingScheme?.code));
                                                     const totalTG = grants.reduce((sum: number, g: any) => sum + (g.grantAmount?.estimated ?? 0), 0);
+                                                    const learnerName = getLearnerName(grants);
                                                     return (
                                                         <tr key={enrolmentId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                            <td className="px-3 py-3 font-mono text-gray-800 dark:text-gray-200 whitespace-nowrap border-r border-gray-200 dark:border-gray-700">{enrolmentId}</td>
+                                                            <td className="px-3 py-3 font-mono text-gray-800 dark:text-gray-200 whitespace-nowrap">{enrolmentId}</td>
+                                                            <td className="px-3 py-3 text-gray-800 dark:text-gray-200 whitespace-nowrap border-r border-gray-200 dark:border-gray-700 max-w-[180px] truncate" title={learnerName}>{learnerName}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap bg-blue-50/30 dark:bg-blue-900/10">
                                                                 {bl ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(bl.status)}`}>{bl.status}</span> : <span className="text-gray-400">—</span>}
                                                             </td>
@@ -2849,12 +2874,19 @@ export const SearchGrantView: React.FC = () => {
                                             const bl      = grants.find((g: any) => BL_CODES.includes(g.fundingScheme?.code));
                                             const mces    = grants.find((g: any) => !BL_CODES.includes(g.fundingScheme?.code));
                                             const totalTG = grants.reduce((sum: number, g: any) => sum + (g.grantAmount?.estimated ?? 0), 0);
+                                            const learnerName = getLearnerName(grants);
                                             return (
                                                 <div key={enrolmentId} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                                                     {/* Enrolment header */}
-                                                    <div className="bg-gray-50 dark:bg-gray-700 px-4 py-2 flex items-center justify-between">
-                                                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Enrolment ID</span>
-                                                        <span className="font-mono text-sm font-bold text-gray-800 dark:text-white">{enrolmentId}</span>
+                                                    <div className="bg-gray-50 dark:bg-gray-700 px-4 py-2">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Enrolment ID</span>
+                                                            <span className="font-mono text-sm font-bold text-gray-800 dark:text-white text-right">{enrolmentId}</span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-3 mt-1">
+                                                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Name</span>
+                                                            <span className="text-sm font-medium text-gray-800 dark:text-white text-right truncate">{learnerName}</span>
+                                                        </div>
                                                     </div>
                                                     <div className="divide-y divide-gray-100 dark:divide-gray-700">
                                                         {/* BL section */}

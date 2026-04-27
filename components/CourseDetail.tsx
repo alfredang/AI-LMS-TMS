@@ -844,6 +844,11 @@ const AssessmentsSection: React.FC<{
 
     return (
         <ContentSection title="Assessment">
+            {userRole === UserRole.Learner && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Download the assessment file as a Microsoft Word or make a new Google Doc copy, complete all questions, then upload the finished file below.
+                </p>
+            )}
             {/* Other file-based assessments (excluding Written/Practical which are shown separately with toggle) */}
             {filteredFileAssessments && filteredFileAssessments.length > 0 && (
                 <ul className="space-y-4">

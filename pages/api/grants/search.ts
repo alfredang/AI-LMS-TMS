@@ -3,6 +3,7 @@ import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import crypto from 'crypto';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import pool from '../../../lib/db';
 
 function summarizeSsgHttpError(status: number, data: unknown): string {
   let base = `SSG error ${status}`;
@@ -24,6 +25,78 @@ function summarizeSsgHttpError(status: number, data: unknown): string {
     return s.length > 2 ? `${base}: ${s.slice(0, 800)}` : base;
   } catch {
     return base;
+  }
+}
+
+function getGrantEnrolmentRef(item: any): string {
+  return String(item?.enrolment?.referenceNumber || '').trim();
+}
+
+async function enrichGrantRowsWithLearnerNames(rows: any[]): Promise<any[]> {
+  const enrolmentRefs = Array.from(new Set(rows.map(getGrantEnrolmentRef).filter(Boolean)));
+  if (enrolmentRefs.length === 0) return rows;
+
+  try {
+    const nameRes = await pool.query(
+      `
+      WITH refs AS (
+        SELECT unnest($1::text[]) AS enrolment_id
+      ),
+      names AS (
+        SELECT
+          LOWER(TRIM(e.enrolment_id)) AS enrolment_key,
+          NULLIF(TRIM(COALESCE(u.full_name, '')), '') AS learner_name,
+          1 AS priority
+        FROM refs r
+        JOIN enrollment e
+          ON LOWER(TRIM(e.enrolment_id)) = LOWER(TRIM(r.enrolment_id))
+        LEFT JOIN app_user u ON u.id = e.user_id
+
+        UNION ALL
+
+        SELECT
+          LOWER(TRIM(se.enrolment_id)) AS enrolment_key,
+          NULLIF(TRIM(COALESCE(se.trainee_name, '')), '') AS learner_name,
+          2 AS priority
+        FROM refs r
+        JOIN ssg_enrolments se
+          ON LOWER(TRIM(se.enrolment_id)) = LOWER(TRIM(r.enrolment_id))
+
+        UNION ALL
+
+        SELECT
+          LOWER(TRIM(da.enrolment_id)) AS enrolment_key,
+          NULLIF(TRIM(COALESCE(da.trainee_name, '')), '') AS learner_name,
+          3 AS priority
+        FROM refs r
+        JOIN da_application da
+          ON LOWER(TRIM(da.enrolment_id)) = LOWER(TRIM(r.enrolment_id))
+      )
+      SELECT DISTINCT ON (enrolment_key)
+        enrolment_key,
+        learner_name
+      FROM names
+      WHERE learner_name IS NOT NULL
+      ORDER BY enrolment_key, priority
+      `,
+      [enrolmentRefs]
+    );
+
+    const nameByEnrolment = new Map<string, string>();
+    for (const row of nameRes.rows) {
+      if (row.enrolment_key && row.learner_name) {
+        nameByEnrolment.set(String(row.enrolment_key), String(row.learner_name));
+      }
+    }
+
+    return rows.map((item) => {
+      const enrolmentKey = getGrantEnrolmentRef(item).toLowerCase();
+      const learnerName = nameByEnrolment.get(enrolmentKey);
+      return learnerName ? { ...item, learnerName } : item;
+    });
+  } catch (error) {
+    console.warn('Unable to enrich grant search results with learner names:', error);
+    return rows;
   }
 }
 
@@ -124,7 +197,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(decryptedStatus).json({ success: false, error: parsed.error.message });
     }
 
-    return res.status(200).json({ success: true, data: parsed?.data ?? [], meta: parsed?.meta ?? {} });
+    const data = Array.isArray(parsed?.data)
+      ? await enrichGrantRowsWithLearnerNames(parsed.data)
+      : [];
+
+    return res.status(200).json({ success: true, data, meta: parsed?.meta ?? {} });
 
   } catch (error) {
     console.error('❌ Search grants error:', error);
