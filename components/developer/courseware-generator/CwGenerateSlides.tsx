@@ -1,48 +1,122 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card } from '../../ui/Card';
 import { Button } from '../../ui/Button';
 import { useCw } from './CwContext';
+
+type JobStatus = 'pending' | 'running' | 'done' | 'failed';
+
+type StatusResp = {
+  id: string;
+  status: JobStatus;
+  progress: { message: string; percent: number };
+  slideCount?: number;
+  fileName?: string;
+  stats?: Record<string, unknown>;
+  message?: string;
+  error?: string;
+};
 
 const CwGenerateSlides: React.FC = () => {
   const cw = useCw();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ message: string; percent: number }>({ message: '', percent: 0 });
+  const [result, setResult] = useState<StatusResp | null>(null);
+  const pollTimer = useRef<number | null>(null);
+
+  const stopPolling = () => {
+    if (pollTimer.current != null) {
+      window.clearTimeout(pollTimer.current);
+      pollTimer.current = null;
+    }
+  };
+
+  useEffect(() => stopPolling, []);
+
+  const pollOnce = async (id: string) => {
+    try {
+      const r = await fetch(`/api/developer/cw-slides-status?jobId=${encodeURIComponent(id)}`);
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        throw new Error(data.error || `Status poll failed (${r.status})`);
+      }
+      const data = (await r.json()) as StatusResp;
+      setProgress(data.progress || { message: '', percent: 0 });
+      if (data.status === 'done') {
+        stopPolling();
+        setResult(data);
+        setLoading(false);
+        if (typeof data.message === 'string') {
+          cw.setSlidesResult(`${data.message}${data.slideCount ? ` · ${data.slideCount} slides` : ''}`);
+        }
+        return;
+      }
+      if (data.status === 'failed') {
+        stopPolling();
+        setError(data.error || 'Generation failed');
+        setLoading(false);
+        return;
+      }
+      pollTimer.current = window.setTimeout(() => pollOnce(id), 2500);
+    } catch (e: any) {
+      // Transient network error — keep polling, the job is still running server-side.
+      console.warn('[cw-slides] status poll error:', e.message);
+      pollTimer.current = window.setTimeout(() => pollOnce(id), 5000);
+    }
+  };
 
   const handleGenerate = async () => {
-    if (!cw.cpText.trim()) {
-      setError('Please paste the Course Proposal content in "Extract Course Info" first.');
+    if (!cw.courseData && !cw.extractedResult.trim()) {
+      setError('Please run "Extract Course Info" first — the slide pipeline needs parsed CP data.');
       return;
     }
     setError('');
+    setResult(null);
+    setJobId(null);
+    setProgress({ message: 'Starting...', percent: 0 });
     setLoading(true);
     try {
-      const res = await fetch('/api/developer/cw-generate', {
+      const res = await fetch('/api/developer/cw-generate-slides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          section: 'generate_slides',
-          cpText: cw.extractedResult,
           courseData: cw.courseData,
+          cpText: cw.extractedResult,
+          extractedResult: cw.extractedResult,
+          config: {},
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Generation failed');
-      cw.setSlidesResult(data.result);
+      if (!res.ok || !data.jobId) {
+        throw new Error(data.error || 'Failed to start slide generation');
+      }
+      setJobId(data.jobId);
+      pollOnce(data.jobId);
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
 
-  const handleCopy = (text: string) => navigator.clipboard.writeText(text);
+  const handleDownload = () => {
+    if (!jobId) return;
+    // Trigger browser download via direct link (streams the file)
+    const a = document.createElement('a');
+    a.href = `/api/developer/cw-slides-download?jobId=${encodeURIComponent(jobId)}`;
+    a.download = result?.fileName || 'Slides.pptx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold dark:text-white">Generate Slides</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Generate slide content using a 4-phase AI pipeline: Research, Content Generation, Editing, and Infographic creation.
+          Run the 5-phase multi-agent pipeline (Research &rarr; Content &rarr; Editor &rarr; Infographic &rarr; Assembly)
+          to produce a WSQ training PPTX deck with AntV infographics.
         </p>
       </div>
 
@@ -55,7 +129,9 @@ const CwGenerateSlides: React.FC = () => {
       )}
 
       <Card className="p-5 space-y-4">
-        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Slide Generation</h3>
+        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+          Slide Generation
+        </h3>
 
         <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-300">
           <p className="font-medium mb-1">Slide Targets by Duration:</p>
@@ -66,48 +142,67 @@ const CwGenerateSlides: React.FC = () => {
             <li>4-day (32 hrs): ~250 slides</li>
             <li>5-day (40 hrs): ~320 slides</li>
           </ul>
+          <p className="text-xs mt-2 italic">Generation takes 10–25 minutes. Safe to keep this tab open — the job runs on the server.</p>
         </div>
 
         {error && (
-          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+          <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">
             {error}
           </div>
         )}
 
         <Button onClick={handleGenerate} disabled={loading} className="w-full">
-          {loading ? 'Generating Slides...' : 'Generate Slide Content'}
+          {loading ? 'Generating Slides (this may take several minutes)…' : 'Generate Slide Deck (.pptx)'}
         </Button>
       </Card>
 
       {loading && (
-        <Card className="p-8 text-center">
-          <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">Running 4-phase slide pipeline with Claude AI...</p>
-          <p className="text-xs text-gray-400 mt-1">Research → Content → Editor → Infographic</p>
-        </Card>
-      )}
-
-      {cw.slidesResult && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-bold text-gray-900 dark:text-white">Generated Slide Content</h4>
-            <button onClick={() => handleCopy(cw.slidesResult)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Copy</button>
+        <Card className="p-6 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                {progress.message || 'Running pipeline...'}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {progress.percent}% — Research &rarr; Content &rarr; Editor &rarr; Infographic &rarr; Assembly
+              </p>
+            </div>
           </div>
-          <textarea
-            value={cw.slidesResult}
-            onChange={e => cw.setSlidesResult(e.target.value)}
-            rows={Math.max(10, cw.slidesResult.split('\n').length + 2)}
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans leading-relaxed"
-          />
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+            <div
+              className="bg-blue-500 h-2 transition-all duration-500"
+              style={{ width: `${Math.max(2, progress.percent || 0)}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-400">
+            Safe to keep this tab open &mdash; generation continues on the server even if your connection blips.
+          </p>
         </Card>
       )}
 
-      {!loading && !cw.slidesResult && (
+      {result?.fileName && (
+        <Card className="p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-bold text-gray-900 dark:text-white">Slide Deck Ready</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {result.message}
+                {result.slideCount ? ` · ${result.slideCount} slides` : ''}
+              </p>
+            </div>
+            <Button onClick={handleDownload}>Download .pptx</Button>
+          </div>
+        </Card>
+      )}
+
+      {!loading && !result?.fileName && (
         <Card className="p-8 text-center">
           <div className="text-4xl mb-3">🖥️</div>
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Slide Content Generator</h3>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Slide Deck Generator</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-            Generate comprehensive slide content with research-backed data, infographic specifications, and structured topic breakdowns.
+            Run <strong>Extract Course Info</strong> first, then click <strong>Generate Slide Deck</strong>.
+            Output is a WSQ-standard PPTX with infographic content slides, fixed intro (10) and closing (7) slides.
           </p>
         </Card>
       )}
