@@ -84,47 +84,34 @@ const COMMON_ICONS: string[] = [
   'mdi/leaf', 'mdi/earth', 'mdi/recycle', 'mdi/sprout',
 ];
 
-// Module-level cache. Filled lazily by the first call to ensureIconCache().
+// Module-level cache, primed on first access from the bundled JSON file
+// at lib/cw-slides-icon-cache.json. Pre-fetched at build/dev time via
+// `npx tsx scripts/prefetch-icons.ts` and committed as a static asset
+// so production has ZERO network calls to iconify.design at runtime.
+//
+// Earlier versions tried to fetch at module init — that worked locally
+// but failed in the Coolify container (slow / blocked egress to iconify),
+// leaving most infographics with empty placeholder squares. With the
+// static bundle, icons render reliably regardless of container network.
 const iconCache = new Map<string, string>();
 let iconCacheLoaded = false;
-let iconCachePromise: Promise<void> | null = null;
 
 async function ensureIconCache(): Promise<void> {
   if (iconCacheLoaded) return;
-  if (iconCachePromise) return iconCachePromise;
-  iconCachePromise = (async () => {
-    const fetchOne = async (name: string): Promise<void> => {
-      // Strip any leading "mdi/" prefix variants, build iconify URL
-      const cleanName = name.trim();
-      if (iconCache.has(cleanName)) return;
-      const url = `https://api.iconify.design/${cleanName}.svg`;
-      try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 5000);
-        const r = await fetch(url, { signal: ctrl.signal, redirect: 'follow' });
-        clearTimeout(timer);
-        if (!r.ok) return;
-        const svg = await r.text();
-        if (svg && svg.trim().startsWith('<svg')) {
-          iconCache.set(cleanName, svg);
-        }
-      } catch {
-        /* ignore — falls back to per-render network fetch */
+  iconCacheLoaded = true;
+  try {
+    const cachePath = path.join(process.cwd(), 'lib', 'cw-slides-icon-cache.json');
+    const raw = fs.readFileSync(cachePath, 'utf-8');
+    const obj = JSON.parse(raw) as Record<string, string>;
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === 'string' && v.trim().startsWith('<svg')) {
+        iconCache.set(k, v);
       }
-    };
-    // Bounded parallelism so we don't hammer iconify
-    const queue = [...COMMON_ICONS];
-    const workers = Array.from({ length: 8 }, async () => {
-      while (queue.length) {
-        const next = queue.shift();
-        if (next) await fetchOne(next);
-      }
-    });
-    await Promise.all(workers);
-    iconCacheLoaded = true;
-    console.log(`[cw-slides-infographic] icon cache loaded: ${iconCache.size}/${COMMON_ICONS.length} icons`);
-  })();
-  return iconCachePromise;
+    }
+    console.log(`[cw-slides-infographic] loaded ${iconCache.size} icons from static bundle`);
+  } catch (e: any) {
+    console.warn('[cw-slides-infographic] static icon bundle missing — icons may not render. Run: npx tsx scripts/prefetch-icons.ts');
+  }
 }
 
 function iconCacheToJson(): string {

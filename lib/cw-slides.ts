@@ -26,6 +26,7 @@ import {
   type InfographicSkeleton as InfographicSkeletonImpl,
   type InfographicContentEntry as InfographicContentEntryImpl,
 } from './cw-slides-infographic';
+import { searchWebMulti } from './cw-slides-websearch';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Config
@@ -433,18 +434,35 @@ async function researchTopic(
     : '';
   const loText = topic.lo_description ? `\nLearning Outcome: ${topic.lo_description}` : '';
 
-  const prompt = `Research the following topic for a WSQ training course.
+  // ── Node-side internet search ──
+  // Bypasses the Anthropic SDK's WebSearch tool (which requires a special
+  // permission on the API key) by calling DuckDuckGo's HTML endpoint
+  // directly. Real internet results — same data quality as the local-dev
+  // WebSearch path — work on ANY API key including OAuth subscription
+  // tokens. The search results are passed into the model prompt as plain
+  // text and the model synthesises them into the structured ResearchEntry.
+  const queries = [
+    `${topic.topic_title} overview guide best practices`,
+    `${topic.topic_title} statistics framework examples`,
+  ];
+  const webResults = await searchWebMulti(queries, 4, 8).catch(() => []);
+  const webResultsText = webResults.length > 0
+    ? '\n\nINTERNET SEARCH RESULTS (use these as your sources — cite them in the JSON output):\n' +
+      webResults.map((r, i) => `${i + 1}. "${r.title}" — ${r.url}\n   ${r.snippet}`).join('\n\n')
+    : '';
+  if (webResults.length > 0) {
+    console.log(`[cw-slides] research: ${webResults.length} web results for '${topic.topic_title}'`);
+  }
+
+  const prompt = `Synthesise research output for a WSQ training course topic. Use the internet search results below (already fetched for you) as your primary source material. Extract sources, summarise findings, and structure key data into the JSON schema.
 
 COURSE: ${courseTitle}
-TOPIC (research EXACTLY this): ${topic.topic_title}
+TOPIC: ${topic.topic_title}
 ${loText}
 ${bpText}
+${webResultsText}
 
-SEARCH PLAN (2 searches, NO WebFetch):
-1. WebSearch for "${topic.topic_title} overview guide best practices"
-2. WebSearch for "${topic.topic_title} statistics framework examples"
-3. Extract 3-5 sources from search result snippets
-4. Return JSON immediately
+When the search results above are populated, cite them by title in the "sources" array — these are real internet sources, use them. When they are empty, fall back to your training knowledge of recognised industry frameworks (NIST, ISO, OECD, UNESCO, McKinsey, Gartner, etc.) and cite real, plausible source names.
 
 Return this JSON:
 {
@@ -463,26 +481,24 @@ Return this JSON:
   }
 }`;
 
-  // Try WebSearch path first. When the API key has WebSearch enabled, this
-  // returns 3-5 fresh internet sources per topic. When the key lacks
-  // WebSearch (common with sk-ant-oat OAuth tokens and basic API keys),
-  // the call may succeed but return empty arrays, OR error out.
+  // Synthesis call — no tools needed. Search results were already fetched
+  // by Node above and embedded in the prompt; the model only synthesises.
+  // This works on ANY Anthropic API key (including OAuth subscription
+  // tokens) because we don't depend on the SDK's WebSearch tool permission.
   try {
     const result = await runAgentJson({
       prompt,
       systemPrompt: RESEARCH_SYSTEM_PROMPT,
-      tools: ['WebSearch'],
-      maxTurns: 5,
+      tools: [],
+      maxTurns: 1,
       model: model || FAST_MODEL,
       apiKey,
     });
     const r = result as ResearchEntry;
-    const haveSources = Array.isArray(r?.sources) && r.sources.length > 0;
-    if (haveSources) return r;
-    // WebSearch path returned no sources — fall through to knowledge-based research.
-    console.warn(`[cw-slides] WebSearch returned 0 sources for '${topic.topic_title}', using knowledge-based research`);
+    if (Array.isArray(r?.sources) && r.sources.length > 0) return r;
+    console.warn(`[cw-slides] research synthesis returned 0 sources for '${topic.topic_title}', using knowledge fallback`);
   } catch (e: any) {
-    console.warn(`[cw-slides] WebSearch path failed for '${topic.topic_title}': ${e.message}, using knowledge-based research`);
+    console.warn(`[cw-slides] research synthesis failed for '${topic.topic_title}': ${e.message}, using knowledge fallback`);
   }
 
   // Knowledge-based research — model writes research-quality output from its
