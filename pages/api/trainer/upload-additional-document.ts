@@ -19,6 +19,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Ensure table exists (idempotent)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS course_additional_document (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        course_run_id UUID NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
+        file_name TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        uploaded_by TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
     const { courseRunId, uploadedBy } = req.query;
 
     if (!courseRunId || !uploadedBy) {
