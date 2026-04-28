@@ -13,6 +13,7 @@ import {
   qboFindItemBySku,
   qboFindOrCreateCustomerByDisplayName,
   qboFindTermByName,
+  qboGetDefaultInvoiceEmailFields,
   qboResolveInvoiceLineTaxCodeRef,
   qboResolveOosTaxCodeRef,
   qboSendInvoice,
@@ -447,10 +448,12 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
 
   const gtc = process.env.QBO_INVOICE_GLOBAL_TAX_CALC?.trim();
   const billToName = (hasDa ? (da.trainee_name ?? ctx.traineeName) : ctx.traineeName) || learnerEmail;
+  const defaultEmailFields = await qboGetDefaultInvoiceEmailFields(undefined);
   const invoiceBody: Record<string, unknown> = {
     CustomerRef: { value: customerId },
     Line: lines,
     BillEmail: { Address: learnerEmail },
+    ...defaultEmailFields,
     CustomerMemo: {
       value: `Skillsfuture Claimable Amount : $${netAmountClamped.toFixed(2)}`,
     },

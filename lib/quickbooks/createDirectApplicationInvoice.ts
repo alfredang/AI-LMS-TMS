@@ -12,6 +12,7 @@ import {
   qboFindItemByName,
   qboFindItemBySku,
   qboFindTermByName,
+  qboGetDefaultInvoiceEmailFields,
   qboResolveInvoiceLineTaxCodeRef,
   qboResolveOosTaxCodeRef,
   qboSparseUpdateInvoice,
@@ -224,6 +225,7 @@ export async function createDirectApplicationInvoice(
       `QuickBooks Term "${MAIN_INVOICE_TERM_NAME}" not found. Create it in QBO (Lists -> All Lists -> Terms).`
     );
   }
+  const defaultEmailFields = await qboGetDefaultInvoiceEmailFields(undefined);
 
   const existingByToday = await qboFindInvoiceByDocNumber(undefined, docNumber);
   const existingByLast6 =
@@ -234,10 +236,12 @@ export async function createDirectApplicationInvoice(
   if (orphan?.id) {
     const reusedDoc = orphan.raw?.DocNumber ? String(orphan.raw.DocNumber) : docNumber;
     const currentTermId = orphan.raw?.SalesTermRef?.value ? String(orphan.raw.SalesTermRef.value) : '';
-    if (orphan.syncToken && currentTermId !== mainTerm.id) {
-      await qboSparseUpdateInvoice(undefined, orphan.id, orphan.syncToken, {
-        SalesTermRef: { value: mainTerm.id },
-      });
+    const fieldsToUpdate = {
+      ...(currentTermId !== mainTerm.id ? { SalesTermRef: { value: mainTerm.id } } : {}),
+      ...defaultEmailFields,
+    };
+    if (orphan.syncToken && Object.keys(fieldsToUpdate).length > 0) {
+      await qboSparseUpdateInvoice(undefined, orphan.id, orphan.syncToken, fieldsToUpdate);
     }
     console.log(`[QBO main invoice] Reusing orphan invoice ${orphan.id} (DocNumber ${reusedDoc}) for enrolment ${enrolmentId}`);
     return {
@@ -338,6 +342,7 @@ export async function createDirectApplicationInvoice(
       Line5: '',
     },
     BillEmail: { Address: app.trainee_email },
+    ...defaultEmailFields,
     TxnDate: txnDate,
     DueDate: dueDate,
     SalesTermRef: { value: mainTerm.id },
