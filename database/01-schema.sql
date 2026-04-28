@@ -1303,6 +1303,15 @@ CREATE TABLE public.da_application (
     enrolment_id character varying(100),
     grant_id character varying(100),
     invoice_id character varying(100),
+    invoice_doc_number text,
+    invoice_drive_file_id text,
+    invoice_drive_web_view_link text,
+    grant_invoice_id character varying(100),
+    grant_invoice_drive_file_id text,
+    grant_invoice_drive_web_view_link text,
+    sfc_invoice_id character varying(100),
+    sfc_invoice_drive_file_id text,
+    sfc_invoice_drive_web_view_link text,
     qb_customer_ref character varying(50),
     auto_enrol_status character varying(50),
     auto_enrol_error text,
@@ -1326,8 +1335,17 @@ COMMENT ON COLUMN public.da_application.highest_relevant_certification IS 'Train
 COMMENT ON COLUMN public.da_application.enrolment_id IS 'SSG enrolment reference number returned by /tpg/enrolments';
 COMMENT ON COLUMN public.da_application.grant_id IS 'SSG grant identifier from grant search';
 COMMENT ON COLUMN public.da_application.invoice_id IS 'QuickBooks invoice ID for the net-fee invoice';
+COMMENT ON COLUMN public.da_application.invoice_doc_number IS 'QuickBooks DocNumber of the main tax invoice (format TC{yy}-{mmdd}-{last6}). Cached to avoid qboReadInvoice on re-runs and used as PO# on supplemental Grant/SFC invoices.';
 COMMENT ON COLUMN public.da_application.qb_customer_ref IS 'Cached QuickBooks CustomerRef for the trainee (find-or-create)';
 COMMENT ON COLUMN public.da_application.auto_enrol_status IS 'Auto-enrol pipeline status: pending | enroled | grant_found | invoiced | failed';
+COMMENT ON COLUMN public.da_application.invoice_drive_file_id IS 'Google Drive file id for the main tax invoice PDF';
+COMMENT ON COLUMN public.da_application.invoice_drive_web_view_link IS 'Google Drive web view link for the main tax invoice PDF';
+COMMENT ON COLUMN public.da_application.grant_invoice_id IS 'QuickBooks invoice id for the supplemental Grant invoice (positive amounts, DocNumber = SSG grant_id)';
+COMMENT ON COLUMN public.da_application.grant_invoice_drive_file_id IS 'Google Drive file id for the Grant invoice PDF';
+COMMENT ON COLUMN public.da_application.grant_invoice_drive_web_view_link IS 'Google Drive web view link for the Grant invoice PDF';
+COMMENT ON COLUMN public.da_application.sfc_invoice_id IS 'QuickBooks invoice id for the supplemental SkillsFuture Credit invoice (positive amount, DocNumber = ssg_claims.claim_id)';
+COMMENT ON COLUMN public.da_application.sfc_invoice_drive_file_id IS 'Google Drive file id for the SFC invoice PDF';
+COMMENT ON COLUMN public.da_application.sfc_invoice_drive_web_view_link IS 'Google Drive web view link for the SFC invoice PDF';
 COMMENT ON COLUMN public.da_application.auto_enrol_error IS 'Last error from auto-enrol pipeline, format: "<step>: <reason>"';
 
 CREATE INDEX IF NOT EXISTS idx_da_application_application_id ON public.da_application(application_id);

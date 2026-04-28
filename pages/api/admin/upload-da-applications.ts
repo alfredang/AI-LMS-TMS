@@ -3,7 +3,7 @@ import pool from '../../../lib/db';
 import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
-import { bulkProcessDirectApplications, createNativeEnrolmentFromDA } from '../../../lib/autoEnrolDirectApplications';
+import { bulkProcessDirectApplications, createNativeEnrolmentFromDA, processDirectApplication } from '../../../lib/autoEnrolDirectApplications';
 import { addDaLearnerToCalendar, removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
@@ -38,8 +38,11 @@ const columnMapping: Record<string, string> = {
     'SkillsFuture subsidy': 'skillsfuture_subsidy',
     'SkillsFuture Subsidy': 'skillsfuture_subsidy',
     'SkillsFuture Credit': 'skillsfuture_credit',
+    'SF Claim ID': 'skillsfuture_credit_claim_id',
     'SkillsFuture Credit claim ID': 'skillsfuture_credit_claim_id',
     'SkillsFuture Credit Claim ID': 'skillsfuture_credit_claim_id',
+    'Grant ID': 'grant_id',
+    'Grant ID (BL)': 'grant_id',
     'Application Status': 'application_status',
     'Course Title': 'course_title',
     'Course Reference Number': 'course_reference_number',
@@ -51,8 +54,18 @@ const columnMapping: Record<string, string> = {
     'Highest Relevant Certification': 'highest_relevant_certification',
     'Enrol Status': 'enrolment_status',
     'Enrolment Status': 'enrolment_status',
+    'Enrol ID': 'enrolment_id',
+    'Enrolment ID': 'enrolment_id',
     'Status': 'application_status',
 };
+
+function hasRealEnrolmentId(value: unknown): boolean {
+    if (value === null || value === undefined) return false;
+    const enrolmentId = String(value).trim();
+    if (!enrolmentId) return false;
+    const upper = enrolmentId.toUpperCase();
+    return upper !== 'MANUAL' && upper !== 'N/A' && upper !== 'NA' && upper !== '-';
+}
 
 // Parse date from various formats
 function parseDate(value: any): string | null {
@@ -404,7 +417,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         for (const record of toUpdate) {
             try {
                 const result = await pool.query(
-                    `UPDATE da_application SET application_status = $1 WHERE application_id = $2 RETURNING *`,
+                    `UPDATE da_application
+                        SET application_status = $1
+                      WHERE application_id = $2
+                      RETURNING *`,
                     [record.application_status, record.application_id]
                 );
                 if (result.rows.length > 0) {
@@ -456,15 +472,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         skillsfuture_subsidy,
                         skillsfuture_credit,
                         skillsfuture_credit_claim_id,
+                        grant_id,
                         application_status,
                         enrolment_status,
+                        enrolment_id,
                         course_title,
                         course_reference_number,
                         course_start_date,
                         course_end_date,
                         highest_qualification,
                         highest_relevant_certification
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
                     RETURNING *`,
                     [
                         record.trainee_id_type || null,
@@ -485,8 +503,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         record.skillsfuture_subsidy || null,
                         record.skillsfuture_credit || null,
                         record.skillsfuture_credit_claim_id || null,
+                        record.grant_id || null,
                         record.application_status || null,
                         record.enrolment_status || null,
+                        record.enrolment_id || null,
                         record.course_title || null,
                         record.course_reference_number || null,
                         record.course_start_date || null,
@@ -577,9 +597,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         // ---- DIRECT APPLICATION AUTOMATIONS ----
-        // Fire-and-forget sync for Calendar and Native Enrolments
+        // Fire-and-forget sync for Calendar, Native Enrolments, and DA invoice generation.
         try {
             const allProcessedRecords = [...insertedRecords, ...updatedRecords];
+            const insertedDbIdSet = new Set(
+                insertedRecords
+                    .map(r => r?.id)
+                    .filter((x: unknown): x is string => typeof x === 'string' && x.length > 0)
+            );
+            const daInvoiceTriggerIds: string[] = [];
             
             // Background async processing to avoid blocking UI response
             setImmediate(async () => {
@@ -657,6 +683,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         await createNativeEnrolmentFromDA(record, pool);
                         console.log(`✅ Automatically created native enrolment for DA ${record.application_id}`);
                     }
+
+                    // Automation 3: DA invoice auto-generation trigger
+                    // Fires when enrol is effectively ticked (Confirmed) and there is a real enrolment_id.
+                    const shouldTriggerDaInvoice =
+                        insertedDbIdSet.has(record.id) &&
+                        isEnrolConfirmed &&
+                        hasRealEnrolmentId(record.enrolment_id) &&
+                        !record.invoice_id;
+
+                    if (shouldTriggerDaInvoice && typeof record.id === 'string' && record.id.length > 0) {
+                        daInvoiceTriggerIds.push(record.id);
+                    }
+                }
+
+                for (const applicationDbId of daInvoiceTriggerIds) {
+                    try {
+                        await processDirectApplication(applicationDbId, undefined, {
+                            forceInvoice: true,
+                            sendInvoiceEmail: true,
+                        });
+                        console.log(`Auto-triggered DA invoice generation + email for application ${applicationDbId}`);
+                    } catch (invoiceErr) {
+                        console.error(`Failed auto-triggered DA invoice generation for ${applicationDbId}:`, invoiceErr);
+                    }
                 }
             });
         } catch (autoErr) {
@@ -690,4 +740,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
     }
 }
-

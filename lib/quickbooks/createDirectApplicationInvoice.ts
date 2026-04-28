@@ -5,8 +5,42 @@
 
 import { refreshGrantsForEnrolments } from '../services/billingSync';
 import { resolveGrantDeductionLinesForInvoice } from '../services/daInvoiceGrantLines';
-import { qboResolveInvoiceLineTaxCodeRef, qboResolveOosTaxCodeRef } from '../services/qboInvoiceService';
-import { resolveCustomerRef } from './resolveCustomerRef';
+import {
+  qboFindCustomerByName,
+  qboFindInvoiceByDocNumber,
+  qboFindInvoiceByDocNumberLike,
+  qboFindItemByName,
+  qboFindItemBySku,
+  qboFindTermByName,
+  qboResolveInvoiceLineTaxCodeRef,
+  qboResolveOosTaxCodeRef,
+  qboSparseUpdateInvoice,
+} from '../services/qboInvoiceService';
+
+/**
+ * Fixed QB customer used on every DA main tax invoice. Configurable via env
+ * for non-standard realms; defaults to the WSQ Individual bucket. Must exist
+ * in QuickBooks as an actual Customer record — we don't auto-create it.
+ */
+const MAIN_INVOICE_CUSTOMER_NAME = (
+  process.env.QBO_DA_MAIN_CUSTOMER_NAME || 'WSQ Individual (Not for Company)'
+).trim();
+
+const MAIN_INVOICE_TERM_NAME = 'Due on receipt';
+
+let cachedMainCustomerId: string | null = null;
+
+async function resolveMainInvoiceCustomerRef(): Promise<string> {
+  if (cachedMainCustomerId) return cachedMainCustomerId;
+  const found = await qboFindCustomerByName(undefined, MAIN_INVOICE_CUSTOMER_NAME);
+  if (!found?.id) {
+    throw new Error(
+      `QuickBooks Customer "${MAIN_INVOICE_CUSTOMER_NAME}" not found. Create it in QBO (Sales → Customers → New customer) or override via QBO_DA_MAIN_CUSTOMER_NAME env var.`
+    );
+  }
+  cachedMainCustomerId = found.id;
+  return cachedMainCustomerId;
+}
 
 export interface DaApplicationForInvoice {
   id: string;
@@ -46,19 +80,25 @@ function toNumber(value: string | number | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function addDays(isoDate: string, days: number): string {
-  const d = new Date(isoDate);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+function formatDate(d: string | Date | null | undefined): string {
+  if (!d) return '-';
+  return new Date(d).toLocaleDateString('en-SG', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
-
-
-function formatDate(d: string | Date | null | undefined): string {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-SG', {
-    day: '2-digit', month: 'short', year: 'numeric'
-  });
+/**
+ * Mask all but the last 4 characters of an NRIC/FIN for the invoice line
+ * description. Example: "T0612345A" -> "XXXXX345A". IDs shorter than 5
+ * characters are returned as-is. Falls back to '-' when missing.
+ */
+function maskNric(value: string | null | undefined): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '-';
+  if (raw.length <= 4) return raw;
+  return 'X'.repeat(raw.length - 4) + raw.slice(-4);
 }
 
 async function callQbProxy(body: Record<string, any>): Promise<any> {
@@ -76,34 +116,37 @@ async function callQbProxy(body: Record<string, any>): Promise<any> {
   return data;
 }
 
-async function findItemBySku(sku: string): Promise<string | null> {
-  if (!sku) return null;
+async function resolveLineItemRef(opts: {
+  courseItemRef: { value: string; name?: string };
+  itemName: string;
+}): Promise<{ value: string; name?: string }> {
+  const targetName = String(opts.itemName || '').trim();
+  if (!targetName) return opts.courseItemRef;
+
   try {
-    const data = await callQbProxy({
-      action: 'query',
-      entity: 'item',
-      query: `SELECT * FROM Item WHERE Sku = '${sku}'`,
-    });
-    const items = data?.data?.QueryResponse?.Item;
-    if (Array.isArray(items) && items.length > 0) {
-      console.log(`[QBO] Found item for SKU ${sku}: Id=${items[0].Id}`);
-      return String(items[0].Id);
+    const item = await qboFindItemByName(undefined, targetName);
+    if (item?.id) {
+      return { value: item.id, name: item.name };
     }
-    console.warn(`[QBO] No item found for SKU: ${sku}`);
-    return null;
+    console.warn(`[QBO] No item found for name: ${targetName}. Falling back to course item.`);
   } catch (e) {
-    console.warn(`[QBO] Item lookup failed for SKU ${sku}:`, e);
-    return null;
+    console.warn(`[QBO] Item lookup failed for name ${targetName}:`, e);
   }
+
+  return opts.courseItemRef;
+}
+
+function resolveSkillsFutureCreditItemName(): string {
+  return (
+    process.env.QBO_SFC_DA_ITEM_NAME ||
+    process.env.QBO_SFC_ITEM_NAME ||
+    'SkillsFuture Claim by Direct Application'
+  ).trim();
 }
 
 export async function createDirectApplicationInvoice(
   app: DaApplicationForInvoice & { enrolment_id?: string }
 ): Promise<CreatedInvoice> {
-  // 1. Compute amounts
-  // full_course_fee is the base fee EXCLUDING gst
-  // gst is stored separately
-  // subsidy and credit are deducted from the base fee
   const fullFee = toNumber(app.full_course_fee);
   const gst = toNumber(app.gst);
   const combinedSubsidy = toNumber(app.skillsfuture_subsidy);
@@ -124,7 +167,6 @@ export async function createDirectApplicationInvoice(
     grantIdFallback: app.grant_id,
   });
 
-  // Net payable = (fee - subsidy - credit) + gst
   const netAmount = Number((fullFee - subsidy - credit + gst).toFixed(2));
 
   if (!fullFee || fullFee <= 0) {
@@ -143,11 +185,8 @@ export async function createDirectApplicationInvoice(
     throw new Error('trainee_email is required to create invoice');
   }
 
-  // 2. Look up QBO item by course reference number (TGS SKU)
-  const itemId =
-    (await findItemBySku(app.course_reference_number || '')) ??
-    process.env.QBO_DEFAULT_ITEM_REF ??
-    null;
+  const courseItem = await qboFindItemBySku(undefined, app.course_reference_number || '');
+  const itemId = courseItem?.id ?? process.env.QBO_DEFAULT_ITEM_REF ?? null;
 
   if (!itemId) {
     throw new Error(
@@ -155,16 +194,18 @@ export async function createDirectApplicationInvoice(
     );
   }
 
-  // 3. Resolve or create customer
-  const customerRef =
-    app.qb_customer_ref ||
-    (await resolveCustomerRef(app.trainee_name || app.trainee_email, app.trainee_email));
+  const courseItemRef = { value: itemId, name: courseItem?.name };
 
-  // 4. Build invoice body
+  // Customer is always the fixed "WSQ Individual (Not for Company)" bucket
+  // — the learner's identity lives in the line-item Description (Participant
+  // Name / NRIC / Course Run) rather than on the QB customer card.
+  // BillEmail is still set to the learner's address below so QB can email
+  // them when sending is enabled.
+  const customerRef = await resolveMainInvoiceCustomerRef();
+
   const txnDate = new Date().toISOString().slice(0, 10);
-  const dueDate = txnDate; // Due date is the same as invoice date
+  const dueDate = txnDate;
 
-  // Generate invoice number: TC{YY}-{MM}{DD}-{last 6 digits of enrolment_id}
   const last6 = enrolmentId.slice(-6).padStart(6, '0');
   const now = new Date();
   const yy = String(now.getFullYear()).slice(-2);
@@ -172,47 +213,83 @@ export async function createDirectApplicationInvoice(
   const dd = String(now.getDate()).padStart(2, '0');
   const docNumber = `TC${yy}-${mm}${dd}-${last6}`;
 
+  // Idempotency — recover an orphan main invoice that a previous attempt
+  // posted to QBO but failed to persist locally (network blip between POST and
+  // DB update). Try today's DocNumber first, then a LIKE search on the stable
+  // `-${last6}` suffix so a retry on a later day still matches.
+
+  const mainTerm = await qboFindTermByName(undefined, MAIN_INVOICE_TERM_NAME);
+  if (!mainTerm?.id) {
+    throw new Error(
+      `QuickBooks Term "${MAIN_INVOICE_TERM_NAME}" not found. Create it in QBO (Lists -> All Lists -> Terms).`
+    );
+  }
+
+  const existingByToday = await qboFindInvoiceByDocNumber(undefined, docNumber);
+  const existingByLast6 =
+    !existingByToday?.id && last6
+      ? await qboFindInvoiceByDocNumberLike(undefined, `TC%-${last6}`)
+      : null;
+  const orphan = existingByToday ?? existingByLast6;
+  if (orphan?.id) {
+    const reusedDoc = orphan.raw?.DocNumber ? String(orphan.raw.DocNumber) : docNumber;
+    const currentTermId = orphan.raw?.SalesTermRef?.value ? String(orphan.raw.SalesTermRef.value) : '';
+    if (orphan.syncToken && currentTermId !== mainTerm.id) {
+      await qboSparseUpdateInvoice(undefined, orphan.id, orphan.syncToken, {
+        SalesTermRef: { value: mainTerm.id },
+      });
+    }
+    console.log(`[QBO main invoice] Reusing orphan invoice ${orphan.id} (DocNumber ${reusedDoc}) for enrolment ${enrolmentId}`);
+    return {
+      invoiceId: String(orphan.id),
+      docNumber: reusedDoc,
+      customerRef: orphan.customerRef || customerRef,
+      netAmount,
+    };
+  }
+
   const taxGst = await qboResolveInvoiceLineTaxCodeRef(undefined);
   const taxOos = await qboResolveOosTaxCodeRef(undefined);
 
   const lines: any[] = [];
 
-  // Line 1: Full course fee — GST 9% SR (QBO calculates GST automatically)
   lines.push({
     DetailType: 'SalesItemLineDetail',
     Amount: fullFee,
     Description: [
       `Course Name: ${app.course_title ?? app.course_reference_number}`,
       `(${app.course_reference_number ?? ''})`,
-      `Participant Name: ${app.trainee_name ?? '—'}`,
-      `NRIC: ${app.trainee_id ?? '—'}`,
+      `Participant Name: ${app.trainee_name ?? '-'}`,
+      `NRIC: ${maskNric(app.trainee_id)}`,
       (() => {
         const start = formatDate(app.course_start_date);
         const end = formatDate(app.course_end_date);
         if (start === end || !app.course_end_date) {
           return `Course Date: ${start}`;
-        } else {
-          return `Course Date: ${start} - ${end}`;
         }
+        return `Course Date: ${start} - ${end}`;
       })(),
-      `Course Run: ${app.course_run_id ?? '—'}`,
+      `Course Run: ${app.course_run_id ?? '-'}`,
     ].join('\n'),
     SalesItemLineDetail: {
-      ItemRef: { value: itemId },
+      ItemRef: courseItemRef,
       Qty: 1,
       UnitPrice: fullFee,
       TaxCodeRef: { value: taxGst },
     },
   });
 
-  // Lines 2+: WSQ funding — Baseline and Non-Baseline separately when in ssg_grants
   for (const g of grantDeductionLines) {
+    const grantItemRef = await resolveLineItemRef({
+      courseItemRef,
+      itemName: g.itemName,
+    });
     lines.push({
       DetailType: 'SalesItemLineDetail',
       Amount: -g.amount,
       Description: g.description,
       SalesItemLineDetail: {
-        ItemRef: { value: itemId },
+        ItemRef: grantItemRef,
         Qty: 1,
         UnitPrice: -g.amount,
         TaxCodeRef: { value: taxOos },
@@ -220,33 +297,57 @@ export async function createDirectApplicationInvoice(
     });
   }
 
-  // SkillsFuture Credit — Out of Scope (always show even if 0)
   lines.push({
     DetailType: 'SalesItemLineDetail',
     Amount: -credit,
-    Description: `SkillsFuture Credit Usage/Claim:\nApplication ID: ${app.application_id ?? '—'}`,
+    Description: `SkillsFuture Credit Usage/Claim:\nApplication ID: ${app.application_id ?? '-'}`,
     SalesItemLineDetail: {
-      ItemRef: { value: itemId },
+      ItemRef: await resolveLineItemRef({
+        courseItemRef,
+        itemName: resolveSkillsFutureCreditItemName(),
+      }),
       Qty: 1,
       UnitPrice: -credit,
       TaxCodeRef: { value: taxOos },
     },
   });
 
+  // BillAddr is set to the learner's name on every invoice — the QB Customer
+  // is the fixed "WSQ Individual (Not for Company)" bucket, but the printed
+  // billing address should identify the actual trainee. Line2–5 are blanked
+  // so QBO doesn't merge in stale lines from the customer record.
+  //
+  // ShipAddr is intentionally blanked — DA invoices have no shipping concept,
+  // and QBO will otherwise inherit the customer's default ShipAddr and render
+  // a "Shipping to" box on the PDF.
+  const billingAddressLine = String(app.trainee_name || '').trim() || MAIN_INVOICE_CUSTOMER_NAME;
   const invoiceBody = {
     CustomerRef: { value: customerRef },
+    BillAddr: {
+      Line1: billingAddressLine,
+      Line2: '',
+      Line3: '',
+      Line4: '',
+      Line5: '',
+    },
+    ShipAddr: {
+      Line1: '',
+      Line2: '',
+      Line3: '',
+      Line4: '',
+      Line5: '',
+    },
     BillEmail: { Address: app.trainee_email },
     TxnDate: txnDate,
     DueDate: dueDate,
+    SalesTermRef: { value: mainTerm.id },
     GlobalTaxCalculation: 'TaxExcluded',
     Line: lines,
     DocNumber: docNumber,
   };
 
-  // 5. Log invoice body for debugging
   console.log('[QBO invoice body]', JSON.stringify(invoiceBody, null, 2));
 
-  // 6. POST via proxy
   const createResp = await callQbProxy({
     action: 'create',
     entity: 'invoice',
@@ -260,9 +361,8 @@ export async function createDirectApplicationInvoice(
 
   return {
     invoiceId: String(invoice.Id),
-    docNumber: String(invoice.DocNumber || ''),
+    docNumber: String(invoice.DocNumber || docNumber),
     customerRef,
     netAmount,
   };
 }
-

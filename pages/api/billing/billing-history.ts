@@ -66,6 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Expand each enrollment into individual document rows
     const rows: any[] = [];
+    const seenInvoiceJobKeys = new Set<string>();
     for (const enr of result.rows) {
       const base = {
         enrollment_id: enr.enrollment_id,
@@ -90,6 +91,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const hasQbInvoice =
         !!enr.qbo_invoice_id || !!enr.drive_web_view_link || !!enr.drive_file_id;
       if (hasQbInvoice) {
+        if (enr.enrolment_id || enr.qbo_invoice_id) {
+          seenInvoiceJobKeys.add(`${enr.enrolment_id || ''}::${enr.qbo_invoice_id || ''}`);
+        }
         rows.push({
           ...base,
           type: 'Personal Invoice',
@@ -110,6 +114,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           status: 'Pending',
         });
       }
+    }
+
+    const standaloneInvoices = await pool.query(
+      `SELECT
+        ij.enrolment_id,
+        ij.qbo_invoice_id,
+        ij.invoice_no,
+        ij.qbo_doc_number,
+        ij.drive_web_view_link,
+        ij.drive_file_id,
+        ij.updated_at,
+        da.id AS da_id,
+        da.course_title,
+        da.course_reference_number AS course_code,
+        da.course_run_id
+       FROM public.invoice_jobs ij
+       LEFT JOIN public.da_application da
+         ON LOWER(TRIM(COALESCE(da.enrolment_id::text, ''))) = LOWER(TRIM(COALESCE(ij.enrolment_id::text, '')))
+       WHERE ij.status = 'done'
+         AND ij.user_id = $1
+         AND (
+              ij.qbo_invoice_id IS NOT NULL
+           OR ij.drive_web_view_link IS NOT NULL
+           OR ij.drive_file_id IS NOT NULL
+         )
+       ORDER BY ij.updated_at DESC`,
+      [userId]
+    );
+
+    for (const inv of standaloneInvoices.rows) {
+      const key = `${inv.enrolment_id || ''}::${inv.qbo_invoice_id || ''}`;
+      if (seenInvoiceJobKeys.has(key)) continue;
+
+      rows.push({
+        enrollment_id: inv.da_id || inv.enrolment_id || inv.qbo_invoice_id,
+        enrolment_id: inv.enrolment_id || null,
+        course_title: inv.course_title || inv.course_code || 'Direct Application',
+        course_code: inv.course_code || null,
+        course_run_id: inv.course_run_id || null,
+        enrolment_date: inv.updated_at || null,
+        type: 'Personal Invoice',
+        document_url: inv.drive_web_view_link || null,
+        invoice_number: inv.invoice_no || inv.qbo_doc_number || inv.qbo_invoice_id || null,
+        status: 'Issued',
+        invoice_pdf_ready: true,
+      });
     }
 
     const proformaCount = rows.filter(r => r.type === 'Proforma Invoice').length;

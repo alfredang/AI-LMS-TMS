@@ -51,6 +51,35 @@ export const UploadDirectApplicationView: React.FC = () => {
     const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
     const [autoEnrolQueued, setAutoEnrolQueued] = useState(0);
     const [autoEnrolPolling, setAutoEnrolPolling] = useState(false);
+    const [emailToggleOn, setEmailToggleOn] = useState(false);
+    const [emailToggleSaving, setEmailToggleSaving] = useState(false);
+
+    React.useEffect(() => {
+        fetch('/api/admin/da-email-toggle')
+            .then(r => r.json())
+            .then(j => { if (j?.success) setEmailToggleOn(!!j.value); })
+            .catch(() => { /* keep default off */ });
+    }, []);
+
+    const handleEmailToggle = async () => {
+        const next = !emailToggleOn;
+        setEmailToggleSaving(true);
+        setEmailToggleOn(next);
+        try {
+            const res = await fetch('/api/admin/da-email-toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value: next }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Toggle failed');
+        } catch (err) {
+            setEmailToggleOn(!next);
+            alert(`Failed to update setting: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setEmailToggleSaving(false);
+        }
+    };
 
     const maskTraineeId = (id: string | null) => {
         if (!id) return 'N/A';
@@ -277,11 +306,11 @@ export const UploadDirectApplicationView: React.FC = () => {
                             <div>
                                 <h3 className="text-sm font-semibold text-gray-800 dark:text-white">SSG Enrolment & Grant Application</h3>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                    {autoEnrolPolling ? `Processing ${autoEnrolQueued} application(s)… refreshing status every 5s` : autoEnrolQueued > 0 ? `Completed — ${autoEnrolQueued} application(s) processed` : `${summary.inserted + summary.updated} eligible application(s) ready to enrol`}
+                                    {autoEnrolPolling ? `Processing ${autoEnrolQueued} application(s)... refreshing status every 5s` : autoEnrolQueued > 0 ? `Completed - ${autoEnrolQueued} application(s) processed` : `${summary.inserted + summary.updated} eligible application(s) ready to enrol`}
                                 </p>
                             </div>
                             <Button onClick={handleAutoEnrol} disabled={isAutoEnrolling || autoEnrolPolling}>
-                                {isAutoEnrolling ? 'Triggering…' : autoEnrolPolling ? 'Processing…' : autoEnrolQueued > 0 ? 'Re-run Auto-Enrol' : 'Auto-Enrol to SSG & Apply Grant'}
+                                {isAutoEnrolling ? 'Triggering...' : autoEnrolPolling ? 'Processing...' : autoEnrolQueued > 0 ? 'Re-run Auto-Enrol' : 'Auto-Enrol to SSG & Apply Grant'}
                             </Button>
                         </div>
                     </Card>
@@ -300,7 +329,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                 <thead className="bg-gray-50 dark:bg-gray-700/50">
                                     <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">#</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">-</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Application ID</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Trainee Name</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Trainee ID</th>
@@ -314,7 +343,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                         <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                             <td className="px-4 py-3 text-xs text-gray-400">{(resultsPage - 1) * RESULTS_PER_PAGE + i + 1}</td>
                                             <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{r.application_id || 'N/A'}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.trainee_name || '—'}</td>
+                                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.trainee_name || '-'}</td>
                                             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="font-mono">{maskTraineeId(r.trainee_id || null)}</span>
@@ -329,11 +358,11 @@ export const UploadDirectApplicationView: React.FC = () => {
                                             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.message}</td>
                                             <td className="px-4 py-3 text-center">
                                                 {(() => {
-                                                    if (r.action !== 'inserted' && r.action !== 'updated') return <span className="text-gray-300">—</span>;
+                                                    if (r.action !== 'inserted' && r.action !== 'updated') return <span className="text-gray-300">-</span>;
                                                     const s = r.enrolStatus;
                                                     if (!s || s === 'pending') return autoEnrolPolling ? <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /> : <span className="inline-flex items-center justify-center w-5 h-5 rounded border-2 border-gray-300" />;
-                                                    if (s === 'failed') return <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-red-100 text-red-600 text-xs font-bold" title={r.enrolError || 'Failed'}>✗</span>;
-                                                    return <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-green-100 text-green-600 text-xs font-bold" title={`${s}${r.enrolmentId ? ` · ${r.enrolmentId}` : ''}`}>✓</span>;
+                                                    if (s === 'failed') return <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-red-100 text-red-600 text-xs font-bold" title={r.enrolError || 'Failed'}>-</span>;
+                                                    return <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-green-100 text-green-600 text-xs font-bold" title={`${s}${r.enrolmentId ? ` - ${r.enrolmentId}` : ''}`}>-</span>;
                                                 })()}
                                             </td>
                                         </tr>
@@ -356,17 +385,44 @@ export const UploadDirectApplicationView: React.FC = () => {
 
     const UploadStep = () => (
         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+            <div className={`mb-4 p-4 rounded-lg border-2 ${emailToggleOn ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-700' : 'border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700'}`}>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-start gap-3">
+                        <div className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center ${emailToggleOn ? 'bg-emerald-100 dark:bg-emerald-800/40' : 'bg-amber-100 dark:bg-amber-800/40'}`}>
+                            <Icon name={emailToggleOn ? IconName.Mail : IconName.Warning} className={`w-5 h-5 ${emailToggleOn ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300'}`} />
+                        </div>
+                        <div>
+                            <p className={`text-sm font-semibold ${emailToggleOn ? 'text-emerald-800 dark:text-emerald-200' : 'text-amber-800 dark:text-amber-200'}`}>
+                                Send Tax Invoice Email to Learner: {emailToggleOn ? 'ON' : 'OFF (test mode)'}
+                            </p>
+                            <p className={`text-xs mt-0.5 ${emailToggleOn ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                                {emailToggleOn
+                                    ? 'After invoice generation, the main tax invoice will be emailed to the learner.'
+                                    : 'Invoices will still be generated and saved to Drive — emails are NOT sent. Safe for testing.'}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleEmailToggle}
+                        disabled={emailToggleSaving}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${emailToggleOn ? 'bg-emerald-500 focus:ring-emerald-500' : 'bg-gray-300 dark:bg-gray-600 focus:ring-amber-500'} ${emailToggleSaving ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+                        aria-label="Toggle invoice email"
+                    >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${emailToggleOn ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                </div>
+            </div>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-                <h4 className="font-semibold text-amber-800 mb-2">⚠️ Important: For Direct Application File</h4>
+                <h4 className="font-semibold text-amber-800 mb-2">Important: For Direct Application File</h4>
                 <p className="text-sm text-amber-700">If you just downloaded this Excel file, please do the following before uploading:</p>
                 <ul className="text-sm text-amber-700 mt-2 list-disc list-inside space-y-1">
-                    <li><strong>Windows:</strong> Open the file in Excel → Click "Enable Editing" → Save the file</li>
-                    <li><strong>Mac:</strong> Open the file in Excel → Save the file (⌘+S)</li>
+                    <li><strong>Windows:</strong> Open the file in Excel -&gt; Click &quot;Enable Editing&quot; -&gt; Save the file</li>
+                    <li><strong>Mac:</strong> Open the file in Excel -&gt; Save the file (Cmd+S)</li>
                 </ul>
-                <p className="text-sm text-amber-700 mt-2"><strong>Reason:</strong> The Excel file downloaded from TPG opens in Protected View.</p>
+                                <p className="text-sm text-amber-700 mt-2"><strong>Reason:</strong> The Excel file downloaded from TPG opens in Protected View.</p>
             </div>
             <div className="text-center mb-4">
-                <h3 className="text-xl font-bold">Upload Direct Application</h3>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Upload Direct Application</h3>
                 <p className="text-gray-500 dark:text-gray-400 mt-1">Submit DA application data in bulk by uploading an Excel file.</p>
             </div>
             <div onDragOver={(e) => handleDragEvents(e, true)} onDragLeave={(e) => handleDragEvents(e, false)} onDrop={handleDrop}
@@ -403,6 +459,7 @@ export const UploadDirectApplicationView: React.FC = () => {
 };
 
 export const ViewDirectApplicationView: React.FC = () => {
+    type DaDocumentType = 'main' | 'grant' | 'sfc';
     const [isLoading, setIsLoading] = useState(false);
     const [applications, setApplications] = useState<any[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -422,20 +479,53 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [isSyncingEnrol, setIsSyncingEnrol] = useState(false);
     const [isSyncingGrants, setIsSyncingGrants] = useState(false);
     const [isSyncingCal, setIsSyncingCal] = useState(false);
-    const [isSyncingInv, setIsSyncingInv] = useState(false);
     const [showPii, setShowPii] = useState(false);
-    const [invDriveFolderUrl, setInvDriveFolderUrl] = useState<string>('https://drive.google.com/drive/folders/1hBhu-Mr9HPUFdjpbZhN1GrwZBTWns_WK');
-
     const [isSyncing, setIsSyncing] = useState(false);
+    const [emailToggleOn, setEmailToggleOn] = useState(false);
+    const [emailToggleSaving, setEmailToggleSaving] = useState(false);
+
     React.useEffect(() => {
-        fetch('/api/admin/da-invoice-drive-folder').then(r => r.json()).then(d => { if (d.folderUrl) setInvDriveFolderUrl(d.folderUrl); }).catch(() => {});
+        fetch('/api/admin/da-email-toggle')
+            .then(r => r.json())
+            .then(j => { if (j?.success) setEmailToggleOn(!!j.value); })
+            .catch(() => { /* keep default off */ });
     }, []);
 
-    // ── Toast ─────────────────────────────────────────────────────────────────
+    const handleEmailToggle = async () => {
+        const next = !emailToggleOn;
+        setEmailToggleSaving(true);
+        setEmailToggleOn(next);
+        try {
+            const res = await fetch('/api/admin/da-email-toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value: next }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Toggle failed');
+        } catch (err) {
+            setEmailToggleOn(!next);
+            alert(`Failed to update setting: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setEmailToggleSaving(false);
+        }
+    };
+
+    // Note
+    const isManualInvoiceMarker = (invoiceId: unknown) => String(invoiceId || '').trim().toUpperCase() === 'MANUAL';
+    const hasInvoiceMarker = (invoiceId: unknown) => String(invoiceId || '').trim() !== '';
+    const hasRealInvoice = (invoiceId: unknown) => hasInvoiceMarker(invoiceId) && !isManualInvoiceMarker(invoiceId);
+    const hasMainInvoiceDocument = (app: any) => !!(
+        (app?.invoice_drive_file_id && String(app.invoice_drive_file_id).trim() !== '') ||
+        (app?.invoice_drive_web_view_link && String(app.invoice_drive_web_view_link).trim() !== '')
+    );
+
     const [toastMsg, setToastMsg] = useState<string | null>(null);
     const [toastIsError, setToastIsError] = useState(false);
     const [toastVisible, setToastVisible] = useState(false);
     const toastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [verifyingDocumentKey, setVerifyingDocumentKey] = useState<string | null>(null);
+    const [brokenDocumentKeys, setBrokenDocumentKeys] = useState<Set<string>>(new Set());
 
     const showToast = React.useCallback((message: string, isError = false) => {
         setToastMsg(message);
@@ -448,95 +538,113 @@ export const ViewDirectApplicationView: React.FC = () => {
         }, 5000);
     }, []);
 
-    // ── Send Invoice Email modal state ────────────────────────────────────────
-    const [showSendEmailModal, setShowSendEmailModal] = useState(false);
-    const [isSendingEmail, setIsSendingEmail] = useState(false);
-    const [emailFilterCourseRun, setEmailFilterCourseRun] = useState('');
-    const [emailFilterCourseCode, setEmailFilterCourseCode] = useState('');
-    const [emailFilterCourseTitle, setEmailFilterCourseTitle] = useState('');
-    const [emailFilterStartDate, setEmailFilterStartDate] = useState('');
-    const [emailFilterEndDate, setEmailFilterEndDate] = useState('');
-    const [emailFilterName, setEmailFilterName] = useState('');
-    const [emailSendResult, setEmailSendResult] = useState<{ sent: number; failed: number; skipped: number } | null>(null);
-    const [emailSelectedIds, setEmailSelectedIds] = useState<Set<string>>(new Set());
+    const getDocumentKey = (app: any, documentType: DaDocumentType) => `${app.id}:${documentType}`;
+    const isInvoiceCheckboxChecked = (app: any) => {
+        if (!hasInvoiceMarker(app?.invoice_id)) return false;
+        if (!hasRealInvoice(app?.invoice_id)) return true;
+        return hasMainInvoiceDocument(app) && !brokenDocumentKeys.has(getDocumentKey(app, 'main'));
+    };
+    const hasVisibleMainInvoice = (app: any) => hasRealInvoice(app?.invoice_id) && isInvoiceCheckboxChecked(app);
+    const getVisibleInvoiceNumber = (app: any) => (hasVisibleMainInvoice(app) ? String(app.invoice_id || '').trim() : '');
 
-    const emailPreviewRows = applications.filter(app => {
-        if (!(app.invoice_id && String(app.invoice_id).trim())) return false;
-        if (emailFilterCourseRun && !(app.course_run_id || '').toLowerCase().includes(emailFilterCourseRun.toLowerCase())) return false;
-        if (emailFilterCourseCode && !(app.course_reference_number || '').toLowerCase().includes(emailFilterCourseCode.toLowerCase())) return false;
-        if (emailFilterCourseTitle && !(app.course_title || '').toLowerCase().includes(emailFilterCourseTitle.toLowerCase())) return false;
-        if (emailFilterName && !(app.trainee_name || '').toLowerCase().includes(emailFilterName.toLowerCase())) return false;
-        if (emailFilterStartDate && app.course_start_date) {
-            const start = new Date(app.course_start_date).toISOString().slice(0, 10);
-            if (start < emailFilterStartDate) return false;
+    const getDocumentUrl = (app: any, documentType: DaDocumentType): string => {
+        if (documentType === 'main') {
+            return app.invoice_drive_web_view_link || (app.invoice_drive_file_id ? `https://drive.google.com/file/d/${app.invoice_drive_file_id}/view` : '');
         }
-        if (emailFilterEndDate && app.course_start_date) {
-            const start = new Date(app.course_start_date).toISOString().slice(0, 10);
-            if (start > emailFilterEndDate) return false;
+        if (documentType === 'grant') {
+            return app.grant_invoice_drive_web_view_link || (app.grant_invoice_drive_file_id ? `https://drive.google.com/file/d/${app.grant_invoice_drive_file_id}/view` : '');
         }
-        return true;
-    });
-
-    const hasEmailFilter = !!(emailFilterCourseRun || emailFilterCourseCode || emailFilterCourseTitle || emailFilterName || emailFilterStartDate || emailFilterEndDate);
-
-    // Keep selection in sync with preview rows (auto-select all when filter changes)
-    React.useEffect(() => {
-        setEmailSelectedIds(new Set(emailPreviewRows.map(a => a.id).filter(Boolean)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [emailFilterCourseRun, emailFilterCourseCode, emailFilterCourseTitle, emailFilterName, emailFilterStartDate, emailFilterEndDate]);
-
-    const emailAllSelected = emailPreviewRows.length > 0 && emailPreviewRows.every(a => emailSelectedIds.has(a.id));
-    const emailSomeSelected = emailPreviewRows.some(a => emailSelectedIds.has(a.id));
-
-    const toggleEmailSelectAll = () => {
-        if (emailAllSelected) {
-            setEmailSelectedIds(new Set());
-        } else {
-            setEmailSelectedIds(new Set(emailPreviewRows.map(a => a.id).filter(Boolean)));
-        }
+        return app.sfc_invoice_drive_web_view_link || (app.sfc_invoice_drive_file_id ? `https://drive.google.com/file/d/${app.sfc_invoice_drive_file_id}/view` : '');
     };
 
-    const toggleEmailRow = (id: string) => {
-        setEmailSelectedIds(prev => {
-            const next = new Set(prev);
-            next.has(id) ? next.delete(id) : next.add(id);
-            return next;
-        });
+    const getDocumentFileId = (app: any, documentType: DaDocumentType): string => {
+        if (documentType === 'main') return String(app.invoice_drive_file_id || '').trim();
+        if (documentType === 'grant') return String(app.grant_invoice_drive_file_id || '').trim();
+        return String(app.sfc_invoice_drive_file_id || '').trim();
     };
 
-    const handleSendInvoiceEmails = async () => {
-        const ids = emailPreviewRows.map(app => app.id).filter(id => emailSelectedIds.has(id));
-        if (ids.length === 0) return;
-        setIsSendingEmail(true);
-        setEmailSendResult(null);
+    const clearDocumentLocally = (applicationId: string, documentType: DaDocumentType) => {
+        setApplications(prev => prev.map(app => {
+            if (app.id !== applicationId) return app;
+            if (documentType === 'main') return { ...app, invoice_id: null, invoice_drive_file_id: null, invoice_drive_web_view_link: null };
+            if (documentType === 'grant') return { ...app, grant_invoice_drive_file_id: null, grant_invoice_drive_web_view_link: null };
+            return { ...app, sfc_invoice_drive_file_id: null, sfc_invoice_drive_web_view_link: null };
+        }));
+    };
+
+    const handleViewDocument = async (app: any, documentType: DaDocumentType) => {
+        const key = getDocumentKey(app, documentType);
+        const url = getDocumentUrl(app, documentType);
+        const fileId = getDocumentFileId(app, documentType);
+        if (!url && !fileId) {
+            setBrokenDocumentKeys(prev => new Set(prev).add(key));
+            clearDocumentLocally(app.id, documentType);
+            showToast('Document may have been deleted', true);
+            return;
+        }
+
+        setVerifyingDocumentKey(key);
         try {
-            const res = await fetch('/api/admin/da-send-invoice-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ applicationIds: ids }),
+            const params = new URLSearchParams({
+                applicationId: app.id,
+                documentType,
             });
+            if (url) params.set('url', url);
+            if (fileId) params.set('fileId', fileId);
+
+            const res = await fetch(`/api/admin/da-verify-drive?${params.toString()}`);
             const json = await res.json();
-            const result = { sent: json.sent ?? 0, failed: json.failed ?? 0, skipped: json.skipped ?? 0 };
-            setEmailSendResult(result);
-            if (result.failed > 0) {
-                showToast(`${result.sent} sent · ${result.failed} failed · ${result.skipped} skipped`, true);
+            if (json.valid) {
+                window.open(url || `https://drive.google.com/file/d/${fileId}/view`, '_blank');
             } else {
-                showToast(`${result.sent} invoice email${result.sent !== 1 ? 's' : ''} sent successfully${result.skipped > 0 ? ` · ${result.skipped} skipped` : ''}`);
+                setBrokenDocumentKeys(prev => new Set(prev).add(key));
+                clearDocumentLocally(app.id, documentType);
+                showToast('Document may have been deleted', true);
             }
         } catch {
-            setEmailSendResult({ sent: 0, failed: ids.length, skipped: 0 });
-            showToast('Failed to send invoice emails. Please try again.', true);
+            window.open(url || `https://drive.google.com/file/d/${fileId}/view`, '_blank');
         } finally {
-            setIsSendingEmail(false);
+            setVerifyingDocumentKey(null);
         }
     };
 
-    // ── Invoice progress modal state ──────────────────────────────────────────
+    const renderDocumentButton = (app: any, documentType: DaDocumentType, colorClasses: string) => {
+        const key = getDocumentKey(app, documentType);
+        if (brokenDocumentKeys.has(key)) {
+            return (
+                <div className="flex flex-col items-start gap-1">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400">
+                        <Icon name={IconName.Warning} className="w-3 h-3" />
+                        Unavailable
+                    </span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400">Document may have been deleted</span>
+                </div>
+            );
+        }
+
+        return (
+            <button
+                onClick={() => handleViewDocument(app, documentType)}
+                disabled={verifyingDocumentKey === key}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors disabled:opacity-60 ${colorClasses}`}
+            >
+                {verifyingDocumentKey === key ? (
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-current" />
+                ) : (
+                    <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
+                )}
+                {verifyingDocumentKey === key ? 'Checking...' : 'View'}
+            </button>
+        );
+    };
+
+    // Note
     const [showInvProgress, setShowInvProgress] = useState(false);
     const [invProgressStartTime, setInvProgressStartTime] = useState(0);
     const [invProgressDone, setInvProgressDone] = useState(false);
     const [invProgressSucceeded, setInvProgressSucceeded] = useState(0);
     const [invProgressFailed, setInvProgressFailed] = useState(0);
+    const [invProgressWarnings, setInvProgressWarnings] = useState(0);
     const [invProgressTotal, setInvProgressTotal] = useState(0);
 
     const toggleDaField = async (appId: string, field: 'enrol' | 'calendar' | 'invoice', newValue: boolean) => {
@@ -567,29 +675,32 @@ export const ViewDirectApplicationView: React.FC = () => {
             const successIds = new Set((json.results || []).filter((r: any) => r.success).map((r: any) => r.id));
             setApplications(prev => prev.map(a => successIds.has(a.id) ? { ...a, calendar_added: true } : a));
             let msg = `${succeeded} learner(s) added to calendar.`;
-            if (failed.length > 0) msg += `\n${failed.length} failed:\n` + failed.map((f: any) => `• ${f.error}`).join('\n');
+            if (failed.length > 0) msg += `\n${failed.length} failed:\n` + failed.map((f: any) => `- ${f.error}`).join('\n');
             alert(msg);
         } catch { alert('Failed to add to calendar.'); }
         finally { setIsAddingToCal(false); }
     };
 
-    // ── Generate Invoice with progress modal ──────────────────────────────────
+    // Note
     const handleGenerateInvoice = async () => {
         const cancelledStatuses = ['cancelled', 'rejected', 'failed'];
-        const ids = Array.from(selectedIds).filter(appId => {
-            const app = applications.find(a => a.application_id === appId);
-            return app && 
-                   !(app.invoice_id && String(app.invoice_id).trim()) && 
-                   !cancelledStatuses.includes((app.application_status || '').toLowerCase());
-        }).map(appId => applications.find(a => a.application_id === appId)?.id).filter(Boolean);
-        if (ids.length === 0) { showToast('No eligible applications selected (all already have invoices).', true); return; }
-        if (!window.confirm(`Generate QuickBooks invoice for ${ids.length} application(s)?`)) return;
+        const ids = applications
+            .filter(app =>
+                selectedIds.has(app.application_id) &&
+                app.id &&
+                !cancelledStatuses.includes((app.application_status || '').toLowerCase())
+            )
+            .map(app => app.id)
+            .filter(Boolean);
+        if (ids.length === 0) { showToast('No eligible selected applications found.', true); return; }
+        if (!window.confirm(`Run invoice generation for ${ids.length} selected application(s)?\n\nThis will create or refresh the main / grant / SFC invoice flow as needed.`)) return;
 
         setIsGeneratingInv(true);
         setShowInvProgress(true);
         setInvProgressDone(false);
         setInvProgressSucceeded(0);
         setInvProgressFailed(0);
+        setInvProgressWarnings(0);
         setInvProgressTotal(ids.length);
         setInvProgressStartTime(Date.now());
 
@@ -600,19 +711,29 @@ export const ViewDirectApplicationView: React.FC = () => {
             });
             const json = await res.json();
             const succeeded = (json.results || []).filter((r: any) => r.success);
+            const warnings = succeeded.filter((r: any) => r.partial || r.warning);
             const failed = (json.results || []).filter((r: any) => !r.success);
-            const invoiceMap = new Map(succeeded.map((r: any) => [r.id, r.invoiceId]));
             setInvProgressSucceeded(succeeded.length);
             setInvProgressFailed(failed.length);
+            setInvProgressWarnings(warnings.length);
             setInvProgressDone(true);
             fetchApplications();
+            if (warnings.length > 0) {
+                console.warn('DA invoice generation warnings:', warnings.map((w: any) => ({ id: w.id, warning: w.warning })));
+                const parts = [`${succeeded.length} invoice${succeeded.length !== 1 ? 's' : ''} generated`];
+                parts.push(`${warnings.length} supplemental issue${warnings.length !== 1 ? 's' : ''}`);
+                if (failed.length > 0) parts.push(`${failed.length} failed`);
+                showToast(parts.join(' | '), true);
+                return;
+            }
             if (failed.length > 0) {
-                showToast(`${succeeded.length} invoice${succeeded.length !== 1 ? 's' : ''} generated · ${failed.length} failed`, true);
+                showToast(`${succeeded.length} invoice${succeeded.length !== 1 ? 's' : ''} generated | ${failed.length} failed`, true);
             } else {
                 showToast(`${succeeded.length} invoice${succeeded.length !== 1 ? 's' : ''} generated successfully`);
             }
         } catch {
             setInvProgressFailed(ids.length);
+            setInvProgressWarnings(0);
             setInvProgressDone(true);
             showToast('Invoice generation failed. Please try again.', true);
         } finally {
@@ -651,17 +772,6 @@ export const ViewDirectApplicationView: React.FC = () => {
             else alert(`Sync failed: ${json.error}`);
         } catch { alert('Sync calendar failed.'); }
         finally { setIsSyncingCal(false); }
-    };
-
-    const handleSyncInvoice = async () => {
-        setIsSyncingInv(true);
-        try {
-            const res = await fetch('/api/admin/da-sync-invoice', { method: 'POST' });
-            const json = await res.json();
-            if (json.success) { alert(`Sync complete: ${json.matched} invoice(s) matched.`); fetchApplications(); }
-            else alert(`Sync failed: ${json.error}`);
-        } catch { alert('Sync invoice failed.'); }
-        finally { setIsSyncingInv(false); }
     };
 
     const [showPageModal, setShowPageModal] = useState(false);
@@ -738,7 +848,7 @@ export const ViewDirectApplicationView: React.FC = () => {
             const succeeded = results.filter((r: any) => r.success);
             const failed = results.filter((r: any) => !r.success);
             let message = succeeded.length > 0 ? `Enrolment created for ${succeeded.length} application(s).\n` : '';
-            if (failed.length > 0) message += `Failed for ${failed.length}:\n` + failed.map((f: any) => `• ${f.application_id}: ${f.error || 'Unknown'}`).join('\n');
+            if (failed.length > 0) message += `Failed for ${failed.length}:\n` + failed.map((f: any) => ` ${f.application_id}: ${f.error || 'Unknown'}`).join('\n');
             alert(message || 'No results returned.');
             setSelectedIds(new Set()); fetchApplications();
         } catch (err) { alert(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`); }
@@ -772,7 +882,11 @@ export const ViewDirectApplicationView: React.FC = () => {
             const response = await fetch('/api/admin/fetch-all-da-applications');
             if (!response.ok) throw new Error(response.status === 500 ? 'Server error.' : `Error ${response.status}`);
             const result = await response.json();
-            if (result.success && result.data) { setApplications(result.data); setSelectedIds(new Set()); }
+            if (result.success && result.data) {
+                setApplications(result.data);
+                setSelectedIds(new Set());
+                setBrokenDocumentKeys(new Set());
+            }
             else throw new Error(result.error || 'Failed to fetch applications');
         } catch (err) { setError(err instanceof Error ? err.message : 'Failed to fetch applications'); }
         finally { setIsLoading(false); }
@@ -834,7 +948,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                 const total = applications.length;
                 const enrolled = applications.filter(a => a.enrolment_id && a.enrolment_id.trim() !== '').length;
                 const calAdded = applications.filter(a => !!a.calendar_added).length;
-                const invoiced = applications.filter(a => a.invoice_id && a.invoice_id.trim() !== '').length;
+                const invoiced = applications.filter(a => isInvoiceCheckboxChecked(a)).length;
                 return (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <Card className="p-4 text-center"><p className="text-3xl font-bold text-blue-600">{total}</p><p className="text-xs text-gray-500 mt-1">Direct Applications</p></Card>
@@ -844,6 +958,35 @@ export const ViewDirectApplicationView: React.FC = () => {
                     </div>
                 );
             })()}
+
+            {/* Email-toggle banner */}
+            <Card className={`p-4 mb-6 border-2 ${emailToggleOn ? 'border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-700' : 'border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700'}`}>
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-start gap-3">
+                        <div className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center ${emailToggleOn ? 'bg-emerald-100 dark:bg-emerald-800/40' : 'bg-amber-100 dark:bg-amber-800/40'}`}>
+                            <Icon name={emailToggleOn ? IconName.Mail : IconName.Warning} className={`w-5 h-5 ${emailToggleOn ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300'}`} />
+                        </div>
+                        <div>
+                            <p className={`text-sm font-semibold ${emailToggleOn ? 'text-emerald-800 dark:text-emerald-200' : 'text-amber-800 dark:text-amber-200'}`}>
+                                Send Tax Invoice Email to Learner: {emailToggleOn ? 'ON' : 'OFF (test mode)'}
+                            </p>
+                            <p className={`text-xs mt-0.5 ${emailToggleOn ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                                {emailToggleOn
+                                    ? 'After invoice generation, the main tax invoice will be emailed to the learner.'
+                                    : 'Invoices will still be generated and saved to Drive — emails are NOT sent. Safe for testing.'}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleEmailToggle}
+                        disabled={emailToggleSaving}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${emailToggleOn ? 'bg-emerald-500 focus:ring-emerald-500' : 'bg-gray-300 dark:bg-gray-600 focus:ring-amber-500'} ${emailToggleSaving ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+                        aria-label="Toggle invoice email"
+                    >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${emailToggleOn ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                </div>
+            </Card>
 
             {/* Search and Refresh */}
             <Card className="p-6 mb-6">
@@ -885,11 +1028,13 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <button onClick={handleAddToCalendar} disabled={isAddingToCal || selectedIds.size === 0} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed">
                                 {isAddingToCal ? 'Adding...' : 'Add to Calendar'}
                             </button>
-                            <button disabled title="Temporarily disabled" className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-400 text-white opacity-50 cursor-not-allowed">
-                                Generate Invoice
-                            </button>
-                            <button disabled title="Temporarily disabled" className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-teal-400 text-white opacity-50 cursor-not-allowed">
-                                Send Invoice Email
+                            <button
+                                onClick={handleGenerateInvoice}
+                                disabled={isGeneratingInv || selectedIds.size === 0}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed"
+                                title="Run the QuickBooks invoice pipeline for the selected rows without emailing the learner"
+                            >
+                                {isGeneratingInv ? 'Generating...' : 'Generate Invoice'}
                             </button>
                             <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
                             <button
@@ -918,14 +1063,11 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <button onClick={handleSyncEnrolment} disabled={isSyncingEnrol} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isSyncingEnrol ? 'Syncing...' : 'Sync Enrolment'}
                             </button>
-                            <button disabled title="Temporarily disabled" className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-300 text-purple-400 dark:text-purple-500 opacity-50 cursor-not-allowed">
-                                Sync Grants
+                            <button onClick={handleSyncGrants} disabled={isSyncingGrants} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-500 text-purple-700 dark:text-purple-300 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                {isSyncingGrants ? 'Syncing...' : 'Sync Grants'}
                             </button>
                             <button onClick={handleSyncCalendar} disabled={isSyncingCal} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed">
                                 {isSyncingCal ? 'Syncing...' : 'Sync Calendar'}
-                            </button>
-                            <button onClick={handleSyncInvoice} disabled={isSyncingInv} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-500 text-amber-700 dark:text-amber-300 hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed">
-                                {isSyncingInv ? 'Syncing...' : 'Sync Invoice'}
                             </button>
                         </div>
                     </div>
@@ -990,7 +1132,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <div className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded border border-blue-200">
                                 <span className="font-medium">{filterableColumns.find(c => c.value === activeFilter.column)?.label}:</span>
                                 <span className="ml-1">{activeFilter.value}</span>
-                                <button onClick={clearFilter} className="ml-1.5 hover:text-red-600">×</button>
+                                <button onClick={clearFilter} className="ml-1.5 hover:text-red-600">-</button>
                             </div>
                         )}
 
@@ -1056,7 +1198,9 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Enrol Status</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Enrol ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Invoice #</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">View Document</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Tax Invoice</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Grant Invoice</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">SFC Invoice</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
@@ -1065,46 +1209,56 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                 <td className="px-2 py-1.5"><input type="checkbox" checked={selectedIds.has(app.application_id)} onChange={() => toggleSelect(app.application_id)} className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300" /></td>
                                                 <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(app.enrolment_id && String(app.enrolment_id).trim() !== '')} onChange={(e) => toggleDaField(app.id, 'enrol', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.enrolment_id ? 'text-green-600 accent-green-600' : ''}`} title={app.enrolment_id ? `Enrolled: ${app.enrolment_id}` : 'Click to mark as enrolled'} /></td>
                                                 <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!app.calendar_added} onChange={(e) => toggleDaField(app.id, 'calendar', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`} title={app.calendar_added ? 'Added to calendar' : 'Click to mark'} /></td>
-                                                <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(app.invoice_id && String(app.invoice_id).trim() !== '')} onChange={(e) => toggleDaField(app.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.invoice_id ? 'text-amber-600 accent-amber-600' : ''}`} title={app.invoice_id ? `Invoice: ${app.invoice_id} — click to uncheck` : 'Click to mark as invoiced'} /></td>
+                                                <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={isInvoiceCheckboxChecked(app)} onChange={(e) => toggleDaField(app.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${isInvoiceCheckboxChecked(app) ? 'text-amber-600 accent-amber-600' : ''}`} title={hasRealInvoice(app.invoice_id) ? (isInvoiceCheckboxChecked(app) ? `Invoice: ${app.invoice_id} - click to uncheck` : `Invoice: ${app.invoice_id} - document may have been deleted`) : hasInvoiceMarker(app.invoice_id) ? 'Marked as invoiced manually - no invoice document linked yet' : 'Click to mark as invoiced'} /></td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">{app.application_id || 'N/A'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_id_type || 'N/A'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.trainee_id ? (showPii ? app.trainee_id : `${app.trainee_id.charAt(0)}****${app.trainee_id.slice(-3)}`) : '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.date_of_birth ? (showPii ? new Date(app.date_of_birth).toLocaleDateString('en-GB') : `**/**/` + new Date(app.date_of_birth).getFullYear()) : '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_name || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[160px] truncate" title={app.trainee_email}>{app.trainee_email || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_phone_country_code && app.trainee_phone ? `+${app.trainee_phone_country_code} ${app.trainee_phone}` : app.trainee_phone || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[180px] truncate" title={app.course_title}>{app.course_title || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.course_reference_number || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_run_id || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.sponsorship_type || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.bl_grant_id || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.bl_amount != null ? `$${parseFloat(app.bl_amount).toFixed(2)}` : '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.other_grant_id || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.other_scheme_code || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.other_amount != null ? `$${parseFloat(app.other_amount).toFixed(2)}` : '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.tg_amount != null ? `$${parseFloat(app.tg_amount).toFixed(2)}` : '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit_claim_id || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit != null ? `$${parseFloat(app.skillsfuture_credit || 0).toFixed(2)}` : '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.trainee_id ? (showPii ? app.trainee_id : `${app.trainee_id.charAt(0)}****${app.trainee_id.slice(-3)}`) : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.date_of_birth ? (showPii ? new Date(app.date_of_birth).toLocaleDateString('en-GB') : `**/**/` + new Date(app.date_of_birth).getFullYear()) : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_name || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[160px] truncate" title={app.trainee_email}>{app.trainee_email || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_phone_country_code && app.trainee_phone ? `+${app.trainee_phone_country_code} ${app.trainee_phone}` : app.trainee_phone || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[180px] truncate" title={app.course_title}>{app.course_title || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.course_reference_number || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_run_id || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.sponsorship_type || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.full_course_fee != null ? `$${parseFloat(app.full_course_fee || 0).toFixed(2)}` : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.gst != null ? `$${parseFloat(app.gst || 0).toFixed(2)}` : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.bl_grant_id || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.bl_amount != null ? `$${parseFloat(app.bl_amount).toFixed(2)}` : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.other_grant_id || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.other_scheme_code || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.other_amount != null ? `$${parseFloat(app.other_amount).toFixed(2)}` : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.tg_amount != null ? `$${parseFloat(app.tg_amount).toFixed(2)}` : '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit_claim_id || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit != null ? `$${parseFloat(app.skillsfuture_credit || 0).toFixed(2)}` : '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">${parseFloat(app.payable_fee || 0).toFixed(2)}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_qualification || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_relevant_certification || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_qualification || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_relevant_certification || '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${getStatusColor(app.application_status || 'Pending')}`}>{app.application_status || 'Pending'}</span></td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_cancelled_by || '—'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_cancelled_by || '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap">
                                                     {app.enrolment_status && app.enrolment_status.trim() !== '' ? (
                                                         <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${app.enrolment_status === 'Confirmed' ? 'bg-green-100 text-green-800' : app.enrolment_status === 'Not Found' ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'}`}>{app.enrolment_status}</span>
-                                                    ) : <span className="text-gray-400">—</span>}
+                                                    ) : <span className="text-gray-400">-</span>}
                                                 </td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.enrolment_id || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.invoice_id || '—'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap">
-                                                    {app.invoice_id
-                                                        ? <a href={app.invoice_drive_file_id ? `https://drive.google.com/file/d/${app.invoice_drive_file_id}/view` : invDriveFolderUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 transition-colors"><Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />View</a>
-                                                        : <span className="text-gray-400">—</span>}
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.enrolment_id || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{getVisibleInvoiceNumber(app) || '-'}</td>
+                                                <td className="px-2 py-1.5">
+                                                    {(hasRealInvoice(app.invoice_id) && hasMainInvoiceDocument(app)) || brokenDocumentKeys.has(getDocumentKey(app, 'main'))
+                                                        ? renderDocumentButton(app, 'main', 'bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40')
+                                                        : <span className="text-gray-400">-</span>}
+                                                </td>
+                                                <td className="px-2 py-1.5">
+                                                    {hasVisibleMainInvoice(app) && (app.grant_id || app.bl_grant_id || app.other_grant_id) && app.grant_invoice_id && ((app.grant_invoice_drive_web_view_link || app.grant_invoice_drive_file_id) || brokenDocumentKeys.has(getDocumentKey(app, 'grant')))
+                                                        ? renderDocumentButton(app, 'grant', 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40')
+                                                        : <span className="text-gray-400">-</span>}
+                                                </td>
+                                                <td className="px-2 py-1.5">
+                                                    {hasVisibleMainInvoice(app) && app.skillsfuture_credit_claim_id && app.sfc_invoice_id && ((app.sfc_invoice_drive_web_view_link || app.sfc_invoice_drive_file_id) || brokenDocumentKeys.has(getDocumentKey(app, 'sfc')))
+                                                        ? renderDocumentButton(app, 'sfc', 'bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:hover:bg-purple-900/40')
+                                                        : <span className="text-gray-400">-</span>}
                                                 </td>
                                             </tr>
                                         ))}
@@ -1134,136 +1288,22 @@ export const ViewDirectApplicationView: React.FC = () => {
                 </Card>
             )}
 
-            {/* ── Send Invoice Email Modal ── */}
-            {showSendEmailModal && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70" style={{ backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
-                    <div className="bg-surface rounded-2xl shadow-2xl max-w-5xl w-full border border-default overflow-hidden mx-4">
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-default bg-surface-elevated">
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-500/10"><Icon name={IconName.Mail} className="w-5 h-5 text-blue-500" /></div>
-                                <div>
-                                    <h3 className="text-base font-semibold text-on-surface">Send Invoice Emails</h3>
-                                    <p className="text-xs text-on-surface-secondary mt-0.5">Filter applications with generated invoices, or leave empty to send to all</p>
-                                </div>
-                            </div>
-                            <button onClick={() => setShowSendEmailModal(false)} className="p-1.5 rounded-lg text-on-surface-secondary hover:text-on-surface hover:bg-surface-hover transition-colors"><Icon name={IconName.Close} className="w-4 h-4" /></button>
-                        </div>
-                        <div className="px-6 py-5 space-y-4">
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                                <div>
-                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">Course Run</label>
-                                    <input type="text" value={emailFilterCourseRun} onChange={e => setEmailFilterCourseRun(e.target.value)} placeholder="e.g. CRS-RUN-001" className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface placeholder-gray-400 transition-shadow" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">Course Code</label>
-                                    <input type="text" value={emailFilterCourseCode} onChange={e => setEmailFilterCourseCode(e.target.value)} placeholder="e.g. TGS-2024-001234" className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface placeholder-gray-400 transition-shadow" />
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">Course Title</label>
-                                    <input type="text" value={emailFilterCourseTitle} onChange={e => setEmailFilterCourseTitle(e.target.value)} placeholder="Search by course title..." className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface placeholder-gray-400 transition-shadow" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">Start Date</label>
-                                    <input type="date" value={emailFilterStartDate} onChange={e => setEmailFilterStartDate(e.target.value)} className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface transition-shadow" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">End Date</label>
-                                    <input type="date" value={emailFilterEndDate} onChange={e => setEmailFilterEndDate(e.target.value)} className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface transition-shadow" />
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="block text-xs font-medium text-on-surface-secondary mb-1.5">Learner Name</label>
-                                    <input type="text" value={emailFilterName} onChange={e => setEmailFilterName(e.target.value)} placeholder="Search by learner name..." className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary text-on-surface placeholder-gray-400 transition-shadow" />
-                                </div>
-                            </div>
-                            <div className="border-t border-default" />
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs font-medium text-on-surface-secondary uppercase tracking-wider">
-                                        Preview {hasEmailFilter && emailPreviewRows.length > 0 ? `· ${emailPreviewRows.length} record${emailPreviewRows.length !== 1 ? 's' : ''}` : ''}
-                                    </span>
-                                </div>
-                                <div className="border border-default rounded-lg bg-surface-elevated overflow-hidden">
-                                    <div className="max-h-44 overflow-y-auto overflow-x-auto">
-                                        {!hasEmailFilter ? (
-                                            <div className="flex flex-col items-center justify-center py-8 text-on-surface-secondary">
-                                                <Icon name={IconName.Search} className="w-6 h-6 mb-2 opacity-40" />
-                                                <span className="text-xs">Enter a filter above to preview matching records</span>
-                                            </div>
-                                        ) : emailPreviewRows.length === 0 ? (
-                                            <div className="flex flex-col items-center justify-center py-8 text-on-surface-secondary">
-                                                <Icon name={IconName.Search} className="w-6 h-6 mb-2 opacity-40" />
-                                                <span className="text-xs">No matching records found</span>
-                                            </div>
-                                        ) : (
-                                            <table className="w-full text-xs">
-                                                <thead>
-                                                    <tr>
-                                                        <th className="px-3 py-2.5 w-8">
-                                                            <input type="checkbox" checked={emailAllSelected} ref={el => { if (el) el.indeterminate = emailSomeSelected && !emailAllSelected; }} onChange={toggleEmailSelectAll} className="rounded border-gray-400 text-blue-600 focus:ring-blue-500 cursor-pointer" />
-                                                        </th>
-                                                        {['Name', 'Email', 'Course Title', 'Course Run', 'Start Date', 'Invoice #'].map(h => (
-                                                            <th key={h} className="px-3 py-2.5 text-left font-semibold text-white/90 dark:text-white/80">{h}</th>
-                                                        ))}
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-default bg-surface">
-                                                    {emailPreviewRows.map((app, i) => {
-                                                        const checked = emailSelectedIds.has(app.id);
-                                                        return (
-                                                            <tr key={app.id || i} onClick={() => toggleEmailRow(app.id)} className={`cursor-pointer hover:bg-surface-hover transition-colors ${checked ? 'bg-blue-500/5' : i % 2 === 1 ? 'bg-surface-elevated/50' : ''}`}>
-                                                                <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                                                                    <input type="checkbox" checked={checked} onChange={() => toggleEmailRow(app.id)} className="rounded border-gray-400 text-blue-600 focus:ring-blue-500 cursor-pointer" />
-                                                                </td>
-                                                                <td className="px-3 py-2 text-on-surface whitespace-nowrap">{app.trainee_name || '—'}</td>
-                                                                <td className="px-3 py-2 text-on-surface-secondary whitespace-nowrap">{app.trainee_email || '—'}</td>
-                                                                <td className="px-3 py-2 text-on-surface truncate max-w-[220px]" title={app.course_title}>{app.course_title || '—'}</td>
-                                                                <td className="px-3 py-2 text-on-surface-secondary font-mono whitespace-nowrap">{app.course_run_id || '—'}</td>
-                                                                <td className="px-3 py-2 text-on-surface-secondary whitespace-nowrap">{app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : '—'}</td>
-                                                                <td className="px-3 py-2 text-on-surface-secondary font-mono whitespace-nowrap">{app.invoice_id}</td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                            {emailSendResult && (
-                                <div className={`rounded-lg px-4 py-3 text-sm border ${emailSendResult.failed > 0 ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800' : 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'}`}>
-                                    {emailSendResult.sent} sent · {emailSendResult.failed} failed · {emailSendResult.skipped} skipped (no invoice or email)
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex items-center justify-between px-6 py-4 border-t border-default bg-surface-elevated">
-                            <span className="text-xs text-on-surface-secondary">
-                                {emailSelectedIds.size > 0 ? `${emailSelectedIds.size} selected · email${emailSelectedIds.size !== 1 ? 's' : ''} will be sent` : 'No recipients selected'}
-                            </span>
-                            <div className="flex items-center gap-3">
-                                <button onClick={() => setShowSendEmailModal(false)} className="px-4 py-2 text-sm font-medium rounded-lg border border-default bg-surface hover:bg-surface-hover text-on-surface transition-colors">Cancel</button>
-                                <button onClick={handleSendInvoiceEmails} disabled={isSendingEmail || emailSelectedIds.size === 0} className="inline-flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                                    {isSendingEmail ? <><div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />Sending...</> : <><Icon name={IconName.Mail} className="w-4 h-4" />Send Emails</>}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ── Invoice Generation Progress Modal ── */}
+            {/* Note */}
             {showInvProgress && (() => {
                 const elapsed = (Date.now() - invProgressStartTime) / 1000;
                 const allFailed = invProgressDone && invProgressFailed === invProgressTotal;
-                const color = invProgressDone ? (allFailed ? 'red' : 'emerald') : 'amber';
+                const hasWarnings = invProgressDone && invProgressWarnings > 0 && !allFailed;
                 return (
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60" style={{ backdropFilter: 'blur(8px)' }}>
                         <div className="w-full max-w-md mx-4 rounded-2xl bg-white dark:bg-gray-800 shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                            <div className={`h-1 ${invProgressDone ? (allFailed ? 'bg-red-500' : 'bg-emerald-500') : 'bg-amber-500'}`} />
+                            <div className={`h-1 ${invProgressDone ? (allFailed ? 'bg-red-500' : hasWarnings ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-amber-500'}`} />
                             <div className="flex flex-col items-center pt-7 pb-2 px-6">
-                                <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${invProgressDone ? (allFailed ? 'bg-red-100 dark:bg-red-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30') : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${invProgressDone ? (allFailed ? 'bg-red-100 dark:bg-red-900/30' : hasWarnings ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-emerald-100 dark:bg-emerald-900/30') : 'bg-amber-100 dark:bg-amber-900/30'}`}>
                                     {invProgressDone ? (
                                         allFailed ? (
                                             <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        ) : hasWarnings ? (
+                                            <svg className="w-7 h-7 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M10.29 3.86l-7.5 13A1 1 0 003.65 18h16.7a1 1 0 00.86-1.5l-7.5-13a1 1 0 00-1.72 0z" /></svg>
                                         ) : (
                                             <svg className="w-7 h-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                                         )
@@ -1272,7 +1312,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                                     )}
                                 </div>
                                 <h3 className="text-base font-semibold text-gray-900 dark:text-white">
-                                    {invProgressDone ? (allFailed ? 'Generation Failed' : 'Invoices Generated!') : 'Generating Invoices...'}
+                                    {invProgressDone ? (allFailed ? 'Generation Failed' : hasWarnings ? 'Generated With Warnings' : 'Invoices Generated!') : 'Generating Invoices...'}
                                 </h3>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                     {invProgressDone ? `Completed in ${fmt(elapsed)}` : `Processing ${invProgressTotal} invoice(s), please wait...`}
@@ -1282,7 +1322,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <div className="px-6 pt-4 pb-2">
                                 <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                     {invProgressDone ? (
-                                        <div className={`h-full rounded-full w-full ${allFailed ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                                        <div className={`h-full rounded-full w-full ${allFailed ? 'bg-red-500' : hasWarnings ? 'bg-amber-500' : 'bg-emerald-500'}`} />
                                     ) : (
                                         <div className="h-full w-full rounded-full overflow-hidden relative">
                                             <div className="absolute inset-0 bg-amber-200 dark:bg-amber-900/40" />
@@ -1313,7 +1353,7 @@ export const ViewDirectApplicationView: React.FC = () => {
 
                             <div className="px-6 pt-4 pb-5">
                                 {invProgressDone ? (
-                                    <button onClick={() => setShowInvProgress(false)} className={`w-full py-2.5 rounded-lg text-white text-sm font-medium transition-colors ${allFailed ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}>
+                                    <button onClick={() => setShowInvProgress(false)} className={`w-full py-2.5 rounded-lg text-white text-sm font-medium transition-colors ${allFailed ? 'bg-red-500 hover:bg-red-600' : hasWarnings ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}>
                                         Done
                                     </button>
                                 ) : (
@@ -1342,7 +1382,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                 </div>
             )}
 
-            {/* ── Toast ── */}
+            {/* Note */}
             {toastMsg && (
                 <div className={`fixed top-5 right-5 z-[9999] max-w-sm w-full transition-all duration-300 ${toastVisible ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'}`}>
                     <div className={`flex items-start gap-3 px-4 py-3.5 rounded-xl shadow-lg border backdrop-blur-sm ${toastIsError ? 'bg-red-950/90 border-red-800/40 text-red-200' : 'bg-emerald-950/90 border-emerald-800/40 text-emerald-200'}`}>
@@ -1416,7 +1456,6 @@ export const UpdateDirectApplicationView: React.FC = () => {
     };
 
     const resetView = () => { setFile(null); setUploadResult(null); setError(null); setUpdatedRecordsPage(1); };
-
     const UploadStep = () => (
         <Card className="p-6">
             <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 rounded-lg p-4 mb-4">
@@ -1431,8 +1470,8 @@ export const UpdateDirectApplicationView: React.FC = () => {
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
                 <h4 className="font-semibold text-amber-800 mb-2">Important: For Direct Application File</h4>
                 <ul className="text-sm text-amber-700 mt-2 list-disc list-inside space-y-1">
-                    <li><strong>Windows:</strong> Open in Excel → Click "Enable Editing" → Save</li>
-                    <li><strong>Mac:</strong> Open in Excel → Save (⌘+S)</li>
+                    <li><strong>Windows:</strong> Open in Excel -&gt; Click "Enable Editing" -&gt; Save</li>
+                    <li><strong>Mac:</strong> Open in Excel -&gt; Save (Cmd+S)</li>
                 </ul>
             </div>
             <div className="text-center mb-4">
@@ -1457,8 +1496,7 @@ export const UpdateDirectApplicationView: React.FC = () => {
             )}
             <div className="flex justify-end mt-6">
                 <Button onClick={handleUpload} disabled={!file || isUploading}>{isUploading ? <div className="flex items-center"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />Updating...</div> : 'Upload & Update'}</Button>
-            </div>
-        </Card>
+            </div></Card>
     );
 
     const ResultsStep = () => (
@@ -1520,8 +1558,7 @@ export const UpdateDirectApplicationView: React.FC = () => {
                     </div>
                 )}
             </div>
-            <div className="p-4 border-t text-right"><Button onClick={resetView}>Start a New Update</Button></div>
-        </Card>
+            <div className="p-4 border-t text-right"><Button onClick={resetView}>Start a New Update</Button></div></Card>
     );
 
     return (

@@ -53,6 +53,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           [newStatus, value, id]
         );
         console.log(`✅ [da-toggle-field] enrol -> status=${newStatus}, value=${value} for ${id}`);
+    } else if (field === 'invoice' && !value) {
+        const result = await pool.query(
+          `UPDATE da_application
+           SET invoice_id = NULL,
+               invoice_doc_number = NULL,
+               invoice_drive_file_id = NULL,
+               invoice_drive_web_view_link = NULL,
+               updated_at = NOW()
+           WHERE id = $1
+           RETURNING enrolment_id`,
+          [id]
+        );
+
+        const enrolmentId = result.rows[0]?.enrolment_id;
+        if (enrolmentId) {
+          await pool.query(
+            `UPDATE public.invoice_jobs
+             SET status = 'failed',
+                 drive_file_id = NULL,
+                 drive_web_view_link = NULL,
+                 last_error = 'Invoice was cleared from Direct Application admin table',
+                 updated_at = NOW()
+             WHERE LOWER(TRIM(COALESCE(enrolment_id::text, ''))) = LOWER(TRIM($1::text))
+               AND status = 'done'`,
+            [enrolmentId]
+          );
+        }
+
+        console.log(`[da-toggle-field] invoice cleared for ${id}`);
     } else {
         await pool.query(
           `UPDATE da_application SET ${column} = $1, updated_at = NOW() WHERE id = $2`,

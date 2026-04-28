@@ -187,19 +187,6 @@ export async function qboQuery(appOverride: string | undefined, query: string): 
   return qboFetchJson({ token, url });
 }
 
-export async function qboFindTermByName(
-  appOverride: string | undefined,
-  termName: string
-): Promise<{ id: string; name?: string; raw: any } | null> {
-  const safe = String(termName || '').replace(/'/g, "''").trim();
-  if (!safe) return null;
-  const data = await qboQuery(appOverride, `SELECT * FROM Term WHERE Name = '${safe}' MAXRESULTS 1`);
-  const t = data?.QueryResponse?.Term;
-  const row = Array.isArray(t) ? t[0] : t;
-  if (!row?.Id) return null;
-  return { id: String(row.Id), name: row?.Name ? String(row.Name) : undefined, raw: row };
-}
-
 export async function qboCreateInvoice(appOverride: string | undefined, body: any): Promise<{ id: string; docNumber?: string; raw: any }> {
   const creds = await getQBOCredentials(appOverride);
   if (!creds) throw new Error('QuickBooks credentials not configured');
@@ -209,6 +196,25 @@ export async function qboCreateInvoice(appOverride: string | undefined, body: an
   const data = await qboFetchJson({ token, url, method: 'POST', body });
   const inv = data?.Invoice ?? data;
   return { id: String(inv?.Id ?? ''), docNumber: inv?.DocNumber ? String(inv.DocNumber) : undefined, raw: data };
+}
+
+export async function qboReadInvoice(
+  appOverride: string | undefined,
+  invoiceId: string
+): Promise<{ id: string; docNumber?: string; syncToken?: string; raw: any }> {
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/invoice/${encodeURIComponent(invoiceId)}?minorversion=${MINOR_VERSION}`;
+  const data = await qboFetchJson({ token, url, method: 'GET' });
+  const inv = data?.Invoice ?? data;
+  return {
+    id: String(inv?.Id ?? ''),
+    docNumber: inv?.DocNumber ? String(inv.DocNumber) : undefined,
+    syncToken: inv?.SyncToken ? String(inv.SyncToken) : undefined,
+    raw: inv,
+  };
 }
 
 export async function qboFindInvoiceByDocNumber(
@@ -226,6 +232,61 @@ export async function qboFindInvoiceByDocNumber(
     customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined,
     syncToken: row?.SyncToken ? String(row.SyncToken) : undefined,
     raw: row,
+  };
+}
+
+/**
+ * Find an invoice whose DocNumber matches a QBO SQL LIKE pattern (`%` wildcards
+ * supported). Used to recover an orphan main invoice created by a prior
+ * attempt when today's computed DocNumber differs (e.g. retry on a later
+ * day) — we match by the stable last-6 of the enrolment reference instead.
+ * Returns the most recent match.
+ */
+export async function qboFindInvoiceByDocNumberLike(
+  appOverride: string | undefined,
+  pattern: string
+): Promise<{ id: string; docNumber?: string; customerRef?: string; syncToken?: string; raw: any } | null> {
+  const safe = String(pattern || '').replace(/'/g, "''").trim();
+  if (!safe) return null;
+  const data = await qboQuery(
+    appOverride,
+    `SELECT * FROM Invoice WHERE DocNumber LIKE '${safe}' ORDERBY MetaData.CreateTime DESC MAXRESULTS 1`
+  );
+  const inv = data?.QueryResponse?.Invoice;
+  const row = Array.isArray(inv) ? inv[0] : inv;
+  if (!row?.Id) return null;
+  return {
+    id: String(row.Id),
+    docNumber: row?.DocNumber ? String(row.DocNumber) : undefined,
+    customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined,
+    syncToken: row?.SyncToken ? String(row.SyncToken) : undefined,
+    raw: row,
+  };
+}
+
+/**
+ * Sparse-update an existing QBO invoice. Only the fields in `fields` are
+ * modified; all other fields are preserved. Caller must supply the current
+ * SyncToken (available via qboReadInvoice / qboFindInvoiceByDocNumber).
+ */
+export async function qboSparseUpdateInvoice(
+  appOverride: string | undefined,
+  invoiceId: string,
+  syncToken: string,
+  fields: Record<string, any>
+): Promise<{ id: string; syncToken?: string; raw: any }> {
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/invoice?minorversion=${MINOR_VERSION}`;
+  const body = { Id: invoiceId, SyncToken: syncToken, sparse: true, ...fields };
+  const data = await qboFetchJson({ token, url, method: 'POST', body });
+  const inv = data?.Invoice ?? data;
+  return {
+    id: String(inv?.Id ?? ''),
+    syncToken: inv?.SyncToken ? String(inv.SyncToken) : undefined,
+    raw: inv,
   };
 }
 
@@ -391,12 +452,84 @@ export async function qboResolveOosTaxCodeRef(appOverride: string | undefined): 
   return '18';
 }
 
+function escapeQboStringLiteral(value: string): string {
+  return String(value || '').replace(/'/g, "''");
+}
+
+function pickFirstQboItem(
+  data: any,
+  fallbackName: string
+): { id: string; name: string; unitPrice: number } | null {
+  const raw = data?.QueryResponse?.Item;
+  const item = Array.isArray(raw) ? raw[0] : raw;
+  if (!item?.Id) return null;
+  return {
+    id: String(item.Id),
+    name: String(item.Name || fallbackName),
+    unitPrice: Number(item.UnitPrice || 0),
+  };
+}
+
 export async function qboFindItemBySku(appOverride: string | undefined, sku: string): Promise<{ id: string; name: string; unitPrice: number } | null> {
-  const q = `SELECT * FROM Item WHERE Sku = '${sku.replace(/'/g, "''")}'`;
+  const safeSku = escapeQboStringLiteral(sku);
+  if (!safeSku) return null;
+  const q = `SELECT * FROM Item WHERE Sku = '${safeSku}' MAXRESULTS 1`;
   const data = await qboQuery(appOverride, q);
-  const item = data?.QueryResponse?.Item?.[0];
-  if (!item) return null;
-  return { id: String(item.Id), name: String(item.Name || sku), unitPrice: Number(item.UnitPrice || 0) };
+  return pickFirstQboItem(data, sku);
+}
+
+export async function qboFindItemByName(
+  appOverride: string | undefined,
+  itemName: string
+): Promise<{ id: string; name: string; unitPrice: number } | null> {
+  const safeName = escapeQboStringLiteral(itemName);
+  if (!safeName) return null;
+  const q = `SELECT * FROM Item WHERE Name = '${safeName}' MAXRESULTS 1`;
+  const data = await qboQuery(appOverride, q);
+  return pickFirstQboItem(data, itemName);
+}
+
+/**
+ * Look up a QuickBooks "Term" by exact Name (e.g. "25 Days SFC", "35 Days Term").
+ * Returns the Term Id for use as SalesTermRef on an invoice, or null if no
+ * matching Term is configured in the QBO realm.
+ */
+export async function qboFindTermByName(
+  appOverride: string | undefined,
+  termName: string
+): Promise<{ id: string; name: string } | null> {
+  const safeName = escapeQboStringLiteral(termName);
+  if (!safeName) return null;
+  const data = await qboQuery(appOverride, `SELECT * FROM Term WHERE Name = '${safeName}' MAXRESULTS 1`);
+  const raw = data?.QueryResponse?.Term;
+  const term = Array.isArray(raw) ? raw[0] : raw;
+  if (!term?.Id) return null;
+  return { id: String(term.Id), name: String(term.Name || termName) };
+}
+
+/**
+ * Look up a QuickBooks Customer by exact DisplayName.
+ *
+ * Used for fixed-identity customers like "WSQ Individual (Not for Company)"
+ * and "Singapore Workforce Development Agency (WSG)" that are configured
+ * once in QBO and reused across all DA invoices. Returns null if the
+ * customer doesn't exist — callers should throw a helpful error so the
+ * admin knows to create the Customer in QB.
+ */
+export async function qboFindCustomerByName(
+  appOverride: string | undefined,
+  displayName: string
+): Promise<{ id: string; displayName: string } | null> {
+  const safe = escapeQboStringLiteral(displayName);
+  if (!safe) return null;
+  const data = await qboQuery(
+    appOverride,
+    `SELECT * FROM Customer WHERE DisplayName = '${safe}' MAXRESULTS 1`
+  );
+  const raw = data?.QueryResponse?.Customer;
+  const c = Array.isArray(raw) ? raw[0] : raw;
+  if (!c?.Id) return null;
+  return { id: String(c.Id), displayName: String(c.DisplayName || displayName) };
 }
 
 /**
@@ -431,18 +564,6 @@ export async function qboFindOrCreateCustomerByDisplayName(appOverride: string |
   const cust = created?.Customer ?? created;
   if (!cust?.Id) throw new Error('QBO customer create returned no Id');
   return String(cust.Id);
-}
-
-/**
- * Find a QB item by exact Name (not SKU). Returns null if not found.
- * Use this for grant/funding items (e.g. "WSQ funding (Baseline)", "WSQ funding (MCES)").
- */
-export async function qboFindItemByName(appOverride: string | undefined, name: string): Promise<{ id: string; name: string; unitPrice: number } | null> {
-  const safe = name.replace(/'/g, "''");
-  const data = await qboQuery(appOverride, `SELECT * FROM Item WHERE Name = '${safe}' MAXRESULTS 1`);
-  const item = data?.QueryResponse?.Item?.[0];
-  if (!item) return null;
-  return { id: String(item.Id), name: String(item.Name || name), unitPrice: Number(item.UnitPrice || 0) };
 }
 
 export async function qboFindOrCreateCustomerByEmail(appOverride: string | undefined, email: string, displayName: string): Promise<string> {

@@ -221,7 +221,7 @@ export async function enqueueInvoiceJobsFromConsolidatedFinance(
 
     let learnerEmail = String(se?.raw_data?.trainee?.email?.full ?? '').trim();
     if (!learnerEmail) learnerEmail = String(se?.raw_data?.trainee?.email ?? '').trim();
-    if (!learnerEmail) learnerEmail = traineeEmailFromSsgRecord(se?.raw_data);
+    if (!learnerEmail) learnerEmail = traineeEmailFromSsgRecord(se?.raw_data) || '';
 
     // Fallback to local enrollment row when available
     const fromEnr = await pool.query(
