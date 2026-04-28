@@ -176,17 +176,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
         lp.dob AS dob,
         e.payment_status AS payment_details,
         e.assessment_status AS assessment,
-        sg.grant_id AS grant_id,
-        sc.claim_id AS claim_id
+        COALESCE(
+          (SELECT sg.grant_id FROM ssg_grants sg WHERE sg.enrollment_id = e.enrolment_id ORDER BY sg.created_date DESC LIMIT 1),
+          e.grant_id
+        ) AS grant_id,
+        (SELECT sc.claim_id FROM ssg_claims sc WHERE sc.enrollment_id = e.enrolment_id ORDER BY sc.created_date DESC LIMIT 1) AS claim_id
       FROM enrollment e
-      JOIN app_user au 
+      JOIN app_user au
         ON e.user_id = au.id
-      JOIN learner_profile lp 
+      LEFT JOIN learner_profile lp
         ON e.user_id = lp.user_id
-      LEFT JOIN ssg_grants sg
-        ON sg.enrollment_id = e.enrolment_id
-      LEFT JOIN ssg_claims sc
-        ON sc.enrollment_id = e.enrolment_id
       WHERE e.course_run_id = $1
       ORDER BY au.full_name
     `;
