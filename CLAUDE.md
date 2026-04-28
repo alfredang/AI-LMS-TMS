@@ -92,6 +92,9 @@ Hundreds of endpoints under `/pages/api/` follow this shape. `GET` is the other 
 - **Nemo AI Agent** (`lib/nemo-tools.ts`) — in-app assistant for Admin/TrainingProvider. Built on the Claude Agent SDK with ~20 tools. Persistent memory read/appended by `lib/nemo-memory.ts`, persisted to `data/nemo-memory.md`. Full spec in `NEMO.md`.
 - **Claude Agent SDK** (`@anthropic-ai/claude-agent-sdk`) powers Nemo, CP Generator, Courseware Generator, and SEO Metadata Generator. **Always authenticate by passing `env: buildClaudeEnv(token)` from `lib/anthropic-auth.ts`** — the `apiKey` SDK option is no longer supported. The helper auto-routes `sk-ant-oat*` (subscription tokens from `claude setup-token`) to `CLAUDE_CODE_OAUTH_TOKEN`, everything else to `ANTHROPIC_API_KEY`, and strips conflicting auth env vars so stale Coolify values can't shadow the token. Tokens live in `training_provider_api` under `key_name = 'ANTHROPIC_API_KEY'` regardless of actual type. Localhost works without env vars because the CLI reads `~/.claude/.credentials.json`; Docker/Coolify has no such file.
 
+### Web Scraping
+- **Firecrawl** (`firecrawl-mcp`) — public-page scraping for trainer-profile enrichment (LinkedIn, personal sites). API key stored in `training_provider_api` under `key_name = 'FIRECRAWL_API_KEY'`. Configured as an MCP server in `.mcp.json` for Claude Code dev sessions; reads the key from `FIRECRAWL_API_KEY` shell env. UI for editing the key lives under **Training Provider profile → Credentials → Firecrawl**.
+
 ### Scheduler (`lib/scheduler/scheduler.ts`)
 - `node-cron` with `Asia/Singapore` timezone
 - Config stored in the `scheduler_config` table
@@ -126,3 +129,19 @@ Hundreds of endpoints under `/pages/api/` follow this shape. `GET` is the other 
 - `node:20-alpine`, Next.js `output: 'standalone'`
 - Ports: **3003** (app), **6434** (host) → 5432 (Postgres in container)
 - Named volumes: `postgres_data`, `uploads_data`, `nemo_data`
+
+## Development MCP servers (`.mcp.json`)
+
+Project-scoped MCP servers loaded by Claude Code in this repo:
+- **playwright** — `@playwright/mcp` — browser automation (visual testing, scraping authenticated pages). The npm `playwright` dep in `package.json` is separate and used by `scripts/refresh-linkedin-profile-images-playwright.mjs`.
+- **firecrawl** — `firecrawl-mcp` — public-page scraping. Reads `FIRECRAWL_API_KEY` from the shell env; canonical value lives in `training_provider_api`.
+
+`.playwright-mcp/` and `.playwright-cli/` are gitignored MCP/CLI session artifacts (page snapshots, console logs) — safe to delete; they regenerate on use.
+
+## One-shot import scripts
+
+`scripts/` holds re-runnable, idempotent data backfills. Recent ones for trainer profile enrichment from the legacy TMS Google Sheet:
+- `import-cv-folder-urls-v3.js` — fills `trainer_profile.cv_folder_url` from sheet column `CV` (matches by email then name; only updates rows where the field is NULL/empty).
+- `import-trainer-skill-tags.js` — fills `trainer_profile.skills_tags` from `Domain + Skill Sets` and `certification_tags` from `Certifications`; deduped, max 5 each; skips trainers who already have non-empty `skills_tags`.
+
+Both default to dry-run; pass `--apply` to write to DB.

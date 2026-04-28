@@ -220,7 +220,7 @@ const ViewTrainers: React.FC = () => {
     }
   };
 
-  const itemsPerPage = 10;
+  const itemsPerPage = 50;
   const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
 
   const toggleCheckbox = (
@@ -559,32 +559,33 @@ const ViewTrainers: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-700/50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Name</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Contact</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">NRIC</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Type</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Area of Expertise</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Status</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account Status</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">LinkedIn Profile</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">CV Folder</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Skill Tags</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Certification Tags</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Name</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Email</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Tel</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">NRIC</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Type</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Expertise</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Status</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">LinkedIn</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">CV</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Skills</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Certs</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                 {paginatedTrainers.map((trainer, index) => (
                   <tr key={`${trainer.trainer_name}-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex items-center">
                         <div
-                          className="flex-shrink-0 h-10 w-10 relative group cursor-pointer"
+                          className="flex-shrink-0 h-8 w-8 relative group cursor-pointer"
                           onClick={() => handleImageUploadClick(trainer.user_id)}
                           title="Click to upload profile image"
                         >
                           <img
-                            className="h-10 w-10 rounded-full object-cover"
+                            className="h-8 w-8 rounded-full object-cover"
                             src={getTrainerThumbnailSrc(trainer)}
                             alt={trainer.trainer_name}
                             onError={(e) => {
@@ -593,27 +594,29 @@ const ViewTrainers: React.FC = () => {
                           />
                           {uploadingImageFor === trainer.user_id ? (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
-                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                             </div>
                           ) : (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Icon name={IconName.Upload} className="w-4 h-4 text-white" />
+                              <Icon name={IconName.Upload} className="w-3.5 h-3.5 text-white" />
                             </div>
                           )}
                         </div>
-                        <div className="ml-4">
+                        <div className="ml-3">
                           <div className="text-sm font-medium text-gray-900 dark:text-white">{trainer.trainer_name}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <div className="text-sm text-gray-900 dark:text-white">{trainer.email}</div>
                       {trainer.secondary_email && (
                         <div className="text-sm text-gray-500 dark:text-gray-400">{trainer.secondary_email}</div>
                       )}
-                      <div className="text-sm text-gray-500 dark:text-gray-400">{trainer.telephone || 'N/A'}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      {trainer.telephone || 'N/A'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
                       {editingNricId === trainer.user_id ? (
                         <div className="flex items-center gap-2">
                           <input
@@ -674,8 +677,8 @@ const ViewTrainers: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{trainer.trainer_type || 'N/A'}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{trainer.trainer_type || 'N/A'}</td>
+                    <td className="px-3 py-2">
                       {(() => {
                         const areas = Array.isArray(trainer.areas_of_expertise)
                           ? trainer.areas_of_expertise
@@ -694,17 +697,17 @@ const ViewTrainers: React.FC = () => {
                         );
                       })()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(trainer.status)}`}>
                         {trainer.status || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getAccountStatusColor(trainer.account_status)}`}>
                         {capitalise(trainer.account_status)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {trainer.linkedin_url ? (
                         <a
                           href={trainer.linkedin_url.startsWith('http') ? trainer.linkedin_url : `https://${trainer.linkedin_url}`}
@@ -719,7 +722,7 @@ const ViewTrainers: React.FC = () => {
                         'N/A'
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {trainer.cv_folder_url ? (
                         <a
                           href={trainer.cv_folder_url}
@@ -735,7 +738,7 @@ const ViewTrainers: React.FC = () => {
                       )}
                     </td>
                     {/* Skill Tags */}
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       {Array.isArray(trainer.skills_tags) && trainer.skills_tags.length > 0 ? (
                         <div className="flex items-center gap-1 max-w-[200px]" title={trainer.skills_tags.join(', ')}>
                           <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 truncate max-w-[150px]">
@@ -750,7 +753,7 @@ const ViewTrainers: React.FC = () => {
                       )}
                     </td>
                     {/* Certification Tags */}
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       {Array.isArray(trainer.certification_tags) && trainer.certification_tags.length > 0 ? (
                         <div className="flex items-center gap-1 max-w-[200px]" title={trainer.certification_tags.join(', ')}>
                           <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 truncate max-w-[150px]">
@@ -764,39 +767,36 @@ const ViewTrainers: React.FC = () => {
                         <span className="text-sm text-gray-500 dark:text-gray-400">N/A</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center gap-1">
+                        <button
                           onClick={() => handleSyncImage(trainer)}
                           disabled={uploadingImageFor === trainer.user_id}
-                          className="text-purple-600 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                          title={uploadingImageFor === trainer.user_id ? 'Syncing image...' : 'Sync profile image'}
+                          className="inline-flex items-center justify-center p-1.5 rounded-md text-purple-600 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20 disabled:opacity-50"
                         >
                           {uploadingImageFor === trainer.user_id ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-1" />
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600" />
                           ) : (
-                            <Icon name={IconName.User} className="w-4 h-4 mr-1" />
+                            <Icon name={IconName.User} className="w-4 h-4" />
                           )}
-                          {uploadingImageFor === trainer.user_id ? 'Syncing...' : 'Sync Image'}
-                        </Button>
+                        </button>
                         {trainer.status === 'Active' ? (
-                          <Button
-                            variant="ghost"
+                          <button
                             onClick={() => handleStatusChange(trainer, 'Inactive')}
-                            className="text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            title="Deactivate trainer"
+                            className="inline-flex items-center justify-center p-1.5 rounded-md text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
                           >
-                            <Icon name={IconName.Close} className="w-4 h-4 mr-1" />
-                            Deactivate
-                          </Button>
+                            <Icon name={IconName.Close} className="w-4 h-4" />
+                          </button>
                         ) : (
-                          <Button
-                            variant="ghost"
+                          <button
                             onClick={() => handleStatusChange(trainer, 'Active')}
-                            className="text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            title="Activate trainer"
+                            className="inline-flex items-center justify-center p-1.5 rounded-md text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
                           >
-                            <Icon name={IconName.Check} className="w-4 h-4 mr-1" />
-                            Activate
-                          </Button>
+                            <Icon name={IconName.Check} className="w-4 h-4" />
+                          </button>
                         )}
                       </div>
                     </td>
