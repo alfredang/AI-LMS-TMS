@@ -297,6 +297,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ message, details, onConfi
 interface InputCellProps {
   value: string;
   onChange: (v: string) => void;
+  onPasteGrid?: (text: string) => void;
   placeholder?: string;
   align?: 'left' | 'center';
   digitsOnly?: boolean;
@@ -305,7 +306,7 @@ interface InputCellProps {
   onBgColorChange?: (c: CellBgColor) => void;
 }
 
-const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = '', align = 'left', digitsOnly = false, onFillAll, bgColor = '', onBgColorChange }) => {
+const InputCell: React.FC<InputCellProps> = ({ value, onChange, onPasteGrid, placeholder = '', align = 'left', digitsOnly = false, onFillAll, bgColor = '', onBgColorChange }) => {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
   const colorMenuRef = useRef<HTMLDivElement>(null);
@@ -337,6 +338,13 @@ const InputCell: React.FC<InputCellProps> = ({ value, onChange, placeholder = ''
         onChange={e => {
           const v = digitsOnly ? e.target.value.replace(/\D/g, '') : e.target.value;
           onChange(v);
+        }}
+        onPaste={e => {
+          const text = e.clipboardData.getData('text');
+          if (onPasteGrid && /[\t\r\n]/.test(text)) {
+            e.preventDefault();
+            onPasteGrid(text);
+          }
         }}
         placeholder={placeholder}
         inputMode={digitsOnly ? 'numeric' : 'text'}
@@ -393,10 +401,11 @@ interface LookupCellProps {
   value: string;
   onChange: (v: string) => void;
   onAutofill: (s: LearnerSuggestion) => void;
+  onPasteGrid?: (text: string) => void;
   placeholder?: string;
 }
 
-const LookupCell: React.FC<LookupCellProps> = ({ value, onChange, onAutofill, placeholder = '' }) => {
+const LookupCell: React.FC<LookupCellProps> = ({ value, onChange, onAutofill, onPasteGrid, placeholder = '' }) => {
   const [suggestions, setSuggestions] = useState<LearnerSuggestion[]>([]);
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -435,6 +444,12 @@ const LookupCell: React.FC<LookupCellProps> = ({ value, onChange, onAutofill, pl
         placeholder={placeholder}
         onChange={e => { onChange(e.target.value); search(e.target.value); }}
         onPaste={e => {
+          const text = e.clipboardData.getData('text');
+          if (onPasteGrid && /[\t\r\n]/.test(text)) {
+            e.preventDefault();
+            onPasteGrid(text);
+            return;
+          }
           const el = e.currentTarget;
           setTimeout(() => { if (el.value) search(el.value); }, 0);
         }}
@@ -538,11 +553,18 @@ const TrainerLookupInput: React.FC<{
 
 // ─── Select cell ─────────────────────────────────────────────────────────────
 
-const SelectCell: React.FC<{ value: string; onChange: (v: string) => void; options: string[] }> = ({ value, onChange, options }) => (
+const SelectCell: React.FC<{ value: string; onChange: (v: string) => void; options: string[]; onPasteGrid?: (text: string) => void }> = ({ value, onChange, options, onPasteGrid }) => (
   <td className="px-1.5 py-1 border-r border-default last:border-r-0 text-center">
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
+      onPaste={e => {
+        const text = e.clipboardData.getData('text');
+        if (onPasteGrid && /[\t\r\n]/.test(text)) {
+          e.preventDefault();
+          onPasteGrid(text);
+        }
+      }}
       className="w-full px-1 py-1 text-xs bg-surface rounded focus:outline-none focus:ring-1 focus:ring-primary/30 text-on-surface cursor-pointer [&>option]:bg-surface [&>option]:text-on-surface"
     >
       <option value="">—</option>
@@ -820,6 +842,69 @@ const COLUMNS: { key: TraineeField | '_no' | '_cancelled' | '_actions'; label: s
 
 // ─── Single class block ───────────────────────────────────────────────────────
 
+const PASTE_TRAINEE_FIELDS = COLUMNS
+  .map(c => c.key)
+  .filter((key): key is TraineeField => key !== '_no' && key !== '_cancelled' && key !== '_actions');
+
+const parseClipboardGrid = (text: string): string[][] => {
+  const normalised = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < normalised.length; i++) {
+    const ch = normalised[i];
+    const next = normalised[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (ch === '\t' && !inQuotes) {
+      row.push(cell);
+      cell = '';
+      continue;
+    }
+
+    if (ch === '\n' && !inQuotes) {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = '';
+      continue;
+    }
+
+    cell += ch;
+  }
+
+  row.push(cell);
+  rows.push(row);
+
+  if (rows.length > 0 && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === '') {
+    rows.pop();
+  }
+
+  return rows;
+};
+
+const normalisePastedTraineeValue = (field: TraineeField, value: string): string => {
+  const trimmed = value.trim();
+  if (field === 'contact_no') return trimmed.replace(/\D/g, '');
+  if (field === 'grant') {
+    const lower = trimmed.toLowerCase();
+    if (lower === 'y' || lower === 'yes') return 'Yes';
+    if (lower === 'n' || lower === 'no') return 'No';
+  }
+  return trimmed;
+};
+
 interface ClassBlockProps {
   classRun: ClassRun;
   activeTab: ClassTab;
@@ -834,6 +919,7 @@ interface ClassBlockProps {
   onRemoveClass: () => void;
   onMoveClass: (targetTab: ClassTab) => void;
   onBulkAddTrainees: (trainees: { name: string; contact_no: string; email: string }[]) => void;
+  onPasteTraineeGrid: (traineeId: string, startField: TraineeField, text: string) => void;
   onAddScheduleEntry: () => void;
   onScheduleEntryChange: (entryId: string, field: keyof Omit<ScheduleEntry, 'id'>, value: string | boolean) => void;
   onRemoveScheduleEntry: (entryId: string) => void;
@@ -844,6 +930,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
   classRun, activeTab, selectedDate, saving, searchQuery = '',
   onClassChange, onTraineeChange, onFillAll,
   onAddTrainee, onRemoveTrainee, onRemoveClass, onMoveClass, onBulkAddTrainees,
+  onPasteTraineeGrid,
   onAddScheduleEntry, onScheduleEntryChange, onRemoveScheduleEntry,
   onReplaceScheduleEntries,
 }) => {
@@ -1231,6 +1318,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                       key={col.key}
                       value={t.date}
                       onChange={v => onTraineeChange(t.id, 'date', v)}
+                      onPasteGrid={text => onPasteTraineeGrid(t.id, 'date', text)}
                       placeholder="DD/MM/YYYY"
                       onFillAll={v => onFillAll('date', v)}
                     />
@@ -1239,6 +1327,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                       key={col.key}
                       value={t.grant}
                       onChange={v => onTraineeChange(t.id, 'grant', v)}
+                      onPasteGrid={text => onPasteTraineeGrid(t.id, 'grant', text)}
                       options={['Yes', 'No']}
                     />
                   ) : (col.key === 'name' || col.key === 'email' || col.key === 'contact_no') ? (
@@ -1247,6 +1336,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                       value={t[col.key]}
                       placeholder={col.placeholder}
                       onChange={v => onTraineeChange(t.id, col.key as TraineeField, v)}
+                      onPasteGrid={text => onPasteTraineeGrid(t.id, col.key as TraineeField, text)}
                       onAutofill={async s => {
                         onTraineeChange(t.id, 'name', s.name);
                         onTraineeChange(t.id, 'email', s.email);
@@ -1270,6 +1360,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                       key={col.key}
                       value={t[col.key as TraineeField] as string}
                       onChange={v => onTraineeChange(t.id, col.key as TraineeField, v)}
+                      onPasteGrid={text => onPasteTraineeGrid(t.id, col.key as TraineeField, text)}
                       placeholder={col.placeholder}
                       align={col.align}
                       digitsOnly={col.digitsOnly}
@@ -1285,6 +1376,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                       key={col.key}
                       value={t[col.key as TraineeField] as string}
                       onChange={v => onTraineeChange(t.id, col.key as TraineeField, v)}
+                      onPasteGrid={text => onPasteTraineeGrid(t.id, col.key as TraineeField, text)}
                       onFillAll={col.key !== 'payment_status' && col.key !== 'magento_order_no' ? v => onFillAll(col.key as TraineeField, v) : undefined}
                       placeholder={col.placeholder}
                       align={col.align}
@@ -2164,6 +2256,52 @@ const MasterListView: React.FC = () => {
     });
   };
 
+  const handlePasteTraineeGrid = (classId: string, traineeId: string, startField: TraineeField, text: string) => {
+    const grid = parseClipboardGrid(text);
+    if (grid.length === 0) return;
+
+    const startCol = PASTE_TRAINEE_FIELDS.indexOf(startField);
+    if (startCol < 0) return;
+
+    setClasses(prev => {
+      const updated = prev.map(cr => {
+        if (cr.id !== classId) return cr;
+
+        const startRow = cr.trainees.findIndex(t => t.id === traineeId);
+        if (startRow < 0) return cr;
+
+        const trainees = [...cr.trainees];
+        const inheritedDate = trainees.find(t => t.date)?.date || fmtDisplay(selectedDate);
+
+        while (trainees.length < startRow + grid.length) {
+          trainees.push({ ...newTrainee(), date: inheritedDate });
+        }
+
+        grid.forEach((cells, rowOffset) => {
+          const rowIndex = startRow + rowOffset;
+          let trainee = trainees[rowIndex];
+
+          cells.forEach((cellValue, colOffset) => {
+            const field = PASTE_TRAINEE_FIELDS[startCol + colOffset];
+            if (!field) return;
+            trainee = {
+              ...trainee,
+              [field]: normalisePastedTraineeValue(field, cellValue),
+            };
+          });
+
+          trainees[rowIndex] = trainee;
+        });
+
+        return { ...cr, trainees };
+      });
+
+      const cr = updated.find(c => c.id === classId);
+      if (cr) scheduleSave(cr, activeTab, selectedDate);
+      return updated;
+    });
+  };
+
   const handleFillAll = (classId: string, field: TraineeField, value: string) => {
     setClasses(prev => {
       const updated = prev.map(cr => cr.id === classId
@@ -2515,6 +2653,9 @@ const MasterListView: React.FC = () => {
               onRemoveClass={() => handleRemoveClass(cr.id)}
               onMoveClass={targetTab => handleMoveClass(cr.id, targetTab)}
               onBulkAddTrainees={trainees => handleBulkAddTrainees(cr.id, trainees)}
+              onPasteTraineeGrid={(traineeId, startField, text) =>
+                handlePasteTraineeGrid(cr.id, traineeId, startField, text)
+              }
               onAddScheduleEntry={() => handleAddScheduleEntry(cr.id)}
               onScheduleEntryChange={(entryId, field, value) =>
                 handleScheduleEntryChange(cr.id, entryId, field, value)
