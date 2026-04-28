@@ -858,10 +858,66 @@ OVERVIEW / PROCESS / HIERARCHY / TIMELINE BLOCKS — same quality bar:
       model: model || FAST_MODEL,
       apiKey,
     });
-    const blocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
-    if (blocks.length < numBlocks) {
-      result.content_blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks);
+    let blocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
+
+    // Second-pass extension — if the model under-delivered (returned
+    // significantly fewer blocks than asked, e.g. 8 when we asked for 22),
+    // make a focused follow-up call asking for N more blocks that COVER
+    // DIFFERENT ANGLES from the existing ones. This produces real Claude
+    // content (not placeholder padding) so the deck hits its slide-count
+    // target without sacrificing quality. Only triggers when the gap is
+    // large (≥4 missing blocks) to avoid wasting tokens on minor shortfalls.
+    const missing = numBlocks - blocks.length;
+    if (missing >= 4 && blocks.length > 0) {
+      try {
+        const existingSummary = blocks.map((b, i) =>
+          `${i + 1}. [${b.visualization_type}] ${b.sub_title}`
+        ).join('\n');
+        const extPrompt = `Extend the content blocks for this WSQ training topic. The previous pass produced ${blocks.length} blocks; we need ${missing} ADDITIONAL blocks covering different angles, with the same quality bar.
+
+COURSE: ${courseTitle}
+TOPIC: ${topic.topic_title}
+LEARNING OUTCOME: ${topic.lo_description}
+${bpText}
+${researchText}
+
+EXISTING BLOCKS (do NOT duplicate these themes):
+${existingSummary}
+
+Generate EXACTLY ${missing} NEW blocks. Use varied visualization_type (process / comparison / statistics / hierarchy / timeline / overview), specific topic-relevant sub_titles, and the same quality rules as the previous pass (no "Pros"/"Cons", no "Point N", real labels with concrete descs). Number block_index starting at ${blocks.length}.
+
+Return ONLY this JSON:
+{
+  "content_blocks": [ /* ${missing} new blocks */ ]
+}`;
+        const ext = await runAgentJson({
+          prompt: extPrompt,
+          systemPrompt: CONTENT_SYSTEM_PROMPT,
+          tools: [],
+          maxTurns: 2,
+          model: model || FAST_MODEL,
+          apiKey,
+        });
+        const extBlocks: ContentBlock[] = Array.isArray(ext?.content_blocks) ? ext.content_blocks : [];
+        if (extBlocks.length > 0) {
+          // Re-index so block_index is continuous across the merged set.
+          const merged = [...blocks];
+          for (const b of extBlocks) {
+            merged.push({ ...b, block_index: merged.length });
+          }
+          blocks = merged;
+          console.log(`[cw-slides] extended '${topic.topic_title}': +${extBlocks.length} blocks (${blocks.length}/${numBlocks})`);
+        }
+      } catch (e: any) {
+        console.warn(`[cw-slides] extension failed for '${topic.topic_title}':`, e.message);
+      }
     }
+
+    // Final pad from real bullets if still short — never invents generic content.
+    if (blocks.length < numBlocks) {
+      blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks);
+    }
+    result.content_blocks = blocks;
     return result as ContentMapEntry;
   } catch (e: any) {
     console.error(`[cw-slides] content failed for '${topic.topic_title}':`, e.message);
