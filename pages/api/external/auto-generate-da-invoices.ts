@@ -202,12 +202,16 @@ export async function runAutomation(): Promise<
 
     // Eligibility: confirmed DA, already enrolled to SSG (otherwise invoice
     // generation would be blocked anyway), and at least one invoice missing.
+    // Skips rows whose course ended >30 days ago — back-dated re-arms
+    // (e.g. late grant_id backfill on a finished class) must not silently
+    // generate invoices long after the course is over.
     const result = await pool.query(
       `SELECT id, application_id
          FROM da_application
         WHERE LOWER(COALESCE(application_status, '')) IN ('confirm application', 'confirmed')
           AND enrolment_id IS NOT NULL
           AND TRIM(enrolment_id) <> ''
+          AND (course_end_date IS NULL OR course_end_date >= CURRENT_DATE - INTERVAL '30 days')
           AND (
                 invoice_id IS NULL
              OR (grant_id IS NOT NULL AND TRIM(grant_id) <> '' AND grant_invoice_id IS NULL)

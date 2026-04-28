@@ -686,11 +686,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
                     // Automation 3: DA invoice auto-generation trigger
                     // Fires when enrol is effectively ticked (Confirmed) and there is a real enrolment_id.
+                    // Skips rows whose course already ended >30 days ago — past-class uploads
+                    // (e.g. re-imports of historical Excel exports) must not silently re-invoice.
+                    const courseEndCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+                    const courseEndedLongAgo =
+                        !!record.course_end_date &&
+                        new Date(record.course_end_date).getTime() < courseEndCutoffMs;
                     const shouldTriggerDaInvoice =
                         insertedDbIdSet.has(record.id) &&
                         isEnrolConfirmed &&
                         hasRealEnrolmentId(record.enrolment_id) &&
-                        !record.invoice_id;
+                        !record.invoice_id &&
+                        !courseEndedLongAgo;
+
+                    if (courseEndedLongAgo && insertedDbIdSet.has(record.id)) {
+                        console.log(
+                            `⏭️ Skipping auto-invoice for ${record.application_id || record.id} — course ended ${record.course_end_date} (>30 days ago)`
+                        );
+                    }
 
                     if (shouldTriggerDaInvoice && typeof record.id === 'string' && record.id.length > 0) {
                         daInvoiceTriggerIds.push(record.id);
