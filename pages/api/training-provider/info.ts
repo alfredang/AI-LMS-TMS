@@ -43,7 +43,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.enable_default_otp,
           tp.default_otp,
           tp.color_scheme,
-          tp.force_first_password_change
+          tp.force_first_password_change,
+          tp.support_email,
+          tp.contact_tel,
+          tp.company_tel,
+          tp.company_address
         FROM training_provider_member tpm
         JOIN training_provider tp ON tpm.provider_id = tp.id
         WHERE tpm.user_id = $1
@@ -62,7 +66,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.enable_default_otp,
             tp.default_otp,
             tp.color_scheme,
-            tp.force_first_password_change
+            tp.force_first_password_change,
+            tp.support_email,
+            tp.contact_tel,
+            tp.company_tel,
+            tp.company_address
           FROM training_provider tp
           WHERE tp.id = $1
         `, [userId]);
@@ -81,7 +89,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.enable_default_otp,
             tp.default_otp,
             tp.color_scheme,
-            tp.force_first_password_change
+            tp.force_first_password_change,
+            tp.support_email,
+            tp.contact_tel,
+            tp.company_tel,
+            tp.company_address
           FROM provider_admin_user pau
           JOIN training_provider tp ON pau.provider_id = tp.id
           WHERE pau.user_id = $1
@@ -172,7 +184,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.enable_default_otp,
           tp.default_otp,
           tp.color_scheme,
-          tp.force_first_password_change
+          tp.force_first_password_change,
+          tp.support_email,
+          tp.contact_tel,
+          tp.company_tel,
+          tp.company_address
         FROM user_role_map urm
         JOIN app_user au ON au.id = urm.user_id
         CROSS JOIN training_provider tp
@@ -240,6 +256,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       uen: trainingProvider.uen || '',
       companyWebsite: trainingProvider.company_website || '',
       companyEmail: trainingProvider.company_email || '',
+      supportEmail: trainingProvider.support_email || trainingProvider.company_email || '',
+      contactTel: trainingProvider.contact_tel || trainingProvider.company_tel || '',
+      companyAddress: trainingProvider.company_address || '',
       companyLogoUrl: getAbsoluteImageUrl(trainingProvider.profile_picture_url),
       companyName: trainingProvider.company_name || 'Training Provider',
       companyShortname: trainingProvider.company_shortname || 'TP',

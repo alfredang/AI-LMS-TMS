@@ -1,5 +1,6 @@
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -7,6 +8,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'GET') {
     try {
+      const tp = await getTrainingPartnerIdentifiers();
       await pool.query('ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS course_completion_email_subject TEXT');
       await pool.query('ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS course_completion_email_body TEXT');
       await pool.query('ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS course_completion_email_cc TEXT');
@@ -14,11 +16,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const row = result.rows[0] || {};
       let courseCompletionEmailBody = row.course_completion_email_body || '';
 
+      // Replace template variables with values from Company Settings
       courseCompletionEmailBody = courseCompletionEmailBody
-        .replace(/\{COMPANY_PHONE\}/g, '6100 0613')
-        .replace(/\{COMPANY_EMAIL\}/g, 'enquiry@tertiaryinfotech.com')
-        .replace(/\{COMPANY_SHORT_NAME\}/g, 'Tertiary Courses SG')
-        .replace(/\{COMPANY_NAME\}/g, 'Tertiary Infotech');
+        .replace(/\{COMPANY_PHONE\}/g, tp.contactTel)
+        .replace(/\{COMPANY_EMAIL\}/g, tp.supportEmail || tp.companyEmail)
+        .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname)
+        .replace(/\{COMPANY_NAME\}/g, tp.name);
 
       return res.status(200).json({
         success: true,

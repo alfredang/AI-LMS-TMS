@@ -348,6 +348,9 @@ export interface TrainingProviderProfile {
   companyShortname?: string;
   companyWebsite?: string;
   companyEmail?: string;
+  supportEmail?: string;
+  contactTel?: string;
+  companyAddress?: string;
 }
 
 export interface CurrentUserProfile {

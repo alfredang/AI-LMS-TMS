@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import crypto from 'crypto';
 
 interface BulkItem {
@@ -55,8 +56,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
     const encKey = Buffer.from(credentials.encryptionKey, 'base64');
     const iv = Buffer.from('SSGAPIInitVector', 'utf8');
-    const uen = '201509271W';
-    const tpCode = 'T08GB0001K';
+    const tpIdentifiers = await getTrainingPartnerIdentifiers();
+    const uen = tpIdentifiers.uen;
+    const tpCode = tpIdentifiers.code;
 
     const results: BulkResult[] = [];
 

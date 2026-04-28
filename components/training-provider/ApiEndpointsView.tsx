@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Icon, IconName } from '../ui/Icon';
 
 interface EndpointDoc {
@@ -37,7 +37,7 @@ const sections: EndpointSection[] = [
         bodyFields: [
           { name: 'course_run_id', type: 'string', required: true, description: 'The SSG course run ID' },
         ],
-        exampleRequest: `curl -X POST https://ai-lms-tms.tertiaryinfo.tech/api/external/unassign-trainer \\
+        exampleRequest: `curl -X POST __BASE_URL__/api/external/unassign-trainer \\
   -H "x-api-key: YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "course_run_id": "1303232" }'`,
@@ -57,7 +57,7 @@ const sections: EndpointSection[] = [
         queryParams: [
           { name: 'course_run_id', type: 'string', required: true, description: 'The SSG course run ID' },
         ],
-        exampleRequest: `curl -X GET "https://ai-lms-tms.tertiaryinfo.tech/api/external/get-course-run?course_run_id=1303232" \\
+        exampleRequest: `curl -X GET "__BASE_URL__/api/external/get-course-run?course_run_id=1303232" \\
   -H "x-api-key: YOUR_API_KEY"`,
         exampleResponse: `{
   "success": true,
@@ -89,7 +89,7 @@ const sections: EndpointSection[] = [
           { name: 'status', type: 'string', required: false, description: 'Filter by class status (e.g. "Confirmed", "Completed")' },
           { name: 'trainer_email', type: 'string', required: false, description: 'Filter by assigned trainer email (case-insensitive)' },
         ],
-        exampleRequest: `curl -X GET "https://ai-lms-tms.tertiaryinfo.tech/api/external/list-course-runs?status=Confirmed" \\
+        exampleRequest: `curl -X GET "__BASE_URL__/api/external/list-course-runs?status=Confirmed" \\
   -H "x-api-key: YOUR_API_KEY"`,
         exampleResponse: `{
   "success": true,
@@ -118,7 +118,7 @@ const sections: EndpointSection[] = [
         queryParams: [
           { name: 'status', type: 'string', required: false, description: 'Filter by trainer status (e.g. "Active")' },
         ],
-        exampleRequest: `curl -X GET "https://ai-lms-tms.tertiaryinfo.tech/api/external/list-trainers?status=Active" \\
+        exampleRequest: `curl -X GET "__BASE_URL__/api/external/list-trainers?status=Active" \\
   -H "x-api-key: YOUR_API_KEY"`,
         exampleResponse: `{
   "success": true,
@@ -1167,6 +1167,11 @@ const ApiEndpointsView: React.FC = () => {
   const [expandedSections, setExpandedSections] = useState<Record<number, boolean>>({ 0: true });
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const resolvedSections = useMemo(() => JSON.parse(
+    JSON.stringify(sections).replace(/__BASE_URL__/g, baseUrl)
+  ), [baseUrl]);
+
   const toggleSection = (idx: number) => {
     setExpandedSections(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
@@ -1181,7 +1186,7 @@ const ApiEndpointsView: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const totalEndpoints = sections.reduce((sum, s) => sum + s.endpoints.length, 0);
+  const totalEndpoints = resolvedSections.reduce((sum: number, s: any) => sum + s.endpoints.length, 0);
 
   return (
     <div className="space-y-6">
@@ -1189,7 +1194,7 @@ const ApiEndpointsView: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">API Endpoints</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Complete API documentation for all {totalEndpoints} endpoints across {sections.length} categories.
+          Complete API documentation for all {totalEndpoints} endpoints across {resolvedSections.length} categories.
         </p>
       </div>
 
@@ -1207,7 +1212,7 @@ const ApiEndpointsView: React.FC = () => {
               <strong>Internal APIs</strong> use session-based authentication via JWT tokens from the login endpoint.
             </p>
             <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
-              Base URL: <code className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-800 text-xs font-mono">https://ai-lms-tms.tertiaryinfo.tech</code>
+              Base URL: <code className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-800 text-xs font-mono">__BASE_URL__</code>
             </p>
           </div>
         </div>
@@ -1215,7 +1220,7 @@ const ApiEndpointsView: React.FC = () => {
 
       {/* Sections */}
       <div className="space-y-4">
-        {sections.map((section, sIdx) => (
+        {resolvedSections.map((section: any, sIdx: number) => (
           <div key={sIdx} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 overflow-hidden">
             {/* Section Header */}
             <button
@@ -1242,7 +1247,7 @@ const ApiEndpointsView: React.FC = () => {
             {/* Section Endpoints */}
             {expandedSections[sIdx] && (
               <div className="border-t border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700/50">
-                {section.endpoints.map((ep, eIdx) => {
+                {section.endpoints.map((ep: any, eIdx: number) => {
                   const epKey = `${sIdx}-${eIdx}`;
                   const isExpanded = expandedEndpoint === epKey;
 
@@ -1285,7 +1290,7 @@ const ApiEndpointsView: React.FC = () => {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {ep.headers.map((h, i) => (
+                                    {ep.headers.map((h: any, i: number) => (
                                       <tr key={i} className="border-b dark:border-gray-700/50 last:border-0">
                                         <td className="py-1.5 pr-4 font-mono text-xs text-gray-700 dark:text-gray-300">{h.name}</td>
                                         <td className="py-1.5 pr-4 font-mono text-xs text-gray-500 dark:text-gray-400">{h.value}</td>
@@ -1313,7 +1318,7 @@ const ApiEndpointsView: React.FC = () => {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {ep.queryParams.map((p, i) => (
+                                    {ep.queryParams.map((p: any, i: number) => (
                                       <tr key={i} className="border-b dark:border-gray-700/50 last:border-0">
                                         <td className="py-1.5 pr-4 font-mono text-xs text-gray-700 dark:text-gray-300">{p.name}</td>
                                         <td className="py-1.5 pr-4 text-xs text-gray-500 dark:text-gray-400">{p.type}</td>
@@ -1347,7 +1352,7 @@ const ApiEndpointsView: React.FC = () => {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {ep.bodyFields.map((f, i) => (
+                                    {ep.bodyFields.map((f: any, i: number) => (
                                       <tr key={i} className="border-b dark:border-gray-700/50 last:border-0">
                                         <td className="py-1.5 pr-4 font-mono text-xs text-gray-700 dark:text-gray-300">{f.name}</td>
                                         <td className="py-1.5 pr-4 text-xs text-gray-500 dark:text-gray-400">{f.type}</td>

@@ -121,17 +121,19 @@ const OtpEmailTemplateView: React.FC = () => {
   // Preview: replace variables with sample values
   const companyShortName = trainingProviderProfile?.companyShortname || 'Training Provider';
 
+  const siteUrl = (typeof window !== 'undefined' ? window.location.origin : '') + '/';
+
   const previewSubject = subject
     .replace(/\{COMPANY_SHORT_NAME\}/g, companyShortName)
     .replace(/\{OTP\}/g, '123456')
-    .replace(/\{SITE_URL\}/g, 'https://ai-lms-tms.tertiaryinfo.tech/')
+    .replace(/\{SITE_URL\}/g, siteUrl)
     .replace(/\{EXPIRY_MINUTES\}/g, '30')
     .replace(/\{USER_EMAIL\}/g, 'user@example.com');
 
   const previewBody = body
     .replace(/\{COMPANY_SHORT_NAME\}/g, companyShortName)
     .replace(/\{OTP\}/g, '123456')
-    .replace(/\{SITE_URL\}/g, 'https://ai-lms-tms.tertiaryinfo.tech/')
+    .replace(/\{SITE_URL\}/g, siteUrl)
     .replace(/\{EXPIRY_MINUTES\}/g, '30')
     .replace(/\{USER_EMAIL\}/g, 'user@example.com');
 

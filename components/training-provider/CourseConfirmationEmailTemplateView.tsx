@@ -15,7 +15,7 @@ Course Title: {COURSE_NAME}
 Course Start Date/Time: {COURSE_START_DATE}
 
 Training Venue
-For physical classes, the venue is 12 Woodlands Square #07-85/86/87 Woods Square Tower 1, Singapore 737715 Map https://g.page/tertiarycourses-sg?share
+For physical classes, the venue is {COMPANY_ADDRESS}
 
 Nearest MRT station: Walk 3 mins from Woodlands MRT (NS9) Exit 2
 Parking rate at Woods Square: Car - $1.20/hour , Motorcycle- $0.8/hour (Hourly charge)
@@ -45,19 +45,19 @@ If you do not have a Singpass account and need to register for one, please visit
 Request for Postponement / Withdrawal
 Requests for course deferment, if any, are to be communicated to us at least 3 days before course commencement.
 
-For refund policy, please refer to https://www.tertiarycourses.com.sg/cancellation-policy.html
+For refund policy, please refer to {COMPANY_WEBSITE}
 
 We reserve the right to cancel or postpone the course or change the scheduled trainer. In the event that a course is cancelled due to unforeseen circumstances, a full refund will be made.
 
 Support
 If you have other enquiries, please contact us below:
 
-Tel: 6100 0613 (9am to 6pm, Mon-Sun excluding Public Holidays)
-Email: enquiry@tertiaryinfotech.com
+Tel: {COMPANY_PHONE} (9am to 6pm, Mon-Sun excluding Public Holidays)
+Email: {COMPANY_EMAIL}
 
 Thank you very much for signing up the course and choosing us as your learning partner.
 
-from Tertiary Infotech Team`;
+from {COMPANY_SHORT_NAME} Team`;
 
 const DEFAULT_CC = '';
 

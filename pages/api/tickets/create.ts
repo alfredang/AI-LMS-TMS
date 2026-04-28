@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { emailService } from '../../../lib/services/emailService';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -40,8 +41,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const user = userResult.rows[0];
       
       // 1. Notify Admin
+      const tp = await getTrainingPartnerIdentifiers();
       await emailService.sendEmail({
-        to: 'enquiry@tertiaryinfotech.com',
+        to: tp.supportEmail || tp.companyEmail,
         subject: `New Support Ticket Raised: ${ticketNumber} - ${subject}`,
         text: `A new support ticket has been raised by ${user.full_name} (${user.email}).\n\nTicket Number: ${ticketNumber}\nCategory: ${category}\nSubject: ${subject}\n\nDescription:\n${description}\n\nPlease login to the admin dashboard to view and reply to this ticket.`,
         html: `
