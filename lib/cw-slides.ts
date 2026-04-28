@@ -758,7 +758,16 @@ async function generateContentBlocks(
     ? `\nNOTE: Research data is thin (${sources.length} sources). Use WebSearch to find 1-2 additional sources. Keep searches focused.`
     : '';
 
-  const prompt = `Create ${numBlocks} content blocks for this topic. Each block = one infographic slide that goes into a Singapore WSQ training PPTX deck.
+  // Cap the first-call ask at SAFE_FIRST_CALL_BLOCKS (12). Asking for 30
+  // blocks in one shot blows past the 64K output token cap (each block is
+  // ~1.5K tokens of JSON with items + children), causes a JSON-parse fail,
+  // and falls back to a 2-3 slide stub with "Source: Course Proposal"
+  // captions. The extension loop below adds remaining blocks in 8-block
+  // chunks that reliably fit within the token cap.
+  const SAFE_FIRST_CALL_BLOCKS = 12;
+  const firstAsk = Math.min(numBlocks, SAFE_FIRST_CALL_BLOCKS);
+
+  const prompt = `Create ${firstAsk} content blocks for this topic. Each block = one infographic slide that goes into a Singapore WSQ training PPTX deck.
 
 COURSE: ${courseTitle}
 LEARNING UNIT: ${topic.lu_title}
@@ -840,12 +849,12 @@ Return this JSON:
 
 MANDATORY BLOCK SEQUENCE:
 1. Block 0: "overview" — "What is {Topic_Title}?"
-2. Block 1..${numBlocks - 2}: VARY types (process / comparison / statistics / hierarchy / timeline)
+2. Block 1..${firstAsk - 2}: VARY types (process / comparison / statistics / hierarchy / timeline)
    Each must have a SPECIFIC sub-title naming a real concept/framework/process — NOT "Detail 1" / "Point 1".
-3. Block ${numBlocks - 1}: "overview" — "Key Takeaways"
+3. Block ${firstAsk - 1}: "overview" — "Key Takeaways"
 
 RULES:
-- EXACTLY ${numBlocks} blocks
+- EXACTLY ${firstAsk} blocks
 - Labels: 2-3 words MAX
 - Descriptions: short complete phrase (4-8 words)
 - For "comparison": exactly 2 root items
@@ -887,20 +896,22 @@ OVERVIEW / PROCESS / HIERARCHY / TIMELINE BLOCKS — same quality bar:
     });
     let blocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
 
-    // Second-pass extension — if the model under-delivered (returned
-    // significantly fewer blocks than asked, e.g. 8 when we asked for 22),
-    // make a focused follow-up call asking for N more blocks that COVER
-    // DIFFERENT ANGLES from the existing ones. This produces real Claude
-    // content (not placeholder padding) so the deck hits its slide-count
-    // target without sacrificing quality. Only triggers when the gap is
-    // large (≥4 missing blocks) to avoid wasting tokens on minor shortfalls.
-    const missing = numBlocks - blocks.length;
-    if (missing >= 4 && blocks.length > 0) {
+    // Looping extension — call Claude repeatedly in 8-block chunks until we
+    // hit the target. Each chunk's prompt names the existing block themes so
+    // Claude doesn't duplicate. Bounded by MAX_EXTENSION_PASSES so a stuck
+    // model can't loop forever.
+    const CHUNK_SIZE = 8;
+    const MAX_EXTENSION_PASSES = 4; // up to 32 more blocks beyond the first 12 (44 total)
+    let pass = 0;
+    while (blocks.length < numBlocks && pass < MAX_EXTENSION_PASSES) {
+      const remaining = numBlocks - blocks.length;
+      const askThisPass = Math.min(remaining, CHUNK_SIZE);
+      if (askThisPass < 2) break; // not worth a call for 1 block
       try {
         const existingSummary = blocks.map((b, i) =>
           `${i + 1}. [${b.visualization_type}] ${b.sub_title}`
         ).join('\n');
-        const extPrompt = `Extend the content blocks for this WSQ training topic. The previous pass produced ${blocks.length} blocks; we need ${missing} ADDITIONAL blocks covering different angles, with the same quality bar.
+        const extPrompt = `Extend the content blocks for this WSQ training topic. The previous passes produced ${blocks.length} blocks; we need ${askThisPass} MORE blocks covering different angles, with the same quality bar.
 
 COURSE: ${courseTitle}
 TOPIC: ${topic.topic_title}
@@ -911,11 +922,11 @@ ${researchText}
 EXISTING BLOCKS (do NOT duplicate these themes):
 ${existingSummary}
 
-Generate EXACTLY ${missing} NEW blocks. Use varied visualization_type (process / comparison / statistics / hierarchy / timeline / overview), specific topic-relevant sub_titles, and the same quality rules as the previous pass (no "Pros"/"Cons", no "Point N", real labels with concrete descs). Number block_index starting at ${blocks.length}.
+Generate EXACTLY ${askThisPass} NEW blocks. Use varied visualization_type (process / comparison / statistics / hierarchy / timeline / overview), specific topic-relevant sub_titles, and the same quality rules (no "Pros"/"Cons", no "Point N", real labels with concrete descs).
 
 Return ONLY this JSON:
 {
-  "content_blocks": [ /* ${missing} new blocks */ ]
+  "content_blocks": [ /* ${askThisPass} new blocks */ ]
 }`;
         const ext = await runAgentJson({
           prompt: extPrompt,
@@ -926,18 +937,21 @@ Return ONLY this JSON:
           apiKey,
         });
         const extBlocks: ContentBlock[] = Array.isArray(ext?.content_blocks) ? ext.content_blocks : [];
-        if (extBlocks.length > 0) {
-          // Re-index so block_index is continuous across the merged set.
-          const merged = [...blocks];
-          for (const b of extBlocks) {
-            merged.push({ ...b, block_index: merged.length });
-          }
-          blocks = merged;
-          console.log(`[cw-slides] extended '${topic.topic_title}': +${extBlocks.length} blocks (${blocks.length}/${numBlocks})`);
+        if (extBlocks.length === 0) {
+          console.warn(`[cw-slides] extension pass ${pass + 1} for '${topic.topic_title}': returned 0 blocks, stopping`);
+          break;
         }
+        const merged = [...blocks];
+        for (const b of extBlocks) {
+          merged.push({ ...b, block_index: merged.length });
+        }
+        blocks = merged;
+        console.log(`[cw-slides] '${topic.topic_title}' pass ${pass + 1}: +${extBlocks.length} blocks (${blocks.length}/${numBlocks})`);
       } catch (e: any) {
-        console.warn(`[cw-slides] extension failed for '${topic.topic_title}':`, e.message);
+        console.warn(`[cw-slides] extension pass ${pass + 1} failed for '${topic.topic_title}':`, e.message);
+        break;
       }
+      pass++;
     }
 
     // Final pad from real bullets if still short — never invents generic content.
@@ -948,6 +962,49 @@ Return ONLY this JSON:
     return result as ContentMapEntry;
   } catch (e: any) {
     console.error(`[cw-slides] content failed for '${topic.topic_title}':`, e.message);
+    // First attempt died (token limit / parse fail / SDK error). Retry once
+    // with a small ask before giving up to fallback. With 6 blocks the
+    // model almost always returns clean JSON, even on dense topics.
+    try {
+      const retryPrompt = `Create 6 content blocks for this WSQ training topic. Each block = one infographic slide.
+
+COURSE: ${courseTitle}
+TOPIC: ${topic.topic_title}
+LEARNING OUTCOME: ${topic.lo_description}
+${bpText}
+${researchText}
+
+RULES:
+- EXACTLY 6 blocks
+- Block 0: "overview" / "What is ${topic.topic_title}?"
+- Blocks 1-4: VARY types (process / comparison / statistics / hierarchy / timeline)
+- Block 5: "overview" / "Key Takeaways"
+- Specific topic-relevant sub_titles. NO "Detail N" / "Point N" / "Pros / Cons".
+- "caption" on every block: "Source: {Source Name}, {Year}" using research above.
+- 2-5 items per block; each item has label (2-3 words) and desc (4-8 words).
+
+Return ONLY:
+{ "content_blocks": [ /* 6 blocks */ ], "activity": { "title": "...", "scenario": "...", "steps": ["...","..."], "expected_output": "...", "duration": "20 minutes" } }`;
+      const retry = await runAgentJson({
+        prompt: retryPrompt,
+        systemPrompt: CONTENT_SYSTEM_PROMPT,
+        tools: [],
+        maxTurns: 2,
+        model: model || FAST_MODEL,
+        apiKey,
+      });
+      const retryBlocks: ContentBlock[] = Array.isArray(retry?.content_blocks) ? retry.content_blocks : [];
+      if (retryBlocks.length > 0) {
+        console.log(`[cw-slides] retry succeeded for '${topic.topic_title}': ${retryBlocks.length} blocks`);
+        return {
+          topic: topic.topic_title,
+          content_blocks: retryBlocks,
+          activity: retry?.activity,
+        } as ContentMapEntry;
+      }
+    } catch (re: any) {
+      console.error(`[cw-slides] retry also failed for '${topic.topic_title}':`, re.message);
+    }
     return fallbackContentBlocks(topic.topic_title, topic.bullet_points, numBlocks, research);
   }
 }
