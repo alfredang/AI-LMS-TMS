@@ -9,7 +9,7 @@ export interface GrantDeductionLine {
   grantId: string;
   /** Full Description field for QBO (includes Grant Ref#) */
   description: string;
-  /** QuickBooks Product/Service item name for the grant line. */
+  /** QB Item Name to use for this line (e.g. 'WSQ funding (Baseline)', 'WSQ funding (MCES)') */
   itemName: string;
 }
 
@@ -113,6 +113,7 @@ export async function loadSplitGrantDeductionsFromDb(
     amt?: number;
     funding_scheme_code?: string | null;
     funding_scheme_description?: string | null;
+    funding_scheme_code?: string | null;
   } | undefined;
   if (nbl && Number(nbl.amt) > 0) {
     const gid = String(nbl.grant_id ?? '-');

@@ -40,9 +40,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (search) {
       conditions.push(`(
-        OR sg.grant_id ILIKE $${paramIndex}
+        sg.grant_id ILIKE $${paramIndex}
         OR sg.enrollment_id ILIKE $${paramIndex}
         OR sg.funding_scheme_description ILIKE $${paramIndex}
+        OR COALESCE(se.trainee_name, '') ILIKE $${paramIndex}
+        OR COALESCE(se.trainee_nric, '') ILIKE $${paramIndex}
       )`);
       params.push(`%${search}%`);
       paramIndex++;
@@ -165,6 +167,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           [enrolmentIds]
         );
         for (const r of localId.rows as Array<{ enrolment_id: string; trainee_name: string | null; trainee_nric: string | null }>) {
+          const key = r.enrolment_id.trim();
+          const existing = identityByEnr[key];
+          if (existing?.trainee_name && existing?.trainee_nric) continue;
+          identityByEnr[key] = {
+            trainee_name: existing?.trainee_name || (r.trainee_name || '').trim() || null,
+            trainee_nric: existing?.trainee_nric || (r.trainee_nric || '').trim() || null,
+          };
+        }
+
+        // Fallback to da_application (DA enrolments may not exist in ssg_enrolments or enrollment)
+        const daId = await idClient.query(
+          `SELECT enrolment_id::text AS enrolment_id,
+                  trainee_name::text AS trainee_name,
+                  trainee_id::text AS trainee_nric
+           FROM public.da_application
+           WHERE enrolment_id IS NOT NULL
+             AND LOWER(TRIM(COALESCE(enrolment_id::text, ''))) = ANY(
+               SELECT LOWER(TRIM(x::text)) FROM unnest($1::text[]) x
+             )`,
+          [enrolmentIds]
+        );
+        for (const r of daId.rows as Array<{ enrolment_id: string; trainee_name: string | null; trainee_nric: string | null }>) {
+          const key = r.enrolment_id.trim();
+          const existing = identityByEnr[key];
+          if (existing?.trainee_name && existing?.trainee_nric) continue;
+          identityByEnr[key] = {
+            trainee_name: existing?.trainee_name || (r.trainee_name || '').trim() || null,
+            trainee_nric: existing?.trainee_nric || (r.trainee_nric || '').trim() || null,
+          };
+        }
+
+        // Fallback to ssg_claims (populated from SSG claim API, has trainee_name + individual_nric)
+        const claimId = await idClient.query(
+          `SELECT DISTINCT ON (enrollment_id)
+                  enrollment_id::text AS enrolment_id,
+                  trainee_name::text AS trainee_name,
+                  individual_nric::text AS trainee_nric
+           FROM public.ssg_claims
+           WHERE enrollment_id IS NOT NULL
+             AND LOWER(TRIM(COALESCE(enrollment_id::text, ''))) = ANY(
+               SELECT LOWER(TRIM(x::text)) FROM unnest($1::text[]) x
+             )
+           ORDER BY enrollment_id, claim_id DESC`,
+          [enrolmentIds]
+        );
+        for (const r of claimId.rows as Array<{ enrolment_id: string; trainee_name: string | null; trainee_nric: string | null }>) {
           const key = r.enrolment_id.trim();
           const existing = identityByEnr[key];
           if (existing?.trainee_name && existing?.trainee_nric) continue;

@@ -28,6 +28,7 @@ export interface InvoiceJobRow {
   drive_web_view_link: string | null;
   invoice_sent_at?: string | null;
   invoice_sent_to?: string | null;
+  grn_doc_number?: string | null;
   created_at: string;
   updated_at: string;
   last_attempt_at: string | null;
@@ -79,6 +80,9 @@ export async function ensureInvoiceJobsTable(): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE public.invoice_jobs ADD COLUMN IF NOT EXISTS invoice_sent_to text NULL`
+  );
+  await pool.query(
+    `ALTER TABLE public.invoice_jobs ADD COLUMN IF NOT EXISTS grn_doc_number text NULL`
   );
   try {
     await pool.query(

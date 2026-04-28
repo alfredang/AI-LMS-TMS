@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { enqueueInvoiceJobsFromConsolidatedFinance } from '@/lib/services/invoiceJobs';
+import { runPendingInvoiceJobs } from '@/lib/services/invoiceJobsRunner';
+import { processInvoiceJob } from '@/lib/services/invoiceJobProcessor';
 
 /**
  * POST /api/finance/invoice-jobs/enqueue
@@ -23,6 +25,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const results = await enqueueInvoiceJobsFromConsolidatedFinance(enrolmentIds);
     const okCount = results.filter((r) => r.ok).length;
+    // For Finance UX, try to process immediately so the UI polling finishes quickly.
+    // (If the request times out, jobs remain queued and can still be processed by the runner later.)
+    if (okCount > 0) {
+      const ok = results.filter((r) => r.ok && r.jobId).map((r) => String(r.jobId));
+      if (ok.length > 0 && ok.length <= 5) {
+        for (const jobId of ok) {
+          await processInvoiceJob(jobId);
+        }
+      } else {
+        const limit = Math.min(5, Math.max(1, okCount));
+        await runPendingInvoiceJobs(limit);
+      }
+    }
     return res.status(200).json({
       success: true,
       results,
