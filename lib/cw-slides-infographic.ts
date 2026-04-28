@@ -371,22 +371,26 @@ function templateLimits(template: string): {
   const isColumn = /column|done-list/.test(template);
   const isRow = /row/.test(template);
 
+  // Tightened limits to prevent text overlap on AntV-rendered infographics.
+  // Earlier limits were too generous — long labels/descs would overflow
+  // their text zones and overlap neighbouring elements. Per AntV template
+  // visual inspection, these caps keep text inside the design boxes.
   if (isChart) {
-    return { labelMax: 18, descMax: 0, titleMax: 45, topDescMax: 60, maxItems: 4 };
+    return { labelMax: 14, descMax: 0, titleMax: 38, topDescMax: 50, maxItems: 4 };
   }
   if (isSequence && isHorizontal) {
-    return { labelMax: 20, descMax: 35, titleMax: 45, topDescMax: 55, maxItems: 3 };
+    return { labelMax: 16, descMax: 28, titleMax: 38, topDescMax: 48, maxItems: 3 };
   }
   if (isSequence) {
-    return { labelMax: 22, descMax: 45, titleMax: 45, topDescMax: 60, maxItems: 4 };
+    return { labelMax: 18, descMax: 35, titleMax: 38, topDescMax: 50, maxItems: 4 };
   }
   if (isCompare) {
-    return { labelMax: 22, descMax: 40, titleMax: 45, topDescMax: 55, maxItems: 4 };
+    return { labelMax: 18, descMax: 32, titleMax: 38, topDescMax: 48, maxItems: 4 };
   }
   if (isList || isGrid || isColumn || isRow) {
-    return { labelMax: 28, descMax: 55, titleMax: 50, topDescMax: 65, maxItems: 6 };
+    return { labelMax: 22, descMax: 42, titleMax: 42, topDescMax: 55, maxItems: 6 };
   }
-  return { labelMax: 25, descMax: 50, titleMax: 45, topDescMax: 60, maxItems: 5 };
+  return { labelMax: 20, descMax: 38, titleMax: 38, topDescMax: 50, maxItems: 5 };
 }
 
 // Detect sparse content that would render as an empty-looking compare or
