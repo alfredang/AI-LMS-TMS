@@ -643,14 +643,17 @@ function captionFromResearch(research: ResearchEntry | undefined, topicTitle: st
       const title = String(s?.title ?? '').trim();
       const year = String(s?.date ?? '').trim();
       if (!title) return '';
-      // Strip trailing punctuation for cleaner caption
       const clean = title.replace(/[.;:,!?]+$/, '').slice(0, 40);
       return year ? `${clean}, ${year}` : clean;
     })
     .filter(Boolean)
     .slice(0, 3);
   if (named.length) return `Source: ${named.join('; ')}`;
-  return `Source: Course Proposal — ${topicTitle}`;
+  // Research truly returned nothing — leave empty rather than cite the
+  // CP (per supervisor: internet sources only). The slide will render
+  // without a source line, which is honest about the data state.
+  void topicTitle;
+  return '';
 }
 
 // Fallback when content generation completely fails for a topic. Builds

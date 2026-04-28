@@ -29,14 +29,18 @@ export interface WebSearchResult {
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
 
-// Try the DuckDuckGo HTML lite endpoint first — it's very minimal and
-// rarely blocked. Falls back to the regular HTML endpoint if lite fails.
+// Multiple search backends tried in order. DDG endpoints are rate-limited
+// and sometimes blocked from cloud-hosted IPs. Wikipedia REST API is rock-
+// solid (no key, generous rate limits, accepts any user-agent) so it's a
+// reliable backstop. The Wikipedia path won't have the breadth of a real
+// web search but every topic will get at least one citable source.
 const DDG_ENDPOINTS = [
   'https://html.duckduckgo.com/html/',
   'https://lite.duckduckgo.com/lite/',
 ];
 
 export async function searchWeb(query: string, maxResults = 5, timeoutMs = 8000): Promise<WebSearchResult[]> {
+  // Try DuckDuckGo first
   for (const endpoint of DDG_ENDPOINTS) {
     try {
       const ctrl = new AbortController();
@@ -52,18 +56,63 @@ export async function searchWeb(query: string, maxResults = 5, timeoutMs = 8000)
         redirect: 'follow',
       });
       clearTimeout(timer);
-      if (!r.ok) continue;
+      if (!r.ok) {
+        console.warn(`[cw-slides-websearch] ${endpoint} returned ${r.status} for "${query.slice(0, 40)}"`);
+        continue;
+      }
       const html = await r.text();
       const results = endpoint.includes('lite')
         ? parseDdgLite(html, maxResults)
         : parseDdgHtml(html, maxResults);
-      if (results.length > 0) return results;
+      if (results.length > 0) {
+        console.log(`[cw-slides-websearch] DDG returned ${results.length} results for "${query.slice(0, 40)}"`);
+        return results;
+      }
+      console.warn(`[cw-slides-websearch] ${endpoint} returned 0 parsed results for "${query.slice(0, 40)}"`);
     } catch (e: any) {
-      // Try next endpoint
+      console.warn(`[cw-slides-websearch] ${endpoint} threw for "${query.slice(0, 40)}":`, e.message);
       continue;
     }
   }
+
+  // Wikipedia REST search fallback — ALWAYS available, no key, no IP blocks.
+  try {
+    const wikiResults = await searchWikipedia(query, maxResults, timeoutMs);
+    if (wikiResults.length > 0) {
+      console.log(`[cw-slides-websearch] Wikipedia returned ${wikiResults.length} results for "${query.slice(0, 40)}"`);
+      return wikiResults;
+    }
+  } catch (e: any) {
+    console.warn(`[cw-slides-websearch] Wikipedia fallback failed for "${query.slice(0, 40)}":`, e.message);
+  }
+
+  console.warn(`[cw-slides-websearch] ALL backends returned 0 results for "${query.slice(0, 40)}"`);
   return [];
+}
+
+async function searchWikipedia(query: string, maxResults: number, timeoutMs: number): Promise<WebSearchResult[]> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const url = `https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(query)}&limit=${Math.min(maxResults, 10)}`;
+    const r = await fetch(url, {
+      signal: ctrl.signal,
+      headers: {
+        'User-Agent': 'cw-slides-websearch/1.0 (+https://github.com/alfredang/AI-LMS-TMS)',
+        'Accept': 'application/json',
+      },
+    });
+    if (!r.ok) return [];
+    const json = await r.json() as { pages?: Array<{ title?: string; description?: string; excerpt?: string; key?: string }> };
+    const pages = json.pages ?? [];
+    return pages.slice(0, maxResults).map((p) => ({
+      title: p.title || '',
+      url: p.key ? `https://en.wikipedia.org/wiki/${encodeURIComponent(p.key)}` : '',
+      snippet: (p.excerpt || p.description || '').replace(/<[^>]+>/g, '').trim(),
+    })).filter((r) => r.title);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function parseDdgHtml(html: string, maxResults: number): WebSearchResult[] {
