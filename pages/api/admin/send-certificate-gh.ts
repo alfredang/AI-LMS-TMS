@@ -157,7 +157,7 @@ Feel free to let me know if you need anything else. Thank you.
 Best regards,
 Support Team
 {COMPANY_SHORT_NAME}
-Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
+Tel: ${tp.contactTel} | Email: ${tp.supportEmail || tp.companyEmail} | WhatsApp: https://wa.me/${tp.contactTel.replace(/[^0-9]/g, '')}`;
 
     const bodyText = (dbBody || defaultBody)
       .replace(/\{STUDENT_NAME\}/g, studentName)

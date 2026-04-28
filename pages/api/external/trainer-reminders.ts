@@ -74,9 +74,9 @@ function mapRow(row: any) {
       phone_e164: phone,
       email: row.trainer_email || null,
     },
-    lms_login_url: 'https://ai-lms-tms.tertiaryinfo.tech/',
+    lms_login_url: (process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '') + '/',
     e_attendance_url: row.digital_attendance_id
-      ? `https://ai-lms-tms.tertiaryinfo.tech/e-attendance/${row.course_run_id}`
+      ? `${(process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '')}/e-attendance/${row.course_run_id}`
       : null,
     google_meet_url: null,
     venue: buildVenueString(row),

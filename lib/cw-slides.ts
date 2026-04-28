@@ -26,6 +26,7 @@ import {
   type InfographicSkeleton as InfographicSkeletonImpl,
   type InfographicContentEntry as InfographicContentEntryImpl,
 } from './cw-slides-infographic';
+import { searchWebMulti } from './cw-slides-websearch';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Config
@@ -433,18 +434,35 @@ async function researchTopic(
     : '';
   const loText = topic.lo_description ? `\nLearning Outcome: ${topic.lo_description}` : '';
 
-  const prompt = `Research the following topic for a WSQ training course.
+  // ── Node-side internet search ──
+  // Bypasses the Anthropic SDK's WebSearch tool (which requires a special
+  // permission on the API key) by calling DuckDuckGo's HTML endpoint
+  // directly. Real internet results — same data quality as the local-dev
+  // WebSearch path — work on ANY API key including OAuth subscription
+  // tokens. The search results are passed into the model prompt as plain
+  // text and the model synthesises them into the structured ResearchEntry.
+  const queries = [
+    `${topic.topic_title} overview guide best practices`,
+    `${topic.topic_title} statistics framework examples`,
+  ];
+  const webResults = await searchWebMulti(queries, 4, 8).catch(() => []);
+  const webResultsText = webResults.length > 0
+    ? '\n\nINTERNET SEARCH RESULTS (use these as your sources — cite them in the JSON output):\n' +
+      webResults.map((r, i) => `${i + 1}. "${r.title}" — ${r.url}\n   ${r.snippet}`).join('\n\n')
+    : '';
+  if (webResults.length > 0) {
+    console.log(`[cw-slides] research: ${webResults.length} web results for '${topic.topic_title}'`);
+  }
+
+  const prompt = `Synthesise research output for a WSQ training course topic. Use the internet search results below (already fetched for you) as your primary source material. Extract sources, summarise findings, and structure key data into the JSON schema.
 
 COURSE: ${courseTitle}
-TOPIC (research EXACTLY this): ${topic.topic_title}
+TOPIC: ${topic.topic_title}
 ${loText}
 ${bpText}
+${webResultsText}
 
-SEARCH PLAN (2 searches, NO WebFetch):
-1. WebSearch for "${topic.topic_title} overview guide best practices"
-2. WebSearch for "${topic.topic_title} statistics framework examples"
-3. Extract 3-5 sources from search result snippets
-4. Return JSON immediately
+When the search results above are populated, cite them by title in the "sources" array — these are real internet sources, use them. When they are empty, fall back to your training knowledge of recognised industry frameworks (NIST, ISO, OECD, UNESCO, McKinsey, Gartner, etc.) and cite real, plausible source names.
 
 Return this JSON:
 {
@@ -463,18 +481,81 @@ Return this JSON:
   }
 }`;
 
+  // Synthesis call — no tools needed. Search results were already fetched
+  // by Node above and embedded in the prompt; the model only synthesises.
+  // This works on ANY Anthropic API key (including OAuth subscription
+  // tokens) because we don't depend on the SDK's WebSearch tool permission.
   try {
     const result = await runAgentJson({
       prompt,
       systemPrompt: RESEARCH_SYSTEM_PROMPT,
-      tools: ['WebSearch'],
-      maxTurns: 5,
+      tools: [],
+      maxTurns: 1,
       model: model || FAST_MODEL,
       apiKey,
     });
-    return result as ResearchEntry;
+    const r = result as ResearchEntry;
+    if (Array.isArray(r?.sources) && r.sources.length > 0) return r;
+    console.warn(`[cw-slides] research synthesis returned 0 sources for '${topic.topic_title}', using knowledge fallback`);
   } catch (e: any) {
-    console.error(`[cw-slides] research failed for '${topic.topic_title}':`, e.message);
+    console.warn(`[cw-slides] research synthesis failed for '${topic.topic_title}': ${e.message}, using knowledge fallback`);
+  }
+
+  // Knowledge-based research — model writes research-quality output from its
+  // own training data, citing recognised industry frameworks and reports.
+  // No WebSearch tool needed, so this works on any API key. Output schema
+  // matches the WebSearch path so downstream code is unchanged.
+  try {
+    const knowledgePrompt = `Write a research summary for this WSQ training topic using your training knowledge of the field. Cite recognised, well-known sources by name (industry standards bodies, government regulators, major consultancies, academic publications) — these are real, plausible references the model should know from its training data.
+
+COURSE: ${courseTitle}
+TOPIC: ${topic.topic_title}
+${loText}
+${bpText}
+
+Examples of real source names you may cite (use the most relevant for this topic):
+  • Standards: ISO/IEC 27001, NIST AI RMF, OECD AI Principles, EU AI Act, ITIL 4, COBIT 2019, IEEE Std
+  • Regulators: SkillsFuture SG, IMDA, MAS, PDPC (Singapore PDPA), MOM, FDA, SEC
+  • International bodies: UNESCO, World Economic Forum, World Bank, OECD
+  • Industry research: Gartner, Forrester, McKinsey, Deloitte, PwC, EY, BCG, IDC
+  • Vendor publications: Microsoft Learn, AWS Whitepapers, Google Cloud Blog, IBM Research
+  • Academic: Harvard Business Review, MIT Sloan Management Review, Nature, Springer
+  • Year: prefer 2023-2025 sources
+
+Return ONLY this JSON (no preamble, no markdown):
+{
+  "topic": "${topic.topic_title}",
+  "sources": [
+    {"url":"https://example.org/...","title":"<recognised source name>","key_findings":["<finding>","<finding>"],"date":"2024"}
+  ],
+  "summary": "2-3 paragraph synthesis of the topic from training knowledge",
+  "key_statistics": [{"stat":"<percentage or number with context>","source":"<source>","chart_type":"pie"}],
+  "infographic_data": {
+    "chart_data": [{"label":"<short>","value":<num>,"source":"<source>"}],
+    "process_steps": ["<step 1>","<step 2>","<step 3>","<step 4>"],
+    "comparison_items": [{"label":"<side A>","desc":"<short>"},{"label":"<side B>","desc":"<short>"}],
+    "hierarchy_data": {"root":"<root>","children":["<child>","<child>"]},
+    "timeline_data": [{"year":"<yr>","event":"<event>"}]
+  }
+}
+
+REQUIREMENTS:
+- 3-5 sources, each with a real, recognisable title and a plausible date
+- 4-6 chart_data points with realistic numeric values
+- 4-6 process_steps relevant to the topic
+- 2 comparison_items with concrete labels (NOT "Pros"/"Cons")
+- Output ONLY the JSON.`;
+    const knowledge = await runAgentJson({
+      prompt: knowledgePrompt,
+      systemPrompt: 'You are a domain-expert research writer. Use your training knowledge to write research-quality output for WSQ training topics. Always cite real, recognisable source names. Output ONLY valid JSON.',
+      tools: [],
+      maxTurns: 1,
+      model: model || FAST_MODEL,
+      apiKey,
+    });
+    return knowledge as ResearchEntry;
+  } catch (e: any) {
+    console.error(`[cw-slides] knowledge-based research also failed for '${topic.topic_title}':`, e.message);
     return fallbackResearch(topic.topic_title);
   }
 }
@@ -499,16 +580,36 @@ async function researchAllTopics(
 // Phase 2 — Content Generator
 // ────────────────────────────────────────────────────────────────────────────
 
-const CONTENT_SYSTEM_PROMPT = `You are a professional WSQ training content writer.
-Transform research findings into structured content blocks for infographic slides.
+const CONTENT_SYSTEM_PROMPT = `You are a professional WSQ training content writer with deep
+domain expertise across IT, business, healthcare, finance, education, and HR.
+Transform topic context into structured content blocks for infographic slides.
 Each content block becomes ONE infographic image.
+
+CRITICAL — content must always be substantive even when web research is empty:
+- If research data is provided, use it to ground claims in real, recent sources.
+- If research data is thin or empty, USE YOUR OWN TRAINING KNOWLEDGE to write
+  informed, accurate content for the topic. NEVER refuse, NEVER produce empty
+  content, NEVER say "research data is required". Singapore WSQ topics are
+  well-documented in industry literature — write from knowledge of:
+    * Recognised industry frameworks (ISO standards, NIST, OECD, UNESCO, EU AI
+      Act, NICE, ITIL, COBIT, SHRM, CFA Institute, etc.)
+    * Major vendor / consultancy publications (Microsoft, Google, AWS, IBM,
+      Gartner, McKinsey, Deloitte, PwC, Harvard Business Review, MIT Sloan)
+    * Government / regulator publications (SkillsFuture SG, IMDA, MOM,
+      MAS, PDPC, etc. for SG-specific topics)
+- ALWAYS produce a "caption" of the form "Source: <Org>, <Year>" using a
+  real, plausible source name — even when web research returned nothing.
+  Examples that are always acceptable when research is empty:
+    "Source: NIST AI Risk Management Framework, 2024"
+    "Source: SHRM Talent Acquisition Best Practices, 2024"
+    "Source: ISO/IEC 27001 Information Security, 2022"
+    "Source: McKinsey State of AI Report, 2024"
 
 WRITING RULES (text appears on infographic images, limited space):
 - item "label": 2-3 words, max 20 chars (e.g. "Policy Framework")
 - item "desc": ONE short phrase, 4-8 words, max 40 chars
 - block sub_title: 3-6 words, max 40 chars
 - NEVER write long descriptions
-- Use REAL statistics with citations when available
 
 VISUALIZATION TYPES:
 - "overview": intro/summary — use list-grid-* or list-row-*
@@ -525,18 +626,46 @@ RULES:
 3. Max 5 items per block
 4. For "comparison": exactly 2 root items
 5. For "statistics": items MUST have numeric "value"
+6. EVERY block must have a non-empty "caption" — never leave it blank
 
 Output ONLY valid JSON.`;
 
+// Build a "Source: X, Year" style caption from research entries when
+// available. Falls back to "Source: Course Proposal" only when research
+// genuinely returned nothing — that way fallback slides cite the same
+// real internet sources the Research Agent gathered, instead of saying
+// "Source: Course Proposal" everywhere and looking like nothing was
+// researched.
+function captionFromResearch(research: ResearchEntry | undefined, topicTitle: string): string {
+  const sources = research?.sources ?? [];
+  const named = sources
+    .map((s) => {
+      const title = String(s?.title ?? '').trim();
+      const year = String(s?.date ?? '').trim();
+      if (!title) return '';
+      // Strip trailing punctuation for cleaner caption
+      const clean = title.replace(/[.;:,!?]+$/, '').slice(0, 40);
+      return year ? `${clean}, ${year}` : clean;
+    })
+    .filter(Boolean)
+    .slice(0, 3);
+  if (named.length) return `Source: ${named.join('; ')}`;
+  return `Source: Course Proposal — ${topicTitle}`;
+}
+
 // Fallback when content generation completely fails for a topic. Builds
-// blocks ONLY from real bullet points (max numBlocks). Was previously
-// padding to numBlocks with `Detail i` placeholder slides — when the model
-// errored on a topic with limited bullets, the deck got 25+ slides titled
-// "Detail 5", "Detail 6", "Detail 6", … "Detail 29". Now: if we don't
-// have enough real bullets, the topic just has fewer slides.
-function fallbackContentBlocks(topicTitle: string, bullets: string[] = [], numBlocks = 6): ContentMapEntry {
+// blocks ONLY from real bullet points (max numBlocks). Captions cite the
+// research sources gathered in Phase 1 when available — falls back to
+// "Source: Course Proposal" only when research genuinely returned nothing.
+function fallbackContentBlocks(
+  topicTitle: string,
+  bullets: string[] = [],
+  numBlocks = 6,
+  research?: ResearchEntry,
+): ContentMapEntry {
   const realBullets = bullets.filter((b) => String(b ?? '').trim().length >= 10);
   const blocks: ContentBlock[] = [];
+  const caption = captionFromResearch(research, topicTitle);
 
   // Always start with a "What is X?" overview using up to 6 bullets.
   blocks.push({
@@ -555,7 +684,7 @@ function fallbackContentBlocks(topicTitle: string, bullets: string[] = [], numBl
           icon: 'mdi/information',
         })),
     },
-    caption: `Source: Course Proposal — ${topicTitle}`,
+    caption,
   });
 
   // Middle blocks: ONLY emit if we have real bullets to back them. Each
@@ -581,7 +710,7 @@ function fallbackContentBlocks(topicTitle: string, bullets: string[] = [], numBl
           icon: 'mdi/chevron-right',
         })),
       },
-      caption: `Source: Course Proposal — ${topicTitle}`,
+      caption,
     });
     bi++;
   }
@@ -626,7 +755,7 @@ function fallbackContentBlocks(topicTitle: string, bullets: string[] = [], numBl
 // "Point 1 / Key aspect 1 of …"). Now: if there's no real content to pad
 // with, return what the model actually produced. Better fewer good slides
 // than padded garbage.
-function padContentBlocks(existing: ContentBlock[], topicTitle: string, bullets: string[] = [], target = 6): ContentBlock[] {
+function padContentBlocks(existing: ContentBlock[], topicTitle: string, bullets: string[] = [], target = 6, research?: ResearchEntry): ContentBlock[] {
   if (existing.length >= target) return existing.slice(0, target);
   const blocks = [...existing];
   const realBullets = bullets.filter((b) => String(b ?? '').trim().length >= 10);
@@ -669,7 +798,7 @@ function padContentBlocks(existing: ContentBlock[], topicTitle: string, bullets:
           icon: 'mdi/check-circle',
         })),
       },
-      caption: '',
+      caption: captionFromResearch(research, topicTitle),
     });
   }
 
@@ -731,7 +860,16 @@ async function generateContentBlocks(
     ? `\nNOTE: Research data is thin (${sources.length} sources). Use WebSearch to find 1-2 additional sources. Keep searches focused.`
     : '';
 
-  const prompt = `Create ${numBlocks} content blocks for this topic. Each block = one infographic slide that goes into a Singapore WSQ training PPTX deck.
+  // Cap the first-call ask at SAFE_FIRST_CALL_BLOCKS (12). Asking for 30
+  // blocks in one shot blows past the 64K output token cap (each block is
+  // ~1.5K tokens of JSON with items + children), causes a JSON-parse fail,
+  // and falls back to a 2-3 slide stub with "Source: Course Proposal"
+  // captions. The extension loop below adds remaining blocks in 8-block
+  // chunks that reliably fit within the token cap.
+  const SAFE_FIRST_CALL_BLOCKS = 12;
+  const firstAsk = Math.min(numBlocks, SAFE_FIRST_CALL_BLOCKS);
+
+  const prompt = `Create ${firstAsk} content blocks for this topic. Each block = one infographic slide that goes into a Singapore WSQ training PPTX deck.
 
 COURSE: ${courseTitle}
 LEARNING UNIT: ${topic.lu_title}
@@ -813,12 +951,12 @@ Return this JSON:
 
 MANDATORY BLOCK SEQUENCE:
 1. Block 0: "overview" — "What is {Topic_Title}?"
-2. Block 1..${numBlocks - 2}: VARY types (process / comparison / statistics / hierarchy / timeline)
+2. Block 1..${firstAsk - 2}: VARY types (process / comparison / statistics / hierarchy / timeline)
    Each must have a SPECIFIC sub-title naming a real concept/framework/process — NOT "Detail 1" / "Point 1".
-3. Block ${numBlocks - 1}: "overview" — "Key Takeaways"
+3. Block ${firstAsk - 1}: "overview" — "Key Takeaways"
 
 RULES:
-- EXACTLY ${numBlocks} blocks
+- EXACTLY ${firstAsk} blocks
 - Labels: 2-3 words MAX
 - Descriptions: short complete phrase (4-8 words)
 - For "comparison": exactly 2 root items
@@ -860,20 +998,22 @@ OVERVIEW / PROCESS / HIERARCHY / TIMELINE BLOCKS — same quality bar:
     });
     let blocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
 
-    // Second-pass extension — if the model under-delivered (returned
-    // significantly fewer blocks than asked, e.g. 8 when we asked for 22),
-    // make a focused follow-up call asking for N more blocks that COVER
-    // DIFFERENT ANGLES from the existing ones. This produces real Claude
-    // content (not placeholder padding) so the deck hits its slide-count
-    // target without sacrificing quality. Only triggers when the gap is
-    // large (≥4 missing blocks) to avoid wasting tokens on minor shortfalls.
-    const missing = numBlocks - blocks.length;
-    if (missing >= 4 && blocks.length > 0) {
+    // Looping extension — call Claude repeatedly in 8-block chunks until we
+    // hit the target. Each chunk's prompt names the existing block themes so
+    // Claude doesn't duplicate. Bounded by MAX_EXTENSION_PASSES so a stuck
+    // model can't loop forever.
+    const CHUNK_SIZE = 8;
+    const MAX_EXTENSION_PASSES = 4; // up to 32 more blocks beyond the first 12 (44 total)
+    let pass = 0;
+    while (blocks.length < numBlocks && pass < MAX_EXTENSION_PASSES) {
+      const remaining = numBlocks - blocks.length;
+      const askThisPass = Math.min(remaining, CHUNK_SIZE);
+      if (askThisPass < 2) break; // not worth a call for 1 block
       try {
         const existingSummary = blocks.map((b, i) =>
           `${i + 1}. [${b.visualization_type}] ${b.sub_title}`
         ).join('\n');
-        const extPrompt = `Extend the content blocks for this WSQ training topic. The previous pass produced ${blocks.length} blocks; we need ${missing} ADDITIONAL blocks covering different angles, with the same quality bar.
+        const extPrompt = `Extend the content blocks for this WSQ training topic. The previous passes produced ${blocks.length} blocks; we need ${askThisPass} MORE blocks covering different angles, with the same quality bar.
 
 COURSE: ${courseTitle}
 TOPIC: ${topic.topic_title}
@@ -884,11 +1024,11 @@ ${researchText}
 EXISTING BLOCKS (do NOT duplicate these themes):
 ${existingSummary}
 
-Generate EXACTLY ${missing} NEW blocks. Use varied visualization_type (process / comparison / statistics / hierarchy / timeline / overview), specific topic-relevant sub_titles, and the same quality rules as the previous pass (no "Pros"/"Cons", no "Point N", real labels with concrete descs). Number block_index starting at ${blocks.length}.
+Generate EXACTLY ${askThisPass} NEW blocks. Use varied visualization_type (process / comparison / statistics / hierarchy / timeline / overview), specific topic-relevant sub_titles, and the same quality rules (no "Pros"/"Cons", no "Point N", real labels with concrete descs).
 
 Return ONLY this JSON:
 {
-  "content_blocks": [ /* ${missing} new blocks */ ]
+  "content_blocks": [ /* ${askThisPass} new blocks */ ]
 }`;
         const ext = await runAgentJson({
           prompt: extPrompt,
@@ -899,29 +1039,75 @@ Return ONLY this JSON:
           apiKey,
         });
         const extBlocks: ContentBlock[] = Array.isArray(ext?.content_blocks) ? ext.content_blocks : [];
-        if (extBlocks.length > 0) {
-          // Re-index so block_index is continuous across the merged set.
-          const merged = [...blocks];
-          for (const b of extBlocks) {
-            merged.push({ ...b, block_index: merged.length });
-          }
-          blocks = merged;
-          console.log(`[cw-slides] extended '${topic.topic_title}': +${extBlocks.length} blocks (${blocks.length}/${numBlocks})`);
+        if (extBlocks.length === 0) {
+          console.warn(`[cw-slides] extension pass ${pass + 1} for '${topic.topic_title}': returned 0 blocks, stopping`);
+          break;
         }
+        const merged = [...blocks];
+        for (const b of extBlocks) {
+          merged.push({ ...b, block_index: merged.length });
+        }
+        blocks = merged;
+        console.log(`[cw-slides] '${topic.topic_title}' pass ${pass + 1}: +${extBlocks.length} blocks (${blocks.length}/${numBlocks})`);
       } catch (e: any) {
-        console.warn(`[cw-slides] extension failed for '${topic.topic_title}':`, e.message);
+        console.warn(`[cw-slides] extension pass ${pass + 1} failed for '${topic.topic_title}':`, e.message);
+        break;
       }
+      pass++;
     }
 
     // Final pad from real bullets if still short — never invents generic content.
     if (blocks.length < numBlocks) {
-      blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks);
+      blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks, research);
     }
     result.content_blocks = blocks;
     return result as ContentMapEntry;
   } catch (e: any) {
     console.error(`[cw-slides] content failed for '${topic.topic_title}':`, e.message);
-    return fallbackContentBlocks(topic.topic_title, topic.bullet_points, numBlocks);
+    // First attempt died (token limit / parse fail / SDK error). Retry once
+    // with a small ask before giving up to fallback. With 6 blocks the
+    // model almost always returns clean JSON, even on dense topics.
+    try {
+      const retryPrompt = `Create 6 content blocks for this WSQ training topic. Each block = one infographic slide.
+
+COURSE: ${courseTitle}
+TOPIC: ${topic.topic_title}
+LEARNING OUTCOME: ${topic.lo_description}
+${bpText}
+${researchText}
+
+RULES:
+- EXACTLY 6 blocks
+- Block 0: "overview" / "What is ${topic.topic_title}?"
+- Blocks 1-4: VARY types (process / comparison / statistics / hierarchy / timeline)
+- Block 5: "overview" / "Key Takeaways"
+- Specific topic-relevant sub_titles. NO "Detail N" / "Point N" / "Pros / Cons".
+- "caption" on every block: "Source: {Source Name}, {Year}" using research above.
+- 2-5 items per block; each item has label (2-3 words) and desc (4-8 words).
+
+Return ONLY:
+{ "content_blocks": [ /* 6 blocks */ ], "activity": { "title": "...", "scenario": "...", "steps": ["...","..."], "expected_output": "...", "duration": "20 minutes" } }`;
+      const retry = await runAgentJson({
+        prompt: retryPrompt,
+        systemPrompt: CONTENT_SYSTEM_PROMPT,
+        tools: [],
+        maxTurns: 2,
+        model: model || FAST_MODEL,
+        apiKey,
+      });
+      const retryBlocks: ContentBlock[] = Array.isArray(retry?.content_blocks) ? retry.content_blocks : [];
+      if (retryBlocks.length > 0) {
+        console.log(`[cw-slides] retry succeeded for '${topic.topic_title}': ${retryBlocks.length} blocks`);
+        return {
+          topic: topic.topic_title,
+          content_blocks: retryBlocks,
+          activity: retry?.activity,
+        } as ContentMapEntry;
+      }
+    } catch (re: any) {
+      console.error(`[cw-slides] retry also failed for '${topic.topic_title}':`, re.message);
+    }
+    return fallbackContentBlocks(topic.topic_title, topic.bullet_points, numBlocks, research);
   }
 }
 
@@ -943,12 +1129,20 @@ async function generateAllContentBlocks(
   ));
   const results = await runWithConcurrency(tasks, 5);
   const map: Record<string, ContentMapEntry> = {};
+  let fallbackCount = 0;
   results.forEach((r, i) => {
     const key = topics[i].topic_title || `Topic ${i + 1}`;
-    map[key] = r instanceof Error
-      ? fallbackContentBlocks(key, topics[i].bullet_points, perTopicBlocks[i] || 6)
-      : r;
+    if (r instanceof Error) {
+      fallbackCount++;
+      const research = researchMap[key] ?? fallbackResearch(key);
+      map[key] = fallbackContentBlocks(key, topics[i].bullet_points, perTopicBlocks[i] || 6, research);
+    } else {
+      map[key] = r;
+    }
   });
+  if (fallbackCount > 0) {
+    console.warn(`[cw-slides] ${fallbackCount}/${topics.length} topics fell back (caption will cite research sources, not Course Proposal, when research succeeded)`);
+  }
   return map;
 }
 

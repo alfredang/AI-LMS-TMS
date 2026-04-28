@@ -27,7 +27,7 @@ Thank you very much for your time and support. We look forward to your response 
 Best regards,
 Support Team
 {COMPANY_SHORT_NAME}
-Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
+Tel: {COMPANY_PHONE} | Email: {COMPANY_EMAIL} | WhatsApp: https://wa.me/{COMPANY_WHATSAPP}`;
 
 export const DEFAULT_TRAINER_ACCEPT_SUBJECT = 'Thank You for Accepting - {COURSE_TITLE} ({COURSE_RUN_ID})';
 
@@ -51,7 +51,7 @@ Thank you once again for partnering with us. We look forward to working with you
 Best regards,
 Support Team
 {COMPANY_SHORT_NAME}
-Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
+Tel: {COMPANY_PHONE} | Email: {COMPANY_EMAIL} | WhatsApp: https://wa.me/{COMPANY_WHATSAPP}`;
 
 export const DEFAULT_TRAINER_DECLINE_SUBJECT = 'Thank You for Your Response - {COURSE_TITLE} ({COURSE_RUN_ID})';
 
@@ -66,7 +66,7 @@ Thank you once again for your support and collaboration. We value your partnersh
 Best regards,
 Support Team
 {COMPANY_SHORT_NAME}
-Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
+Tel: {COMPANY_PHONE} | Email: {COMPANY_EMAIL} | WhatsApp: https://wa.me/{COMPANY_WHATSAPP}`;
 
 export function normalizeTrainerName(name: string | null | undefined) {
   return String(name || '')
@@ -127,10 +127,12 @@ export function buildInvitationReplacements(opts: {
   classRow: InvitationClassRow;
   trainerName: string;
   companyShortName: string;
+  companyPhone?: string;
+  companyEmail?: string;
   acceptUrl: string;
   declineUrl: string;
 }): Record<string, string> {
-  const { classRow, trainerName, companyShortName, acceptUrl, declineUrl } = opts;
+  const { classRow, trainerName, companyShortName, companyPhone, companyEmail, acceptUrl, declineUrl } = opts;
 
   // Duration in days (inclusive of start and end)
   let durationLabel = 'N/A';
@@ -174,6 +176,9 @@ export function buildInvitationReplacements(opts: {
     TPG_TRAINER: classRow.tpg_assigned_trainer_name || 'N/A',
     ACCEPT_URL: acceptUrl,
     DECLINE_URL: declineUrl,
+    COMPANY_PHONE: companyPhone || '',
+    COMPANY_EMAIL: companyEmail || '',
+    COMPANY_WHATSAPP: (companyPhone || '').replace(/[^0-9]/g, ''),
   };
 }
 

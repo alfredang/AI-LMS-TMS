@@ -43,12 +43,12 @@ Please note that this ProForma Invoice does not confirm your seat in the course.
 Support
 If you have any questions, please contact us:
 
-Tel: 6100 0613 (9am to 6pm, Mon-Sun excluding Public Holidays)
-Email: enquiry@tertiaryinfotech.com
+Tel: {COMPANY_PHONE} (9am to 6pm, Mon-Sun excluding Public Holidays)
+Email: {COMPANY_EMAIL}
 
-Thank you for choosing Tertiary Infotech Academy as your learning partner.
+Thank you for choosing {COMPANY_SHORT_NAME} as your learning partner.
 
-From Tertiary Infotech Team`;
+From {COMPANY_SHORT_NAME} Team`;
 
 const DEFAULT_CC = '';
 

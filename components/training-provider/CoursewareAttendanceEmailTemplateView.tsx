@@ -8,7 +8,7 @@ const DEFAULT_SUBJECT = 'Courseware and Attendance Taking for {COURSE_NAME}';
 
 const DEFAULT_BODY = `Dear Learners,<br><br>
 <strong>Course Material</strong><br>
-You can access the platform at the following link: https://ai-lms-tms.tertiaryinfo.tech/<br><br>
+You can access the platform at the following link: {SITE_URL}<br><br>
 To log in, please use your email address with either an OTP or the default password: password123. For security purposes, please change your password immediately after your first login.<br><br>
 <strong>E-Attendance Taking (for SSG-funded courses only)</strong><br>
 Please click on the link below to take e-attendance for trainer (SingPass app) and trainee (Mobile Camera) in separate option provided.<br><br>
@@ -16,11 +16,11 @@ Course Run Code : {DIGITAL_ATTENDANCE_ID}<br><br>
 QR Code link: https://www.myskillsfuture.gov.sg/api/take-attendance/{DIGITAL_ATTENDANCE_ID}<br><br>
 <strong>Support</strong><br>
 If you need further support, please contact us.<br><br>
-Tel: 6929 2168<br>
-Email: enquiry@tertiaryinfotech.com<br><br>
-from Tertiary Courses SG Team`;
+Tel: {COMPANY_PHONE}<br>
+Email: {COMPANY_EMAIL}<br><br>
+from {COMPANY_SHORT_NAME} Team`;
 
-const DEFAULT_CC = 'tansc@tertiaryinfotech.com';
+const DEFAULT_CC = '';
 
 const CoursewareAttendanceEmailTemplateView: React.FC = () => {
   const [subject, setSubject] = useState('');

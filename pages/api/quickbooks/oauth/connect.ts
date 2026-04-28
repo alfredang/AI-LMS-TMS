@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Must match the redirect URI registered in Intuit Developer portal
-  const redirectUri = process.env.QBO_REDIRECT_URI || 'https://ai-lms-tms.tertiaryinfo.tech/api/quickbooks/oauth/callback';
+  const redirectUri = process.env.QBO_REDIRECT_URI || `${(process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '')}/api/quickbooks/oauth/callback`;
 
   const state = `${app}_${Date.now()}`;
 

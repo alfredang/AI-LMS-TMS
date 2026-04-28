@@ -17,7 +17,7 @@ Course Start Date/Time: {COURSE_START_DATE}
 If you are not able to attend the course, please kindly let us know immediately before the class.
 
 Training Venue:
-For physical classes, the venue is 12 Woodlands Square #07-85/86/87 Woods Square Tower 1, Singapore 737715 Map https://g.page/tertiarycourses-sg?share
+For physical classes, the venue is {COMPANY_ADDRESS}
 
 Nearest MRT station: Walk 3 mins from Woodlands MRT (NS9) Exit 2
 Parking rate at Woods Square: Car - $1.20/hour , Motorcycle- $0.8/hour (Hourly charge)
@@ -43,12 +43,12 @@ We will send the course material in softcopy ONLY and LMS access on the course d
 Support
 If you have other enquiries, please contact us.
 
-Tel: 6100 0613
-Email: enquiry@tertiaryinfotech.com
+Tel: {COMPANY_PHONE}
+Email: {COMPANY_EMAIL}
 
 Thank you very much for signing up the course and choosing us as your learning partner.
 
-from Tertiary Courses SG Team`;
+from {COMPANY_SHORT_NAME} Team`;
 
 const DEFAULT_CC = '';
 

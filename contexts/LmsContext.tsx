@@ -8,7 +8,7 @@ import { resetTutorChat } from '@lib/services/geminiService';
 import { initializeColorScheme } from '@utils/colorUtils';
 
 // Function to fetch training provider info for all users
-const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; referenceLinks?: any }> => {
+const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; referenceLinks?: any }> => {
   try {
     // If userId is provided, fetch specific organization info
     const url = userId 
@@ -39,6 +39,10 @@ const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: strin
       companyName: result.data.companyName || 'Training Provider',
       companyShortname: result.data.companyShortname,
       companyWebsite: result.data.companyWebsite,
+      companyEmail: result.data.companyEmail,
+      supportEmail: result.data.supportEmail,
+      contactTel: result.data.contactTel,
+      companyAddress: result.data.companyAddress,
       referenceLinks: result.data.referenceLinks,
     };
   } catch (error) {
@@ -473,6 +477,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               companyName: providerInfo.companyName,
               companyShortname: providerInfo.companyShortname,
               companyWebsite: providerInfo.companyWebsite || '',
+              companyEmail: providerInfo.companyEmail || '',
+              supportEmail: providerInfo.supportEmail || '',
+              contactTel: providerInfo.contactTel || '',
+              companyAddress: providerInfo.companyAddress || '',
               integrations: providerInfo.referenceLinks || {},
             } as TrainingProviderProfile);
           } catch (error) {
@@ -894,6 +902,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               companyName: providerInfo.companyName,
               companyShortname: providerInfo.companyShortname,
               companyWebsite: providerInfo.companyWebsite || '',
+              companyEmail: providerInfo.companyEmail || '',
+              supportEmail: providerInfo.supportEmail || '',
+              contactTel: providerInfo.contactTel || '',
+              companyAddress: providerInfo.companyAddress || '',
               integrations: providerInfo.referenceLinks || {},
             } as TrainingProviderProfile);
             console.log('✅ LmsContext: Training provider info loaded after login');

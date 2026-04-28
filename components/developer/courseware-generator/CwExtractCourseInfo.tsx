@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '../../ui/Card';
 import { Button } from '../../ui/Button';
-import { useCw } from './CwContext';
+import { useCw, clearPersistedExtraction } from './CwContext';
 
 // ─── Data Table (matches Streamlit's st.dataframe) ───
 const DataTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers, rows }) => (
@@ -515,6 +515,35 @@ const CwExtractCourseInfo: React.FC = () => {
       {!loading && cw.extractedResult && elapsedTime > 0 && (
         <div className="p-4 rounded-lg bg-green-900/20 border border-green-700">
           <p className="text-sm text-green-400 font-medium">Extract Course Info completed in {elapsedTime} seconds!</p>
+        </div>
+      )}
+
+      {/* ── Saved-extraction notice + Clear button ──
+          Extraction state is persisted in localStorage so it survives
+          navigation between Generator pages AND browser refresh. The Clear
+          button removes the saved data so the user can start fresh. */}
+      {!loading && cw.extractedResult && (
+        <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Extraction is saved — it will stay available across pages and browser refreshes for 7 days.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              if (!window.confirm('Clear the saved extraction? You will need to re-upload the CP and re-run extraction.')) return;
+              cw.setExtractedResult('');
+              cw.setCourseData(null);
+              cw.setCpText('');
+              clearPersistedExtraction();
+              setFileName('');
+              setFileSize('');
+              setElapsedTime(0);
+              setError('');
+            }}
+            className="px-3 py-1.5 rounded-md text-xs font-semibold border border-red-300 dark:border-red-800 text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
+            Clear Extraction
+          </button>
         </div>
       )}
 

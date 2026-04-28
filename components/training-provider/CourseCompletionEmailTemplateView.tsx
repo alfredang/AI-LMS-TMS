@@ -6,11 +6,9 @@ import { getApiUrl } from '@/lib/urlHelpers';
 
 const DEFAULT_SUBJECT = 'Course Completion for WSQ - Quickbooks Accounting System for Small and Medium Enterprises';
 
-const DEFAULT_BODY = `Tertiary Courses SG <sales@tertiarycourses.com.sg><br>
-Apr 19, 2026, 5:24 PM (22 hours ago)<br>
-to support, bcc: iris, bcc: leepeng, bcc: shi.jinmei, bcc: thengshiyun, bcc: kityan_kam, bcc: woansan.tan<br><br>
+const DEFAULT_BODY = `{COMPANY_SHORT_NAME}<br><br>
 Dear participants,<br><br>
-Thank you for attending WSQ - Quickbooks Accounting System for Small and Medium Enterprises with Tertiary Courses! We hope you found the information and skills valuable for your personal and professional growth.<br><br>
+Thank you for attending the course with {COMPANY_SHORT_NAME}! We hope you found the information and skills valuable for your personal and professional growth.<br><br>
 <strong>Certificates</strong><br>
 The digital certificate of achievement has been sent to you at the end of the course.<br><br>
 For WSQ certification, please follow the steps below to download your SOA e-cert:<br><br>
@@ -29,19 +27,13 @@ Choose a file location to save the PDF<br><br>
 The SOA e-cert is available 3-4 weeks after course completion.<br>
 The SOA certificate title reflects the TSC title, not the course title, and indicates the competencies attained after passing the WSQ course assessment.<br><br>
 <strong>Course Feedback</strong><br>
-Your feedback is important to us! If you haven't sent it already, please take a moment to share your thoughts on your overall experience:<br><br>
-TRAQOM survey form<br>
-Course feedback form<br><br>
+Your feedback is important to us! If you haven't sent it already, please take a moment to share your thoughts on your overall experience.<br><br>
 <strong>Post-Course Support</strong><br>
 Feel free to reach out to us:<br><br>
-Tel: 6100 0613 (9am to 6pm, Mon-Sun excluding Public Holidays)<br>
-Email: enquiry@tertiaryinfotech.com<br><br>
-<strong>Google Review Promotion</strong><br>
-We would appreciate it if you could share a review on Google: Google Review Link.<br><br>
-As a token of appreciation, you will receive a 10% discount offer for your next Non-WSQ course sign-up. Request your promo code after submitting your Google review.<br><br>
-Note: The promo code is not applicable to WSQ and IBF courses.<br><br>
+Tel: {COMPANY_PHONE}<br>
+Email: {COMPANY_EMAIL}<br><br>
 Thank you very much once again. We look forward to seeing you again in our future courses.<br><br>
-From the Tertiary Courses Team`;
+From the {COMPANY_SHORT_NAME} Team`;
 
 const DEFAULT_CC = '';
 

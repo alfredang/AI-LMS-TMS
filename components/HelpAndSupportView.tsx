@@ -287,7 +287,7 @@ const TicketDetailView: React.FC<{ ticketId: string; userId: string; onBack: () 
 
 // ── Main Component ──────────────────────────────────────
 const HelpAndSupportView: React.FC = () => {
-  const { currentUser } = useLms();
+  const { currentUser, trainingProviderProfile } = useLms();
   const userId = currentUser?.id || '';
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -318,7 +318,7 @@ const HelpAndSupportView: React.FC = () => {
         <h2 className="text-3xl font-bold mb-6">Help & Support</h2>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           <div className="lg:col-span-1">
-            <ContactCard />
+            <ContactCard trainingProviderProfile={trainingProviderProfile} />
           </div>
           <div className="lg:col-span-2">
             <TicketDetailView ticketId={selectedTicketId} userId={userId} onBack={() => { setSelectedTicketId(null); fetchTickets(); }} />
@@ -334,7 +334,7 @@ const HelpAndSupportView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         {/* Left Column: Contact Info */}
         <div className="lg:col-span-1">
-          <ContactCard />
+          <ContactCard trainingProviderProfile={trainingProviderProfile} />
         </div>
 
         {/* Right Column: Tickets */}
@@ -423,14 +423,14 @@ const InfoItem: React.FC<{ label: string; value: string }> = ({ label, value }) 
   </div>
 );
 
-const ContactCard: React.FC = () => (
+const ContactCard: React.FC<{ trainingProviderProfile?: any }> = ({ trainingProviderProfile: tp }) => (
   <Card className="p-6">
     <h3 className="text-xl font-bold mb-4">Contact Information</h3>
     <div className="space-y-4">
-      <InfoItem label="Company Address" value="12 Woodland Square #07-85/86/87 Woods Square Tower 1, Singapore 737715" />
+      {tp?.companyAddress && <InfoItem label="Company Address" value={tp.companyAddress} />}
       <InfoItem label="Opening Hours" value="Mon - Fri, 9:00 AM - 6:00 PM" />
-      <InfoItem label="Hotline Tel" value="+65 6100 0613" />
-      <InfoItem label="Support Email" value="enquiry@tertiaryinfotech.com" />
+      {tp?.contactTel && <InfoItem label="Hotline Tel" value={tp.contactTel} />}
+      {(tp?.supportEmail || tp?.companyEmail) && <InfoItem label="Support Email" value={tp?.supportEmail || tp?.companyEmail} />}
     </div>
   </Card>
 );
