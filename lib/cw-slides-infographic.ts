@@ -114,6 +114,69 @@ async function ensureIconCache(): Promise<void> {
   }
 }
 
+// Snap an arbitrary icon name to the closest cached icon. The model
+// frequently picks names that aren't in our 80-icon static bundle
+// (mdi/python, mdi/database-export, mdi/cloud-upload, etc.). In production
+// the page can't fetch them from iconify.design (egress blocked / slow), so
+// they render as empty circles. Snapping to a cached icon by category keyword
+// guarantees every icon position has a real visible glyph.
+function snapToCachedIcon(name: string | undefined, fallbackIdx: number): string {
+  const def = COMMON_ICONS[fallbackIdx % COMMON_ICONS.length];
+  if (!name || typeof name !== 'string') return def;
+  // If it's already cached, keep it.
+  if (iconCache.has(name)) return name;
+  // Try common iconify aliases stripped of extra parts
+  const cleaned = name.replace(/^mdi-/, 'mdi/').replace(/_/g, '-');
+  if (iconCache.has(cleaned)) return cleaned;
+  // Keyword-based mapping to a cached icon — covers the most common
+  // model picks. Order matters (more specific first).
+  const KEYWORD_MAP: Array<[RegExp, string]> = [
+    [/code|programming|develop|script|python|java|api/, 'mdi/code-tags'],
+    [/database|sql|table|query|data\b/, 'mdi/database'],
+    [/cloud|aws|azure|gcp/, 'mdi/cloud'],
+    [/server|host|backend/, 'mdi/server'],
+    [/security|encrypt|protect|lock|password|auth/, 'mdi/lock'],
+    [/web|http|browser|url/, 'mdi/web'],
+    [/email|mail|notify/, 'mdi/email'],
+    [/account|user|person|people|team|staff/, 'mdi/account-multiple'],
+    [/business|company|org|enterprise|corporate/, 'mdi/office-building'],
+    [/money|cost|price|finance|budget|usd|salary/, 'mdi/currency-usd'],
+    [/percent|rate|metric|kpi/, 'mdi/percent'],
+    [/chart|graph|stat|analytic/, 'mdi/chart-bar'],
+    [/trend|growth|increase|up\b/, 'mdi/trending-up'],
+    [/decline|down|decrease|drop/, 'mdi/trending-down'],
+    [/time|clock|hour|minute|deadline|schedule/, 'mdi/clock'],
+    [/calendar|date|day|week|month|year/, 'mdi/calendar'],
+    [/check|verify|validate|approve|complete|done/, 'mdi/check-circle'],
+    [/cancel|reject|fail|error|wrong/, 'mdi/close'],
+    [/warn|alert|caution|risk/, 'mdi/alert'],
+    [/help|support|question/, 'mdi/help-circle'],
+    [/doc|file|paper|report/, 'mdi/file-document'],
+    [/list|bullet|item/, 'mdi/format-list-bulleted'],
+    [/idea|insight|innovate|tip|bulb/, 'mdi/lightbulb'],
+    [/process|step|workflow|flow/, 'mdi/refresh'],
+    [/arrow|next|continue|forward/, 'mdi/arrow-right'],
+    [/star|favorite|highlight|key|important/, 'mdi/star'],
+    [/shield|safe|secure|defend/, 'mdi/shield'],
+    [/scale|balance|fair|equity|justice/, 'mdi/scale-balance'],
+    [/heart|love|care|wellness/, 'mdi/heart'],
+    [/leaf|green|environment|eco|sustainability/, 'mdi/leaf'],
+    [/earth|world|global|planet/, 'mdi/earth'],
+    [/rocket|launch|deploy|release/, 'mdi/rocket-launch'],
+    [/cog|setting|config|tool|gear/, 'mdi/cog'],
+    [/info|about|describe|note/, 'mdi/information'],
+    [/book|learn|train|education|course/, 'mdi/book-open'],
+    [/handshake|partner|deal|agreement/, 'mdi/handshake'],
+    [/trophy|award|win|achieve/, 'mdi/trophy'],
+    [/flag|milestone|goal/, 'mdi/flag'],
+  ];
+  const lower = name.toLowerCase();
+  for (const [re, cached] of KEYWORD_MAP) {
+    if (re.test(lower)) return cached;
+  }
+  return def;
+}
+
 function iconCacheToJson(): string {
   // Build a JS object literal so the AntV page can look up icons by name.
   const obj: Record<string, string> = {};
@@ -308,22 +371,26 @@ function templateLimits(template: string): {
   const isColumn = /column|done-list/.test(template);
   const isRow = /row/.test(template);
 
+  // Tightened limits to prevent text overlap on AntV-rendered infographics.
+  // Earlier limits were too generous — long labels/descs would overflow
+  // their text zones and overlap neighbouring elements. Per AntV template
+  // visual inspection, these caps keep text inside the design boxes.
   if (isChart) {
-    return { labelMax: 18, descMax: 0, titleMax: 45, topDescMax: 60, maxItems: 4 };
+    return { labelMax: 14, descMax: 0, titleMax: 38, topDescMax: 50, maxItems: 4 };
   }
   if (isSequence && isHorizontal) {
-    return { labelMax: 20, descMax: 35, titleMax: 45, topDescMax: 55, maxItems: 3 };
+    return { labelMax: 16, descMax: 28, titleMax: 38, topDescMax: 48, maxItems: 3 };
   }
   if (isSequence) {
-    return { labelMax: 22, descMax: 45, titleMax: 45, topDescMax: 60, maxItems: 4 };
+    return { labelMax: 18, descMax: 35, titleMax: 38, topDescMax: 50, maxItems: 4 };
   }
   if (isCompare) {
-    return { labelMax: 22, descMax: 40, titleMax: 45, topDescMax: 55, maxItems: 4 };
+    return { labelMax: 18, descMax: 32, titleMax: 38, topDescMax: 48, maxItems: 4 };
   }
   if (isList || isGrid || isColumn || isRow) {
-    return { labelMax: 28, descMax: 55, titleMax: 50, topDescMax: 65, maxItems: 6 };
+    return { labelMax: 22, descMax: 42, titleMax: 42, topDescMax: 55, maxItems: 6 };
   }
-  return { labelMax: 25, descMax: 50, titleMax: 45, topDescMax: 60, maxItems: 5 };
+  return { labelMax: 20, descMax: 38, titleMax: 38, topDescMax: 50, maxItems: 5 };
 }
 
 // Detect sparse content that would render as an empty-looking compare or
@@ -375,8 +442,9 @@ export function buildAntvDsl(block: ContentBlock, template: string): string {
         entry.desc = truncateAtWord(contextDesc, limits.descMax);
       }
     }
-    const icon = raw?.icon ?? '';
-    entry.icon = icon && String(icon).startsWith('mdi/') ? icon : DEFAULT_ICONS[i % DEFAULT_ICONS.length];
+    // Snap any model-picked icon to a guaranteed-cached one so it always
+    // renders in production (no network fetch fallback needed).
+    entry.icon = snapToCachedIcon(raw?.icon, i);
 
     if (isChart) {
       let value: any = raw?.value;
@@ -392,7 +460,7 @@ export function buildAntvDsl(block: ContentBlock, template: string): string {
       entry.children = children.map((c, ci) => {
         const childEntry: any = {
           label: truncateAtWord(c?.label ?? `Sub ${ci + 1}`, Math.min(25, limits.labelMax)),
-          icon: c?.icon ?? DEFAULT_ICONS[ci % DEFAULT_ICONS.length],
+          icon: snapToCachedIcon(c?.icon, ci),
         };
         if (c?.desc) childEntry.desc = truncateAtWord(c.desc, Math.min(40, limits.descMax || 40));
         return childEntry;

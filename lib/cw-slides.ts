@@ -215,12 +215,21 @@ function computeTotalTarget(hours: number): number {
   return baseMax + (days - 2) * SLIDES_PER_DAY_DEFAULT;
 }
 
+// Floor for blocks per topic regardless of math. Earlier the formula
+// could land at 2 blocks per topic (e.g. 21-topic 1-day course) which
+// produces thin "what is X / key takeaways" decks with no meat in
+// between. Streamlit's reference deck targets ~6-7 infographics per
+// topic; we floor at 5 so every topic gets at least overview + 3
+// concept slides + key takeaways even when duration parsing is off
+// or the CP packs many topics into a short course.
+const MIN_BLOCKS_PER_TOPIC = 5;
+
 function computePerTopicDistribution(hours: number, numTopics: number): number[] {
   if (numTopics <= 0) return [];
   const target = computeTotalTarget(hours);
   const standard = computeStandardSlideCount(numTopics);
-  const contentBudget = Math.max(numTopics, target - standard);
-  let base = Math.max(1, Math.floor(contentBudget / numTopics));
+  const contentBudget = Math.max(numTopics * MIN_BLOCKS_PER_TOPIC, target - standard);
+  let base = Math.max(MIN_BLOCKS_PER_TOPIC, Math.floor(contentBudget / numTopics));
   base = Math.min(base, MAX_SLIDES_PER_TOPIC);
   const remainder = contentBudget - base * numTopics;
   const dist = new Array(numTopics).fill(base);
@@ -643,14 +652,17 @@ function captionFromResearch(research: ResearchEntry | undefined, topicTitle: st
       const title = String(s?.title ?? '').trim();
       const year = String(s?.date ?? '').trim();
       if (!title) return '';
-      // Strip trailing punctuation for cleaner caption
       const clean = title.replace(/[.;:,!?]+$/, '').slice(0, 40);
       return year ? `${clean}, ${year}` : clean;
     })
     .filter(Boolean)
     .slice(0, 3);
   if (named.length) return `Source: ${named.join('; ')}`;
-  return `Source: Course Proposal — ${topicTitle}`;
+  // Research truly returned nothing — leave empty rather than cite the
+  // CP (per supervisor: internet sources only). The slide will render
+  // without a source line, which is honest about the data state.
+  void topicTitle;
+  return '';
 }
 
 // Fallback when content generation completely fails for a topic. Builds
