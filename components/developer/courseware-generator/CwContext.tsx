@@ -1,4 +1,55 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+
+// localStorage-backed state — persists CP extraction across navigation AND
+// browser refresh. Lazy-init reads the saved value on mount; an effect
+// writes back on change. Auto-expires after 7 days so stale extractions
+// don't linger forever. Designed for the Courseware Generator's extracted
+// course info (extractedResult / courseData / cpText) so users can flip
+// between Generate Slides / AP-FG-LG / Lesson Plan etc. without losing
+// their extracted CP — and refresh without losing it either.
+const STORAGE_NS = 'cw_ext_v1';
+const STORAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function loadPersisted<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(`${STORAGE_NS}:${key}`);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as { v: T; t: number };
+    if (!parsed || typeof parsed.t !== 'number') return fallback;
+    if (Date.now() - parsed.t > STORAGE_TTL_MS) {
+      window.localStorage.removeItem(`${STORAGE_NS}:${key}`);
+      return fallback;
+    }
+    return parsed.v;
+  } catch {
+    return fallback;
+  }
+}
+
+function savePersisted<T>(key: string, value: T): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(`${STORAGE_NS}:${key}`, JSON.stringify({ v: value, t: Date.now() }));
+  } catch {
+    // localStorage full / disabled — silent no-op (state still works in memory).
+  }
+}
+
+function usePersistentState<T>(key: string, initial: T): [T, (v: T) => void] {
+  const [state, setState] = useState<T>(() => loadPersisted(key, initial));
+  useEffect(() => {
+    savePersisted(key, state);
+  }, [key, state]);
+  return [state, setState];
+}
+
+export function clearPersistedExtraction(): void {
+  if (typeof window === 'undefined') return;
+  for (const k of ['courseData', 'cpText', 'extractedResult']) {
+    try { window.localStorage.removeItem(`${STORAGE_NS}:${k}`); } catch {}
+  }
+}
 
 // Assessment types available
 export const ASSESSMENT_TYPES = [
@@ -162,12 +213,6 @@ export interface CwState {
   brochureResult: string;
   setBrochureResult: (v: string) => void;
 
-  // Convert Documents
-  convertSourceText: string;
-  setConvertSourceText: (v: string) => void;
-  convertResult: string;
-  setConvertResult: (v: string) => void;
-
   // Audit — file-upload-based (Streamlit-parity).
   auditCpFile: File | null;
   setAuditCpFile: (v: File | null) => void;
@@ -192,9 +237,12 @@ export const useCw = () => {
 export const CwProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const [selectedCompanyName, setSelectedCompanyName] = useState('');
-  const [courseData, setCourseData] = useState<CourseData | null>(null);
-  const [cpText, setCpText] = useState('');
-  const [extractedResult, setExtractedResult] = useState('');
+  // Persist extraction state across navigation + browser refresh.
+  // CP file (binary) is NOT stored — only the parsed text + structured
+  // courseData + the AI-extracted JSON result.
+  const [courseData, setCourseData] = usePersistentState<CourseData | null>('courseData', null);
+  const [cpText, setCpText] = usePersistentState<string>('cpText', '');
+  const [extractedResult, setExtractedResult] = usePersistentState<string>('extractedResult', '');
   const [selectedDocType, setSelectedDocType] = useState('ap');
   const [generatedDoc, setGeneratedDoc] = useState('');
   const [numTrainingDays, setNumTrainingDays] = useState(2);
@@ -204,8 +252,6 @@ export const CwProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [slidesResult, setSlidesResult] = useState('');
   const [courseUrl, setCourseUrl] = useState('');
   const [brochureResult, setBrochureResult] = useState('');
-  const [convertSourceText, setConvertSourceText] = useState('');
-  const [convertResult, setConvertResult] = useState('');
   const [auditCpFile, setAuditCpFile] = useState<File | null>(null);
   const [auditTgsCode, setAuditTgsCode] = useState('');
   const [auditDocs, setAuditDocs] = useState<AuditDocEntry[]>([]);
@@ -228,8 +274,6 @@ export const CwProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       slidesResult, setSlidesResult,
       courseUrl, setCourseUrl,
       brochureResult, setBrochureResult,
-      convertSourceText, setConvertSourceText,
-      convertResult, setConvertResult,
       auditCpFile, setAuditCpFile,
       auditTgsCode, setAuditTgsCode,
       auditDocs, setAuditDocs,

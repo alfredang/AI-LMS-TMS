@@ -528,15 +528,42 @@ RULES:
 
 Output ONLY valid JSON.`;
 
+// Build a "Source: X, Year" style caption from research entries when
+// available. Falls back to "Source: Course Proposal" only when research
+// genuinely returned nothing — that way fallback slides cite the same
+// real internet sources the Research Agent gathered, instead of saying
+// "Source: Course Proposal" everywhere and looking like nothing was
+// researched.
+function captionFromResearch(research: ResearchEntry | undefined, topicTitle: string): string {
+  const sources = research?.sources ?? [];
+  const named = sources
+    .map((s) => {
+      const title = String(s?.title ?? '').trim();
+      const year = String(s?.date ?? '').trim();
+      if (!title) return '';
+      // Strip trailing punctuation for cleaner caption
+      const clean = title.replace(/[.;:,!?]+$/, '').slice(0, 40);
+      return year ? `${clean}, ${year}` : clean;
+    })
+    .filter(Boolean)
+    .slice(0, 3);
+  if (named.length) return `Source: ${named.join('; ')}`;
+  return `Source: Course Proposal — ${topicTitle}`;
+}
+
 // Fallback when content generation completely fails for a topic. Builds
-// blocks ONLY from real bullet points (max numBlocks). Was previously
-// padding to numBlocks with `Detail i` placeholder slides — when the model
-// errored on a topic with limited bullets, the deck got 25+ slides titled
-// "Detail 5", "Detail 6", "Detail 6", … "Detail 29". Now: if we don't
-// have enough real bullets, the topic just has fewer slides.
-function fallbackContentBlocks(topicTitle: string, bullets: string[] = [], numBlocks = 6): ContentMapEntry {
+// blocks ONLY from real bullet points (max numBlocks). Captions cite the
+// research sources gathered in Phase 1 when available — falls back to
+// "Source: Course Proposal" only when research genuinely returned nothing.
+function fallbackContentBlocks(
+  topicTitle: string,
+  bullets: string[] = [],
+  numBlocks = 6,
+  research?: ResearchEntry,
+): ContentMapEntry {
   const realBullets = bullets.filter((b) => String(b ?? '').trim().length >= 10);
   const blocks: ContentBlock[] = [];
+  const caption = captionFromResearch(research, topicTitle);
 
   // Always start with a "What is X?" overview using up to 6 bullets.
   blocks.push({
@@ -555,7 +582,7 @@ function fallbackContentBlocks(topicTitle: string, bullets: string[] = [], numBl
           icon: 'mdi/information',
         })),
     },
-    caption: `Source: Course Proposal — ${topicTitle}`,
+    caption,
   });
 
   // Middle blocks: ONLY emit if we have real bullets to back them. Each
@@ -581,7 +608,7 @@ function fallbackContentBlocks(topicTitle: string, bullets: string[] = [], numBl
           icon: 'mdi/chevron-right',
         })),
       },
-      caption: `Source: Course Proposal — ${topicTitle}`,
+      caption,
     });
     bi++;
   }
@@ -626,7 +653,7 @@ function fallbackContentBlocks(topicTitle: string, bullets: string[] = [], numBl
 // "Point 1 / Key aspect 1 of …"). Now: if there's no real content to pad
 // with, return what the model actually produced. Better fewer good slides
 // than padded garbage.
-function padContentBlocks(existing: ContentBlock[], topicTitle: string, bullets: string[] = [], target = 6): ContentBlock[] {
+function padContentBlocks(existing: ContentBlock[], topicTitle: string, bullets: string[] = [], target = 6, research?: ResearchEntry): ContentBlock[] {
   if (existing.length >= target) return existing.slice(0, target);
   const blocks = [...existing];
   const realBullets = bullets.filter((b) => String(b ?? '').trim().length >= 10);
@@ -669,7 +696,7 @@ function padContentBlocks(existing: ContentBlock[], topicTitle: string, bullets:
           icon: 'mdi/check-circle',
         })),
       },
-      caption: '',
+      caption: captionFromResearch(research, topicTitle),
     });
   }
 
@@ -915,13 +942,13 @@ Return ONLY this JSON:
 
     // Final pad from real bullets if still short — never invents generic content.
     if (blocks.length < numBlocks) {
-      blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks);
+      blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks, research);
     }
     result.content_blocks = blocks;
     return result as ContentMapEntry;
   } catch (e: any) {
     console.error(`[cw-slides] content failed for '${topic.topic_title}':`, e.message);
-    return fallbackContentBlocks(topic.topic_title, topic.bullet_points, numBlocks);
+    return fallbackContentBlocks(topic.topic_title, topic.bullet_points, numBlocks, research);
   }
 }
 
@@ -943,12 +970,20 @@ async function generateAllContentBlocks(
   ));
   const results = await runWithConcurrency(tasks, 5);
   const map: Record<string, ContentMapEntry> = {};
+  let fallbackCount = 0;
   results.forEach((r, i) => {
     const key = topics[i].topic_title || `Topic ${i + 1}`;
-    map[key] = r instanceof Error
-      ? fallbackContentBlocks(key, topics[i].bullet_points, perTopicBlocks[i] || 6)
-      : r;
+    if (r instanceof Error) {
+      fallbackCount++;
+      const research = researchMap[key] ?? fallbackResearch(key);
+      map[key] = fallbackContentBlocks(key, topics[i].bullet_points, perTopicBlocks[i] || 6, research);
+    } else {
+      map[key] = r;
+    }
   });
+  if (fallbackCount > 0) {
+    console.warn(`[cw-slides] ${fallbackCount}/${topics.length} topics fell back (caption will cite research sources, not Course Proposal, when research succeeded)`);
+  }
   return map;
 }
 
