@@ -113,7 +113,6 @@ export async function loadSplitGrantDeductionsFromDb(
     amt?: number;
     funding_scheme_code?: string | null;
     funding_scheme_description?: string | null;
-    funding_scheme_code?: string | null;
   } | undefined;
   if (nbl && Number(nbl.amt) > 0) {
     const gid = String(nbl.grant_id ?? '-');

@@ -54,13 +54,6 @@ function formatDate(d: string | Date | null | undefined): string {
   });
 }
 
-function maskNric(value: string | null | undefined): string {
-  const raw = String(value || '').trim();
-  if (!raw) return '-';
-  if (raw.length <= 4) return raw;
-  return 'X'.repeat(raw.length - 4) + raw.slice(-4);
-}
-
 type InvoiceContext = {
   courseTitle: string;
   courseRef: string;
