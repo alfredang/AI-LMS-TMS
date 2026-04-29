@@ -239,19 +239,48 @@ export async function qboGetDefaultInvoiceEmailBcc(appOverride: string | undefin
   return normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailBcc'));
 }
 
+export async function qboGetQuickBooksInvoiceEmailFields(
+  appOverride: string | undefined
+): Promise<{ cc: string; bcc: string }> {
+  const preferences = await qboReadPreferences(appOverride);
+  return {
+    cc: normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailCc')) || '',
+    bcc: normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailBcc')) || '',
+  };
+}
+
 export async function qboGetDefaultInvoiceEmailFields(
   appOverride: string | undefined
 ): Promise<{ BillEmailCc?: { Address: string }; BillEmailBcc?: { Address: string } }> {
+  let dbCc: string | null = null;
+  let dbBcc: string | null = null;
+  let hasDbCcSetting = false;
+  let hasDbBccSetting = false;
+
+  try {
+    const result = await pool.query(
+      `SELECT da_invoice_email_cc, da_invoice_email_bcc
+       FROM training_provider
+       LIMIT 1`
+    );
+    hasDbCcSetting = result.rows[0]?.da_invoice_email_cc !== null && result.rows[0]?.da_invoice_email_cc !== undefined;
+    hasDbBccSetting = result.rows[0]?.da_invoice_email_bcc !== null && result.rows[0]?.da_invoice_email_bcc !== undefined;
+    dbCc = normalizeEmailAddressList(result.rows[0]?.da_invoice_email_cc);
+    dbBcc = normalizeEmailAddressList(result.rows[0]?.da_invoice_email_bcc);
+  } catch {
+    // Columns may not exist until the migration is applied. Fall back below.
+  }
+
   const envCc = normalizeEmailAddressList(process.env.QBO_INVOICE_EMAIL_CC);
   const envBcc = normalizeEmailAddressList(process.env.QBO_INVOICE_EMAIL_BCC);
-  let cc = envCc;
-  let bcc = envBcc;
+  let cc = hasDbCcSetting ? dbCc : envCc;
+  let bcc = hasDbBccSetting ? dbBcc : envBcc;
 
-  if (!cc || !bcc) {
+  if ((!hasDbCcSetting && !cc) || (!hasDbBccSetting && !bcc)) {
     try {
       const preferences = await qboReadPreferences(appOverride);
-      cc = cc || normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailCc'));
-      bcc = bcc || normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailBcc'));
+      if (!hasDbCcSetting) cc = cc || normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailCc'));
+      if (!hasDbBccSetting) bcc = bcc || normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailBcc'));
     } catch (err) {
       console.warn('[qbo] Could not read invoice email CC/BCC preferences:', err instanceof Error ? err.message : err);
     }

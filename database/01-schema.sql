@@ -1175,6 +1175,8 @@ CREATE TABLE public.training_provider (
     company_email text,
     company_tel text,
     company_website text,
+    da_invoice_email_cc text,
+    da_invoice_email_bcc text,
     privacy_policy text,
     acceptable_use_policy text,
     otp_email_subject text,

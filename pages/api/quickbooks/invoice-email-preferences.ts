@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import {
-  qboGetDefaultInvoiceEmailFields,
+  qboGetQuickBooksInvoiceEmailFields,
   qboReadPreferences,
 } from '../../../lib/services/qboInvoiceService';
 
@@ -12,12 +12,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const app = typeof req.query.app === 'string' ? req.query.app : undefined;
     const preferences = await qboReadPreferences(app);
-    const emailFields = await qboGetDefaultInvoiceEmailFields(app);
+    const emailFields = await qboGetQuickBooksInvoiceEmailFields(app);
 
     return res.status(200).json({
       success: true,
-      cc: emailFields.BillEmailCc?.Address || '',
-      bcc: emailFields.BillEmailBcc?.Address || '',
+      cc: emailFields.cc,
+      bcc: emailFields.bcc,
       hasSalesEmailCcField: JSON.stringify(preferences).includes('SalesEmailCc'),
       hasSalesEmailBccField: JSON.stringify(preferences).includes('SalesEmailBcc'),
     });

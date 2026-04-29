@@ -53,11 +53,19 @@ export const UploadDirectApplicationView: React.FC = () => {
     const [autoEnrolPolling, setAutoEnrolPolling] = useState(false);
     const [emailToggleOn, setEmailToggleOn] = useState(false);
     const [emailToggleSaving, setEmailToggleSaving] = useState(false);
+    const [invoiceEmailCc, setInvoiceEmailCc] = useState('');
+    const [invoiceEmailBcc, setInvoiceEmailBcc] = useState('');
 
     React.useEffect(() => {
         fetch('/api/admin/da-email-toggle')
             .then(r => r.json())
-            .then(j => { if (j?.success) setEmailToggleOn(!!j.value); })
+            .then(j => {
+                if (j?.success) {
+                    setEmailToggleOn(!!j.value);
+                    setInvoiceEmailCc(j.cc || '');
+                    setInvoiceEmailBcc(j.bcc || '');
+                }
+            })
             .catch(() => { /* keep default off */ });
     }, []);
 
@@ -76,6 +84,44 @@ export const UploadDirectApplicationView: React.FC = () => {
         } catch (err) {
             setEmailToggleOn(!next);
             alert(`Failed to update setting: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setEmailToggleSaving(false);
+        }
+    };
+
+    const handleEmailRecipientsSave = async () => {
+        setEmailToggleSaving(true);
+        try {
+            const res = await fetch('/api/admin/da-email-toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cc: invoiceEmailCc, bcc: invoiceEmailBcc }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Save failed');
+            setInvoiceEmailCc(json.cc || '');
+            setInvoiceEmailBcc(json.bcc || '');
+        } catch (err) {
+            alert(`Failed to save recipients: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setEmailToggleSaving(false);
+        }
+    };
+
+    const handlePullEmailRecipientsFromQuickBooks = async () => {
+        setEmailToggleSaving(true);
+        try {
+            const res = await fetch('/api/admin/da-email-toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ importFromQuickBooks: true }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Import failed');
+            setInvoiceEmailCc(json.cc || '');
+            setInvoiceEmailBcc(json.bcc || '');
+        } catch (err) {
+            alert(`Failed to pull recipients from QuickBooks: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
             setEmailToggleSaving(false);
         }
@@ -411,6 +457,34 @@ export const UploadDirectApplicationView: React.FC = () => {
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${emailToggleOn ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                 </div>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
+                    <label className="block">
+                        <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">CC recipients</span>
+                        <input
+                            type="text"
+                            value={invoiceEmailCc}
+                            onChange={(e) => setInvoiceEmailCc(e.target.value)}
+                            placeholder="finance@example.com, admin@example.com"
+                            className={inputClasses}
+                        />
+                    </label>
+                    <label className="block">
+                        <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">BCC recipients</span>
+                        <input
+                            type="text"
+                            value={invoiceEmailBcc}
+                            onChange={(e) => setInvoiceEmailBcc(e.target.value)}
+                            placeholder="audit@example.com"
+                            className={inputClasses}
+                        />
+                    </label>
+                    <Button variant="secondary" onClick={handleEmailRecipientsSave} disabled={emailToggleSaving}>
+                        {emailToggleSaving ? 'Saving...' : 'Save Recipients'}
+                    </Button>
+                    <Button variant="outline" onClick={handlePullEmailRecipientsFromQuickBooks} disabled={emailToggleSaving}>
+                        Pull from QuickBooks
+                    </Button>
+                </div>
             </div>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
                 <h4 className="font-semibold text-amber-800 mb-2">Important: For Direct Application File</h4>
@@ -483,11 +557,19 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [isSyncing, setIsSyncing] = useState(false);
     const [emailToggleOn, setEmailToggleOn] = useState(false);
     const [emailToggleSaving, setEmailToggleSaving] = useState(false);
+    const [invoiceEmailCc, setInvoiceEmailCc] = useState('');
+    const [invoiceEmailBcc, setInvoiceEmailBcc] = useState('');
 
     React.useEffect(() => {
         fetch('/api/admin/da-email-toggle')
             .then(r => r.json())
-            .then(j => { if (j?.success) setEmailToggleOn(!!j.value); })
+            .then(j => {
+                if (j?.success) {
+                    setEmailToggleOn(!!j.value);
+                    setInvoiceEmailCc(j.cc || '');
+                    setInvoiceEmailBcc(j.bcc || '');
+                }
+            })
             .catch(() => { /* keep default off */ });
     }, []);
 
@@ -506,6 +588,44 @@ export const ViewDirectApplicationView: React.FC = () => {
         } catch (err) {
             setEmailToggleOn(!next);
             alert(`Failed to update setting: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setEmailToggleSaving(false);
+        }
+    };
+
+    const handleEmailRecipientsSave = async () => {
+        setEmailToggleSaving(true);
+        try {
+            const res = await fetch('/api/admin/da-email-toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cc: invoiceEmailCc, bcc: invoiceEmailBcc }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Save failed');
+            setInvoiceEmailCc(json.cc || '');
+            setInvoiceEmailBcc(json.bcc || '');
+        } catch (err) {
+            alert(`Failed to save recipients: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setEmailToggleSaving(false);
+        }
+    };
+
+    const handlePullEmailRecipientsFromQuickBooks = async () => {
+        setEmailToggleSaving(true);
+        try {
+            const res = await fetch('/api/admin/da-email-toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ importFromQuickBooks: true }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Import failed');
+            setInvoiceEmailCc(json.cc || '');
+            setInvoiceEmailBcc(json.bcc || '');
+        } catch (err) {
+            alert(`Failed to pull recipients from QuickBooks: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
             setEmailToggleSaving(false);
         }
@@ -985,6 +1105,34 @@ export const ViewDirectApplicationView: React.FC = () => {
                     >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${emailToggleOn ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
+                </div>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
+                    <label className="block">
+                        <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">CC recipients</span>
+                        <input
+                            type="text"
+                            value={invoiceEmailCc}
+                            onChange={(e) => setInvoiceEmailCc(e.target.value)}
+                            placeholder="finance@example.com, admin@example.com"
+                            className={inputClasses}
+                        />
+                    </label>
+                    <label className="block">
+                        <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">BCC recipients</span>
+                        <input
+                            type="text"
+                            value={invoiceEmailBcc}
+                            onChange={(e) => setInvoiceEmailBcc(e.target.value)}
+                            placeholder="audit@example.com"
+                            className={inputClasses}
+                        />
+                    </label>
+                    <Button variant="secondary" onClick={handleEmailRecipientsSave} disabled={emailToggleSaving}>
+                        {emailToggleSaving ? 'Saving...' : 'Save Recipients'}
+                    </Button>
+                    <Button variant="outline" onClick={handlePullEmailRecipientsFromQuickBooks} disabled={emailToggleSaving}>
+                        Pull from QuickBooks
+                    </Button>
                 </div>
             </Card>
 
