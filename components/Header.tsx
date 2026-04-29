@@ -313,7 +313,21 @@ const Header: React.FC = () => {
             </span>
           </div>
 
-          {/* Center Section: Navigation - Always visible */}
+          {/* Center Section: Admin gets a wide search bar; other roles keep their nav. */}
+          {isAdmin ? (
+            <div className="flex items-center justify-center px-2">
+              <button
+                onClick={() => setIsSearchOpen(true)}
+                title="Search functions (⌘K)"
+                aria-label="Search functions"
+                className="flex items-center gap-2 w-full max-w-xl px-3 sm:px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-sm font-medium text-on-surface-secondary transition-colors border border-default"
+              >
+                <Icon name={IconName.Search} className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1 text-left truncate">Search functions, e.g. cancel enrolment</span>
+                <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-on-surface-secondary border border-default rounded">⌘K</kbd>
+              </button>
+            </div>
+          ) : (
           <nav className="flex items-center justify-center space-x-1 sm:space-x-1.5 xl:space-x-2">
             {navItems.map(item => {
               // External link (opens in new tab)
@@ -393,23 +407,10 @@ const Header: React.FC = () => {
               );
             })}
           </nav>
+          )}
 
           {/* Right Section: Actions */}
           <div className="flex items-center justify-end space-x-1.5 sm:space-x-2">
-
-            {/* Function Search (Admin only) */}
-            {isAdmin && (
-              <button
-                onClick={() => setIsSearchOpen(true)}
-                title="Search functions (⌘K)"
-                aria-label="Search functions"
-                className="flex items-center gap-2 px-2 sm:px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors border border-gray-200 dark:border-gray-700"
-              >
-                <Icon name={IconName.Search} className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span className="hidden md:inline text-on-surface-secondary">Search</span>
-                <kbd className="hidden lg:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-on-surface-secondary border border-default rounded">⌘K</kbd>
-              </button>
-            )}
 
             {/* Role Switcher - only show if user has multiple roles */}
             {hasMultipleRoles && (
