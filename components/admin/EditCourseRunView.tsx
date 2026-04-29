@@ -186,7 +186,7 @@ export const EditCourseRunView: React.FC = () => {
             setWheelchairAccess(venue.wheelChairAccess ? OptionalSelector.YES : OptionalSelector.NO);
 
             setModeOfTraining(run.modeOfTraining ?? '1');
-            setCourseAdminEmail('sales@tertiarycourses.com.sg');
+            setCourseAdminEmail(run.courseAdminEmail ?? '');
             setCourseVacancy(run.courseVacancy?.code ?? 'A');
 
             setIsDataLoaded(true);

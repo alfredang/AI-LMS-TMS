@@ -46,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Must match the redirect URI used in /connect and registered in Intuit
-  const redirectUri = process.env.QBO_REDIRECT_URI || 'https://ai-lms-tms.tertiaryinfo.tech/api/quickbooks/oauth/callback';
+  const redirectUri = process.env.QBO_REDIRECT_URI || `${(process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '')}/api/quickbooks/oauth/callback`;
 
   // Exchange authorization code for tokens
   try {

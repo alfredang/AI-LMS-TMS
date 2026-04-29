@@ -37,6 +37,9 @@ export interface TrainingProviderEmailConfig {
   company_email?: string | null;
   company_name?: string | null;
   company_shortname?: string | null;
+  support_email?: string | null;
+  contact_tel?: string | null;
+  company_tel?: string | null;
   google_client_id: string;
   google_client_secret: string;
   google_refresh_token: string;
@@ -73,6 +76,7 @@ export interface TrainerInvitationSendResult {
 export async function loadTrainingProviderEmailConfig(): Promise<TrainingProviderEmailConfig | null> {
   const res = await pool.query(
     `SELECT email_user, company_email, company_name, company_shortname,
+            support_email, contact_tel, company_tel,
             google_client_id, google_client_secret, google_refresh_token,
             trainer_invitation_email_subject, trainer_invitation_email_body,
             trainer_invitation_email_cc
@@ -399,7 +403,7 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
 
   // 6. Build message
   const token = createInvitationToken();
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ai-lms-tms.tertiaryinfo.tech';
+  const siteUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || '';
   const acceptUrl = `${siteUrl}/api/public/trainer-invitation/respond?token=${token}&action=accept`;
   const declineUrl = `${siteUrl}/api/public/trainer-invitation/respond?token=${token}&action=decline`;
 
@@ -407,6 +411,8 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
     classRow,
     trainerName: trainer.full_name || nextTrainerName,
     companyShortName: tp.company_shortname || tp.company_name || 'Training Provider',
+    companyPhone: tp.contact_tel || tp.company_tel || '',
+    companyEmail: tp.support_email || tp.company_email || '',
     acceptUrl,
     declineUrl,
   });

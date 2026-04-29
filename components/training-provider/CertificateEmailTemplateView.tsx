@@ -28,7 +28,7 @@ const DEFAULT_BODY = `<p>Hello {STUDENT_NAME},</p>
 <p>Best regards,<br/>
 <strong>Support Team</strong><br/>
 <strong>{COMPANY_SHORT_NAME}</strong><br/>
-Tel: 61000613 | Email: <a href="mailto:support@tertiaryinfotech.com">support@tertiaryinfotech.com</a> | WhatsApp: <a href="https://wa.me/6561000613">https://wa.me/6561000613</a></p>`;
+Tel: {COMPANY_PHONE} | Email: <a href="mailto:{COMPANY_SUPPORT_EMAIL}">{COMPANY_SUPPORT_EMAIL}</a> | WhatsApp: <a href="https://wa.me/{COMPANY_WHATSAPP}">https://wa.me/{COMPANY_WHATSAPP}</a></p>`;
 
 const DEFAULT_CC = '';
 
@@ -173,6 +173,9 @@ const CertificateEmailTemplateView: React.FC = () => {
   const companyName = trainingProviderProfile?.companyName || 'Training Provider';
   const companyShortName = trainingProviderProfile?.companyShortname || companyName;
   const companyWebsite = trainingProviderProfile?.companyWebsite || '';
+  const companyPhone = trainingProviderProfile?.contactTel || '';
+  const companySupportEmail = trainingProviderProfile?.supportEmail || trainingProviderProfile?.companyEmail || '';
+  const companyWhatsApp = companyPhone.replace(/[^0-9]/g, '');
 
   const replaceVars = (text: string) =>
     text
@@ -181,6 +184,9 @@ const CertificateEmailTemplateView: React.FC = () => {
       .replace(/\{COMPANY_NAME\}/g, companyName)
       .replace(/\{COMPANY_SHORT_NAME\}/g, companyShortName)
       .replace(/\{COMPANY_WEBSITE\}/g, companyWebsite)
+      .replace(/\{COMPANY_PHONE\}/g, companyPhone)
+      .replace(/\{COMPANY_SUPPORT_EMAIL\}/g, companySupportEmail)
+      .replace(/\{COMPANY_WHATSAPP\}/g, companyWhatsApp)
       .replace(/\{CERTIFICATE_URL\}/g, 'https://drive.google.com/file/d/example/view');
 
   const previewSubject = replaceVars(subject);

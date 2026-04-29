@@ -96,12 +96,14 @@ class EmailService {
     const tp = await getTrainingPartnerIdentifiers();
     const companyName = tp.companyShortname || tp.name || 'Training Provider';
 
+    const siteUrl = (tp.siteUrl || '').replace(/\/$/, '') + '/';
+
     const subject = `${companyName} LMS - Verification Code`;
     const text = `Hi,
 
 Your OTP is ${otp}.
 
-Please use this to login to your account on the ${companyName} AI LMS TMS https://ai-lms-tms.tertiaryinfo.tech/ within ${expiryMinutes} minutes.
+Please use this to login to your account on the ${companyName} AI LMS TMS ${siteUrl} within ${expiryMinutes} minutes.
 
 If your OTP does not work, please request for a new OTP on the login page.
 
@@ -114,7 +116,7 @@ ${companyName}`;
       <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
         <p>Hi,</p>
         <p>Your OTP is <strong>${otp}</strong>.</p>
-        <p>Please use this to login to your account on the ${companyName} AI LMS TMS <a href="https://ai-lms-tms.tertiaryinfo.tech/">https://ai-lms-tms.tertiaryinfo.tech/</a> within ${expiryMinutes} minutes.</p>
+        <p>Please use this to login to your account on the ${companyName} AI LMS TMS <a href="${siteUrl}">${siteUrl}</a> within ${expiryMinutes} minutes.</p>
         <p>If your OTP does not work, please request for a new OTP on the login page.</p>
         <p>If you did not make this request, you may ignore this email. Do not share this OTP with anyone. This is strictly confidential and to be used by you only.</p>
         <p>Warm regards<br>${companyName}</p>

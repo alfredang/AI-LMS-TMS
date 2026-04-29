@@ -163,7 +163,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
           const evtRes = await calendar.events.get({ calendarId, eventId: googleEventId });
-          const EXCLUDED_EMAILS = new Set(['sales@tertiarycourses.com.sg']);
+          const EXCLUDED_EMAILS = new Set<string>();
           // Include ALL guests regardless of responseStatus (accepted/declined/tentative/needsAction)
           const attendees: string[] = (evtRes.data.attendees || [])
             .filter((a: any) => a.email && !a.self) // exclude the calendar owner's own entry

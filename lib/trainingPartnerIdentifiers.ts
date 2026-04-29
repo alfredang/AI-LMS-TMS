@@ -8,9 +8,18 @@ export interface TrainingPartnerIdentifiers {
   defaultPassword: string;
   companyWebsite: string;
   companyEmail: string;
+  supportEmail: string;
+  contactTel: string;
+  companyAddress: string;
+  siteUrl: string;
 }
 
 let cached: TrainingPartnerIdentifiers | null = null;
+
+/** Clear the cached identifiers so the next call re-fetches from DB. */
+export function clearTrainingPartnerCache() {
+  cached = null;
+}
 
 /**
  * Fetches the training partner UEN, code, and name from the database.
@@ -22,7 +31,9 @@ export async function getTrainingPartnerIdentifiers(): Promise<TrainingPartnerId
 
   try {
     const result = await pool.query(
-      `SELECT uen, company_name, company_shortname, default_password, company_website, company_email FROM training_provider WHERE uen IS NOT NULL LIMIT 1`
+      `SELECT uen, company_name, company_shortname, default_password, company_website,
+              company_email, support_email, contact_tel, company_tel, company_address
+       FROM training_provider WHERE uen IS NOT NULL LIMIT 1`
     );
 
     if (result.rows.length > 0) {
@@ -36,6 +47,10 @@ export async function getTrainingPartnerIdentifiers(): Promise<TrainingPartnerId
         defaultPassword: row.default_password || process.env.DEFAULT_PASSWORD || 'changeme',
         companyWebsite: row.company_website || '',
         companyEmail: row.company_email || '',
+        supportEmail: row.support_email || row.company_email || '',
+        contactTel: row.contact_tel || row.company_tel || '',
+        companyAddress: row.company_address || '',
+        siteUrl: process.env.NEXT_PUBLIC_BASE_URL || '',
       };
       return cached;
     }
@@ -53,6 +68,10 @@ export async function getTrainingPartnerIdentifiers(): Promise<TrainingPartnerId
     defaultPassword: process.env.DEFAULT_PASSWORD || 'changeme',
     companyWebsite: '',
     companyEmail: '',
+    supportEmail: '',
+    contactTel: '',
+    companyAddress: '',
+    siteUrl: process.env.NEXT_PUBLIC_BASE_URL || '',
   };
   return cached;
 }

@@ -88,6 +88,11 @@ const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; 
         defaultModel: '',
         models: []
     },
+    'FIRECRAWL_API_KEY': {
+        label: 'Firecrawl API Key',
+        defaultModel: '',
+        models: []
+    },
     'BIZFILE_CLIENT_ID': {
         label: 'Bizfile Client ID',
         defaultModel: '',
@@ -145,6 +150,9 @@ const OPENCLAW_API_KEY_NAMES = [
 ] as const;
 const N8N_API_KEY_NAMES = [
     'N8N_API_KEY',
+] as const;
+const FIRECRAWL_API_KEY_NAMES = [
+    'FIRECRAWL_API_KEY',
 ] as const;
 const BIZFILE_API_KEY_NAMES = [
     'BIZFILE_CLIENT_ID',
@@ -265,6 +273,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isLlmCredentialsOpen, setIsLlmCredentialsOpen] = useState(false);
     const [isOpenClawCredentialsOpen, setIsOpenClawCredentialsOpen] = useState(false);
     const [isN8nCredentialsOpen, setIsN8nCredentialsOpen] = useState(false);
+    const [isFirecrawlCredentialsOpen, setIsFirecrawlCredentialsOpen] = useState(false);
     const [isBizfileCredentialsOpen, setIsBizfileCredentialsOpen] = useState(false);
     const [isQuickbooksCredentialsOpen, setIsQuickbooksCredentialsOpen] = useState(false);
     const [isCompanyOpen, setIsCompanyOpen] = useState(false);
@@ -2238,6 +2247,15 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         {isN8nCredentialsOpen && (
                             <div className="rounded-md border border-default bg-surface p-5">
                                 {renderCredentialInputs(N8N_API_KEY_NAMES)}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        {renderSubsectionHeader('Firecrawl', isFirecrawlCredentialsOpen, () => setIsFirecrawlCredentialsOpen(prev => !prev))}
+                        {isFirecrawlCredentialsOpen && (
+                            <div className="rounded-md border border-default bg-surface p-5">
+                                {renderCredentialInputs(FIRECRAWL_API_KEY_NAMES)}
                             </div>
                         )}
                     </div>

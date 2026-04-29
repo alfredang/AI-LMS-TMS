@@ -32,7 +32,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Check if file exists — if not, proxy from production in dev mode
     if (!fs.existsSync(resolvedPath)) {
       if (process.env.NODE_ENV !== 'production') {
-        const prodUrl = `https://ai-lms-tms.tertiaryinfo.tech/uploads/${requestedPath}`;
+        const prodBaseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+        const prodUrl = `${prodBaseUrl}/uploads/${requestedPath}`;
         try {
           const prodRes = await fetch(prodUrl);
           if (prodRes.ok && prodRes.body) {

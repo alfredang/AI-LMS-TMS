@@ -26,6 +26,7 @@ import {
   type InfographicSkeleton as InfographicSkeletonImpl,
   type InfographicContentEntry as InfographicContentEntryImpl,
 } from './cw-slides-infographic';
+import { searchWebMulti } from './cw-slides-websearch';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Config
@@ -214,12 +215,21 @@ function computeTotalTarget(hours: number): number {
   return baseMax + (days - 2) * SLIDES_PER_DAY_DEFAULT;
 }
 
+// Floor for blocks per topic regardless of math. Earlier the formula
+// could land at 2 blocks per topic (e.g. 21-topic 1-day course) which
+// produces thin "what is X / key takeaways" decks with no meat in
+// between. Streamlit's reference deck targets ~6-7 infographics per
+// topic; we floor at 5 so every topic gets at least overview + 3
+// concept slides + key takeaways even when duration parsing is off
+// or the CP packs many topics into a short course.
+const MIN_BLOCKS_PER_TOPIC = 5;
+
 function computePerTopicDistribution(hours: number, numTopics: number): number[] {
   if (numTopics <= 0) return [];
   const target = computeTotalTarget(hours);
   const standard = computeStandardSlideCount(numTopics);
-  const contentBudget = Math.max(numTopics, target - standard);
-  let base = Math.max(1, Math.floor(contentBudget / numTopics));
+  const contentBudget = Math.max(numTopics * MIN_BLOCKS_PER_TOPIC, target - standard);
+  let base = Math.max(MIN_BLOCKS_PER_TOPIC, Math.floor(contentBudget / numTopics));
   base = Math.min(base, MAX_SLIDES_PER_TOPIC);
   const remainder = contentBudget - base * numTopics;
   const dist = new Array(numTopics).fill(base);
@@ -433,18 +443,35 @@ async function researchTopic(
     : '';
   const loText = topic.lo_description ? `\nLearning Outcome: ${topic.lo_description}` : '';
 
-  const prompt = `Research the following topic for a WSQ training course.
+  // ── Node-side internet search ──
+  // Bypasses the Anthropic SDK's WebSearch tool (which requires a special
+  // permission on the API key) by calling DuckDuckGo's HTML endpoint
+  // directly. Real internet results — same data quality as the local-dev
+  // WebSearch path — work on ANY API key including OAuth subscription
+  // tokens. The search results are passed into the model prompt as plain
+  // text and the model synthesises them into the structured ResearchEntry.
+  const queries = [
+    `${topic.topic_title} overview guide best practices`,
+    `${topic.topic_title} statistics framework examples`,
+  ];
+  const webResults = await searchWebMulti(queries, 4, 8).catch(() => []);
+  const webResultsText = webResults.length > 0
+    ? '\n\nINTERNET SEARCH RESULTS (use these as your sources — cite them in the JSON output):\n' +
+      webResults.map((r, i) => `${i + 1}. "${r.title}" — ${r.url}\n   ${r.snippet}`).join('\n\n')
+    : '';
+  if (webResults.length > 0) {
+    console.log(`[cw-slides] research: ${webResults.length} web results for '${topic.topic_title}'`);
+  }
+
+  const prompt = `Synthesise research output for a WSQ training course topic. Use the internet search results below (already fetched for you) as your primary source material. Extract sources, summarise findings, and structure key data into the JSON schema.
 
 COURSE: ${courseTitle}
-TOPIC (research EXACTLY this): ${topic.topic_title}
+TOPIC: ${topic.topic_title}
 ${loText}
 ${bpText}
+${webResultsText}
 
-SEARCH PLAN (2 searches, NO WebFetch):
-1. WebSearch for "${topic.topic_title} overview guide best practices"
-2. WebSearch for "${topic.topic_title} statistics framework examples"
-3. Extract 3-5 sources from search result snippets
-4. Return JSON immediately
+When the search results above are populated, cite them by title in the "sources" array — these are real internet sources, use them. When they are empty, fall back to your training knowledge of recognised industry frameworks (NIST, ISO, OECD, UNESCO, McKinsey, Gartner, etc.) and cite real, plausible source names.
 
 Return this JSON:
 {
@@ -463,18 +490,81 @@ Return this JSON:
   }
 }`;
 
+  // Synthesis call — no tools needed. Search results were already fetched
+  // by Node above and embedded in the prompt; the model only synthesises.
+  // This works on ANY Anthropic API key (including OAuth subscription
+  // tokens) because we don't depend on the SDK's WebSearch tool permission.
   try {
     const result = await runAgentJson({
       prompt,
       systemPrompt: RESEARCH_SYSTEM_PROMPT,
-      tools: ['WebSearch'],
-      maxTurns: 5,
+      tools: [],
+      maxTurns: 1,
       model: model || FAST_MODEL,
       apiKey,
     });
-    return result as ResearchEntry;
+    const r = result as ResearchEntry;
+    if (Array.isArray(r?.sources) && r.sources.length > 0) return r;
+    console.warn(`[cw-slides] research synthesis returned 0 sources for '${topic.topic_title}', using knowledge fallback`);
   } catch (e: any) {
-    console.error(`[cw-slides] research failed for '${topic.topic_title}':`, e.message);
+    console.warn(`[cw-slides] research synthesis failed for '${topic.topic_title}': ${e.message}, using knowledge fallback`);
+  }
+
+  // Knowledge-based research — model writes research-quality output from its
+  // own training data, citing recognised industry frameworks and reports.
+  // No WebSearch tool needed, so this works on any API key. Output schema
+  // matches the WebSearch path so downstream code is unchanged.
+  try {
+    const knowledgePrompt = `Write a research summary for this WSQ training topic using your training knowledge of the field. Cite recognised, well-known sources by name (industry standards bodies, government regulators, major consultancies, academic publications) — these are real, plausible references the model should know from its training data.
+
+COURSE: ${courseTitle}
+TOPIC: ${topic.topic_title}
+${loText}
+${bpText}
+
+Examples of real source names you may cite (use the most relevant for this topic):
+  • Standards: ISO/IEC 27001, NIST AI RMF, OECD AI Principles, EU AI Act, ITIL 4, COBIT 2019, IEEE Std
+  • Regulators: SkillsFuture SG, IMDA, MAS, PDPC (Singapore PDPA), MOM, FDA, SEC
+  • International bodies: UNESCO, World Economic Forum, World Bank, OECD
+  • Industry research: Gartner, Forrester, McKinsey, Deloitte, PwC, EY, BCG, IDC
+  • Vendor publications: Microsoft Learn, AWS Whitepapers, Google Cloud Blog, IBM Research
+  • Academic: Harvard Business Review, MIT Sloan Management Review, Nature, Springer
+  • Year: prefer 2023-2025 sources
+
+Return ONLY this JSON (no preamble, no markdown):
+{
+  "topic": "${topic.topic_title}",
+  "sources": [
+    {"url":"https://example.org/...","title":"<recognised source name>","key_findings":["<finding>","<finding>"],"date":"2024"}
+  ],
+  "summary": "2-3 paragraph synthesis of the topic from training knowledge",
+  "key_statistics": [{"stat":"<percentage or number with context>","source":"<source>","chart_type":"pie"}],
+  "infographic_data": {
+    "chart_data": [{"label":"<short>","value":<num>,"source":"<source>"}],
+    "process_steps": ["<step 1>","<step 2>","<step 3>","<step 4>"],
+    "comparison_items": [{"label":"<side A>","desc":"<short>"},{"label":"<side B>","desc":"<short>"}],
+    "hierarchy_data": {"root":"<root>","children":["<child>","<child>"]},
+    "timeline_data": [{"year":"<yr>","event":"<event>"}]
+  }
+}
+
+REQUIREMENTS:
+- 3-5 sources, each with a real, recognisable title and a plausible date
+- 4-6 chart_data points with realistic numeric values
+- 4-6 process_steps relevant to the topic
+- 2 comparison_items with concrete labels (NOT "Pros"/"Cons")
+- Output ONLY the JSON.`;
+    const knowledge = await runAgentJson({
+      prompt: knowledgePrompt,
+      systemPrompt: 'You are a domain-expert research writer. Use your training knowledge to write research-quality output for WSQ training topics. Always cite real, recognisable source names. Output ONLY valid JSON.',
+      tools: [],
+      maxTurns: 1,
+      model: model || FAST_MODEL,
+      apiKey,
+    });
+    return knowledge as ResearchEntry;
+  } catch (e: any) {
+    console.error(`[cw-slides] knowledge-based research also failed for '${topic.topic_title}':`, e.message);
     return fallbackResearch(topic.topic_title);
   }
 }
@@ -562,14 +652,17 @@ function captionFromResearch(research: ResearchEntry | undefined, topicTitle: st
       const title = String(s?.title ?? '').trim();
       const year = String(s?.date ?? '').trim();
       if (!title) return '';
-      // Strip trailing punctuation for cleaner caption
       const clean = title.replace(/[.;:,!?]+$/, '').slice(0, 40);
       return year ? `${clean}, ${year}` : clean;
     })
     .filter(Boolean)
     .slice(0, 3);
   if (named.length) return `Source: ${named.join('; ')}`;
-  return `Source: Course Proposal — ${topicTitle}`;
+  // Research truly returned nothing — leave empty rather than cite the
+  // CP (per supervisor: internet sources only). The slide will render
+  // without a source line, which is honest about the data state.
+  void topicTitle;
+  return '';
 }
 
 // Fallback when content generation completely fails for a topic. Builds

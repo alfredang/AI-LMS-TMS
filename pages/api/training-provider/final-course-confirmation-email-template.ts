@@ -1,5 +1,6 @@
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -7,6 +8,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'GET') {
     try {
+      const tp = await getTrainingPartnerIdentifiers();
       await pool.query('ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS final_course_confirmation_email_subject TEXT');
       await pool.query('ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS final_course_confirmation_email_body TEXT');
       await pool.query('ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS final_course_confirmation_email_cc TEXT');
@@ -14,12 +16,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const row = result.rows[0] || {};
       let finalCourseConfirmationEmailBody = row.final_course_confirmation_email_body || '';
 
-      // Replace variables with hardcoded values
+      // Replace template variables with values from Company Settings
       finalCourseConfirmationEmailBody = finalCourseConfirmationEmailBody
-        .replace(/\{COMPANY_PHONE\}/g, '6100 0613')
-        .replace(/\{COMPANY_EMAIL\}/g, 'enquiry@tertiaryinfotech.com')
-        .replace(/\{COMPANY_SHORT_NAME\}/g, 'Tertiary Courses SG')
-        .replace(/\{COMPANY_NAME\}/g, 'Tertiary Infotech');
+        .replace(/\{COMPANY_PHONE\}/g, tp.contactTel)
+        .replace(/\{COMPANY_EMAIL\}/g, tp.supportEmail || tp.companyEmail)
+        .replace(/\{COMPANY_SHORT_NAME\}/g, tp.companyShortname)
+        .replace(/\{COMPANY_NAME\}/g, tp.name);
 
       return res.status(200).json({
         success: true,
@@ -41,13 +43,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (typeof finalCourseConfirmationEmailSubject !== 'string' || typeof finalCourseConfirmationEmailBody !== 'string') {
         return res.status(400).json({ success: false, error: 'finalCourseConfirmationEmailSubject and finalCourseConfirmationEmailBody must be strings' });
       }
-
-      // Replace variables with hardcoded values
-      // finalCourseConfirmationEmailBody = finalCourseConfirmationEmailBody
-      //   .replace(/\{COMPANY_PHONE\}/g, '6100 0613')
-      //   .replace(/\{COMPANY_EMAIL\}/g, 'enquiry@tertiaryinfotech.com')
-      //   .replace(/\{COMPANY_SHORT_NAME\}/g, 'Tertiary Courses SG')
-      //   .replace(/\{COMPANY_NAME\}/g, 'Tertiary Infotech');
 
       await pool.query('ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS final_course_confirmation_email_subject TEXT');
       await pool.query('ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS final_course_confirmation_email_body TEXT');

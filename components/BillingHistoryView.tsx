@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
@@ -55,26 +55,65 @@ const BillingHistoryView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [brokenLinks, setBrokenLinks] = useState<Set<string>>(new Set());
+  const autoVerifiedKeys = useRef<Set<string>>(new Set());
+
+  const fetchData = useCallback(async () => {
+    if (!currentUser?.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/billing/billing-history?userId=${currentUser.id}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Failed to load billing history');
+      setRows(json.data);
+      setSummary(json.summary);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load billing history');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser?.id]);
 
   useEffect(() => {
-    if (!currentUser?.id) return;
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/billing/billing-history?userId=${currentUser.id}`);
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error || 'Failed to load billing history');
-        setRows(json.data);
-        setSummary(json.summary);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load billing history');
-      } finally {
-        setLoading(false);
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (loading || error || rows.length === 0) return;
+
+    let cancelled = false;
+    const verifyLoadedDocuments = async () => {
+      let cleanedAny = false;
+
+      for (const row of rows) {
+        if (!row.document_url) continue;
+
+        const key = `${row.enrollment_id}-${row.type}-${row.document_url}`;
+        if (autoVerifiedKeys.current.has(key)) continue;
+        autoVerifiedKeys.current.add(key);
+
+        try {
+          const res = await fetch(
+            `/api/billing/verify-drive?url=${encodeURIComponent(row.document_url)}&enrollmentId=${row.enrollment_id}`
+          );
+          const json = await res.json();
+          if (!json.valid) {
+            cleanedAny = true;
+            setBrokenLinks((prev) => new Set(prev).add(`${row.enrollment_id}-${row.type}`));
+          }
+        } catch {
+          // Keep the row visible if verification is unavailable.
+        }
+      }
+
+      if (cleanedAny && !cancelled) {
+        await fetchData();
       }
     };
-    fetchData();
-  }, [currentUser?.id]);
+
+    verifyLoadedDocuments();
+    return () => { cancelled = true; };
+  }, [error, fetchData, loading, rows]);
 
   const filtered = rows.filter(r => {
     if (!search.trim()) return true;

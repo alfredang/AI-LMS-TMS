@@ -232,6 +232,8 @@ export interface TrainingProviderProfile extends BaseProfile {
   companyTel: string;
   companyWebsite: string;
   companyLogoUrl?: string;
+  supportEmail?: string;
+  contactTel?: string;
   loginId: string;
   contactPerson: {
     name: string;

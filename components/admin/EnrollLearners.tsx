@@ -672,8 +672,6 @@ const EnrollLearners: React.FC = () => {
     if (formData.traineeSponsorshipType === SponsorshipType.EMPLOYER) {
       if (!formData.employerUen?.trim()) {
         newErrors.push('Employer UEN is required for employer-sponsored trainees');
-      } else if (!validateUEN(formData.employerUen)) {
-        newErrors.push('Employer UEN is not valid');
       }
 
       if (!formData.employerFullName?.trim()) {
