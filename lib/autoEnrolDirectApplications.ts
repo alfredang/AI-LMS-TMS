@@ -38,7 +38,7 @@ import { refreshGrantsForEnrolments } from './services/billingSync';
 import { loadSplitGrantDeductionsFromDb } from './services/daInvoiceGrantLines';
 import { driveFileExists, uploadInvoicePdfToDrive } from './services/invoiceDriveUpload';
 import { ensureInvoiceJobsTable } from './services/invoiceJobs';
-import { qboFetchInvoicePdf, qboReadInvoice } from './services/qboInvoiceService';
+import { qboFetchInvoicePdf, qboReadInvoice, qboSendInvoice } from './services/qboInvoiceService';
 import { shouldSendQboInvoiceEmailFromQuickBooks } from './services/qboInvoiceEmailPolicy';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from './google-auth/googleAuth';
@@ -411,16 +411,7 @@ function hasSsgError(parsed: any): string | null {
 }
 
 async function callInvoiceSend(invoiceId: string, email: string): Promise<void> {
-  const baseUrl = process.env.QBO_PROXY_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'send', entity: 'invoice', id: invoiceId, sendTo: email }),
-  });
-  const data = await resp.json().catch(() => null);
-  if (!resp.ok || !data?.success) {
-    throw new Error(data?.error || `QB send returned ${resp.status}`);
-  }
+  await qboSendInvoice(undefined, invoiceId, email);
 }
 
 // ---------------------------------------------------------------------------

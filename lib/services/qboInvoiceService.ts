@@ -136,6 +136,32 @@ function baseCompanyUrl(realmId: string): string {
   return `${QBO_BASE_URL}/v3/company/${realmId}`;
 }
 
+function normalizeEmailAddressList(value: unknown): string | null {
+  const raw =
+    typeof value === 'string'
+      ? value
+      : value && typeof value === 'object' && typeof (value as { Address?: unknown }).Address === 'string'
+        ? (value as { Address: string }).Address
+        : '';
+  const emails = raw
+    .split(/[,\n;]/)
+    .map(email => email.trim())
+    .filter(Boolean);
+  const unique = Array.from(new Set(emails));
+  return unique.length ? unique.join(',') : null;
+}
+
+function findNestedValueByKey(value: unknown, key: string): unknown {
+  if (!value || typeof value !== 'object') return undefined;
+  const obj = value as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(obj, key)) return obj[key];
+  for (const child of Object.values(obj)) {
+    const found = findNestedValueByKey(child, key);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
 /**
  * QBO often returns Message: "A business validation error has occurred..."
  * while the real reason is in Error[].Detail — surface both.
@@ -185,6 +211,85 @@ export async function qboQuery(appOverride: string | undefined, query: string): 
   const token = await getAccessToken(creds, appKey);
   const url = `${baseCompanyUrl(creds.realmId)}/query?query=${encodeURIComponent(query)}&minorversion=${MINOR_VERSION}`;
   return qboFetchJson({ token, url });
+}
+
+export async function qboReadPreferences(appOverride: string | undefined): Promise<any> {
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/preferences?minorversion=${MINOR_VERSION}`;
+  const data = await qboFetchJson({ token, url, method: 'GET' });
+  return data?.Preferences ?? data;
+}
+
+export async function qboGetDefaultInvoiceEmailCc(appOverride: string | undefined): Promise<string | null> {
+  const envCc = normalizeEmailAddressList(process.env.QBO_INVOICE_EMAIL_CC);
+  if (envCc) return envCc;
+
+  const preferences = await qboReadPreferences(appOverride);
+  return normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailCc'));
+}
+
+export async function qboGetDefaultInvoiceEmailBcc(appOverride: string | undefined): Promise<string | null> {
+  const envBcc = normalizeEmailAddressList(process.env.QBO_INVOICE_EMAIL_BCC);
+  if (envBcc) return envBcc;
+
+  const preferences = await qboReadPreferences(appOverride);
+  return normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailBcc'));
+}
+
+export async function qboGetQuickBooksInvoiceEmailFields(
+  appOverride: string | undefined
+): Promise<{ cc: string; bcc: string }> {
+  const preferences = await qboReadPreferences(appOverride);
+  return {
+    cc: normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailCc')) || '',
+    bcc: normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailBcc')) || '',
+  };
+}
+
+export async function qboGetDefaultInvoiceEmailFields(
+  appOverride: string | undefined
+): Promise<{ BillEmailCc?: { Address: string }; BillEmailBcc?: { Address: string } }> {
+  let dbCc: string | null = null;
+  let dbBcc: string | null = null;
+  let hasDbCcSetting = false;
+  let hasDbBccSetting = false;
+
+  try {
+    const result = await pool.query(
+      `SELECT da_invoice_email_cc, da_invoice_email_bcc
+       FROM training_provider
+       LIMIT 1`
+    );
+    hasDbCcSetting = result.rows[0]?.da_invoice_email_cc !== null && result.rows[0]?.da_invoice_email_cc !== undefined;
+    hasDbBccSetting = result.rows[0]?.da_invoice_email_bcc !== null && result.rows[0]?.da_invoice_email_bcc !== undefined;
+    dbCc = normalizeEmailAddressList(result.rows[0]?.da_invoice_email_cc);
+    dbBcc = normalizeEmailAddressList(result.rows[0]?.da_invoice_email_bcc);
+  } catch {
+    // Columns may not exist until the migration is applied. Fall back below.
+  }
+
+  const envCc = normalizeEmailAddressList(process.env.QBO_INVOICE_EMAIL_CC);
+  const envBcc = normalizeEmailAddressList(process.env.QBO_INVOICE_EMAIL_BCC);
+  let cc = hasDbCcSetting ? dbCc : envCc;
+  let bcc = hasDbBccSetting ? dbBcc : envBcc;
+
+  if ((!hasDbCcSetting && !cc) || (!hasDbBccSetting && !bcc)) {
+    try {
+      const preferences = await qboReadPreferences(appOverride);
+      if (!hasDbCcSetting) cc = cc || normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailCc'));
+      if (!hasDbBccSetting) bcc = bcc || normalizeEmailAddressList(findNestedValueByKey(preferences, 'SalesEmailBcc'));
+    } catch (err) {
+      console.warn('[qbo] Could not read invoice email CC/BCC preferences:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  return {
+    ...(cc ? { BillEmailCc: { Address: cc } } : {}),
+    ...(bcc ? { BillEmailBcc: { Address: bcc } } : {}),
+  };
 }
 
 export async function qboCreateInvoice(appOverride: string | undefined, body: any): Promise<{ id: string; docNumber?: string; raw: any }> {
@@ -332,6 +437,13 @@ export async function qboSendInvoice(appOverride: string | undefined, invoiceId:
   if (!creds) throw new Error('QuickBooks credentials not configured');
   const appKey = `${creds.selectedApp}:${creds.realmId}`;
   const token = await getAccessToken(creds, appKey);
+  const emailFields = await qboGetDefaultInvoiceEmailFields(appOverride);
+  if (Object.keys(emailFields).length > 0) {
+    const invoice = await qboReadInvoice(appOverride, invoiceId);
+    if (invoice.syncToken) {
+      await qboSparseUpdateInvoice(appOverride, invoiceId, invoice.syncToken, emailFields);
+    }
+  }
   const sendPath = `${baseCompanyUrl(creds.realmId)}/invoice/${encodeURIComponent(invoiceId)}/send`;
   const params = new URLSearchParams({ minorversion: String(MINOR_VERSION) });
   if (sendTo?.trim()) params.set('sendTo', sendTo.trim());

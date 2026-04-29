@@ -1,7 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-
-const BASE_URL = process.env.QBO_PROXY_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+import {
+  qboGetDefaultInvoiceEmailFields,
+  qboReadInvoice,
+  qboSendInvoice,
+  qboSparseUpdateInvoice,
+} from '../../../lib/services/qboInvoiceService';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
@@ -25,34 +29,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!row.invoice_id || !row.trainee_email) { skipped++; continue; }
 
       try {
-        // Read the current invoice so we have SyncToken (required for update)
-        const readResp = await fetch(`${BASE_URL}/api/quickbooks/proxy`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'read', entity: 'invoice', id: row.invoice_id }),
-        });
-        const readData = await readResp.json().catch(() => null);
-        const invoice = readData?.data?.Invoice;
-        if (invoice?.SyncToken) {
-          // Patch BillEmail to learner's email before sending
-          await fetch(`${BASE_URL}/api/quickbooks/proxy`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'create',
-              entity: 'invoice',
-              body: { Id: row.invoice_id, SyncToken: invoice.SyncToken, BillEmail: { Address: row.trainee_email }, sparse: true },
-            }),
+        const invoice = await qboReadInvoice(undefined, row.invoice_id);
+        if (invoice.syncToken) {
+          await qboSparseUpdateInvoice(undefined, row.invoice_id, invoice.syncToken, {
+            BillEmail: { Address: row.trainee_email },
+            ...(await qboGetDefaultInvoiceEmailFields(undefined)),
           });
         }
 
-        const resp = await fetch(`${BASE_URL}/api/quickbooks/proxy`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'send', entity: 'invoice', id: row.invoice_id, sendTo: row.trainee_email }),
-        });
-        const data = await resp.json().catch(() => null);
-        if (!resp.ok || !data?.success) throw new Error(data?.error || `QB send returned ${resp.status}`);
+        await qboSendInvoice(undefined, row.invoice_id, row.trainee_email);
         sent++;
         console.log(`[DA email] Sent invoice ${row.invoice_id} to ${row.trainee_email}`);
       } catch (err) {
