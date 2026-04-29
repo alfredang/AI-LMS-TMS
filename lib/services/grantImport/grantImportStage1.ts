@@ -407,7 +407,9 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
       matched_qb_object_id: r.matchedQbObjectId,
       existing_amount: r.existingAmount,
       existing_payment_date: r.existingPaymentDate,
-      selected_for_apply: r.matchStatus === 'ready',
+      // Default selection should be explicit by user action (or "Select all Ready"),
+      // so the Selected count reflects only what the user chose.
+      selected_for_apply: false,
       apply_status: r.matchStatus === 'already_applied' && r.matchedQbObjectId ? 'applied' : null,
       apply_error: null,
       applied_at: r.matchStatus === 'already_applied' && r.matchedQbObjectId ? new Date().toISOString() : null,

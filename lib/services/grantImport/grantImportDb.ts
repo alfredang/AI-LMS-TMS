@@ -197,63 +197,106 @@ export async function insertGrantImportBatch(input: {
 export async function insertGrantImportRows(batchId: string, rows: Array<Record<string, any>>): Promise<void> {
   await requireGrantImportSchema();
   if (rows.length === 0) return;
-  // Insert one-by-one for clarity and partial safety; stage 2 will need row-level updates anyway.
-  for (const row of rows) {
-    await pool.query(
-      `INSERT INTO public.grant_import_rows (
-        batch_id, row_number,
-        financial_transaction_id, enrolment_id, grant_id,
-        course_title, scheme, trainee_id, trainee_name, employer_name,
-        amount_raw, amount_parsed, payment_date_raw, payment_date_parsed,
-        bank_reference_id, funding_component, raw_row_json,
-        validation_status, validation_errors,
-        match_status,
-        matched_fms_record_id, matched_qb_object_id, existing_amount, existing_payment_date,
-        selected_for_apply,
-        apply_status, apply_error, applied_at
-      ) VALUES (
-        $1::uuid, $2::int,
-        $3::text, $4::text, $5::text,
-        $6::text, $7::text, $8::text, $9::text, $10::text,
-        $11::text, $12::numeric, $13::text, $14::date,
-        $15::text, $16::text, $17::jsonb,
-        $18::public.grant_import_validation_status, $19::jsonb,
-        $20::public.grant_import_match_status,
-        $21::text, $22::text, $23::numeric, $24::date,
-        $25::boolean,
-        $26::public.grant_import_apply_status, $27::text, $28::timestamptz
-      )`,
-      [
-        batchId,
-        row.row_number,
-        row.financial_transaction_id,
-        row.enrolment_id,
-        row.grant_id,
-        row.course_title,
-        row.scheme,
-        row.trainee_id,
-        row.trainee_name,
-        row.employer_name,
-        row.amount_raw,
-        row.amount_parsed,
-        row.payment_date_raw,
-        row.payment_date_parsed,
-        row.bank_reference_id,
-        row.funding_component,
-        row.raw_row_json,
-        row.validation_status,
-        row.validation_errors,
-        row.match_status,
-        row.matched_fms_record_id,
-        row.matched_qb_object_id,
-        row.existing_amount,
-        row.existing_payment_date,
-        row.selected_for_apply ?? true,
-        row.apply_status ?? null,
-        row.apply_error ?? null,
-        row.applied_at ?? null,
-      ]
-    );
+  // Bulk insert in chunks (much faster than one-by-one, especially on local dev).
+  const client = await pool.connect();
+  const cols = [
+    'batch_id',
+    'row_number',
+    'financial_transaction_id',
+    'enrolment_id',
+    'grant_id',
+    'course_title',
+    'scheme',
+    'trainee_id',
+    'trainee_name',
+    'employer_name',
+    'amount_raw',
+    'amount_parsed',
+    'payment_date_raw',
+    'payment_date_parsed',
+    'bank_reference_id',
+    'funding_component',
+    'raw_row_json',
+    'validation_status',
+    'validation_errors',
+    'match_status',
+    'matched_fms_record_id',
+    'matched_qb_object_id',
+    'existing_amount',
+    'existing_payment_date',
+    'selected_for_apply',
+    'apply_status',
+    'apply_error',
+    'applied_at',
+  ] as const;
+
+  const chunkSize = 400; // keeps query size reasonable
+  try {
+    await client.query('BEGIN');
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
+      const values: any[] = [];
+      const tuples: string[] = [];
+      for (let r = 0; r < chunk.length; r++) {
+        const row = chunk[r];
+        const base = values.length;
+        // 28 columns per row
+        tuples.push(
+          `($${base + 1}::uuid, $${base + 2}::int, ` +
+            `$${base + 3}::text, $${base + 4}::text, $${base + 5}::text, ` +
+            `$${base + 6}::text, $${base + 7}::text, $${base + 8}::text, $${base + 9}::text, $${base + 10}::text, ` +
+            `$${base + 11}::text, $${base + 12}::numeric, $${base + 13}::text, $${base + 14}::date, ` +
+            `$${base + 15}::text, $${base + 16}::text, $${base + 17}::jsonb, ` +
+            `$${base + 18}::public.grant_import_validation_status, $${base + 19}::jsonb, ` +
+            `$${base + 20}::public.grant_import_match_status, ` +
+            `$${base + 21}::text, $${base + 22}::text, $${base + 23}::numeric, $${base + 24}::date, ` +
+            `$${base + 25}::boolean, $${base + 26}::public.grant_import_apply_status, $${base + 27}::text, $${base + 28}::timestamptz)`
+        );
+
+        values.push(
+          batchId,
+          row.row_number,
+          row.financial_transaction_id,
+          row.enrolment_id,
+          row.grant_id,
+          row.course_title,
+          row.scheme,
+          row.trainee_id,
+          row.trainee_name,
+          row.employer_name,
+          row.amount_raw,
+          row.amount_parsed,
+          row.payment_date_raw,
+          row.payment_date_parsed,
+          row.bank_reference_id,
+          row.funding_component,
+          row.raw_row_json,
+          row.validation_status,
+          row.validation_errors,
+          row.match_status,
+          row.matched_fms_record_id,
+          row.matched_qb_object_id,
+          row.existing_amount,
+          row.existing_payment_date,
+          row.selected_for_apply ?? true,
+          row.apply_status ?? null,
+          row.apply_error ?? null,
+          row.applied_at ?? null
+        );
+      }
+
+      await client.query(
+        `INSERT INTO public.grant_import_rows (${cols.join(', ')})
+         VALUES ${tuples.join(', ')}`,
+        values
+      );
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
   }
 }
 
@@ -429,6 +472,21 @@ export async function clearApplyStateForSelectedRows(batchId: string): Promise<v
      WHERE batch_id = $1::uuid
        AND selected_for_apply = true`,
     [batchId]
+  );
+}
+
+/** Clear prior apply results for a specific set of row IDs (used when rowIds are passed explicitly from the client). */
+export async function clearApplyStateForSpecificRows(batchId: string, rowIds: string[]): Promise<void> {
+  await requireGrantImportSchema();
+  if (rowIds.length === 0) return;
+  await pool.query(
+    `UPDATE public.grant_import_rows
+     SET apply_status = NULL,
+         apply_error = NULL,
+         applied_at = NULL
+     WHERE batch_id = $1::uuid
+       AND id = ANY($2::uuid[])`,
+    [batchId, rowIds]
   );
 }
 

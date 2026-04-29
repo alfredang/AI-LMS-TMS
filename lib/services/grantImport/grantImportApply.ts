@@ -1,5 +1,6 @@
 import {
   clearApplyStateForSelectedRows,
+  clearApplyStateForSpecificRows,
   insertGrantImportAuditLog,
   listApplyCandidates,
   markBatchStatus,
@@ -182,12 +183,14 @@ async function qbFindInvoiceByScanningRecentInvoices(
   const d = parseIsoDate(paymentDate);
   if (!d) return null;
   const end = new Date(d.getTime() + 24 * 60 * 60 * 1000);
-  const start = new Date(d.getTime() - 180 * 24 * 60 * 60 * 1000);
+  // Performance: keep the scan window tight.
+  // Scanning too many invoices can make a single-row apply take 30-60s locally.
+  const start = new Date(d.getTime() - 60 * 24 * 60 * 60 * 1000);
   const endIso = fmtIsoDate(end);
   const startIso = fmtIsoDate(start);
 
   const pageSize = 100;
-  const maxPages = 15; // up to 1500 invoices in window
+  const maxPages = 3; // up to 300 invoices in window
   for (let page = 0; page < maxPages; page++) {
     const startPos = page * pageSize + 1;
     const data = await callQbProxy({
@@ -417,11 +420,13 @@ export async function applyGrantImportBatch(input: {
   actorUserId: string | null;
   dryRun: boolean;
   allowOverwriteAlreadyApplied: boolean;
+  /** When provided, only these row IDs are processed (overrides DB selected_for_apply). */
+  rowIds?: string[];
 }): Promise<{
   batchId: string;
   summary: { totalSelected: number; applied: number; skipped: number; failed: number };
   results: Array<{ rowId: string; ok: boolean; status: 'applied' | 'skipped' | 'failed'; error?: string }>;
-  enrolmentRollups: { updated: number; results: any[] };
+  enrolmentRollups: { updated: number; results: any[]; pending?: boolean };
 }> {
   await markBatchStatus(input.batchId, 'applying', input.actorUserId);
   await insertGrantImportAuditLog({
@@ -433,10 +438,20 @@ export async function applyGrantImportBatch(input: {
   });
 
   // Reset apply fields for this run so polling UI can show accurate done/total (terminal statuses only).
-  await clearApplyStateForSelectedRows(input.batchId);
+  if (input.rowIds && input.rowIds.length > 0) {
+    await clearApplyStateForSpecificRows(input.batchId, input.rowIds);
+  } else {
+    await clearApplyStateForSelectedRows(input.batchId);
+  }
 
   const rows = await listApplyCandidates(input.batchId);
-  const selected = rows.filter((r) => r.selected_for_apply);
+  let selected: typeof rows;
+  if (input.rowIds && input.rowIds.length > 0) {
+    const idSet = new Set(input.rowIds);
+    selected = rows.filter((r) => idSet.has(r.id));
+  } else {
+    selected = rows.filter((r) => r.selected_for_apply);
+  }
   const totalSelected = selected.length;
 
   let applied = 0;
@@ -603,20 +618,23 @@ export async function applyGrantImportBatch(input: {
           const existingSync = hit.SyncToken ? String(hit.SyncToken) : undefined;
 
           if (!input.allowOverwriteAlreadyApplied) {
-            skipped += 1;
+            applied += 1;
+            const appliedAt = new Date().toISOString();
             await updateRowApplyResult({
               rowId,
-              applyStatus: 'skipped',
-              applyError: `QB payment already exists for this invoice (PaymentRefNum=${refNum}, PaymentId=${existingId})`,
+              applyStatus: 'applied',
+              applyError: null,
+              appliedAt,
               matchedQbObjectId: existingId,
             });
+            if (row.enrolment_id) affectedEnrolments.add(String(row.enrolment_id));
             await insertGrantImportAuditLog({
               batchId: input.batchId,
               rowId,
-              eventType: 'skip',
+              eventType: 'apply_success',
               actorUserId: input.actorUserId,
               details: {
-                reason: 'qb_payment_exists_refnum_linked_invoice_amount_date',
+                reason: 'qb_payment_exists_refnum_sync_fms_only',
                 qb_payment_id: existingId,
                 payment_ref_num: refNum,
                 qb_invoice_id: inv.id,
@@ -624,7 +642,7 @@ export async function applyGrantImportBatch(input: {
                 payment_date: txnDate,
               },
             });
-            results.push({ rowId, ok: true, status: 'skipped' });
+            results.push({ rowId, ok: true, status: 'applied' });
             continue;
           }
 
@@ -654,27 +672,30 @@ export async function applyGrantImportBatch(input: {
           const existingSync = hit.SyncToken ? String(hit.SyncToken) : undefined;
 
           if (!input.allowOverwriteAlreadyApplied) {
-            skipped += 1;
+            applied += 1;
+            const appliedAt = new Date().toISOString();
             await updateRowApplyResult({
               rowId,
-              applyStatus: 'skipped',
-              applyError: `QB payment already exists for this invoice/amount/date (PaymentId=${existingId})`,
+              applyStatus: 'applied',
+              applyError: null,
+              appliedAt,
               matchedQbObjectId: existingId,
             });
+            if (row.enrolment_id) affectedEnrolments.add(String(row.enrolment_id));
             await insertGrantImportAuditLog({
               batchId: input.batchId,
               rowId,
-              eventType: 'skip',
+              eventType: 'apply_success',
               actorUserId: input.actorUserId,
               details: {
-                reason: 'qb_payment_exists_invoice_amount_date',
+                reason: 'qb_payment_exists_customer_date_sync_fms_only',
                 qb_payment_id: existingId,
                 qb_invoice_id: inv.id,
                 amount,
                 payment_date: txnDate,
               },
             });
-            results.push({ rowId, ok: true, status: 'skipped' });
+            results.push({ rowId, ok: true, status: 'applied' });
             continue;
           }
 
@@ -789,24 +810,39 @@ export async function applyGrantImportBatch(input: {
     }
   }
 
-  // Rollup recalculation only after row applies
-  const rollups = await recalcAndPersistGrantPaymentRollups(Array.from(affectedEnrolments), new Date());
-  await insertGrantImportAuditLog({
-    batchId: input.batchId,
-    rowId: null,
-    eventType: 'enrolment_status_update',
-    actorUserId: input.actorUserId,
-    details: { updated: rollups.updated, enrolments: rollups.results },
-  });
-
-  await updateBatchCounts(input.batchId);
-  await markBatchStatus(input.batchId, 'completed', input.actorUserId);
+  // Post-steps can be slow (rollups + batch counts). Do them in background so UI isn't stuck
+  // waiting after it already hit 100% done rows.
+  const affected = Array.from(affectedEnrolments);
+  void (async () => {
+    try {
+      const rollups = await recalcAndPersistGrantPaymentRollups(affected, new Date());
+      await insertGrantImportAuditLog({
+        batchId: input.batchId,
+        rowId: null,
+        eventType: 'enrolment_status_update',
+        actorUserId: input.actorUserId,
+        details: { updated: rollups.updated, enrolments: rollups.results },
+      });
+    } catch (e) {
+      console.warn('[grant-import] rollup post-step failed:', e);
+    }
+    try {
+      await updateBatchCounts(input.batchId);
+    } catch (e) {
+      console.warn('[grant-import] updateBatchCounts post-step failed:', e);
+    }
+    try {
+      await markBatchStatus(input.batchId, 'completed', input.actorUserId);
+    } catch (e) {
+      console.warn('[grant-import] markBatchStatus(completed) post-step failed:', e);
+    }
+  })();
 
   return {
     batchId: input.batchId,
     summary: { totalSelected, applied, skipped, failed },
     results,
-    enrolmentRollups: rollups,
+    enrolmentRollups: { updated: 0, results: [], pending: true },
   };
 }
 
