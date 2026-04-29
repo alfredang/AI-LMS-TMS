@@ -494,9 +494,10 @@ const AllCourseRunsView: React.FC = () => {
     try {
       const todayIso = new Date().toISOString().slice(0, 10);
       const defaultFromIso = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+      const oneYearAheadIso = new Date(Date.now() + 365 * 86400_000).toISOString().slice(0, 10);
 
       const rawFrom = viewFrom || defaultFromIso;
-      const rawTo = viewTo || todayIso;
+      const rawTo = viewTo || (includeFutureCourseRuns ? oneYearAheadIso : todayIso);
       const from = rawFrom <= rawTo ? rawFrom : rawTo;
       const to = rawFrom <= rawTo ? rawTo : rawFrom;
 

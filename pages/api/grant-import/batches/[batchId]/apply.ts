@@ -15,12 +15,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { actorUserId } = await requireFinanceOrAdmin(req);
     const dryRun = Boolean(req.body?.dryRun ?? true);
     const allowOverwriteAlreadyApplied = Boolean(req.body?.allowOverwriteAlreadyApplied ?? false);
+    const rowIds: string[] | undefined = Array.isArray(req.body?.rowIds)
+      ? (req.body.rowIds as unknown[]).map((x) => String(x)).filter(Boolean)
+      : undefined;
 
     const out = await applyGrantImportBatch({
       batchId,
       actorUserId,
       dryRun,
       allowOverwriteAlreadyApplied,
+      rowIds: rowIds && rowIds.length > 0 ? rowIds : undefined,
     });
 
     return res.status(200).json({ success: true, data: out });

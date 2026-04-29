@@ -114,6 +114,8 @@ const GrantImportView: React.FC = () => {
   const [applyPct, setApplyPct] = useState(0);
   const [applyMsg, setApplyMsg] = useState('Applying payments…');
   const [rowFilter, setRowFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
 
   const fileValidationError = useMemo(() => {
     if (!file) return null;
@@ -135,18 +137,29 @@ const GrantImportView: React.FC = () => {
       ambiguous: by('ambiguous'),
       invalid: by('invalid'),
       problem,
-      selected: rows.filter((r) => r.selected_for_apply).length,
     };
   }, [preview]);
 
   const filteredRows = useMemo(() => {
     if (!preview) return [];
     const applyStatuses = ['applied', 'skipped', 'failed', 'pending'];
-    if (rowFilter === 'all') return preview.rows;
-    if (applyStatuses.includes(rowFilter))
-      return preview.rows.filter((r) => String(r.apply_status || '').toLowerCase() === rowFilter);
-    return preview.rows.filter((r) => String(r.match_status) === rowFilter);
-  }, [preview, rowFilter]);
+    let result = preview.rows;
+    if (rowFilter !== 'all') {
+      if (applyStatuses.includes(rowFilter))
+        result = result.filter((r) => String(r.apply_status || '').toLowerCase() === rowFilter);
+      else
+        result = result.filter((r) => String(r.match_status) === rowFilter);
+    }
+    if (dateFrom) result = result.filter((r) => r.payment_date_parsed != null && r.payment_date_parsed >= dateFrom);
+    if (dateTo) result = result.filter((r) => r.payment_date_parsed != null && r.payment_date_parsed <= dateTo);
+    return result;
+  }, [preview, rowFilter, dateFrom, dateTo]);
+
+  /** Count of selected+ready rows in the currently-visible (date-filtered) view. */
+  const selectedCount = useMemo(
+    () => filteredRows.filter((r) => r.selected_for_apply && String(r.match_status) === 'ready').length,
+    [filteredRows]
+  );
 
   const loadPreview = useCallback(
     async (id: string) => {
@@ -166,6 +179,8 @@ const GrantImportView: React.FC = () => {
     setInfo(null);
     setApplyResult(null);
     setRowFilter('all');
+    setDateFrom('');
+    setDateTo('');
     setUploading(true);
     setUploadJobId(null);
     setUploadPct(0);
@@ -261,6 +276,8 @@ const GrantImportView: React.FC = () => {
     setApplyResult(null);
     setPreview(null);
     setBatchId(null);
+    setDateFrom('');
+    setDateTo('');
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -305,7 +322,8 @@ const GrantImportView: React.FC = () => {
 
   const selectAllReady = async (selected: boolean) => {
     if (!preview || !batchId) return;
-    const updates = preview.rows
+    const filteredIds = new Set(filteredRows.map((r) => r.id));
+    const updates = filteredRows
       .filter((r) => String(r.match_status) === 'ready')
       .map((r) => ({ id: r.id, selected }));
     if (updates.length === 0) return;
@@ -313,7 +331,9 @@ const GrantImportView: React.FC = () => {
       p
         ? {
             ...p,
-            rows: p.rows.map((r) => (String(r.match_status) === 'ready' ? { ...r, selected_for_apply: selected } : r)),
+            rows: p.rows.map((r) =>
+              String(r.match_status) === 'ready' && filteredIds.has(r.id) ? { ...r, selected_for_apply: selected } : r
+            ),
           }
         : p
     );
@@ -328,8 +348,9 @@ const GrantImportView: React.FC = () => {
 
   const setAllSelectable = async (selected: boolean) => {
     if (!preview || !batchId) return;
-    const updates = preview.rows
-      .filter((r) => !['unmatched', 'ambiguous', 'invalid'].includes(String(r.match_status)))
+    const filteredIds = new Set(filteredRows.map((r) => r.id));
+    const updates = filteredRows
+      .filter((r) => String(r.match_status) === 'ready')
       .map((r) => ({ id: r.id, selected }));
     if (updates.length === 0) return;
     setPreview((p) =>
@@ -337,7 +358,7 @@ const GrantImportView: React.FC = () => {
         ? {
             ...p,
             rows: p.rows.map((r) =>
-              !['unmatched', 'ambiguous', 'invalid'].includes(String(r.match_status))
+              String(r.match_status) === 'ready' && filteredIds.has(r.id)
                 ? { ...r, selected_for_apply: selected }
                 : r
             ),
@@ -356,8 +377,7 @@ const GrantImportView: React.FC = () => {
   const apply = async () => {
     if (!batchId) return;
     setError(null);
-    const totalSel = counts.selected;
-    setApplyCounts({ done: 0, total: Math.max(0, totalSel) });
+    setApplyCounts({ done: 0, total: Math.max(0, selectedCount) });
     setApplyPct(0);
     setApplyMsg('Applying payments…');
     setApplying(true);
@@ -365,64 +385,63 @@ const GrantImportView: React.FC = () => {
       const res = await fetch(`/api/grant-import/batches/${encodeURIComponent(batchId)}/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-actor-user-id': actorUserId },
-        body: JSON.stringify({ dryRun, allowOverwriteAlreadyApplied: allowOverwrite }),
+        body: JSON.stringify({
+          dryRun,
+          allowOverwriteAlreadyApplied: allowOverwrite,
+          rowIds: filteredRows
+            .filter((r) => !!r.selected_for_apply && String(r.match_status) === 'ready')
+            .map((r) => r.id),
+        }),
       });
       const json = await res.json();
       if (!res.ok || !json?.success) throw new Error(json?.error || 'Apply failed');
       setApplyResult(json.data);
-      await loadPreview(batchId);
     } catch (e: any) {
       setError(e?.message || 'Apply failed');
     } finally {
       setApplying(false);
       setApplyCounts(null);
       setApplyPct(0);
+      // Refresh preview after modal closes so UI doesn't feel "stuck" at 100%.
+      void loadPreview(batchId).catch(() => {});
     }
   };
 
-  // Poll preview during apply so we can show done/total like Stage 1 (row apply_status updates in DB).
+  // During apply, poll a lightweight endpoint (counts only), not the full preview.
   useEffect(() => {
     if (!applying || !batchId) return;
-    void loadPreview(batchId).catch(() => {});
-    const id = setInterval(() => {
-      void loadPreview(batchId).catch(() => {});
-    }, 500);
-    return () => clearInterval(id);
-  }, [applying, batchId, loadPreview]);
-
-  useEffect(() => {
-    if (!applying || !preview) return;
-    const batchStatus = String((preview as { batch?: { status?: string } }).batch?.status || '');
-    const selected = preview.rows.filter((r) => r.selected_for_apply);
-    const total = selected.length;
-
-    // Until the server marks the batch as applying (or completed), row apply_status may still reflect a previous run.
-    if (batchStatus !== 'applying' && batchStatus !== 'completed') {
-      setApplyCounts((prev) => ({ done: 0, total: Math.max(total, prev?.total ?? 0) }));
-      setApplyPct(0);
-      setApplyMsg('Starting apply…');
-      return;
-    }
-
-    const done = selected.filter((r) => {
-      const s = String(r.apply_status || '').toLowerCase();
-      return s === 'applied' || s === 'skipped' || s === 'failed';
-    }).length;
-    setApplyCounts((prev) => {
-      const t = Math.max(total, prev?.total ?? 0);
-      return { done: Math.min(done, t), total: t };
-    });
-    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-    setApplyPct(pct);
-    const pending = selected.filter((r) => String(r.apply_status || '').toLowerCase() === 'pending').length;
-    setApplyMsg(
-      pending > 0
-        ? `Processing… (${done}/${total})`
-        : total > 0 && done < total
-          ? `Working… (${done}/${total})`
-          : `Applying… (${done}/${total})`
-    );
-  }, [applying, preview]);
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/grant-import/batches/${encodeURIComponent(batchId)}/apply-progress`, {
+          headers: { 'x-actor-user-id': actorUserId },
+        });
+        const json = await res.json();
+        const data = json?.data as
+          | {
+              total_selected_ready?: number;
+              done_selected_ready?: number;
+            }
+          | null
+          | undefined;
+        if (cancelled || !data) return;
+        const total = Number(data.total_selected_ready ?? 0);
+        const done = Number(data.done_selected_ready ?? 0);
+        setApplyCounts((prev) => ({ done: Math.min(done, total), total: Math.max(total, prev?.total ?? 0) }));
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        setApplyPct(pct);
+        setApplyMsg(done >= total ? `Finishing… (${done}/${total})` : `Processing… (${done}/${total})`);
+      } catch {
+        // ignore
+      }
+    };
+    void tick();
+    const id = setInterval(() => void tick(), 800);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [applying, batchId, actorUserId]);
 
   useEffect(() => {
     if (!batchId) return;
@@ -588,7 +607,7 @@ const GrantImportView: React.FC = () => {
                   Deselect all Ready
                 </Button>
                 <span className="text-xs text-on-surface-secondary">
-                  Selected: <span className="font-semibold text-on-surface">{counts.selected}</span>
+                  Selected: <span className="font-semibold text-on-surface">{selectedCount}</span>
                 </span>
               </div>
 
@@ -607,8 +626,8 @@ const GrantImportView: React.FC = () => {
                   />
                   Allow overwrite already-applied
                 </label>
-                <Button onClick={() => void apply()} disabled={applying || !batchId || counts.selected === 0}>
-                  {applying ? 'Applying…' : `Apply Selected (${counts.selected})`}
+                <Button onClick={() => void apply()} disabled={applying || !batchId || selectedCount === 0}>
+                  {applying ? 'Applying…' : `Apply Selected (${selectedCount})`}
                 </Button>
               </div>
             </div>
@@ -701,10 +720,41 @@ const GrantImportView: React.FC = () => {
                   {opt.label} ({opt.count})
                 </button>
               ))}
-              {rowFilter !== 'all' && (
+              {(rowFilter !== 'all' || dateFrom || dateTo) && (
                 <span className="ml-auto text-[11px] text-on-surface-secondary">
                   Showing {filteredRows.length} of {preview.rows.length} rows
                 </span>
+              )}
+            </div>
+            {/* Payment date range filter */}
+            <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-default bg-surface-elevated/60">
+              <span className="text-[11px] font-semibold text-on-surface-secondary uppercase tracking-wider mr-1">Payment Date:</span>
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] text-on-surface-secondary">From</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="px-2 py-1 rounded border border-default bg-surface text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] text-on-surface-secondary">To</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="px-2 py-1 rounded border border-default bg-surface text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              {(dateFrom || dateTo) && (
+                <button
+                  type="button"
+                  onClick={() => { setDateFrom(''); setDateTo(''); }}
+                  className="text-[11px] text-on-surface-secondary hover:text-on-surface underline"
+                >
+                  Clear dates
+                </button>
               )}
             </div>
 
@@ -714,8 +764,7 @@ const GrantImportView: React.FC = () => {
                   <tr className="border-b border-default bg-surface-elevated">
                     <th className="px-3 py-2 text-xs text-left">
                       {(() => {
-                        const rows = preview?.rows || [];
-                        const selectable = rows.filter((r) => !['unmatched', 'ambiguous', 'invalid'].includes(String(r.match_status)));
+                        const selectable = filteredRows.filter((r) => String(r.match_status) === 'ready');
                         const allSelected = selectable.length > 0 && selectable.every((r) => !!r.selected_for_apply);
                         const someSelected = selectable.some((r) => !!r.selected_for_apply);
                         const nextChecked = !allSelected;
@@ -724,8 +773,8 @@ const GrantImportView: React.FC = () => {
                             type="button"
                             onClick={() => void setAllSelectable(nextChecked)}
                             className="inline-flex items-center justify-center -m-2 p-2 rounded-md hover:bg-surface-hover cursor-pointer"
-                            title="Select / deselect all applicable rows"
-                            aria-label="Select / deselect all applicable rows"
+                            title="Select / deselect all READY rows"
+                            aria-label="Select / deselect all READY rows"
                           >
                             <input
                               type="checkbox"
@@ -762,6 +811,8 @@ const GrantImportView: React.FC = () => {
                   )}
                   {filteredRows.map((r) => {
                     const disabled = ['unmatched', 'ambiguous', 'invalid'].includes(String(r.match_status));
+                    const selectable = String(r.match_status) === 'ready';
+                    const disabledAny = disabled || !selectable;
                     const fmsStatus = r.fms_updated_live ? 'updated' : 'not updated';
                     const qbStatus = r.qb_applied_live ? 'applied' : 'not applied';
                     return (
@@ -778,18 +829,18 @@ const GrantImportView: React.FC = () => {
                         <td className="px-3 py-2">
                           <button
                             type="button"
-                            disabled={disabled}
+                            disabled={disabledAny}
                             onClick={() => void toggleRow(r.id, !r.selected_for_apply)}
                             className={`inline-flex items-center justify-center -m-2 p-2 rounded-md ${
-                              disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-surface-hover cursor-pointer'
+                              disabledAny ? 'cursor-not-allowed opacity-50' : 'hover:bg-surface-hover cursor-pointer'
                             }`}
-                            title={disabled ? 'Not applicable row' : 'Select / deselect row'}
-                            aria-label={disabled ? 'Not applicable row' : 'Select / deselect row'}
+                            title={disabledAny ? 'Only READY rows can be selected' : 'Select / deselect row'}
+                            aria-label={disabledAny ? 'Only READY rows can be selected' : 'Select / deselect row'}
                           >
                             <input
                               type="checkbox"
                               checked={!!r.selected_for_apply}
-                              disabled={disabled}
+                              disabled={disabledAny}
                               onChange={() => {}}
                               className="pointer-events-none"
                             />
