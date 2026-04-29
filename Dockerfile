@@ -2,6 +2,11 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# Coolify injects all env vars (including NODE_ENV) as build-time ARGs.
+# Force development mode here so npm ci installs devDependencies
+# (next, typescript, etc.) which are required to build the app.
+ENV NODE_ENV=development
+
 COPY package*.json ./
 RUN npm ci
 
