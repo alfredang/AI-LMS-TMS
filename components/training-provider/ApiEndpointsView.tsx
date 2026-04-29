@@ -606,12 +606,13 @@ const sections: EndpointSection[] = [
         method: 'POST',
         path: '/api/enrolment/cancel',
         title: 'Cancel Enrolment',
-        description: 'Cancels an existing enrolment.',
+        description: 'Cancels an existing enrolment. Course Run ID is auto-resolved from SSG when omitted.',
         headers: [
           { name: 'Content-Type', value: 'application/json', description: 'Request body format' },
         ],
         bodyFields: [
-          { name: 'enrolmentId', type: 'string', required: true, description: 'Enrolment UUID' },
+          { name: 'enrolmentId', type: 'string', required: true, description: 'SSG enrolment reference (e.g. ENR-2602-014784)' },
+          { name: 'courseRunId', type: 'string', required: false, description: 'Optional. Resolved from SSG via the enrolmentId when omitted.' },
         ],
       },
       {

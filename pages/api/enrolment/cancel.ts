@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
+import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
 import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
@@ -8,7 +9,10 @@ import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/bil
 /**
  * POST /api/enrolment/cancel
  * Cancel an enrolment via SSG API.
- * Body: { enrolmentId, courseRunId }
+ * Body: { enrolmentId, courseRunId? }
+ *
+ * If courseRunId is not provided, it is resolved from the local
+ * ssg_enrolments cache, then by calling SSG view-enrolment as a fallback.
  *
  * SSG payload:
  * { "enrolment": { "course": { "run": { "id": "<courseRunId>" } } } }
@@ -18,9 +22,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { enrolmentId, courseRunId } = req.body;
-  if (!enrolmentId || !courseRunId) {
-    return res.status(400).json({ success: false, error: 'enrolmentId and courseRunId are required' });
+  const { enrolmentId, courseRunId: courseRunIdInput } = req.body;
+  if (!enrolmentId) {
+    return res.status(400).json({ success: false, error: 'enrolmentId is required' });
   }
 
   try {
@@ -30,6 +34,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+
+    // Resolve courseRunId: prefer the value posted by the caller; otherwise look it up.
+    let courseRunId: string | undefined = courseRunIdInput ? String(courseRunIdInput).trim() : undefined;
+    if (!courseRunId) {
+      const cached = await pool.query<{ course_run_id: string | null }>(
+        `SELECT course_run_id FROM ssg_enrolments
+         WHERE enrolment_id = $1 AND course_run_id IS NOT NULL AND course_run_id <> ''
+         ORDER BY imported_at DESC LIMIT 1`,
+        [String(enrolmentId).trim()]
+      );
+      courseRunId = cached.rows[0]?.course_run_id ?? undefined;
+    }
+    if (!courseRunId) {
+      const api = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
+      const view = await api.viewEnrolment(String(enrolmentId).trim());
+      const ssgRunId = (view?.data as any)?.enrolment?.course?.run?.id ?? (view?.data as any)?.course?.run?.id;
+      if (view?.error || !ssgRunId) {
+        const msg = (view?.error as any)?.message ?? 'Unable to resolve courseRunId from SSG for this enrolmentId';
+        return res.status(view?.status || 400).json({ success: false, error: msg });
+      }
+      courseRunId = String(ssgRunId);
+    }
 
     const payload = {
       enrolment: {

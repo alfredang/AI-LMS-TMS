@@ -4698,10 +4698,13 @@ export const CancelEnrolmentView: React.FC = () => {
         setResult(null);
 
         try {
+            const body: { enrolmentId: string; courseRunId?: string } = { enrolmentId: enrolmentId.trim() };
+            if (courseRunId.trim()) body.courseRunId = courseRunId.trim();
+
             const response = await fetch(CANCEL_ENROLMENT_API, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enrolmentId: enrolmentId.trim(), courseRunId: courseRunId.trim() })
+                body: JSON.stringify(body)
             });
 
             const json = await response.json();
@@ -4731,7 +4734,7 @@ export const CancelEnrolmentView: React.FC = () => {
         setShowConfirm(false);
     };
 
-    const isFormValid = enrolmentId.trim() && courseRunId.trim();
+    const isFormValid = !!enrolmentId.trim();
 
     return (
         <div>
@@ -4741,7 +4744,7 @@ export const CancelEnrolmentView: React.FC = () => {
             <Card className="p-6 mb-6">
                 <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Details</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Both Enrolment ID and Course Run ID are required to cancel an enrolment.
+                    Only the Enrolment ID is required. The Course Run ID is auto-resolved from SSG; provide it explicitly to skip the lookup.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -4761,14 +4764,14 @@ export const CancelEnrolmentView: React.FC = () => {
                     </div>
                     <div>
                         <label htmlFor="cancel-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID <span className="text-red-500">*</span>
+                            Course Run ID <span className="text-gray-400 font-normal">(optional)</span>
                         </label>
                         <input
                             id="cancel-course-run-id"
                             type="text"
                             value={courseRunId}
                             onChange={(e) => setCourseRunId(e.target.value)}
-                            placeholder="e.g. 1225151"
+                            placeholder="Auto-resolved from SSG if blank"
                             className={inputClasses}
                             disabled={isSubmitting}
                         />
