@@ -26,6 +26,13 @@ export async function register() {
             console.error('[CP] Failed to ensure cp_prompt_template table:', err);
         }
 
+        try {
+            const { ensureCourseAnnouncementTable } = await import('./lib/course-announcement-ensure-table');
+            await ensureCourseAnnouncementTable();
+        } catch (err) {
+            console.error('[Announcements] Failed to ensure course_announcement table:', err);
+        }
+
         // Warm up OpenClaw session to avoid ~15s cold start on first user message
         const { sendToOpenClaw } = await import('./lib/openclaw-client');
         sendToOpenClaw({ messages: [{ role: 'user', content: 'ping' }], userId: 'warmup', timeoutMs: 30000 }).catch(() => {});

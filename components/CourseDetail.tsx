@@ -1229,21 +1229,38 @@ const AssessmentsSection: React.FC<{
     );
 };
 
-// --- Additional Documents Section Component ---
-const AdditionalDocumentsSection: React.FC<{ userRole: UserRole, courseRunId: string, currentUser: any }> = ({ userRole, courseRunId, currentUser }) => {
-    const [documents, setDocuments] = React.useState<any[]>([]);
+// --- Announcements Section Component ---
+type Announcement = {
+    id: string;
+    courseRunId: string;
+    title: string | null;
+    message: string | null;
+    linkUrl: string | null;
+    fileName: string | null;
+    fileUrl: string | null;
+    postedBy: string;
+    createdAt: string;
+};
+
+const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, currentUser: any }> = ({ userRole, courseRunId, currentUser }) => {
+    const [announcements, setAnnouncements] = React.useState<Announcement[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [uploading, setUploading] = React.useState(false);
+    const [composing, setComposing] = React.useState(false);
+    const [submitting, setSubmitting] = React.useState(false);
+    const [title, setTitle] = React.useState('');
+    const [message, setMessage] = React.useState('');
+    const [linkUrl, setLinkUrl] = React.useState('');
+    const [pendingFile, setPendingFile] = React.useState<File | null>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-    const fetchDocuments = React.useCallback(async () => {
+    const fetchAnnouncements = React.useCallback(async () => {
         if (!courseRunId) return;
         setLoading(true);
         try {
-            const res = await fetch(`/api/course/additional-documents?courseRunId=${courseRunId}`);
+            const res = await fetch(`/api/course/announcements?courseRunId=${courseRunId}`);
             const data = await res.json();
             if (data.success) {
-                setDocuments(data.documents);
+                setAnnouncements(data.announcements);
             }
         } catch (err) {
             console.error(err);
@@ -1253,43 +1270,63 @@ const AdditionalDocumentsSection: React.FC<{ userRole: UserRole, courseRunId: st
     }, [courseRunId]);
 
     React.useEffect(() => {
-        fetchDocuments();
-    }, [fetchDocuments]);
+        fetchAnnouncements();
+    }, [fetchAnnouncements]);
 
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files || e.target.files.length === 0) return;
-        
-        setUploading(true);
-        for (let i = 0; i < e.target.files.length; i++) {
-            const file = e.target.files[i];
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            try {
-                const res = await fetch(`/api/trainer/upload-additional-document?courseRunId=${courseRunId}&uploadedBy=${encodeURIComponent(currentUser?.name || currentUser?.email || 'Trainer')}`, {
-                    method: 'POST',
-                    body: formData
-                });
-                if (!res.ok) throw new Error('Upload failed');
-            } catch (err) {
-                console.error(err);
-                alert(`Failed to upload ${file.name}`);
-            }
-        }
-        
+    const resetComposer = () => {
+        setTitle('');
+        setMessage('');
+        setLinkUrl('');
+        setPendingFile(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setUploading(false);
-        fetchDocuments();
+        setComposing(false);
+    };
+
+    const handleSubmit = async () => {
+        const trimmedMessage = message.trim();
+        const trimmedLink = linkUrl.trim();
+
+        if (!trimmedMessage && !trimmedLink && !pendingFile) {
+            alert('Add a message, link, or file before posting.');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const formData = new FormData();
+            formData.append('courseRunId', courseRunId);
+            formData.append('postedBy', currentUser?.name || currentUser?.email || 'Trainer');
+            if (title.trim()) formData.append('title', title.trim());
+            if (trimmedMessage) formData.append('message', trimmedMessage);
+            if (trimmedLink) formData.append('linkUrl', trimmedLink);
+            if (pendingFile) formData.append('file', pendingFile);
+
+            const res = await fetch('/api/trainer/create-announcement', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Failed to post announcement');
+            }
+            resetComposer();
+            fetchAnnouncements();
+        } catch (err: any) {
+            console.error(err);
+            alert(err?.message || 'Failed to post announcement');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this document?')) return;
+        if (!confirm('Delete this announcement?')) return;
         try {
-            const res = await fetch(`/api/course/additional-documents?id=${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/course/announcements?id=${id}`, { method: 'DELETE' });
             if (res.ok) {
-                setDocuments(prev => prev.filter(d => d.id !== id));
+                setAnnouncements(prev => prev.filter(a => a.id !== id));
             } else {
-                alert('Failed to delete document');
+                alert('Failed to delete announcement');
             }
         } catch (err) {
             console.error(err);
@@ -1301,75 +1338,155 @@ const AdditionalDocumentsSection: React.FC<{ userRole: UserRole, courseRunId: st
     const isTrainerOrAdmin = userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider;
 
     return (
-        <ContentSection title="Additional Documents">
+        <ContentSection title="Announcements">
             <div className="space-y-4">
-                {isTrainerOrAdmin && (
-                    <div className="flex justify-between items-center mb-4">
+                {isTrainerOrAdmin && !composing && (
+                    <div className="flex justify-between items-center">
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Upload personalized course materials for learners.
+                            Post messages, links, or documents that all learners in this class can see.
                         </p>
-                        <input 
-                            type="file" 
-                            multiple 
-                            ref={fileInputRef} 
-                            onChange={handleFileChange} 
-                            style={{ display: 'none' }} 
-                        />
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={uploading}
-                            className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        <button
+                            onClick={() => setComposing(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
                         >
-                            <Icon name={uploading ? IconName.Spinner : IconName.FileText} className={`w-4 h-4 ${uploading ? 'animate-spin' : ''}`} />
-                            {uploading ? 'Uploading...' : 'Upload Files'}
+                            <Icon name={IconName.Bell} className="w-4 h-4" />
+                            New Announcement
                         </button>
                     </div>
                 )}
-                
+
+                {isTrainerOrAdmin && composing && (
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3">
+                        <input
+                            type="text"
+                            value={title}
+                            onChange={e => setTitle(e.target.value)}
+                            placeholder="Title (optional)"
+                            className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <textarea
+                            value={message}
+                            onChange={e => setMessage(e.target.value)}
+                            placeholder="Write a message for your learners…"
+                            rows={4}
+                            className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <div className="flex items-center gap-2">
+                            <Icon name={IconName.Link} className="w-4 h-4 text-gray-400" />
+                            <input
+                                type="url"
+                                value={linkUrl}
+                                onChange={e => setLinkUrl(e.target.value)}
+                                placeholder="https://example.com (optional link)"
+                                className="flex-1 px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={e => setPendingFile(e.target.files?.[0] || null)}
+                                style={{ display: 'none' }}
+                            />
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="flex items-center gap-2 px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
+                            >
+                                <Icon name={IconName.FileText} className="w-4 h-4" />
+                                {pendingFile ? 'Change file' : 'Attach file'}
+                            </button>
+                            {pendingFile && (
+                                <span className="text-sm text-gray-600 dark:text-gray-300 truncate" title={pendingFile.name}>
+                                    {pendingFile.name}
+                                    <button
+                                        onClick={() => { setPendingFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                                        className="ml-2 text-red-600 hover:underline"
+                                    >
+                                        remove
+                                    </button>
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex justify-end gap-2 pt-1">
+                            <button
+                                onClick={resetComposer}
+                                disabled={submitting}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSubmit}
+                                disabled={submitting}
+                                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                {submitting && <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin" />}
+                                {submitting ? 'Posting…' : 'Post Announcement'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {loading ? (
                     <div className="flex justify-center p-8">
                         <Icon name={IconName.Spinner} className="w-8 h-8 text-blue-500 animate-spin" />
                     </div>
-                ) : documents.length === 0 ? (
+                ) : announcements.length === 0 ? (
                     <div className="text-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                        <Icon name={IconName.FileText} className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                        <p className="text-gray-600 dark:text-gray-300 font-medium">No additional documents</p>
-                        {isTrainerOrAdmin && <p className="text-sm text-gray-500 mt-1">Click "Upload Files" to add materials.</p>}
+                        <Icon name={IconName.Bell} className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                        <p className="text-gray-600 dark:text-gray-300 font-medium">No announcements yet</p>
+                        {isTrainerOrAdmin && <p className="text-sm text-gray-500 mt-1">Click "New Announcement" to post a message, link, or file.</p>}
                     </div>
                 ) : (
-                    <ul className="space-y-2">
-                        {documents.map(doc => (
-                            <li key={doc.id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:shadow-sm transition-shadow">
-                                <div className="flex items-center flex-1 min-w-0">
-                                    <Icon name={IconName.FileText} className="w-5 h-5 text-blue-500 mr-3 flex-shrink-0" />
-                                    <div className="min-w-0">
-                                        <p className="font-medium text-gray-900 dark:text-white truncate" title={doc.fileName}>{doc.fileName}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                            Uploaded by {doc.uploadedBy} • {new Date(doc.createdAt).toLocaleDateString()}
+                    <ul className="space-y-3">
+                        {announcements.map(a => (
+                            <li key={a.id} className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        {a.title && (
+                                            <p className="font-semibold text-gray-900 dark:text-white">{a.title}</p>
+                                        )}
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            Posted by {a.postedBy} • {new Date(a.createdAt).toLocaleString()}
                                         </p>
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-                                    <a 
-                                        href={doc.fileUrl} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        download={doc.fileName}
-                                        className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors"
-                                        title="Download"
-                                    >
-                                        <Icon name={IconName.ExternalLink} className="w-5 h-5" />
-                                    </a>
                                     {isTrainerOrAdmin && (
-                                        <button 
-                                            onClick={() => handleDelete(doc.id)}
-                                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                                        <button
+                                            onClick={() => handleDelete(a.id)}
+                                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors flex-shrink-0"
                                             title="Delete"
                                         >
                                             <Icon name={IconName.Delete} className="w-5 h-5" />
                                         </button>
                                     )}
                                 </div>
+                                {a.message && (
+                                    <p className="mt-2 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">{a.message}</p>
+                                )}
+                                {a.linkUrl && (
+                                    <a
+                                        href={a.linkUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="mt-2 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline break-all"
+                                    >
+                                        <Icon name={IconName.Link} className="w-4 h-4 flex-shrink-0" />
+                                        <span className="truncate">{a.linkUrl}</span>
+                                    </a>
+                                )}
+                                {a.fileUrl && (
+                                    <a
+                                        href={a.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        download={a.fileName || undefined}
+                                        className="mt-2 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline"
+                                    >
+                                        <Icon name={IconName.FileText} className="w-4 h-4 flex-shrink-0" />
+                                        <span className="truncate">{a.fileName || 'Attachment'}</span>
+                                        <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5 flex-shrink-0" />
+                                    </a>
+                                )}
                             </li>
                         ))}
                     </ul>
@@ -1769,7 +1886,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         if (label === 'Lesson' || label === 'Lessons' || label === 'Learning Outcomes') targetId = 'lessons';
         else if (label === 'Assessment' || label === 'Assessments') targetId = 'assessments';
         else if (label === 'Certificate') targetId = 'certificate';
-        else if (label === 'Additional Documents') targetId = 'additional-documents';
+        else if (label === 'Announcements') targetId = 'announcements';
         else if (label === 'Assessment Summary Record') targetId = toId(label);
         else if (label === 'Grading') targetId = 'assessment-grading';
 
@@ -1791,7 +1908,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "Learning Outcomes", icon: IconName.BookOpen },
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
-        { type: 'link', label: "Additional Documents", icon: IconName.FileText },
+        { type: 'link', label: "Announcements", icon: IconName.Bell },
         { type: 'link', label: "Certificate", icon: IconName.FileText },
     ];
 
@@ -1811,7 +1928,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Grading", icon: IconName.Edit },
-        { type: 'link', label: "Additional Documents", icon: IconName.FileText },
+        { type: 'link', label: "Announcements", icon: IconName.Bell },
     ];
 
     if (userRole === UserRole.Developer || userRole === UserRole.Admin) {
@@ -3148,11 +3265,11 @@ export const CourseDetail: React.FC = () => {
                                 );
                             })()}
 
-                            {/* Additional Documents */}
-                            <div id={toId("Additional Documents")}>
-                                <AdditionalDocumentsSection
-                                    userRole={userRole} 
-                                    courseRunId={convertedCourse.courseRunId || selectedCourse?.courseRunId || ''} 
+                            {/* Announcements */}
+                            <div id={toId("Announcements")}>
+                                <AnnouncementsSection
+                                    userRole={userRole}
+                                    courseRunId={convertedCourse.courseRunId || selectedCourse?.courseRunId || ''}
                                     currentUser={currentUser}
                                 />
                             </div>
