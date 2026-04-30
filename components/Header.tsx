@@ -6,6 +6,7 @@ import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getFileUrl } from '@/lib/urlHelpers';
 import AdminSearchPalette from './admin/AdminSearchPalette';
 import FinanceSearchPalette from './finance/FinanceSearchPalette';
+import TrainingProviderSearchPalette from './training-provider/TrainingProviderSearchPalette';
 
 // ── Live SGT clock ───────────────────────────────────────────────────────────
 // Two-line compact clock shown in the header next to the profile picture.
@@ -182,7 +183,13 @@ const Header: React.FC = () => {
   const hasMultipleRoles = userRoles.length > 1;
   const isAdmin = role === UserRole.Admin;
   const isFinance = role === UserRole.Finance;
-  const showSearchBar = isAdmin || isFinance;
+  const isTrainingProvider = role === UserRole.TrainingProvider;
+  const showSearchBar = isAdmin || isFinance || isTrainingProvider;
+  const searchPlaceholder = isAdmin
+    ? 'Search functions, e.g. cancel enrolment'
+    : isFinance
+      ? 'Search functions, e.g. cancel claim'
+      : 'Search functions, e.g. company setting';
 
   // Cmd/Ctrl+K opens the function search (admin & finance)
   useEffect(() => {
@@ -326,9 +333,7 @@ const Header: React.FC = () => {
                 className="flex items-center gap-2 w-full max-w-xl px-3 sm:px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-sm font-medium text-on-surface-secondary transition-colors border border-default"
               >
                 <Icon name={IconName.Search} className="w-4 h-4 flex-shrink-0" />
-                <span className="flex-1 text-left truncate">
-                  {isAdmin ? 'Search functions, e.g. cancel enrolment' : 'Search functions, e.g. cancel claim'}
-                </span>
+                <span className="flex-1 text-left truncate">{searchPlaceholder}</span>
                 <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-on-surface-secondary border border-default rounded">⌘K</kbd>
               </button>
             </div>
@@ -455,6 +460,7 @@ const Header: React.FC = () => {
       </div>
       {isAdmin && <AdminSearchPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />}
       {isFinance && <FinanceSearchPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />}
+      {isTrainingProvider && <TrainingProviderSearchPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />}
     </header>
   );
 };
