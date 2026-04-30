@@ -438,15 +438,24 @@ export async function qboSendInvoice(appOverride: string | undefined, invoiceId:
   const appKey = `${creds.selectedApp}:${creds.realmId}`;
   const token = await getAccessToken(creds, appKey);
   const emailFields = await qboGetDefaultInvoiceEmailFields(appOverride);
-  if (Object.keys(emailFields).length > 0) {
+  const trimmedSendTo = sendTo?.trim();
+
+  // Important: QBO often only sends emails if the Invoice has BillEmail populated.
+  // When `sendTo` is provided (from our /send endpoint), explicitly set BillEmail first.
+  const mergedSparseFields: Record<string, any> = { ...emailFields };
+  if (trimmedSendTo) {
+    mergedSparseFields.BillEmail = { Address: trimmedSendTo };
+  }
+
+  if (Object.keys(mergedSparseFields).length > 0) {
     const invoice = await qboReadInvoice(appOverride, invoiceId);
     if (invoice.syncToken) {
-      await qboSparseUpdateInvoice(appOverride, invoiceId, invoice.syncToken, emailFields);
+      await qboSparseUpdateInvoice(appOverride, invoiceId, invoice.syncToken, mergedSparseFields);
     }
   }
   const sendPath = `${baseCompanyUrl(creds.realmId)}/invoice/${encodeURIComponent(invoiceId)}/send`;
   const params = new URLSearchParams({ minorversion: String(MINOR_VERSION) });
-  if (sendTo?.trim()) params.set('sendTo', sendTo.trim());
+  if (trimmedSendTo) params.set('sendTo', trimmedSendTo);
   const url = `${sendPath}?${params.toString()}`;
 
   // Send must not use Content-Type: application/json with an empty body — Intuit often returns NPE (code 10000).

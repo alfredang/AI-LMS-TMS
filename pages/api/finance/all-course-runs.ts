@@ -191,21 +191,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN LATERAL (
         SELECT grant_id, status, estimated_grant_amount
         FROM ssg_grants
-        WHERE enrollment_id = se.enrolment_id AND funding_scheme_code = 'Baseline'
+        WHERE LOWER(TRIM(COALESCE(enrollment_id::text, ''))) = LOWER(TRIM(COALESCE(se.enrolment_id::text, '')))
+          AND funding_scheme_code = 'Baseline'
         ORDER BY (CASE WHEN status = 'Cancelled' THEN 1 ELSE 0 END), grant_id DESC
         LIMIT 1
       ) bl ON true
       LEFT JOIN LATERAL (
         SELECT grant_id, status, estimated_grant_amount, funding_scheme_code
         FROM ssg_grants
-        WHERE enrollment_id = se.enrolment_id AND funding_scheme_code != 'Baseline'
+        WHERE LOWER(TRIM(COALESCE(enrollment_id::text, ''))) = LOWER(TRIM(COALESCE(se.enrolment_id::text, '')))
+          AND funding_scheme_code != 'Baseline'
         ORDER BY (CASE WHEN status = 'Cancelled' THEN 1 ELSE 0 END), grant_id DESC
         LIMIT 1
       ) nbl ON true
       LEFT JOIN LATERAL (
         SELECT claim_id, claim_amount, payment_date, claim_status, claim_payment_status, qb_payment_id
         FROM ssg_claims
-        WHERE enrollment_id = se.enrolment_id
+        WHERE LOWER(TRIM(COALESCE(enrollment_id::text, ''))) = LOWER(TRIM(COALESCE(se.enrolment_id::text, '')))
         ORDER BY claim_id DESC
         LIMIT 1
       ) sc ON true
