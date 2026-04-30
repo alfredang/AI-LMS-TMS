@@ -426,7 +426,9 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
         UnitPrice: -sfcCredit,
         TaxCodeRef: { value: taxCodeOos },
       },
-      Description: `To Less Skillsfuture Credit : $${sfcCredit.toFixed(2)}`,
+      Description: hasDa
+        ? `SkillsFuture Credit Usage/Claim:\nApplication ID: ${da.application_id ?? '-'}`
+        : `To Less Skillsfuture Credit : $${sfcCredit.toFixed(2)}`,
     });
   }
 
@@ -438,13 +440,6 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     (Number.isFinite(grantSubsidy) ? grantSubsidy : 0) -
     (Number.isFinite(sfcCredit) ? sfcCredit : 0);
   const netAmountClamped = Number.isFinite(netAmount) ? Math.max(0, netAmount) : 0;
-
-  // Always show a 4th row message (informational only; no amount field to avoid QBO parse errors).
-  lines.push({
-    DetailType: 'DescriptionOnly',
-    DescriptionLineDetail: {},
-    Description: `To Less Skillsfuture Credit : $${netAmountClamped.toFixed(2)}`,
-  });
 
   const gtc = process.env.QBO_INVOICE_GLOBAL_TAX_CALC?.trim();
   const billToName = (hasDa ? (da.trainee_name ?? ctx.traineeName) : ctx.traineeName) || learnerEmail;
