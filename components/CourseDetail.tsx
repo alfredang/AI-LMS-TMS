@@ -1756,9 +1756,10 @@ interface CourseSidebarProps {
 type NavItem = { type: 'link'; label: string; icon: IconName } | { type: 'separator' };
 
 const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingView, selectedCourse, onMobileItemClick }) => {
-    const { setTrainerPage, setSelectedCourse } = useLms();
+    const { setTrainerPage, setSelectedCourse, trainingProviderProfile } = useLms();
     const defaultActive = userRole === UserRole.Learner ? 'Learning Outcomes' : 'Lesson';
     const [activeItem, setActiveItem] = useState(defaultActive);
+    const showLessonPlanForLearner = !!trainingProviderProfile?.showLessonPlanLearnerView;
 
     const handleItemClick = (label: string) => {
         onSetGradingView(false);
@@ -1784,7 +1785,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     };
 
     const learnerNavItems: NavItem[] = [
-        { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
+        ...(showLessonPlanForLearner ? [{ type: 'link', label: "Lesson Plan", icon: IconName.BookOpen } as NavItem] : []),
         { type: 'link', label: "Learner Guide", icon: IconName.FileText },
         { type: 'link', label: "Learner Slides", icon: IconName.FileText },
         { type: 'link', label: "Learning Outcomes", icon: IconName.BookOpen },
@@ -2138,7 +2139,8 @@ export const CourseDetail: React.FC = () => {
         setPendingAttendanceCourseRunId,
         setPendingGradingCourseRunId,
         currentUser,
-        role
+        role,
+        trainingProviderProfile,
     } = useLms();
 
     const handleFileDownload = (filePath: string, e?: React.MouseEvent) => {
@@ -2823,8 +2825,8 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Learner-only: Lesson Plan */}
-                            {userRole !== UserRole.Trainer && userRole !== UserRole.Developer && userRole !== UserRole.Admin && userRole !== UserRole.TrainingProvider && (
+                            {/* Learner-only: Lesson Plan (gated by Company Admin Setting) */}
+                            {userRole !== UserRole.Trainer && userRole !== UserRole.Developer && userRole !== UserRole.Admin && userRole !== UserRole.TrainingProvider && trainingProviderProfile?.showLessonPlanLearnerView && (
                                 <div id={toId("Lesson Plan")}>
                                     <ContentSection title="Lesson Plan">
                                         {!isMaterialsUnlocked ? (

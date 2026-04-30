@@ -262,7 +262,7 @@ export async function addDaLearnerToCalendar(
               if (sortedDates.length > 1) titleParts.push(`Day ${dayNumber}`);
               titleParts.push("WSQ");
               titleParts.push(cleanTitle);
-              if (ssgRunId) titleParts.push(ssgRunId);
+              // Course run ID intentionally excluded from title (kept in description only)
               const standardizedTitle = titleParts.join(' - ');
 
               const isVirtual = /virtual|online|e-learning/i.test(resolvedCourseTitle);
@@ -342,7 +342,7 @@ export async function addDaLearnerToCalendar(
               if (sortedDates.length > 1) titleParts.push(`Day ${dayNumber}`);
               titleParts.push("WSQ");
               titleParts.push(cleanTitle);
-              if (ssgRunId) titleParts.push(ssgRunId);
+              // Course run ID intentionally excluded from title (kept in description only)
               const newTitle = titleParts.join(' - ');
 
               const sTime = sessionMap[targetDate]?.startTime || '09:00';

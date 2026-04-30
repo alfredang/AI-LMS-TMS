@@ -36,6 +36,7 @@ import {
   buildFallbackSplitGrantLines,
   loadSplitGrantDeductionsFromDb,
 } from '../services/daInvoiceGrantLines';
+import { buildPurchaseOrderInvoiceFields } from './directApplicationInvoiceFields';
 
 /**
  * Fixed QB customer for all Grant + SFC supplemental invoices — the grant is
@@ -171,12 +172,14 @@ export async function createDirectApplicationGrantInvoice(
   const existing = await qboFindInvoiceByDocNumber(undefined, docNumber);
   if (existing?.id) {
     const desiredPo = input.mainInvoiceDocNumber ? input.mainInvoiceDocNumber.trim() : '';
-    const currentPo = existing.raw?.PONumber ? String(existing.raw.PONumber).trim() : '';
-    if (desiredPo && currentPo !== desiredPo && existing.syncToken) {
+    if (desiredPo && existing.syncToken) {
       try {
-        await qboSparseUpdateInvoice(undefined, existing.id, existing.syncToken, {
-          PONumber: desiredPo,
-        });
+        await qboSparseUpdateInvoice(
+          undefined,
+          existing.id,
+          existing.syncToken,
+          await buildPurchaseOrderInvoiceFields(desiredPo, existing.raw)
+        );
       } catch (err) {
         console.warn(`[QBO grant invoice] Failed to backfill PONumber on invoice ${existing.id}:`, err);
       }
@@ -228,7 +231,7 @@ export async function createDirectApplicationGrantInvoice(
 
   if (input.mainInvoiceDocNumber && input.mainInvoiceDocNumber.trim()) {
     // PO# cross-reference back to the main tax invoice.
-    invoiceBody.PONumber = input.mainInvoiceDocNumber.trim();
+    Object.assign(invoiceBody, await buildPurchaseOrderInvoiceFields(input.mainInvoiceDocNumber));
   }
 
   const created = await qboCreateInvoice(undefined, invoiceBody);

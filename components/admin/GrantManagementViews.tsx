@@ -4682,26 +4682,61 @@ export const ViewCourseRunView: React.FC = () => {
 export const CancelEnrolmentView: React.FC = () => {
     const [enrolmentId, setEnrolmentId] = useState<string>('');
     const [courseRunId, setCourseRunId] = useState<string>('');
+    const [isLookingUp, setIsLookingUp] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [preview, setPreview] = useState<any>(null);
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
-    const [showConfirm, setShowConfirm] = useState(false);
 
+    const VIEW_ENROLMENT_API = '/api/enrolment/view';
     const CANCEL_ENROLMENT_API = '/api/enrolment/cancel';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
+    const handleLookup = async () => {
+        setIsLookingUp(true);
+        setPreview(null);
+        setResult(null);
+        setError(null);
+        try {
+            const url = `${VIEW_ENROLMENT_API}?enrolmentId=${encodeURIComponent(enrolmentId.trim())}`;
+            const response = await fetch(url);
+            const json = await response.json();
+
+            if (!response.ok || !json.success) {
+                const errMsg = typeof json.error === 'string' ? json.error : (json.error?.message ?? `Error ${response.status}`);
+                setError(errMsg);
+                return;
+            }
+
+            const enrolment = json.data?.enrolment ?? json.data;
+            setPreview(enrolment);
+            // Prefill courseRunId from preview if user hasn't typed one — saves a lookup on submit.
+            if (!courseRunId.trim()) {
+                const id = enrolment?.course?.run?.id;
+                if (id) setCourseRunId(String(id));
+            }
+        } catch (err) {
+            console.error('❌ Error looking up enrolment:', err);
+            setError(err instanceof Error ? err.message : 'Failed to look up enrolment');
+        } finally {
+            setIsLookingUp(false);
+        }
+    };
+
     const handleSubmit = async () => {
-        setShowConfirm(false);
         setIsSubmitting(true);
         setError(null);
         setResult(null);
 
         try {
+            const body: { enrolmentId: string; courseRunId?: string } = { enrolmentId: enrolmentId.trim() };
+            if (courseRunId.trim()) body.courseRunId = courseRunId.trim();
+
             const response = await fetch(CANCEL_ENROLMENT_API, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enrolmentId: enrolmentId.trim(), courseRunId: courseRunId.trim() })
+                body: JSON.stringify(body)
             });
 
             const json = await response.json();
@@ -4715,6 +4750,7 @@ export const CancelEnrolmentView: React.FC = () => {
 
             console.log('✅ Cancel enrolment response:', json);
             setResult(json.data);
+            setPreview(null);
         } catch (err) {
             console.error('❌ Error cancelling enrolment:', err);
             setError(err instanceof Error ? err.message : 'Failed to cancel enrolment');
@@ -4726,12 +4762,19 @@ export const CancelEnrolmentView: React.FC = () => {
     const handleClear = () => {
         setEnrolmentId('');
         setCourseRunId('');
+        setPreview(null);
         setResult(null);
         setError(null);
-        setShowConfirm(false);
     };
 
-    const isFormValid = enrolmentId.trim() && courseRunId.trim();
+    const isFormValid = !!enrolmentId.trim();
+
+    const previewLearnerName = preview?.trainee?.fullName ?? preview?.trainee?.name ?? '—';
+    const previewCourseRunId = preview?.course?.run?.id ?? '—';
+    const previewCourseTitle = preview?.course?.title ?? preview?.course?.referenceNumber ?? '—';
+    const previewStartDate = preview?.course?.run?.startDate ?? '—';
+    const previewEndDate = preview?.course?.run?.endDate ?? '—';
+    const previewStatus = preview?.status ?? '—';
 
     return (
         <div>
@@ -4741,7 +4784,7 @@ export const CancelEnrolmentView: React.FC = () => {
             <Card className="p-6 mb-6">
                 <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Details</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Both Enrolment ID and Course Run ID are required to cancel an enrolment.
+                    Only the Enrolment ID is required. The Course Run ID is auto-resolved from SSG; provide it explicitly to skip the lookup.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -4753,68 +4796,122 @@ export const CancelEnrolmentView: React.FC = () => {
                             id="cancel-enrolment-id"
                             type="text"
                             value={enrolmentId}
-                            onChange={(e) => setEnrolmentId(e.target.value)}
+                            onChange={(e) => { setEnrolmentId(e.target.value); if (preview) setPreview(null); }}
                             placeholder="e.g. ENR-2602-014784"
                             className={inputClasses}
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || isLookingUp}
                         />
                     </div>
                     <div>
                         <label htmlFor="cancel-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID <span className="text-red-500">*</span>
+                            Course Run ID <span className="text-gray-400 font-normal">(optional)</span>
                         </label>
                         <input
                             id="cancel-course-run-id"
                             type="text"
                             value={courseRunId}
                             onChange={(e) => setCourseRunId(e.target.value)}
-                            placeholder="e.g. 1225151"
+                            placeholder="Auto-resolved from SSG if blank"
                             className={inputClasses}
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || isLookingUp}
                         />
                     </div>
                 </div>
 
                 <div className="flex gap-3">
-                    {!showConfirm ? (
+                    {!preview ? (
                         <Button
-                            onClick={() => setShowConfirm(true)}
-                            disabled={isSubmitting || !isFormValid}
+                            onClick={handleLookup}
+                            disabled={isLookingUp || isSubmitting || !isFormValid}
                         >
-                            {isSubmitting ? (
+                            {isLookingUp ? (
                                 <div className="flex items-center">
                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                    Cancelling...
+                                    Looking up…
                                 </div>
                             ) : (
                                 <>
-                                    <Icon name={IconName.X} className="w-4 h-4 mr-2" />
-                                    Cancel Enrolment
+                                    <Icon name={IconName.Search} className="w-4 h-4 mr-2" />
+                                    Look up Enrolment
                                 </>
                             )}
                         </Button>
-                    ) : (
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm text-red-600 dark:text-red-400 font-medium">
-                                Are you sure you want to cancel this enrolment?
-                            </span>
-                            <Button onClick={handleSubmit}>
-                                Yes, Cancel It
-                            </Button>
-                            <Button variant="outline" onClick={() => setShowConfirm(false)}>
-                                No, Go Back
-                            </Button>
-                        </div>
-                    )}
-                    <Button variant="outline" onClick={handleClear} disabled={isSubmitting}>
+                    ) : null}
+                    <Button variant="outline" onClick={handleClear} disabled={isSubmitting || isLookingUp}>
                         Clear
                     </Button>
                 </div>
 
-                {error && !result && (
+                {error && !result && !preview && (
                     <p className="text-red-500 text-sm mt-3">{error}</p>
                 )}
             </Card>
+
+            {/* Preview + Confirmation */}
+            {preview && !result && (
+                <Card className="p-6 mb-6 border-l-4 border-yellow-500">
+                    <div className="flex items-center gap-2 mb-4">
+                        <Icon name={IconName.InfoCircle} className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                        <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Confirm Cancellation</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        Please review the enrolment details below before proceeding. This action cannot be undone.
+                    </p>
+
+                    <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 mb-5 text-sm">
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Learner Name</dt>
+                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewLearnerName}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Enrolment ID</dt>
+                            <dd className="mt-0.5 font-mono text-gray-900 dark:text-gray-100">{preview?.referenceNumber ?? enrolmentId.trim()}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Course Run ID</dt>
+                            <dd className="mt-0.5 font-mono text-gray-900 dark:text-gray-100">{previewCourseRunId}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Course Title</dt>
+                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewCourseTitle}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Start Date</dt>
+                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewStartDate}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">End Date</dt>
+                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewEndDate}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Current Status</dt>
+                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewStatus}</dd>
+                        </div>
+                    </dl>
+
+                    <div className="flex items-center gap-3">
+                        <Button onClick={handleSubmit} disabled={isSubmitting}>
+                            {isSubmitting ? (
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Cancelling…
+                                </div>
+                            ) : (
+                                <>
+                                    <Icon name={IconName.X} className="w-4 h-4 mr-2" />
+                                    Confirm Cancel
+                                </>
+                            )}
+                        </Button>
+                        <Button variant="outline" onClick={() => setPreview(null)} disabled={isSubmitting}>
+                            Go Back
+                        </Button>
+                        {error && (
+                            <span className="text-red-500 text-sm">{error}</span>
+                        )}
+                    </div>
+                </Card>
+            )}
 
             {/* Loading State */}
             {isSubmitting && (

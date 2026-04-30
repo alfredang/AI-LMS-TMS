@@ -34,11 +34,12 @@ import {
   buildDaSfcInvoicePdfFileName,
   createDirectApplicationSfcInvoice,
 } from './quickbooks/createDirectApplicationSfcInvoice';
+import { buildPurchaseOrderInvoiceFields } from './quickbooks/directApplicationInvoiceFields';
 import { refreshGrantsForEnrolments } from './services/billingSync';
 import { loadSplitGrantDeductionsFromDb } from './services/daInvoiceGrantLines';
 import { driveFileExists, uploadInvoicePdfToDrive } from './services/invoiceDriveUpload';
 import { ensureInvoiceJobsTable } from './services/invoiceJobs';
-import { qboFetchInvoicePdf, qboReadInvoice, qboSendInvoice } from './services/qboInvoiceService';
+import { qboFetchInvoicePdf, qboReadInvoice, qboSendInvoice, qboSparseUpdateInvoice } from './services/qboInvoiceService';
 import { shouldSendQboInvoiceEmailFromQuickBooks } from './services/qboInvoiceEmailPolicy';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from './google-auth/googleAuth';
@@ -98,6 +99,32 @@ function isQboObjectNotFoundError(err: unknown): boolean {
 
 function isRealSsgEnrolmentId(value: unknown): value is string {
   return /^ENR-/i.test(String(value || '').trim());
+}
+
+function isMainInvoiceDocNumber(value: unknown): value is string {
+  return /^TC\d{2}-\d{4}-\d{6}$/i.test(String(value || '').trim());
+}
+
+async function ensureQboInvoicePurchaseOrder(
+  invoiceId: string,
+  desiredPoNumber: string | null | undefined,
+  label: 'grant' | 'sfc'
+): Promise<void> {
+  const desiredPo = String(desiredPoNumber || '').trim();
+  if (!invoiceId || !desiredPo) return;
+
+  const invoice = await qboReadInvoice(undefined, invoiceId);
+  if (!invoice.syncToken) {
+    throw new Error(`Cannot update ${label} invoice ${invoiceId} PO#: QuickBooks did not return a SyncToken`);
+  }
+
+  await qboSparseUpdateInvoice(
+    undefined,
+    invoiceId,
+    invoice.syncToken,
+    await buildPurchaseOrderInvoiceFields(desiredPo, invoice.raw)
+  );
+  console.log(`[QBO ${label} invoice] Set PO# ${desiredPo} on invoice ${invoiceId}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -923,6 +950,9 @@ export async function processDirectApplication(
   // QBO. Set at create time below; older rows may be null and will be
   // backfilled via the lookup block further down.
   let invoiceDocNumber: string | null = row.invoice_doc_number || null;
+  if (!invoiceDocNumber && isMainInvoiceDocNumber(invoiceId)) {
+    invoiceDocNumber = String(invoiceId).trim();
+  }
   // Track the QB customer ref across the pipeline — `row` is an in-memory
   // snapshot and doesn't pick up the UPDATE we issue after the main invoice
   // create, so the supplemental grant/SFC steps need this local copy.
@@ -1096,7 +1126,7 @@ export async function processDirectApplication(
   if (
     invoiceId &&
     !invoiceDocNumber &&
-    ((shouldGenerateGrantInvoice && !existingGrantInvoiceId) || (shouldGenerateSfcInvoice && !existingSfcInvoiceId))
+    (shouldGenerateGrantInvoice || shouldGenerateSfcInvoice)
   ) {
     try {
       const existingInvoice = await qboReadInvoice(undefined, invoiceId);
@@ -1117,6 +1147,49 @@ export async function processDirectApplication(
         error: err instanceof Error ? err.message : String(err),
         failedStep: 'invoice_lookup',
       };
+    }
+  }
+
+  if ((shouldGenerateGrantInvoice || shouldGenerateSfcInvoice) && !invoiceDocNumber) {
+    const err = new Error(
+      `Cannot create or update Grant/SFC invoices without the main tax invoice number. ` +
+      `Expected a TC invoice number like TC26-0430-119707 for DA application ${applicationId}.`
+    );
+    await markFailed(appId, 'invoice_lookup', err);
+    return {
+      id: appId,
+      applicationId,
+      success: false,
+      finalStatus: 'failed',
+      enrolmentId: enrolmentReference,
+      grantId: grantId || undefined,
+      invoiceId: invoiceId || undefined,
+      error: err.message,
+      failedStep: 'invoice_lookup',
+    };
+  }
+
+  if (invoiceDocNumber && shouldGenerateGrantInvoice && existingGrantInvoiceId) {
+    try {
+      await ensureQboInvoicePurchaseOrder(existingGrantInvoiceId, invoiceDocNumber, 'grant');
+    } catch (err) {
+      await markFailed(appId, 'grant_invoice_po', err);
+      supplementalErrors.push({
+        step: 'grant_invoice_po',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  if (invoiceDocNumber && shouldGenerateSfcInvoice && existingSfcInvoiceId) {
+    try {
+      await ensureQboInvoicePurchaseOrder(existingSfcInvoiceId, invoiceDocNumber, 'sfc');
+    } catch (err) {
+      await markFailed(appId, 'sfc_invoice_po', err);
+      supplementalErrors.push({
+        step: 'sfc_invoice_po',
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
