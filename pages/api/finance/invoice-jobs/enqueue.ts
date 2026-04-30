@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const results = await enqueueInvoiceJobsFromConsolidatedFinance(enrolmentIds);
+    const results = await enqueueInvoiceJobsFromConsolidatedFinance(enrolmentIds, { skipAutoProcess: true });
     const okCount = results.filter((r) => r.ok).length;
     // For Finance UX, try to process immediately so the UI polling finishes quickly.
     // (If the request times out, jobs remain queued and can still be processed by the runner later.)

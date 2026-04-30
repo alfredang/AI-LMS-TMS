@@ -14,6 +14,7 @@ import {
   qboFindOrCreateCustomerByDisplayName,
   qboFindTermByName,
   qboGetDefaultInvoiceEmailFields,
+  qboReadInvoice,
   qboResolveInvoiceLineTaxCodeRef,
   qboResolveOosTaxCodeRef,
   qboSendInvoice,
@@ -29,6 +30,19 @@ let _cachedTaxCodeGst: string | null = null;
 let _cachedTaxCodeOos: string | null = null;
 let _cachedSfcItemId: string | null = null;
 let _cachedDueOnReceiptTermId: string | null = null;
+let _cachedWsg35DaysTermId: string | null = null;
+
+function addDaysIso(isoDate: string, days: number): string {
+  const m = String(isoDate || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return isoDate;
+  const d = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`);
+  if (!Number.isFinite(d.getTime())) return isoDate;
+  d.setUTCDate(d.getUTCDate() + days);
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 function safeText(v: unknown): string {
   return typeof v === 'string' ? v : String(v ?? '');
@@ -332,6 +346,11 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     const term = await qboFindTermByName(undefined, 'Due on receipt');
     if (term?.id) _cachedDueOnReceiptTermId = term.id;
   }
+  // Terms: 35 Days Term (used for GRN/WSG invoices)
+  if (!_cachedWsg35DaysTermId) {
+    const term = await qboFindTermByName(undefined, '35 Days Term');
+    if (term?.id) _cachedWsg35DaysTermId = term.id;
+  }
 
   // Grant item lookups — cached at module level so only fetched once per server lifecycle
   const grantItemIdCache = new Map<string, string>();
@@ -468,30 +487,61 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   let docNumber: string | null = job.qbo_doc_number ?? null;
   let invoiceNo: string | null = job.invoice_no ? String(job.invoice_no).trim() || null : null;
 
+  // If the stored QBO invoice id was deleted in QBO, clear it so we recreate on re-queue.
+  if (invoiceId) {
+    try {
+      await qboReadInvoice(undefined, invoiceId);
+    } catch (e) {
+      console.warn('[invoice-job] Stored QBO invoice id not found; will recreate:', e instanceof Error ? e.message : e);
+      invoiceId = '';
+      docNumber = null;
+      await pool.query(
+        `UPDATE public.invoice_jobs
+         SET qbo_invoice_id = NULL, qbo_doc_number = NULL, updated_at = now()
+         WHERE id = $1`,
+        [jobId]
+      );
+    }
+  }
+
   if (!invoiceId) {
     invoiceNo = await reserveTmsInvoiceNo(jobId, enrolmentId, invoiceNo);
     invoiceBody.DocNumber = invoiceNo;
 
-    let inv;
-    try {
-      inv = await step('QBO create invoice', () => qboCreateInvoice(undefined, invoiceBody));
-    } catch (err) {
-      if (err && typeof err === 'object') {
-        console.error('[QBO create invoice error]', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
-      } else {
-        console.error('[QBO create invoice error]', err);
+    // Idempotency: check if QB already has an invoice with this DocNumber before creating.
+    // Prevents duplicate invoices when two concurrent processes both see qbo_invoice_id = null.
+    const existingInv = await qboFindInvoiceByDocNumber(undefined, invoiceNo!);
+    if (existingInv?.id) {
+      invoiceId = existingInv.id;
+      docNumber = invoiceNo;
+      await pool.query(
+        `UPDATE public.invoice_jobs
+         SET qbo_invoice_id = $2, qbo_doc_number = $3, invoice_no = COALESCE(invoice_no, $4), updated_at = now()
+         WHERE id = $1`,
+        [jobId, invoiceId, docNumber, invoiceNo]
+      );
+    } else {
+      let inv;
+      try {
+        inv = await step('QBO create invoice', () => qboCreateInvoice(undefined, invoiceBody));
+      } catch (err) {
+        if (err && typeof err === 'object') {
+          console.error('[QBO create invoice error]', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+        } else {
+          console.error('[QBO create invoice error]', err);
+        }
+        throw err;
       }
-      throw err;
+      if (!inv.id) throw new Error('QBO create invoice: QuickBooks returned no Id');
+      invoiceId = inv.id;
+      docNumber = inv.docNumber ?? invoiceNo;
+      await pool.query(
+        `UPDATE public.invoice_jobs
+         SET qbo_invoice_id = $2, qbo_doc_number = $3, invoice_no = COALESCE(invoice_no, $4), updated_at = now()
+         WHERE id = $1`,
+        [jobId, invoiceId, docNumber, invoiceNo]
+      );
     }
-    if (!inv.id) throw new Error('QBO create invoice: QuickBooks returned no Id');
-    invoiceId = inv.id;
-    docNumber = inv.docNumber ?? invoiceNo;
-    await pool.query(
-      `UPDATE public.invoice_jobs
-       SET qbo_invoice_id = $2, qbo_doc_number = $3, invoice_no = COALESCE(invoice_no, $4), updated_at = now()
-       WHERE id = $1`,
-      [jobId, invoiceId, docNumber, invoiceNo]
-    );
   }
 
   // 5) Mark done as soon as the invoice exists in QBO.
@@ -503,6 +553,10 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
      WHERE id = $1`,
     [jobId]
   );
+
+  // Snapshot the customer invoice number (TC...) for GRN creation.
+  // Do NOT rely on `job.invoice_no` here because `job` is an earlier DB snapshot.
+  const mainCustomerInvoiceNoForGrn = String(invoiceNo || docNumber || '').trim();
 
   // 6) Post-steps (do not block job completion)
   void (async () => {
@@ -544,13 +598,18 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
 
     // Create GRN invoice in QB (post-step — errors here don't fail invoice generation)
     const existingGrnRef = job.grn_doc_number ? String(job.grn_doc_number).trim() || null : null;
-    if (!existingGrnRef && grantDeductionLines.length > 0) {
+    if (grantDeductionLines.length > 0) {
       try {
         const primaryGrnRef = grantDeductionLines[0].grantId !== '—' ? grantDeductionLines[0].grantId : null;
-        if (primaryGrnRef) {
-          const existingGrn = await qboFindInvoiceByDocNumber(undefined, primaryGrnRef);
+        const desiredGrnRef = (existingGrnRef || primaryGrnRef || '').trim() || null;
+        if (desiredGrnRef) {
+          const existingGrn = await qboFindInvoiceByDocNumber(undefined, desiredGrnRef);
           if (!existingGrn?.id) {
-            const wsgCustomerId = await qboFindOrCreateCustomerByDisplayName(undefined, 'WSG');
+            // Grant (GRN) invoice should be addressed to WSG, with the correct display name used in QBO.
+            // Prefer full name, fallback to legacy short name.
+            let wsgCustomerId =
+              (await qboFindOrCreateCustomerByDisplayName(undefined, 'Singapore Workforce Development Agency (WSG)')) ||
+              (await qboFindOrCreateCustomerByDisplayName(undefined, 'WSG'));
             const grnLines = grantDeductionLines.map((g) => ({
               Amount: g.amount,
               DetailType: 'SalesItemLineDetail',
@@ -560,20 +619,33 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
                 UnitPrice: g.amount,
                 TaxCodeRef: { value: taxCodeOos },
               },
-              Description: g.description.replace(/^Less: /, ''),
+              // Keep the "Less:" prefix as per Finance expectation.
+              Description: g.description,
             }));
+
+            const txnDate = new Date().toISOString().slice(0, 10);
+            // PO# must be the main customer tax invoice (TC...).
+            const mainInvoiceDocNumber = mainCustomerInvoiceNoForGrn;
+            const dueDate = addDaysIso(txnDate, 35);
             const grnBody: Record<string, unknown> = {
               CustomerRef: { value: wsgCustomerId },
-              DocNumber: primaryGrnRef,
+              BillAddr: { Line1: 'Singapore Workforce Development Agency (WSG)' },
+              BillEmail: { Address: 'angch@tertiaryinfotech.com' },
+              TxnDate: txnDate,
+              DueDate: dueDate,
+              DocNumber: desiredGrnRef,
               Line: grnLines,
+              ...(mainInvoiceDocNumber ? { PONumber: mainInvoiceDocNumber } : {}),
+              ...(_cachedWsg35DaysTermId ? { SalesTermRef: { value: _cachedWsg35DaysTermId } } : {}),
               PrivateNote: `SSG enrolment: ${enrolmentId}`,
             };
-            if (gtc && gtc.toLowerCase() !== 'omit') grnBody.GlobalTaxCalculation = gtc;
+            // GRN invoices are out-of-scope grant amounts and should not add GST.
+            grnBody.GlobalTaxCalculation = 'TaxExcluded';
             await qboCreateInvoice(undefined, grnBody);
           }
           await pool.query(
             `UPDATE public.invoice_jobs SET grn_doc_number = $2, updated_at = now() WHERE id = $1`,
-            [jobId, primaryGrnRef]
+            [jobId, desiredGrnRef]
           );
         }
       } catch (e) {
