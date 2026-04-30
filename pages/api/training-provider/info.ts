@@ -47,7 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.support_email,
           tp.contact_tel,
           tp.company_tel,
-          tp.company_address
+          tp.company_address,
+          tp.show_lesson_plan_learner_view
         FROM training_provider_member tpm
         JOIN training_provider tp ON tpm.provider_id = tp.id
         WHERE tpm.user_id = $1
@@ -70,7 +71,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.support_email,
             tp.contact_tel,
             tp.company_tel,
-            tp.company_address
+            tp.company_address,
+            tp.show_lesson_plan_learner_view
           FROM training_provider tp
           WHERE tp.id = $1
         `, [userId]);
@@ -93,7 +95,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.support_email,
             tp.contact_tel,
             tp.company_tel,
-            tp.company_address
+            tp.company_address,
+            tp.show_lesson_plan_learner_view
           FROM provider_admin_user pau
           JOIN training_provider tp ON pau.provider_id = tp.id
           WHERE pau.user_id = $1
@@ -144,6 +147,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           defaultOtp: trainingProvider.default_otp || '',
           colorScheme: trainingProvider.color_scheme || null,
           forceFirstPasswordChange: trainingProvider.force_first_password_change || false,
+          showLessonPlanLearnerView: trainingProvider.show_lesson_plan_learner_view || false,
           privacyPolicy: privacyPolicy || null,
           acceptableUsePolicy: acceptableUsePolicy || null,
           referenceLinks: {
@@ -188,7 +192,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.support_email,
           tp.contact_tel,
           tp.company_tel,
-          tp.company_address
+          tp.company_address,
+          tp.show_lesson_plan_learner_view
         FROM user_role_map urm
         JOIN app_user au ON au.id = urm.user_id
         CROSS JOIN training_provider tp
@@ -228,6 +233,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         defaultOtp: '',
         colorScheme: null,
         forceFirstPasswordChange: false,
+        showLessonPlanLearnerView: false,
         privacyPolicy: null,
         acceptableUsePolicy: null
       };
@@ -267,6 +273,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       defaultOtp: trainingProvider.default_otp || '',
       colorScheme: trainingProvider.color_scheme || null,
       forceFirstPasswordChange: trainingProvider.force_first_password_change || false,
+      showLessonPlanLearnerView: trainingProvider.show_lesson_plan_learner_view || false,
       privacyPolicy: fallbackPrivacyPolicy || null,
       acceptableUsePolicy: fallbackAcceptableUsePolicy || null
     };

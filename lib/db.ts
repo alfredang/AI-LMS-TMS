@@ -107,4 +107,12 @@ pool
     console.warn('Auto-migration warning:', err.message);
   });
 
+pool
+  .query(`
+    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS show_lesson_plan_learner_view boolean DEFAULT false NOT NULL;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
 export default pool;

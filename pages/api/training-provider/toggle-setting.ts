@@ -24,6 +24,7 @@ const ALLOWED_COLUMNS = new Set([
   'auto_enrol_direct_applications',
   'auto_generate_qb_invoice',
   'auto_add_learner_to_calendar',
+  'show_lesson_plan_learner_view',
   'auto_mask_sensitive_data',
   'auto_delete_after_six_months',
 ]);

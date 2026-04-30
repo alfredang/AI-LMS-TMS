@@ -8,7 +8,7 @@ import { resetTutorChat } from '@lib/services/geminiService';
 import { initializeColorScheme } from '@utils/colorUtils';
 
 // Function to fetch training provider info for all users
-const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; referenceLinks?: any }> => {
+const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; referenceLinks?: any }> => {
   try {
     // If userId is provided, fetch specific organization info
     const url = userId 
@@ -43,6 +43,7 @@ const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: strin
       supportEmail: result.data.supportEmail,
       contactTel: result.data.contactTel,
       companyAddress: result.data.companyAddress,
+      showLessonPlanLearnerView: result.data.showLessonPlanLearnerView ?? false,
       referenceLinks: result.data.referenceLinks,
     };
   } catch (error) {

@@ -333,6 +333,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoEnrolDirectApplications: "Auto Submit Direct Applications to SSG",
         autoGenerateQbInvoice: "Auto Generate QuickBooks Invoice for Direct Applications",
         autoAddLearnerToCalendar: "Auto Add Learner to Calendar for Direct Applications",
+        showLessonPlanLearnerView: "Show Lesson Plan on Learner View",
     };
 
     useEffect(() => {
@@ -543,6 +544,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoEnrolDirectApplications: 'auto_enrol_direct_applications',
         autoGenerateQbInvoice: 'auto_generate_qb_invoice',
         autoAddLearnerToCalendar: 'auto_add_learner_to_calendar',
+        showLessonPlanLearnerView: 'show_lesson_plan_learner_view',
     };
 
     const handleToggleChange = (section: 'adminSettings' | 'securitySettings' | 'integrations' | 'gamingSettings' | 'fundingSettings', key: string) => {

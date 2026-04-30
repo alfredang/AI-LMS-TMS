@@ -1143,6 +1143,7 @@ CREATE TABLE public.training_provider (
     auto_send_thankyou_email boolean DEFAULT false NOT NULL,
     auto_enrol_direct_applications boolean DEFAULT false NOT NULL,
     auto_generate_qb_invoice boolean DEFAULT false NOT NULL,
+    show_lesson_plan_learner_view boolean DEFAULT false NOT NULL,
     auto_mask_sensitive_data boolean DEFAULT false NOT NULL,
     auto_delete_after_six_months boolean DEFAULT false NOT NULL,
     enable_otp_login boolean DEFAULT false NOT NULL,

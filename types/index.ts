@@ -353,6 +353,7 @@ export interface TrainingProviderProfile {
   supportEmail?: string;
   contactTel?: string;
   companyAddress?: string;
+  showLessonPlanLearnerView?: boolean;
 }
 
 export interface CurrentUserProfile {
