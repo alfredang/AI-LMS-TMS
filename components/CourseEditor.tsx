@@ -2040,7 +2040,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         </div>
                     </Card>
 
-                    {(role === UserRole.Trainer || role === UserRole.Developer) && (
+                    {(role === UserRole.Admin || role === UserRole.Trainer || role === UserRole.Developer) && (
                     <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                         <h3 className="text-xl font-bold mb-4">Assessment Methods</h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Select the assessment methods for this course. A link field will appear for each selected method.</p>
