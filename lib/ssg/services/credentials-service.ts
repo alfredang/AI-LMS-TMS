@@ -213,8 +213,10 @@ export class SSGCredentialsService {
 
         for (const base of baseUrls) {
           const url = filePath.startsWith('http') ? filePath : `${base}${normalizedPath}`;
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 5000);
           try {
-            const res = await fetch(url);
+            const res = await fetch(url, { signal: controller.signal });
             if (res.ok) {
               const text = await res.text();
               if (text.includes('-----BEGIN')) {
@@ -222,7 +224,12 @@ export class SSGCredentialsService {
                 return text;
               }
             }
-          } catch { /* try next */ }
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.warn(`[creds] Could not load PEM via URL ${url}: ${msg}`);
+          } finally {
+            clearTimeout(timeout);
+          }
         }
 
         // Filesystem fallback (works on the same machine as the files)

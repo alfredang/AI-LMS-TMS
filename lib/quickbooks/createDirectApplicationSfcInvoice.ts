@@ -30,6 +30,7 @@ import {
   qboResolveOosTaxCodeRef,
   qboSparseUpdateInvoice,
 } from '../services/qboInvoiceService';
+import { buildPurchaseOrderInvoiceFields } from './directApplicationInvoiceFields';
 
 export interface SfcInvoiceInput {
   enrolmentId: string;
@@ -146,12 +147,14 @@ export async function createDirectApplicationSfcInvoice(
     // Backfill PONumber if the existing invoice was created before PO linking
     // was added and mainInvoiceDocNumber is now available.
     const desiredPo = input.mainInvoiceDocNumber ? input.mainInvoiceDocNumber.trim() : '';
-    const currentPo = existingInvoice.raw?.PONumber ? String(existingInvoice.raw.PONumber).trim() : '';
-    if (desiredPo && currentPo !== desiredPo && existingInvoice.syncToken) {
+    if (desiredPo && existingInvoice.syncToken) {
       try {
-        await qboSparseUpdateInvoice(undefined, existingInvoice.id, existingInvoice.syncToken, {
-          PONumber: desiredPo,
-        });
+        await qboSparseUpdateInvoice(
+          undefined,
+          existingInvoice.id,
+          existingInvoice.syncToken,
+          await buildPurchaseOrderInvoiceFields(desiredPo, existingInvoice.raw)
+        );
       } catch (err) {
         console.warn(`[QBO sfc invoice] Failed to backfill PONumber on invoice ${existingInvoice.id}:`, err);
       }
@@ -206,7 +209,7 @@ export async function createDirectApplicationSfcInvoice(
   };
 
   if (input.mainInvoiceDocNumber && input.mainInvoiceDocNumber.trim()) {
-    invoiceBody.PONumber = input.mainInvoiceDocNumber.trim();
+    Object.assign(invoiceBody, await buildPurchaseOrderInvoiceFields(input.mainInvoiceDocNumber));
   }
 
   const created = await qboCreateInvoice(undefined, invoiceBody);

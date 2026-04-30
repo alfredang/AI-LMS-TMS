@@ -665,7 +665,8 @@ export const ViewDirectApplicationView: React.FC = () => {
         return hasMainInvoiceDocument(app) && !brokenDocumentKeys.has(getDocumentKey(app, 'main'));
     };
     const hasVisibleMainInvoice = (app: any) => hasRealInvoice(app?.invoice_id) && isInvoiceCheckboxChecked(app);
-    const getVisibleInvoiceNumber = (app: any) => (hasVisibleMainInvoice(app) ? String(app.invoice_id || '').trim() : '');
+    const getDisplayInvoiceNumber = (app: any) => String(app?.invoice_doc_number || app?.invoice_id || '').trim();
+    const getVisibleInvoiceNumber = (app: any) => (hasVisibleMainInvoice(app) ? getDisplayInvoiceNumber(app) : '');
 
     const getDocumentUrl = (app: any, documentType: DaDocumentType): string => {
         if (documentType === 'main') {
@@ -686,7 +687,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     const clearDocumentLocally = (applicationId: string, documentType: DaDocumentType) => {
         setApplications(prev => prev.map(app => {
             if (app.id !== applicationId) return app;
-            if (documentType === 'main') return { ...app, invoice_id: null, invoice_drive_file_id: null, invoice_drive_web_view_link: null };
+            if (documentType === 'main') return { ...app, invoice_id: null, invoice_doc_number: null, invoice_drive_file_id: null, invoice_drive_web_view_link: null };
             if (documentType === 'grant') return { ...app, grant_invoice_drive_file_id: null, grant_invoice_drive_web_view_link: null };
             return { ...app, sfc_invoice_drive_file_id: null, sfc_invoice_drive_web_view_link: null };
         }));
@@ -772,7 +773,7 @@ export const ViewDirectApplicationView: React.FC = () => {
             if (a.id !== appId) return a;
             if (field === 'enrol') return { ...a, enrolment_status: newValue ? 'Confirmed' : null, enrolment_id: newValue ? (a.enrolment_id || 'MANUAL') : null };
             if (field === 'calendar') return { ...a, calendar_added: newValue };
-            if (field === 'invoice') return { ...a, invoice_id: newValue ? (a.invoice_id || 'MANUAL') : null };
+            if (field === 'invoice') return { ...a, invoice_id: newValue ? (a.invoice_id || 'MANUAL') : null, invoice_doc_number: newValue ? a.invoice_doc_number : null };
             return a;
         }));
         try {
@@ -1357,7 +1358,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                 <td className="px-2 py-1.5"><input type="checkbox" checked={selectedIds.has(app.application_id)} onChange={() => toggleSelect(app.application_id)} className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300" /></td>
                                                 <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(app.enrolment_id && String(app.enrolment_id).trim() !== '')} onChange={(e) => toggleDaField(app.id, 'enrol', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.enrolment_id ? 'text-green-600 accent-green-600' : ''}`} title={app.enrolment_id ? `Enrolled: ${app.enrolment_id}` : 'Click to mark as enrolled'} /></td>
                                                 <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!app.calendar_added} onChange={(e) => toggleDaField(app.id, 'calendar', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`} title={app.calendar_added ? 'Added to calendar' : 'Click to mark'} /></td>
-                                                <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={isInvoiceCheckboxChecked(app)} onChange={(e) => toggleDaField(app.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${isInvoiceCheckboxChecked(app) ? 'text-amber-600 accent-amber-600' : ''}`} title={hasRealInvoice(app.invoice_id) ? (isInvoiceCheckboxChecked(app) ? `Invoice: ${app.invoice_id} - click to uncheck` : `Invoice: ${app.invoice_id} - document may have been deleted`) : hasInvoiceMarker(app.invoice_id) ? 'Marked as invoiced manually - no invoice document linked yet' : 'Click to mark as invoiced'} /></td>
+                                                <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={isInvoiceCheckboxChecked(app)} onChange={(e) => toggleDaField(app.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${isInvoiceCheckboxChecked(app) ? 'text-amber-600 accent-amber-600' : ''}`} title={hasRealInvoice(app.invoice_id) ? (isInvoiceCheckboxChecked(app) ? `Invoice: ${getDisplayInvoiceNumber(app)} - click to uncheck` : `Invoice: ${getDisplayInvoiceNumber(app)} - document may have been deleted`) : hasInvoiceMarker(app.invoice_id) ? 'Marked as invoiced manually - no invoice document linked yet' : 'Click to mark as invoiced'} /></td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">{app.application_id || 'N/A'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_id_type || 'N/A'}</td>
