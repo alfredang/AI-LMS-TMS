@@ -43,12 +43,25 @@ function buildVenueString(row: any): string | null {
   return parts.length > 0 ? parts.join(', ') : null;
 }
 
-function computeDurationLabel(startDate: string, endDate: string): string {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const days = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  if (days <= 1) return '1 day';
-  return `${days} days`;
+function computeDurationLabel(row: any): string {
+  // Prefer scheduled session days, then course.num_of_days, then calendar span.
+  const toPositiveInt = (v: unknown): number | null => {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+  };
+  const sessionDays = toPositiveInt(row?.session_days);
+  if (sessionDays) return sessionDays === 1 ? '1 day' : `${sessionDays} days`;
+  const numOfDays = toPositiveInt(row?.num_of_days);
+  if (numOfDays) return numOfDays === 1 ? '1 day' : `${numOfDays} days`;
+  if (row?.start_date && row?.end_date) {
+    const start = new Date(row.start_date);
+    const end = new Date(row.end_date);
+    const span = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    if (span <= 1) return '1 day';
+    return `${span} days`;
+  }
+  return 'N/A';
 }
 
 function mapRow(row: any) {
@@ -62,7 +75,7 @@ function mapRow(row: any) {
     course_title: row.course_title,
     start_date: row.start_date,
     end_date: row.end_date,
-    duration_label: computeDurationLabel(row.start_date, row.end_date),
+    duration_label: computeDurationLabel(row),
     status: row.class_status,
     mode_of_training: row.mode_of_learning || 'Physical',
     is_virtual: isVirtual,
@@ -178,6 +191,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          cr.updated_at,
          c.course_code,
          c.title AS course_title,
+         c.num_of_days,
+         (
+           SELECT COUNT(DISTINCT cs.start_date)::int
+           FROM course_session cs
+           WHERE cs.course_run_id = cr.id
+             AND COALESCE(cs.deleted, false) = false
+             AND cs.start_date IS NOT NULL
+         ) AS session_days,
          crt.trainer_id,
          crt.trainer_name,
          crt.trainer_email,
@@ -231,6 +252,14 @@ async function handleSingle(courseRunId: string, res: NextApiResponse) {
          cr.updated_at,
          c.course_code,
          c.title AS course_title,
+         c.num_of_days,
+         (
+           SELECT COUNT(DISTINCT cs.start_date)::int
+           FROM course_session cs
+           WHERE cs.course_run_id = cr.id
+             AND COALESCE(cs.deleted, false) = false
+             AND cs.start_date IS NOT NULL
+         ) AS session_days,
          crt.trainer_id,
          crt.trainer_name,
          crt.trainer_email,

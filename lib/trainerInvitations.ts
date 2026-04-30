@@ -111,9 +111,44 @@ export interface InvitationClassRow {
   course_type?: string | null;            // WSQ, Non-WSQ, etc.
   training_hours?: string | number | null;
   assessment_hours?: string | number | null;
+  num_of_days?: string | number | null;   // course.num_of_days — authoritative source for class days
+  session_days?: string | number | null;  // distinct count of course_session.start_date for this run, optional
   start_date?: string | Date | null;
   end_date?: string | Date | null;
   tpg_assigned_trainer_name?: string | null;
+}
+
+/**
+ * Resolve the class duration label. Preference order:
+ *   1. Distinct session count from course_session (caller passes via session_days).
+ *   2. course.num_of_days (the authoritative course-level field).
+ *   3. Calendar span (end - start + 1) — last resort, naive and counts weekends.
+ *
+ * Returns a label like "2 days" / "1 day", or 'N/A' when no source is usable.
+ */
+export function resolveClassDurationDays(row: Pick<InvitationClassRow, 'num_of_days' | 'session_days' | 'start_date' | 'end_date'>): { days: number | null; label: string } {
+  const toPositiveInt = (v: unknown): number | null => {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+  };
+
+  const sessionDays = toPositiveInt(row.session_days);
+  if (sessionDays) return { days: sessionDays, label: `${sessionDays} day${sessionDays === 1 ? '' : 's'}` };
+
+  const numOfDays = toPositiveInt(row.num_of_days);
+  if (numOfDays) return { days: numOfDays, label: `${numOfDays} day${numOfDays === 1 ? '' : 's'}` };
+
+  if (row.start_date && row.end_date) {
+    const startMs = new Date(row.start_date as any).getTime();
+    const endMs = new Date(row.end_date as any).getTime();
+    if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs) {
+      const span = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1;
+      return { days: span, label: `${span} day${span === 1 ? '' : 's'}` };
+    }
+  }
+
+  return { days: null, label: 'N/A' };
 }
 
 /**
@@ -134,16 +169,9 @@ export function buildInvitationReplacements(opts: {
 }): Record<string, string> {
   const { classRow, trainerName, companyShortName, companyPhone, companyEmail, acceptUrl, declineUrl } = opts;
 
-  // Duration in days (inclusive of start and end)
-  let durationLabel = 'N/A';
-  if (classRow.start_date && classRow.end_date) {
-    const startMs = new Date(classRow.start_date as any).getTime();
-    const endMs = new Date(classRow.end_date as any).getTime();
-    if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs) {
-      const days = Math.round((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1;
-      durationLabel = `${days} day${days === 1 ? '' : 's'}`;
-    }
-  }
+  // Duration: prefer course.num_of_days / session count over the naive span
+  // (see resolveClassDurationDays for the preference order).
+  const { label: durationLabel } = resolveClassDurationDays(classRow);
 
   // Confirmation deadline: 2 days from now at 23:59 SGT. Formatted as
   // DD-MM-YYYY with hyphens to match the agreed copy.

@@ -167,7 +167,9 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
   await ensureTrainerInvitationTemplateColumns((sql) => pool.query(sql));
   await ensureTpgTrainerColumns((sql, params) => pool.query(sql, params));
 
-  // 1. Load course_run + course details (all fields needed by placeholders)
+  // 1. Load course_run + course details (all fields needed by placeholders).
+  // session_days = distinct class days actually scheduled, used as the most
+  // accurate duration source; num_of_days is the course-level fallback.
   const classResult = await pool.query(
     `SELECT
         cr.id,
@@ -181,8 +183,16 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
         c.course_type,
         c.training_hours,
         c.assessment_hours,
+        c.num_of_days,
         c.trainers_list,
-        cr.invitation_paused
+        cr.invitation_paused,
+        (
+          SELECT COUNT(DISTINCT cs.start_date)::int
+          FROM course_session cs
+          WHERE cs.course_run_id = cr.id
+            AND COALESCE(cs.deleted, false) = false
+            AND cs.start_date IS NOT NULL
+        ) AS session_days
       FROM course_run cr
       JOIN course c ON c.id = cr.course_id
       WHERE cr.id = $1
