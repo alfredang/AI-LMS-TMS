@@ -115,6 +115,42 @@ async function qbFindInvoiceByEnrolmentId(apps: string[], enrolmentId: string): 
   return null;
 }
 
+async function qbFindInvoiceByDocNumber(apps: string[], docNumber: string): Promise<{
+  app: string;
+  id: string;
+  balance: number;
+  customerRef: string;
+  docNumber: string | null;
+} | null> {
+  const safeDoc = escapeQbQueryString(String(docNumber || '').trim());
+  if (!safeDoc) return null;
+  for (const app of apps) {
+    try {
+      const data = await callQbProxy({
+        action: 'query',
+        entity: 'invoice',
+        app,
+        query: `SELECT Id, DocNumber, Balance, CustomerRef FROM Invoice WHERE DocNumber = '${safeDoc}' MAXRESULTS 5`,
+      });
+      const rows = data?.QueryResponse?.Invoice;
+      const list: any[] = Array.isArray(rows) ? rows : rows ? [rows] : [];
+      const inv = list[0];
+      if (inv?.Id) {
+        return {
+          app,
+          id: String(inv.Id),
+          balance: Number(inv.Balance ?? 0),
+          customerRef: inv?.CustomerRef?.value ? String(inv.CustomerRef.value) : '',
+          docNumber: inv?.DocNumber ? String(inv.DocNumber) : null,
+        };
+      }
+    } catch {
+      // Try next app
+    }
+  }
+  return null;
+}
+
 export async function sfcStage1ParseMatchAndPersist(input: {
   filepath: string;
   filename: string | null;
@@ -238,7 +274,9 @@ export async function sfcStage1ParseMatchAndPersist(input: {
          ij.qbo_invoice_id,
          ij.qbo_doc_number,
          ij.invoice_no,
-         da.invoice_id AS da_invoice_id
+         da.invoice_id AS da_invoice_id,
+         da.application_id AS da_application_id,
+         da.sfc_invoice_id AS da_sfc_invoice_id
        FROM public.ssg_claims sc
        JOIN public.ssg_enrolments se ON sc.enrollment_id = se.enrolment_id
        LEFT JOIN public.invoice_jobs ij ON ij.enrolment_id = se.enrolment_id
@@ -289,8 +327,50 @@ export async function sfcStage1ParseMatchAndPersist(input: {
     const enrolmentId = String(match.enrolment_id || '');
     const sponsorshipType = String(match.sponsorship_type || '');
     const ssgClaimRowId = String(match.ssg_claim_row_id || '');
-    let qboInvoiceId = match.qbo_invoice_id ? String(match.qbo_invoice_id) : null;
-    let qboDocNumber = match.qbo_doc_number ? String(match.qbo_doc_number) : null;
+    const daApplicationId = match.da_application_id ? String(match.da_application_id) : null;
+    const daSfcInvoiceId = match.da_sfc_invoice_id ? String(match.da_sfc_invoice_id) : null;
+    const isDa = !!(daApplicationId && String(daApplicationId).trim());
+
+    // Main (TC / net-fee) invoice reference
+    const mainInvoiceId = match.qbo_invoice_id
+      ? String(match.qbo_invoice_id)
+      : match.da_invoice_id
+        ? String(match.da_invoice_id)
+        : null;
+    const mainDocNumber = match.qbo_doc_number
+      ? String(match.qbo_doc_number)
+      : match.invoice_no
+        ? String(match.invoice_no)
+        : null;
+
+    // Target invoice for SFC payment apply:
+    // - Non-DA: main invoice
+    // - DA: supplemental SFC invoice (DocNumber SFC-CA-...), created later if missing
+    let qboInvoiceId = isDa ? (daSfcInvoiceId ? String(daSfcInvoiceId) : null) : mainInvoiceId;
+    let qboDocNumber = isDa ? null : (mainDocNumber ? String(mainDocNumber) : null);
+
+    // DA rows: if we don't have the supplemental invoice id stored yet, try to find the existing SFC-CA invoice in QB
+    // so the preview can correctly show "QB paid" (balance=0) without requiring an FMS apply.
+    if (isDa && !qboInvoiceId && daApplicationId) {
+      const apps = appOverride === 'app2' ? ['app2', 'app1'] : ['app1', 'app2'];
+      const desiredDocNumber = `SFC-${String(daApplicationId).trim().toUpperCase()}`;
+      const found = await qbFindInvoiceByDocNumber(apps, desiredDocNumber);
+      if (found?.id) {
+        qboInvoiceId = found.id;
+        qboDocNumber = found.docNumber;
+        // Best-effort backfill so next run resolves from DB
+        try {
+          await pool.query(
+            `UPDATE public.da_application
+             SET sfc_invoice_id = $2::varchar
+             WHERE LOWER(TRIM(COALESCE(enrolment_id,''))) = LOWER(TRIM($1::text))`,
+            [enrolmentId, found.id]
+          );
+        } catch {
+          // best-effort
+        }
+      }
+    }
 
     // Step 3 — Already applied check (DB)
     const storedQbPaymentId = appliedQbPaymentIds.get(claimId) ?? null;
@@ -302,6 +382,10 @@ export async function sfcStage1ParseMatchAndPersist(input: {
         matched_enrolment_id: enrolmentId,
         matched_ssg_claim_id: ssgClaimRowId,
         sponsorship_type: sponsorshipType,
+        da_application_id: daApplicationId,
+        da_sfc_invoice_id: daSfcInvoiceId,
+        main_qbo_invoice_id: mainInvoiceId,
+        main_qbo_doc_number: mainDocNumber,
         matched_qbo_invoice_id: qboInvoiceId,
         matched_qbo_doc_number: qboDocNumber,
         matched_qbo_invoice_balance: null,
@@ -313,10 +397,16 @@ export async function sfcStage1ParseMatchAndPersist(input: {
       continue;
     }
 
-    // Step 5 — Find QB invoice: DB first, then DA direct fallback, then QB PrivateNote fallback
-    // DA enrolments: use da_application.invoice_id before hitting QB API
-    if (!qboInvoiceId && match.da_invoice_id) {
-      qboInvoiceId = String(match.da_invoice_id);
+    // Step 5 — Find QB invoice (main invoice only): DB first, then QB fallback
+    // DA enrolments: use da_application.invoice_id before hitting QB API (main TC/net-fee invoice)
+    if (!mainInvoiceId && match.da_invoice_id) {
+      const candidate = String(match.da_invoice_id);
+      // Only backfill main invoice fields; DA SFC invoice is handled separately in apply.
+      const resolvedMainInvoiceId = candidate;
+      // For non-DA rows, we also use this as the target qboInvoiceId.
+      if (!isDa && !qboInvoiceId) qboInvoiceId = resolvedMainInvoiceId;
+      if (!mainDocNumber && match.invoice_no) qboDocNumber = String(match.invoice_no);
+
       // Backfill invoice_jobs so next upload resolves from DB (best-effort)
       try {
         await pool.query(
@@ -330,14 +420,14 @@ export async function sfcStage1ParseMatchAndPersist(input: {
              status = 'done',
              updated_at = now()
            WHERE public.invoice_jobs.qbo_invoice_id IS NULL`,
-          [enrolmentId, match.da_invoice_id]
+          [enrolmentId, candidate]
         );
       } catch {
         // best-effort backfill — proceed regardless
       }
     }
 
-    if (!qboInvoiceId) {
+    if (!qboInvoiceId && !isDa) {
       if ((i + 1) % 10 === 0 || i === paidRows.length - 1) {
         input.onProgress?.({ pct: 10 + Math.round(((i + 1) / Math.max(1, totalRows)) * 75), message: `Searching QuickBooks for invoice (${i + 1}/${totalRows})…` });
       }
@@ -373,6 +463,10 @@ export async function sfcStage1ParseMatchAndPersist(input: {
           matched_enrolment_id: enrolmentId,
           matched_ssg_claim_id: ssgClaimRowId,
           sponsorship_type: sponsorshipType,
+          da_application_id: daApplicationId,
+          da_sfc_invoice_id: daSfcInvoiceId,
+          main_qbo_invoice_id: mainInvoiceId,
+          main_qbo_doc_number: mainDocNumber,
           matched_qbo_invoice_id: null,
           matched_qbo_doc_number: null,
           matched_qbo_invoice_balance: null,
@@ -388,7 +482,9 @@ export async function sfcStage1ParseMatchAndPersist(input: {
     let qboInvoiceBalance: number | null = null;
     let resolvedMatchStatus = 'ready';
 
-    if (runQbChecks) {
+    // DA rows can be "ready" even before the supplemental SFC invoice exists.
+    // In that case, Stage 2 will create the invoice (DocNumber SFC-CA-...) and then apply payment.
+    if (runQbChecks && qboInvoiceId) {
       const apps = appOverride === 'app2' ? ['app2', 'app1'] : ['app1', 'app2'];
       for (const app of apps) {
         const invData = await qbGetInvoiceById(app, qboInvoiceId);
@@ -414,6 +510,10 @@ export async function sfcStage1ParseMatchAndPersist(input: {
       matched_enrolment_id: enrolmentId,
       matched_ssg_claim_id: ssgClaimRowId,
       sponsorship_type: sponsorshipType,
+      da_application_id: daApplicationId,
+      da_sfc_invoice_id: daSfcInvoiceId,
+      main_qbo_invoice_id: mainInvoiceId,
+      main_qbo_doc_number: mainDocNumber,
       matched_qbo_invoice_id: qboInvoiceId,
       matched_qbo_doc_number: qboDocNumber,
       matched_qbo_invoice_balance: qboInvoiceBalance,

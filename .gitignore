@@ -155,6 +155,7 @@ CLAUDE.md
 
 # n8n workflow exports (local artifacts)
 n8nworkflows/
+n8nworkflows.md/
 
 # Playwright MCP / CLI session artifacts (logs + page snapshots)
 .playwright-cli/

@@ -51,6 +51,10 @@ export async function ensureSfcImportSchema(): Promise<void> {
       matched_enrolment_id VARCHAR,
       matched_ssg_claim_id VARCHAR,
       sponsorship_type VARCHAR,
+      da_application_id VARCHAR,
+      da_sfc_invoice_id VARCHAR,
+      main_qbo_invoice_id VARCHAR,
+      main_qbo_doc_number VARCHAR,
       matched_qbo_invoice_id VARCHAR,
       matched_qbo_doc_number VARCHAR,
       matched_qbo_invoice_balance NUMERIC(10,2),
@@ -62,6 +66,12 @@ export async function ensureSfcImportSchema(): Promise<void> {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+
+  // Backfill columns for existing DBs (idempotent)
+  await pool.query(`ALTER TABLE public.sfc_import_rows ADD COLUMN IF NOT EXISTS da_application_id VARCHAR`);
+  await pool.query(`ALTER TABLE public.sfc_import_rows ADD COLUMN IF NOT EXISTS da_sfc_invoice_id VARCHAR`);
+  await pool.query(`ALTER TABLE public.sfc_import_rows ADD COLUMN IF NOT EXISTS main_qbo_invoice_id VARCHAR`);
+  await pool.query(`ALTER TABLE public.sfc_import_rows ADD COLUMN IF NOT EXISTS main_qbo_doc_number VARCHAR`);
 
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_sfc_import_rows_batch_id ON public.sfc_import_rows(batch_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_sfc_import_rows_claim_id ON public.sfc_import_rows(claim_id)`);
@@ -171,6 +181,10 @@ export async function insertSfcImportRow(row: {
   matched_enrolment_id: string | null;
   matched_ssg_claim_id: string | null;
   sponsorship_type: string | null;
+  da_application_id?: string | null;
+  da_sfc_invoice_id?: string | null;
+  main_qbo_invoice_id?: string | null;
+  main_qbo_doc_number?: string | null;
   matched_qbo_invoice_id: string | null;
   matched_qbo_doc_number: string | null;
   matched_qbo_invoice_balance: number | null;
@@ -187,7 +201,8 @@ export async function insertSfcImportRow(row: {
        disbursement_date, disbursement_date_iso,
        claim_amount, payout_request_id, claim_status,
        match_status, matched_enrolment_id, matched_ssg_claim_id,
-       sponsorship_type, matched_qbo_invoice_id, matched_qbo_doc_number,
+       sponsorship_type, da_application_id, da_sfc_invoice_id, main_qbo_invoice_id, main_qbo_doc_number,
+       matched_qbo_invoice_id, matched_qbo_doc_number,
        matched_qbo_invoice_balance, matched_qb_payment_id,
        validation_errors, apply_status, apply_error
      ) VALUES (
@@ -197,9 +212,10 @@ export async function insertSfcImportRow(row: {
        $9::varchar, $10::varchar,
        $11::numeric, $12::varchar, $13::varchar,
        $14::varchar, $15::varchar, $16::varchar,
-       $17::varchar, $18::varchar, $19::varchar,
-       $20::numeric, $21::varchar,
-       $22::jsonb, $23::varchar, $24::varchar
+       $17::varchar, $18::varchar, $19::varchar, $20::varchar, $21::varchar,
+       $22::varchar, $23::varchar,
+       $24::numeric, $25::varchar,
+       $26::jsonb, $27::varchar, $28::varchar
      ) RETURNING id`,
     [
       row.batch_id, row.row_index,
@@ -208,9 +224,18 @@ export async function insertSfcImportRow(row: {
       row.disbursement_date, row.disbursement_date_iso,
       row.claim_amount, row.payout_request_id, row.claim_status,
       row.match_status, row.matched_enrolment_id, row.matched_ssg_claim_id,
-      row.sponsorship_type, row.matched_qbo_invoice_id, row.matched_qbo_doc_number,
-      row.matched_qbo_invoice_balance, row.matched_qb_payment_id,
-      JSON.stringify(row.validation_errors), row.apply_status, row.apply_error,
+      row.sponsorship_type,
+      row.da_application_id ?? null,
+      row.da_sfc_invoice_id ?? null,
+      row.main_qbo_invoice_id ?? null,
+      row.main_qbo_doc_number ?? null,
+      row.matched_qbo_invoice_id,
+      row.matched_qbo_doc_number,
+      row.matched_qbo_invoice_balance,
+      row.matched_qb_payment_id,
+      JSON.stringify(row.validation_errors),
+      row.apply_status,
+      row.apply_error,
     ]
   );
   return Number(r.rows[0].id);
@@ -238,7 +263,10 @@ export async function getSfcImportRows(batchId: number): Promise<any[]> {
             claim_amount::text AS claim_amount,
             payout_request_id, claim_status,
             match_status, matched_enrolment_id, matched_ssg_claim_id,
-            sponsorship_type, matched_qbo_invoice_id, matched_qbo_doc_number,
+            sponsorship_type,
+            da_application_id, da_sfc_invoice_id,
+            main_qbo_invoice_id, main_qbo_doc_number,
+            matched_qbo_invoice_id, matched_qbo_doc_number,
             matched_qbo_invoice_balance::text AS matched_qbo_invoice_balance,
             matched_qb_payment_id, validation_errors,
             apply_status, apply_error, applied_at::text AS applied_at,
@@ -339,6 +367,8 @@ export async function getSfcImportRowsForApply(batchId: number, rowIds: number[]
             disbursement_date_iso, claim_amount::float AS claim_amount,
             payout_request_id, match_status, apply_status,
             matched_enrolment_id, matched_ssg_claim_id,
+            da_application_id, da_sfc_invoice_id,
+            main_qbo_invoice_id, main_qbo_doc_number,
             matched_qbo_invoice_id, matched_qbo_doc_number,
             matched_qbo_invoice_balance::float AS matched_qbo_invoice_balance,
             matched_qb_payment_id

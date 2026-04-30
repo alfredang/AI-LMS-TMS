@@ -490,7 +490,8 @@ const SfcPaymentSyncView: React.FC = () => {
           <Icon name={IconName.InfoCircle} className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-purple-800 dark:text-purple-200">
             <strong>{counts.da}</strong> Direct Application (DA) enrolment{counts.da !== 1 ? 's' : ''} detected.
-            DA rows are processed the same as non-DA — their SFC payment is applied to the QB net-fee invoice.
+            For DA rows, SFC payments are applied to the supplemental QB invoice with DocNumber <strong>SFC-CA-…</strong> (from the SSG Application ID).
+            If the SFC-CA invoice is missing, it will be created automatically during <strong>Apply Selected</strong>.
           </p>
         </div>
       )}

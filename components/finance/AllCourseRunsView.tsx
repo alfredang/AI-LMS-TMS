@@ -370,6 +370,11 @@ const AllCourseRunsView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
+  // Import Course Run modal (Finance)
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importRunId, setImportRunId] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<{ success: boolean; message: string; detail?: string } | null>(null);
   const [selectedEnrolmentIds, setSelectedEnrolmentIds] = useState<string[]>([]);
   const [queueing, setQueueing] = useState(false);
   const [sending, setSending] = useState(false);
@@ -486,6 +491,36 @@ const AllCourseRunsView: React.FC = () => {
     const t = setTimeout(() => setSyncToast(null), 8000);
     return () => clearTimeout(t);
   }, [syncToast]);
+
+  const handleImportRun = async () => {
+    const runId = importRunId.trim();
+    if (!runId) return;
+    setImportLoading(true);
+    setImportResult(null);
+    try {
+      const response = await ssgFetch('/api/finance/import-course-run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ course_run_id: runId }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        const { courseTitle, courseRunId: savedRunId, startDate, endDate, action } = result.data;
+        setImportResult({
+          success: true,
+          message: `Course run ${action === 'created' ? 'added' : 'updated'} successfully.`,
+          detail: `${courseTitle} (Run ID: ${savedRunId}, ${startDate ?? 'N/A'} → ${endDate ?? 'N/A'})`,
+        });
+        await fetchData();
+      } else {
+        setImportResult({ success: false, message: result.error || 'Import failed.' });
+      }
+    } catch {
+      setImportResult({ success: false, message: 'Network error. Please try again.' });
+    } finally {
+      setImportLoading(false);
+    }
+  };
 
   const runSync = async () => {
     setSyncing(true);
@@ -682,6 +717,9 @@ const AllCourseRunsView: React.FC = () => {
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const statusOptions = stats?.byStatus.map(s => s.status) ?? [];
+  const searchedCrId = debouncedSearch.trim();
+  const looksLikeCourseRunId = /^\d{6,12}$/.test(searchedCrId);
+  const shouldSuggestImport = !loading && rows.length === 0 && looksLikeCourseRunId;
 
   const cell = 'px-3 py-2.5 text-xs whitespace-nowrap';
   const headerCell = 'px-3 py-2 font-medium text-on-surface-secondary text-xs whitespace-nowrap';
@@ -812,6 +850,17 @@ const AllCourseRunsView: React.FC = () => {
                   {syncing ? 'Refreshing…' : 'Refresh from SSG'}
                 </Button>
                 <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowImportModal(true);
+                    setImportResult(null);
+                    setImportRunId(searchedCrId || '');
+                  }}
+                  disabled={syncing || loading || queueing || sending}
+                >
+                  Import course run
+                </Button>
+                <Button
                   onClick={() => void queueQboInvoices()}
                   disabled={queueing || sending || selectedEnrolmentIds.length === 0 || loading}
                 >
@@ -836,6 +885,29 @@ const AllCourseRunsView: React.FC = () => {
       {syncToast && (
         <div className={`p-3 rounded-lg text-sm ${syncToast.toLowerCase().includes('failed') ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'}`}>
           {syncToast}
+        </div>
+      )}
+
+      {shouldSuggestImport && (
+        <div className="p-3 rounded-lg text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <div className="font-medium">No results for Course Run ID {searchedCrId}.</div>
+              <div className="text-[11px] opacity-80">You can import it from SSG into the local database, then retry the search.</div>
+            </div>
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium disabled:opacity-50"
+              onClick={() => {
+                setShowImportModal(true);
+                setImportResult(null);
+                setImportRunId(searchedCrId);
+              }}
+              disabled={syncing || loading || queueing || sending}
+            >
+              Import {searchedCrId}
+            </button>
+          </div>
         </div>
       )}
 
@@ -1307,6 +1379,74 @@ const AllCourseRunsView: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* Import Course Run Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md border border-gray-200 dark:border-gray-700">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Import Course Run</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Enter a Course Run ID to fetch its details from SSG and save it to the database.
+              </p>
+
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Course Run ID
+              </label>
+              <input
+                type="text"
+                value={importRunId}
+                onChange={(e) => {
+                  setImportRunId(e.target.value);
+                  setImportResult(null);
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && !importLoading && void handleImportRun()}
+                placeholder="e.g. 1067907"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 mb-4"
+                autoFocus
+              />
+
+              {importResult && (
+                <div
+                  className={`rounded-md p-3 mb-4 text-sm ${
+                    importResult.success
+                      ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300'
+                      : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'
+                  }`}
+                >
+                  <p className="font-medium">{importResult.message}</p>
+                  {importResult.detail && <p className="mt-1 text-xs opacity-80">{importResult.detail}</p>}
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportRunId('');
+                    setImportResult(null);
+                  }}
+                  disabled={importLoading}
+                >
+                  {importResult?.success ? 'Close' : 'Cancel'}
+                </Button>
+                <Button
+                  onClick={() => void handleImportRun()}
+                  disabled={importLoading || !importRunId.trim()}
+                >
+                  {importLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                      Fetching...
+                    </>
+                  ) : 'Import'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

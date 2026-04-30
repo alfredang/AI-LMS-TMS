@@ -6,6 +6,7 @@ import {
   insertSfcImportAuditLog,
   recomputeSfcBatchApplyCounts,
 } from './sfcImportDb';
+import { createDirectApplicationSfcInvoice } from '@/lib/quickbooks/createDirectApplicationSfcInvoice';
 
 type ProxyResponse<T = any> = { success: boolean; data?: T; error?: string };
 
@@ -203,7 +204,12 @@ export async function applySfcImportRows(input: {
       const claimAmount = Number(row.claim_amount);
       const txnDate = String(row.disbursement_date_iso || '').trim();
       const payoutRequestId = String(row.payout_request_id || '').trim();
-      const qboInvoiceId = String(row.matched_qbo_invoice_id || '').trim();
+      const isDa = !!String(row.da_application_id || '').trim();
+      const daApplicationId = String(row.da_application_id || '').trim() || null;
+      const daSfcInvoiceId = String(row.da_sfc_invoice_id || '').trim() || null;
+      const mainQboDocNumber = String(row.main_qbo_doc_number || '').trim() || null;
+
+      let qboInvoiceId = String(row.matched_qbo_invoice_id || '').trim() || daSfcInvoiceId || '';
       const enrolmentId = String(row.matched_enrolment_id || '').trim();
       const ssgClaimId = String(row.matched_ssg_claim_id || '').trim();
 
@@ -211,6 +217,44 @@ export async function applySfcImportRows(input: {
       if (!Number.isFinite(claimAmount) || claimAmount <= 0) throw new Error('Invalid claim_amount');
       if (!txnDate) throw new Error('Missing disbursement_date_iso');
       if (!payoutRequestId) throw new Error('Missing payout_request_id');
+
+      // DA rows: if the supplemental SFC invoice doesn't exist yet, create it now (only when we're actually applying).
+      if (!qboInvoiceId && isDa && !syncOnly) {
+        if (!enrolmentId) throw new Error('Missing matched_enrolment_id (required for DA)');
+        if (!daApplicationId) throw new Error('Missing da_application_id (required for DA)');
+
+        const created = await createDirectApplicationSfcInvoice({
+          enrolmentId,
+          mainInvoiceDocNumber: mainQboDocNumber,
+          sfcClaimId: claimId,
+          applicationId: daApplicationId,
+          fallbackAmount: claimAmount,
+        });
+        if (!created?.invoiceId) throw new Error('Failed to create DA SFC invoice in QuickBooks');
+
+        qboInvoiceId = String(created.invoiceId);
+
+        // Persist linkage for future runs (best-effort).
+        try {
+          await pool.query(
+            `UPDATE public.da_application
+             SET sfc_invoice_id = $2::varchar
+             WHERE LOWER(TRIM(COALESCE(enrolment_id,''))) = LOWER(TRIM($1::text))`,
+            [enrolmentId, created.invoiceId]
+          );
+        } catch {
+          // best-effort
+        }
+
+        await pool.query(
+          `UPDATE public.sfc_import_rows SET
+             da_sfc_invoice_id = $2::varchar,
+             matched_qbo_invoice_id = $2::varchar,
+             matched_qbo_doc_number = $3::varchar
+           WHERE id = $1::int`,
+          [rowId, created.invoiceId, created.docNumber ?? null]
+        );
+      }
 
       // For already-applied rows with no invoice ID stored, we can't re-check QB — just skip cleanly.
       if (!qboInvoiceId) {

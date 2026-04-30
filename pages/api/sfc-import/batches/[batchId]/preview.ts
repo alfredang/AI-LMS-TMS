@@ -52,7 +52,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const enrichedRows = rows.map((r: any) => ({
       ...r,
       fms_updated: fmsStatusMap.get(String(r.claim_id || '')) === 'PAID',
-      qb_updated: !!r.matched_qb_payment_id,
+      qb_updated:
+        String(r.match_status || '') === 'already_applied' ||
+        String(r.apply_status || '') === 'applied' ||
+        !!r.matched_qb_payment_id ||
+        (r.matched_qbo_invoice_balance != null && Number(r.matched_qbo_invoice_balance) === 0),
       is_da: daEnrolmentSet.has(String(r.matched_enrolment_id || '')),
     }));
 
