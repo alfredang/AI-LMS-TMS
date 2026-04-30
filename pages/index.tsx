@@ -58,7 +58,7 @@ const Home: NextPage = () => {
         <Head>
           <title>{appTitle} LMS TMS - Login</title>
           <meta name="description" content="Login to your learning management system" />
-          <link rel="icon" href="/favicon.ico" />
+          <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
         </Head>
         <LoginScreen 
           onLoginSuccess={(role) => {
@@ -77,7 +77,7 @@ const Home: NextPage = () => {
         <Head>
           <title>{appTitle} LMS TMS</title>
           <meta name="description" content="Your personal learning dashboard" />
-          <link rel="icon" href="/favicon.ico" />
+          <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
         </Head>
         <LearnerLayout />
       </>
@@ -90,7 +90,7 @@ const Home: NextPage = () => {
         <Head>
           <title>{appTitle} LMS TMS - Trainer Dashboard</title>
           <meta name="description" content="Trainer management dashboard" />
-          <link rel="icon" href="/favicon.ico" />
+          <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
         </Head>
         <TrainerLayout />
       </>
@@ -103,7 +103,7 @@ const Home: NextPage = () => {
         <Head>
           <title>{appTitle} LMS TMS - Developer Dashboard</title>
           <meta name="description" content="Developer dashboard and profile" />
-          <link rel="icon" href="/favicon.ico" />
+          <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
         </Head>
         <DeveloperLayout />
       </>
@@ -116,7 +116,7 @@ const Home: NextPage = () => {
         <Head>
           <title>{appTitle} LMS TMS - Admin Dashboard</title>
           <meta name="description" content="Admin management dashboard" />
-          <link rel="icon" href="/favicon.ico" />
+          <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
         </Head>
         <AdminLayout />
       </>
@@ -129,7 +129,7 @@ const Home: NextPage = () => {
         <Head>
           <title>{appTitle} LMS TMS - Finance Dashboard</title>
           <meta name="description" content="Finance management dashboard" />
-          <link rel="icon" href="/favicon.ico" />
+          <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
         </Head>
         <FinanceLayout />
       </>
@@ -142,7 +142,7 @@ const Home: NextPage = () => {
         <Head>
           <title>{appTitle} LMS TMS - Training Provider Dashboard</title>
           <meta name="description" content="Training provider management dashboard" />
-          <link rel="icon" href="/favicon.ico" />
+          <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
         </Head>
         <TrainingProviderLayout />
       </>
@@ -155,7 +155,7 @@ const Home: NextPage = () => {
       <Head>
         <title>{appTitle} LMS TMS - Dashboard</title>
         <meta name="description" content="Learning Management System Dashboard" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
       </Head>
 
       <Header />

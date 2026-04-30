@@ -125,6 +125,48 @@ You need to create a DNS record so the client's domain points to the Hostinger V
    - **Host / Name:** `www`
    - **Value / Points to:** `clientcompany.com`
 
+#### Worked example — GoDaddy → Hostinger Coolify (IP `76.13.209.134`)
+
+Use this when the client's domain is registered at GoDaddy and the LMS/TMS Coolify instance is running on the Hostinger VPS at `76.13.209.134`. The example assumes you want the LMS at `lms.clientcompany.com`.
+
+1. **Log in to GoDaddy** at <https://sso.godaddy.com/> with the account that owns the domain.
+2. Open the **Products** page → find the domain (`clientcompany.com`) → click **DNS** (or **Manage DNS**). The **DNS Management** page opens, listing the existing records (NS, SOA, default A/CNAME entries, etc.).
+3. In the **Records** table, click **Add New Record**. Fill in:
+
+   | Field | Value |
+   |---|---|
+   | **Type** | `A` |
+   | **Name** | `lms` &nbsp;(just the subdomain — GoDaddy appends the apex automatically) |
+   | **Value** | `76.13.209.134` |
+   | **TTL** | `600 seconds` (or `1 Hour`) — pick the lowest GoDaddy lets you use while testing |
+
+   Click **Save**.
+
+4. **(Only if pointing the apex `clientcompany.com` instead of a subdomain)** edit the existing root `A` record (Name `@`) and change its **Value** to `76.13.209.134`. Then add a CNAME so `www` follows the apex:
+
+   | Field | Value |
+   |---|---|
+   | **Type** | `CNAME` |
+   | **Name** | `www` |
+   | **Value** | `@` &nbsp;(GoDaddy resolves this to the apex) |
+   | **TTL** | `1 Hour` |
+
+   Do **not** delete GoDaddy's NS or SOA records. Leave the existing email-related MX/TXT records alone unless the client is also moving mail.
+
+5. Wait 2–10 minutes for GoDaddy's DNS to propagate, then verify from your local machine:
+
+   ```bash
+   dig lms.clientcompany.com +short
+   # expected output:
+   # 76.13.209.134
+   ```
+
+   If you see anything else (e.g., a parked-domain IP), wait a few more minutes and retry — GoDaddy occasionally takes longer for first-time records.
+
+6. Once `dig` returns `76.13.209.134`, continue to [Step 7](#step-7-configure-the-domain-in-coolify) and set the domain in Coolify so Let's Encrypt can issue the SSL certificate.
+
+> **Tip:** GoDaddy's UI sometimes shows two A records for the same name during propagation — the old one and the one you just added. Delete the stale entry once the new one is live so the resolver doesn't round-robin between them.
+
 ### Option B: Client uses Cloudflare
 
 1. Log in to Cloudflare > select the domain

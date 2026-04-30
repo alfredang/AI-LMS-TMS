@@ -164,7 +164,16 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     }, [currentUser, currentUserEmail]);
 
     // Tab state for navigation
-    const [activeTab, setActiveTab] = useState<'courseRun' | 'sessions' | 'enrollments' | 'trainer'>('courseRun');
+    const [activeTab, setActiveTab] = useState<'courseRun' | 'sessions' | 'enrollments' | 'trainer' | 'assessment'>('courseRun');
+    const [assessmentLinks, setAssessmentLinks] = useState<{
+        courseTitle?: string | null;
+        courseCode?: string | null;
+        assessmentFolderUrl?: string | null;
+        assessmentRecordFolderUrl?: string | null;
+        assessmentSummaryRecordUrl?: string | null;
+    } | null>(null);
+    const [assessmentLinksLoading, setAssessmentLinksLoading] = useState(false);
+    const [assessmentLinksError, setAssessmentLinksError] = useState<string | null>(null);
     const [enrolledLearners, setEnrolledLearners] = useState<Array<{
         user_id: string; full_name: string; email: string; secondary_email: string | null;
         nric: string | null; tel: string | null; sponsorship_type: string | null;
@@ -1680,6 +1689,33 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
     };
 
+    // Load assessment links when the Assessment tab becomes active
+    useEffect(() => {
+        if (!isEditMode || activeTab !== 'assessment' || !courseToEdit?.id) return;
+        let cancelled = false;
+        (async () => {
+            setAssessmentLinksLoading(true);
+            setAssessmentLinksError(null);
+            try {
+                const res = await fetch(`/api/admin/course-run-assessment-links?courseRunId=${encodeURIComponent(courseToEdit.id)}`);
+                const json = await res.json();
+                if (cancelled) return;
+                if (!res.ok || !json.success) {
+                    setAssessmentLinksError(typeof json.error === 'string' ? json.error : `Error ${res.status}`);
+                    setAssessmentLinks(null);
+                } else {
+                    setAssessmentLinks(json.data);
+                }
+            } catch (err) {
+                if (cancelled) return;
+                setAssessmentLinksError(err instanceof Error ? err.message : 'Failed to load assessment links');
+            } finally {
+                if (!cancelled) setAssessmentLinksLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [isEditMode, activeTab, courseToEdit?.id]);
+
     // Load trainers when trainer tab becomes active
     useEffect(() => {
         if (isEditMode && activeTab === 'trainer' && availableTrainers.length === 0) {
@@ -2178,7 +2214,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             {isEditMode && (
                 <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
                     <nav className="-mb-px flex space-x-8">
-                        {(['courseRun', 'sessions', 'enrollments', 'trainer'] as const).map(tab => (
+                        {(['courseRun', 'sessions', 'enrollments', 'trainer', 'assessment'] as const).map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
@@ -2188,7 +2224,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'
                                 }`}
                             >
-                                {tab === 'courseRun' ? 'Course Run' : tab === 'sessions' ? 'Sessions' : tab === 'enrollments' ? 'Enrolled Learners' : 'Trainer'}
+                                {tab === 'courseRun' ? 'Course Run' : tab === 'sessions' ? 'Sessions' : tab === 'enrollments' ? 'Enrolled Learners' : tab === 'trainer' ? 'Trainer' : 'Assessment'}
                             </button>
                         ))}
                     </nav>
@@ -4103,6 +4139,72 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
 
                         </div>
+                    </FormSection>
+                )}
+
+                {/* Assessment Tab */}
+                {isEditMode && activeTab === 'assessment' && (
+                    <FormSection title="Assessment Resources">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            Quick access to the Assessment folder and Assessment Record folder configured on the parent course.
+                        </p>
+
+                        {assessmentLinksLoading && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                Loading…
+                            </div>
+                        )}
+
+                        {!assessmentLinksLoading && assessmentLinksError && (
+                            <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-3 text-sm text-red-800 dark:text-red-300">
+                                {assessmentLinksError}
+                            </div>
+                        )}
+
+                        {!assessmentLinksLoading && !assessmentLinksError && assessmentLinks && (
+                            <div className="space-y-3">
+                                {[
+                                    { label: 'Assessment Folder', url: assessmentLinks.assessmentFolderUrl, hint: 'Folder containing the assessment plan and source documents.' },
+                                    { label: 'Assessment Record Folder', url: assessmentLinks.assessmentRecordFolderUrl, hint: 'Folder where graded assessment records are stored.' },
+                                    { label: 'Assessment Summary Record', url: assessmentLinks.assessmentSummaryRecordUrl, hint: 'Optional — link to the consolidated ASR document or folder.' },
+                                ].map(item => (
+                                    <div key={item.label} className="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.label}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.hint}</p>
+                                                {item.url ? (
+                                                    <a
+                                                        href={item.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="block mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline break-all"
+                                                    >
+                                                        {item.url}
+                                                    </a>
+                                                ) : (
+                                                    <p className="mt-2 text-sm text-gray-400 italic">Not configured on the course.</p>
+                                                )}
+                                            </div>
+                                            {item.url && (
+                                                <a
+                                                    href={item.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-blue-600 hover:bg-blue-700 text-white"
+                                                >
+                                                    Open
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                    These links are configured on the course (not the run). Update them in <strong>Course Management → Edit Course</strong>.
+                                </p>
+                            </div>
+                        )}
                     </FormSection>
                 )}
             </div>

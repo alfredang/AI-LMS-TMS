@@ -7,8 +7,9 @@ function MyApp({ Component, pageProps }: AppProps) {
   return (
     <>
       <Head>
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/api/favicon.png?size=16" />
+        <link rel="shortcut icon" href="/api/favicon.png?size=32" />
       </Head>
       <LmsProvider>
         <Component {...pageProps} />
