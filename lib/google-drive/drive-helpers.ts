@@ -120,13 +120,33 @@ export async function autoShareCourseResourcesWithTrainer(
 
         if (linksToShare.length === 0) return;
 
+        // Find primary and secondary emails
+        const emailsToShare = new Set<string>();
+        if (trainerEmail) emailsToShare.add(trainerEmail.toLowerCase());
+
+        try {
+            const userResult = await pool.query(
+                `SELECT email, secondary_email FROM app_user WHERE LOWER(email) = LOWER($1) OR LOWER(secondary_email) = LOWER($1) LIMIT 1`,
+                [trainerEmail]
+            );
+            if (userResult.rows.length > 0) {
+                const user = userResult.rows[0];
+                if (user.email) emailsToShare.add(user.email.toLowerCase());
+                if (user.secondary_email) emailsToShare.add(user.secondary_email.toLowerCase());
+            }
+        } catch (e) {
+            console.warn(`⚠️ Could not fetch secondary email for trainer sharing: ${(e as any).message}`);
+        }
+
         // Authenticate once for all sharing operations
         const drive = await getDriveClient();
 
         for (const link of linksToShare) {
             const fileId = extractGoogleFileId(link.url);
             if (fileId) {
-                await shareGoogleFileWithUser(drive, fileId, trainerEmail, link.label);
+                for (const email of emailsToShare) {
+                    await shareGoogleFileWithUser(drive, fileId, email, link.label);
+                }
             } else {
                 console.warn(`⚠️ Could not extract Google file ID from ${link.label} URL: ${link.url}`);
             }
