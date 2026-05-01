@@ -26,6 +26,8 @@ Deploy the LMS/TMS platform for a new client on a fresh Hostinger VPS with Cooli
 16. [Troubleshooting](#troubleshooting)
 17. [Appendix A: Gmail OAuth Setup (Detailed)](#appendix-a-gmail-oauth-setup-detailed)
 18. [Appendix B: SSG TPGateway Certificate Setup (Detailed)](#appendix-b-ssg-tpgateway-certificate-setup-detailed)
+19. [Appendix C: Local Development Setup for a New Client (Claude Code / VS Code)](#appendix-c-local-development-setup-for-a-new-client-claude-code--vs-code)
+20. [Appendix D: Connecting Local Dev to a Client's Coolify Database (Worked Example: Chariot)](#appendix-d-connecting-local-dev-to-a-clients-coolify-database-worked-example-chariot)
 
 ---
 
@@ -1003,3 +1005,394 @@ SSG certificates expire (typically every 1-2 years). To renew:
 6. Test an SSG API call to verify the new certificates work
 
 The platform displays **certificate expiry dates** in the SSG Configuration section. Monitor these and renew before they expire to avoid service interruptions.
+
+---
+
+## Appendix C: Local Development Setup for a New Client (Claude Code / VS Code)
+
+Steps 1–11 cover deploying the client's *production* instance to Coolify. This appendix covers the **developer workstation** side: how to clone the repo locally so you can run the dev server, use Claude Code, and connect to that client's database — without touching any other client's environment.
+
+> **Why a separate working directory per client?** The codebase reads `DATABASE_URL` (and every other secret) from `.env.local` in the project root. If you swap `.env.local` files inside one folder, a single mistyped command can write Client A's data into Client B's DB. Putting each client in its own directory makes that mistake structurally impossible. As a bonus, Claude Code keys its memory off the absolute path, so each client gets a fresh memory namespace with no cross-client bleed.
+
+### C1. Clone the repo into a client-specific folder
+
+You can name the folder anything — directory name is not referenced by the code, `package.json`, or any config:
+
+```bash
+# Pick a structure like ~/projects/clients/<clientname>/
+git clone https://github.com/alfredang/AI-LMS-TMS.git ~/projects/clients/chariot
+cd ~/projects/clients/chariot
+```
+
+> **Alternative — git worktree.** If you want both clients to share the same `.git` folder (faster `git pull`, less disk), use a worktree instead of a clone:
+>
+> ```bash
+> cd ~/projects/tertiary/ai-lms-tms
+> git worktree add ~/projects/clients/chariot main
+> ```
+
+### C2. Create the client's `.env.local`
+
+`.env.local` is gitignored — every working directory needs its own. **Never copy a production `DATABASE_URL` into a dev workspace.** Point it at the client's *dev or staging* database (or a local Postgres for early development).
+
+```bash
+# Start from the original as a template if useful
+cp ~/projects/tertiary/ai-lms-tms/.env.local .env.local
+
+# Then edit at minimum:
+#   DATABASE_URL=postgres://...    ← new client's DB (never the original)
+#   JWT_SECRET=...                 ← regenerate, do not reuse
+#   GOOGLE_CLIENT_ID / SECRET      ← new client's Google OAuth app
+#   ANTHROPIC_API_KEY / OPENAI...  ← new client's keys
+#   SSG / TPGateway certs          ← new client's, if applicable
+#   QUICKBOOKS_*                   ← new client's
+```
+
+**Crossing client secrets is worse than crossing DBs.** Walk through `.env.local` line by line and confirm each value belongs to the new client.
+
+### C3. Install dependencies
+
+```bash
+npm install
+```
+
+### C4. Open the new directory as its own VS Code window
+
+```bash
+code ~/projects/clients/chariot
+```
+
+Opening it as a separate window (not as a folder inside the existing window) is what gives Claude Code an isolated session:
+
+- Claude Code reads CLAUDE.md from the workspace root.
+- Claude Code memory lives at `~/.claude/projects/-Users-<you>-projects-clients-chariot/memory/` — distinct from the original repo's memory.
+- The integrated terminal's `cwd` is the new folder, so `npm run dev`, scripts, and `node -e` snippets all read this client's `.env.local`.
+
+### C5. Run and verify
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000` and confirm:
+
+- The login page appears (no DB connection error).
+- A test login with the new client's seeded admin account works (proves it's hitting the right DB).
+- Branding, training-provider name, etc. match the new client (proves the right `training_provider` row).
+
+If you see Tertiary's data, your `.env.local` is still pointing at the original DB — stop and fix before doing anything else.
+
+### C6. Pulling upstream changes
+
+The clone (or worktree) tracks the same `origin/main` as the original repo, so updates are routine:
+
+```bash
+git fetch origin
+git pull origin main
+npm install   # if package.json changed
+npm run dev
+```
+
+If you've made client-specific code changes on a branch, rebase or merge onto `main` the same way. The longer you let custom changes diverge from `main`, the harder updates become — keep customizations behind feature flags or in `training_provider` config rows where possible, rather than in code.
+
+### C7. What does *not* need to change when you rename the directory
+
+For reference, none of these care about the folder name (so renaming `ai-lms-tms` → `chariot` is safe):
+
+- TypeScript path aliases (`@components`, `@lib`, etc.) — resolved from project root.
+- `package.json` `name` field — pure metadata, edit if you want consistency.
+- `next.config.js`, `tsconfig.json` — directory-name-independent.
+- `docker-compose.yml` — Compose uses the folder name as the *project* name (so containers become `chariot-app-1`, `chariot-postgres-1`), which is helpful for isolating clients on the same host, not a problem.
+
+Things that **do** need updating after a rename:
+
+- Personal shell aliases or scripts that hardcode `~/projects/tertiary/ai-lms-tms`.
+- VS Code workspace files (`.code-workspace`) if you use them.
+- Any external CI/CD pointing at a specific local path (rare).
+
+### C8. Branch hygiene — never push a client clone to `main`
+
+A client clone (Chariot, etc.) shares its `origin` with the canonical Tertiary repo. Without guard rails, a stray `git push` from this directory will publish client-specific commits — secrets, branding, hot fixes — onto the shared `main` branch. Treat every client clone as **forbidden from writing to `main`** and set up three layers of defence the moment you finish cloning:
+
+1. Always work on a **client-namespaced branch** (`<client>/local-dev`, never `main`).
+2. Point `git push` at a **fake push remote** so a bare `git push` fails noisily instead of going to `origin`.
+3. Install a **pre-push hook** that refuses any push targeting `refs/heads/main` (or `master`), no matter which remote.
+
+#### C8.1 Create the client branch and set push.default
+
+Run this once, immediately after `git clone` (or `git worktree add`):
+
+```bash
+cd ~/projects/clients/chariot
+
+# Create and switch to a client-namespaced branch
+git checkout -b chariot/local-dev
+
+# Make `git push` (no args) push the *current* branch only — never main by accident
+git config push.default current
+```
+
+#### C8.2 Disable the default push remote
+
+Repoint `origin`'s push URL at a fake target so `git push` without an explicit remote fails. Fetches still work, so you can pull upstream changes normally.
+
+```bash
+# Keep fetch URL pointing at the real origin; break only push
+git remote set-url --push origin no_push
+
+# Verify
+git remote -v
+# origin  https://github.com/alfredang/AI-LMS-TMS.git (fetch)
+# origin  no_push                                     (push)
+```
+
+| Action | Result |
+|---|---|
+| `git push` on `chariot/local-dev` | Fails — `no_push` is not a valid remote |
+| `git push origin chariot/local-dev` | Succeeds — explicit and intentional, creates a client branch on GitHub |
+| `git push` while accidentally on `main` | Fails on `no_push` (and the pre-push hook below adds a second layer) |
+
+#### C8.3 Install a pre-push hook that rejects `main`
+
+The fake remote stops accidental bare pushes, but if someone *does* type `git push origin main` it would still go through. Add a `pre-push` hook to backstop that:
+
+```bash
+cat > .git/hooks/pre-push <<'HOOK'
+#!/bin/sh
+# Reject any push whose remote ref is main or master.
+# Client clones must never write to the shared upstream main branch.
+while read local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main|refs/heads/master)
+      echo "❌ Refused: push to $remote_ref is blocked in this client clone." >&2
+      echo "   Push to a client-namespaced branch instead, e.g.:" >&2
+      echo "     git push origin chariot/local-dev" >&2
+      exit 1
+      ;;
+  esac
+done
+exit 0
+HOOK
+chmod +x .git/hooks/pre-push
+```
+
+> **Why a hook and not just the fake remote?** `.git/hooks/` is per-clone and not committed, so each client clone gets its own copy. The hook fires *before* any push regardless of the remote name, catching the case where someone re-adds a real push URL or pushes to a different remote entirely.
+
+#### C8.4 Verify the guard rails
+
+```bash
+# Should fail at the fake remote
+git push
+# fatal: 'no_push' does not appear to be a git repository
+
+# Should fail at the hook even with an explicit remote
+git push origin main
+# ❌ Refused: push to refs/heads/main is blocked in this client clone.
+
+# Should succeed (the intended workflow)
+git push origin chariot/local-dev
+```
+
+#### C8.5 Day-to-day workflow from here
+
+```bash
+git status                                # confirms chariot/local-dev
+# edit, commit freely
+git add <files>
+git commit -m "chariot: …"
+# git push   ← safely fails (no_push)
+
+# Publish to GitHub only when you mean it:
+git push origin chariot/local-dev
+# then open a PR if/when changes need to flow back to upstream
+```
+
+Pull upstream `main` into the client branch the usual way:
+
+```bash
+git fetch origin
+git rebase origin/main      # or: git merge origin/main
+```
+
+If a client-specific commit ever needs to land on the shared `main`, push it from the **Tertiary** working directory (not the client clone) after review — keeping the directional flow `client clone → PR → upstream main` explicit, never silent.
+
+## Appendix D: Connecting Local Dev to a Client's Coolify Database (Worked Example: Chariot)
+
+When a client's stack is deployed via the Docker Compose flow in Steps 5–8, Postgres runs as the `db` service **inside** the same Coolify resource as the Next.js app — it does **not** appear under Coolify's standalone "Databases" section. This appendix shows how to point a local dev workspace at that DB, using **Chariot** as the worked example.
+
+> **Safety note:** Pointing local dev at a *production* DB lets a single mistyped `UPDATE` or migration script wreck live data. Prefer a dev/staging DB. If you must connect to production, treat it as read-only by default and confirm the target on every session (see D6).
+
+### D1. Clone into a client-specific folder
+
+The directory name is purely organisational — code, `package.json`, and Compose are folder-name independent (see [C7](#c7-what-does-not-need-to-change-when-you-rename-the-directory)).
+
+```bash
+git clone https://github.com/alfredang/AI-LMS-TMS.git ~/projects/clients/chariot
+cd ~/projects/clients/chariot
+```
+
+Or, if you'd rather share `.git` with the existing checkout:
+
+```bash
+cd ~/projects/tertiary/ai-lms-tms
+git worktree add ~/projects/clients/chariot main
+```
+
+### D2. Collect the DB connection details from Coolify
+
+Open the Chariot Coolify resource (`Projects → Chariot Learning LMS → production`) and click into the `db` service. Note:
+
+- **VPS IP** of the Hostinger host running Coolify (e.g. `76.13.209.134`)
+- **`DB_PASSWORD`** — the value you set in [Step 6.1](#61-required-variables-must-set-before-first-deploy)
+- **`DB_NAME`** — `lmsdb` unless you changed it
+- **Host port** — `6434` (mapped to container's `5432` in `docker-compose.yml`)
+
+### D3. Choose a connection method
+
+**Option A — SSH tunnel (recommended).** Keeps Postgres firewalled to localhost on the VPS; nothing extra exposed to the public internet.
+
+> **You must keep this tunnel open the entire time `npm run dev` is running.** The tunnel is a separate terminal process — closing it (or letting the SSH session time out) immediately breaks every DB query the local app makes. Treat opening the tunnel as a prerequisite to `npm run dev`, not an optional setup step.
+
+**Open a NEW terminal window** (do not reuse the one you'll run `npm run dev` in) and run:
+
+```bash
+ssh -L 6434:localhost:6434 root@76.13.209.134
+# Leave this window open and logged in. Do not close it.
+# When it asks for password / MFA, complete it. The shell prompt
+# stays open — that's the tunnel. Type `exit` to close it later.
+```
+
+What this does: the `-L 6434:localhost:6434` flag forwards your laptop's port 6434 through SSH to port 6434 on the VPS, where Coolify's Postgres container is listening. Anything that connects to `localhost:6434` on your laptop is actually reaching the Chariot DB.
+
+Then, in your **app terminal** (a different window, where you'll later run `npm run dev`), set:
+
+```bash
+# In .env.local
+DATABASE_URL=postgres://postgres:<DB_PASSWORD>@localhost:6434/lmsdb
+```
+
+**Option B — direct connection.** Requires opening port `6434` on the VPS firewall *only* to your office/home IP. Do not open `6434` to `0.0.0.0/0`.
+
+```bash
+# In .env.local
+DATABASE_URL=postgres://postgres:<DB_PASSWORD>@76.13.209.134:6434/lmsdb
+```
+
+Default to A unless there's a specific reason. UFW example for B:
+
+```bash
+ssh root@76.13.209.134 "ufw allow from <your-public-ip> to any port 6434 proto tcp"
+```
+
+#### Troubleshooting the tunnel
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `npm run dev` logs `ECONNREFUSED 127.0.0.1:6434` | Tunnel terminal was closed or timed out | Re-open it: `ssh -L 6434:localhost:6434 root@<vps-ip>` in a fresh terminal |
+| `bind: Address already in use` when opening the tunnel | Old tunnel still running, or another process is on `6434` | `lsof -iTCP:6434 -sTCP:LISTEN` to find the PID, then `kill <pid>` |
+| Tunnel opens but queries hang | Postgres container in Coolify is down | Check `db` service logs in the Chariot Coolify resource |
+| Tunnel keeps dying after a few minutes | SSH idle timeout on VPS or laptop | Add `-o ServerAliveInterval=60` to the ssh command, or add `ServerAliveInterval 60` to `~/.ssh/config` |
+
+For a longer-lived tunnel that survives sleep/wake cycles, run it under `autossh` instead:
+
+```bash
+brew install autossh   # macOS
+autossh -M 0 -N -L 6434:localhost:6434 root@76.13.209.134
+```
+
+`-N` means "no remote command" (don't open a shell, just forward); `-M 0` disables autossh's own monitor port and relies on SSH keepalives instead.
+
+### D4. Create the Chariot `.env.local` from Coolify's env vars
+
+`.env.local` is gitignored — every working directory needs its own. The fastest, least error-prone way to populate it is to **mirror the env vars Coolify is already using** for the Chariot app, since those are the values the deployed instance actually runs against. This is what guarantees `JWT_SECRET`, `DB_PASSWORD`, OAuth secrets, etc. all match between local and prod.
+
+#### D4.1 Find Coolify's env vars
+
+1. Open Coolify → `Projects → Chariot Learning LMS → production`.
+2. Click into the application (the Docker Compose resource — the only card under **Applications**).
+3. Click the **`app`** service (the Next.js container, *not* the `db` service).
+4. Go to the **"Environment Variables"** tab.
+
+You'll see every variable from [Step 6](#step-6-set-environment-variables) listed: `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`, `NEXT_PUBLIC_BASE_URL`, `ADMIN_EMAIL`, `ANTHROPIC_API_KEY`, etc. Secrets are masked by default — click the **eye icon** next to each one to reveal the value.
+
+> **Two convenient bulk options.** Most Coolify versions expose either:
+> - a **"Developer view"** / **"Show all"** toggle that shows every var as raw `KEY=VALUE` lines — copy the whole block; or
+> - a **"Download .env"** button at the top of the Environment Variables tab — downloads a file you can use as a starting point.
+>
+> If neither shows up in your Coolify version (UI varies per release), fall back to revealing and copying each variable individually.
+
+#### D4.2 Translate Coolify values into local `.env.local`
+
+Start from the existing template, then overwrite the keys you just copied:
+
+```bash
+cp ~/projects/tertiary/ai-lms-tms/.env.local .env.local
+# or, if Coolify gave you a downloaded file:
+# cp ~/Downloads/chariot-production.env .env.local
+```
+
+Then edit — most values copy across **unchanged**, but a few must be rewritten for local use:
+
+| Variable | Source | Local override |
+|---|---|---|
+| `DB_PASSWORD` | Coolify (copy as-is) | — |
+| `DB_NAME` | Coolify (`lmsdb`) | — |
+| `JWT_SECRET` | Coolify (copy as-is) | — must match, otherwise existing user tokens won't validate |
+| `ANTHROPIC_API_KEY` | Coolify (copy as-is) | — |
+| `GOOGLE_OAUTH_*`, `QBO_*`, SSG certs | Coolify (copy as-is) | — |
+| `DATABASE_URL` | **Build locally**, not from Coolify | `postgres://postgres:<DB_PASSWORD>@localhost:6434/lmsdb` (uses the SSH tunnel from D3, **not** the in-Docker hostname Coolify uses) |
+| `NEXT_PUBLIC_BASE_URL` | **Override** | `http://localhost:3000` (Coolify's value is `https://lms.chariot.com` — wrong for local) |
+| `NODE_ENV` | **Override** | `development` (Coolify uses `production`) |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_FULL_NAME`, `COMPANY_NAME`, `TRAINING_PARTNER_UEN` | Skip | These only run on first boot from an empty `postgres_data` volume — the local app reads `training_provider` from the DB, not these vars. Including them is harmless but does nothing. |
+
+> **Why `DATABASE_URL` differs from Coolify's setup.** Inside the Coolify Docker network, the app reaches Postgres at the service hostname `db:5432` (set automatically by Compose). On your laptop there's no `db` host — you're tunnelling to the VPS's published port `6434`. So even though `DB_PASSWORD` and `DB_NAME` are copied verbatim, the *URL* must be reconstructed for local use.
+
+#### D4.3 Don't cross client secrets
+
+Walk through every variable in `.env.local` and confirm it belongs to **Chariot**, not Tertiary. The starter template you copied from `~/projects/tertiary/ai-lms-tms/.env.local` is Tertiary's — anything you didn't explicitly overwrite from Coolify is still pointing at Tertiary's resources.
+
+**Crossing client secrets is worse than crossing DBs** — a stale `QBO_REFRESH_TOKEN` will cheerfully post Chariot invoices into Tertiary's QuickBooks; a stale `GOOGLE_OAUTH_REFRESH_TOKEN` will send Chariot OTP emails from Tertiary's Gmail account.
+
+A quick sanity grep before running anything:
+
+```bash
+grep -iE "tertiary|@tertiaryinfotech" .env.local
+# Expected: no matches. Any hit is almost certainly a leftover from the template.
+```
+
+### D5. Install and open in VS Code as its own window
+
+```bash
+npm install
+code ~/projects/clients/chariot
+```
+
+Opening as a *separate* VS Code window (not a folder inside the existing window) gives Claude Code an isolated memory namespace at `~/.claude/projects/-Users-<you>-projects-clients-chariot/memory/`, so Tertiary memories don't bleed into Chariot work.
+
+### D6. Verify before any write
+
+> **Confirm the SSH tunnel is up first** (Option A). The tunnel terminal must be open and showing a logged-in shell prompt at `root@<vps-ip>`. If it's closed, re-open it before going further — every command below will fail with `connection refused` otherwise.
+
+Run this **every** time you start a session against Chariot, before running migrations or writes:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT company_name, uen FROM training_provider;"
+```
+
+Expected output: Chariot's company name and UEN. If it returns Tertiary, your `.env.local` (or your tunnel) is pointing at the wrong host — **stop**, fix it, do not proceed.
+
+Then start the dev server and sanity-check the UI:
+
+```bash
+npm run dev
+```
+
+At `http://localhost:3000`:
+- Login screen shows Chariot branding (proves the right `training_provider` row).
+- Logging in with Chariot's seeded admin works (proves `JWT_SECRET` matches and the user table is the right one).
+
+### D7. Caveats
+
+- **Migrations.** `npm run db:migrate` against a production DB will run irreversible schema changes. Only do this if you have a fresh `pg_dump` backup taken minutes ago (see [Backup Recommendations](#backup-recommendations)).
+- **Scheduler.** The dev server starts its own in-process `node-cron` scheduler. If it points at a production DB, **disable scheduled tasks** via the Admin UI before `npm run dev`, or both the local and the deployed scheduler will fire (e.g. duplicate certificate emails to learners).
+- **Uploads.** File uploads in local dev write to your laptop's `public/uploads/`, not the VPS's `uploads_data` volume. The DB will reference paths that don't exist on production — clean up test rows before you log off.
