@@ -261,23 +261,25 @@ Add each of these as a separate environment variable:
 
 ### 6.2 Required for Email (OTP won't work without this)
 
+**Gmail OAuth is the only fully-supported email transport.** The system uses the Gmail API (not SMTP) for everything user-facing: OTP login, certificate delivery, trainer invitations, course confirmations, completion emails. Without Gmail OAuth, users cannot log in.
+
 Email is configured **after first login** via the Admin UI (Training Provider > Company Settings > Integrations). You enter:
 - Gmail OAuth Client ID
 - Gmail OAuth Client Secret
 - Gmail OAuth Refresh Token
 - Sender email address
 
-**No env vars needed** — credentials are stored in the `training_provider` table.
+**No env vars needed** — credentials are stored in the `training_provider` table. Detailed walkthrough in [Appendix A](#appendix-a-gmail-oauth-setup-detailed).
 
-> **Alternative: SMTP fallback** (if not using Gmail OAuth):
+> **A note on SMTP env vars.** The codebase exposes `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM`, but they are **only consumed by the support-ticket notification path** (`lib/services/emailService.ts`, used by `pages/api/tickets/create.ts`). They do **not** drive OTP login, certificates, trainer invitations, or any other user-facing email. Setting these as a "fallback" for Gmail OAuth will not work — OTP login will still fail until the four `training_provider` Gmail columns are filled in.
+
+> **What if a client cannot use Gmail OAuth?** Three practical options:
 >
-> | Variable | Value |
-> |---|---|
-> | `SMTP_HOST` | `smtp.gmail.com` |
-> | `SMTP_PORT` | `587` |
-> | `SMTP_USER` | `client-email@gmail.com` |
-> | `SMTP_PASS` | `<gmail-app-password>` |
-> | `SMTP_FROM` | `client-email@gmail.com` |
+> 1. **Recommended — use a Google Workspace service mailbox.** The Gmail account does not need to be a real human's inbox. Create a dedicated mailbox like `noreply@clientcompany.com` in the client's Google Workspace and OAuth that. This satisfies most "we don't want personal Gmail" objections at zero engineering cost.
+> 2. **Use a free Gmail account** (`clientname.lms@gmail.com`) for OTP only. Works the same as Workspace OAuth, but emails go out from a `@gmail.com` address — usable for testing or low-touch deployments, not ideal for client-branded production.
+> 3. **Add a different transport (Resend, SES, generic SMTP) — code change required.** None of these are wired up today. Adding one means a new `email_provider` column on `training_provider`, a small adapter layer, and updates to the ~10 places that currently call the Gmail API directly. Roughly half a day's work for Resend (simplest API), 1–2 days for a clean multi-provider abstraction. Do this only if the client genuinely can't use any Google account.
+
+> **Why Gmail API and not SMTP?** SMTP via Gmail (port 587, App Password) is rate-limited to ~500/day and frequently throttled. The Gmail API gives much higher quotas, better deliverability, and reliable refresh-token auth. The architecture decision predates the Resend era and was the right call at the time — but it does mean every new client needs a Google account.
 
 ### 6.3 Required for AI Features
 
@@ -404,6 +406,44 @@ Now that DNS is pointing to the VPS and env vars are set, configure the domain i
 ## Step 10: Post-Deployment Configuration (Admin UI)
 
 After the admin logs in and changes the default password, configure these in **Training Provider > Company Settings**.
+
+### 10.0 Post-Deployment Configuration Checklist
+
+Use this as a single-page reference for what needs to be configured before handing the system to the client. Items are ordered by **deployment criticality** — anything marked **Required** must be done before users can meaningfully use the system; **Recommended** unlocks core features; **Optional** is per-client.
+
+| # | Item | Priority | Where to configure | Why it matters | Detail |
+|---|---|---|---|---|---|
+| 1 | Change admin default password | **Required** | Login screen (forced on first login) | Default password is in env vars and visible to anyone with VPS access | [9](#step-9-first-boot--what-happens-automatically) |
+| 2 | Company name, short name, logo | **Required** | Company Settings → Branding | Appears on login screen, emails, certificates, invoices — the visible identity of the system | [10.1](#101-branding--identity) |
+| 3 | Company address, phone, support email | **Required** | Company Settings → Branding | Help page, email footers, support links, calendar event organiser | [10.1](#101-branding--identity) |
+| 4 | Privacy Policy & Acceptable Use Policy | **Required** | Company Settings → Branding | Legal text shown on login modal — must reflect the client, not Tertiary | [10.1](#101-branding--identity) |
+| 5 | **Gmail OAuth** (Client ID, Client Secret, Refresh Token, sender email) | **Required** | Company Settings → Integrations | Without this, OTP login emails do not send and users cannot log in. **Most critical post-deploy step.** | [10.2](#102-email-configuration-critical), [Appendix A](#appendix-a-gmail-oauth-setup-detailed) |
+| 6 | OTP & Certificate email templates | **Required** | Email Templates pages | Subject + body for OTP, certificate delivery, course confirmation, etc. | [10.2](#102-email-configuration-critical) |
+| 7 | Default password & "Force first password change" | **Required** | Company Settings → Feature Toggles | Default password assigned to new accounts; enforce change-on-first-login | [10.5](#105-feature-toggles) |
+| 8 | Color scheme | **Recommended** | Company Settings → Branding | UI theme — match client's brand colours | [10.1](#101-branding--identity) |
+| 9 | Anthropic API key (for Nemo, CP Generator, Courseware Generator) | **Recommended** | Training Provider → API Keys (`training_provider_api`, `key_name = 'ANTHROPIC_API_KEY'`) | Without this, Nemo AI assistant and content generators won't work. Use a `sk-ant-oat*` token (subscription) or `sk-ant-api*` (PAYG) | [Step 6.3](#63-required-for-ai-features) |
+| 10 | Google Gemini API key | **Recommended** | API Keys + env var `NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY` | Powers the public-facing chatbot on marketing pages | [Step 6.3](#63-required-for-ai-features) |
+| 11 | Firecrawl API key | **Recommended** | API Keys (`key_name = 'FIRECRAWL_API_KEY'`) — also editable under TP profile → Credentials → Firecrawl | Trainer-profile enrichment from LinkedIn / personal sites | [CLAUDE.md → Web Scraping](CLAUDE.md) |
+| 12 | Google Calendar ID + sync toggle | **Recommended** | Company Settings → Google Integration | Class schedules push to a shared calendar — trainers see all upcoming classes | [10.3](#103-google-integration-optional) |
+| 13 | Google Drive folder URLs (certificates, uploads) | **Recommended** | Company Settings → Google Integration | Certificate PDFs and file uploads stored in client's Drive | [10.3](#103-google-integration-optional) |
+| 14 | Google Slides certificate template ID | **Recommended** | Company Settings → Google Integration | Auto-generated certificates render from this template | [10.3](#103-google-integration-optional) |
+| 15 | GST registration & rate | **Recommended** (SG clients) | Company Settings → Financial | Tax line items on invoices, proforma invoices, receipts | [10.4](#104-financial-settings) |
+| 16 | Funding rates (Normal / Enhanced) | **Recommended** (SG clients) | Company Settings → Financial | SkillsFuture funding calculations on enrollment fees | [10.4](#104-financial-settings) |
+| 17 | **SSG TPGateway certificates** (App 1 / App 3 cert + private key + encryption key) | **Required for SG SSG clients** | Company Settings → SSG Configuration | mTLS auth for course publishing, enrollment submission, grant claims | [10.6](#106-ssgtpgateway-singapore-training-providers-only), [Appendix B](#appendix-b-ssg-tpgateway-certificate-setup-detailed) |
+| 18 | SSG App 4 OAuth (Client ID + Secret) | **Optional** (SG clients using App 4) | Company Settings → SSG Configuration | OAuth-based SSG integration for newer endpoints | [Appendix B](#appendix-b-ssg-tpgateway-certificate-setup-detailed) |
+| 19 | Default SSG App selector | **Required for SG SSG clients** | Company Settings → SSG Configuration | Picks which app (`app1`/`app3`/`app4`) is used by default for SSG calls | [10.6](#106-ssgtpgateway-singapore-training-providers-only) |
+| 20 | QuickBooks OAuth (Client ID, Secret, Realm ID, Refresh Token) | **Optional** | Env vars or Admin UI | Enables invoice / customer / payment sync to QuickBooks Online | [Step 6.4](#64-optional-enable-as-needed-later) |
+| 21 | Auto-send toggles (proforma invoices, confirmation emails, certificates) | **Recommended** | Company Settings → Feature Toggles | Controls which scheduled jobs actually fire — leave OFF until you've verified credentials work | [10.5](#105-feature-toggles) |
+| 22 | OTP login enable + Default OTP toggle | **Required** | Company Settings → Feature Toggles | Enable OTP login; **disable Default OTP** in production (it's a fixed-code testing aid) | [10.5](#105-feature-toggles) |
+| 23 | Leaderboard / Point System | **Optional** | Company Settings → Feature Toggles | Gamification — turn on if the client wants learner engagement features | [10.5](#105-feature-toggles) |
+| 24 | Scheduler tasks review | **Recommended** | Admin → Scheduler | Roughly 17 cron jobs (certificate generation, SSG sync, calendar sync, etc.). Disable any not relevant to this client to avoid noisy errors in logs | [CLAUDE.md → Scheduler](CLAUDE.md) |
+| 25 | Create initial user accounts (trainers, finance, training-provider users) | **Recommended** | Admin → User Management | Onboard the client's actual staff before handing over | — |
+
+> **Order matters.** Items 1–7 unblock day-1 use. 5 (Gmail OAuth) gates everything else — without it nothing else can be tested end-to-end because OTP emails don't arrive. 17–19 only apply to Singapore training providers using SkillsFuture; non-SG clients can skip the entire SSG block.
+
+> **Per-client variation.** Items 11 (Firecrawl), 17–19 (SSG), 20 (QuickBooks), and 23 (Leaderboard) are commercial integrations that depend on the client's contract. Confirm scope before configuring — and confirm the credentials belong to the **client's** accounts, not Tertiary's.
+
+The detailed sections below cover each grouping in depth.
 
 ### 10.1 Branding & Identity
 
