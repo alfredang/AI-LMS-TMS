@@ -9,6 +9,7 @@ import { generateCourseImage } from '@lib/services/geminiService';
 import { getCourseImageUrl } from '@utils/imageUtils';
 import { getApiUrl } from '@/lib/urlHelpers';
 import QuizEditorModal, { QuizQuestion } from './QuizEditorModal';
+import { TopicAccordion } from './CourseDetail';
 
 const inputGhostClasses = (isTitle: boolean) =>
     `flex-grow border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-gray-300 dark:focus:border-gray-600 rounded-md px-2 py-1 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 focus:bg-gray-50 dark:focus:bg-gray-800 focus:outline-none w-full transition-colors dark:text-white ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
@@ -444,7 +445,7 @@ const EditableTopicAccordion: React.FC<{
 
 
 const CourseEditor: React.FC = () => {
-    const { editingCourse, setEditingCourse, role, courseEditMode, setCourseEditMode, trainingProviderProfile } = useLms();
+    const { editingCourse, setEditingCourse, role, courseEditMode, setCourseEditMode, trainingProviderProfile, currentUser } = useLms();
 
     if (!editingCourse) {
         return <div className="flex items-center justify-center h-full"><Spinner text="Loading course editor..." /></div>;
@@ -1634,32 +1635,23 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Lesson</h3>
                             <div className="space-y-4">
-                                {course.topics?.length ? course.topics.map((topic, index) => (
-                                    <div key={topic.id} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                                        <h4 className="text-lg font-semibold dark:text-white">{topic.title}</h4>
-                                        {topic.subtopics?.length > 0 && (
-                                            <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300">
-                                                {topic.subtopics.map((subtopic, subIndex) => (
-                                                    <li key={subtopic.id}>{subtopic.title}</li>
-                                                ))}
-                                            </ul>
-                                        )}
-                                        {resourceLinks.filter(link => link.topicId === topic.id).length > 0 && (
-                                            <div className="mt-4 space-y-2">
-                                                {resourceLinks.filter(link => link.topicId === topic.id).map(link => (
-                                                    <a
-                                                        key={link.id}
-                                                        href={link.url}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="block rounded-md border border-gray-200 px-3 py-2 text-sm text-blue-600 hover:underline dark:border-gray-700 dark:text-blue-300"
-                                                    >
-                                                        {link.title || link.url}
-                                                    </a>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
+                                {course.topics?.length ? course.topics.map(topic => (
+                                    <TopicAccordion
+                                        key={topic.id}
+                                        topic={topic}
+                                        progress={0}
+                                        bookmarkedSubtopics={new Set()}
+                                        onToggleBookmark={() => {}}
+                                        userRole={role}
+                                        completedSubtopics={new Set()}
+                                        onToggleCompletion={() => {}}
+                                        completedTopics={new Set()}
+                                        onToggleTopicCompletion={() => {}}
+                                        resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
+                                        userId={currentUser?.id}
+                                        courseId={course.id}
+                                        latestQuizScores={{}}
+                                    />
                                 )) : (
                                     <div className="text-gray-500 dark:text-gray-400">No lessons available.</div>
                                 )}

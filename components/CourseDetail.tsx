@@ -2008,7 +2008,7 @@ interface TopicAccordionProps {
     onQuizSubmitted?: (quizId: string, result: { score: number; total: number }) => void;
 }
 
-const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [], userId, courseId, latestQuizScores, onQuizSubmitted }) => {
+export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [], userId, courseId, latestQuizScores, onQuizSubmitted }) => {
     const [openQuizId, setOpenQuizId] = React.useState<string | null>(null);
     const [isOpen, setIsOpen] = React.useState(true);
     const displayTitle = topic.title.replace('Module', 'Learning Unit');
