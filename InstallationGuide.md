@@ -28,6 +28,7 @@ Deploy the LMS/TMS platform for a new client on a fresh Hostinger VPS with Cooli
 18. [Appendix B: SSG TPGateway Certificate Setup (Detailed)](#appendix-b-ssg-tpgateway-certificate-setup-detailed)
 19. [Appendix C: Local Development Setup for a New Client (Claude Code / VS Code)](#appendix-c-local-development-setup-for-a-new-client-claude-code--vs-code)
 20. [Appendix D: Connecting Local Dev to a Client's Coolify Database (Worked Example: Chariot)](#appendix-d-connecting-local-dev-to-a-clients-coolify-database-worked-example-chariot)
+21. [Appendix E: Adding Another Client Clone Alongside Existing Ones (Worked Example: Intellisoft)](#appendix-e-adding-another-client-clone-alongside-existing-ones-worked-example-intellisoft)
 
 ---
 
@@ -48,17 +49,19 @@ Before you begin, ensure you have:
 
 ## Step 2: Provision a Hostinger VPS
 
+> **A note on placeholders in this guide.** Any IP address you see (`203.0.113.10`, `203.0.113.20`), domain (`clientcompany.com`), email (`admin@clientcompany.com`, `clientname.lms@gmail.com`), or UEN (`202412345X`) is a **placeholder** drawn from the IANA documentation ranges. None refers to a real server, customer, or account. Replace with the actual values when running these steps for a real client. Never commit real IPs, credentials, or client identifiers to this document.
+
 1. Log in to [Hostinger](https://www.hostinger.com/) and go to **VPS** section
 2. Purchase or provision a new VPS:
    - **OS:** Ubuntu 22.04 or 24.04 LTS
    - **Plan:** KVM 2 or higher (4 GB RAM minimum)
    - **Location:** Choose the region closest to the client's users
 3. Once provisioned, note down:
-   - **Server IP Address** (e.g., `154.41.250.123`)
+   - **Server IP Address** (e.g., `203.0.113.10`)
    - **Root Password** (or set up SSH keys)
 4. **SSH into the server** to verify access:
    ```bash
-   ssh root@154.41.250.123
+   ssh root@203.0.113.10
    ```
 5. **(Recommended) Update the server:**
    ```bash
@@ -77,7 +80,7 @@ Coolify is a self-hosted PaaS (like Heroku/Vercel). It manages Docker deployment
 
 1. **SSH into the VPS** (if not already connected):
    ```bash
-   ssh root@154.41.250.123
+   ssh root@203.0.113.10
    ```
 
 2. **Run the Coolify installer** (one command):
@@ -89,7 +92,7 @@ Coolify is a self-hosted PaaS (like Heroku/Vercel). It manages Docker deployment
 3. **Wait for the installation to complete.** You'll see a message like:
    ```
    Coolify installed successfully!
-   Please visit http://154.41.250.123:8000 to get started.
+   Please visit http://203.0.113.10:8000 to get started.
    ```
 
 4. **Open Coolify in your browser:**
@@ -120,16 +123,16 @@ You need to create a DNS record so the client's domain points to the Hostinger V
 2. **Add an A record:**
    - **Type:** `A`
    - **Host / Name:** `lms` (if using subdomain like `lms.clientcompany.com`) or `@` (if using root domain)
-   - **Value / Points to:** `154.41.250.123` (the Hostinger VPS IP)
+   - **Value / Points to:** `203.0.113.10` (the Hostinger VPS IP)
    - **TTL:** `300` (5 minutes, or Auto)
 3. If using a root domain, also add a **www** record:
    - **Type:** `CNAME`
    - **Host / Name:** `www`
    - **Value / Points to:** `clientcompany.com`
 
-#### Worked example — GoDaddy → Hostinger Coolify (IP `76.13.209.134`)
+#### Worked example — GoDaddy → Hostinger Coolify (IP `203.0.113.20`)
 
-Use this when the client's domain is registered at GoDaddy and the LMS/TMS Coolify instance is running on the Hostinger VPS at `76.13.209.134`. The example assumes you want the LMS at `lms.clientcompany.com`.
+Use this when the client's domain is registered at GoDaddy and the LMS/TMS Coolify instance is running on the Hostinger VPS at `203.0.113.20`. The example assumes you want the LMS at `lms.clientcompany.com`.
 
 1. **Log in to GoDaddy** at <https://sso.godaddy.com/> with the account that owns the domain.
 2. Open the **Products** page → find the domain (`clientcompany.com`) → click **DNS** (or **Manage DNS**). The **DNS Management** page opens, listing the existing records (NS, SOA, default A/CNAME entries, etc.).
@@ -139,12 +142,12 @@ Use this when the client's domain is registered at GoDaddy and the LMS/TMS Cooli
    |---|---|
    | **Type** | `A` |
    | **Name** | `lms` &nbsp;(just the subdomain — GoDaddy appends the apex automatically) |
-   | **Value** | `76.13.209.134` |
+   | **Value** | `203.0.113.20` |
    | **TTL** | `600 seconds` (or `1 Hour`) — pick the lowest GoDaddy lets you use while testing |
 
    Click **Save**.
 
-4. **(Only if pointing the apex `clientcompany.com` instead of a subdomain)** edit the existing root `A` record (Name `@`) and change its **Value** to `76.13.209.134`. Then add a CNAME so `www` follows the apex:
+4. **(Only if pointing the apex `clientcompany.com` instead of a subdomain)** edit the existing root `A` record (Name `@`) and change its **Value** to `203.0.113.20`. Then add a CNAME so `www` follows the apex:
 
    | Field | Value |
    |---|---|
@@ -160,12 +163,12 @@ Use this when the client's domain is registered at GoDaddy and the LMS/TMS Cooli
    ```bash
    dig lms.clientcompany.com +short
    # expected output:
-   # 76.13.209.134
+   # 203.0.113.20
    ```
 
    If you see anything else (e.g., a parked-domain IP), wait a few more minutes and retry — GoDaddy occasionally takes longer for first-time records.
 
-6. Once `dig` returns `76.13.209.134`, continue to [Step 7](#step-7-configure-the-domain-in-coolify) and set the domain in Coolify so Let's Encrypt can issue the SSL certificate.
+6. Once `dig` returns `203.0.113.20`, continue to [Step 7](#step-7-configure-the-domain-in-coolify) and set the domain in Coolify so Let's Encrypt can issue the SSL certificate.
 
 > **Tip:** GoDaddy's UI sometimes shows two A records for the same name during propagation — the old one and the one you just added. Delete the stale entry once the new one is live so the resolver doesn't round-robin between them.
 
@@ -176,7 +179,7 @@ Use this when the client's domain is registered at GoDaddy and the LMS/TMS Cooli
 3. Click **Add Record:**
    - **Type:** `A`
    - **Name:** `lms` (or `@` for root domain)
-   - **IPv4 Address:** `154.41.250.123`
+   - **IPv4 Address:** `203.0.113.10`
    - **Proxy status:** Toggle **OFF** (DNS only / grey cloud) — Let Coolify handle SSL, not Cloudflare
    - **TTL:** Auto
 4. Click **Save**
@@ -188,42 +191,116 @@ Wait 2-10 minutes, then verify the DNS is working:
 ```bash
 # From your local terminal
 nslookup lms.clientcompany.com
-# Should return the VPS IP: 154.41.250.123
+# Should return the VPS IP: 203.0.113.10
 
 # Or use dig
 dig lms.clientcompany.com +short
-# Should return: 154.41.250.123
+# Should return: 203.0.113.10
 ```
 
 > **Important:** DNS propagation can take up to 48 hours in rare cases, but usually completes within 5-15 minutes. Do not proceed to Coolify domain configuration until DNS is resolving correctly, otherwise SSL certificate generation will fail.
 
 ---
 
-## Step 5: Create a Docker Compose Project in Coolify
+## Step 5: Create a Docker Compose Resource in Coolify
+
+This is the step most installations get tripped up on, because Coolify's resource picker presents many options that *look* like they'd work but won't run a `docker-compose.yml`. The two correct paths are documented below, with the GitHub App path strongly preferred.
+
+> **Common mistake.** Picking **"Public Repository"** or **"Private Repository"** without changing the **Build Pack** results in Coolify defaulting to **Nixpacks**, which tries to auto-detect the framework and ignores `docker-compose.yml`. The deploy "succeeds" but only the Next.js app starts (no Postgres), and the app immediately fails health checks because it can't reach the DB. The fix is to **change Build Pack to Docker Compose** at the resource-creation screen — see Step 5.4 below.
+
+### 5.1 Create the Project shell
 
 1. **Open Coolify** at `http://<server-ip>:8000`
+2. Click **"Projects"** in the left sidebar
+3. Click **"+ Add"**
+4. **Name** the project after the client (e.g., `Intellisoft LMS`, `Chariot Learning LMS`)
+5. Click **"Save"**
+6. Click into the new project. You'll see a default **Production** environment — use that, or click **"+ New Environment"** if the client needs separate staging/prod.
 
-2. **Create a new Project:**
-   - Click **"Projects"** in the left sidebar
-   - Click **"+ Add"**
-   - Name it (e.g., `Client Name LMS`)
-   - Click **"Save"**
+### 5.2 Choose how Coolify will connect to GitHub
 
-3. **Add a new Environment** (or use the default "Production"):
-   - Click into the project
-   - Click **"+ New Resource"**
+Coolify needs *some* way to pull the LMS/TMS repo. There are three options, in decreasing order of preference:
 
-4. **Select resource type: "Docker Compose"**
+| Connection method | When to use | Setup location |
+|---|---|---|
+| **(A) GitHub App** | **Recommended.** Most secure (fine-grained permissions, only the repos you select), supports automatic webhook-triggered deploys, no PAT to expire | Coolify left sidebar → **Sources** → **+ New** → GitHub App |
+| **(B) Personal Access Token (PAT)** | Quick fallback if you can't create a GitHub App right now (org policy, etc.) | Same Sources page, "Public Repository" + PAT for `repo` scope |
+| **(C) Deploy Key** | Last resort, single-repo only | Sources → Deploy Key → paste public key into the GitHub repo's Deploy Keys |
 
-5. **Connect to GitHub repository:**
-   - **Repository:** Select or paste the LMS/TMS GitHub repo URL
-   - If the repo is private, you'll need to add a GitHub App or use a **Deploy Key**:
-     - Go to **Coolify > Sources** (or Settings > GitHub)
-     - Add a new GitHub App or paste the Personal Access Token from Step 1
-   - **Branch:** `main`
-   - **Docker Compose Location:** `docker-compose.yml` (default, at repo root)
+If a GitHub App already exists in this Coolify instance from a prior client, you can reuse it — just make sure it's installed on the LMS/TMS repo (GitHub UI → app settings → Install Repositories).
 
-6. Click **"Save"** — do NOT deploy yet. We need to set environment variables first.
+### 5.3 Set up the GitHub App (first-time only — skip if reusing)
+
+1. In Coolify, left sidebar → **Sources** → **+ New** → **GitHub App**.
+2. You'll see two installation paths:
+   - **Automated Installation** (recommended) — one-click manifest registration
+   - **Manual Installation / Continue** — paste an existing App ID + private key. Use only if you've already created a GitHub App outside Coolify.
+3. Click **"Register Now"** under Automated Installation.
+4. Coolify redirects you to GitHub. GitHub shows a **pre-filled app manifest** with name, permissions, and webhook URL. The webhook URL will look like `http://<your-coolify-vps-ip>:8000/...` — plain HTTP, IP-based. **This is fine for now**; we'll address it under "Webhook URL caveat" below.
+5. Click **"Create GitHub App"**. GitHub may prompt for your password.
+6. After creation, GitHub immediately redirects to the **app install page**:
+   - Select **"Only select repositories"** (safer than "All repositories")
+   - Pick the LMS/TMS repo (e.g., `alfredang/AI-LMS-TMS`)
+   - Click **"Install"**
+7. GitHub redirects back to Coolify. The Source now shows as connected, with no red warnings.
+
+> **If you see a "You must complete this step" warning in Coolify** with a big **"Install Repositories on GitHub"** button: that means the app exists but isn't installed on any repo yet. Click the button, follow the same flow as step 6 above, and the warning will disappear.
+
+> **Webhook URL caveat.** The GitHub App's webhook URL is registered as `http://<coolify-ip>:8000/...`. GitHub allows plain HTTP webhooks today, but they're discouraged and noisier in delivery logs. If/when you put Coolify's own UI behind a domain with SSL (separate from the LMS domain in Step 7 — Coolify's UI typically stays on `:8000` unless you reverse-proxy it), come back and update this source's webhook URL to the HTTPS one. Not blocking.
+
+### 5.4 Create the Docker Compose resource
+
+Now you have a Project, an Environment, and a Source. Create the actual deployable:
+
+1. Navigate: **Projects (sidebar) → click into your project → click into the Production environment**.
+2. Click **"+ New Resource"**.
+3. The resource picker appears. **Pick the right entry — this is where most setups go wrong.** Look under the **Git Based** section:
+
+   | Picker entry | Use when |
+   |---|---|
+   | **Private Repository (with GitHub App)** | ✅ **Recommended.** Use the source you set up in 5.3. |
+   | **Private Repository (with Deploy Key)** | Only if you went with method (C). |
+   | **Public Repository** | If the LMS/TMS repo is public AND you accepted method (B). |
+   | **Docker Compose Empty** | Don't use for this guide — that's for hand-pasting a compose file, not deploying from Git. |
+   | **Dockerfile** / **Application** | Don't use — these bypass `docker-compose.yml` entirely (the Step 5 intro warning). |
+
+4. After picking the entry, fill in the form on the next screen. **Every field below matters; don't skip any:**
+
+   | Field | Value | Notes |
+   |---|---|---|
+   | **GitHub Source** (only on the App path) | The source you created in 5.3 | If empty, your app isn't installed on any repo yet — go back to 5.3 step 7 |
+   | **Repository** | `alfredang/AI-LMS-TMS` (or wherever the LMS/TMS code lives) | Full `owner/repo` |
+   | **Branch** | `main` | Coolify will deploy on every push to this branch via the GitHub App webhook |
+   | **Build Pack** | **`Docker Compose`** | ⚠️ **Critical — defaults to Nixpacks.** Change it to Docker Compose, or `docker-compose.yml` will be ignored and the deploy will fail in confusing ways |
+   | **Docker Compose Location** | `docker-compose.yml` | Appears only after Build Pack = Docker Compose. Path is relative to the repo root, default is correct |
+   | **Base Directory** | `/` | Leave default unless the compose file is in a subdirectory |
+   | **Is it a static site?** | No | |
+   | **Preserve Repository During Deployment** | ✅ **Check it.** | ⚠️ **Off by default and easy to miss.** When unchecked, Coolify wipes the cloned repo between deploys — which deletes the `database/*.sql` init scripts that Docker Compose bind-mounts into the Postgres container. The first deploy may work; subsequent deploys leave Postgres with no init scripts and the app crashes with auth/DB errors. Always on for this stack. |
+
+5. Click **"Save"**. **Do NOT click Deploy yet** — we still need to set environment variables (Step 6). Deploying without env vars will spin up containers that immediately crash on missing `DB_PASSWORD`, `JWT_SECRET`, etc.
+
+> **If you've already created the resource without "Preserve Repository" checked,** you don't need to recreate it. Open the resource → **Configuration** → **General** tab → scroll to the **Build** section → tick **"Preserve Repository During Deployment"** → **Save**. The setting takes effect on the next deploy.
+
+### 5.5 Verify the resource was created correctly
+
+After Save, you land on the resource's overview page. Confirm:
+
+- The page header shows the resource name and **"Docker Compose"** as the build pack (not Nixpacks/Dockerfile).
+- The **Services** panel (or sidebar) lists two services: **`app`** and **`db`**, parsed from `docker-compose.yml`.
+- The **General** / **Configuration** tab shows the GitHub Source, repo, branch (`main`), and compose file path.
+
+If you see only one service, or no services at all, the build pack didn't actually take Docker Compose — go back to step 5.4 and re-check the Build Pack dropdown. (Sometimes Coolify caches the old setting; deleting and recreating the resource is faster than fighting the form.)
+
+### 5.6 Common troubleshooting at this step
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Picker shows no "Private Repository (with GitHub App)" entry | No GitHub App source exists yet | Do 5.3 first |
+| GitHub App source exists but resource creation says "no repos available" | App isn't installed on any repo, or you didn't grant access to this specific repo | GitHub → app settings → Install Repositories → add the LMS/TMS repo |
+| Build Pack dropdown doesn't show "Docker Compose" | You're on a screen that doesn't support compose (e.g., Dockerfile-only path) | Cancel, go back to "+ New Resource", pick a Git-based entry |
+| After Save, no `db` service appears | Build Pack is still Nixpacks / Dockerfile, ignoring `docker-compose.yml` | Edit the resource's Configuration → change Build Pack → re-save. If that doesn't work, recreate the resource. |
+| Webhook isn't firing on `git push` | App webhook URL is HTTP and GitHub silently dropped it (rare), or the app isn't installed on this specific repo | GitHub → app settings → Recent Deliveries — check for failures. Reinstall the app on the repo if missing. |
+| First deploy worked, second deploy fails with Postgres init errors / "role postgres does not exist" / app can't auth to DB | "Preserve Repository During Deployment" is unchecked, so Coolify wiped the repo dir between deploys and the `database/*.sql` init scripts that the compose file bind-mounts into Postgres are gone | Resource → Configuration → General → Build → tick **"Preserve Repository During Deployment"** → Save. Next deploy will work. (For a fresh start: delete the `postgres_data` volume so init scripts re-run, then redeploy.) |
 
 ---
 
@@ -568,7 +645,7 @@ NODE_ENV=production
 NEXT_PUBLIC_BASE_URL=https://lms.newclient.com
 JWT_SECRET=<openssl rand -hex 32>
 ADMIN_EMAIL=admin@newclient.com
-ADMIN_PASSWORD=TempPassword123!
+ADMIN_PASSWORD=<replace-with-strong-temp-password>
 ADMIN_FULL_NAME=Admin
 COMPANY_NAME=New Client Pte Ltd
 TRAINING_PARTNER_UEN=202412345X
@@ -686,6 +763,107 @@ The platform uses the **Gmail API** (not SMTP) to send emails. This requires:
 3. A **Refresh Token** that grants offline access to the sender's Gmail account
 
 The credentials are entered in the Admin UI and stored in the `training_provider` database table.
+
+### Pre-flight: choose the sender mailbox
+
+Before the steps below, decide which Gmail/Google Workspace mailbox will actually send the platform's email. There are three viable patterns — pick the one that matches the client's setup:
+
+| Pattern | When to use | Setup step |
+|---|---|---|
+| **(i) Client already has Google Workspace** at their domain (e.g. `support@clientcompany.com` is on Workspace) | Confirm with `dig MX <domain> +short` — if you see `aspmx.l.google.com`, it's Workspace | Skip ahead to A1 and OAuth that mailbox directly. Best deliverability. |
+| **(ii) Client has Workspace but wants a separate sender** | Most common for production — keeps "noreply" out of a real person's inbox | Create `noreply@clientcompany.com` as a Workspace mailbox or alias, OAuth that. Then proceed to A1. |
+| **(iii) Client has no Google Workspace** (mailbox is on Microsoft 365 / cPanel / Zoho / Cloudflare routing, or they refuse Workspace) | Cost-sensitive deployments; clients who don't want to add a Workspace seat | Use **A0 — Free Gmail + "Send mail as" alias** below before A1. Works, with a deliverability caveat. |
+
+If the client falls into (iii), do A0 first. Otherwise skip A0 and start at A1.
+
+---
+
+### A0. Free Gmail + "Send mail as" alias (only for clients without Google Workspace)
+
+This pattern lets the platform send email **as** `support@clientcompany.com` (the client's existing address, hosted anywhere) by routing through a free Gmail account that we OAuth.
+
+**How it works conceptually:**
+
+```
+LMS  ─── Gmail API (OAuth) ───►  clientname.lms@gmail.com  ─── sends as ───►  support@clientcompany.com
+                                  (free Gmail we control)                  (client's real address)
+```
+
+The recipient sees the email From `support@clientcompany.com`. Replies go to `support@clientcompany.com` (which still hits the client's existing mailbox, on whatever provider hosts it).
+
+#### A0.1 Create the free Gmail account
+
+1. Go to <https://accounts.google.com/signup>
+2. Pick an address that identifies the platform, not a person. Convention: `<client>.lms@gmail.com`. Examples:
+   - `clientname.lms@gmail.com`
+   - `clientcompanylearning.lms@gmail.com`
+3. Use the client's company contact info on signup (recovery phone/email should be reachable by the client, not by us).
+4. Save the credentials in the client's password manager — they own this account, not us.
+
+> **Why a dedicated Gmail and not a personal one?** This account holds an OAuth refresh token that can send email on the platform's behalf indefinitely. Tying it to a real person creates a single point of failure when they leave or change their password.
+
+#### A0.2 Add `support@clientcompany.com` as a "Send mail as" alias
+
+1. Sign into `clientname.lms@gmail.com` at <https://mail.google.com/>
+2. Click the **gear icon** (top-right) → **See all settings**
+3. Open the **Accounts and Import** tab
+4. Find the **"Send mail as:"** row → click **Add another email address**
+5. In the popup:
+   - **Name:** `Chariot Learning Support` (whatever should appear next to the email in recipients' inboxes)
+   - **Email address:** `support@clientcompany.com`
+   - Leave **"Treat as an alias"** checked
+   - Click **Next Step**
+6. On the next screen, Gmail offers two ways to send:
+   - **Option A — Send through Gmail (default, easier):** leave the default. Emails go through Google's outbound infra; SPF must list `_spf.google.com` (see A0.4).
+   - **Option B — Send through your client's SMTP:** if the client wants outbound to literally route via their mail provider's servers, fill in their SMTP host/port/user/pass. Rare; only do this if the client insists.
+   - Click **Next Step**
+7. Click **Send Verification**
+8. Gmail sends a verification email **to `support@clientcompany.com`** with a confirmation link.
+9. The **client** opens that mailbox (in whatever provider they use — Microsoft 365, Zoho, cPanel webmail, etc.) and clicks the link, OR forwards you the confirmation code to enter back in Gmail. Either works.
+
+#### A0.3 Make `support@clientcompany.com` the default From
+
+1. Back in **Settings → Accounts and Import → Send mail as**
+2. Next to `support@clientcompany.com`, click **make default**
+3. Set **"When replying to a message:"** to **"Reply from the same address the message was sent to"**
+
+Result: every email the platform sends through `clientname.lms@gmail.com` will go out with `support@clientcompany.com` as the From address.
+
+#### A0.4 Add SPF (and ideally DKIM) on `clientcompany.com` so emails don't go to spam
+
+This is the **deliverability caveat**. Without it, Outlook/Office 365 will often show "via gmail.com" or drop emails to spam.
+
+**SPF (required, free, fixes most cases):**
+
+The client adds a TXT record on `clientcompany.com`:
+
+```
+clientcompany.com    TXT    "v=spf1 include:_spf.google.com include:<their-existing-mail-provider> ~all"
+```
+
+`include:_spf.google.com` authorises Google's outbound IPs to send email claiming to be from `clientcompany.com`. Keep any existing `include:` entry (e.g. `include:spf.protection.outlook.com` if they use Microsoft 365) so the client's normal email sending still passes SPF.
+
+Verify after a few minutes:
+```bash
+dig TXT clientcompany.com +short
+```
+
+**DKIM (strongly recommended, but only available on paid Workspace):**
+
+DKIM cryptographically signs outgoing mail with the domain's key, which is what major providers actually trust. Free Gmail accounts **cannot** set up DKIM for arbitrary domains — only Google Workspace can. This is the main reason any client with non-trivial email volume eventually ends up on Workspace.
+
+If the client refuses Workspace, the platform will work, but expect 5–15% of emails (especially to Outlook recipients) to go to spam. Document this expectation up front.
+
+#### A0.5 Now proceed to A1 with the free Gmail
+
+When you reach A3 (OAuth consent screen) and A5 (refresh token), use the free Gmail account (`clientname.lms@gmail.com`), **not** the alias. The OAuth grant is on the actual mailbox, not the address we send mail as.
+
+When you reach A6 (enter credentials in Admin UI), set:
+
+- **Email User:** `support@clientcompany.com` *(the alias — this is what the platform tells Gmail to send From)*
+- **Google Client ID / Secret / Refresh Token:** from the free Gmail account's OAuth setup
+
+Gmail accepts an alias as the `From:` header on `users.messages.send` calls **only if it's been verified as a "Send mail as" alias** (which we did in A0.2). That's why A0.2 is non-optional.
 
 ---
 
@@ -1282,7 +1460,7 @@ git worktree add ~/projects/clients/chariot main
 
 Open the Chariot Coolify resource (`Projects → Chariot Learning LMS → production`) and click into the `db` service. Note:
 
-- **VPS IP** of the Hostinger host running Coolify (e.g. `76.13.209.134`)
+- **VPS IP** of the Hostinger host running Coolify (e.g. `203.0.113.20`)
 - **`DB_PASSWORD`** — the value you set in [Step 6.1](#61-required-variables-must-set-before-first-deploy)
 - **`DB_NAME`** — `lmsdb` unless you changed it
 - **Host port** — `6434` (mapped to container's `5432` in `docker-compose.yml`)
@@ -1296,7 +1474,7 @@ Open the Chariot Coolify resource (`Projects → Chariot Learning LMS → produc
 **Open a NEW terminal window** (do not reuse the one you'll run `npm run dev` in) and run:
 
 ```bash
-ssh -L 6434:localhost:6434 root@76.13.209.134
+ssh -L 6434:localhost:6434 root@203.0.113.20
 # Leave this window open and logged in. Do not close it.
 # When it asks for password / MFA, complete it. The shell prompt
 # stays open — that's the tunnel. Type `exit` to close it later.
@@ -1315,13 +1493,13 @@ DATABASE_URL=postgres://postgres:<DB_PASSWORD>@localhost:6434/lmsdb
 
 ```bash
 # In .env.local
-DATABASE_URL=postgres://postgres:<DB_PASSWORD>@76.13.209.134:6434/lmsdb
+DATABASE_URL=postgres://postgres:<DB_PASSWORD>@203.0.113.20:6434/lmsdb
 ```
 
 Default to A unless there's a specific reason. UFW example for B:
 
 ```bash
-ssh root@76.13.209.134 "ufw allow from <your-public-ip> to any port 6434 proto tcp"
+ssh root@203.0.113.20 "ufw allow from <your-public-ip> to any port 6434 proto tcp"
 ```
 
 #### Troubleshooting the tunnel
@@ -1337,7 +1515,7 @@ For a longer-lived tunnel that survives sleep/wake cycles, run it under `autossh
 
 ```bash
 brew install autossh   # macOS
-autossh -M 0 -N -L 6434:localhost:6434 root@76.13.209.134
+autossh -M 0 -N -L 6434:localhost:6434 root@203.0.113.20
 ```
 
 `-N` means "no remote command" (don't open a shell, just forward); `-M 0` disables autossh's own monitor port and relies on SSH keepalives instead.
@@ -1436,3 +1614,235 @@ At `http://localhost:3000`:
 - **Migrations.** `npm run db:migrate` against a production DB will run irreversible schema changes. Only do this if you have a fresh `pg_dump` backup taken minutes ago (see [Backup Recommendations](#backup-recommendations)).
 - **Scheduler.** The dev server starts its own in-process `node-cron` scheduler. If it points at a production DB, **disable scheduled tasks** via the Admin UI before `npm run dev`, or both the local and the deployed scheduler will fire (e.g. duplicate certificate emails to learners).
 - **Uploads.** File uploads in local dev write to your laptop's `public/uploads/`, not the VPS's `uploads_data` volume. The DB will reference paths that don't exist on production — clean up test rows before you log off.
+
+---
+---
+
+## Appendix E: Adding Another Client Clone Alongside Existing Ones (Worked Example: Intellisoft)
+
+Once you've set up Chariot using Appendices C and D, adding the next client (Intellisoft, in this example) follows the same shape but needs three extra things:
+
+1. A **second pre-push hook** in the new clone (hooks live in `.git/hooks/` — per-clone, not committed).
+2. A **Claude Code deny hook** as belt-and-suspenders for AI-driven mistakes.
+3. **Non-clashing local ports** for the SSH tunnel and dev server, so Chariot and Intellisoft can run simultaneously without fighting for `6434` / `3000`.
+
+This appendix is the recipe. Substitute `intellisoft` → your client name throughout.
+
+### E1. Clone into a separate directory (don't reuse Chariot's folder)
+
+```bash
+cd ~/projects/clients
+git clone https://github.com/alfredang/AI-LMS-TMS.git intellisoft
+cd intellisoft
+```
+
+> **Why a separate folder.** Each client clone keeps its own `.env.local`, its own `.git/hooks/`, its own Claude Code memory, and (after step E5) listens on a different dev port. Mixing them in one folder is the easy way to write Chariot data into Intellisoft's DB.
+
+Then immediately apply the C8 branch hygiene baseline:
+
+```bash
+git checkout -b intellisoft/local-dev
+git config push.default current
+git remote set-url --push origin no_push
+```
+
+### E2. Install the pre-push hook (block pushes to `main`)
+
+This is the same hook from C8.3, but the message is namespaced to Intellisoft so the operator immediately knows which clone they're in if it ever fires.
+
+```bash
+cat > .git/hooks/pre-push <<'EOF'
+#!/bin/sh
+protected_branch='main'
+remote="$1"
+while read local_ref local_sha remote_ref remote_sha; do
+    if [ "$remote_ref" = "refs/heads/$protected_branch" ]; then
+        echo ""
+        echo "🚫 BLOCKED: push to '$protected_branch' on remote '$remote'"
+        echo "   This clone is for Intellisoft client work. Pushing to main"
+        echo "   would deploy to all tenants on alfredang/AI-LMS-TMS."
+        echo ""
+        echo "   To push a feature branch instead:"
+        echo "     git push origin \$(git branch --show-current)"
+        echo ""
+        exit 1
+    fi
+done
+exit 0
+EOF
+chmod +x .git/hooks/pre-push
+```
+
+Verify:
+
+```bash
+git push origin main
+# 🚫 BLOCKED: push to 'main' on remote 'origin'
+```
+
+### E3. Add a Claude Code deny hook (belt-and-suspenders for AI sessions)
+
+If you use Claude Code in this clone, the assistant has access to `git push` via the Bash tool. The git pre-push hook above stops it at the git layer, but you can stop it one layer earlier — at Claude Code's permission system — so the LLM gets a clear "denied with reason" before any shell command runs. This catches the case where Claude tries to use `--force` or some other variant that might surprise the git hook.
+
+```bash
+mkdir -p .claude
+cat > .claude/settings.local.json <<'EOF'
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"'); if echo \"$cmd\" | grep -qE 'git[[:space:]]+push([[:space:]]+[^[:space:]]+)*[[:space:]]+(HEAD:)?main(\\b|$)'; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Blocked: this Intellisoft clone forbids pushing to main. Use a feature branch (e.g. intellisoft/local-dev) instead.\"}}'; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+```
+
+> **What this does.** Before Claude Code runs any `Bash` tool, it runs this hook. The hook reads the proposed shell command from stdin (as JSON), and if the regex matches `git push ... main` (with or without `HEAD:` prefix, with or without intermediate args), it returns a structured `deny` decision. Claude sees the reason and picks a different approach — usually pushing to the feature branch — without ever invoking the shell.
+>
+> `.claude/settings.local.json` is gitignored by default. Like `.git/hooks/`, it's a per-clone safeguard you re-install for every new client folder.
+
+### E4. Create `.env.local` from a sibling clone, then rewrite the client-specific bits
+
+Copying from Chariot is faster than re-deriving every variable from scratch — you'll keep the dev-only values and the same env-var *shape*, then overwrite anything client-specific.
+
+```bash
+cp ~/projects/clients/chariot/.env.local .env.local
+```
+
+Then open `.env.local` and change the following. Use the Coolify "Environment Variables" tab on Intellisoft's resource as the source of truth (see [D4.1](#d41-find-coolifys-env-vars)):
+
+| Variable | Source | Value for Intellisoft |
+|---|---|---|
+| `DB_HOST` / `DB_PORT` | tunnel-driven | `localhost` / `6435` (different local port — see E5) |
+| `DB_PASSWORD` | Coolify | Intellisoft's value |
+| `DATABASE_URL` | construct locally | `postgres://postgres:<DB_PASSWORD>@localhost:6435/lmsdb` |
+| `JWT_SECRET` | Coolify | Intellisoft's value (must match the deployed app) |
+| `COMPANY_NAME` | Coolify | `Intellisoft Pte Ltd` (or whatever the real name is) |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Coolify | Intellisoft's first-boot admin creds |
+| `ANTHROPIC_API_KEY`, Google OAuth, QBO, SSG | Coolify | Intellisoft's keys, **not** Chariot's |
+| `NEXT_PUBLIC_BASE_URL` | local | `http://localhost:3031` (matches the dev port from E5) |
+| `NODE_ENV` | local | `development` |
+
+Run the cross-client safety grep before `npm run dev`:
+
+```bash
+grep -iE "chariot|tertiary" .env.local
+# Expected: no matches. Any hit is a leftover from copying Chariot's template — fix it.
+```
+
+### E5. SSH tunnel on a different local port
+
+Chariot already uses `6434` on your laptop. To run both clients at once, forward Intellisoft to a different local port (the **remote** port stays `6434` — that's the host port Coolify's Compose maps Postgres to, identical on every VPS).
+
+In a **new terminal window**, leave open while developing:
+
+```bash
+ssh -L 6435:localhost:6434 root@<INTELLISOFT_VPS_IP>
+```
+
+Now:
+- `localhost:6434` → Chariot's Postgres (existing tunnel)
+- `localhost:6435` → Intellisoft's Postgres (this new tunnel)
+
+`DATABASE_URL` in Intellisoft's `.env.local` points at `localhost:6435`. Chariot's still points at `localhost:6434`. They never collide.
+
+If you add a third client later, use `6436`, then `6437`, etc.
+
+### E6. Different dev server port
+
+Next.js defaults to `3000`. If Chariot's dev server is already running there, Intellisoft's will fail to bind. Set `PORT` per client:
+
+```bash
+# One-off
+PORT=3031 npm run dev
+```
+
+Or bake into a per-client npm script if you'd rather not remember:
+
+```bash
+# Edit package.json scripts in this clone only (it's gitignored from the user's PoV
+# because you never push from this clone — but it WILL show as modified in git)
+# Easier alternative: keep a shell alias in your dotfiles
+alias dev:intellisoft='cd ~/projects/clients/intellisoft && PORT=3031 npm run dev'
+alias dev:chariot='cd ~/projects/clients/chariot && PORT=3030 npm run dev'
+```
+
+Suggested port allocation:
+
+| Client | Tunnel local port | Dev server port |
+|---|---|---|
+| Tertiary (canonical repo) | n/a (uses local Postgres or own staging) | `3000` |
+| Chariot | `6434` | `3030` |
+| Intellisoft | `6435` | `3031` |
+| Next client | `6436` | `3032` |
+
+Update Intellisoft's `NEXT_PUBLIC_BASE_URL` in `.env.local` to match the chosen port: `http://localhost:3031`.
+
+### E7. Install dependencies and run
+
+```bash
+npm install
+PORT=3031 npm run dev
+```
+
+Open `http://localhost:3031` and verify before doing anything else:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT company_name, uen FROM training_provider;"
+# Expected: Intellisoft. Anything else → stop, your tunnel or env is wrong.
+```
+
+### E8. Open as its own VS Code window
+
+```bash
+code ~/projects/clients/intellisoft
+```
+
+A separate VS Code window keeps Claude Code memory isolated to `~/.claude/projects/-Users-<you>-projects-clients-intellisoft/memory/`, so prior Chariot context doesn't leak into Intellisoft work.
+
+### E9. Quick reference: full setup script for a new client
+
+For copy-paste reuse when onboarding the *next* client. Replace `<CLIENT>` and `<VPS_IP>` and pick free ports:
+
+```bash
+CLIENT=intellisoft
+VPS_IP=<INTELLISOFT_VPS_IP>
+LOCAL_DB_PORT=6435
+DEV_PORT=3031
+
+cd ~/projects/clients
+git clone https://github.com/alfredang/AI-LMS-TMS.git "$CLIENT"
+cd "$CLIENT"
+
+# Branch hygiene (C8)
+git checkout -b "$CLIENT/local-dev"
+git config push.default current
+git remote set-url --push origin no_push
+
+# Pre-push hook (E2) — paste the heredoc from above
+
+# Claude Code deny hook (E3) — paste the heredoc from above
+
+# Env from a sibling, then edit
+cp ~/projects/clients/chariot/.env.local .env.local
+# ... edit DATABASE_URL, JWT_SECRET, COMPANY_NAME, etc.
+
+npm install
+
+# In a separate terminal:
+ssh -L "$LOCAL_DB_PORT":localhost:6434 "root@$VPS_IP"
+
+# Back in this terminal:
+PORT="$DEV_PORT" npm run dev
+```
+
+That's the entire onboarding for a new client clone, end to end.
