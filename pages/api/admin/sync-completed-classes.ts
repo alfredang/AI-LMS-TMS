@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { createSSGAttendanceAPI } from '../../../lib/ssg/api/attendance-api';
+import { extractRecordsFromViewAttendance, normalizeAttendanceRecord } from '../../../lib/ssg/utils/attendance-decrypt';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
@@ -508,13 +509,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           try {
             const attResult = await attendanceAPI.viewAttendance(ssgRunId, cr.course_code, sessionId);
             if (!attResult.error && attResult.data) {
-              const records = Array.isArray(attResult.data) ? attResult.data : (attResult.data?.attendance || []);
+              let records: any[] = [];
+              try {
+                records = extractRecordsFromViewAttendance(attResult.data, credentials.encryptionKey, sessionId);
+              } catch (decErr) {
+                result.errors.push(`Decrypt failed for session ${sessionId}: ${decErr instanceof Error ? decErr.message : 'unknown'}`);
+              }
               result.attendanceFetched += records.length;
 
               for (const att of records) {
-                const traineeId = att?.trainee?.id || att?.traineeId;
-                const isPresent = att?.status === 'present' || att?.status === 'Present' || att?.attendance === true;
-                if (!traineeId) continue;
+                const normalized = normalizeAttendanceRecord(att);
+                if (!normalized) continue;
+                const { nric: traineeId, isPresent } = normalized;
 
                 // Find the local session ID
                 const localSession = await pool.query(

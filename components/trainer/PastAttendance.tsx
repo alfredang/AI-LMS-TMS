@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLms } from '../../contexts/LmsContext';
 import { Icon, IconName } from '../ui/Icon';
 
@@ -25,9 +25,19 @@ interface StudentRecord {
   is_competent: boolean;
 }
 
+interface SessionMeta {
+  id: string;
+  sessionNumber: string | null;
+  title: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  ssgSessionId: string | null;
+}
+
 interface AttendanceSummary {
   totalSessions: number;
-  data: { nric: string; userId: string; attendedCount: number }[];
+  sessions?: SessionMeta[];
+  data: { nric: string; userId: string; attendedCount: number; sessions?: Record<string, boolean> }[];
 }
 
 const PastAttendance: React.FC = () => {
@@ -39,6 +49,55 @@ const PastAttendance: React.FC = () => {
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [attendanceSummary, setAttendanceSummary] = useState<AttendanceSummary | null>(null);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [startDateFrom, setStartDateFrom] = useState('');
+  const [startDateTo, setStartDateTo] = useState('');
+  const [endDateFrom, setEndDateFrom] = useState('');
+  const [endDateTo, setEndDateTo] = useState('');
+
+  const filteredClasses = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const sFrom = startDateFrom ? new Date(startDateFrom) : null;
+    const sTo = startDateTo ? new Date(startDateTo) : null;
+    const eFrom = endDateFrom ? new Date(endDateFrom) : null;
+    const eTo = endDateTo ? new Date(endDateTo) : null;
+    if (sTo) sTo.setHours(23, 59, 59, 999);
+    if (eTo) eTo.setHours(23, 59, 59, 999);
+
+    return classes.filter(c => {
+      if (q) {
+        const haystack = `${c.run_id} ${c.run_code} ${c.course_title} ${c.course_code}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      const start = c.start_date ? new Date(c.start_date) : null;
+      const end = c.end_date ? new Date(c.end_date) : null;
+      if (sFrom && (!start || start < sFrom)) return false;
+      if (sTo && (!start || start > sTo)) return false;
+      if (eFrom && (!end || end < eFrom)) return false;
+      if (eTo && (!end || end > eTo)) return false;
+      return true;
+    });
+  }, [classes, searchQuery, startDateFrom, startDateTo, endDateFrom, endDateTo]);
+
+  // Clear selection if it falls outside the filtered set
+  useEffect(() => {
+    if (selectedRunId && !filteredClasses.some(c => c.run_id === selectedRunId)) {
+      setSelectedRunId('');
+    }
+  }, [filteredClasses, selectedRunId]);
+
+  const hasActiveFilters = !!(searchQuery || startDateFrom || startDateTo || endDateFrom || endDateTo);
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStartDateFrom('');
+    setStartDateTo('');
+    setEndDateFrom('');
+    setEndDateTo('');
+  };
 
   // Fetch past classes
   useEffect(() => {
@@ -56,18 +115,11 @@ const PastAttendance: React.FC = () => {
   }, [currentUser?.email]);
 
   // Fetch students and attendance for selected class
-  useEffect(() => {
-    if (!selectedRunId) {
-      setStudents([]);
-      setAttendanceSummary(null);
-      return;
-    }
-    const controller = new AbortController();
+  const loadClassData = (runId: string, signal?: AbortSignal) => {
     setLoadingStudents(true);
     setLoadingAttendance(true);
 
-    // Fetch students
-    fetch(`/api/trainer/class-students?courseRunId=${selectedRunId}`, { signal: controller.signal })
+    fetch(`/api/trainer/class-students?courseRunId=${runId}`, { signal })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setStudents(data);
@@ -75,19 +127,81 @@ const PastAttendance: React.FC = () => {
       .catch(err => { if (err.name !== 'AbortError') console.error('Failed to fetch students:', err); })
       .finally(() => setLoadingStudents(false));
 
-    // Fetch attendance summary
-    fetch(`/api/trainer/attendance-summary?courseRunId=${selectedRunId}`, { signal: controller.signal })
+    fetch(`/api/trainer/attendance-summary?courseRunId=${runId}`, { signal })
       .then(res => res.json())
       .then(data => {
         if (data.success) setAttendanceSummary(data);
       })
       .catch(err => { if (err.name !== 'AbortError') console.error('Failed to fetch attendance:', err); })
       .finally(() => setLoadingAttendance(false));
+  };
 
+  useEffect(() => {
+    if (!selectedRunId) {
+      setStudents([]);
+      setAttendanceSummary(null);
+      setSyncMessage(null);
+      return;
+    }
+    setSyncMessage(null);
+    const controller = new AbortController();
+    loadClassData(selectedRunId, controller.signal);
     return () => controller.abort();
   }, [selectedRunId]);
 
+  const handleRefreshFromSSG = async () => {
+    if (!selectedRunId || syncing) return;
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch('/api/trainer/sync-attendance-from-ssg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseRunId: selectedRunId }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setSyncMessage({ kind: 'error', text: json.error || `Sync failed (HTTP ${res.status})` });
+      } else {
+        const errorNote = Array.isArray(json.errors) && json.errors.length > 0
+          ? ` (${json.errors.length} session error${json.errors.length === 1 ? '' : 's'})`
+          : '';
+        setSyncMessage({
+          kind: 'success',
+          text: `Synced ${json.sessionsSynced}/${json.sessionsFetched} sessions, ${json.attendanceUpserted} attendance records updated${errorNote}.`,
+        });
+        loadClassData(selectedRunId);
+      }
+    } catch (err) {
+      setSyncMessage({
+        kind: 'error',
+        text: err instanceof Error ? err.message : 'Sync failed',
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const selectedClass = classes.find(c => c.run_id === selectedRunId);
+
+  const filterInputClass = "w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
+
+  // Parse SSG/local date strings: handles YYYYMMDD (SSG raw), YYYY-MM-DD,
+  // and full ISO. Returns null if unparseable.
+  const parseSessionDate = (raw: string | null | undefined): Date | null => {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (/^\d{8}$/.test(s)) {
+      const d = new Date(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const formatSessionDate = (raw: string | null | undefined, opts?: Intl.DateTimeFormatOptions) => {
+    const d = parseSessionDate(raw);
+    return d ? d.toLocaleDateString('en-GB', opts) : null;
+  };
 
   return (
     <div className="space-y-6">
@@ -96,32 +210,72 @@ const PastAttendance: React.FC = () => {
 
       {/* Class Selection */}
       <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800">
-          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-            Select a Past Class
-          </label>
-          <div className="relative w-full">
-            {loadingClasses ? (
-              <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
-                <Icon name={IconName.Spinner} className="w-5 h-5 animate-spin text-blue-500" />
-                Loading your past classes...
-              </div>
-            ) : classes.length === 0 ? (
-              <p className="text-sm text-gray-500 py-2">No past classes found.</p>
-            ) : (
-              <select
-                value={selectedRunId}
-                onChange={e => setSelectedRunId(e.target.value)}
-                className="w-full pl-3 pr-10 py-2.5 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white shadow-sm"
-              >
-                <option value="">— Choose a past class —</option>
-                {classes.map(c => (
-                  <option key={c.run_id} value={c.run_id}>
-                    {c.course_title} | {c.run_code} ({new Date(c.start_date || '').toLocaleDateString('en-GB')} - {new Date(c.end_date || '').toLocaleDateString('en-GB')})
-                  </option>
-                ))}
-              </select>
-            )}
+        <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800 space-y-4">
+          {/* Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="lg:col-span-1">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Search</label>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Run ID, code, course title…"
+                className={filterInputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Start Date From</label>
+              <input type="date" value={startDateFrom} onChange={e => setStartDateFrom(e.target.value)} className={filterInputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Start Date To</label>
+              <input type="date" value={startDateTo} onChange={e => setStartDateTo(e.target.value)} className={filterInputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">End Date From</label>
+              <input type="date" value={endDateFrom} onChange={e => setEndDateFrom(e.target.value)} className={filterInputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">End Date To</label>
+              <input type="date" value={endDateTo} onChange={e => setEndDateTo(e.target.value)} className={filterInputClass} />
+            </div>
+          </div>
+          {hasActiveFilters && (
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+              <span>{filteredClasses.length} of {classes.length} classes match</span>
+              <button onClick={clearFilters} className="text-blue-600 hover:text-blue-700 font-medium">Clear filters</button>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Select a Past Class
+            </label>
+            <div className="relative w-full">
+              {loadingClasses ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                  <Icon name={IconName.Spinner} className="w-5 h-5 animate-spin text-blue-500" />
+                  Loading your past classes...
+                </div>
+              ) : classes.length === 0 ? (
+                <p className="text-sm text-gray-500 py-2">No past classes found.</p>
+              ) : filteredClasses.length === 0 ? (
+                <p className="text-sm text-gray-500 py-2">No classes match the current filters.</p>
+              ) : (
+                <select
+                  value={selectedRunId}
+                  onChange={e => setSelectedRunId(e.target.value)}
+                  className="w-full pl-3 pr-10 py-2.5 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md dark:bg-gray-700 dark:text-white shadow-sm"
+                >
+                  <option value="">— Choose a past class —</option>
+                  {filteredClasses.map(c => (
+                    <option key={c.run_id} value={c.run_id}>
+                      {c.course_title} | {c.run_code} ({new Date(c.start_date || '').toLocaleDateString('en-GB')} - {new Date(c.end_date || '').toLocaleDateString('en-GB')})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
         </div>
 
@@ -150,6 +304,7 @@ const PastAttendance: React.FC = () => {
               return totalSessions > 0 ? Math.round((attended / totalSessions) * 100) : 0;
             });
             const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+            const fullyAttended = scores.filter(s => s === 100).length;
             const getAvgColor = (pct: number) => {
               if (pct >= 75) return 'text-green-500';
               if (pct >= 50) return 'text-yellow-500';
@@ -163,11 +318,11 @@ const PastAttendance: React.FC = () => {
                 </div>
                 <div className="bg-surface rounded-lg border border-default shadow-sm p-5 text-center">
                   <div className={`text-3xl font-bold ${getAvgColor(avgScore)}`}>{avgScore}%</div>
-                  <div className="text-xs text-gray-400 mt-1">Average E-Attendance Score</div>
+                  <div className="text-xs text-gray-400 mt-1">Average Overall Attendance ({totalSessions} session{totalSessions === 1 ? '' : 's'})</div>
                 </div>
                 <div className="bg-surface rounded-lg border border-default shadow-sm p-5 text-center">
-                  <div className={`text-3xl font-bold ${getAvgColor(avgScore)}`}>{avgScore}%</div>
-                  <div className="text-xs text-gray-400 mt-1">Average Manual Attendance Score</div>
+                  <div className="text-3xl font-bold text-white">{fullyAttended}<span className="text-base text-gray-400 font-normal"> / {students.length}</span></div>
+                  <div className="text-xs text-gray-400 mt-1">Fully Attended (100%)</div>
                 </div>
               </>
             );
@@ -178,11 +333,11 @@ const PastAttendance: React.FC = () => {
       {/* Student Attendance List */}
       {selectedRunId && (
         <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800 flex justify-between items-center">
+          <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800 flex justify-between items-center gap-3 flex-wrap">
             <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               Learner Attendance
             </h2>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               {attendanceSummary && (
                 <span className="text-xs text-gray-500 dark:text-gray-400">
                   {attendanceSummary.totalSessions} Session{attendanceSummary.totalSessions !== 1 ? 's' : ''}
@@ -191,8 +346,22 @@ const PastAttendance: React.FC = () => {
               <div className="text-xs text-gray-500 bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
                 {students.length} Learners
               </div>
+              <button
+                onClick={handleRefreshFromSSG}
+                disabled={syncing || loadingStudents || loadingAttendance}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-60 disabled:cursor-not-allowed"
+                title="Pull the latest sessions and attendance from SSG"
+              >
+                <Icon name={syncing ? IconName.Spinner : IconName.Sync} className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Refreshing…' : 'Refresh from SSG'}
+              </button>
             </div>
           </div>
+          {syncMessage && (
+            <div className={`px-5 py-2 text-xs ${syncMessage.kind === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'}`}>
+              {syncMessage.text}
+            </div>
+          )}
 
           <div className="p-0">
             {(loadingStudents || loadingAttendance) ? (
@@ -213,14 +382,31 @@ const PastAttendance: React.FC = () => {
                       <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">#</th>
                       <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Learner Name</th>
                       <th className="px-5 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Learner NRIC</th>
-                      <th className="px-5 py-3 text-center font-medium text-gray-500 dark:text-gray-400">E-Attendance Score</th>
-                      <th className="px-5 py-3 text-center font-medium text-gray-500 dark:text-gray-400">Manual Attendance Score</th>
+                      {(attendanceSummary?.sessions || []).map((s, sIdx) => {
+                        const fullDate = formatSessionDate(s.startDate);
+                        const shortDate = formatSessionDate(s.startDate, { day: '2-digit', month: 'short' });
+                        return (
+                          <th
+                            key={s.id}
+                            className="px-3 py-3 text-center font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap"
+                            title={[s.title, fullDate].filter(Boolean).join(' · ')}
+                          >
+                            {s.sessionNumber || `S${sIdx + 1}`}
+                            {shortDate && (
+                              <div className="text-[10px] font-normal text-gray-400 dark:text-gray-500 mt-0.5">
+                                {shortDate}
+                              </div>
+                            )}
+                          </th>
+                        );
+                      })}
+                      <th className="px-5 py-3 text-center font-medium text-gray-500 dark:text-gray-400">Overall</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {students.map((student, idx) => {
                       const totalSessions = attendanceSummary?.totalSessions ?? 0;
-                      // Match by NRIC or user_id
+                      const sessionsList = attendanceSummary?.sessions || [];
                       const attendanceRow = attendanceSummary?.data?.find(
                         (r) => (student.nric && r.nric === student.nric) || (student.user_id && r.userId === student.user_id)
                       );
@@ -238,12 +424,24 @@ const PastAttendance: React.FC = () => {
                           <td className="px-5 py-3 text-gray-400 font-mono">{idx + 1}</td>
                           <td className="px-5 py-3 font-medium text-gray-900 dark:text-white">{student.student_name}</td>
                           <td className="px-5 py-3 text-gray-500 dark:text-gray-400 font-mono text-xs">{student.nric ? '****' + student.nric.slice(4) : '—'}</td>
-                          <td className="px-5 py-3 text-center">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getScoreColor(scorePercent)}`}>
-                              {scorePercent}%
-                            </span>
-                            <span className="ml-1 text-[10px] text-gray-400">({attendedCount}/{totalSessions})</span>
-                          </td>
+                          {sessionsList.map(s => {
+                            const sessionMap = attendanceRow?.sessions || {};
+                            const recorded = Object.prototype.hasOwnProperty.call(sessionMap, s.id);
+                            const present = sessionMap[s.id] === true;
+                            return (
+                              <td key={s.id} className="px-3 py-3 text-center">
+                                {recorded ? (
+                                  present ? (
+                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-bold" title="Present">✓</span>
+                                  ) : (
+                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs font-bold" title="Absent">✗</span>
+                                  )
+                                ) : (
+                                  <span className="text-gray-300 dark:text-gray-600 text-xs" title="No record">—</span>
+                                )}
+                              </td>
+                            );
+                          })}
                           <td className="px-5 py-3 text-center">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getScoreColor(scorePercent)}`}>
                               {scorePercent}%
