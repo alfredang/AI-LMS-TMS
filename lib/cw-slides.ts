@@ -192,16 +192,92 @@ export interface SlidesResult {
 // ────────────────────────────────────────────────────────────────────────────
 
 function parseHours(raw: unknown): number {
-  const s = String(raw ?? '').toLowerCase()
-    .replace(/hours/g, '')
-    .replace(/hrs/g, '')
-    .replace(/hr/g, '')
-    .replace(/h/g, '')
-    .trim();
+  let s = String(raw ?? '').toLowerCase().trim();
   if (!s || ['n/a', 'na', 'nil', 'none', '-'].includes(s)) return 0;
+  // Recognise "X day(s)" before stripping anything — convert to hours.
+  const dayMatch = s.match(/(\d+(?:\.\d+)?)\s*day/);
+  if (dayMatch) {
+    const d = parseFloat(dayMatch[1]);
+    if (Number.isFinite(d) && d >= 0.5 && d <= 60) return d * 8;
+  }
+  // Capture "X hour Y minute" before stripping units so we don't lose minutes.
+  const hmMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:hour|hr|h)s?\s*(\d+)\s*(?:minute|min)/);
+  if (hmMatch) {
+    const h = parseFloat(hmMatch[1]);
+    const m = parseFloat(hmMatch[2]);
+    if (Number.isFinite(h) && Number.isFinite(m)) return h + m / 60;
+  }
+  // Strip unit suffixes and parse the leading number.
+  s = s.replace(/hours/g, '').replace(/hrs/g, '').replace(/hr/g, '').replace(/h\b/g, '').trim();
   const m = s.match(/[\d.]+/);
   const n = m ? parseFloat(m[0]) : 0;
   return Number.isFinite(n) ? n : 0;
+}
+
+// Last-resort duration extraction. Scans the parsed CP text for the largest
+// plausible "total" course/training duration regardless of CP format
+// (legacy table style, new SSG WSQ form, or DOCX prose). Returns 0 only
+// when truly nothing is found. Strategy: gather every plausible candidate
+// (hours, days, "X hour Y minute"), keep candidates that look like totals
+// (mention "total"/"course"/"training"/"duration" nearby), then return the
+// largest. Picking the largest avoids confusing per-LU durations
+// (e.g. 600 minutes = 10 hours per LU) with the actual course total.
+function extractDurationHoursFromText(cpText: string): number {
+  if (!cpText) return 0;
+  const text = cpText;
+  const candidates: number[] = [];
+
+  // 1. "Total ... Duration | N hour[s] [M minute[s]]" — handles both legacy
+  //    "Total Duration | 32 hours" and new "Total Course Duration | 32 hour
+  //    0 minutes" / "Total Instructional Duration | 30 hour 0 minutes".
+  const totalDurRe = /Total\s+(?:Course\s+|Training\s+|Instructional\s+)?Duration\s*[:\|]\s*([\d.]+)\s*(?:hour|hr)s?\s*(?:([\d.]+)\s*(?:minute|min)s?)?/gi;
+  for (const m of text.matchAll(totalDurRe)) {
+    const h = parseFloat(m[1]);
+    const min = m[2] ? parseFloat(m[2]) : 0;
+    if (Number.isFinite(h) && h >= 1) candidates.push(h + min / 60);
+  }
+
+  // 2. "Total ... Hours: N" or "Total Training Hours | N"
+  const totalHrsRe = /Total\s+(?:Course\s+|Training\s+|Instructional\s+)?Hours?\s*[:\|]\s*([\d.]+)/gi;
+  for (const m of text.matchAll(totalHrsRe)) {
+    const h = parseFloat(m[1]);
+    if (Number.isFinite(h) && h >= 1) candidates.push(h);
+  }
+
+  // 3. "Total ... Duration | N day[s]" (some CPs report duration in days)
+  const totalDaysRe = /Total\s+(?:Course\s+|Training\s+|Instructional\s+)?Duration\s*[:\|]\s*([\d.]+)\s*day/gi;
+  for (const m of text.matchAll(totalDaysRe)) {
+    const d = parseFloat(m[1]);
+    if (Number.isFinite(d) && d >= 1) candidates.push(d * 8);
+  }
+
+  // 4. "X-day course" / "X day course" / "X day training programme" — natural-
+  //    language fallback for DOCX CPs that don't have a structured table.
+  const ndayRe = /(\d+(?:\.\d+)?)\s*[-]?\s*day\s+(?:course|training|programme|program|workshop)/gi;
+  for (const m of text.matchAll(ndayRe)) {
+    const d = parseFloat(m[1]);
+    if (Number.isFinite(d) && d >= 1 && d <= 30) candidates.push(d * 8);
+  }
+
+  // 5. Loose "X hours" near a context word — only counted when it appears
+  //    near "total" / "course" / "training" / "duration" within 100 chars
+  //    so we don't pick up assessment minutes or per-topic times.
+  const looseRe = /(\d+(?:\.\d+)?)\s*(?:hour|hr)s?\b/gi;
+  for (const m of text.matchAll(looseRe)) {
+    const h = parseFloat(m[1]);
+    if (!Number.isFinite(h) || h < 4 || h > 200) continue;
+    const start = Math.max(0, (m.index ?? 0) - 100);
+    const before = text.slice(start, m.index ?? 0);
+    if (/(?:total\s+(?:course|training|instructional)?\s*(?:duration|hours)|course\s+duration|training\s+hours)/i.test(before)) {
+      candidates.push(h);
+    }
+  }
+
+  if (candidates.length === 0) return 0;
+  // Pick the largest plausible total. Per-LU durations would also match
+  // pattern 5 but max() correctly picks the course-total over per-component
+  // values (course total >= sum of components, in practice).
+  return Math.max(...candidates);
 }
 
 function computeStandardSlideCount(numTopics: number): number {
@@ -2771,34 +2847,49 @@ export async function generateSlides(
   const courseTitle = String(ctx.Course_Title || 'Course');
   const lus = Array.isArray(ctx.Learning_Units) ? ctx.Learning_Units : [];
 
-  // Parse hours. Try the structured fields first, then any duration-like
-  // field, then scan the raw CP text directly. Without this last-resort
-  // scan the orchestrator silently falls back to 8h on the new SSG WSQ
-  // CP form (15MAY2025+) — which uses "Total Course Duration | 32 hour
-  // 0 minutes" instead of the legacy "Total Duration | 32 hours". Net
-  // effect: 32h courses get treated as 8h and produce ~100 slides
-  // instead of ~250.
-  const rawHours = ctx.Total_Course_Duration_Hours
-    || ctx.Total_Training_Hours
-    || ctx.Total_Course_Duration
-    || ctx.totalTrainingHours
-    || '';
+  // Parse hours. Three layers of fallback so the deck size correctly tracks
+  // the real course duration regardless of CP format (legacy table, new
+  // SSG WSQ form, DOCX prose, or odd Claude extraction misses):
+  //   1. Try every structured field Phase 0 may have populated (hours
+  //      OR days; PascalCase OR camelCase).
+  //   2. If still <8h, run extractDurationHoursFromText on the raw CP
+  //      text — that scans every plausible "Total X Duration / Hours /
+  //      Days" pattern and picks the largest plausible total.
+  //   3. If the CP genuinely has no duration info, fall back to topic-
+  //      count heuristic (caps at 8h floor).
   const totalTopics = lus.reduce((n: number, lu: any) => n + (Array.isArray(lu.Topics) ? lu.Topics.length : 0), 0);
-  let hours = parseHours(rawHours);
-  // Last-resort: scan raw CP text for any "Total Course/Training/Instructional Duration | N hour" pattern
-  if (hours < 8) {
-    const cpText = String(ctx._cp_text ?? '');
-    const dur = cpText.match(
-      /Total\s*(?:Course|Training|Instructional)?\s*Duration\s*\|\s*([\d.]+)\s*(?:hour|hr)/i,
-    );
-    if (dur) {
-      const h = parseFloat(dur[1]);
-      if (Number.isFinite(h) && h >= 1) hours = h;
+  const candidateFields = [
+    ctx.Total_Course_Duration_Hours,
+    ctx.Total_Course_Duration,
+    ctx.Total_Training_Hours,
+    ctx.Total_Training_Duration,
+    ctx.Total_Instructional_Duration,
+    ctx.totalTrainingHours,
+    ctx.totalCourseDuration,
+  ];
+  let hours = 0;
+  let resolvedFrom = 'none';
+  for (const field of candidateFields) {
+    const h = parseHours(field);
+    if (h >= 1) {
+      hours = h;
+      resolvedFrom = `field='${field}'`;
+      break;
     }
   }
-  if (hours < 1 && totalTopics > 0) hours = Math.max(8, totalTopics * 2);
+  if (hours < 8) {
+    const fromText = extractDurationHoursFromText(String(ctx._cp_text ?? ''));
+    if (fromText >= 1) {
+      hours = fromText;
+      resolvedFrom = `cp-text scan (${fromText}h)`;
+    }
+  }
+  if (hours < 1 && totalTopics > 0) {
+    hours = Math.max(8, totalTopics * 2);
+    resolvedFrom = `topic-count heuristic (${totalTopics} topics × 2)`;
+  }
   if (hours < 8) hours = 8;
-  console.log(`[cw-slides] duration: rawHours='${rawHours}' parsed=${hours}h topics=${totalTopics} → target=${computeTotalTarget(hours)} slides`);
+  console.log(`[cw-slides] duration resolved: ${hours}h from ${resolvedFrom} → target=${computeTotalTarget(hours)} slides (${totalTopics} topics)`);
   const target = computeTotalTarget(hours);
   const perTopic = computePerTopicDistribution(hours, Math.max(1, totalTopics));
 
