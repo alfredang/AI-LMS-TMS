@@ -620,13 +620,13 @@ EVIDENCE:
 
 Return ONLY valid JSON, no markdown code blocks, no explanation.`;
 
-        // Use Sonnet 4.6 explicitly for CP extraction — Opus is slower and
-        // overkill here (the task is structured JSON extraction, not deep
-        // reasoning). Sonnet handles 45K-char CPs in roughly 30-50s vs
-        // Opus's 90-150s. Critical fields that Sonnet occasionally drops
-        // (Skills_Framework / TSC_Sector / Proficiency_Level) are caught
-        // by the regex fallback below.
-        const jsonResult = await generateWithClaude(jsonPrompt, apiKey, 1, 'claude-sonnet-4-6');
+        // Use Haiku 4.5 for CP extraction — this is structured field-matching,
+        // not deep reasoning. Haiku 4.5 handles 45K-char CPs in roughly 8-15s
+        // vs Sonnet's 30-50s, matching Streamlit's fast extraction. Critical
+        // fields that occasionally come back null/empty (Skills_Framework /
+        // TSC_Sector / Proficiency_Level) are caught by the regex fallback
+        // below — same defensive sweep as before.
+        const jsonResult = await generateWithClaude(jsonPrompt, apiKey, 1, 'claude-haiku-4-5-20251001');
 
         // Parse JSON from response
         let courseDataJson = null;

@@ -1,0 +1,39 @@
+# Coolify uses Nixpacks (not the Dockerfile) to build this app. By default
+# Nixpacks auto-detects Node and produces a stripped image with no browser
+# binary, which silently breaks Phase 4 of the slide generator (AntV →
+# Chromium → PNG via lib/cw-slides-infographic.ts). This file extends the
+# auto-detected Node build with the Chromium binary + the system libs it
+# needs at runtime, so production decks render the infographic images
+# instead of falling back to text-only slides.
+
+[phases.setup]
+# Native libraries Chromium needs at runtime. The Nixpacks Node provider
+# uses a Debian-based base, so apt-get works here. This list mirrors what
+# `playwright install --with-deps` installs but applied at the Nixpacks
+# build stage (where sudo isn't available, so apt must be declared).
+aptPkgs = [
+  "libnss3",
+  "libatk1.0-0",
+  "libatk-bridge2.0-0",
+  "libcups2",
+  "libxkbcommon0",
+  "libxcomposite1",
+  "libxdamage1",
+  "libxfixes3",
+  "libxrandr2",
+  "libgbm1",
+  "libasound2",
+  "libpango-1.0-0",
+  "libcairo2",
+  "libxshmfence1",
+]
+
+[phases.install]
+# Replaces the default install step. We must keep `npm ci` (so dependencies
+# are installed) and add the Playwright Chromium binary download
+# (~280 MB, cached). The browser is downloaded into the npm package's
+# default cache so the runtime container finds it without env tweaks.
+cmds = [
+  "npm ci",
+  "npx playwright install chromium",
+]
