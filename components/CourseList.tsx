@@ -546,7 +546,7 @@ const ManagementCourseList: React.FC = () => {
                                     View Course
                                 </Button>
                                 {(role === UserRole.Developer || role === UserRole.Admin) && (
-                                    <button onClick={() => handleCourseInfo(course)} className="flex items-center text-subtle font-semibold hover:text-primary transition-colors">
+                                    <button onClick={() => handleEditCourse(course)} className="flex items-center text-subtle font-semibold hover:text-primary transition-colors">
                                         <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
                                         <span>Edit Course</span>
                                     </button>
@@ -719,7 +719,7 @@ const ManagementCourseList: React.FC = () => {
                                             View Course
                                         </Button>
                                         {(role === UserRole.Developer || role === UserRole.Admin) && (
-                                            <Button size="sm" variant="ghost" onClick={() => handleCourseInfo(course)}>
+                                            <Button size="sm" variant="ghost" onClick={() => handleEditCourse(course)}>
                                                 <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
                                                 Edit Course
                                             </Button>
