@@ -2721,7 +2721,37 @@ async function buildPptxBuffer(
   // in Node: use `write` which returns Buffer/ArrayBuffer depending on env).
   const out = (await pres.write({ outputType: 'nodebuffer' })) as Buffer;
   const finalSlides = (pres as any)._slides?.length ?? 0;
-  return { buffer: out, slideCount: finalSlides };
+  const cleaned = scrubPptxBuffer(out);
+  return { buffer: cleaned, slideCount: finalSlides };
+}
+
+// pptxgenjs emits a zero-dim group-shape transform on every slide:
+//   <p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/>
+//   <a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>
+// PowerPoint flags this as invalid (group shape with zero extent) and shows
+// the "found a problem with content / Repair" dialog every time the user
+// opens the deck. python-pptx (used by Streamlit) emits `<p:grpSpPr/>`
+// instead and PowerPoint accepts that cleanly. This post-processor strips
+// the zero-dim xfrm out of every slide XML so the deck opens cleanly.
+function scrubPptxBuffer(buf: Buffer): Buffer {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const PizZip = require('pizzip');
+    const zip = new PizZip(buf);
+    const files = zip.file(/^ppt\/slides\/slide\d+\.xml$/);
+    const reZeroXfrm = /<p:grpSpPr>\s*<a:xfrm>\s*<a:off x="0" y="0"\/>\s*<a:ext cx="0" cy="0"\/>\s*<a:chOff x="0" y="0"\/>\s*<a:chExt cx="0" cy="0"\/>\s*<\/a:xfrm>\s*<\/p:grpSpPr>/g;
+    for (const f of files) {
+      const text = f.asText();
+      const cleaned = text.replace(reZeroXfrm, '<p:grpSpPr/>');
+      if (cleaned !== text) {
+        zip.file(f.name, cleaned);
+      }
+    }
+    return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' }) as Buffer;
+  } catch (e: any) {
+    console.warn('[cw-slides] scrubPptxBuffer failed, returning original:', e?.message);
+    return buf;
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
