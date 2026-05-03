@@ -2771,12 +2771,34 @@ export async function generateSlides(
   const courseTitle = String(ctx.Course_Title || 'Course');
   const lus = Array.isArray(ctx.Learning_Units) ? ctx.Learning_Units : [];
 
-  // Parse hours
-  const rawHours = ctx.Total_Course_Duration_Hours || ctx.Total_Training_Hours || '';
+  // Parse hours. Try the structured fields first, then any duration-like
+  // field, then scan the raw CP text directly. Without this last-resort
+  // scan the orchestrator silently falls back to 8h on the new SSG WSQ
+  // CP form (15MAY2025+) — which uses "Total Course Duration | 32 hour
+  // 0 minutes" instead of the legacy "Total Duration | 32 hours". Net
+  // effect: 32h courses get treated as 8h and produce ~100 slides
+  // instead of ~250.
+  const rawHours = ctx.Total_Course_Duration_Hours
+    || ctx.Total_Training_Hours
+    || ctx.Total_Course_Duration
+    || ctx.totalTrainingHours
+    || '';
   const totalTopics = lus.reduce((n: number, lu: any) => n + (Array.isArray(lu.Topics) ? lu.Topics.length : 0), 0);
   let hours = parseHours(rawHours);
+  // Last-resort: scan raw CP text for any "Total Course/Training/Instructional Duration | N hour" pattern
+  if (hours < 8) {
+    const cpText = String(ctx._cp_text ?? '');
+    const dur = cpText.match(
+      /Total\s*(?:Course|Training|Instructional)?\s*Duration\s*\|\s*([\d.]+)\s*(?:hour|hr)/i,
+    );
+    if (dur) {
+      const h = parseFloat(dur[1]);
+      if (Number.isFinite(h) && h >= 1) hours = h;
+    }
+  }
   if (hours < 1 && totalTopics > 0) hours = Math.max(8, totalTopics * 2);
   if (hours < 8) hours = 8;
+  console.log(`[cw-slides] duration: rawHours='${rawHours}' parsed=${hours}h topics=${totalTopics} → target=${computeTotalTarget(hours)} slides`);
   const target = computeTotalTarget(hours);
   const perTopic = computePerTopicDistribution(hours, Math.max(1, totalTopics));
 

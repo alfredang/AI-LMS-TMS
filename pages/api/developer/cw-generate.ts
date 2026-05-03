@@ -757,11 +757,26 @@ Return ONLY valid JSON, no markdown code blocks, no explanation.`;
                 }
               }
 
-              // Fix hours from CP Breakdown section (exact values from source)
-              // Total Duration
-              const totalDurMatch = parsedCpText.match(/Total\s*Duration\s*\|\s*([\d.]+)\s*hours?/i);
+              // Fix hours from CP Breakdown section (exact values from source).
+              // Handle BOTH the legacy CP format ("Total Duration | 32 hours")
+              // AND the new SSG WSQ form (15MAY2025+) which uses
+              // "Total Course Duration | 32 hour 0 minutes" / "Total
+              // Instructional Duration | 30 hour 0 minutes". Without this
+              // duration ends up empty → orchestrator falls back to 8h →
+              // deck only gets ~100 slides regardless of real course length.
+              const totalDurMatch = parsedCpText.match(
+                /Total\s*(?:Course\s*)?Duration\s*\|\s*([\d.]+)\s*(?:hour|hr)/i,
+              );
               if (totalDurMatch) {
-                courseDataJson.Total_Course_Duration_Hours = `${totalDurMatch[1]} hours`;
+                const hours = parseFloat(totalDurMatch[1]);
+                // New CP often reports "32 hour 0 minutes" — also pick up
+                // the trailing minutes if present so we don't lose precision.
+                const fullMatch = parsedCpText.match(
+                  /Total\s*(?:Course\s*)?Duration\s*\|\s*([\d.]+)\s*(?:hour|hr)s?\s*([\d.]+)?\s*minute?s?/i,
+                );
+                const minutes = fullMatch && fullMatch[2] ? parseFloat(fullMatch[2]) : 0;
+                const totalH = hours + (minutes / 60);
+                courseDataJson.Total_Course_Duration_Hours = `${totalH} hours`;
               }
 
               // Training Hours = Classroom + Practical + E-Learning + Others (excluding Assessment)
@@ -774,6 +789,17 @@ Return ONLY valid JSON, no markdown code blocks, no explanation.`;
               if (eLearningMatch) totalTraining += parseFloat(eLearningMatch[1]);
               if (totalTraining > 0) {
                 courseDataJson.Total_Training_Hours = `${totalTraining} hours`;
+              }
+              // New-format fallback: "Total Instructional Duration | 30 hour 0 minutes"
+              if (!totalTraining) {
+                const instMatch = parsedCpText.match(
+                  /Total\s*Instructional\s*Duration\s*\|\s*([\d.]+)\s*(?:hour|hr)s?\s*(?:([\d.]+)\s*minute?s?)?/i,
+                );
+                if (instMatch) {
+                  const h = parseFloat(instMatch[1]);
+                  const m = instMatch[2] ? parseFloat(instMatch[2]) : 0;
+                  courseDataJson.Total_Training_Hours = `${h + m / 60} hours`;
+                }
               }
 
               // Assessment Hours
