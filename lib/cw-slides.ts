@@ -1749,24 +1749,108 @@ function formatActivity(activity: ContentMapEntry['activity']): string[] {
 //     and no descs — the original bug that produced empty "VS" arrows).
 // Anything with at least one substantive item (a real label, or a desc
 // with any text, or a numeric value) is allowed through.
+// Words that mark an item as a generic placeholder rather than topic content.
+// Comparison blocks like "Pros vs Cons" render with the LABEL as the giant
+// header text, so even if there's a desc the slide LOOKS empty — we treat
+// these as thin and either repair (preferred) or drop them.
+const PLACEHOLDER_LABEL_RE = /^(?:pros?|cons?|good|bad|yes|no|\+|−|-|a|b|x|y|n\/a|placeholder|advantages?|disadvantages?|positives?|negatives?|benefits?|drawbacks?|old|new|before|after|step\s*\d+|point\s*\d+|item\s*\d+|detail\s*\d+|phase\s*[a-z0-9]+|key\s+point|key\s+aspect|component)\s*$/i;
+const PLACEHOLDER_DESC_RE = /^(?:detail\s*\d+|point\s*\d+|step\s*\d+|item\s*\d+|tbd|todo|placeholder|n\/a|none|loremipsum|lorem ipsum)\s*\.?$/i;
+
+function isPlaceholderItem(it: ContentBlockItem | undefined): boolean {
+  if (!it) return true;
+  const label = String(it.label ?? '').trim();
+  const desc = String(it.desc ?? '').trim();
+  const hasValue = typeof it.value === 'number' && Number.isFinite(it.value);
+  if (!label && !desc && !hasValue) return true;
+  // Label is generic placeholder AND desc is also generic/short → placeholder
+  if (PLACEHOLDER_LABEL_RE.test(label)) {
+    if (!desc || desc.length < 8 || PLACEHOLDER_DESC_RE.test(desc)) return true;
+    // Label is "Pros" but desc is real → still placeholder for comparison
+    // viz because the rendered image shows the LABEL prominently.
+    // We'll let repairBlock fix this; for the thinness check, treat as
+    // placeholder UNLESS the desc is substantive (≥20 chars of real text).
+    if (desc.length < 20) return true;
+  }
+  if (PLACEHOLDER_DESC_RE.test(desc)) return true;
+  return false;
+}
+
 function isBlockThin(block: ContentBlock | undefined): boolean {
   if (!block) return true;
   const items = block.data?.items;
   if (!Array.isArray(items) || items.length === 0) return true;
 
-  const placeholderRe = /^(?:pros?|cons?|good|bad|yes|no|\+|−|-|a|b|x|y|n\/a|placeholder)\s*$/i;
-  let allPlaceholder = true;
+  // Block is thin only when EVERY item is a placeholder.
   for (const it of items) {
+    if (!isPlaceholderItem(it)) return false;
+  }
+  return true;
+}
+
+// Repair a block whose items have placeholder labels but real descriptions.
+// Comparison blocks are the main offender (model sometimes returns
+// "Pros / Cons" or "Advantages / Disadvantages" despite explicit prompt
+// rules). Rather than drop the slide, we rewrite the labels to be topic-
+// specific so the rendered PNG has meaningful headers. Returns the
+// (possibly mutated) block, or `undefined` if the block is unsalvageable.
+function repairBlock(block: ContentBlock, topicTitle: string): ContentBlock | undefined {
+  if (!block || !Array.isArray(block.data?.items) || block.data.items.length === 0) {
+    return undefined;
+  }
+  const items = block.data.items;
+
+  // Strip items that are pure placeholders (no rescuable content).
+  const survivors = items.filter((it) => {
+    const desc = String(it?.desc ?? '').trim();
+    const hasValue = typeof it?.value === 'number' && Number.isFinite(it.value);
+    return desc.length >= 8 || hasValue;
+  });
+  if (survivors.length === 0) return undefined; // unsalvageable
+
+  // Rewrite placeholder labels using topic-specific text. Strategy:
+  //  - For "comparison" blocks: substitute "Traditional {topic}" / "Modern {topic}"
+  //    or use the desc's first 3 words as the new label.
+  //  - For other blocks: derive label from desc (first ~3 words).
+  const isComparison = String(block.visualization_type ?? '').toLowerCase() === 'comparison';
+  const compLabels = [
+    `Traditional Approach`,
+    `Modern Approach`,
+  ];
+  let comparisonIdx = 0;
+
+  for (const it of survivors) {
     const label = String(it.label ?? '').trim();
     const desc = String(it.desc ?? '').trim();
-    const hasValue = typeof it.value === 'number' && Number.isFinite(it.value);
-    const isPlaceholder = !label || (placeholderRe.test(label) && !desc && !hasValue);
-    if (!isPlaceholder) {
-      allPlaceholder = false;
-      break;
+    if (PLACEHOLDER_LABEL_RE.test(label) || !label) {
+      if (isComparison && comparisonIdx < compLabels.length) {
+        // Use Traditional/Modern as the replacement labels for binary comparison
+        it.label = compLabels[comparisonIdx];
+        comparisonIdx++;
+      } else {
+        // Derive label from desc first words
+        const derived = desc.split(/\s+/).slice(0, 3).join(' ').replace(/[.,;:!?]+$/, '');
+        it.label = derived.slice(0, 28) || `${topicTitle} concept`.slice(0, 28);
+      }
     }
   }
-  return allPlaceholder;
+
+  block.data.items = survivors;
+  return block;
+}
+
+// Run repairBlock over every block in the contentMap. Called between Phase 2
+// (content generation) and Phase 3 (skeleton building) so downstream phases
+// see a clean, label-fixed contentMap.
+function repairContentMap(contentMap: Record<string, ContentMapEntry>): void {
+  for (const entry of Object.values(contentMap)) {
+    const repaired: ContentBlock[] = [];
+    for (const block of entry.content_blocks) {
+      const fixed = repairBlock(block, entry.topic);
+      if (fixed) repaired.push(fixed);
+    }
+    // Re-index block_index to match new array
+    entry.content_blocks = repaired.map((b, i) => ({ ...b, block_index: i }));
+  }
 }
 
 function assemble(
@@ -2693,6 +2777,13 @@ export async function generateSlides(
   const contentMap = allTopics.length
     ? await generateAllContentBlocks(allTopics, researchMap, courseTitle, perTopic, apiKey, model)
     : {};
+
+  // Repair pass: scrub placeholder labels (Pros/Cons/Detail N/Step 1) so
+  // Phase 4 doesn't render infographics with empty-looking headers. This
+  // catches the case where the model returned descriptions but kept the
+  // banned generic label words despite the prompt's BANNED rules.
+  repairContentMap(contentMap);
+
   const totalBlocks = Object.values(contentMap).reduce((n, c) => n + c.content_blocks.length, 0);
   progress?.(`Phase 2/5: Content blocks — ${totalBlocks} blocks across ${Object.keys(contentMap).length} topics`, 40);
 
