@@ -4,6 +4,7 @@ import path from 'path';
 import pool from '../../../lib/db';
 import { generateSlides, type CwCompanyInfo, type SlideAgentConfig } from '../../../lib/cw-slides';
 import { createJob, updateJob, updateProgress, slidesOutputDir } from '../../../lib/cw-slides-jobs';
+import { parseCpFile } from '../../../lib/cp-parser';
 
 export const config = {
   api: {
@@ -58,8 +59,29 @@ type SlidesRequest = {
   courseData?: Record<string, unknown>;
   cpText?: string;
   extractedResult?: string;
+  cpBase64?: string;
   config?: SlideAgentConfig;
 };
+
+// Auto-detect DOCX vs XLSX from a ZIP buffer. Both formats are ZIPs, but
+// XLSX has 'xl/' entries and DOCX has 'word/' entries near the start.
+async function parseCpAuto(base64: string): Promise<string> {
+  const buf = Buffer.from(base64, 'base64');
+  // Sniff the first ~2KB for format markers
+  const head = buf.subarray(0, 4096).toString('latin1');
+  if (head.includes('xl/') || head.includes('xl/_rels')) {
+    return parseCpFile(buf, 'cp.xlsx');
+  }
+  if (head.includes('word/') || head.includes('word/_rels')) {
+    return parseCpFile(buf, 'cp.docx');
+  }
+  // Fallback: try XLSX first, then DOCX
+  try {
+    return await parseCpFile(buf, 'cp.xlsx');
+  } catch {
+    return parseCpFile(buf, 'cp.docx');
+  }
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -68,7 +90,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const body = (req.body || {}) as SlidesRequest;
   const courseData = body.courseData || {};
-  const cpText = body.cpText || body.extractedResult || '';
+  let cpText = body.cpText || body.extractedResult || '';
+
+  // If the frontend sent the raw CP base64, re-parse it server-side. This
+  // gives the slide generator the full original CP text (not just the
+  // markdown extraction summary) so duration/topic detection works even
+  // when courseData is stale (e.g. extracted before a code deploy that
+  // fixed the duration regex).
+  if (body.cpBase64 && typeof body.cpBase64 === 'string') {
+    try {
+      const rawText = await parseCpAuto(body.cpBase64);
+      console.log(`[cw-slides] re-parsed CP from base64: ${rawText.length} chars`);
+      // Prefer the raw parsed text since it preserves the exact CP wording.
+      // If markdown was provided too, keep it appended for backwards compat.
+      cpText = rawText + (cpText ? '\n\n--- EXTRACTED MARKDOWN ---\n' + cpText : '');
+    } catch (e: any) {
+      console.warn('[cw-slides] cpBase64 re-parse failed, using markdown only:', e?.message);
+    }
+  }
 
   const apiKey = await getApiKey();
   if (!apiKey) {

@@ -84,6 +84,11 @@ const CwGenerateSlides: React.FC = () => {
           courseData: cw.courseData,
           cpText: cw.extractedResult,
           extractedResult: cw.extractedResult,
+          // Send the original CP base64 too so the backend can re-parse the
+          // raw file and find duration even when courseData is stale (e.g.
+          // user generated slides without re-extracting after a deploy).
+          // The backend auto-detects DOCX vs XLSX from the buffer.
+          cpBase64: cw.cpText,
           config: {},
         }),
       });
