@@ -125,13 +125,23 @@ const CwGenerateSlides: React.FC = () => {
         </p>
       </div>
 
-      {cw.courseData && (
-        <Card className="p-4 bg-gray-50 dark:bg-gray-800/50">
-          <p className="text-xs text-gray-400 uppercase tracking-wider">Course Context</p>
-          <p className="text-sm font-semibold text-gray-900 dark:text-white">{cw.courseData.courseTitle}</p>
-          <p className="text-xs text-gray-500">{cw.courseData.totalTrainingHours}h training</p>
-        </Card>
-      )}
+      {cw.courseData && (() => {
+        const cd = cw.courseData as any;
+        const title = cd.courseTitle || cd.Course_Title || 'Course';
+        const hoursRaw = cd.totalTrainingHours
+          || cd.Total_Training_Hours
+          || cd.Total_Course_Duration_Hours
+          || cd.Total_Course_Duration
+          || '';
+        const hoursDisplay = hoursRaw ? `${hoursRaw}` : '(no duration extracted)';
+        return (
+          <Card className="p-4 bg-gray-50 dark:bg-gray-800/50">
+            <p className="text-xs text-gray-400 uppercase tracking-wider">Course Context</p>
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">{title}</p>
+            <p className="text-xs text-gray-500">{hoursDisplay}</p>
+          </Card>
+        );
+      })()}
 
       <Card className="p-5 space-y-4">
         <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
