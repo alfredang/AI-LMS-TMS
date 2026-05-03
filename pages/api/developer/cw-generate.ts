@@ -620,13 +620,15 @@ EVIDENCE:
 
 Return ONLY valid JSON, no markdown code blocks, no explanation.`;
 
-        // Use Haiku 4.5 for CP extraction — this is structured field-matching,
-        // not deep reasoning. Haiku 4.5 handles 45K-char CPs in roughly 8-15s
-        // vs Sonnet's 30-50s, matching Streamlit's fast extraction. Critical
-        // fields that occasionally come back null/empty (Skills_Framework /
-        // TSC_Sector / Proficiency_Level) are caught by the regex fallback
-        // below — same defensive sweep as before.
-        const jsonResult = await generateWithClaude(jsonPrompt, apiKey, 1, 'claude-haiku-4-5-20251001');
+        // CP extraction uses Sonnet 4.6 — matches Streamlit's reliable
+        // extraction model. Earlier Haiku 4.5 was tried for speed but it
+        // missed Total_Course_Duration_Hours / Total_Training_Hours often
+        // enough that downstream slide generation defaulted to 8h → 116
+        // slides for what should have been 250-slide 4-day courses.
+        // Sonnet adds ~30s but reliably populates every required field.
+        // Streamlit reference: courseware_agents/cp_interpreter.py uses
+        // claude-sonnet-4-20250514 for the same task.
+        const jsonResult = await generateWithClaude(jsonPrompt, apiKey, 1, 'claude-sonnet-4-6');
 
         // Parse JSON from response
         let courseDataJson = null;
