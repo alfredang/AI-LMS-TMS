@@ -2907,29 +2907,37 @@ export async function generateSlides(
     ctx.totalTrainingHours,
     ctx.totalCourseDuration,
   ];
-  let hours = 0;
-  let resolvedFrom = 'none';
+  // Gather ALL candidate hour values from EVERY source in parallel — fields,
+  // text scan, topic-count heuristic — and pick the largest. This is the
+  // most defensive strategy: courseData fields might be stale or empty,
+  // text scan might miss the duration line, but ONE of them will find the
+  // right value, and max() ensures we use it. Earlier strategies that took
+  // the FIRST positive candidate kept defaulting to 8h whenever any source
+  // was empty/zero, producing tiny decks.
+  const fieldHours: { value: number; source: string }[] = [];
   for (const field of candidateFields) {
     const h = parseHours(field);
-    if (h >= 1) {
-      hours = h;
-      resolvedFrom = `field='${field}'`;
-      break;
+    if (h >= 1) fieldHours.push({ value: h, source: `field='${field}'` });
+  }
+  const cpTextStr = String(ctx._cp_text ?? '');
+  const textHours = extractDurationHoursFromText(cpTextStr);
+  if (textHours >= 1) fieldHours.push({ value: textHours, source: `cp-text scan` });
+  const topicHeuristic = totalTopics > 0 ? Math.max(8, totalTopics * 2) : 0;
+
+  let hours = 0;
+  let resolvedFrom = 'fallback (8h floor)';
+  for (const candidate of fieldHours) {
+    if (candidate.value > hours) {
+      hours = candidate.value;
+      resolvedFrom = candidate.source;
     }
   }
-  if (hours < 8) {
-    const fromText = extractDurationHoursFromText(String(ctx._cp_text ?? ''));
-    if (fromText >= 1) {
-      hours = fromText;
-      resolvedFrom = `cp-text scan (${fromText}h)`;
-    }
-  }
-  if (hours < 1 && totalTopics > 0) {
-    hours = Math.max(8, totalTopics * 2);
-    resolvedFrom = `topic-count heuristic (${totalTopics} topics × 2)`;
+  if (hours < 1 && topicHeuristic > 0) {
+    hours = topicHeuristic;
+    resolvedFrom = `topic-count heuristic (${totalTopics} topics × 2 = ${topicHeuristic}h)`;
   }
   if (hours < 8) hours = 8;
-  console.log(`[cw-slides] duration resolved: ${hours}h from ${resolvedFrom} → target=${computeTotalTarget(hours)} slides (${totalTopics} topics)`);
+  console.log(`[cw-slides] DURATION DETECTION: candidates=${JSON.stringify(fieldHours)} cpTextLen=${cpTextStr.length} → using ${hours}h from ${resolvedFrom} → target=${computeTotalTarget(hours)} slides (${totalTopics} topics, ~${Math.round((computeTotalTarget(hours) - 17 - totalTopics * 2) / Math.max(1, totalTopics))} blocks/topic)`);
   const target = computeTotalTarget(hours);
   const perTopic = computePerTopicDistribution(hours, Math.max(1, totalTopics));
 
