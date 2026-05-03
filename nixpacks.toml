@@ -5,35 +5,19 @@
 # auto-detected Node build with the Chromium binary + the system libs it
 # needs at runtime, so production decks render the infographic images
 # instead of falling back to text-only slides.
-
-[phases.setup]
-# Native libraries Chromium needs at runtime. The Nixpacks Node provider
-# uses a Debian-based base, so apt-get works here. This list mirrors what
-# `playwright install --with-deps` installs but applied at the Nixpacks
-# build stage (where sudo isn't available, so apt must be declared).
-aptPkgs = [
-  "libnss3",
-  "libatk1.0-0",
-  "libatk-bridge2.0-0",
-  "libcups2",
-  "libxkbcommon0",
-  "libxcomposite1",
-  "libxdamage1",
-  "libxfixes3",
-  "libxrandr2",
-  "libgbm1",
-  "libasound2",
-  "libpango-1.0-0",
-  "libcairo2",
-  "libxshmfence1",
-]
+#
+# Strategy: instead of declaring each apt package by name (brittle across
+# Debian versions — 12/bookworm renamed libasound2 → libasound2t64 etc.),
+# we let Playwright's own installer handle apt deps via `--with-deps`.
+# Playwright detects the OS and installs the right package names. Falls
+# back to a browser-only install if --with-deps fails (in case the build
+# container lacks apt sudo permissions).
 
 [phases.install]
-# Replaces the default install step. We must keep `npm ci` (so dependencies
-# are installed) and add the Playwright Chromium binary download
-# (~280 MB, cached). The browser is downloaded into the npm package's
-# default cache so the runtime container finds it without env tweaks.
+# Replaces the default install step. Keeps `npm ci` (so dependencies are
+# installed) and adds Playwright Chromium download with system deps.
+# Total adds ~280 MB to the image but is required for AntV → PNG.
 cmds = [
   "npm ci",
-  "npx playwright install chromium",
+  "npx playwright install --with-deps chromium || npx playwright install chromium",
 ]
