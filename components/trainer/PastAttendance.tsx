@@ -40,7 +40,11 @@ interface AttendanceSummary {
   data: { nric: string; userId: string; attendedCount: number; sessions?: Record<string, boolean> }[];
 }
 
-const PastAttendance: React.FC = () => {
+interface PastAttendanceProps {
+  isAdminMode?: boolean;
+}
+
+const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) => {
   const { currentUser } = useLms();
   const [classes, setClasses] = useState<PastClass[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
@@ -101,10 +105,15 @@ const PastAttendance: React.FC = () => {
 
   // Fetch past classes
   useEffect(() => {
-    if (!currentUser?.email) return;
+    const url = isAdminMode
+      ? '/api/admin/past-classes'
+      : currentUser?.email
+        ? `/api/trainer/past-classes?email=${encodeURIComponent(currentUser.email)}`
+        : null;
+    if (!url) return;
     const controller = new AbortController();
     setLoadingClasses(true);
-    fetch(`/api/trainer/past-classes?email=${encodeURIComponent(currentUser.email)}`, { signal: controller.signal })
+    fetch(url, { signal: controller.signal })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setClasses(data);
@@ -112,7 +121,7 @@ const PastAttendance: React.FC = () => {
       .catch(err => { if (err.name !== 'AbortError') console.error('Failed to fetch past classes:', err); })
       .finally(() => setLoadingClasses(false));
     return () => controller.abort();
-  }, [currentUser?.email]);
+  }, [currentUser?.email, isAdminMode]);
 
   // Fetch students and attendance for selected class
   const loadClassData = (runId: string, signal?: AbortSignal) => {

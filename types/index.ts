@@ -103,6 +103,7 @@ export enum AdminPage {
   AssignStudent = 'assignStudent',
   SearchPastLearners = 'searchPastLearners',
   CheckAttendance = 'checkAttendance',
+  PastAttendance = 'pastAttendance',
   AutomationLogs = 'automationLogs',
   TrainerFolderLogs = 'trainerFolderLogs',
   AutoCreateCertificatesLog = 'autoCreateCertificatesLog',

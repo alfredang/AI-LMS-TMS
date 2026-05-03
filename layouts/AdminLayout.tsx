@@ -58,6 +58,7 @@ import EditCourseRunView from '../components/admin/EditCourseRunView';
 import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
 import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
+import PastAttendance from '../components/trainer/PastAttendance';
 import AdminCalendarView from '../components/admin/AdminCalendarView';
 import ViewClassByDateView from '../components/admin/ViewClassByDateView';
 import SchedulerView from '../components/admin/SchedulerView';
@@ -179,6 +180,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.DeleteCourseRun]: 'Delete Course Run',
   [AdminPage.ClassDetail]: 'Class Detail',
   [AdminPage.CheckAttendance]: 'Check Attendance',
+  [AdminPage.PastAttendance]: 'Past Attendance',
   [AdminPage.AssignStudent]: 'Assign Learners',
   [AdminPage.SearchPastLearners]: 'Search Past Learners',
   [AdminPage.AutomationLogs]: 'Automation Logging',
@@ -250,6 +252,7 @@ const AdminLayout: React.FC = () => {
     ],
     [AdminPage.TpgAttendance]: [
       { title: "Check Attendance", description: "View and manage e-attendance for course runs.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.CheckAttendance) },
+      { title: "Past Attendance", description: "Review attendance summary for past course runs.", icon: IconName.ClipboardCheck, onClick: () => setAdminPage(AdminPage.PastAttendance) },
     ],
     [AdminPage.TpgAssessment]: [
       { title: "Submit Assessment", description: "Submit learner assessment results to TPG.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.SubmitAssessment) },
@@ -403,6 +406,8 @@ const AdminLayout: React.FC = () => {
             <TrainerAttendanceDashboard isAdminMode />
           </div>
         );
+      case AdminPage.PastAttendance:
+        return <PastAttendance isAdminMode />;
       case AdminPage.AutomationLogs:
         return <AutomationLogsView />;
       case AdminPage.TrainerFolderLogs:

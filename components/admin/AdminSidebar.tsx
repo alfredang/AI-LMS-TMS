@@ -70,7 +70,15 @@ const SubSection: React.FC<{ title: string; isOpen: boolean; onToggle: () => voi
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
         </button>
-        {isOpen && <div className="space-y-1">{children}</div>}
+        {isOpen && (
+            <div className="space-y-1">
+                {React.Children.map(children, child =>
+                    React.isValidElement(child)
+                        ? React.cloneElement(child as React.ReactElement<any>, { nested: true })
+                        : child
+                )}
+            </div>
+        )}
     </div>
 );
 
@@ -127,7 +135,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const NavItem: React.FC<{ page: AdminPage; isSubItem?: boolean; label?: string; icon?: IconName }> = ({ page, isSubItem = false, label, icon }) => {
+    const NavItem: React.FC<{ page: AdminPage; isSubItem?: boolean; nested?: boolean; label?: string; icon?: IconName }> = ({ page, isSubItem = false, nested = false, label, icon }) => {
         if (collapsed && !isSubItem) {
             return (
                 <a
@@ -172,8 +180,9 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                     setAdminPage(page);
                     if (onNavigate) onNavigate();
                 }}
-                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isSubItem ? 'pl-8' : ''
-                    } ${adminPage === page
+                className={`flex items-center gap-2 rounded-md px-3 transition-colors font-medium ${
+                    nested ? 'pl-12 py-1.5 text-xs' : isSubItem ? 'pl-8 py-2 text-sm' : 'py-2 text-sm'
+                } ${adminPage === page
                         ? 'bg-blue-50 text-blue-600 border-l-3 border-blue-500 dark:bg-blue-600/20 dark:text-blue-400 dark:border-blue-500'
                         : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white'
                     }`}
@@ -242,6 +251,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <SubSection title="Attendance" isOpen={openSections.tpgAttendance} onToggle={() => toggleSection('tpgAttendance')}>
                     <NavItem page={AdminPage.CourseSessionAttendance} label="Session Attendance" isSubItem />
                     <NavItem page={AdminPage.CheckAttendance} label="Check Attendance" isSubItem />
+                    <NavItem page={AdminPage.PastAttendance} label="Past Attendance" isSubItem />
                 </SubSection>
 
                 <SubSection title="Assessment" isOpen={openSections.tpgAssessment} onToggle={() => toggleSection('tpgAssessment')}>
