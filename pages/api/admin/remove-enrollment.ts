@@ -8,7 +8,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
-  const { email, courseRunId } = req.body as { email: string; courseRunId: string };
+  const { email, courseRunId, force } = req.body as { email: string; courseRunId: string; force?: boolean };
 
   if (!email || !courseRunId) {
     return res.status(400).json({ success: false, message: 'email and courseRunId are required' });
@@ -30,6 +30,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const userId = userResult.rows[0].id;
+
+    // Guard: refuse to remove if the learner already submitted an assessment for this run.
+    // Pass { force: true } to override after a deliberate admin decision.
+    if (!force) {
+      const submissionGuard = await client.query(
+        `SELECT
+           (SELECT COUNT(*)::int FROM link_assessment_submission
+              WHERE user_id = $1 AND course_run_id = $2) AS link_count,
+           (SELECT COUNT(*)::int FROM submission s
+              JOIN enrollment e ON e.id = s.enrollment_id
+              WHERE e.user_id = $1 AND e.course_run_id = $2) AS legacy_count`,
+        [userId, courseRunId]
+      );
+      const linkCount = submissionGuard.rows[0]?.link_count ?? 0;
+      const legacyCount = submissionGuard.rows[0]?.legacy_count ?? 0;
+      if (linkCount + legacyCount > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          code: 'SUBMISSION_EXISTS',
+          message: `Cannot remove — learner has ${linkCount + legacyCount} submitted assessment file(s) for this course run. Pass { force: true } to override.`,
+        });
+      }
+    }
 
     // Soft-delete: mark as Admin Removed so SSG sync does not re-add the learner
     const result = await client.query(

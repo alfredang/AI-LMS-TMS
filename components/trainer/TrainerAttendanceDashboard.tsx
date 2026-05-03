@@ -108,6 +108,14 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [searchError, setSearchError]           = useState<string | null>(null);
   const [adminCourse, setAdminCourse]           = useState<any | null>(null);
 
+  // Admin-mode: list of ongoing classes for the dropdown
+  const [adminOngoingClasses, setAdminOngoingClasses] = useState<Array<{
+    id: string; courseRunId: string; courseTitle: string; courseCode: string;
+    trainerName: string; startDate: string; endDate: string;
+  }>>([]);
+  const [adminOngoingLoading, setAdminOngoingLoading] = useState(false);
+  const [adminDropdownValue, setAdminDropdownValue] = useState('');
+
   const [uen, setUen] = useState('');
   const [selectedCourseRunId, setSelectedCourseRunId] = useState('');
   const [sessions, setSessions]                        = useState<Session[]>([]);
@@ -195,9 +203,10 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       .catch(() => {});
   }, []);
 
-  const handleAdminSearch = async () => {
-    const code = adminInput.trim();
+  const handleAdminSearch = async (codeOverride?: string) => {
+    const code = (codeOverride ?? adminInput).trim();
     if (!code) return;
+    if (codeOverride && codeOverride !== adminInput) setAdminInput(codeOverride);
     setIsSearching(true);
     setSearchError(null);
     setAdminCourse(null);
@@ -249,6 +258,23 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       setIsSearching(false);
     }
   };
+
+  // Admin: fetch ongoing classes once for the dropdown
+  useEffect(() => {
+    if (!isAdminMode) return;
+    const controller = new AbortController();
+    setAdminOngoingLoading(true);
+    fetch('/api/admin/ongoing-classes?page=0&limit=500&classStatus=ActiveOnly', { signal: controller.signal })
+      .then(res => res.json())
+      .then(json => {
+        if (json?.success && Array.isArray(json.data?.classes)) {
+          setAdminOngoingClasses(json.data.classes);
+        }
+      })
+      .catch(err => { if (err.name !== 'AbortError') console.error('Failed to fetch ongoing classes:', err); })
+      .finally(() => setAdminOngoingLoading(false));
+    return () => controller.abort();
+  }, [isAdminMode]);
 
   // Auto-populate from URL query param (e.g. ctrl+click from calendar)
   const urlCourseRunIdHandled = useRef(false);
@@ -1070,13 +1096,39 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             <div className="flex flex-wrap items-center gap-3">
               {isAdminMode ? (
                 <>
-                  <div className="flex-1 min-w-[260px]">
+                  <div className="flex-1 min-w-[260px] space-y-2">
+                    <div className="relative">
+                      <select
+                        value={adminDropdownValue}
+                        onChange={e => {
+                          const code = e.target.value;
+                          setAdminDropdownValue(code);
+                          if (code) handleAdminSearch(code);
+                        }}
+                        disabled={adminOngoingLoading || isSearching}
+                        className="input-themed w-full border rounded px-3 py-2 text-sm pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      >
+                        <option value="">
+                          {adminOngoingLoading
+                            ? 'Loading ongoing classes…'
+                            : adminOngoingClasses.length === 0
+                              ? 'No ongoing classes'
+                              : `— Select from ${adminOngoingClasses.length} ongoing class${adminOngoingClasses.length === 1 ? '' : 'es'} —`}
+                        </option>
+                        {adminOngoingClasses.map(c => (
+                          <option key={c.id} value={c.courseRunId}>
+                            {c.courseTitle} | {c.courseRunId} ({c.trainerName})
+                          </option>
+                        ))}
+                      </select>
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none text-xs">▼</span>
+                    </div>
                     <input
                       type="text"
                       value={adminInput}
-                      onChange={e => { setAdminInput(e.target.value); setSearchError(null); }}
+                      onChange={e => { setAdminInput(e.target.value); setSearchError(null); setAdminDropdownValue(''); }}
                       onKeyDown={e => { if (e.key === 'Enter') handleAdminSearch(); }}
-                      placeholder="e.g. 1069549"
+                      placeholder="…or enter a Course Run ID, e.g. 1069549"
                       className="input-themed w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                       disabled={isSearching}
                     />
@@ -1090,7 +1142,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     )}
                   </div>
                   <button
-                    onClick={handleAdminSearch}
+                    onClick={() => handleAdminSearch()}
                     disabled={isSearching || !adminInput.trim()}
                     className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
