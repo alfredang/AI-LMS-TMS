@@ -665,7 +665,13 @@ Return this JSON:
       prompt,
       systemPrompt: RESEARCH_SYSTEM_PROMPT,
       tools: [],
-      maxTurns: 1,
+      // Streamlit uses RESEARCH_MAX_TURNS = 5. With maxTurns=1 the SDK
+      // raises "Reached maximum number of turns" the moment the model
+      // wraps JSON in markdown / needs a clarification turn — every
+      // failure cascades into the deepest fallback, producing decks
+      // with only the generic NIST/OECD/EU AI Act pool. 5 turns gives
+      // headroom to retry/correct without erroring out.
+      maxTurns: 5,
       model: model || FAST_MODEL,
       apiKey,
     });
@@ -724,7 +730,11 @@ REQUIREMENTS:
       prompt: knowledgePrompt,
       systemPrompt: 'You are a domain-expert research writer. Use your training knowledge to write research-quality output for WSQ training topics. Always cite real, recognisable source names. Output ONLY valid JSON.',
       tools: [],
-      maxTurns: 1,
+      // Bumped from 1 to 5 to match Streamlit's RESEARCH_MAX_TURNS. Same
+      // rationale as the synthesis call above: avoids "Reached maximum
+      // number of turns" errors that cascade into the generic-source
+      // fallback pool.
+      maxTurns: 5,
       model: model || FAST_MODEL,
       apiKey,
     });
@@ -795,6 +805,20 @@ VISUALIZATION TYPES:
 - "statistics": numeric — use chart-bar / chart-pie / chart-column
 - "timeline": time-ordered — use sequence-timeline-*
 
+ICON FORMAT — mdi/<icon-name> (Material Design Icons). Pick a SPECIFIC,
+content-relevant icon for EACH item — never repeat the same icon for all
+items in a block. Categories with examples:
+- Tech: mdi/code-tags, mdi/database, mdi/api, mdi/cloud, mdi/server, mdi/monitor
+- Business: mdi/chart-line, mdi/briefcase, mdi/currency-usd, mdi/handshake, mdi/target
+- Process: mdi/check-circle, mdi/arrow-right, mdi/cog, mdi/rocket-launch, mdi/play-circle
+- People: mdi/account, mdi/account-group, mdi/school, mdi/human-greeting
+- Security: mdi/lock, mdi/shield-check, mdi/shield-account, mdi/key, mdi/eye
+- Data: mdi/chart-bar, mdi/chart-pie, mdi/trending-up, mdi/poll, mdi/finance
+- Quality: mdi/star, mdi/trophy, mdi/medal, mdi/thumb-up, mdi/clipboard-check
+- Time: mdi/clock, mdi/calendar, mdi/timer, mdi/refresh
+- Document: mdi/file-document, mdi/file-check, mdi/clipboard-text, mdi/note-text
+- Concept: mdi/lightbulb, mdi/information, mdi/help-circle, mdi/scale-balance, mdi/leaf
+
 RULES:
 1. First block = "overview", last block = "overview" (key takeaways)
 2. VARY visualization types — never repeat consecutively
@@ -802,6 +826,10 @@ RULES:
 4. For "comparison": exactly 2 root items
 5. For "statistics": items MUST have numeric "value"
 6. EVERY block must have a non-empty "caption" — never leave it blank
+7. EVERY item MUST have a content-specific "icon" (mdi/...) — pick one that
+   matches what the item describes (e.g. "Risk Assessment" → mdi/shield-check;
+   "Data Pipeline" → mdi/database; "Training" → mdi/school). Vary icons across
+   items — DO NOT use mdi/star or mdi/check-circle for everything.
 
 Output ONLY valid JSON.`;
 
@@ -2899,15 +2927,6 @@ export async function generateSlides(
   //      count heuristic (caps at 8h floor).
   const totalTopics = lus.reduce((n: number, lu: any) => n + (Array.isArray(lu.Topics) ? lu.Topics.length : 0), 0);
 
-  // MANUAL OVERRIDE — short-circuit ALL auto-detection when the user has
-  // explicitly picked a course duration in the UI dropdown. This is the
-  // ground-truth path that guarantees the deck size matches what the user
-  // selected (1/2/3/4/5 days). Auto-detection had too many failure modes
-  // in production (extraction misses fields, courseData stale, etc.).
-  const overrideHours = typeof ctx._override_hours === 'number' && ctx._override_hours >= 1
-    ? ctx._override_hours
-    : null;
-
   const candidateFields = [
     ctx.Total_Course_Duration_Hours,
     ctx.Total_Course_Duration,
@@ -2948,15 +2967,7 @@ export async function generateSlides(
   }
   if (hours < 8) hours = 8;
 
-  // Manual user override always wins. Applied here so the auto-detection
-  // logic above still runs (for logging) but the final hours value is
-  // whatever the user picked in the dropdown.
-  if (overrideHours !== null) {
-    hours = overrideHours;
-    resolvedFrom = `MANUAL OVERRIDE (user selected ${overrideHours}h via dropdown)`;
-  }
-
-  console.log(`[cw-slides] DURATION DETECTION: candidates=${JSON.stringify(fieldHours)} cpTextLen=${cpTextStr.length} override=${overrideHours} → using ${hours}h from ${resolvedFrom} → target=${computeTotalTarget(hours)} slides (${totalTopics} topics, ~${Math.round((computeTotalTarget(hours) - 17 - totalTopics * 2) / Math.max(1, totalTopics))} blocks/topic)`);
+  console.log(`[cw-slides] DURATION DETECTION: candidates=${JSON.stringify(fieldHours)} cpTextLen=${cpTextStr.length} → using ${hours}h from ${resolvedFrom} → target=${computeTotalTarget(hours)} slides (${totalTopics} topics, ~${Math.round((computeTotalTarget(hours) - 17 - totalTopics * 2) / Math.max(1, totalTopics))} blocks/topic)`);
   const target = computeTotalTarget(hours);
   const perTopic = computePerTopicDistribution(hours, Math.max(1, totalTopics));
 
