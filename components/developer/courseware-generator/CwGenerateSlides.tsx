@@ -23,6 +23,11 @@ const CwGenerateSlides: React.FC = () => {
   const [jobId, setJobId] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ message: string; percent: number }>({ message: '', percent: 0 });
   const [result, setResult] = useState<StatusResp | null>(null);
+  // 'auto' = use auto-detection from CP. Otherwise the user explicitly picks
+  // 1-5 days, which forces the slide-target math regardless of what
+  // extraction or text-scan produced. This is the override that guarantees
+  // the deck size matches the course duration.
+  const [daysOverride, setDaysOverride] = useState<string>('auto');
   const pollTimer = useRef<number | null>(null);
 
   const stopPolling = () => {
@@ -77,6 +82,8 @@ const CwGenerateSlides: React.FC = () => {
     setProgress({ message: 'Starting...', percent: 0 });
     setLoading(true);
     try {
+      const overrideDays = daysOverride === 'auto' ? null : parseInt(daysOverride, 10);
+      const overrideHours = overrideDays ? overrideDays * 8 : null;
       const res = await fetch('/api/developer/cw-generate-slides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,6 +96,9 @@ const CwGenerateSlides: React.FC = () => {
           // user generated slides without re-extracting after a deploy).
           // The backend auto-detects DOCX vs XLSX from the buffer.
           cpBase64: cw.cpText,
+          // Manual override — when set, backend uses this instead of any
+          // auto-detected hours. 1-day=8h, 2-day=16h, 3-day=24h, etc.
+          overrideHours,
           config: {},
         }),
       });
@@ -147,6 +157,28 @@ const CwGenerateSlides: React.FC = () => {
         <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
           Slide Generation
         </h3>
+
+        <div>
+          <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider block mb-2">
+            Course Duration
+          </label>
+          <select
+            value={daysOverride}
+            onChange={(e) => setDaysOverride(e.target.value)}
+            className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={loading}
+          >
+            <option value="auto">Auto-detect from CP (recommended)</option>
+            <option value="1">1-day course (8 hours) → ~100 slides</option>
+            <option value="2">2-day course (16 hours) → ~160 slides</option>
+            <option value="3">3-day course (24 hours) → ~210 slides</option>
+            <option value="4">4-day course (32 hours) → ~250 slides</option>
+            <option value="5">5-day course (40 hours) → ~320 slides</option>
+          </select>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Override if auto-detection produces the wrong slide count for your CP.
+          </p>
+        </div>
 
         <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-300">
           <p className="font-medium mb-1">Slide Targets by Duration:</p>

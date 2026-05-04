@@ -60,6 +60,10 @@ type SlidesRequest = {
   cpText?: string;
   extractedResult?: string;
   cpBase64?: string;
+  // Manual override — number of hours user explicitly selected (1-day=8h,
+  // 2-day=16h, etc.). When set, orchestrator uses this as ground truth and
+  // skips all auto-detection. null/undefined = use auto-detection.
+  overrideHours?: number | null;
   config?: SlideAgentConfig;
 };
 
@@ -119,6 +123,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const company = await getCompanyInfo();
   const mergedConfig: SlideAgentConfig = { ...(body.config || {}), company };
   const context: Record<string, unknown> = { ...courseData, _cp_text: cpText };
+  // User-provided manual override of course hours wins over any auto-
+  // detection. The orchestrator reads ctx._override_hours first.
+  if (typeof body.overrideHours === 'number' && body.overrideHours >= 1) {
+    context._override_hours = body.overrideHours;
+    console.log(`[cw-slides] manual override: using ${body.overrideHours}h (skipping auto-detection)`);
+  }
   const courseTitle = String((courseData as any)?.courseTitle ?? (courseData as any)?.Course_Title ?? 'Course');
 
   // Create job and return immediately — generation runs in the background.

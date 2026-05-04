@@ -2898,6 +2898,16 @@ export async function generateSlides(
   //   3. If the CP genuinely has no duration info, fall back to topic-
   //      count heuristic (caps at 8h floor).
   const totalTopics = lus.reduce((n: number, lu: any) => n + (Array.isArray(lu.Topics) ? lu.Topics.length : 0), 0);
+
+  // MANUAL OVERRIDE — short-circuit ALL auto-detection when the user has
+  // explicitly picked a course duration in the UI dropdown. This is the
+  // ground-truth path that guarantees the deck size matches what the user
+  // selected (1/2/3/4/5 days). Auto-detection had too many failure modes
+  // in production (extraction misses fields, courseData stale, etc.).
+  const overrideHours = typeof ctx._override_hours === 'number' && ctx._override_hours >= 1
+    ? ctx._override_hours
+    : null;
+
   const candidateFields = [
     ctx.Total_Course_Duration_Hours,
     ctx.Total_Course_Duration,
@@ -2937,7 +2947,16 @@ export async function generateSlides(
     resolvedFrom = `topic-count heuristic (${totalTopics} topics × 2 = ${topicHeuristic}h)`;
   }
   if (hours < 8) hours = 8;
-  console.log(`[cw-slides] DURATION DETECTION: candidates=${JSON.stringify(fieldHours)} cpTextLen=${cpTextStr.length} → using ${hours}h from ${resolvedFrom} → target=${computeTotalTarget(hours)} slides (${totalTopics} topics, ~${Math.round((computeTotalTarget(hours) - 17 - totalTopics * 2) / Math.max(1, totalTopics))} blocks/topic)`);
+
+  // Manual user override always wins. Applied here so the auto-detection
+  // logic above still runs (for logging) but the final hours value is
+  // whatever the user picked in the dropdown.
+  if (overrideHours !== null) {
+    hours = overrideHours;
+    resolvedFrom = `MANUAL OVERRIDE (user selected ${overrideHours}h via dropdown)`;
+  }
+
+  console.log(`[cw-slides] DURATION DETECTION: candidates=${JSON.stringify(fieldHours)} cpTextLen=${cpTextStr.length} override=${overrideHours} → using ${hours}h from ${resolvedFrom} → target=${computeTotalTarget(hours)} slides (${totalTopics} topics, ~${Math.round((computeTotalTarget(hours) - 17 - totalTopics * 2) / Math.max(1, totalTopics))} blocks/topic)`);
   const target = computeTotalTarget(hours);
   const perTopic = computePerTopicDistribution(hours, Math.max(1, totalTopics));
 
