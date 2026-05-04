@@ -30,4 +30,11 @@ SELECT id, 'Payroll'::public.user_role
  WHERE email IN ('tansc@tertiaryinfotech.com', 'angch@tertiaryinfotech.com')
 ON CONFLICT (user_id, role) DO NOTHING;
 
+-- 3. Enable the Payroll feature flag for Tertiary so the Payroll role is
+--    actually exposed by /api/users/role and the role-switcher dropdown.
+--    Without this, the grants in step 2 are inert.
+UPDATE public.training_provider
+   SET payroll_enabled = TRUE
+ WHERE payroll_enabled IS DISTINCT FROM TRUE;
+
 COMMIT;
