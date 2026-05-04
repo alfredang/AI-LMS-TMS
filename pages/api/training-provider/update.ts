@@ -732,6 +732,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await autoCreateAndUpdate([
         { name: 'support_email', value: profileData.contactPerson?.email || null },
       ]);
+      // Virtual Meeting provider (validated allow-list; defaults to google_meet)
+      try {
+        const allowedVirtualMeetingProviders = ['google_meet', 'zoom', 'teams'];
+        const requested = profileData.integrations?.virtualMeetingProvider;
+        const virtualMeetingProvider = allowedVirtualMeetingProviders.includes(requested)
+          ? requested
+          : 'google_meet';
+        await pool.query(
+          'UPDATE training_provider SET virtual_meeting_provider = $1 WHERE id = $2',
+          [virtualMeetingProvider, trainingProviderId]
+        );
+      } catch (e) {
+        console.warn('⚠️ virtual_meeting_provider column missing; run database/migrations/add_virtual_meeting_provider.sql');
+      }
       // Admin thresholds
       await autoCreateAndUpdate([
         { name: 'upcoming_classes_threshold_days', value: String(profileData.adminSettings?.upcomingClassesThresholdDays || 21) },
