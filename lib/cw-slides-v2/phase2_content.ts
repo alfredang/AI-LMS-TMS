@@ -176,57 +176,105 @@ export function padContentBlocks(
     }
   }
 
-  // Topic-aware subtitle pools matching Streamlit's per-block concept
-  // naming style (e.g. "Key Ethical Risk Categories", "Ethical Risk
-  // Assessment Process", "Implementation Timeline"). Each block index
-  // picks a different concept so subtitles never repeat within a topic.
-  const topicShort = topicTitle.split(/\s+/).slice(0, 5).join(' ').slice(0, 40);
+  // Extract a SHORT (1-2 word) key concept from the topic title for
+  // use in subtitles. Streamlit uses short keyword extracts like
+  // "Ethical Risk", "AI Ethics", "Privacy Measures" — NOT the full
+  // 5-word topic title repeated everywhere. Strategy: skip filler
+  // verbs/prepositions, take the 1-2 most informative noun-like
+  // words. Avoids awkward subtitles like "Foundations of AI Prompt
+  // Engineering Foundations".
+  const STOP_WORDS = new Set([
+    'the','a','an','of','in','on','to','for','and','or','with','by',
+    'apply','maintain','develop','compare','configure','exercise',
+    'design','implement','introduce','introduction','overview',
+    'foundations','basics','fundamentals','principles',
+    'using','through','via','from','at','about','that','which',
+    'data','content','information','application','applications',
+    'tools','platforms','techniques','strategies','methods',
+    'including','such','as','e.g.','etc.',
+  ]);
+  function extractKeyConcept(title: string): string {
+    // Strip parens/brackets, lowercase, split
+    const clean = title.replace(/[\(\[].*?[\)\]]/g, '').replace(/[.,;:!?]/g, ' ');
+    const words = clean.split(/\s+/).filter(Boolean);
+    // Take words that aren't stop-words, prefer capitalized originals
+    const informative: string[] = [];
+    for (const w of words) {
+      if (informative.length >= 2) break;
+      if (w.length < 3) continue;
+      if (STOP_WORDS.has(w.toLowerCase())) continue;
+      informative.push(w);
+    }
+    if (informative.length === 0) {
+      // Fall back to first 2 words ignoring stop list
+      return words.filter((w) => w.length >= 3).slice(0, 2).join(' ');
+    }
+    return informative.join(' ');
+  }
+  const concept = extractKeyConcept(topicTitle).slice(0, 25); // e.g. "AI Prompt", "Prompting", "Excel Workspace"
+
+  // Subtitle pools — large enough to support 20+ blocks per topic
+  // without repeating. Subtitle = concept + concept-type suffix.
+  // Mirrors Streamlit's "Key X Categories", "X Assessment Process"
+  // pattern but uses the SHORT concept instead of full topic title.
   const SUBTITLE_POOLS: Record<string, string[]> = {
     overview: [
-      `Key ${topicShort} Concepts`,
-      `${topicShort} Fundamentals`,
-      `Core Components of ${topicShort}`,
-      `${topicShort} Overview`,
-      `Essential ${topicShort} Categories`,
-      `${topicShort} Foundations`,
+      `Key ${concept} Concepts`,
+      `${concept} Fundamentals`,
+      `${concept} Categories`,
+      `Core ${concept} Components`,
+      `Essential ${concept} Elements`,
+      `${concept} Building Blocks`,
+      `${concept} Key Aspects`,
+      `${concept} Foundations`,
+      `${concept} Definitions`,
     ],
     process: [
-      `${topicShort} Implementation Process`,
-      `${topicShort} Step-by-Step Workflow`,
-      `${topicShort} Operational Stages`,
-      `Practical ${topicShort} Procedure`,
+      `${concept} Implementation Process`,
+      `${concept} Workflow`,
+      `${concept} Operational Stages`,
+      `${concept} Procedure`,
+      `${concept} Lifecycle`,
+      `${concept} Step-by-Step`,
     ],
     comparison: [
-      `${topicShort} Approach Comparison`,
-      `Traditional vs Modern ${topicShort}`,
-      `${topicShort} Method Trade-offs`,
+      `${concept} Approach Comparison`,
+      `Traditional vs Modern ${concept}`,
+      `${concept} Method Trade-offs`,
+      `${concept} Best vs Common Practice`,
     ],
     statistics: [
-      `${topicShort} Industry Metrics`,
-      `${topicShort} Adoption Statistics`,
-      `${topicShort} Performance Data`,
+      `${concept} Industry Metrics`,
+      `${concept} Adoption Statistics`,
+      `${concept} Performance Data`,
+      `${concept} Market Trends`,
     ],
     hierarchy: [
-      `${topicShort} Framework Structure`,
-      `${topicShort} Taxonomy`,
-      `${topicShort} Component Hierarchy`,
+      `${concept} Framework`,
+      `${concept} Taxonomy`,
+      `${concept} Component Hierarchy`,
+      `${concept} Structural Map`,
     ],
     timeline: [
-      `${topicShort} Evolution Timeline`,
-      `${topicShort} Implementation Roadmap`,
-      `${topicShort} Historical Milestones`,
+      `${concept} Evolution Timeline`,
+      `${concept} Implementation Roadmap`,
+      `${concept} Historical Milestones`,
+      `${concept} Development Phases`,
     ],
     cycle: [
-      `${topicShort} Continuous Cycle`,
-      `${topicShort} Iterative Process`,
+      `${concept} Continuous Cycle`,
+      `${concept} Iterative Process`,
+      `${concept} Feedback Loop`,
     ],
     quadrant: [
-      `${topicShort} Strategic Quadrants`,
-      `${topicShort} Decision Matrix`,
+      `${concept} Strategic Quadrants`,
+      `${concept} Decision Matrix`,
+      `${concept} Trade-off Map`,
     ],
     relationship: [
-      `${topicShort} Component Relationships`,
-      `${topicShort} Interconnections`,
+      `${concept} Component Relationships`,
+      `${concept} Interconnections`,
+      `${concept} Dependency Map`,
     ],
   };
   // Per-pool counters so each viz_type rotates through its pool
@@ -281,15 +329,25 @@ export function padContentBlocks(
         icon: 'mdi/chart-bar',
       }));
     } else if (findings.length - findingCursor >= 3) {
-      // Use research key_findings as overview/list items — REAL content
-      // from Wikipedia article extracts, not generic "Point 1" stubs.
+      // Use research key_findings — Wikipedia article sentences. Cap desc
+      // at ~50 chars to fit infographic template limits without mid-
+      // sentence truncation, and break at clean word boundaries.
       const chunk = findings.slice(findingCursor, findingCursor + 4);
       findingCursor += chunk.length;
-      items = chunk.map((f) => ({
-        label: f.split(' ').slice(0, 3).join(' ').slice(0, 28) || 'Insight',
-        desc: f.slice(0, 80),
-        icon: 'mdi/lightbulb',
-      }));
+      const truncWord = (s: string, max: number) => {
+        if (s.length <= max) return s;
+        const cut = s.slice(0, max);
+        const lastSpace = cut.lastIndexOf(' ');
+        return (lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).replace(/[,;:]+$/, '');
+      };
+      items = chunk.map((f) => {
+        const labelWords = f.split(' ').slice(0, 3).join(' ');
+        return {
+          label: truncWord(labelWords, 25) || 'Insight',
+          desc: truncWord(f, 50),
+          icon: 'mdi/lightbulb',
+        };
+      });
     } else if (bpChunk.length) {
       items = bpChunk.map((bp) => ({
         label: bp.split(' ').slice(0, 3).join(' ').slice(0, 28),
@@ -308,27 +366,34 @@ export function padContentBlocks(
         { label: 'Cost Reduction', value: 30, desc: 'Cost savings achieved', icon: 'mdi/currency-usd' },
       ];
     } else {
-      // Last resort — generate topic-relevant content even with NO research
-      // and NO bullets. Uses a rotating concept set so each block has
-      // distinct items, not "Point 1 / Point 2".
+      // Last resort — short, complete-phrase descriptions that FIT within
+      // infographic template limits (~30-40 chars). Icons restricted to
+      // the 80-icon static bundle in lib/cw-slides-icon-cache.json so
+      // snapToCachedIcon doesn't fall to repeated default icons.
       const conceptPools: Array<Array<ContentBlockItem>> = [
         [
-          { label: 'Foundation', desc: `Core concepts of ${topicShort}`, icon: 'mdi/foundation' },
-          { label: 'Practice', desc: `Practical application of ${topicShort}`, icon: 'mdi/cog' },
-          { label: 'Standards', desc: `Industry standards for ${topicShort}`, icon: 'mdi/check-circle' },
-          { label: 'Outcomes', desc: `Expected outcomes of ${topicShort}`, icon: 'mdi/target' },
+          { label: 'Core Concepts', desc: 'Fundamental ideas and definitions', icon: 'mdi/lightbulb' },
+          { label: 'Application', desc: 'Practical real-world usage', icon: 'mdi/cog' },
+          { label: 'Standards', desc: 'Industry-recognised guidelines', icon: 'mdi/check-circle' },
+          { label: 'Outcomes', desc: 'Measurable business benefits', icon: 'mdi/star' },
         ],
         [
-          { label: 'Why', desc: `Why ${topicShort} matters`, icon: 'mdi/lightbulb' },
-          { label: 'How', desc: `How to apply ${topicShort}`, icon: 'mdi/arrow-right-circle' },
-          { label: 'When', desc: `When to use ${topicShort}`, icon: 'mdi/clock' },
-          { label: 'Where', desc: `Where ${topicShort} applies`, icon: 'mdi/map-marker' },
+          { label: 'Purpose', desc: 'Why this matters in practice', icon: 'mdi/help-circle' },
+          { label: 'Approach', desc: 'How to apply the framework', icon: 'mdi/arrow-right-circle' },
+          { label: 'Timing', desc: 'When to use each method', icon: 'mdi/clock' },
+          { label: 'Context', desc: 'Where it best applies', icon: 'mdi/earth' },
         ],
         [
-          { label: 'Skills', desc: `Skills needed for ${topicShort}`, icon: 'mdi/school' },
-          { label: 'Tools', desc: `Tools for ${topicShort}`, icon: 'mdi/wrench' },
-          { label: 'Methods', desc: `Methods used in ${topicShort}`, icon: 'mdi/format-list-bulleted' },
-          { label: 'Quality', desc: `Quality measures for ${topicShort}`, icon: 'mdi/star' },
+          { label: 'Skills', desc: 'Required competencies', icon: 'mdi/school' },
+          { label: 'Tools', desc: 'Software and resources', icon: 'mdi/cog' },
+          { label: 'Methods', desc: 'Proven techniques', icon: 'mdi/format-list-bulleted' },
+          { label: 'Quality', desc: 'Best-practice indicators', icon: 'mdi/trophy' },
+        ],
+        [
+          { label: 'Inputs', desc: 'Required data and resources', icon: 'mdi/database' },
+          { label: 'Process', desc: 'Step-by-step transformation', icon: 'mdi/refresh' },
+          { label: 'Outputs', desc: 'Expected deliverables', icon: 'mdi/file-document' },
+          { label: 'Validation', desc: 'Quality assurance checks', icon: 'mdi/clipboard-check' },
         ],
       ];
       items = conceptPools[bi % conceptPools.length];
