@@ -1738,7 +1738,7 @@ function fuzzyGetContent<T>(map: Record<string, T> | undefined, key: string): T 
   return undefined;
 }
 
-function buildSkeleton(context: any, contentMap: Record<string, ContentMapEntry>): Skeleton {
+export function buildSkeleton(context: any, contentMap: Record<string, ContentMapEntry>): Skeleton {
   // Reset the global template-usage counter so each deck gets fair rotation
   // across the whole pool.
   resetTemplateCounter();
@@ -1997,7 +1997,7 @@ function repairContentMap(contentMap: Record<string, ContentMapEntry>): void {
   }
 }
 
-function assemble(
+export function assemble(
   skeleton: Skeleton,
   contentMap: Record<string, ContentMapEntry>,
   infographicMap: Record<string, InfographicResult[]>,
@@ -2071,7 +2071,7 @@ function assemble(
 // All positions expressed in inches (1 inch = 914400 EMU).
 // ────────────────────────────────────────────────────────────────────────────
 
-function makePres(): PptxGenJS {
+export function makePres(): PptxGenJS {
   const pres = new PptxGenJS();
   pres.defineLayout({ name: 'WSQ_STD', width: SLIDE_W_INCHES, height: SLIDE_H_INCHES });
   pres.layout = 'WSQ_STD';
@@ -2572,7 +2572,7 @@ function addCertificateSlide(pres: PptxGenJS, tscCode: string, company: CwCompan
 // ────────────────────────────────────────────────────────────────────────────
 // Standard intro slides (10 total) — exact content match with build_pptx.py
 // ────────────────────────────────────────────────────────────────────────────
-function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | undefined): void {
+export function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | undefined): void {
   const courseTitle = ctx.Course_Title || 'Course';
   const tgsCode = ctx.TGS_Ref_No || ctx.TGS_Number || ctx.Course_Code || '';
   const tscCode = ctx.TSC_Code || '';
@@ -2714,7 +2714,7 @@ function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | unde
 // ────────────────────────────────────────────────────────────────────────────
 // Standard closing slides (7 total) — exact content match with build_pptx.py
 // ────────────────────────────────────────────────────────────────────────────
-function addClosingSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | undefined): void {
+export function addClosingSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | undefined): void {
   const tscCode = ctx.TSC_Code || '';
 
   // 1. Summary & Q&A (section)
@@ -2821,7 +2821,7 @@ function addTopicSlides(
 // LU builder — add all topics in order (no LU section header — topic headers
 // already carry the LO|LU|T prefix, matching build_pptx.py's flat flow).
 // ────────────────────────────────────────────────────────────────────────────
-function addLuSlides(
+export function addLuSlides(
   pres: PptxGenJS,
   lu: { topics: AssemblyTopic[] },
   company: CwCompanyInfo | undefined,
@@ -2833,7 +2833,7 @@ function addLuSlides(
   return added;
 }
 
-async function buildPptxBuffer(
+export async function buildPptxBuffer(
   ctx: any,
   skeleton: Skeleton,
   luDataMap: Record<string, { topics: AssemblyTopic[] }>,
@@ -2877,7 +2877,7 @@ async function buildPptxBuffer(
 // opens the deck. python-pptx (used by Streamlit) emits `<p:grpSpPr/>`
 // instead and PowerPoint accepts that cleanly. This post-processor strips
 // the zero-dim xfrm out of every slide XML so the deck opens cleanly.
-function scrubPptxBuffer(buf: Buffer): Buffer {
+export function scrubPptxBuffer(buf: Buffer): Buffer {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const PizZip = require('pizzip');
