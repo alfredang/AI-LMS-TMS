@@ -120,20 +120,33 @@ export async function wikipediaResearch(topicTitle: string, courseTitle: string)
   const summaryPromises = topPages.slice(0, 3).map((p) => p.key ? wikiSummary(p.key) : Promise.resolve(null));
   const summaries = await Promise.all(summaryPromises);
 
-  // Build ResearchEntry
+  // Build ResearchEntry — split each Wikipedia summary into multiple
+  // bullet-sized findings so downstream padding has plenty of material
+  // to draw from.
+  const splitToFindings = (text: string): string[] => {
+    if (!text) return [];
+    return text
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.replace(/<[^>]+>/g, '').trim())
+      .filter((s) => s.length >= 20 && s.length <= 180);
+  };
+
   const sources: ResearchSource[] = topPages.map((p, i) => {
     const summary = summaries[i];
     const url = summary?.content_urls?.desktop?.page
       || (p.key ? `https://en.wikipedia.org/wiki/${encodeURIComponent(p.key)}` : '');
     const excerpt = (p.excerpt || p.description || '').replace(/<[^>]+>/g, '').trim();
-    const findings: string[] = [];
-    if (excerpt) findings.push(excerpt.slice(0, 160));
-    if (summary?.extract) findings.push(summary.extract.slice(0, 200));
+    const extract = summary?.extract || '';
+    // Each finding = ONE substantive sentence. Up to 6 per source.
+    const findings = [
+      ...splitToFindings(excerpt),
+      ...splitToFindings(extract),
+    ].slice(0, 6);
     return {
       title: p.title,
       url,
       type: 'wikipedia',
-      key_findings: findings.filter(Boolean).slice(0, 2),
+      key_findings: findings.length > 0 ? findings : (excerpt ? [excerpt.slice(0, 160)] : []),
       relevance_score: 1.0 - (i * 0.1),
       date: new Date().getFullYear().toString(),
     };
@@ -142,18 +155,18 @@ export async function wikipediaResearch(topicTitle: string, courseTitle: string)
   // Build summary from top 2-3 article extracts
   const summaryParts: string[] = [];
   for (const s of summaries) {
-    if (s?.extract) summaryParts.push(s.extract.slice(0, 300));
+    if (s?.extract) summaryParts.push(s.extract.slice(0, 400));
   }
-  const summary = summaryParts.join('\n\n').slice(0, 800);
+  const summary = summaryParts.join('\n\n').slice(0, 1200);
 
-  // Pull bullet-point-style steps from longer extracts when available.
-  // Heuristic: split by sentence, take 4-6 short sentences.
+  // Pull MANY bullet-point-style sentences from extracts. Padding picks
+  // 4-5 of these per process/list block, so we want 15-20 available.
   const allText = summaryParts.join(' ');
   const sentences = allText
     .split(/(?<=[.!?])\s+/)
     .map((s) => s.trim())
     .filter((s) => s.length > 20 && s.length < 200)
-    .slice(0, 4);
+    .slice(0, 20);
 
   console.log(`[wikipedia_research] '${topicTitle.slice(0, 60)}': ${sources.length} sources, ${summaryParts.length} summaries fetched`);
 

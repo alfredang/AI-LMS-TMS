@@ -252,12 +252,29 @@ export function padContentBlocks(
         { label: 'Cost Save', value: 30, desc: 'Cost reduction', icon: 'mdi/currency-usd' },
       ];
     } else {
-      // Last resort — generic stubs (only when NO research, NO bullets, no fitting viz data)
-      items = Array.from({ length: 4 }, (_, j) => ({
-        label: `Point ${j + 1}`,
-        desc: `Key aspect ${j + 1} of ${topicTitle}`,
-        icon: 'mdi/information',
-      }));
+      // Last resort — generate topic-relevant content even with NO research
+      // and NO bullets. Uses topic title + keyword inflections to produce
+      // labels and descriptions that AT LEAST sound topic-specific instead
+      // of generic "Point 1 / Point 2" stubs.
+      const tWords = topicTitle.split(/\s+/).filter(Boolean);
+      const tShort = tWords.slice(0, 4).join(' ');
+      const concepts = [
+        { label: 'Definition', desc: `Understanding what ${tShort} means in practice`, icon: 'mdi/information' },
+        { label: 'Why It Matters', desc: `Importance and impact of ${tShort}`, icon: 'mdi/star' },
+        { label: 'Core Steps', desc: `Practical workflow for ${tShort}`, icon: 'mdi/arrow-right-circle' },
+        { label: 'Best Practices', desc: `Industry-standard approach for ${tShort}`, icon: 'mdi/check-circle' },
+        { label: 'Common Pitfalls', desc: `Mistakes to avoid when handling ${tShort}`, icon: 'mdi/alert-circle' },
+        { label: 'Tools', desc: `Software and resources for ${tShort}`, icon: 'mdi/cog' },
+      ];
+      // Pick 4 concepts in rotation based on block index so different
+      // blocks get different concept slants instead of all the same.
+      const start = bi % concepts.length;
+      items = [
+        concepts[start % concepts.length],
+        concepts[(start + 1) % concepts.length],
+        concepts[(start + 2) % concepts.length],
+        concepts[(start + 3) % concepts.length],
+      ];
     }
 
     const subTitle = derivedSubTitle

@@ -2391,13 +2391,11 @@ function addInfographicSlide(
     });
   }
 
-  // Source caption: x=0.17, y=5.14 (4700000), w=9.62, h=0.27 (247000)
-  if (caption) {
-    slide.addText(caption, {
-      x: 0.17, y: 5.14, w: 9.62, h: 0.27,
-      fontSize: 9, italic: true, color: COLOR_GRAY, fontFace: 'Arial', align: 'left',
-    });
-  }
+  // Source caption rendering disabled per user requirement — sources are
+  // still tracked internally (research data drives content / icon picks)
+  // but not displayed on the slide. The caption parameter is preserved
+  // in the function signature for backward compatibility.
+  void caption;
 
   addFooter(slide, copyrightText(company));
 }
