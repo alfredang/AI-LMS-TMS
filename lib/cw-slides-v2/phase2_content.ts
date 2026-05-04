@@ -356,12 +356,12 @@ export function padContentBlocks(
       }));
     } else if (vizType === 'comparison') {
       items = [
-        { label: 'Traditional', desc: `Traditional approach to ${topicShort}`, icon: 'mdi/history' },
-        { label: 'Modern', desc: `Modern approach to ${topicShort}`, icon: 'mdi/rocket-launch' },
+        { label: 'Traditional', desc: `Traditional approach to ${concept}`, icon: 'mdi/history' },
+        { label: 'Modern', desc: `Modern approach to ${concept}`, icon: 'mdi/rocket-launch' },
       ];
     } else if (vizType === 'statistics') {
       items = [
-        { label: 'Adoption', value: 73, desc: `Industry adoption of ${topicShort}`, icon: 'mdi/trending-up' },
+        { label: 'Adoption', value: 73, desc: `Industry adoption of ${concept}`, icon: 'mdi/trending-up' },
         { label: 'Efficiency', value: 45, desc: 'Efficiency gains realized', icon: 'mdi/chart-line' },
         { label: 'Cost Reduction', value: 30, desc: 'Cost savings achieved', icon: 'mdi/currency-usd' },
       ];
@@ -400,7 +400,7 @@ export function padContentBlocks(
     }
 
     const subTitle = derivedSubTitle
-      || (bpChunk.length ? bpChunk[0].split(' ').slice(0, 6).join(' ').slice(0, 60) : `${topicShort} Concepts ${bi}`);
+      || (bpChunk.length ? bpChunk[0].split(' ').slice(0, 6).join(' ').slice(0, 60) : `${concept} Concepts ${bi}`);
 
     blocks.push({
       block_index: bi,
