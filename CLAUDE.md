@@ -4,6 +4,16 @@ Guidance for Claude Code (claude.ai/code) working in this repository.
 
 > **Note:** `NEMO.md` at the repo root is unrelated — it's the product spec for **Nemo**, the in-app AI assistant exposed to Admin/Training Provider users. Not to be confused with the emerging `AGENTS.md` convention (vendor-neutral coding-agent instructions); we don't use that file here.
 
+## Workflow
+
+**Always test on localhost before pushing to GitHub.** This applies especially to database migrations, schema changes, and anything that could touch shared/production state. The standard pattern:
+
+1. Spin up a throwaway Postgres (e.g. `docker run --rm postgres:17-alpine`), load `database/01-schema.sql`, simulate the relevant prod state, then apply the new SQL.
+2. Snapshot the affected rows/constraints before and after; diff them. For idempotent migrations, also run twice and confirm the second run is a no-op.
+3. Only push to GitHub once the local test confirms no regressions on Tertiary's prod-like state. If localhost surfaces an issue, fix locally and re-test before pushing.
+
+For UI/code changes, run `npm run dev` and exercise the feature in the browser before pushing.
+
 ## Platform Context
 
 - **Company:** Tertiary Infotech Academy (Singapore-based IT training provider, UEN: 201509271W)

@@ -3,14 +3,33 @@
 --   1. 'Payroll' value to user_role enum
 --   2. payroll_tiers JSONB column on training_provider (tiered % of course fee paid to trainer)
 --   3. trainer_payout table (per-(course_run, trainer) row)
---   4. Role assignment to tansc@tertiaryinfotech.com and angch@tertiaryinfotech.com
+--   4. Guard the (user_id, role) primary key on user_role_map so the ON CONFLICT
+--      pattern used elsewhere is portable across tenants.
+--
+-- Tenant-specific role grants (e.g. Tertiary staff -> Payroll) live in
+-- database/seeds/<tenant>-seed.sql, not in this generic migration.
 --
 -- Safe to run repeatedly.
+--
+-- NOTE: ALTER TYPE ... ADD VALUE must run in its own transaction because the
+-- new enum value cannot be referenced in the same transaction it is added.
+-- Hence the two BEGIN/COMMIT blocks below.
 
--- 1. Append 'Payroll' to user_role enum (Postgres 12+)
+-- ---------------------------------------------------------------------------
+-- Block 1: append 'Payroll' to user_role enum (own tx; required by Postgres).
+-- ---------------------------------------------------------------------------
+BEGIN;
+
 ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'Payroll' AFTER 'Finance';
 
--- 2. Tier configuration column (default = 1 pax 70%, 2 pax 60%, 3-4 pax 50%, 5+ pax 40%)
+COMMIT;
+
+-- ---------------------------------------------------------------------------
+-- Block 2: schema additions that may reference the new enum value.
+-- ---------------------------------------------------------------------------
+BEGIN;
+
+-- Tier configuration column (default = 1 pax 70%, 2 pax 60%, 3-4 pax 50%, 5+ pax 40%)
 ALTER TABLE public.training_provider
     ADD COLUMN IF NOT EXISTS payroll_tiers JSONB
     DEFAULT '[
@@ -23,7 +42,7 @@ ALTER TABLE public.training_provider
 COMMENT ON COLUMN public.training_provider.payroll_tiers IS
   'Trainer payout tier ladder. Array of {minPax, maxPax (null = open ended), percent}. Each row payout = course_fee * num_learners * percent / 100.';
 
--- 3. trainer_payout table
+-- trainer_payout table
 CREATE TABLE IF NOT EXISTS public.trainer_payout (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     course_run_id UUID NOT NULL REFERENCES public.course_run(id) ON DELETE CASCADE,
@@ -52,9 +71,27 @@ CREATE TRIGGER trainer_payout_touch_updated_at
     BEFORE UPDATE ON public.trainer_payout
     FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
 
--- 4. Assign Payroll role to the two staff (no-op if user doesn't exist yet)
-INSERT INTO public.user_role_map (user_id, role)
-SELECT id, 'Payroll'::public.user_role
-  FROM public.app_user
- WHERE email IN ('tansc@tertiaryinfotech.com', 'angch@tertiaryinfotech.com')
-ON CONFLICT (user_id, role) DO NOTHING;
+-- Ensure user_role_map has its (user_id, role) primary key. Older databases
+-- (pre-payroll, or sites that diverged from the canonical schema) may have
+-- lost or never had it; the ON CONFLICT (user_id, role) pattern relies on it.
+-- Dedupe first so the constraint can attach cleanly.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+          FROM pg_constraint
+         WHERE conname = 'user_role_map_pkey'
+           AND conrelid = 'public.user_role_map'::regclass
+    ) THEN
+        DELETE FROM public.user_role_map a
+              USING public.user_role_map b
+         WHERE a.ctid < b.ctid
+           AND a.user_id = b.user_id
+           AND a.role    = b.role;
+
+        ALTER TABLE public.user_role_map
+            ADD CONSTRAINT user_role_map_pkey PRIMARY KEY (user_id, role);
+    END IF;
+END$$;
+
+COMMIT;
