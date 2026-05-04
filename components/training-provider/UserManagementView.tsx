@@ -6,7 +6,7 @@ import { authService } from '@lib/services/authService';
 
 const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
 
-const ALL_ROLES = ['Learner', 'Trainer', 'Developer', 'Admin', 'Finance', 'Training Provider'] as const;
+const ALL_ROLES = ['Learner', 'Trainer', 'Developer', 'Admin', 'Finance', 'Payroll', 'Training Provider'] as const;
 
 // Role badge config
 const getRoleBadge = (role: string): { classes: string; dot: string } => {
@@ -23,6 +23,8 @@ const getRoleBadge = (role: string): { classes: string; dot: string } => {
             return { classes: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700', dot: 'bg-emerald-500' };
         case 'Learner':
             return { classes: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700', dot: 'bg-amber-500' };
+        case 'Payroll':
+            return { classes: 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-700', dot: 'bg-pink-500' };
         default:
             return { classes: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600', dot: 'bg-gray-400' };
     }
