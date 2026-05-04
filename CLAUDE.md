@@ -6,6 +6,10 @@ Guidance for Claude Code (claude.ai/code) working in this repository.
 
 ## Workflow
 
+**At the start of every session, scan `git status` for pre-existing modified or untracked files.** If any look related to the user's current task or to a recently discussed feature (e.g. modifications to files in a feature directory the user is asking about, or a `lib/<feature>/` helper that other files import), surface them to the user and ask whether they should ship in the current commit. Do **not** silently leave them as "someone else's in-flight work" — repeated sessions of that behavior caused a real production drift where the Payroll role rendered correctly on localhost but broke on the live site because the dependent files were never committed.
+
+Untracked files matter too: a new `lib/foo.ts` imported by an already-tracked file means the live build will fail until the new file is committed.
+
 **Always test on localhost before pushing to GitHub.** This applies especially to database migrations, schema changes, and anything that could touch shared/production state. The standard pattern:
 
 1. Spin up a throwaway Postgres (e.g. `docker run --rm postgres:17-alpine`), load `database/01-schema.sql`, simulate the relevant prod state, then apply the new SQL.
@@ -13,6 +17,8 @@ Guidance for Claude Code (claude.ai/code) working in this repository.
 3. Only push to GitHub once the local test confirms no regressions on Tertiary's prod-like state. If localhost surfaces an issue, fix locally and re-test before pushing.
 
 For UI/code changes, run `npm run dev` and exercise the feature in the browser before pushing.
+
+**When the user reports "live ≠ localhost":** before chasing symptoms, check `git status` and `git log origin/main..HEAD` first. Drift between live and localhost is most often uncommitted/unpushed work, not a runtime bug.
 
 ## Platform Context
 
