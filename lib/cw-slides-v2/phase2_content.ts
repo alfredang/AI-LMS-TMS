@@ -193,25 +193,42 @@ export function padContentBlocks(
     'tools','platforms','techniques','strategies','methods',
     'including','such','as','e.g.','etc.',
   ]);
+  // Allow 2-letter tech acronyms (AI, ML, UI, UX, IT, OS, IP, AR, VR)
+  // since they're often the most semantically important words in WSQ
+  // tech topic titles. Without this, "Agentic AI" → "Agentic Agents"
+  // because AI gets dropped for being 2 chars.
+  const TECH_ACRONYMS_2 = new Set([
+    'ai','ml','ui','ux','it','os','ip','ar','vr','db','qa','qc',
+    'rd','pm','hr','it','io','3d','2d','5g','4g','3g',
+  ]);
   function extractKeyConcept(title: string): string {
-    // Strip parens/brackets, lowercase, split
-    const clean = title.replace(/[\(\[].*?[\)\]]/g, '').replace(/[.,;:!?]/g, ' ');
+    // Strip parens/brackets, drop everything after ' - ' or ',' or ';'
+    // (those usually mark "e.g. AgentX, Promptly, Dify..." enumerations
+    // which we don't want in the concept)
+    let clean = title.replace(/[\(\[].*?[\)\]]/g, '');
+    clean = clean.split(/\s+[-–—]\s+/)[0];        // before first " - "
+    clean = clean.split(/[,;]/)[0];                // before first comma/semicolon
+    clean = clean.replace(/[.,;:!?]/g, ' ');
+    // Convert "no-code" / "low-code" hyphenated terms into single tokens
+    clean = clean.replace(/\bno[-\s]code\b/gi, 'No-Code')
+                 .replace(/\blow[-\s]code\b/gi, 'Low-Code');
     const words = clean.split(/\s+/).filter(Boolean);
-    // Take words that aren't stop-words, prefer capitalized originals
     const informative: string[] = [];
     for (const w of words) {
       if (informative.length >= 2) break;
-      if (w.length < 3) continue;
-      if (STOP_WORDS.has(w.toLowerCase())) continue;
+      const lw = w.toLowerCase();
+      if (STOP_WORDS.has(lw)) continue;
+      // Allow 2-char tech acronyms; otherwise require 3+ chars
+      if (w.length < 3 && !TECH_ACRONYMS_2.has(lw)) continue;
       informative.push(w);
     }
     if (informative.length === 0) {
-      // Fall back to first 2 words ignoring stop list
-      return words.filter((w) => w.length >= 3).slice(0, 2).join(' ');
+      // Fall back: take first 2 non-stop words regardless of length
+      return words.filter((w) => !STOP_WORDS.has(w.toLowerCase())).slice(0, 2).join(' ');
     }
     return informative.join(' ');
   }
-  const concept = extractKeyConcept(topicTitle).slice(0, 25); // e.g. "AI Prompt", "Prompting", "Excel Workspace"
+  const concept = extractKeyConcept(topicTitle).slice(0, 30); // e.g. "AI Agents", "No-Code AI", "Excel Workspace"
 
   // Subtitle pools — large enough to support 20+ blocks per topic
   // without repeating. Subtitle = concept + concept-type suffix.
@@ -490,7 +507,44 @@ async function generateTopicContent(
     ? `\nNOTE: Research data is thin (${sources.length} sources). Use WebSearch (1 search max) to find supplementary facts.`
     : '';
 
-  const prompt = `Create ${numBlocks} content blocks for this topic. Each block = one infographic slide.
+  const tools = sources.length < 2 ? ['WebSearch'] : [];
+
+  // Iterative batched calls — ask for 4 blocks at a time instead of 20.
+  // Single big asks routinely truncate in production (model returns
+  // 0-2 blocks instead of 20). Multiple smaller asks each fit comfortably
+  // within Claude's output budget, so each succeeds reliably. Total
+  // production time goes up (5x calls per topic) but content quality
+  // matches Streamlit because every block is real Claude output, not
+  // padding fallback.
+  const BATCH_SIZE = 4;
+  const MAX_BATCHES = Math.ceil(numBlocks / BATCH_SIZE) + 1; // +1 buffer
+  const allBlocks: ContentBlock[] = [];
+  let activity: ActivityData | undefined;
+
+  for (let batch = 0; batch < MAX_BATCHES; batch++) {
+    if (allBlocks.length >= numBlocks) break;
+    const remaining = numBlocks - allBlocks.length;
+    const askThisBatch = Math.min(BATCH_SIZE, remaining);
+    const startIdx = allBlocks.length;
+    const isFirstBatch = batch === 0;
+    const isLastBatch = startIdx + askThisBatch >= numBlocks;
+
+    // Tell Claude what blocks already exist so it doesn't duplicate
+    const existingSummary = allBlocks.length > 0
+      ? '\n\nALREADY GENERATED BLOCKS (do NOT repeat these themes):\n' +
+        allBlocks.map((b, i) => `  ${i + 1}. [${b.visualization_type}] ${b.sub_title}`).join('\n')
+      : '';
+
+    let positionGuidance = '';
+    if (isFirstBatch) {
+      positionGuidance = '\nThis is the FIRST batch — START with a "overview" block titled "What is ' + topic.topic_title + '?" as block 0.';
+    } else if (isLastBatch) {
+      positionGuidance = '\nThis is the LAST batch — END with an "overview" block titled "Key Takeaways" or similar.';
+    } else {
+      positionGuidance = '\nMIDDLE batch — VARY visualization types: process, comparison, statistics, hierarchy, timeline, cycle. NO overview blocks here.';
+    }
+
+    const batchPrompt = `Create ${askThisBatch} content blocks (block index ${startIdx} to ${startIdx + askThisBatch - 1}) for this topic. Each block = one infographic slide.
 
 COURSE: ${courseTitle}
 LEARNING UNIT: ${topic.lu_title}
@@ -499,107 +553,97 @@ TOPIC: ${topic.topic_title}
 ${bpText}
 ${researchText}
 ${researchHint}
+${existingSummary}
+${positionGuidance}
 
 Return this JSON:
 {
-  "topic": "${topic.topic_title}",
   "content_blocks": [
     {
-      "block_index": 0,
-      "sub_title": "What is ${topic.topic_title}?",
-      "visualization_type": "overview",
-      "suggested_template": "list-grid-badge-card",
+      "block_index": ${startIdx},
+      "sub_title": "Specific Concept Title (e.g. 'Risk Categories', 'Implementation Process', 'Industry Statistics')",
+      "visualization_type": "overview" | "process" | "comparison" | "statistics" | "hierarchy" | "timeline" | "cycle",
+      "suggested_template": "matching AntV template",
       "data": {
         "title": "Short Title (3-6 words)",
-        "desc": "Brief one-line overview (max 8 words)",
+        "desc": "Brief one-line overview",
         "items": [
-          {"label": "Key Point", "desc": "Short complete phrase (4-8 words)", "icon": "mdi/icon-name"}
+          {"label": "Specific Concept", "desc": "Real fact or insight from research", "icon": "mdi/relevant-icon"}
         ]
       },
       "caption": "Source: Name, Year",
       "sources_used": ["Source Name"]
     }
-    /* ${numBlocks} blocks total, VARY visualization_type, varied content-specific icons */
-  ],
+    /* ${askThisBatch} blocks total — sub_titles must be SPECIFIC topic concepts, NOT generic placeholders like "Detail" or "Point" */
+  ]${isFirstBatch ? `,
   "activity": {
-    "title": "Exercise Name",
-    "scenario": "Real-world scenario description",
-    "steps": ["Step 1: Action", "Step 2: Action", "Step 3: Action"],
-    "expected_output": "What learners produce",
+    "title": "Real-world Exercise Name",
+    "scenario": "Industry-relevant scenario tied to the topic",
+    "steps": ["Step 1: Specific action", "Step 2: Specific action", "Step 3: Specific action"],
+    "expected_output": "Concrete deliverable",
     "duration": "20 minutes"
-  }
+  }` : ''}
 }
 
-MANDATORY BLOCK SEQUENCE:
-1. Block 0: "overview" — introduce the topic
-2. Block 1..${numBlocks - 2}: VARY types (process / comparison / statistics / hierarchy / timeline / cycle)
-3. Block ${numBlocks - 1}: "overview" — key takeaways summary
-
-RULES:
-- EXACTLY ${numBlocks} content blocks
-- Labels: 2-3 words MAX (no "Pros"/"Cons" etc — name the actual concept)
-- Descriptions: SHORT complete phrase, 4-8 words
-- For "comparison": exactly 2 root items with children
-- For "statistics": items MUST have numeric "value" field
-- Include citations "(Source, Year)" in captions
-- EVERY item must have a content-specific icon (varied across items)
+CRITICAL RULES:
+- EVERY item.label must be a SPECIFIC concept from the research (e.g. "RAG Pipeline", "Token Limits", "Few-Shot Prompts" — NOT "Foundation", "Standards", "Tools")
+- EVERY item.desc must be a complete short phrase with REAL info from the research/CP, not a generic placeholder
+- sub_titles must be UNIQUE specific concepts (e.g. "Prompt Engineering Patterns", "Token Cost Analysis", NOT "Implementation Process" repeated)
+- items[]: 4-5 items per block, each with content-specific mdi/* icon
+- For "comparison": EXACTLY 2 root items with children (real things being compared)
+- For "statistics": items MUST have numeric "value" with real numbers
 `;
 
-  const tools = sources.length < 2 ? ['WebSearch'] : [];
-
-  try {
-    const result = await runAgentJson({
-      prompt,
-      systemPrompt: CONTENT_SYSTEM_PROMPT,
-      tools,
-      maxTurns: CONTENT_MAX_TURNS,
-      model: model || FAST_MODEL,
-      apiKey,
-    });
-    let blocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
-
-    // Always pad to target — Streamlit _pad_content_blocks behaviour
-    if (blocks.length < numBlocks) {
-      console.log(`[cw-slides-v2] '${topic.topic_title.slice(0, 60)}': model returned ${blocks.length}, padding to ${numBlocks}`);
-      blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks, research);
-    } else {
-      blocks = blocks.slice(0, numBlocks);
-    }
-
-    // Apply research-derived caption to blocks that lack one
-    const baseCaption = captionFromResearch(research);
-    for (const b of blocks) {
-      if (!b.caption || b.caption.trim().length === 0) {
-        b.caption = baseCaption;
+    try {
+      const result = await runAgentJson({
+        prompt: batchPrompt,
+        systemPrompt: CONTENT_SYSTEM_PROMPT,
+        tools,
+        maxTurns: CONTENT_MAX_TURNS,
+        model: model || FAST_MODEL,
+        apiKey,
+      });
+      const newBlocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
+      if (newBlocks.length === 0) {
+        console.warn(`[cw-slides-v2] '${topic.topic_title.slice(0, 60)}' batch ${batch + 1}/${MAX_BATCHES}: 0 blocks returned, stopping iterative gen`);
+        break;
       }
+      // Re-index to continue from where we are
+      for (const b of newBlocks) {
+        b.block_index = allBlocks.length;
+        allBlocks.push(b);
+      }
+      if (isFirstBatch && result?.activity) activity = result.activity;
+      console.log(`[cw-slides-v2] '${topic.topic_title.slice(0, 60)}' batch ${batch + 1}: +${newBlocks.length} blocks (${allBlocks.length}/${numBlocks})`);
+    } catch (e: any) {
+      console.warn(`[cw-slides-v2] '${topic.topic_title.slice(0, 60)}' batch ${batch + 1} failed: ${e.message}`);
+      break;
     }
-
-    return {
-      topic: topic.topic_title,
-      content_blocks: blocks,
-      activity: result?.activity,
-    };
-  } catch (e: any) {
-    console.error(`[cw-slides-v2] content generation failed for '${topic.topic_title.slice(0, 60)}':`, e.message);
-    // Pad from scratch — guarantees target count even when Claude call fails
-    const padded = padContentBlocks([], topic.topic_title, topic.bullet_points, numBlocks, research);
-    const baseCaption = captionFromResearch(research);
-    for (const b of padded) {
-      if (!b.caption) b.caption = baseCaption;
-    }
-    return {
-      topic: topic.topic_title,
-      content_blocks: padded,
-      activity: {
-        title: `${topic.topic_title} Practice`,
-        scenario: `Apply ${topic.topic_title} concepts to a real scenario`,
-        steps: ['Step 1: Review concepts', 'Step 2: Apply to scenario', 'Step 3: Discuss findings'],
-        expected_output: 'Summary document',
-        duration: '20 minutes',
-      },
-    };
   }
+
+  // Pad any remaining gap (only if iterative gen didn't fully fill)
+  let blocks = allBlocks;
+  if (blocks.length < numBlocks) {
+    blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks, research);
+  } else {
+    blocks = blocks.slice(0, numBlocks);
+  }
+
+  // Apply research-derived caption to blocks that lack one
+  const baseCaption = captionFromResearch(research);
+  for (const b of blocks) {
+    if (!b.caption || b.caption.trim().length === 0) {
+      b.caption = baseCaption;
+    }
+  }
+
+  return {
+    topic: topic.topic_title,
+    content_blocks: blocks,
+    activity,
+  };
 }
+
 
 // ────────────────────────────────────────────────────────────────────────────
 // Public — generate content for all topics in parallel
