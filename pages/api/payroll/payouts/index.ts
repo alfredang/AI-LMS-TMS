@@ -44,7 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       WHERE cr.end_date IS NOT NULL
         AND cr.end_date <= CURRENT_DATE
         AND cr.end_date >= (CURRENT_DATE - ($1 || ' months')::interval)
-        AND COALESCE(cr.class_status,'') <> 'Cancelled'
+        AND (cr.class_status IS NULL OR cr.class_status::text <> 'Cancelled')
         AND crt.trainer_id IS NOT NULL
     `;
     const candidates = await pool.query(candidatesQuery, [String(months)]);

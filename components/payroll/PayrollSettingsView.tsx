@@ -3,8 +3,10 @@ import { PayoutTier, validateTiers } from '@lib/payroll/calculate';
 
 const PayrollSettingsView: React.FC = () => {
   const [tiers, setTiers] = useState<PayoutTier[]>([]);
+  const [enabled, setEnabled] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [togglingEnabled, setTogglingEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -13,12 +15,37 @@ const PayrollSettingsView: React.FC = () => {
     try {
       const r = await fetch('/api/payroll/tiers');
       const j = await r.json();
-      if (j.success) setTiers(j.data.tiers);
-      else setError(j.error || 'Failed to load tiers');
+      if (j.success) {
+        setTiers(j.data.tiers);
+        setEnabled(!!j.data.enabled);
+      } else setError(j.error || 'Failed to load tiers');
     } catch (e: any) {
       setError(e?.message || 'Failed to load tiers');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleEnabled = async (next: boolean) => {
+    setTogglingEnabled(true);
+    setError(null);
+    setSuccess(false);
+    const prev = enabled;
+    setEnabled(next);
+    try {
+      const r = await fetch('/api/payroll/tiers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.error || 'Failed to update');
+      setEnabled(!!j.data.enabled);
+    } catch (e: any) {
+      setEnabled(prev);
+      setError(e?.message || 'Failed to update');
+    } finally {
+      setTogglingEnabled(false);
     }
   };
 
@@ -83,6 +110,32 @@ const PayrollSettingsView: React.FC = () => {
 
   return (
     <div className="max-w-2xl space-y-4">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-default p-4 flex items-start justify-between gap-4">
+        <div>
+          <div className="font-semibold">Enable Payroll Role</div>
+          <p className="text-xs text-on-surface-secondary mt-1 max-w-md">
+            When off, the Payroll role is hidden from login/role pickers and the Payroll dashboard is
+            inaccessible. Existing payout data is preserved either way.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          disabled={togglingEnabled}
+          onClick={() => toggleEnabled(!enabled)}
+          className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-200 ${
+            enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+          } ${togglingEnabled ? 'opacity-50' : ''}`}
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
+              enabled ? 'translate-x-8' : 'translate-x-1'
+            }`}
+          />
+        </button>
+      </div>
+
       <div>
         <h1 className="text-2xl font-bold">Payout Tier Settings</h1>
         <p className="text-sm text-on-surface-secondary">

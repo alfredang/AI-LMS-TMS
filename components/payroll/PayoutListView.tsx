@@ -83,18 +83,18 @@ const PayoutListView: React.FC = () => {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 dark:bg-slate-700 text-left text-xs uppercase tracking-wider text-on-surface-secondary">
             <tr>
-              <th className="px-3 py-2">Course Title</th>
-              <th className="px-3 py-2">Course Code</th>
-              <th className="px-3 py-2">Run ID</th>
-              <th className="px-3 py-2">Trainer</th>
-              <th className="px-3 py-2 text-right"># Learners</th>
-              <th className="px-3 py-2 text-right">Course Fee</th>
-              <th className="px-3 py-2 text-right">Est. Payout</th>
-              <th className="px-3 py-2 text-right">Actual Payout</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Payment Date</th>
-              <th className="px-3 py-2">Remark</th>
-              <th className="px-3 py-2"></th>
+              <th className="px-2 py-1.5 whitespace-nowrap">Course Title</th>
+              <th className="px-2 py-1.5 whitespace-nowrap">Course Code</th>
+              <th className="px-2 py-1.5 whitespace-nowrap">Run ID</th>
+              <th className="px-2 py-1.5 whitespace-nowrap">Trainer</th>
+              <th className="px-2 py-1.5 whitespace-nowrap text-right"># Learners</th>
+              <th className="px-2 py-1.5 whitespace-nowrap text-right">Course Fee</th>
+              <th className="px-2 py-1.5 whitespace-nowrap text-right">Est. Payout</th>
+              <th className="px-2 py-1.5 whitespace-nowrap text-right">Actual Payout</th>
+              <th className="px-2 py-1.5 whitespace-nowrap">Status</th>
+              <th className="px-2 py-1.5 whitespace-nowrap">Payment Date</th>
+              <th className="px-2 py-1.5 whitespace-nowrap">Remark</th>
+              <th className="px-2 py-1.5 whitespace-nowrap"></th>
             </tr>
           </thead>
           <tbody>
@@ -114,26 +114,26 @@ const PayoutListView: React.FC = () => {
             )}
             {!loading &&
               rows.map((r) => (
-                <tr key={r.id} className="border-t border-default hover:bg-gray-50 dark:hover:bg-slate-700/50">
-                  <td className="px-3 py-2">{r.course_title || '-'}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{r.course_code || '-'}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{r.course_run_code || '-'}</td>
-                  <td className="px-3 py-2">{r.trainer_name || '-'}</td>
-                  <td className="px-3 py-2 text-right">{r.num_learners}</td>
-                  <td className="px-3 py-2 text-right">{fmtCurrency(r.course_fee)}</td>
-                  <td className="px-3 py-2 text-right">{fmtCurrency(r.estimated_payout)}</td>
-                  <td className="px-3 py-2 text-right font-medium">{fmtCurrency(r.actual_payout)}</td>
-                  <td className="px-3 py-2">
+                <tr key={r.id} className="border-t border-default hover:bg-gray-50 dark:hover:bg-slate-700/50 whitespace-nowrap">
+                  <td className="px-2 py-1.5 max-w-[18rem] truncate" title={r.course_title || ''}>{r.course_title || '-'}</td>
+                  <td className="px-2 py-1.5 font-mono text-xs">{r.course_code || '-'}</td>
+                  <td className="px-2 py-1.5 font-mono text-xs">{r.course_run_code || '-'}</td>
+                  <td className="px-2 py-1.5 max-w-[12rem] truncate" title={r.trainer_name || ''}>{r.trainer_name || '-'}</td>
+                  <td className="px-2 py-1.5 text-right">{r.num_learners}</td>
+                  <td className="px-2 py-1.5 text-right">{fmtCurrency(r.course_fee)}</td>
+                  <td className="px-2 py-1.5 text-right">{fmtCurrency(r.estimated_payout)}</td>
+                  <td className="px-2 py-1.5 text-right font-medium">{fmtCurrency(r.actual_payout)}</td>
+                  <td className="px-2 py-1.5">
                     <StatusBadge status={r.status} />
                   </td>
-                  <td className="px-3 py-2">{r.payment_date || '-'}</td>
-                  <td className="px-3 py-2 max-w-[14rem] truncate" title={r.remark || ''}>
+                  <td className="px-2 py-1.5">{r.payment_date || '-'}</td>
+                  <td className="px-2 py-1.5 max-w-[12rem] truncate" title={r.remark || ''}>
                     {r.remark || '-'}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-2 py-1.5">
                     <button
                       onClick={() => setEditing(r)}
-                      className="px-2 py-1 text-xs border rounded hover:bg-gray-100 dark:hover:bg-slate-700"
+                      className="px-2 py-0.5 text-xs border rounded hover:bg-gray-100 dark:hover:bg-slate-700"
                     >
                       Edit
                     </button>
