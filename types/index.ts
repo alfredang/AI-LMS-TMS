@@ -189,6 +189,7 @@ export enum TrainerPage {
   TrainingHours = 'trainingHours',
   LessonDeliveryGuide = 'lessonDeliveryGuide',
   AssessmentGuide = 'assessmentGuide',
+  PaymentHistory = 'paymentHistory',
 }
 
 // Course related interfaces

@@ -17,6 +17,7 @@ const NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
   { page: TrainerPage.PastAssessment,     label: 'Past Assessment',     icon: IconName.Award          },
   { page: TrainerPage.LessonDeliveryGuide, label: 'Lesson Delivery Guide', icon: IconName.BookOpen },
   { page: TrainerPage.AssessmentGuide,   label: 'Assessment Guide',    icon: IconName.BookOpen        },
+  { page: TrainerPage.PaymentHistory,    label: 'Payment History',     icon: IconName.Analytics       },
 ];
 
 const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
