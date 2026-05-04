@@ -893,6 +893,13 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         </div>
     );
 
+    const ssgAppCount = Math.max(1, Math.min(4, formData.ssgAppCount ?? 1));
+    const getSsgAppLabel = (appKey: 'app1' | 'app2' | 'app3' | 'app4') => {
+        const n = appKey.replace('app', '');
+        const customName = formData.ssgAppNames?.[appKey]?.trim();
+        return customName ? `App ${n} (${customName})` : `App ${n}`;
+    };
+
     const renderSsgAppHeader = (
         title: string,
         appKey: string,
@@ -2038,8 +2045,40 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 {renderSectionHeader('SSG Authentication Setting', isSsgOpen, () => setIsSsgOpen(prev => !prev), 'text-xl font-bold')}
                 {isSsgOpen && <div className="space-y-4 mt-2">
 
+                    {/* App count + per-app name editor (edit mode only) */}
+                    {isEditing && (
+                        <div className="rounded-md border border-default bg-surface-elevated p-4 space-y-3">
+                            <div>
+                                <label htmlFor="ssgAppCount" className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Number of SSG Apps</label>
+                                <select
+                                    id="ssgAppCount"
+                                    value={ssgAppCount}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, ssgAppCount: parseInt(e.target.value, 10) }))}
+                                    className={inputClasses}
+                                >
+                                    {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {(['app1', 'app2', 'app3', 'app4'] as const).slice(0, ssgAppCount).map(key => (
+                                    <div key={key}>
+                                        <label htmlFor={`ssgAppName-${key}`} className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">App {key.replace('app', '')} Name</label>
+                                        <input
+                                            type="text"
+                                            id={`ssgAppName-${key}`}
+                                            value={formData.ssgAppNames?.[key] || ''}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, ssgAppNames: { ...(prev.ssgAppNames || {}), [key]: e.target.value } }))}
+                                            className={inputClasses}
+                                            placeholder={`App ${key.replace('app', '')} name`}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* App 1 */}
-                    {renderSsgAppHeader('App 1 (SKILLETO TERTIARY)', 'app1', isSsgApp1Open, () => setIsSsgApp1Open(prev => !prev))}
+                    {ssgAppCount >= 1 && renderSsgAppHeader(getSsgAppLabel('app1'), 'app1', isSsgApp1Open, () => setIsSsgApp1Open(prev => !prev))}
                     {isSsgApp1Open && (isEditing ? (
                         <div className="space-y-4 ml-4">
                             <div>
@@ -2092,8 +2131,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     ))}
 
                     {/* App 2 */}
-                    {renderSsgAppHeader('App 2 (Training Management System)', 'app2', isSsgApp2Open, () => setIsSsgApp2Open(prev => !prev))}
-                    {isSsgApp2Open && (isEditing ? (
+                    {ssgAppCount >= 2 && renderSsgAppHeader(getSsgAppLabel('app2'), 'app2', isSsgApp2Open, () => setIsSsgApp2Open(prev => !prev))}
+                    {ssgAppCount >= 2 && isSsgApp2Open && (isEditing ? (
                         <div className="space-y-4 ml-4">
                             <div>
                                 <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Self Signing Cert File</label>
@@ -2145,8 +2184,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     ))}
 
                     {/* App 3 */}
-                    {renderSsgAppHeader('App 3 (TIPL Tertiary Infotech Academy)', 'app3', isSsgApp3Open, () => setIsSsgApp3Open(prev => !prev))}
-                    {isSsgApp3Open && (isEditing ? (
+                    {ssgAppCount >= 3 && renderSsgAppHeader(getSsgAppLabel('app3'), 'app3', isSsgApp3Open, () => setIsSsgApp3Open(prev => !prev))}
+                    {ssgAppCount >= 3 && isSsgApp3Open && (isEditing ? (
                         <div className="space-y-4 ml-4">
                             <div>
                                 <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Self Signing Cert File</label>
@@ -2198,8 +2237,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     ))}
 
                     {/* App 4 */}
-                    {renderSsgAppHeader('App 4 (TMS API)', 'app4', isSsgApp4Open, () => setIsSsgApp4Open(prev => !prev))}
-                    {isSsgApp4Open && (isEditing ? (
+                    {ssgAppCount >= 4 && renderSsgAppHeader(getSsgAppLabel('app4'), 'app4', isSsgApp4Open, () => setIsSsgApp4Open(prev => !prev))}
+                    {ssgAppCount >= 4 && isSsgApp4Open && (isEditing ? (
                         <div className="space-y-4 ml-4">
                             <div>
                                 <label htmlFor="ssgApp4ClientId" className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Client ID</label>

@@ -42,7 +42,7 @@ npm run db:seed      # Seed database
 ### Authentication
 - JWT (`jsonwebtoken`) + bcrypt + OTP flow
 - Endpoints under `/pages/api/auth/`
-- 6 roles (`UserRole` in `types/index.ts`): Admin, TrainingProvider, Finance, Trainer, Developer, Learner
+- 7 roles (`UserRole` in `types/index.ts`): Admin, TrainingProvider, Finance, Payroll, Trainer, Developer, Learner
 
 ### Role-based layouts
 Every role has a layout in `layouts/`. Some pair with a standalone sidebar component; others keep the sidebar inline:
@@ -54,6 +54,7 @@ Every role has a layout in `layouts/`. Some pair with a standalone sidebar compo
 | `DeveloperLayout` | `components/developer/DeveloperSidebar.tsx` |
 | `TrainingProviderLayout` | `components/training-provider/TrainingProviderSidebar.tsx` |
 | `FinanceLayout` | *(inline in the layout file)* |
+| `PayrollLayout` | *(inline in the layout file)* |
 | `LearnerLayout` | *(inline in the layout file)* |
 
 All sidebars — standalone or inline — follow the same collapsible icon-rail pattern: expanded by default, collapsed shows icons only, toggle at the top.
@@ -109,6 +110,10 @@ Hundreds of endpoints under `/pages/api/` follow this shape. `GET` is the other 
 2. **Billing:** Proforma Invoice → SkillsFuture Credit → Invoice → Payment → Receipt
 3. **SSG:** Course publishing on TPGateway → Enrollment submission → Grant application → Claim submission
 4. **Certificates:** Auto-generated daily at 6:30 PM SGT for course runs ended within the last 7 days, requires ≥60% attendance (configurable), rendered from a Google Slides template and emailed as PDF
+5. **Trainer Payroll:** Configurable payout tiers + per-class payouts managed by the Payroll role (gated by `payroll_enabled` flag — see `lib/payroll/featureFlag.ts`). Dashboard surfaces trainer payout history and approval workflow.
+
+### SSG App configuration
+Each `training_provider` row stores `ssg_app_count` (1–4) and `ssg_app_names` (jsonb map: `app1`/`app2`/`app3`/`app4` → display name). The Training Provider profile UI exposes a count selector and per-app name editor under **SSG Authentication Setting**. New providers default to 1 app named "App 1"; the tertiary tenant is backfilled to 4 with the historical names so existing labels are preserved.
 
 ## Database
 

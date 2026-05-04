@@ -78,6 +78,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.ssg_app4_client_id,
           tp.ssg_app4_client_secret,
           tp.ssg_default_app,
+          tp.ssg_app_count,
+          tp.ssg_app_names,
           tp.created_at,
           tp.updated_at
         FROM app_user au
@@ -194,6 +196,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ssgApp4ClientId: profile.ssg_app4_client_id,
         ssgApp4ClientSecret: profile.ssg_app4_client_secret,
         ssgDefaultApp: profile.ssg_default_app || 'app2',
+        ssgAppCount: typeof profile.ssg_app_count === 'number' ? profile.ssg_app_count : 1,
+        ssgAppNames: profile.ssg_app_names || {},
         createdAt: profile.created_at,
         updatedAt: profile.updated_at
       };
