@@ -154,12 +154,31 @@ export function padContentBlocks(
   topicTitle: string,
   bullets: string[] = [],
   target = 6,
+  research?: ResearchEntry,
 ): ContentBlock[] {
   if (existing.length >= target) return existing.slice(0, target);
   const blocks: ContentBlock[] = [...existing];
   const bps = bullets.filter((b) => String(b ?? '').trim().length >= 10);
 
+  // Pull real content from research where available, so padded blocks
+  // contain actual researched material instead of generic "Detail N" stubs.
+  const r = research || {} as any;
+  const procSteps: string[] = r?.infographic_data?.process_steps?.filter((s: any) => typeof s === 'string' && s.trim().length > 5) ?? [];
+  const compItems: any[] = r?.infographic_data?.comparison_items ?? [];
+  const chartData: any[] = r?.infographic_data?.chart_data ?? [];
+  const sources: any[] = r?.sources ?? [];
+  // Flatten key_findings across sources into bite-sized phrases for items.
+  const findings: string[] = [];
+  for (const s of sources) {
+    for (const f of (s.key_findings || [])) {
+      const t = String(f).trim();
+      if (t.length >= 10 && t.length <= 200) findings.push(t);
+    }
+  }
+
   let padIdx = 0;
+  let procCursor = 0;
+  let findingCursor = 0;
   while (blocks.length < target) {
     const bi = blocks.length;
     let [vizType, template] = PAD_TEMPLATES[padIdx % PAD_TEMPLATES.length];
@@ -175,7 +194,53 @@ export function padContentBlocks(
     const bpChunk = bpStart < bps.length ? bps.slice(bpStart, bpStart + 4) : [];
 
     let items: ContentBlockItem[];
-    if (vizType === 'comparison') {
+    let derivedSubTitle = '';
+
+    // For each viz type, prefer research-derived content over generic stubs.
+    if (vizType === 'process' && procSteps.length - procCursor >= 3) {
+      const stepChunk = procSteps.slice(procCursor, procCursor + 5);
+      procCursor += stepChunk.length;
+      items = stepChunk.map((s, i) => ({
+        label: `Step ${i + 1}`,
+        desc: s.slice(0, 80),
+        icon: 'mdi/arrow-right-circle',
+      }));
+      derivedSubTitle = `${topicTitle} Implementation Process`;
+    } else if (vizType === 'comparison' && compItems.length >= 2) {
+      const pair = compItems.slice(0, 2);
+      items = pair.map((c, i) => ({
+        label: String(c.label ?? (i === 0 ? 'Approach A' : 'Approach B')).slice(0, 28),
+        desc: String(c.desc ?? '').slice(0, 80),
+        icon: i === 0 ? 'mdi/history' : 'mdi/rocket-launch',
+      }));
+      derivedSubTitle = `${topicTitle} — Approach Comparison`;
+    } else if (vizType === 'statistics' && chartData.length >= 2) {
+      items = chartData.slice(0, 5).map((d) => ({
+        label: String(d.label ?? '').slice(0, 28) || 'Metric',
+        desc: String(d.label ?? ''),
+        value: typeof d.value === 'number' ? d.value : 50,
+        icon: 'mdi/chart-bar',
+      }));
+      derivedSubTitle = `${topicTitle} — Key Statistics`;
+    } else if (findings.length - findingCursor >= 3) {
+      // Use research key_findings as overview/list items — REAL content
+      // from Wikipedia article extracts, not generic "Point 1" stubs.
+      const chunk = findings.slice(findingCursor, findingCursor + 4);
+      findingCursor += chunk.length;
+      items = chunk.map((f) => ({
+        label: f.split(' ').slice(0, 3).join(' ').slice(0, 28) || 'Insight',
+        desc: f.slice(0, 80),
+        icon: 'mdi/lightbulb',
+      }));
+      derivedSubTitle = `${topicTitle} — Key Insights`;
+    } else if (bpChunk.length) {
+      items = bpChunk.map((bp) => ({
+        label: bp.split(' ').slice(0, 3).join(' ').slice(0, 28),
+        desc: bp,
+        icon: 'mdi/chevron-right',
+      }));
+      derivedSubTitle = bpChunk[0].split(' ').slice(0, 6).join(' ').slice(0, 60);
+    } else if (vizType === 'comparison') {
       items = [
         { label: 'Traditional', desc: `Traditional approach to ${topicTitle}`, icon: 'mdi/history' },
         { label: 'Modern', desc: `Modern approach to ${topicTitle}`, icon: 'mdi/rocket-launch' },
@@ -186,13 +251,8 @@ export function padContentBlocks(
         { label: 'Efficiency', value: 45, desc: 'Efficiency improvement', icon: 'mdi/chart-line' },
         { label: 'Cost Save', value: 30, desc: 'Cost reduction', icon: 'mdi/currency-usd' },
       ];
-    } else if (bpChunk.length) {
-      items = bpChunk.map((bp) => ({
-        label: bp.split(' ').slice(0, 3).join(' ').slice(0, 28),
-        desc: bp,
-        icon: 'mdi/chevron-right',
-      }));
     } else {
+      // Last resort — generic stubs (only when NO research, NO bullets, no fitting viz data)
       items = Array.from({ length: 4 }, (_, j) => ({
         label: `Point ${j + 1}`,
         desc: `Key aspect ${j + 1} of ${topicTitle}`,
@@ -200,9 +260,8 @@ export function padContentBlocks(
       }));
     }
 
-    const subTitle = bpChunk.length
-      ? bpChunk[0].split(' ').slice(0, 6).join(' ').slice(0, 60)
-      : `${topicTitle} — Detail ${bi}`;
+    const subTitle = derivedSubTitle
+      || (bpChunk.length ? bpChunk[0].split(' ').slice(0, 6).join(' ').slice(0, 60) : `${topicTitle} — Detail ${bi}`);
 
     blocks.push({
       block_index: bi,
@@ -352,7 +411,7 @@ RULES:
     // Always pad to target — Streamlit _pad_content_blocks behaviour
     if (blocks.length < numBlocks) {
       console.log(`[cw-slides-v2] '${topic.topic_title.slice(0, 60)}': model returned ${blocks.length}, padding to ${numBlocks}`);
-      blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks);
+      blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks, research);
     } else {
       blocks = blocks.slice(0, numBlocks);
     }
@@ -373,7 +432,7 @@ RULES:
   } catch (e: any) {
     console.error(`[cw-slides-v2] content generation failed for '${topic.topic_title.slice(0, 60)}':`, e.message);
     // Pad from scratch — guarantees target count even when Claude call fails
-    const padded = padContentBlocks([], topic.topic_title, topic.bullet_points, numBlocks);
+    const padded = padContentBlocks([], topic.topic_title, topic.bullet_points, numBlocks, research);
     const baseCaption = captionFromResearch(research);
     for (const b of padded) {
       if (!b.caption) b.caption = baseCaption;
@@ -418,7 +477,7 @@ export async function generateAllContent(
     const key = topics[i].topic_title || `Topic ${i + 1}`;
     if (r instanceof Error) {
       console.error(`[cw-slides-v2] content errored for '${key.slice(0, 60)}':`, r.message);
-      map[key] = { topic: key, content_blocks: padContentBlocks([], key, topics[i].bullet_points, perTopicBlocks[i] || 6) };
+      map[key] = { topic: key, content_blocks: padContentBlocks([], key, topics[i].bullet_points, perTopicBlocks[i] || 6, researchMap[key]) };
     } else {
       map[key] = r;
     }
