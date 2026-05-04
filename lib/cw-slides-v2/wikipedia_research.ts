@@ -120,22 +120,59 @@ export async function wikipediaResearch(topicTitle: string, courseTitle: string)
   const summaryPromises = topPages.slice(0, 3).map((p) => p.key ? wikiSummary(p.key) : Promise.resolve(null));
   const summaries = await Promise.all(summaryPromises);
 
+  // Decode common HTML entities and strip noise that Wikipedia injects
+  // into article text (citation markers, retrieval dates, see-also
+  // footers). Without this cleanup, items show up as &quot;Voxtral
+  // and "Retrieved 7 December 2025" in the rendered infographics.
+  const HTML_ENTITIES: Record<string, string> = {
+    '&quot;': '"', '&amp;': '&', '&lt;': '<', '&gt;': '>',
+    '&apos;': "'", '&#39;': "'", '&nbsp;': ' ',
+  };
+  const decodeEntities = (s: string): string => {
+    return s.replace(/&[a-z#0-9]+;/gi, (m) => {
+      if (HTML_ENTITIES[m]) return HTML_ENTITIES[m];
+      const num = m.match(/^&#(\d+);$/);
+      if (num) return String.fromCharCode(Number(num[1]));
+      return m;
+    });
+  };
+
+  // Wikipedia "junk" patterns to filter out — citation/footnote text
+  // that's not real content.
+  const JUNK_PATTERNS = [
+    /^retrieved\b/i,
+    /^archived\b/i,
+    /^\[(citation needed|edit|note|\d+)\]/i,
+    /^\d+ [a-z]+ \d{4}\.?$/i,                  // "7 December 2025"
+    /^see also\b/i, /^references?$/i, /^external links\b/i,
+    /^further reading\b/i, /^bibliography\b/i,
+    /^\^/, /^[a-z]\.\s*$/i,                     // footnote markers like "^a"
+  ];
+  const isJunk = (s: string): boolean => {
+    const trimmed = s.trim();
+    if (trimmed.length < 20) return true;
+    if (JUNK_PATTERNS.some((re) => re.test(trimmed))) return true;
+    // Sentences that are mostly numbers / punctuation
+    const wordCount = (trimmed.match(/[a-zA-Z]{3,}/g) || []).length;
+    if (wordCount < 3) return true;
+    return false;
+  };
+
   // Build ResearchEntry — split each Wikipedia summary into multiple
-  // bullet-sized findings so downstream padding has plenty of material
-  // to draw from.
+  // clean bullet-sized findings.
   const splitToFindings = (text: string): string[] => {
     if (!text) return [];
     return text
       .split(/(?<=[.!?])\s+/)
-      .map((s) => s.replace(/<[^>]+>/g, '').trim())
-      .filter((s) => s.length >= 20 && s.length <= 180);
+      .map((s) => decodeEntities(s.replace(/<[^>]+>/g, '').replace(/\[\d+\]/g, '')).trim())
+      .filter((s) => s.length >= 25 && s.length <= 180 && !isJunk(s));
   };
 
   const sources: ResearchSource[] = topPages.map((p, i) => {
     const summary = summaries[i];
     const url = summary?.content_urls?.desktop?.page
       || (p.key ? `https://en.wikipedia.org/wiki/${encodeURIComponent(p.key)}` : '');
-    const excerpt = (p.excerpt || p.description || '').replace(/<[^>]+>/g, '').trim();
+    const excerpt = decodeEntities((p.excerpt || p.description || '').replace(/<[^>]+>/g, '').replace(/\[\d+\]/g, '').trim());
     const extract = summary?.extract || '';
     // Each finding = ONE substantive sentence. Up to 6 per source.
     const findings = [
@@ -143,10 +180,10 @@ export async function wikipediaResearch(topicTitle: string, courseTitle: string)
       ...splitToFindings(extract),
     ].slice(0, 6);
     return {
-      title: p.title,
+      title: decodeEntities(p.title || ''),
       url,
       type: 'wikipedia',
-      key_findings: findings.length > 0 ? findings : (excerpt ? [excerpt.slice(0, 160)] : []),
+      key_findings: findings.length > 0 ? findings : (excerpt && !isJunk(excerpt) ? [excerpt.slice(0, 160)] : []),
       relevance_score: 1.0 - (i * 0.1),
       date: new Date().getFullYear().toString(),
     };

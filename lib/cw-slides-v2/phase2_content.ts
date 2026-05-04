@@ -338,13 +338,24 @@ export function padContentBlocks(
         if (s.length <= max) return s;
         const cut = s.slice(0, max);
         const lastSpace = cut.lastIndexOf(' ');
-        return (lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).replace(/[,;:]+$/, '');
+        return (lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).replace(/[,;:.!?]+$/, '');
       };
-      items = chunk.map((f) => {
-        const labelWords = f.split(' ').slice(0, 3).join(' ');
+      // Decode any leftover HTML entities in finding text and skip
+      // citation-style leading words ("Retrieved", "Archived", quotes).
+      const HTML_ENT: Record<string, string> = { '&quot;': '"', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&apos;': "'", '&#39;': "'", '&nbsp;': ' ' };
+      const cleanText = (s: string) => s.replace(/&[a-z#0-9]+;/gi, (m) => HTML_ENT[m] || m).replace(/^["'']+/, '').replace(/^(retrieved|archived|see also|references?)\b[^.!?]*[.!?]?\s*/i, '').trim();
+      items = chunk.map((f, idx) => {
+        const cleaned = cleanText(f);
+        // Generate a meaningful label by extracting the SUBJECT of the
+        // sentence (skip leading prepositions/articles), max 3 words.
+        const words = cleaned.split(/\s+/).filter((w) => w.length >= 2);
+        const skipLeading = ['the','a','an','this','that','these','those','it','they','we','you','i'];
+        let labelStart = 0;
+        while (labelStart < words.length && skipLeading.includes(words[labelStart].toLowerCase())) labelStart++;
+        const label = words.slice(labelStart, labelStart + 3).join(' ');
         return {
-          label: truncWord(labelWords, 25) || 'Insight',
-          desc: truncWord(f, 50),
+          label: truncWord(label, 25) || `Concept ${bi + 1}`,
+          desc: truncWord(cleaned, 50),
           icon: 'mdi/lightbulb',
         };
       });
