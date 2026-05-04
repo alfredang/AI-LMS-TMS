@@ -56,7 +56,8 @@ npm run db:seed      # Seed database
 - Data-fetching hooks in `/hooks/` (`useCourses`, `useProfile`, `useTrainerCourses`, `useDeveloperCourses`, `useTrainerProfile`, `useAppVersion`)
 
 ### Authentication
-- JWT (`jsonwebtoken`) + bcrypt + OTP flow
+- Password hashing via `bcryptjs`, plus an OTP flow for first-time login / verification
+- **No real JWT.** `pages/api/auth/login.ts` returns a placeholder token string (`mock-jwt-token-${user.id}`); session state is held client-side via `LmsContext` and re-checked against the DB. No `JWT_SECRET` env var is needed.
 - Endpoints under `/pages/api/auth/`
 - 7 roles (`UserRole` in `types/index.ts`): Admin, TrainingProvider, Finance, Payroll, Trainer, Developer, Learner
 
