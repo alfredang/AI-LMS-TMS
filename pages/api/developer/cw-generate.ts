@@ -250,52 +250,6 @@ Generate a marketing brochure with:
 Professional marketing tone. Focus on benefits and outcomes.
 Respond with ONLY the brochure content, nothing else.`;
 
-const CONVERT_ASSESSMENT_PROMPT = `You are an expert WSQ instructional designer converting assessment documents into WSQ-standard format.
-
-Source Document Content:
-{source_text}
-
-Convert this document into WSQ-standard assessment format with:
-1. Proper question numbering and structure
-2. Scenario-based questions with K/A statement mapping
-3. Clear answer guidelines with marking criteria
-4. Trainee information header
-5. Assessment instructions
-6. Assessor sign-off section
-
-Maintain the original content while restructuring into WSQ format.
-Respond with ONLY the converted document, nothing else.`;
-
-const CONVERT_COURSEWARE_PROMPT = `You are an expert WSQ instructional designer converting courseware into WSQ-standard format.
-
-Source Document Content:
-{source_text}
-
-Convert this document into WSQ-standard courseware format with:
-1. Proper section structure (Course Overview, Learning Units, Topics)
-2. Learning outcomes aligned to K/A statements
-3. Structured content with activities and exercises
-4. Assessment integration points
-5. Professional formatting consistent with WSQ guidelines
-
-Maintain the original content while restructuring into WSQ format.
-Respond with ONLY the converted document, nothing else.`;
-
-const CONVERT_LESSON_PLAN_PROMPT = `You are an expert WSQ instructional designer converting a lesson plan into WSQ-standard format.
-
-Source Document Content:
-{source_text}
-
-Convert this into WSQ-standard lesson plan format with:
-1. Day-by-day schedule (9:00 AM - 6:00 PM)
-2. Fixed lunch at 12:30 PM - 1:15 PM
-3. Assessment on last day at 4:00 PM - 6:00 PM
-4. Proper timing and duration columns
-5. Topic descriptions with instructional methods
-
-Maintain the original content while restructuring into WSQ lesson plan format.
-Respond with ONLY the converted lesson plan, nothing else.`;
-
 const COURSEWARE_AUDIT_PROMPT = `You are an expert WSQ quality auditor for Singapore's SSG framework.
 
 Audit the following courseware documents against the Course Proposal for consistency.
@@ -456,8 +410,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       numTrainingDays = '2',
       assessmentTypes = [],
       courseUrl = '',
-      sourceText = '',
-      convertType = 'assessment',
       auditDocuments = {},
     } = req.body;
 
@@ -1040,19 +992,6 @@ CRITICAL: Return ONLY the JSON, no markdown blocks, no explanation.`;
           course_context: courseContext,
           course_url: courseUrl,
         });
-        const result = await generateWithClaude(prompt, apiKey);
-        return res.status(200).json({ success: true, result });
-      }
-
-      case 'convert_documents': {
-        const convertTemplates: Record<string, string> = {
-          assessment: CONVERT_ASSESSMENT_PROMPT,
-          courseware: CONVERT_COURSEWARE_PROMPT,
-          lesson_plan: CONVERT_LESSON_PLAN_PROMPT,
-        };
-        const template = convertTemplates[convertType];
-        if (!template) return res.status(400).json({ error: `Unknown convert type: ${convertType}` });
-        const prompt = buildPrompt(template, { source_text: sourceText });
         const result = await generateWithClaude(prompt, apiKey);
         return res.status(200).json({ success: true, result });
       }

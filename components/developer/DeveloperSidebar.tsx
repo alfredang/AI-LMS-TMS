@@ -192,7 +192,6 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
                     <NavItem page={DeveloperPage.CwGenerateAssessment} label="Generate Assessment" isSubItem />
                     <NavItem page={DeveloperPage.CwGenerateSlides} label="Generate Slides" isSubItem />
                     <NavItem page={DeveloperPage.CwGenerateBrochure} label="Generate Brochure" isSubItem />
-                    <NavItem page={DeveloperPage.CwConvertDocuments} label="Convert Documents" isSubItem />
                     <NavItem page={DeveloperPage.CwCoursewareAudit} label="Courseware Audit" isSubItem />
                 </NavSection>
             )}

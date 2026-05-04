@@ -162,7 +162,6 @@ export enum DeveloperPage {
   CwGenerateAssessment = 'cwGenerateAssessment',
   CwGenerateSlides = 'cwGenerateSlides',
   CwGenerateBrochure = 'cwGenerateBrochure',
-  CwConvertDocuments = 'cwConvertDocuments',
   CwCoursewareAudit = 'cwCoursewareAudit',
 }
 
