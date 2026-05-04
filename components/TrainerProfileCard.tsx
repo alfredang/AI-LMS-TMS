@@ -9,6 +9,7 @@ import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, getProfileImageImportUrl, stripBaseUrl } from '@/lib/urlHelpers';
 import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
 import { maskNric, formatDate, formatDateForInput } from '../utils';
+import TrainerPayoutHistory from './payroll/TrainerPayoutHistory';
 
 // Constants for styling consistency
 const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
@@ -1239,6 +1240,8 @@ export const TrainerProfileCard: React.FC<{
                             color="secondary"
                         />
                     </section>
+
+                    {userId && <TrainerPayoutHistory trainerUserId={userId} />}
                 </div>
 
             </Card>

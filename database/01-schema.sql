@@ -447,7 +447,8 @@ CREATE TYPE public.user_role AS ENUM (
     'Admin',
     'Developer',
     'Training Provider',
-    'Finance'
+    'Finance',
+    'Payroll'
 );
 
 

@@ -79,6 +79,8 @@ const convertToUserRole = (roleString: string): UserRole => {
       return UserRole.Developer;
     case 'finance':
       return UserRole.Finance;
+    case 'payroll':
+      return UserRole.Payroll;
     case 'training_provider':
     case 'trainingprovider':
       return UserRole.TrainingProvider;

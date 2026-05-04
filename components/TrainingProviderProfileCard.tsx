@@ -7,6 +7,7 @@ import { TrainingProviderProfile } from '@app-types/profile';
 import { useLms } from '@contexts/LmsContext';
 import { applyPrimaryColor, useColorScheme, ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
+import PayrollSettingsView from './payroll/PayrollSettingsView';
 
 // Constants for styling consistency
 const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
@@ -282,6 +283,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isSsgOpen, setIsSsgOpen] = useState(false);
     const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false);
     const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
+    const [isPayrollOpen, setIsPayrollOpen] = useState(false);
     const [isSecurityOpen, setIsSecurityOpen] = useState(false);
     const [isGamificationOpen, setIsGamificationOpen] = useState(false);
     const [isSsgFundingOpen, setIsSsgFundingOpen] = useState(false);
@@ -1820,6 +1822,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             isEditing={true}
                         />
                     ))}
+                </div>}
+
+                <div className="border-t my-6"></div>
+                {renderSectionHeader('Payroll', isPayrollOpen, () => setIsPayrollOpen(prev => !prev), 'text-xl font-bold')}
+                {isPayrollOpen && <div className="mt-4">
+                    <PayrollSettingsView />
                 </div>}
 
                 <div className="border-t my-6"></div>
