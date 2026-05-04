@@ -176,6 +176,62 @@ export function padContentBlocks(
     }
   }
 
+  // Topic-aware subtitle pools matching Streamlit's per-block concept
+  // naming style (e.g. "Key Ethical Risk Categories", "Ethical Risk
+  // Assessment Process", "Implementation Timeline"). Each block index
+  // picks a different concept so subtitles never repeat within a topic.
+  const topicShort = topicTitle.split(/\s+/).slice(0, 5).join(' ').slice(0, 40);
+  const SUBTITLE_POOLS: Record<string, string[]> = {
+    overview: [
+      `Key ${topicShort} Concepts`,
+      `${topicShort} Fundamentals`,
+      `Core Components of ${topicShort}`,
+      `${topicShort} Overview`,
+      `Essential ${topicShort} Categories`,
+      `${topicShort} Foundations`,
+    ],
+    process: [
+      `${topicShort} Implementation Process`,
+      `${topicShort} Step-by-Step Workflow`,
+      `${topicShort} Operational Stages`,
+      `Practical ${topicShort} Procedure`,
+    ],
+    comparison: [
+      `${topicShort} Approach Comparison`,
+      `Traditional vs Modern ${topicShort}`,
+      `${topicShort} Method Trade-offs`,
+    ],
+    statistics: [
+      `${topicShort} Industry Metrics`,
+      `${topicShort} Adoption Statistics`,
+      `${topicShort} Performance Data`,
+    ],
+    hierarchy: [
+      `${topicShort} Framework Structure`,
+      `${topicShort} Taxonomy`,
+      `${topicShort} Component Hierarchy`,
+    ],
+    timeline: [
+      `${topicShort} Evolution Timeline`,
+      `${topicShort} Implementation Roadmap`,
+      `${topicShort} Historical Milestones`,
+    ],
+    cycle: [
+      `${topicShort} Continuous Cycle`,
+      `${topicShort} Iterative Process`,
+    ],
+    quadrant: [
+      `${topicShort} Strategic Quadrants`,
+      `${topicShort} Decision Matrix`,
+    ],
+    relationship: [
+      `${topicShort} Component Relationships`,
+      `${topicShort} Interconnections`,
+    ],
+  };
+  // Per-pool counters so each viz_type rotates through its pool
+  const poolCursors: Record<string, number> = {};
+
   let padIdx = 0;
   let procCursor = 0;
   let findingCursor = 0;
@@ -193,8 +249,13 @@ export function padContentBlocks(
     const bpStart = bi * 2;
     const bpChunk = bpStart < bps.length ? bps.slice(bpStart, bpStart + 4) : [];
 
+    // Pick a unique subtitle from the viz_type pool
+    const pool = SUBTITLE_POOLS[vizType] || SUBTITLE_POOLS.overview;
+    const cursorIdx = poolCursors[vizType] || 0;
+    let derivedSubTitle = pool[cursorIdx % pool.length];
+    poolCursors[vizType] = cursorIdx + 1;
+
     let items: ContentBlockItem[];
-    let derivedSubTitle = '';
 
     // For each viz type, prefer research-derived content over generic stubs.
     if (vizType === 'process' && procSteps.length - procCursor >= 3) {
@@ -205,7 +266,6 @@ export function padContentBlocks(
         desc: s.slice(0, 80),
         icon: 'mdi/arrow-right-circle',
       }));
-      derivedSubTitle = `${topicTitle} Implementation Process`;
     } else if (vizType === 'comparison' && compItems.length >= 2) {
       const pair = compItems.slice(0, 2);
       items = pair.map((c, i) => ({
@@ -213,7 +273,6 @@ export function padContentBlocks(
         desc: String(c.desc ?? '').slice(0, 80),
         icon: i === 0 ? 'mdi/history' : 'mdi/rocket-launch',
       }));
-      derivedSubTitle = `${topicTitle} — Approach Comparison`;
     } else if (vizType === 'statistics' && chartData.length >= 2) {
       items = chartData.slice(0, 5).map((d) => ({
         label: String(d.label ?? '').slice(0, 28) || 'Metric',
@@ -221,7 +280,6 @@ export function padContentBlocks(
         value: typeof d.value === 'number' ? d.value : 50,
         icon: 'mdi/chart-bar',
       }));
-      derivedSubTitle = `${topicTitle} — Key Statistics`;
     } else if (findings.length - findingCursor >= 3) {
       // Use research key_findings as overview/list items — REAL content
       // from Wikipedia article extracts, not generic "Point 1" stubs.
@@ -232,53 +290,52 @@ export function padContentBlocks(
         desc: f.slice(0, 80),
         icon: 'mdi/lightbulb',
       }));
-      derivedSubTitle = `${topicTitle} — Key Insights`;
     } else if (bpChunk.length) {
       items = bpChunk.map((bp) => ({
         label: bp.split(' ').slice(0, 3).join(' ').slice(0, 28),
         desc: bp,
         icon: 'mdi/chevron-right',
       }));
-      derivedSubTitle = bpChunk[0].split(' ').slice(0, 6).join(' ').slice(0, 60);
     } else if (vizType === 'comparison') {
       items = [
-        { label: 'Traditional', desc: `Traditional approach to ${topicTitle}`, icon: 'mdi/history' },
-        { label: 'Modern', desc: `Modern approach to ${topicTitle}`, icon: 'mdi/rocket-launch' },
+        { label: 'Traditional', desc: `Traditional approach to ${topicShort}`, icon: 'mdi/history' },
+        { label: 'Modern', desc: `Modern approach to ${topicShort}`, icon: 'mdi/rocket-launch' },
       ];
     } else if (vizType === 'statistics') {
       items = [
-        { label: 'Adoption', value: 73, desc: 'Industry adoption rate', icon: 'mdi/trending-up' },
-        { label: 'Efficiency', value: 45, desc: 'Efficiency improvement', icon: 'mdi/chart-line' },
-        { label: 'Cost Save', value: 30, desc: 'Cost reduction', icon: 'mdi/currency-usd' },
+        { label: 'Adoption', value: 73, desc: `Industry adoption of ${topicShort}`, icon: 'mdi/trending-up' },
+        { label: 'Efficiency', value: 45, desc: 'Efficiency gains realized', icon: 'mdi/chart-line' },
+        { label: 'Cost Reduction', value: 30, desc: 'Cost savings achieved', icon: 'mdi/currency-usd' },
       ];
     } else {
       // Last resort — generate topic-relevant content even with NO research
-      // and NO bullets. Uses topic title + keyword inflections to produce
-      // labels and descriptions that AT LEAST sound topic-specific instead
-      // of generic "Point 1 / Point 2" stubs.
-      const tWords = topicTitle.split(/\s+/).filter(Boolean);
-      const tShort = tWords.slice(0, 4).join(' ');
-      const concepts = [
-        { label: 'Definition', desc: `Understanding what ${tShort} means in practice`, icon: 'mdi/information' },
-        { label: 'Why It Matters', desc: `Importance and impact of ${tShort}`, icon: 'mdi/star' },
-        { label: 'Core Steps', desc: `Practical workflow for ${tShort}`, icon: 'mdi/arrow-right-circle' },
-        { label: 'Best Practices', desc: `Industry-standard approach for ${tShort}`, icon: 'mdi/check-circle' },
-        { label: 'Common Pitfalls', desc: `Mistakes to avoid when handling ${tShort}`, icon: 'mdi/alert-circle' },
-        { label: 'Tools', desc: `Software and resources for ${tShort}`, icon: 'mdi/cog' },
+      // and NO bullets. Uses a rotating concept set so each block has
+      // distinct items, not "Point 1 / Point 2".
+      const conceptPools: Array<Array<ContentBlockItem>> = [
+        [
+          { label: 'Foundation', desc: `Core concepts of ${topicShort}`, icon: 'mdi/foundation' },
+          { label: 'Practice', desc: `Practical application of ${topicShort}`, icon: 'mdi/cog' },
+          { label: 'Standards', desc: `Industry standards for ${topicShort}`, icon: 'mdi/check-circle' },
+          { label: 'Outcomes', desc: `Expected outcomes of ${topicShort}`, icon: 'mdi/target' },
+        ],
+        [
+          { label: 'Why', desc: `Why ${topicShort} matters`, icon: 'mdi/lightbulb' },
+          { label: 'How', desc: `How to apply ${topicShort}`, icon: 'mdi/arrow-right-circle' },
+          { label: 'When', desc: `When to use ${topicShort}`, icon: 'mdi/clock' },
+          { label: 'Where', desc: `Where ${topicShort} applies`, icon: 'mdi/map-marker' },
+        ],
+        [
+          { label: 'Skills', desc: `Skills needed for ${topicShort}`, icon: 'mdi/school' },
+          { label: 'Tools', desc: `Tools for ${topicShort}`, icon: 'mdi/wrench' },
+          { label: 'Methods', desc: `Methods used in ${topicShort}`, icon: 'mdi/format-list-bulleted' },
+          { label: 'Quality', desc: `Quality measures for ${topicShort}`, icon: 'mdi/star' },
+        ],
       ];
-      // Pick 4 concepts in rotation based on block index so different
-      // blocks get different concept slants instead of all the same.
-      const start = bi % concepts.length;
-      items = [
-        concepts[start % concepts.length],
-        concepts[(start + 1) % concepts.length],
-        concepts[(start + 2) % concepts.length],
-        concepts[(start + 3) % concepts.length],
-      ];
+      items = conceptPools[bi % conceptPools.length];
     }
 
     const subTitle = derivedSubTitle
-      || (bpChunk.length ? bpChunk[0].split(' ').slice(0, 6).join(' ').slice(0, 60) : `${topicTitle} — Detail ${bi}`);
+      || (bpChunk.length ? bpChunk[0].split(' ').slice(0, 6).join(' ').slice(0, 60) : `${topicShort} Concepts ${bi}`);
 
     blocks.push({
       block_index: bi,
