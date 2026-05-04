@@ -2868,6 +2868,7 @@ CREATE TABLE public.training_provider (
     ssg_default_app text DEFAULT 'app2'::text,
     ssg_app_count smallint DEFAULT 1 NOT NULL,
     ssg_app_names jsonb DEFAULT '{}'::jsonb NOT NULL,
+    virtual_meeting_provider text DEFAULT 'google_meet'::text,
     app1_cert_expiry timestamp with time zone,
     app2_cert_expiry timestamp with time zone,
     app3_cert_expiry timestamp with time zone,

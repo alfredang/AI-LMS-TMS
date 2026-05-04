@@ -2759,9 +2759,13 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Google Meet */}
+                            {/* Virtual Meeting */}
+                            {(() => {
+                                const vmp = ((trainingProviderProfile as any)?.integrations?.virtualMeetingProvider as 'google_meet' | 'zoom' | 'teams' | undefined) || 'google_meet';
+                                const providerLabel = vmp === 'zoom' ? 'Zoom' : vmp === 'teams' ? 'Microsoft Teams' : 'Google Meet';
+                                return (
                             <div id={toId("Google Meet")}>
-                                <ContentSection title="Google Meet">
+                                <ContentSection title={providerLabel}>
                                     {(convertedCourse.classType === 'Virtual' || convertedCourse.classType === 'Hybrid') && convertedCourse.virtualMeetingLink ? (
                                         <a
                                             href={convertedCourse.virtualMeetingLink}
@@ -2771,7 +2775,7 @@ export const CourseDetail: React.FC = () => {
                                         >
                                             <Icon name={IconName.Video} className="w-6 h-6 text-green-600 flex-shrink-0" />
                                             <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-gray-900 dark:text-white">Join Google Meet</p>
+                                                <p className="font-semibold text-gray-900 dark:text-white">{`Join ${providerLabel}`}</p>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                                                     {convertedCourse.virtualMeetingLink}
                                                 </p>
@@ -2789,6 +2793,8 @@ export const CourseDetail: React.FC = () => {
                                     )}
                                 </ContentSection>
                             </div>
+                                );
+                            })()}
 
                             {/* Courseware - grouped container for Trainer/Developer/Admin/TrainingProvider */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (

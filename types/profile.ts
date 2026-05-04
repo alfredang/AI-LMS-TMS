@@ -1,4 +1,6 @@
 // User role types
+export type VirtualMeetingProvider = 'google_meet' | 'zoom' | 'teams';
+
 export enum UserRole {
   Learner = 'Learner',
   Trainer = 'Trainer',
@@ -287,6 +289,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     openClawHooksPath?: string;
     openClawAgentId?: string;
     openClawCallbackUrl?: string;
+    virtualMeetingProvider?: VirtualMeetingProvider;
   };
   adminSettings: {
     autoSendProFormaInvoice: boolean;

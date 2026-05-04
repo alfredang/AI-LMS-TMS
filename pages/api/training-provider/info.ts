@@ -135,6 +135,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         } catch (e) { /* columns don't exist */ }
 
+        let virtualMeetingProvider: 'google_meet' | 'zoom' | 'teams' = 'google_meet';
+        try {
+          const r = await pool.query(`SELECT virtual_meeting_provider FROM training_provider WHERE id = $1`, [trainingProvider.id]);
+          const v = r.rows[0]?.virtual_meeting_provider;
+          if (v === 'zoom' || v === 'teams') virtualMeetingProvider = v;
+        } catch (e) { /* column doesn't exist yet */ }
+
         const responseData = {
           uen: trainingProvider.uen || '',
           companyWebsite: trainingProvider.company_website || '',
@@ -150,6 +157,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           showLessonPlanLearnerView: trainingProvider.show_lesson_plan_learner_view || false,
           privacyPolicy: privacyPolicy || null,
           acceptableUsePolicy: acceptableUsePolicy || null,
+          virtualMeetingProvider,
           referenceLinks: {
             masterListUrl: refLinks.master_list_url || '',
             tertiaryTmsUrl: refLinks.tertiary_tms_url || '',
@@ -258,6 +266,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     } catch (e) { /* columns don't exist */ }
 
+    let fallbackVirtualMeetingProvider: 'google_meet' | 'zoom' | 'teams' = 'google_meet';
+    try {
+      const r = await pool.query('SELECT virtual_meeting_provider FROM training_provider LIMIT 1');
+      const v = r.rows[0]?.virtual_meeting_provider;
+      if (v === 'zoom' || v === 'teams') fallbackVirtualMeetingProvider = v;
+    } catch (e) { /* column doesn't exist yet */ }
+
     const responseData = {
       uen: trainingProvider.uen || '',
       companyWebsite: trainingProvider.company_website || '',
@@ -275,7 +290,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       forceFirstPasswordChange: trainingProvider.force_first_password_change || false,
       showLessonPlanLearnerView: trainingProvider.show_lesson_plan_learner_view || false,
       privacyPolicy: fallbackPrivacyPolicy || null,
-      acceptableUsePolicy: fallbackAcceptableUsePolicy || null
+      acceptableUsePolicy: fallbackAcceptableUsePolicy || null,
+      virtualMeetingProvider: fallbackVirtualMeetingProvider
     };
 
     console.log('✅ Training provider info fetched:', responseData);

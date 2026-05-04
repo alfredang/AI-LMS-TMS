@@ -1624,6 +1624,75 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         </div>
                     </div>
 
+                    {/* ===== Virtual Meeting Subsection ===== */}
+                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
+                        <h3 className="text-lg font-bold text-on-surface mb-4">Virtual Meeting</h3>
+                        <div className="p-3 bg-surface rounded-md border border-default">
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-3">Provider</label>
+                            {(() => {
+                                const selected = (formData.integrations as any).virtualMeetingProvider || 'google_meet';
+                                const options: Array<{ value: 'google_meet' | 'zoom' | 'teams'; label: string; sub: string }> = [
+                                    { value: 'google_meet', label: 'Google Meet', sub: 'Default' },
+                                    { value: 'zoom', label: 'Zoom', sub: 'zoom.us' },
+                                    { value: 'teams', label: 'Microsoft Teams', sub: 'teams.microsoft.com' },
+                                ];
+                                return (
+                                    <div role="radiogroup" aria-label="Virtual meeting provider" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        {options.map(opt => {
+                                            const isSelected = selected === opt.value;
+                                            const interactive = isEditing;
+                                            return (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    role="radio"
+                                                    aria-checked={isSelected}
+                                                    disabled={!interactive}
+                                                    onClick={() => {
+                                                        if (!interactive) return;
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                virtualMeetingProvider: opt.value,
+                                                            },
+                                                        }));
+                                                    }}
+                                                    className={[
+                                                        'relative text-left p-4 rounded-lg border-2 transition-all',
+                                                        isSelected
+                                                            ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                                                            : 'border-default bg-surface-elevated hover:border-primary/50',
+                                                        interactive ? 'cursor-pointer' : 'cursor-default opacity-90',
+                                                    ].join(' ')}
+                                                >
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="min-w-0">
+                                                            <p className={`text-sm font-semibold ${isSelected ? 'text-primary' : 'text-on-surface'}`}>{opt.label}</p>
+                                                            <p className="text-[11px] text-on-surface-secondary mt-0.5 truncate">{opt.sub}</p>
+                                                        </div>
+                                                        <span
+                                                            className={[
+                                                                'flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
+                                                                isSelected ? 'border-primary bg-primary' : 'border-on-surface-secondary/40 bg-transparent',
+                                                            ].join(' ')}
+                                                            aria-hidden="true"
+                                                        >
+                                                            {isSelected && <span className="w-2 h-2 rounded-full bg-white" />}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                            <p className="text-[10px] text-on-surface-secondary mt-3">
+                                Determines the conferencing label shown to Learners and Trainers in My Classes.
+                            </p>
+                        </div>
+                    </div>
+
                 </div>}
 
                 <div className="border-t my-6"></div>

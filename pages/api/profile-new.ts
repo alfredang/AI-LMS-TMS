@@ -606,6 +606,14 @@ async function getTrainingProviderProfile(userId: string) {
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
 
+  // Virtual Meeting provider (tolerant of pre-migration DBs)
+  let virtualMeetingProvider: 'google_meet' | 'zoom' | 'teams' = 'google_meet';
+  try {
+    const r = await pool.query(`SELECT virtual_meeting_provider FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    const v = r.rows[0]?.virtual_meeting_provider;
+    if (v === 'zoom' || v === 'teams') virtualMeetingProvider = v;
+  } catch (e) { /* column doesn't exist yet */ }
+
   // Parse color scheme - now returning as string instead of object
   let colorScheme;
   try {
@@ -672,6 +680,7 @@ async function getTrainingProviderProfile(userId: string) {
       googleRefreshToken: profileData.google_refresh_token || '',
       googleSlidesTemplateId: profileData.google_slides_template_id || '',
       googleServiceAccountJson: profileData.google_service_account_json || '',
+      virtualMeetingProvider,
       trainerProfileImageUrl: refLinks.trainer_profile_image_url || '',
       certificateFolderUrl: profileData.certificate_folder_url || '',
       masterListUrl: refLinks.master_list_url || '',

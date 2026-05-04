@@ -8,7 +8,7 @@ import { resetTutorChat } from '@lib/services/geminiService';
 import { initializeColorScheme } from '@utils/colorUtils';
 
 // Function to fetch training provider info for all users
-const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; referenceLinks?: any }> => {
+const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; referenceLinks?: any; virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' }> => {
   try {
     // If userId is provided, fetch specific organization info
     const url = userId 
@@ -45,6 +45,7 @@ const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: strin
       companyAddress: result.data.companyAddress,
       showLessonPlanLearnerView: result.data.showLessonPlanLearnerView ?? false,
       referenceLinks: result.data.referenceLinks,
+      virtualMeetingProvider: result.data.virtualMeetingProvider || 'google_meet',
     };
   } catch (error) {
     console.error('Error fetching training provider info:', error);
@@ -484,7 +485,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               supportEmail: providerInfo.supportEmail || '',
               contactTel: providerInfo.contactTel || '',
               companyAddress: providerInfo.companyAddress || '',
-              integrations: providerInfo.referenceLinks || {},
+              integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
             } as TrainingProviderProfile);
           } catch (error) {
             console.error('❌ LmsContext: Failed to load training provider info:', error);
@@ -862,7 +863,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             companyName: providerInfo.companyName,
             companyShortname: providerInfo.companyShortname,
             companyWebsite: providerInfo.companyWebsite || '',
-            integrations: providerInfo.referenceLinks || {},
+            integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
           } as TrainingProviderProfile);
           console.log('✅ LmsContext: Training provider info loaded after login');
         } catch (error) {
@@ -909,7 +910,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               supportEmail: providerInfo.supportEmail || '',
               contactTel: providerInfo.contactTel || '',
               companyAddress: providerInfo.companyAddress || '',
-              integrations: providerInfo.referenceLinks || {},
+              integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
             } as TrainingProviderProfile);
             console.log('✅ LmsContext: Training provider info loaded after login');
           } catch (error) {
