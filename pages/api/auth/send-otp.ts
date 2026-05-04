@@ -127,17 +127,32 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     (async () => {
       try {
         // Reuse cached OAuth2 client (avoids redundant token refresh on every request)
-        const oauth2Client = getOrCreateOAuth2Client(google_client_id, google_client_secret, google_refresh_token);
+        let oauth2Client = getOrCreateOAuth2Client(google_client_id, google_client_secret, google_refresh_token);
 
-        // Ensure access token is fresh
-        try {
-          await oauth2Client.getAccessToken();
-          console.log('✅ Gmail OAuth access token ready');
-        } catch (tokenError: any) {
-          console.error('❌ Failed to refresh Gmail OAuth access token:', tokenError?.message);
-          // Invalidate cache so next request rebuilds the client
-          cachedOAuth2Client = null;
-          cachedOAuth2Key = '';
+        // Ensure access token is fresh — retry on transient failures (cold-start
+        // network blips, slow DNS, intermittent Google OAuth endpoint hiccups).
+        // Without retry, the first OTP send after a Coolify redeploy often fails
+        // and the user has to click "Resend" to get a working second attempt.
+        let tokenReady = false;
+        for (let tokenAttempt = 1; tokenAttempt <= 3; tokenAttempt++) {
+          try {
+            await oauth2Client.getAccessToken();
+            console.log(`✅ Gmail OAuth access token ready (attempt ${tokenAttempt})`);
+            tokenReady = true;
+            break;
+          } catch (tokenError: any) {
+            console.error(`❌ Token refresh attempt ${tokenAttempt} failed:`, tokenError?.message);
+            // Invalidate the cached client so we rebuild fresh on the next try
+            cachedOAuth2Client = null;
+            cachedOAuth2Key = '';
+            if (tokenAttempt < 3) {
+              await new Promise(r => setTimeout(r, tokenAttempt * 500));
+              oauth2Client = getOrCreateOAuth2Client(google_client_id, google_client_secret, google_refresh_token);
+            }
+          }
+        }
+        if (!tokenReady) {
+          console.error('❌ Failed to refresh Gmail OAuth access token after 3 attempts');
           return;
         }
 
