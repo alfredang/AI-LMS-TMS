@@ -17,7 +17,7 @@ const NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
   { page: TrainerPage.PastAssessment,     label: 'Past Assessment',     icon: IconName.Award          },
   { page: TrainerPage.LessonDeliveryGuide, label: 'Lesson Delivery Guide', icon: IconName.BookOpen },
   { page: TrainerPage.AssessmentGuide,   label: 'Assessment Guide',    icon: IconName.BookOpen        },
-  { page: TrainerPage.PaymentHistory,    label: 'Payment History',     icon: IconName.Analytics       },
+  { page: TrainerPage.PaymentHistory,    label: 'Trainer Payout History', icon: IconName.Analytics       },
 ];
 
 const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -28,6 +28,7 @@ const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Flash Cards',    icon: IconName.FileText,  href: 'https://alfredang.github.io/flashcard/' },
   { label: 'Live Q&A',       icon: IconName.Help,     href: 'https://alfredang.github.io/live-qna/' },
   { label: 'Whiteboard',     icon: IconName.Edit,     href: 'https://alfredang.github.io/whiteboard/' },
+  { label: 'Padlet',         icon: IconName.Bookmark, href: 'https://alfredang.github.io/padlet/' },
   { label: 'Collaborative Note', icon: IconName.FileText, href: 'https://alfredang.github.io/collabnote/' },
   { label: 'Collaborative Flow', icon: IconName.Link, href: 'https://alfredang.github.io/collabflow/' },
   { label: 'Collaborative Kanban', icon: IconName.ClipboardCheck, href: 'https://alfredang.github.io/kanban/' },

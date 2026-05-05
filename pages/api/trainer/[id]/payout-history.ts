@@ -22,7 +22,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          tp.num_learners,
          tp.actual_payout,
          tp.payment_date::text AS payment_date,
-         tp.remark
+         tp.remark,
+         cr.start_date::text AS start_date,
+         cr.end_date::text   AS end_date
        FROM trainer_payout tp
        JOIN course_run cr ON cr.id = tp.course_run_id
        LEFT JOIN course c ON c.id = cr.course_id
