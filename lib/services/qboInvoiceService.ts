@@ -432,6 +432,15 @@ export async function qboVoidPayment(appOverride: string | undefined, paymentId:
   await qboFetchJson({ token, url, method: 'POST', body: { Id: paymentId, SyncToken: syncToken } });
 }
 
+export async function qboDeleteInvoice(appOverride: string | undefined, invoiceId: string, syncToken: string): Promise<void> {
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/invoice?operation=delete&minorversion=${MINOR_VERSION}`;
+  await qboFetchJson({ token, url, method: 'POST', body: { Id: invoiceId, SyncToken: syncToken } });
+}
+
 export async function qboSendInvoice(appOverride: string | undefined, invoiceId: string, sendTo?: string): Promise<void> {
   const creds = await getQBOCredentials(appOverride);
   if (!creds) throw new Error('QuickBooks credentials not configured');

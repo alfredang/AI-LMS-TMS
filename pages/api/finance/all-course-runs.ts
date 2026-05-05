@@ -178,10 +178,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ij.invoice_sent_at AS invoice_sent_at,
         ij.qbo_sfc_status AS qbo_sfc_status,
         ij.grn_doc_number AS grn_doc_number,
+        ij.drive_web_view_link AS invoice_drive_web_view_link,
+        ij.grn_drive_web_view_link AS grn_drive_web_view_link,
         (da_chk.found IS NOT NULL) AS is_da
       FROM ssg_enrolments se
       LEFT JOIN LATERAL (
-        SELECT inv.invoice_no, inv.qbo_invoice_id, inv.qbo_doc_number, inv.invoice_sent_at, inv.qbo_sfc_status, inv.grn_doc_number
+        SELECT inv.invoice_no, inv.qbo_invoice_id, inv.qbo_doc_number, inv.invoice_sent_at, inv.qbo_sfc_status, inv.grn_doc_number, inv.drive_web_view_link, inv.grn_drive_web_view_link
         FROM public.invoice_jobs inv
         WHERE inv.status = 'done'
           AND LOWER(TRIM(COALESCE(inv.enrolment_id::text, ''))) = LOWER(TRIM(COALESCE(se.enrolment_id::text, '')))

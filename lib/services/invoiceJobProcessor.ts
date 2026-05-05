@@ -544,14 +544,23 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     }
   }
 
+  // Compute GRN ref before marking done so the column is populated the moment the UI sees 'done'.
+  const existingGrnRef = job.grn_doc_number ? String(job.grn_doc_number).trim() || null : null;
+  const primaryGrnRef =
+    grantDeductionLines.length > 0 && grantDeductionLines[0].grantId !== '—'
+      ? grantDeductionLines[0].grantId
+      : null;
+  const desiredGrnRef = (existingGrnRef || primaryGrnRef || '').trim() || null;
+
   // 5) Mark done as soon as the invoice exists in QBO.
   // PDF + Drive upload can be slow; do it after the job is "done" to keep Finance UX responsive.
   await pool.query(
     `UPDATE public.invoice_jobs
      SET status = 'done',
+         grn_doc_number = COALESCE(grn_doc_number, $2),
          updated_at = now()
      WHERE id = $1`,
-    [jobId]
+    [jobId, desiredGrnRef]
   );
 
   // Snapshot the customer invoice number (TC...) for GRN creation.
@@ -597,56 +606,68 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     }
 
     // Create GRN invoice in QB (post-step — errors here don't fail invoice generation)
-    const existingGrnRef = job.grn_doc_number ? String(job.grn_doc_number).trim() || null : null;
-    if (grantDeductionLines.length > 0) {
+    // desiredGrnRef is already computed and saved at the done-mark step above.
+    if (grantDeductionLines.length > 0 && desiredGrnRef) {
       try {
-        const primaryGrnRef = grantDeductionLines[0].grantId !== '—' ? grantDeductionLines[0].grantId : null;
-        const desiredGrnRef = (existingGrnRef || primaryGrnRef || '').trim() || null;
-        if (desiredGrnRef) {
-          const existingGrn = await qboFindInvoiceByDocNumber(undefined, desiredGrnRef);
-          if (!existingGrn?.id) {
-            // Grant (GRN) invoice should be addressed to WSG, with the correct display name used in QBO.
-            // Prefer full name, fallback to legacy short name.
-            let wsgCustomerId =
-              (await qboFindOrCreateCustomerByDisplayName(undefined, 'Singapore Workforce Development Agency (WSG)')) ||
-              (await qboFindOrCreateCustomerByDisplayName(undefined, 'WSG'));
-            const grnLines = grantDeductionLines.map((g) => ({
-              Amount: g.amount,
-              DetailType: 'SalesItemLineDetail',
-              SalesItemLineDetail: {
-                ItemRef: { value: grantItemIdCache.get(g.itemName)! },
-                Qty: 1,
-                UnitPrice: g.amount,
-                TaxCodeRef: { value: taxCodeOos },
-              },
-              // Keep the "Less:" prefix as per Finance expectation.
-              Description: g.description,
-            }));
+        const existingGrn = await qboFindInvoiceByDocNumber(undefined, desiredGrnRef);
+        let grnInvoiceId: string | null = existingGrn?.id || null;
 
-            const txnDate = new Date().toISOString().slice(0, 10);
-            // PO# must be the main customer tax invoice (TC...).
-            const mainInvoiceDocNumber = mainCustomerInvoiceNoForGrn;
-            const dueDate = addDaysIso(txnDate, 35);
-            const grnBody: Record<string, unknown> = {
-              CustomerRef: { value: wsgCustomerId },
-              BillAddr: { Line1: 'Singapore Workforce Development Agency (WSG)' },
-              BillEmail: { Address: 'angch@tertiaryinfotech.com' },
-              TxnDate: txnDate,
-              DueDate: dueDate,
-              DocNumber: desiredGrnRef,
-              Line: grnLines,
-              ...(mainInvoiceDocNumber ? { PONumber: mainInvoiceDocNumber } : {}),
-              ...(_cachedWsg35DaysTermId ? { SalesTermRef: { value: _cachedWsg35DaysTermId } } : {}),
-              PrivateNote: `SSG enrolment: ${enrolmentId}`,
-            };
-            // GRN invoices are out-of-scope grant amounts and should not add GST.
-            grnBody.GlobalTaxCalculation = 'TaxExcluded';
-            await qboCreateInvoice(undefined, grnBody);
+        if (!existingGrn?.id) {
+          const wsgCustomerId =
+            (await qboFindOrCreateCustomerByDisplayName(undefined, 'Singapore Workforce Development Agency (WSG)')) ||
+            (await qboFindOrCreateCustomerByDisplayName(undefined, 'WSG'));
+          const grnLines = grantDeductionLines.map((g) => ({
+            Amount: g.amount,
+            DetailType: 'SalesItemLineDetail',
+            SalesItemLineDetail: {
+              ItemRef: { value: grantItemIdCache.get(g.itemName)! },
+              Qty: 1,
+              UnitPrice: g.amount,
+              TaxCodeRef: { value: taxCodeOos },
+            },
+            Description: g.description,
+          }));
+
+          const txnDate = new Date().toISOString().slice(0, 10);
+          const dueDate = addDaysIso(txnDate, 35);
+          const grnBody: Record<string, unknown> = {
+            CustomerRef: { value: wsgCustomerId },
+            BillAddr: { Line1: 'Singapore Workforce Development Agency (WSG)' },
+            BillEmail: { Address: 'angch@tertiaryinfotech.com' },
+            TxnDate: txnDate,
+            DueDate: dueDate,
+            DocNumber: desiredGrnRef,
+            Line: grnLines,
+            ...(mainCustomerInvoiceNoForGrn ? { PONumber: mainCustomerInvoiceNoForGrn } : {}),
+            ...(_cachedWsg35DaysTermId ? { SalesTermRef: { value: _cachedWsg35DaysTermId } } : {}),
+            PrivateNote: `SSG enrolment: ${enrolmentId}`,
+            GlobalTaxCalculation: 'TaxExcluded',
+          };
+          const grnInv = await qboCreateInvoice(undefined, grnBody);
+          grnInvoiceId = grnInv?.id || null;
+        }
+
+        // Ensure grn_doc_number is persisted (belt-and-suspenders; already set at done-mark).
+        await pool.query(
+          `UPDATE public.invoice_jobs SET grn_doc_number = $2, updated_at = now() WHERE id = $1`,
+          [jobId, desiredGrnRef]
+        );
+
+        // Fetch GRN PDF and upload to the same Drive invoices folder.
+        if (grnInvoiceId) {
+          try {
+            const grnPdf = await qboFetchInvoicePdf(undefined, grnInvoiceId);
+            const grnFileName = `GRN_invoice_${safeText(desiredGrnRef)}.pdf`;
+            const grnDrive = await uploadInvoicePdfToDrive({ pdf: grnPdf, fileName: grnFileName });
+            await pool.query(
+              `UPDATE public.invoice_jobs
+               SET grn_drive_file_id = $2, grn_drive_web_view_link = $3, updated_at = now()
+               WHERE id = $1`,
+              [jobId, grnDrive.fileId, grnDrive.webViewLink]
+            );
+          } catch (e) {
+            console.warn('[invoice-job] GRN PDF/Drive (post-step):', e);
           }
-          await pool.query(
-            `UPDATE public.invoice_jobs SET grn_doc_number = $2, updated_at = now() WHERE id = $1`,
-            [jobId, desiredGrnRef]
-          );
         }
       } catch (e) {
         console.warn('[invoice-job] GRN invoice creation (post-step):', e);

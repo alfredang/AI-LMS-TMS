@@ -50,6 +50,8 @@ interface CourseRunRow {
   invoice_no?: string | null;
   invoice_sent_at?: string | null;
   grn_doc_number?: string | null;
+  invoice_drive_web_view_link?: string | null;
+  grn_drive_web_view_link?: string | null;
   is_da?: boolean | null;
 }
 
@@ -124,19 +126,19 @@ const fmtInvDuration = (s: number) =>
 async function pollInvoiceJobSettled(
   enrolmentId: string,
   timeoutMs: number
-): Promise<'done' | 'failed' | 'timeout'> {
+): Promise<{ outcome: 'done' | 'failed' | 'timeout'; jobRow?: Record<string, unknown> }> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const res = await fetch(
       `/api/finance/invoice-jobs/status?enrolmentId=${encodeURIComponent(enrolmentId)}`
     );
     const json = await res.json();
-    const row = json?.data as { status?: string } | null | undefined;
-    if (row?.status === 'done') return 'done';
-    if (row?.status === 'failed') return 'failed';
+    const row = json?.data as Record<string, unknown> | null | undefined;
+    if (row?.status === 'done') return { outcome: 'done', jobRow: row };
+    if (row?.status === 'failed') return { outcome: 'failed', jobRow: row };
     await new Promise((r) => setTimeout(r, 1500));
   }
-  return 'timeout';
+  return { outcome: 'timeout' };
 }
 
 // Column group header styling
@@ -351,7 +353,7 @@ const StickyHeader: React.FC<{
   );
 };
 
-const TOTAL_COLS = 40; // update if headers change
+const TOTAL_COLS = 42; // update if headers change
 
 const AllCourseRunsView: React.FC = () => {
   const [search, setSearch] = useState('');
@@ -640,12 +642,33 @@ const AllCourseRunsView: React.FC = () => {
 
       setFmsInvProgressTotal(queuedIds.length);
 
+      const s = (v: unknown) => v != null ? String(v).trim() : '';
       let done = 0;
       let pollFailed = 0;
       for (const eid of queuedIds) {
-        const outcome = await pollInvoiceJobSettled(eid, 180_000);
-        if (outcome === 'done') done += 1;
-        else pollFailed += 1;
+        const { outcome, jobRow } = await pollInvoiceJobSettled(eid, 180_000);
+        if (outcome === 'done') {
+          done += 1;
+          setFmsInvProgressSucceeded(done);
+          if (jobRow) {
+            setRows(prev => prev.map(r =>
+              r.enrolment_id?.toLowerCase().trim() === eid.toLowerCase().trim()
+                ? {
+                    ...r,
+                    invoice_id: s(jobRow.qbo_invoice_id) || r.invoice_id,
+                    invoice_no: s(jobRow.invoice_no) || s(jobRow.qbo_doc_number) || r.invoice_no,
+                    grn_doc_number: s(jobRow.grn_doc_number) || r.grn_doc_number,
+                    invoice_drive_web_view_link: s(jobRow.drive_web_view_link) || r.invoice_drive_web_view_link,
+                    grn_drive_web_view_link: s(jobRow.grn_drive_web_view_link) || r.grn_drive_web_view_link,
+                    invoice_sent_at: s(jobRow.invoice_sent_at) || r.invoice_sent_at,
+                  }
+                : r
+            ));
+          }
+        } else {
+          pollFailed += 1;
+          setFmsInvProgressFailed(pollFailed + skippedAtEnqueue);
+        }
       }
       const totalFailed = pollFailed + skippedAtEnqueue;
 
@@ -801,24 +824,24 @@ const AllCourseRunsView: React.FC = () => {
           </label>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-            <div className="flex gap-3 flex-wrap items-end">
-              <div>
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-start">
+            <div className="grid grid-cols-2 gap-3 items-end w-full sm:w-auto">
+              <div className="min-w-0">
                 <label className="block text-xs font-semibold text-on-surface-secondary mb-1">View start from</label>
                 <input
                   type="date"
                   value={viewFrom}
                   onChange={(e) => { setViewFrom(e.target.value); setPage(0); }}
-                  className="px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
+                  className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="block text-xs font-semibold text-on-surface-secondary mb-1">View start to</label>
                 <input
                   type="date"
                   value={viewTo}
                   onChange={(e) => { setViewTo(e.target.value); setPage(0); }}
-                  className="px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
+                  className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
                 />
               </div>
             </div>
@@ -934,7 +957,7 @@ const AllCourseRunsView: React.FC = () => {
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-blue-300 dark:border-blue-600 ${groupHeaderColors.course}`}>Course</th>
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-green-300 dark:border-green-600 ${groupHeaderColors.trainee}`}>Trainee</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-purple-300 dark:border-purple-600 ${groupHeaderColors.sponsor}`}>Employer</th>
-                <th colSpan={6} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
+                <th colSpan={8} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
                 <th colSpan={3} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-indigo-300 dark:border-indigo-600 ${groupHeaderColors.bl}`}>BL Grant</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-teal-300 dark:border-teal-600 ${groupHeaderColors.nbl}`}>Non-BL Grant</th>
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-orange-300 dark:border-orange-600 ${groupHeaderColors.tg}`}>TG</th>
@@ -979,6 +1002,8 @@ const AllCourseRunsView: React.FC = () => {
                 <th className={headerCell}>Invoice No</th>
                 <th className={headerCell}>GRN Ref</th>
                 <th className={headerCell}>Sent</th>
+                <th className={headerCell}>Cust Inv</th>
+                <th className={headerCell}>GRN Inv</th>
                 {/* BL Grant (3) */}
                 <th className={headerCell}>Status</th>
                 <th className={headerCell}>Grant ID</th>
@@ -1081,6 +1106,28 @@ const AllCourseRunsView: React.FC = () => {
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_no || '-'}</td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.grn_doc_number || '-'}</td>
                     <td className={`${cell} text-on-surface-secondary`}>{r.invoice_sent_at ? formatDate(String(r.invoice_sent_at).slice(0, 10)) : '-'}</td>
+                    <td className={cell}>
+                      {r.invoice_drive_web_view_link ? (
+                        <button
+                          onClick={() => window.open(r.invoice_drive_web_view_link!, '_blank', 'noreferrer')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40"
+                        >
+                          <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
+                          View
+                        </button>
+                      ) : <span className="text-on-surface-secondary">-</span>}
+                    </td>
+                    <td className={cell}>
+                      {r.grn_drive_web_view_link ? (
+                        <button
+                          onClick={() => window.open(r.grn_drive_web_view_link!, '_blank', 'noreferrer')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
+                        >
+                          <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
+                          View
+                        </button>
+                      ) : <span className="text-on-surface-secondary">-</span>}
+                    </td>
                     {/* BL Grant */}
                     <td className={cell}>
                       {fullyPaid ? (

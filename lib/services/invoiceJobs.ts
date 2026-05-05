@@ -1,7 +1,8 @@
 import pool from '../db';
 import { isEnrolmentEligibleForAutoInvoice } from './invoiceEligibility';
+import { qboReadInvoice, qboDeleteInvoice, qboFindInvoiceByDocNumber } from './qboInvoiceService';
 
-export type InvoiceJobStatus = 'queued' | 'running' | 'done' | 'failed';
+export type InvoiceJobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
 
 export interface EnqueueInvoiceJobInput {
   enrolmentId: string; // SSG ENR-...
@@ -29,6 +30,8 @@ export interface InvoiceJobRow {
   invoice_sent_at?: string | null;
   invoice_sent_to?: string | null;
   grn_doc_number?: string | null;
+  grn_drive_file_id?: string | null;
+  grn_drive_web_view_link?: string | null;
   created_at: string;
   updated_at: string;
   last_attempt_at: string | null;
@@ -83,6 +86,12 @@ export async function ensureInvoiceJobsTable(): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE public.invoice_jobs ADD COLUMN IF NOT EXISTS grn_doc_number text NULL`
+  );
+  await pool.query(
+    `ALTER TABLE public.invoice_jobs ADD COLUMN IF NOT EXISTS grn_drive_file_id text NULL`
+  );
+  await pool.query(
+    `ALTER TABLE public.invoice_jobs ADD COLUMN IF NOT EXISTS grn_drive_web_view_link text NULL`
   );
   try {
     await pool.query(
@@ -360,6 +369,83 @@ export async function tryEnqueueInvoiceFromSsgRecord(record: any): Promise<void>
     );
   } catch (e) {
     console.warn('[invoice_jobs] tryEnqueueInvoiceFromSsgRecord failed:', e);
+  }
+}
+
+/**
+ * Called when a non-DA enrolment is cancelled.
+ * Deletes the main QB invoice and the GRN invoice (if any), then marks the job cancelled.
+ * Non-fatal — errors are logged but never propagate so the cancellation itself isn't blocked.
+ */
+export async function cancelInvoiceJobOnEnrolmentCancelled(enrolmentId: string): Promise<void> {
+  let job: InvoiceJobRow | null = null;
+  try {
+    job = await getInvoiceJobByEnrolmentId(enrolmentId);
+  } catch (e) {
+    console.warn('[invoice_jobs] cancelInvoiceJobOnEnrolmentCancelled — lookup failed:', e instanceof Error ? e.message : e);
+    return;
+  }
+
+  if (!job || job.status !== 'done') return;
+
+  const warnings: string[] = [];
+
+  // Delete main QB invoice
+  if (job.qbo_invoice_id) {
+    try {
+      const inv = await qboReadInvoice(undefined, job.qbo_invoice_id);
+      if (inv?.syncToken) {
+        await qboDeleteInvoice(undefined, job.qbo_invoice_id, inv.syncToken);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // QBO error 610 = "Object Not Found" — invoice already deleted, that's fine
+      if (!msg.includes('610') && !msg.toLowerCase().includes('not found') && !msg.toLowerCase().includes('object not found')) {
+        warnings.push(`main: ${msg}`);
+      }
+    }
+  }
+
+  // Delete GRN invoice
+  if (job.grn_doc_number) {
+    try {
+      const grn = await qboFindInvoiceByDocNumber(undefined, job.grn_doc_number);
+      if (grn?.id && grn?.syncToken) {
+        await qboDeleteInvoice(undefined, grn.id, grn.syncToken);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!msg.includes('610') && !msg.toLowerCase().includes('not found') && !msg.toLowerCase().includes('object not found')) {
+        warnings.push(`grn: ${msg}`);
+      }
+    }
+  }
+
+  const note = warnings.length > 0
+    ? `Enrolment cancelled; QB delete warning: ${warnings.join('; ')}`
+    : 'Invoice deleted — enrolment cancelled';
+
+  try {
+    await pool.query(
+      `UPDATE public.invoice_jobs
+       SET status              = 'cancelled',
+           qbo_invoice_id      = NULL,
+           qbo_doc_number      = NULL,
+           invoice_no          = NULL,
+           drive_file_id       = NULL,
+           drive_web_view_link = NULL,
+           grn_doc_number      = NULL,
+           grn_drive_file_id   = NULL,
+           grn_drive_web_view_link = NULL,
+           invoice_sent_at     = NULL,
+           invoice_sent_to     = NULL,
+           last_error          = $2,
+           updated_at          = now()
+       WHERE id = $1`,
+      [job.id, note]
+    );
+  } catch (e) {
+    console.warn('[invoice_jobs] cancelInvoiceJobOnEnrolmentCancelled — DB update failed:', e instanceof Error ? e.message : e);
   }
 }
 
