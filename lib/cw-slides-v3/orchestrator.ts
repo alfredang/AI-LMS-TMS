@@ -18,6 +18,8 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { query } from '@anthropic-ai/claude-agent-sdk';
+import { buildClaudeEnv } from '../anthropic-auth';
 import { researchAllTopics } from './phase1_research';
 import { generateAllContent } from './phase2_content';
 import { buildSkeleton } from './phase3_editor';
@@ -56,6 +58,47 @@ export async function generateSlides(
                   : apiKey?.startsWith('sk-ant-api') ? 'API key (ANTHROPIC_API_KEY)'
                   : `unknown prefix (${apiKey?.slice(0, 12)}...)`;
   console.log(`[cw-slides-v3] BEGIN — model=${model}, token=${tokenType}, NODE_ENV=${process.env.NODE_ENV}`);
+
+  // ── Pre-flight Claude ping ──────────────────────────────────────────
+  // Tiny single-shot call before launching expensive phases. If auth
+  // is broken in the production container (token expired, CLI binary
+  // missing, network egress blocked), we surface that error in the
+  // first 5 seconds — instead of after Phase 1 burns 4+ min and Phase
+  // 2 silently falls back across all topics.
+  try {
+    const env = buildClaudeEnv(apiKey);
+    env.CLAUDE_CODE_MAX_OUTPUT_TOKENS = env.CLAUDE_CODE_MAX_OUTPUT_TOKENS || '500';
+    const sdkOptions: any = {
+      env,
+      allowedTools: [],
+      permissionMode: 'bypassPermissions',
+      maxTurns: 1,
+      model: 'claude-haiku-4-5-20251001',
+    };
+    let pingText = '';
+    for await (const message of query({
+      prompt: 'Reply with exactly the JSON: {"ok":true}',
+      options: sdkOptions,
+    })) {
+      if (message.type === 'assistant' && (message as any).message?.content) {
+        for (const b of (message as any).message.content) {
+          if (b.type === 'text' && b.text) pingText = b.text;
+        }
+      } else if (message.type === 'result' && (message as any).result) {
+        pingText = (message as any).result;
+      }
+    }
+    const pingOk = /\{[^}]*"ok"\s*:\s*true[^}]*\}/.test(pingText);
+    console.log(`[cw-slides-v3] PRE-FLIGHT: Claude ping ${pingOk ? 'OK' : 'BAD'} (response: ${pingText.slice(0, 120).replace(/\n/g, ' ')})`);
+    if (!pingOk) {
+      console.warn(`[cw-slides-v3] PRE-FLIGHT WARNING: Claude is not responding correctly. All Phase 2/3 calls will likely fall back. Check token, network, and CLI binary in container.`);
+    }
+  } catch (e: any) {
+    console.error(
+      `[cw-slides-v3] PRE-FLIGHT FAILED — Claude unreachable: ${e?.message || String(e)} | code=${e?.code || '?'} | name=${e?.name || '?'}. ` +
+      `All Phase 2/3 calls will fall back to deterministic content. Investigate auth/network/CLI binary.`,
+    );
+  }
 
   const courseTitle = String(ctx.Course_Title || 'Course');
   const lus = Array.isArray(ctx.Learning_Units) ? ctx.Learning_Units : [];

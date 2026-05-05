@@ -374,45 +374,70 @@ function fallbackContentBlocks(
     sources_used: [],
   });
 
-  // ── Block per CP bullet — research enrichment, on-topic ─────────────
-  // Each block is dedicated to one CP bullet. Cards are built from
-  // research findings whose words overlap with the bullet's words. If
-  // no overlapping findings exist, the bullet is expanded structurally
-  // (sub-aspects derived from the bullet itself, never random Wikipedia).
+  // ── Block per CP bullet — Definition / Why / How / Best Practice ────
+  // Each block is dedicated to one CP bullet, expanded into 4 teaching
+  // cards using a standard adult-learning framework. Research findings
+  // (when available and topic-aligned) replace the generic Definition
+  // card with a sourced one. This produces substantive content even
+  // when Phase 2 AI fails entirely.
+  const bulletNoun = (b: string): string => {
+    // First 3 content words = card label
+    const cleaned = cleanText(b).replace(/[.,;:!?()'"]/g, ' ').replace(/\s+/g, ' ').trim();
+    const words = cleaned.split(' ').filter((w) => w.length >= 2);
+    const STOPS_LOC = new Set(['the','a','an','of','in','on','at','to','for','and','or','with','by','is','are','was','using','use','used','this','that']);
+    const content = words.filter((w) => !STOPS_LOC.has(w.toLowerCase()));
+    return (content.length ? content : words).slice(0, 3).join(' ');
+  };
+  const titleCase = (s: string): string => s.replace(/\b([a-z])/g, (_, c) => c.toUpperCase());
+
   for (let bi = 0; bi < bps.length && blocks.length < numBlocks - 1; bi++) {
     const bullet = bps[bi];
-    const matchedFindings = findingsForBullet(bullet, 4, usedFindingIdxs);
+    const noun = bulletNoun(bullet);
+    const matchedFindings = findingsForBullet(bullet, 1, usedFindingIdxs);
     const items: ContentBlockItem[] = [];
 
-    // Derive 1 card from the bullet itself as the structural anchor
-    items.push({
-      label: truncWord(bullet.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
-      desc: truncWord(cleanText(bullet), 80),
-      icon: 'mdi/star',
-    });
-    // Up to 3 enrichment cards from on-topic research findings
-    const seen = new Set<string>();
-    for (const f of matchedFindings) {
-      if (items.length >= 4) break;
-      const desc = cleanText(f);
-      const lbl = labelFromSentence(desc);
-      if (!lbl) continue;
-      const key = lbl.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
+    // Card 1 — Definition (from research finding if available, else bullet text)
+    if (matchedFindings.length > 0) {
       items.push({
-        label: truncWord(lbl, 24),
-        desc: truncWord(desc, 80),
-        icon: 'mdi/lightbulb',
+        label: 'What It Is',
+        desc: truncWord(cleanText(matchedFindings[0]), 80),
+        icon: 'mdi/information',
+      });
+    } else {
+      items.push({
+        label: 'What It Is',
+        desc: truncWord(cleanText(bullet), 80),
+        icon: 'mdi/information',
       });
     }
 
+    // Card 2 — Why It Matters (anchored to the topic + bullet)
+    items.push({
+      label: 'Why It Matters',
+      desc: `Foundation for ${truncWord(noun.toLowerCase(), 40)} in ${truncWord(topicTitle.toLowerCase(), 30)}`,
+      icon: 'mdi/star',
+    });
+
+    // Card 3 — How to Apply (action-oriented)
+    items.push({
+      label: 'How to Apply',
+      desc: `Practice ${truncWord(noun.toLowerCase(), 40)} as part of your ${truncWord(topicTitle.toLowerCase().split(' ').slice(0, 4).join(' '), 28)} workflow`,
+      icon: 'mdi/cog',
+    });
+
+    // Card 4 — Best Practice / Outcome
+    items.push({
+      label: 'Outcome',
+      desc: `Confidence applying ${truncWord(noun.toLowerCase(), 50)} in real workplace tasks`,
+      icon: 'mdi/check-circle',
+    });
+
     blocks.push({
       block_index: blocks.length,
-      sub_title: truncWord(cleanText(bullet), 60),
+      sub_title: truncWord(titleCase(cleanText(bullet)), 60),
       visualization_type: 'overview',
-      suggested_template: bi % 2 === 0 ? 'list-grid-candy-card-lite' : 'list-row-horizontal-icon-arrow',
-      data: { title: truncWord(cleanText(bullet), 40), items },
+      suggested_template: bi % 2 === 0 ? 'list-grid-badge-card' : 'list-grid-candy-card-lite',
+      data: { title: truncWord(titleCase(cleanText(bullet)), 40), items },
       caption: '',
       sources_used: [],
     });
