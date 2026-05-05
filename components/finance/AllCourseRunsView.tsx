@@ -257,7 +257,6 @@ const StickyHeader: React.FC<{
   theadRef: React.RefObject<HTMLTableSectionElement | null>;
 }> = ({ tableRef, theadRef }) => {
   const cloneRef = useRef<HTMLDivElement>(null);
-  const syncing = useRef(false);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [visible, setVisible] = useState(false);
   const [style, setStyle] = useState<React.CSSProperties>({});
@@ -782,126 +781,162 @@ const AllCourseRunsView: React.FC = () => {
       )}
 
       {/* Search + Filter */}
-      <Card className="p-4">
-        <div className="flex flex-col gap-3">
+      <Card className="p-5">
+        <div className="flex flex-col gap-5">
+
+          {/* Row 1: Search + dropdowns */}
           <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Icon name={IconName.Search} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-secondary" />
-            <input
-              type="text"
-              placeholder="Search by trainee name, NRIC, enrolment ID, course title, course code..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-on-surface placeholder-gray-400"
-            />
-          </div>
-          <select
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
-            className="px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
-          >
-            <option value="">All Statuses</option>
-            {statusOptions.map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          <select
-            value={sortOrder}
-            onChange={e => { setSortOrder(e.target.value as 'newest' | 'oldest'); setPage(0); }}
-            className="px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
-          >
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-          </select>
-          <label className="flex items-center gap-2 px-1 py-2 text-sm text-on-surface whitespace-nowrap cursor-pointer">
-            <input
-              type="checkbox"
-              checked={includeFutureCourseRuns}
-              onChange={(e) => { setIncludeFutureCourseRuns(e.target.checked); setPage(0); }}
-              className="rounded border-default"
-            />
-            Include future course runs
-          </label>
+            <div className="relative flex-1">
+              <Icon name={IconName.Search} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-secondary pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search by trainee name, NRIC, enrolment ID, course title, course code…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-10 pr-3 py-2.5 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-on-surface placeholder-gray-400"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
+              className="px-3 py-2.5 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface min-w-[140px]"
+            >
+              <option value="">All Statuses</option>
+              {statusOptions.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select
+              value={sortOrder}
+              onChange={e => { setSortOrder(e.target.value as 'newest' | 'oldest'); setPage(0); }}
+              className="px-3 py-2.5 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface min-w-[140px]"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+            </select>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-start">
-            <div className="grid grid-cols-2 gap-3 items-end w-full sm:w-auto">
-              <div className="min-w-0">
-                <label className="block text-xs font-semibold text-on-surface-secondary mb-1">View start from</label>
+          {/* Divider */}
+          <div className="border-t border-default" />
+
+          {/* Row 2: Date range + quick shortcuts + Include future */}
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+            <div className="flex gap-3 flex-1">
+              <div className="flex-1 min-w-0">
+                <label className="block text-xs font-semibold text-on-surface-secondary mb-1.5 uppercase tracking-wide">Start from</label>
                 <input
                   type="date"
                   value={viewFrom}
                   onChange={(e) => { setViewFrom(e.target.value); setPage(0); }}
-                  className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
+                  className="w-full px-3 py-2.5 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
                 />
               </div>
-              <div className="min-w-0">
-                <label className="block text-xs font-semibold text-on-surface-secondary mb-1">View start to</label>
+              <div className="flex items-end pb-2.5 text-on-surface-secondary text-sm">→</div>
+              <div className="flex-1 min-w-0">
+                <label className="block text-xs font-semibold text-on-surface-secondary mb-1.5 uppercase tracking-wide">Start to</label>
                 <input
                   type="date"
                   value={viewTo}
                   onChange={(e) => { setViewTo(e.target.value); setPage(0); }}
-                  className="w-full px-3 py-2 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
+                  className="w-full px-3 py-2.5 text-sm bg-surface border border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
                 />
               </div>
             </div>
-            <div className="flex flex-col gap-2 sm:ml-auto sm:items-end">
-              <div className="flex gap-2 flex-wrap justify-end">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setViewFrom(new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10));
-                    setViewTo(new Date().toISOString().slice(0, 10));
-                    setPage(0);
-                  }}
-                  disabled={syncing || loading || queueing}
-                >
-                  Last 30 days
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setViewFrom('');
-                    setViewTo('');
-                    setPage(0);
-                  }}
-                  disabled={syncing || loading || queueing}
-                >
-                  Clear
-                </Button>
-                <Button onClick={() => void runSync()} disabled={syncing || queueing}>
-                  {syncing ? 'Refreshing…' : 'Refresh from SSG'}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowImportModal(true);
-                    setImportResult(null);
-                    setImportRunId(searchedCrId || '');
-                  }}
-                  disabled={syncing || loading || queueing || sending}
-                >
-                  Import course run
-                </Button>
-                <Button
-                  onClick={() => void queueQboInvoices()}
-                  disabled={queueing || sending || selectedEnrolmentIds.length === 0 || loading}
-                >
-                  {queueing ? 'Queueing…' : `Queue QB invoices (${selectedEnrolmentIds.length})`}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => void sendQbInvoices()}
-                  disabled={sending || queueing || selectedEnrolmentIds.length === 0 || loading}
-                >
-                  {sending ? 'Sending…' : `Send invoice (${selectedEnrolmentIds.length})`}
-                </Button>
-              </div>
-              <p className="text-[11px] text-on-surface-secondary text-right max-w-md">
-                Select enrolments, then queue invoices. Rows that are already invoiced or cannot be queued are skipped.
-              </p>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewFrom(new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10));
+                  setViewTo(new Date().toISOString().slice(0, 10));
+                  setPage(0);
+                }}
+                disabled={syncing || loading || queueing}
+                className="px-3 py-2 text-xs font-medium rounded-md border border-default bg-surface hover:bg-surface-hover text-on-surface disabled:opacity-40 transition-colors"
+              >
+                Last 30 days
+              </button>
+              <button
+                type="button"
+                onClick={() => { setViewFrom(''); setViewTo(''); setPage(0); }}
+                disabled={syncing || loading || queueing}
+                className="px-3 py-2 text-xs font-medium rounded-md border border-default bg-surface hover:bg-surface-hover text-on-surface disabled:opacity-40 transition-colors"
+              >
+                Clear
+              </button>
+              <label className="flex items-center gap-2 text-sm text-on-surface cursor-pointer select-none ml-1">
+                <input
+                  type="checkbox"
+                  checked={includeFutureCourseRuns}
+                  onChange={(e) => { setIncludeFutureCourseRuns(e.target.checked); setPage(0); }}
+                  className="rounded border-default w-4 h-4"
+                />
+                <span className="whitespace-nowrap">Include future</span>
+              </label>
             </div>
           </div>
+
+          {/* Divider */}
+          <div className="border-t border-default" />
+
+          {/* Row 3: Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            {/* Left: data actions */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button onClick={() => void runSync()} disabled={syncing || queueing} className="gap-1.5">
+                {syncing
+                  ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Refreshing…</>
+                  : 'Refresh from SSG'
+                }
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowImportModal(true);
+                  setImportResult(null);
+                  setImportRunId(searchedCrId || '');
+                }}
+                disabled={syncing || loading || queueing || sending}
+              >
+                Import course run
+              </Button>
+            </div>
+
+            {/* Vertical separator */}
+            <div className="hidden sm:block h-8 w-px bg-default mx-1" />
+
+            {/* Right: invoice actions */}
+            <div className="flex items-center gap-2 flex-wrap sm:ml-auto">
+              {selectedEnrolmentIds.length > 0 && (
+                <span className="text-xs text-on-surface-secondary px-2 py-1 rounded-full bg-surface border border-default font-medium">
+                  {selectedEnrolmentIds.length} selected
+                </span>
+              )}
+              <Button
+                onClick={() => void queueQboInvoices()}
+                disabled={queueing || sending || selectedEnrolmentIds.length === 0 || loading}
+                className="gap-1.5"
+              >
+                {queueing
+                  ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Queueing…</>
+                  : `Queue QB invoices (${selectedEnrolmentIds.length})`
+                }
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void sendQbInvoices()}
+                disabled={sending || queueing || selectedEnrolmentIds.length === 0 || loading}
+              >
+                {sending ? 'Sending…' : `Send invoice (${selectedEnrolmentIds.length})`}
+              </Button>
+            </div>
+          </div>
+
+          {/* Helper text */}
+          <p className="text-[11px] text-on-surface-secondary -mt-2">
+            Select enrolments from the table below, then use "Queue QB invoices" to generate invoices. Rows already invoiced or ineligible are automatically skipped.
+          </p>
+
         </div>
       </Card>
 
