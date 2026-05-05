@@ -246,89 +246,315 @@ export function padContentBlocks(
 }
 
 /**
- * Generate simple content blocks from CP bullet points only (used when
- * the AI call throws). Mirrors Streamlit's `_fallback_content_blocks`.
+ * Build content blocks when the Phase 2 AI call fails.
+ *
+ * Production reality (deck 22): Phase 2 sometimes throws in the Coolify
+ * container even though Phase 1 research succeeds. When that happens we
+ * have a rich research entry sitting unused. This fallback uses
+ *   1. CP bullet_points (always topic-specific from the proposal)
+ *   2. research.infographic_data — chart_data, process_steps,
+ *      comparison_items, hierarchy/timeline data
+ *   3. research.sources[].key_findings — Wikipedia/web sentences
+ *   4. research.summary as overview material
+ * to build content blocks that look as close as possible to what the AI
+ * would have produced. Never emits "Detail N" placeholders or generic
+ * "Apply X concepts in a workplace scenario" activities.
  */
 function fallbackContentBlocks(
   topicTitle: string,
   bulletPoints: string[] = [],
   numBlocks = 6,
+  research?: ResearchEntry,
 ): ContentMapEntry {
-  const bps = bulletPoints.length ? bulletPoints : [topicTitle];
-  const chunkSize = Math.max(1, Math.floor(bps.length / Math.max(1, numBlocks - 1)));
+  const bps = (bulletPoints || []).filter((b) => String(b ?? '').trim().length > 0);
+  const r = research;
+  const procSteps: string[] = (r?.infographic_data?.process_steps || []).filter((s) => typeof s === 'string' && s.trim().length > 5);
+  const compItems: any[] = r?.infographic_data?.comparison_items || [];
+  const chartData: any[] = r?.infographic_data?.chart_data || [];
+  const timelineData: any[] = r?.infographic_data?.timeline_data || [];
+
+  // Flatten research findings (~3-5 per source × 5 sources = 15-25 sentences).
+  const findings: string[] = [];
+  for (const s of r?.sources || []) {
+    for (const f of (s.key_findings || [])) {
+      const t = String(f).trim();
+      if (t.length >= 20 && t.length <= 200) findings.push(t);
+    }
+  }
+
+  const cleanText = (s: string): string => s
+    .replace(/&[a-z#0-9]+;/gi, (m) => ({ '&quot;': '"', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&apos;': "'", '&#39;': "'", '&nbsp;': ' ' } as any)[m] || m)
+    .replace(/^["'`'']+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Helper: pick a short noun-phrase label from a sentence, never a verb fragment.
+  const VERBS = /^(is|are|was|were|be|been|have|has|had|do|does|did|can|could|will|would|should|may|might|must|use|uses|used|make|makes|made|take|takes|took|get|gets|got)$/i;
+  const STOPS = new Set(['the','a','an','this','that','these','those','it','they','we','you','i','in','on','at','of','for','to','from','by','with','and','or','but','as']);
+  const labelFromSentence = (sent: string): string => {
+    const cleaned = sent.replace(/[.,;:!?()'"]/g, ' ').replace(/\s+/g, ' ').trim();
+    const words = cleaned.split(' ').filter((w) => w.length >= 2);
+    let anchor = -1;
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i]; const lw = w.toLowerCase();
+      if (STOPS.has(lw) || VERBS.test(lw)) continue;
+      if (w.length < 4 && !/^[A-Z]{2,}$/.test(w)) continue;
+      anchor = i; break;
+    }
+    if (anchor === -1) return '';
+    const phrase: string[] = [];
+    for (let i = anchor; i < words.length && phrase.length < 3; i++) {
+      const w = words[i]; const lw = w.toLowerCase();
+      if (phrase.length > 0 && (STOPS.has(lw) || VERBS.test(lw))) break;
+      phrase.push(w);
+    }
+    return phrase.join(' ');
+  };
+  const truncWord = (s: string, max: number): string => {
+    if (!s) return '';
+    if (s.length <= max) return s;
+    const cut = s.slice(0, max);
+    const lastSpace = cut.lastIndexOf(' ');
+    return (lastSpace >= 4 ? cut.slice(0, lastSpace) : cut).replace(/[.,;:\-]+$/, '');
+  };
+
   const blocks: ContentBlock[] = [];
 
+  // Block 0 — Overview built from research summary or CP bullets
+  const overviewItems: ContentBlockItem[] = [];
+  if (findings.length >= 3) {
+    const seen = new Set<string>();
+    for (const f of findings) {
+      if (overviewItems.length >= 4) break;
+      const desc = cleanText(f);
+      const lbl = labelFromSentence(desc);
+      if (!lbl) continue;
+      const key = lbl.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      overviewItems.push({
+        label: truncWord(lbl, 24),
+        desc: truncWord(desc, 80),
+        icon: 'mdi/lightbulb',
+      });
+    }
+  }
+  if (overviewItems.length < 3 && bps.length) {
+    for (const bp of bps.slice(0, 4 - overviewItems.length)) {
+      overviewItems.push({
+        label: truncWord(bp.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
+        desc: truncWord(cleanText(bp), 80),
+        icon: 'mdi/information',
+      });
+    }
+  }
+  if (overviewItems.length === 0) {
+    overviewItems.push({ label: 'Overview', desc: `Key aspects of ${topicTitle}`, icon: 'mdi/information' });
+  }
   blocks.push({
     block_index: 0,
     sub_title: `What is ${topicTitle}?`,
     visualization_type: 'overview',
     suggested_template: 'list-grid-badge-card',
-    data: {
-      title: topicTitle.slice(0, 40),
-      desc: `Key concepts of ${topicTitle}`,
-      items: bps.slice(0, 6).map((bp) => ({
-        label: bp.split(/[\s,;:]+/).slice(0, 3).join(' ').slice(0, 25),
-        desc: bp.slice(0, 80),
-        icon: 'mdi/information',
-      })),
-    },
+    data: { title: topicTitle.slice(0, 40), items: overviewItems },
     caption: '',
     sources_used: [],
   });
 
-  for (let i = 1; i < numBlocks - 1; i++) {
-    const start = (i - 1) * chunkSize;
-    const chunk = bps.slice(start, start + chunkSize);
-    if (chunk.length === 0) chunk.push(`Detail ${i}`);
-    blocks.push({
-      block_index: i,
-      sub_title: chunk[0].slice(0, 35),
-      visualization_type: 'overview',
-      suggested_template: 'list-row-horizontal-icon-arrow',
-      data: {
-        title: chunk[0].slice(0, 30),
-        items: chunk.map((c) => ({
-          label: c.split(/[\s,;:]+/).slice(0, 3).join(' ').slice(0, 25),
-          desc: c.slice(0, 80),
-          icon: 'mdi/chevron-right',
-        })),
-      },
-      caption: '',
-      sources_used: [],
-    });
+  // Middle blocks — cycle through research data types so each block has
+  // a different visualization. Streamlit-style sequence: process →
+  // comparison → statistics → hierarchy → timeline → overview-from-findings.
+  let procCursor = 0;
+  let findingCursor = 0;
+  const findingsAvailable = () => findings.length - findingCursor;
+  let pickIdx = 0;
+
+  while (blocks.length < numBlocks - 1) {
+    const bi = blocks.length;
+    let block: ContentBlock | null = null;
+
+    // Try in priority order, falling through if data unavailable
+    const tryProcess = pickIdx % 5 === 0 && procSteps.length - procCursor >= 3;
+    const tryComp = pickIdx % 5 === 1 && compItems.length >= 2;
+    const tryStats = pickIdx % 5 === 2 && chartData.length >= 2;
+    const tryTimeline = pickIdx % 5 === 3 && timelineData.length >= 2;
+    pickIdx++;
+
+    if (tryProcess) {
+      const stepChunk = procSteps.slice(procCursor, procCursor + 5);
+      procCursor += stepChunk.length;
+      block = {
+        block_index: bi,
+        sub_title: `${topicTitle} — Step-by-Step`,
+        visualization_type: 'process',
+        suggested_template: 'sequence-snake-steps-compact-card',
+        data: {
+          title: 'Implementation Steps',
+          items: stepChunk.map((s, i) => ({
+            label: `Step ${i + 1}`,
+            desc: truncWord(cleanText(s), 60),
+            icon: 'mdi/arrow-right',
+          })),
+        },
+        caption: '',
+        sources_used: [],
+      };
+    } else if (tryComp) {
+      const pair = compItems.slice(0, 2);
+      block = {
+        block_index: bi,
+        sub_title: `${topicTitle} — Approach Comparison`,
+        visualization_type: 'comparison',
+        suggested_template: 'compare-binary-horizontal-badge-card-arrow',
+        data: {
+          title: 'Comparison',
+          items: pair.map((c, i) => ({
+            label: truncWord(String(c.label ?? (i === 0 ? 'Traditional' : 'Modern')), 22),
+            desc: truncWord(String(c.desc ?? ''), 60),
+            icon: i === 0 ? 'mdi/history' : 'mdi/rocket-launch',
+          })),
+        },
+        caption: '',
+        sources_used: [],
+      };
+    } else if (tryStats) {
+      block = {
+        block_index: bi,
+        sub_title: `${topicTitle} — Industry Metrics`,
+        visualization_type: 'statistics',
+        suggested_template: 'chart-bar-plain-text',
+        data: {
+          title: 'Key Metrics',
+          items: chartData.slice(0, 5).map((d) => ({
+            label: truncWord(String(d.label || ''), 18) || 'Metric',
+            value: typeof d.value === 'number' && Number.isFinite(d.value) ? d.value : 50,
+            desc: '',
+            icon: 'mdi/chart-bar',
+          })),
+        },
+        caption: '',
+        sources_used: [],
+      };
+    } else if (tryTimeline) {
+      block = {
+        block_index: bi,
+        sub_title: `${topicTitle} — Timeline`,
+        visualization_type: 'timeline',
+        suggested_template: 'sequence-timeline-simple',
+        data: {
+          title: 'Evolution',
+          items: timelineData.slice(0, 5).map((d) => ({
+            label: truncWord(String(d.year || ''), 14) || 'Phase',
+            desc: truncWord(String(d.event || ''), 60),
+            icon: 'mdi/clock',
+          })),
+        },
+        caption: '',
+        sources_used: [],
+      };
+    }
+
+    // Default: build an overview from research findings (next 4 unused)
+    if (!block) {
+      const items: ContentBlockItem[] = [];
+      const seen = new Set<string>();
+      while (items.length < 4 && findingCursor < findings.length) {
+        const f = findings[findingCursor++];
+        const desc = cleanText(f);
+        const lbl = labelFromSentence(desc);
+        if (!lbl) continue;
+        const key = lbl.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push({
+          label: truncWord(lbl, 24),
+          desc: truncWord(desc, 80),
+          icon: 'mdi/lightbulb',
+        });
+      }
+      // If we ran out of findings, use bullets
+      if (items.length < 2 && bps.length) {
+        for (const bp of bps) {
+          if (items.length >= 4) break;
+          items.push({
+            label: truncWord(bp.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
+            desc: truncWord(cleanText(bp), 80),
+            icon: 'mdi/chevron-right',
+          });
+        }
+      }
+      // If still nothing, the topic genuinely has no research/bullets — abort
+      // adding more blocks (better short deck than placeholder).
+      if (items.length < 2) break;
+      block = {
+        block_index: bi,
+        sub_title: `${topicTitle} — Key Concepts ${blocks.length}`,
+        visualization_type: 'overview',
+        suggested_template: blocks.length % 2 === 0 ? 'list-grid-candy-card-lite' : 'list-zigzag-down-compact-card',
+        data: { title: 'Key Concepts', items },
+        caption: '',
+        sources_used: [],
+      };
+    }
+    blocks.push(block);
   }
 
+  // Final block — Key Takeaways from findings or bullets
+  const ktItems: ContentBlockItem[] = [];
+  if (findings.length >= 3 && findingCursor < findings.length) {
+    const seen = new Set<string>();
+    for (let i = findingCursor; i < findings.length && ktItems.length < 4; i++) {
+      const desc = cleanText(findings[i]);
+      const lbl = labelFromSentence(desc);
+      if (!lbl) continue;
+      const key = lbl.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ktItems.push({ label: truncWord(lbl, 24), desc: truncWord(desc, 80), icon: 'mdi/star' });
+    }
+  }
+  if (ktItems.length < 3 && bps.length) {
+    for (const bp of bps.slice(0, 4 - ktItems.length)) {
+      ktItems.push({
+        label: truncWord(bp.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
+        desc: truncWord(cleanText(bp), 80),
+        icon: 'mdi/star',
+      });
+    }
+  }
+  if (ktItems.length === 0) {
+    ktItems.push({ label: 'Key Concept', desc: `Apply ${topicTitle} principles consistently`, icon: 'mdi/star' });
+  }
   blocks.push({
-    block_index: numBlocks - 1,
+    block_index: blocks.length,
     sub_title: 'Key Takeaways',
     visualization_type: 'overview',
     suggested_template: 'list-grid-badge-card',
-    data: {
-      title: `${topicTitle} — Key Takeaways`,
-      items: bps.slice(0, 4).map((bp) => ({
-        label: bp.split(/[\s,;:]+/).slice(0, 3).join(' ').slice(0, 25),
-        desc: bp.slice(0, 80),
-        icon: 'mdi/star',
-      })),
-    },
+    data: { title: `${topicTitle} — Key Takeaways`, items: ktItems },
     caption: '',
     sources_used: [],
   });
+
+  // Activity — synthesise a sensible one (NOT the generic "Apply X concepts...")
+  const activity: ActivityData = {
+    title: `${topicTitle.split(/[\s,]+/).slice(0, 4).join(' ')} Practical Exercise`,
+    scenario: bps.length
+      ? `In small groups, work through a real workplace scenario that requires you to ${bps[0].toLowerCase()}. Use the concepts from this topic to evaluate options and justify your decision.`
+      : `In small groups, work through a real workplace scenario that requires applying ${topicTitle.toLowerCase()}. Use the concepts from this topic to evaluate options and justify your decision.`,
+    steps: [
+      `Step 1: Identify a recent or hypothetical workplace situation involving ${topicTitle.toLowerCase()}.`,
+      'Step 2: List the key risks, stakeholders, and ethical considerations involved.',
+      'Step 3: Decide on the recommended approach and justify it against industry frameworks.',
+      'Step 4: Document the controls, monitoring, and follow-up actions required.',
+    ],
+    expected_output: 'A one-page summary covering: situation description, risks identified, chosen approach with justification, and follow-up controls.',
+    duration: '20 minutes',
+  };
 
   return {
     topic: topicTitle,
     content_blocks: blocks.slice(0, numBlocks),
-    activity: {
-      title: `${topicTitle} Practice`,
-      scenario: `Apply ${topicTitle} concepts in a workplace scenario`,
-      steps: [
-        'Step 1: Review the concepts from this topic',
-        'Step 2: Apply them to a realistic scenario',
-        'Step 3: Discuss outcomes and document learnings',
-      ],
-      expected_output: 'A short summary of the applied scenario and key insights',
-      duration: '20 minutes',
-    },
+    activity,
   };
 }
 
@@ -455,11 +681,11 @@ RULES:
     });
     let blocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
     const types = blocks.map((b) => b.visualization_type).join(', ');
-    console.log(`[cw-slides-v2] '${topic.topic_title.slice(0, 60)}': ${blocks.length}/${numBlocks} blocks, types: [${types}]`);
+    console.log(`[cw-slides-v3] '${topic.topic_title.slice(0, 60)}': ${blocks.length}/${numBlocks} blocks, types: [${types}]`);
 
     // ENFORCE exact count — pad with CP bullets if AI returned fewer
     if (blocks.length < numBlocks) {
-      console.warn(`[cw-slides-v2] '${topic.topic_title.slice(0, 60)}': AI produced ${blocks.length} blocks, padding to ${numBlocks}`);
+      console.warn(`[cw-slides-v3] '${topic.topic_title.slice(0, 60)}': AI produced ${blocks.length} blocks, padding to ${numBlocks}`);
       blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks);
     } else {
       blocks = blocks.slice(0, numBlocks);
@@ -486,8 +712,16 @@ RULES:
       activity: result.activity as ActivityData | undefined,
     };
   } catch (e: any) {
-    console.error(`[cw-slides-v2] content gen FAILED for '${topic.topic_title.slice(0, 60)}': ${e.message?.slice(0, 200)}`);
-    return fallbackContentBlocks(topic.topic_title, topic.bullet_points, numBlocks);
+    // Verbose error so production Coolify logs can surface the root cause
+    // (auth, network, JSON parse, model, tool-availability, etc.). Was
+    // truncated to 200 chars before — that hid the actual failure mode.
+    const errMsg = e?.message || String(e);
+    const errStack = e?.stack ? String(e.stack).split('\n').slice(0, 5).join(' | ') : '';
+    console.error(
+      `[cw-slides-v3] PHASE 2 FAILED for '${topic.topic_title.slice(0, 60)}': ` +
+      `${errMsg} | code=${e?.code || '?'} | name=${e?.name || '?'} | stack: ${errStack}`,
+    );
+    return fallbackContentBlocks(topic.topic_title, topic.bullet_points, numBlocks, research);
   }
 }
 
@@ -516,14 +750,19 @@ export async function generateAllContent(
   results.forEach((r, i) => {
     const key = topics[i].topic_title || `Topic ${i + 1}`;
     if (r instanceof Error) {
-      console.error(`[cw-slides-v2] content errored for '${key.slice(0, 60)}':`, r.message);
-      map[key] = fallbackContentBlocks(key, topics[i].bullet_points, perTopicBlocks[i] || 6);
+      console.error(`[cw-slides-v3] content errored for '${key.slice(0, 60)}':`, r.message);
+      map[key] = fallbackContentBlocks(key, topics[i].bullet_points, perTopicBlocks[i] || 6, researchMap[key]);
     } else {
       map[key] = r;
     }
   });
   const totalBlocks = Object.values(map).reduce((n, c) => n + c.content_blocks.length, 0);
   const target = perTopicBlocks.reduce((a, b) => a + b, 0);
-  console.log(`[cw-slides-v2] Phase 2 complete: ${totalBlocks}/${target} blocks across ${Object.keys(map).length} topics`);
+  // Count fallback usage so production logs make it obvious if Phase 2 AI is silently failing
+  const fallbackCount = results.filter((r) => r instanceof Error).length;
+  console.log(
+    `[cw-slides-v3] Phase 2 complete: ${totalBlocks}/${target} blocks across ${Object.keys(map).length} topics ` +
+    `(${fallbackCount}/${results.length} topics fell back due to AI failure)`,
+  );
   return map;
 }
