@@ -89,17 +89,48 @@ async function wikiSummary(pageKey: string): Promise<WikiSummary | null> {
  * fetch summaries for the top 3 articles, return a ResearchEntry with real
  * sources. Always returns SOMETHING valid — even if Wikipedia returns 0
  * results for one query, the others usually find pages.
+ *
+ * Articles are RELEVANCE-FILTERED before being adopted as sources.
+ * Wikipedia search will happily return "3D printing" for a query about
+ * "Responsible AI" because both share words like "AI" or "applications".
+ * Without filtering those off-topic articles flow through to the final
+ * infographic and produce nonsense ("3D printing, also called …" on a
+ * Responsible-AI slide). The filter requires meaningful keyword overlap
+ * between the article title/excerpt and the topic title.
  */
+function topicKeywords(text: string): Set<string> {
+  const STOP = new Set(['the','a','an','of','in','on','to','for','and','or','with','by','is','are','was','were','be','been','this','that','these','those','it','they','we','you','its','their','his','her','our','your','as','at','from','about','into','onto','via','per','use','using','used','apply','applies','identify','introduce','overview','basics','fundamentals','principles','techniques','strategies','methods','data','content','information','application','applications','tools','platforms','including','such','etc','eg','ie']);
+  return new Set(
+    text.toLowerCase()
+      .replace(/[.,;:!?()'"\[\]\/]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 4 && !STOP.has(w))
+  );
+}
+function relevanceScore(article: WikiSearchResult, topicKws: Set<string>): number {
+  const blob = `${article.title || ''} ${article.description || ''} ${article.excerpt || ''}`;
+  const articleKws = topicKeywords(blob);
+  let overlap = 0;
+  for (const k of articleKws) if (topicKws.has(k)) overlap++;
+  // Articles whose title contains a topic keyword get a small boost.
+  const titleLower = (article.title || '').toLowerCase();
+  let titleBoost = 0;
+  for (const k of topicKws) if (titleLower.includes(k)) { titleBoost += 1; break; }
+  return overlap + titleBoost;
+}
+
 export async function wikipediaResearch(topicTitle: string, courseTitle: string): Promise<ResearchEntry> {
   const cleanTopic = topicTitle.replace(/[\(\[].*?[\)\]]/g, '').trim();
+  // Anchor every query with the course context so generic words like "AI"
+  // or "data" don't pull in unrelated articles (3D printing, smart cities)
+  // when the course is specifically about "Responsible Generative AI".
   const queries = [
+    `${cleanTopic} ${courseTitle}`.slice(0, 120),
     cleanTopic,
-    `${cleanTopic} ${courseTitle}`.slice(0, 100),
     `${cleanTopic} framework standards best practices`,
-  ].filter((q, i, arr) => arr.indexOf(q) === i); // dedupe
+  ].filter((q, i, arr) => arr.indexOf(q) === i);
 
-  // Run all searches in parallel
-  const searchResults = await Promise.all(queries.map((q) => wikiSearch(q, 6)));
+  const searchResults = await Promise.all(queries.map((q) => wikiSearch(q, 8)));
 
   // Flatten + dedupe by title
   const seen = new Set<string>();
@@ -110,13 +141,19 @@ export async function wikipediaResearch(topicTitle: string, courseTitle: string)
       if (!key || seen.has(key)) continue;
       seen.add(key);
       allPages.push(p);
-      if (allPages.length >= 8) break;
     }
-    if (allPages.length >= 8) break;
   }
 
-  // Take top 5 unique pages, fetch summaries for top 3 in parallel
-  const topPages = allPages.slice(0, 5);
+  // Score every article against topic+course keywords; reject low-relevance
+  const topicKws = topicKeywords(`${cleanTopic} ${courseTitle}`);
+  const scored = allPages
+    .map((p) => ({ page: p, score: relevanceScore(p, topicKws) }))
+    .sort((a, b) => b.score - a.score);
+  // Require at least 1 keyword overlap; if too aggressive (no articles pass),
+  // fall back to top 5 unfiltered to ensure we always return SOMETHING.
+  const filtered = scored.filter((s) => s.score >= 1).map((s) => s.page);
+  const finalPages = filtered.length >= 2 ? filtered : scored.slice(0, 5).map((s) => s.page);
+  const topPages = finalPages.slice(0, 5);
   const summaryPromises = topPages.slice(0, 3).map((p) => p.key ? wikiSummary(p.key) : Promise.resolve(null));
   const summaries = await Promise.all(summaryPromises);
 

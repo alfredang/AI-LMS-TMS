@@ -114,67 +114,81 @@ async function ensureIconCache(): Promise<void> {
   }
 }
 
-// Snap an arbitrary icon name to the closest cached icon. The model
-// frequently picks names that aren't in our 80-icon static bundle
-// (mdi/python, mdi/database-export, mdi/cloud-upload, etc.). In production
-// the page can't fetch them from iconify.design (egress blocked / slow), so
-// they render as empty circles. Snapping to a cached icon by category keyword
-// guarantees every icon position has a real visible glyph.
-function snapToCachedIcon(name: string | undefined, fallbackIdx: number): string {
-  const def = COMMON_ICONS[fallbackIdx % COMMON_ICONS.length];
-  if (!name || typeof name !== 'string') return def;
-  // If it's already cached, keep it.
-  if (iconCache.has(name)) return name;
-  // Try common iconify aliases stripped of extra parts
-  const cleaned = name.replace(/^mdi-/, 'mdi/').replace(/_/g, '-');
-  if (iconCache.has(cleaned)) return cleaned;
-  // Keyword-based mapping to a cached icon — covers the most common
-  // model picks. Order matters (more specific first).
-  const KEYWORD_MAP: Array<[RegExp, string]> = [
-    [/code|programming|develop|script|python|java|api/, 'mdi/code-tags'],
-    [/database|sql|table|query|data\b/, 'mdi/database'],
-    [/cloud|aws|azure|gcp/, 'mdi/cloud'],
-    [/server|host|backend/, 'mdi/server'],
-    [/security|encrypt|protect|lock|password|auth/, 'mdi/lock'],
-    [/web|http|browser|url/, 'mdi/web'],
-    [/email|mail|notify/, 'mdi/email'],
-    [/account|user|person|people|team|staff/, 'mdi/account-multiple'],
-    [/business|company|org|enterprise|corporate/, 'mdi/office-building'],
-    [/money|cost|price|finance|budget|usd|salary/, 'mdi/currency-usd'],
-    [/percent|rate|metric|kpi/, 'mdi/percent'],
-    [/chart|graph|stat|analytic/, 'mdi/chart-bar'],
-    [/trend|growth|increase|up\b/, 'mdi/trending-up'],
-    [/decline|down|decrease|drop/, 'mdi/trending-down'],
-    [/time|clock|hour|minute|deadline|schedule/, 'mdi/clock'],
-    [/calendar|date|day|week|month|year/, 'mdi/calendar'],
-    [/check|verify|validate|approve|complete|done/, 'mdi/check-circle'],
-    [/cancel|reject|fail|error|wrong/, 'mdi/close'],
-    [/warn|alert|caution|risk/, 'mdi/alert'],
-    [/help|support|question/, 'mdi/help-circle'],
-    [/doc|file|paper|report/, 'mdi/file-document'],
-    [/list|bullet|item/, 'mdi/format-list-bulleted'],
-    [/idea|insight|innovate|tip|bulb/, 'mdi/lightbulb'],
-    [/process|step|workflow|flow/, 'mdi/refresh'],
-    [/arrow|next|continue|forward/, 'mdi/arrow-right'],
-    [/star|favorite|highlight|key|important/, 'mdi/star'],
-    [/shield|safe|secure|defend/, 'mdi/shield'],
-    [/scale|balance|fair|equity|justice/, 'mdi/scale-balance'],
-    [/heart|love|care|wellness/, 'mdi/heart'],
-    [/leaf|green|environment|eco|sustainability/, 'mdi/leaf'],
-    [/earth|world|global|planet/, 'mdi/earth'],
-    [/rocket|launch|deploy|release/, 'mdi/rocket-launch'],
-    [/cog|setting|config|tool|gear/, 'mdi/cog'],
-    [/info|about|describe|note/, 'mdi/information'],
-    [/book|learn|train|education|course/, 'mdi/book-open'],
-    [/handshake|partner|deal|agreement/, 'mdi/handshake'],
-    [/trophy|award|win|achieve/, 'mdi/trophy'],
-    [/flag|milestone|goal/, 'mdi/flag'],
-  ];
-  const lower = name.toLowerCase();
-  for (const [re, cached] of KEYWORD_MAP) {
-    if (re.test(lower)) return cached;
+// Keyword → cached-icon map used for both (a) snapping a model-supplied
+// icon name and (b) deriving an icon from a card's label/desc when no
+// usable name was supplied. Order matters (more specific first).
+const ICON_KEYWORD_MAP: Array<[RegExp, string]> = [
+  [/\b(privacy|anonymis|de-identif|encrypt|protect|gdpr|pdpa|confiden)/i, 'mdi/lock'],
+  [/\b(security|secure|defend|breach|threat|attack)/i, 'mdi/shield'],
+  [/\b(ethic|fair|bias|moral|accountab|responsib|trust)/i, 'mdi/scale-balance'],
+  [/\b(database|sql|table|query|record|datastore)/i, 'mdi/database'],
+  [/\bdata\b/i, 'mdi/database'],
+  [/\b(cloud|aws|azure|gcp|saas|paas)/i, 'mdi/cloud'],
+  [/\b(server|host|backend|infra|deploy)/i, 'mdi/server'],
+  [/\b(code|programming|develop|script|python|java|api|sdk)/i, 'mdi/code-tags'],
+  [/\b(machine learning|deep learning|neural|llm|gpt|model|algorithm|ai\b)/i, 'mdi/brain'],
+  [/\b(web|http|browser|url|website)/i, 'mdi/web'],
+  [/\b(email|mail|notify|message)/i, 'mdi/email'],
+  [/\b(account|user|person|people|team|staff|stakeholder|role|practitioner|developer|engineer|trainer|learner)/i, 'mdi/account-multiple'],
+  [/\b(business|company|org|enterprise|corporate|industry|commercial)/i, 'mdi/office-building'],
+  [/\b(money|cost|price|finance|budget|usd|salary|fund|invest)/i, 'mdi/currency-usd'],
+  [/\b(percent|rate|metric|kpi|score|indicator)/i, 'mdi/percent'],
+  [/\b(chart|graph|stat|analytic|measure|measurement)/i, 'mdi/chart-bar'],
+  [/\b(trend|growth|increase|up|adoption|scale|expand)/i, 'mdi/trending-up'],
+  [/\b(decline|down|decrease|drop|reduce|cut)/i, 'mdi/trending-down'],
+  [/\b(time|clock|hour|minute|deadline|schedule|duration)/i, 'mdi/clock'],
+  [/\b(calendar|date|day|week|month|year|history|past)/i, 'mdi/calendar'],
+  [/\b(check|verify|validate|approve|complete|done|compliance|compliant|standard|conform)/i, 'mdi/check-circle'],
+  [/\b(cancel|reject|fail|error|wrong)/i, 'mdi/close'],
+  [/\b(warn|alert|caution|risk|hazard|danger|incident|issue|concern|pitfall)/i, 'mdi/alert'],
+  [/\b(help|support|question|inquir|guide)/i, 'mdi/help-circle'],
+  [/\b(doc|document|file|paper|report|policy|guidelin|regulation)/i, 'mdi/file-document'],
+  [/\b(list|bullet|item|inventory|catalog)/i, 'mdi/format-list-bulleted'],
+  [/\b(idea|insight|innovate|tip|bulb|concept|principle)/i, 'mdi/lightbulb'],
+  [/\b(process|step|workflow|flow|procedure|method|stage|phase|pipeline)/i, 'mdi/refresh'],
+  [/\b(arrow|next|continue|forward|proceed)/i, 'mdi/arrow-right'],
+  [/\b(star|favorite|highlight|key|important|priority|critical)/i, 'mdi/star'],
+  [/\b(heart|love|care|wellness|wellbeing|welfare|impact)/i, 'mdi/heart'],
+  [/\b(leaf|green|environment|eco|sustainability|carbon|climate)/i, 'mdi/leaf'],
+  [/\b(earth|world|global|planet|context|scope|reach)/i, 'mdi/earth'],
+  [/\b(rocket|launch|deploy|release|modern|future|emerging|advanced)/i, 'mdi/rocket-launch'],
+  [/\b(cog|setting|config|tool|gear|implement|operate)/i, 'mdi/cog'],
+  [/\b(info|about|describe|note|definition|overview)/i, 'mdi/information'],
+  [/\b(book|learn|train|education|course|knowledge|study)/i, 'mdi/book-open'],
+  [/\b(handshake|partner|deal|agreement|collab)/i, 'mdi/handshake'],
+  [/\b(trophy|award|win|achieve|success|outcome|benefit|reward)/i, 'mdi/trophy'],
+  [/\b(flag|milestone|goal|target|objective|aim)/i, 'mdi/flag'],
+  [/\b(plan|design|architect|blueprint|strategy)/i, 'mdi/clipboard-text'],
+  [/\b(review|assess|evaluate|audit|monitor|inspect|examine)/i, 'mdi/file-search'],
+  [/\b(eye|visib|observ|watch|monitor)/i, 'mdi/eye'],
+];
+
+// Snap an arbitrary icon name to the closest cached icon, OR if no
+// usable name is supplied, derive one from the card's label/desc. The
+// model frequently picks names that aren't in our 80-icon bundle, AND
+// padding/fallback paths often supply only a generic fallback. Without
+// content-aware derivation every card on the slide ends up with the
+// same default lightbulb (the user-visible bug).
+function snapToCachedIcon(name: string | undefined, fallbackIdx: number, contextText?: string): string {
+  // 1) Use the supplied name if it's directly in the cache
+  if (name && typeof name === 'string') {
+    if (iconCache.has(name)) return name;
+    const cleaned = name.replace(/^mdi-/, 'mdi/').replace(/_/g, '-');
+    if (iconCache.has(cleaned)) return cleaned;
+    // Try keyword-mapping the supplied name
+    for (const [re, cached] of ICON_KEYWORD_MAP) {
+      if (re.test(name.toLowerCase())) return cached;
+    }
   }
-  return def;
+  // 2) Fall back to keyword-mapping the card's content text (label + desc)
+  if (contextText && typeof contextText === 'string') {
+    for (const [re, cached] of ICON_KEYWORD_MAP) {
+      if (re.test(contextText)) return cached;
+    }
+  }
+  // 3) Final fallback — rotate through COMMON_ICONS by index so cards in
+  //    the same slide don't all share the same default glyph.
+  return COMMON_ICONS[fallbackIdx % COMMON_ICONS.length];
 }
 
 function iconCacheToJson(): string {
@@ -347,7 +361,14 @@ function truncateAtWord(text: string, maxLen: number): string {
   if (trimmed.length <= maxLen) return trimmed;
   const cut = trimmed.slice(0, maxLen);
   const lastSpace = cut.lastIndexOf(' ');
-  if (lastSpace > maxLen / 2) return cut.slice(0, lastSpace).replace(/[.,;:\-]+$/, '');
+  // Always prefer breaking at a word boundary if one exists at all,
+  // not just past the half-length threshold. The half-length rule was
+  // intended to prevent "B" being returned for a 14-char limit on a
+  // long single-word string, but in practice it dropped the last
+  // letter of words like "Fairness" whose last space sat at position
+  // 6 of a 14-char window. Safer rule: use the last space when ≥ 4
+  // chars are kept; otherwise hard-cut.
+  if (lastSpace >= 4) return cut.slice(0, lastSpace).replace(/[.,;:\-]+$/, '');
   return cut.replace(/[.,;:\-]+$/, '');
 }
 
@@ -376,10 +397,10 @@ function templateLimits(template: string): {
   // their text zones and overlap neighbouring elements. Per AntV template
   // visual inspection, these caps keep text inside the design boxes.
   if (isChart) {
-    return { labelMax: 14, descMax: 0, titleMax: 38, topDescMax: 50, maxItems: 4 };
+    return { labelMax: 20, descMax: 0, titleMax: 38, topDescMax: 50, maxItems: 4 };
   }
   if (isSequence && isHorizontal) {
-    return { labelMax: 16, descMax: 28, titleMax: 38, topDescMax: 48, maxItems: 3 };
+    return { labelMax: 18, descMax: 36, titleMax: 38, topDescMax: 48, maxItems: 3 };
   }
   if (isSequence) {
     return { labelMax: 18, descMax: 35, titleMax: 38, topDescMax: 50, maxItems: 4 };
@@ -443,8 +464,11 @@ export function buildAntvDsl(block: ContentBlock, template: string): string {
       }
     }
     // Snap any model-picked icon to a guaranteed-cached one so it always
-    // renders in production (no network fetch fallback needed).
-    entry.icon = snapToCachedIcon(raw?.icon, i);
+    // renders in production. Pass label+desc as context so cards without
+    // an explicit icon name still get a content-relevant glyph instead
+    // of all sharing the same default.
+    const ctxText = `${raw?.label ?? ''} ${raw?.desc ?? ''} ${contextDesc}`.toLowerCase();
+    entry.icon = snapToCachedIcon(raw?.icon, i, ctxText);
 
     if (isChart) {
       let value: any = raw?.value;
@@ -458,9 +482,10 @@ export function buildAntvDsl(block: ContentBlock, template: string): string {
     const children = Array.isArray(raw?.children) ? raw!.children!.slice(0, 3) : [];
     if (children.length) {
       entry.children = children.map((c, ci) => {
+        const childCtx = `${c?.label ?? ''} ${c?.desc ?? ''} ${contextDesc}`.toLowerCase();
         const childEntry: any = {
           label: truncateAtWord(c?.label ?? `Sub ${ci + 1}`, Math.min(25, limits.labelMax)),
-          icon: snapToCachedIcon(c?.icon, ci),
+          icon: snapToCachedIcon(c?.icon, ci, childCtx),
         };
         if (c?.desc) childEntry.desc = truncateAtWord(c.desc, Math.min(40, limits.descMax || 40));
         return childEntry;
