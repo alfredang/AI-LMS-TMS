@@ -158,53 +158,61 @@ const PAD_TEMPLATES: Array<[string, string]> = [
 function topicDerivedItems(topicTitle: string, concept: string, vizType: string, blockIdx: number): ContentBlockItem[] {
   const t = concept || topicTitle;
   const lower = t.toLowerCase();
-  // Domain-flavoured iconography per concept keywords
+  // Domain-flavoured iconography per concept keywords. Every icon name
+  // here MUST exist in lib/cw-slides-icon-cache.json (the static 80-
+  // icon bundle); missing names render as empty circles in production.
   const iconOf = (kind: string): string => {
     if (/ethic|moral|fair|bias/i.test(t)) {
       return ({ overview: 'mdi/scale-balance', risk: 'mdi/alert', tool: 'mdi/cog', metric: 'mdi/chart-pie', best: 'mdi/check-circle' } as any)[kind] || 'mdi/scale-balance';
     }
     if (/privacy|anonymis|encrypt|secur|protect/i.test(t)) {
-      return ({ overview: 'mdi/lock', risk: 'mdi/shield-alert', tool: 'mdi/shield', metric: 'mdi/percent', best: 'mdi/check-circle' } as any)[kind] || 'mdi/lock';
+      return ({ overview: 'mdi/lock', risk: 'mdi/alert', tool: 'mdi/shield', metric: 'mdi/percent', best: 'mdi/shield-check' } as any)[kind] || 'mdi/lock';
     }
     if (/data|database|storage|record/i.test(t)) {
-      return ({ overview: 'mdi/database', risk: 'mdi/database-alert', tool: 'mdi/database-cog', metric: 'mdi/chart-bar', best: 'mdi/database-check' } as any)[kind] || 'mdi/database';
+      return ({ overview: 'mdi/database', risk: 'mdi/alert-circle', tool: 'mdi/cog', metric: 'mdi/chart-bar', best: 'mdi/check-circle' } as any)[kind] || 'mdi/database';
     }
     if (/ai|machine|learning|model|algorithm/i.test(t)) {
-      return ({ overview: 'mdi/brain', risk: 'mdi/alert-circle', tool: 'mdi/cog', metric: 'mdi/chart-line', best: 'mdi/check-circle' } as any)[kind] || 'mdi/brain';
+      return ({ overview: 'mdi/lightbulb', risk: 'mdi/alert-circle', tool: 'mdi/cog', metric: 'mdi/chart-line', best: 'mdi/check-circle' } as any)[kind] || 'mdi/lightbulb';
     }
     if (/cloud|aws|azure|gcp/i.test(t)) {
-      return ({ overview: 'mdi/cloud', risk: 'mdi/cloud-alert', tool: 'mdi/cloud-cog', metric: 'mdi/chart-bar', best: 'mdi/cloud-check' } as any)[kind] || 'mdi/cloud';
+      return ({ overview: 'mdi/cloud', risk: 'mdi/alert', tool: 'mdi/cog', metric: 'mdi/chart-bar', best: 'mdi/check-circle' } as any)[kind] || 'mdi/cloud';
     }
     return ({ overview: 'mdi/lightbulb', risk: 'mdi/alert', tool: 'mdi/cog', metric: 'mdi/chart-bar', best: 'mdi/check-circle' } as any)[kind] || 'mdi/lightbulb';
   };
 
+  // SHORT, distinct labels (max ~13 chars each) so they fit every
+  // template's labelMax without collapsing to the same first word
+  // when truncated. Descriptions are full meaningful sentences that
+  // mention the concept verbatim — avoid "matters" / "matter" subject-
+  // verb hazards by phrasing every desc as a noun phrase.
+  const tl = t; // already title-cased
   const POOLS: Record<string, ContentBlockItem[][]> = {
     overview: [
       [
-        { label: `${t} Definition`, desc: `Core meaning and scope of ${t.toLowerCase()}`, icon: iconOf('overview') },
-        { label: `${t} Drivers`, desc: `Why ${t.toLowerCase()} matters in industry`, icon: iconOf('best') },
-        { label: `${t} Scope`, desc: `Boundaries and key application areas`, icon: 'mdi/earth' },
-        { label: `${t} Stakeholders`, desc: `Roles involved across the lifecycle`, icon: 'mdi/account-multiple' },
+        { label: 'Definition', desc: `What ${tl} means in practice`, icon: iconOf('overview') },
+        { label: 'Why It Matters', desc: `Business and learner impact of ${tl}`, icon: iconOf('best') },
+        { label: 'Scope', desc: `Where ${tl} applies in industry`, icon: 'mdi/earth' },
+        { label: 'Stakeholders', desc: `Roles involved across the ${tl} lifecycle`, icon: 'mdi/account-multiple' },
       ],
       [
-        { label: `Key Principles`, desc: `Foundational rules guiding ${t.toLowerCase()}`, icon: iconOf('overview') },
-        { label: `Industry Standards`, desc: `Recognised standards used in practice`, icon: 'mdi/file-check' },
-        { label: `Common Pitfalls`, desc: `Mistakes practitioners typically avoid`, icon: iconOf('risk') },
-        { label: `Success Markers`, desc: `Signals that ${t.toLowerCase()} is working`, icon: iconOf('best') },
+        { label: 'Key Principles', desc: `Core rules guiding ${tl}`, icon: iconOf('overview') },
+        { label: 'Standards', desc: `Recognised standards for ${tl}`, icon: 'mdi/file-check' },
+        { label: 'Pitfalls', desc: `Mistakes to avoid with ${tl}`, icon: iconOf('risk') },
+        { label: 'Outcomes', desc: `Signs that ${tl} is working`, icon: iconOf('best') },
       ],
     ],
     process: [
       [
-        { label: `Step 1`, desc: `Define ${t.toLowerCase()} requirements and goals`, icon: 'mdi/flag' },
-        { label: `Step 2`, desc: `Plan controls, roles and tooling`, icon: 'mdi/clipboard-text' },
-        { label: `Step 3`, desc: `Implement and validate the approach`, icon: 'mdi/cog' },
-        { label: `Step 4`, desc: `Monitor outcomes and iterate`, icon: 'mdi/refresh' },
+        { label: 'Define', desc: `Set ${tl} goals and requirements`, icon: 'mdi/flag' },
+        { label: 'Plan', desc: 'Map roles, controls, and tooling', icon: 'mdi/clipboard-text' },
+        { label: 'Apply', desc: 'Implement and validate the approach', icon: 'mdi/cog' },
+        { label: 'Review', desc: 'Monitor outcomes and iterate', icon: 'mdi/refresh' },
       ],
     ],
     comparison: [
       [
-        { label: `Traditional ${t}`, desc: `Manual, ad-hoc handling without ${t.toLowerCase()} discipline`, icon: 'mdi/history' },
-        { label: `Modern ${t}`, desc: `Systematic, framework-led approach to ${t.toLowerCase()}`, icon: 'mdi/rocket-launch' },
+        { label: 'Traditional', desc: `Ad-hoc handling without ${tl} discipline`, icon: 'mdi/history' },
+        { label: 'Modern', desc: `Systematic, framework-led ${tl}`, icon: 'mdi/rocket-launch' },
       ],
     ],
     statistics: [
@@ -217,24 +225,24 @@ function topicDerivedItems(topicTitle: string, concept: string, vizType: string,
     ],
     hierarchy: [
       [
-        { label: t, desc: `Top-level ${t.toLowerCase()} concept`, icon: iconOf('overview'), children: [
+        { label: tl, desc: `Top-level ${tl} concept`, icon: iconOf('overview'), children: [
           { label: 'People', desc: 'Roles & responsibilities', icon: 'mdi/account-multiple' },
           { label: 'Process', desc: 'Workflows & controls', icon: 'mdi/cog' },
-          { label: 'Tools', desc: 'Platforms & utilities', icon: 'mdi/toolbox' },
+          { label: 'Tools', desc: 'Platforms & utilities', icon: 'mdi/cog' },
         ] },
       ],
     ],
     timeline: [
       [
-        { label: 'Past', desc: `Origins and early ${t.toLowerCase()} practice`, icon: 'mdi/history' },
-        { label: 'Present', desc: `Today's ${t.toLowerCase()} norms`, icon: 'mdi/clock' },
+        { label: 'Past', desc: `Origins and early ${tl} practice`, icon: 'mdi/history' },
+        { label: 'Present', desc: `Today's ${tl} norms`, icon: 'mdi/clock' },
         { label: 'Emerging', desc: 'Recent advances and pilots', icon: 'mdi/lightbulb' },
-        { label: 'Future', desc: `Where ${t.toLowerCase()} is heading`, icon: 'mdi/rocket-launch' },
+        { label: 'Future', desc: `Where ${tl} is heading`, icon: 'mdi/rocket-launch' },
       ],
     ],
     cycle: [
       [
-        { label: 'Plan', desc: `Set ${t.toLowerCase()} objectives`, icon: 'mdi/flag' },
+        { label: 'Plan', desc: `Set ${tl} objectives`, icon: 'mdi/flag' },
         { label: 'Apply', desc: 'Execute and document', icon: 'mdi/cog' },
         { label: 'Review', desc: 'Evaluate outcomes', icon: 'mdi/file-search' },
         { label: 'Improve', desc: 'Refine for the next cycle', icon: 'mdi/refresh' },
@@ -250,7 +258,7 @@ function topicDerivedItems(topicTitle: string, concept: string, vizType: string,
     ],
     relationship: [
       [
-        { label: 'Inputs', desc: `Resources feeding ${t.toLowerCase()}`, icon: 'mdi/database' },
+        { label: 'Inputs', desc: `Resources feeding ${tl}`, icon: 'mdi/database' },
         { label: 'Process', desc: 'Transformation steps', icon: 'mdi/cog' },
         { label: 'Outputs', desc: 'Deliverables produced', icon: 'mdi/file-document' },
         { label: 'Feedback', desc: 'Loop for continuous improvement', icon: 'mdi/refresh' },
@@ -478,12 +486,35 @@ export function padContentBlocks(
     poolCursors[vizType] = cursorIdx + 1;
 
     // ─── Helpers used by every branch ──────────────────────────────────
+    // Trailing-connector stop list. A finding sentence sliced at
+    // descMax routinely ends on a stop word ("...broad range of" /
+    // "...this includes" / "...is–particularly from"). Drop those so
+    // the card text reads as a complete clause.
+    const TRAILING_DROP = new Set([
+      'a','an','the','and','or','but','of','in','on','at','to','from','for','by','with',
+      'as','is','are','was','were','be','been','being','that','which','this','these','those',
+      'it','its','their','his','her','our','your','my','than','then','also','such','about',
+      'into','onto','upon','via','per','no','not','if','when','where','while','particularly',
+    ]);
+    const dropTrailingConnectors = (s: string): string => {
+      let out = s.trim().replace(/[.,;:\-]+$/, '');
+      for (let i = 0; i < 4; i++) {
+        const m = out.match(/^(.*?)\s+([A-Za-z'–—–-]+)\s*$/);
+        if (!m) break;
+        const lastWord = m[2].toLowerCase().replace(/^[–—–-]+/, '');
+        if (!TRAILING_DROP.has(lastWord)) break;
+        out = m[1].trim();
+      }
+      return out.replace(/[.,;:\-]+$/, '');
+    };
     const truncWord = (s: string, max: number): string => {
       if (!s) return '';
-      if (s.length <= max) return s;
-      const cut = s.slice(0, max);
+      const trimmed = s.trim();
+      if (trimmed.length <= max) return dropTrailingConnectors(trimmed);
+      const cut = trimmed.slice(0, max);
       const lastSpace = cut.lastIndexOf(' ');
-      return (lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).replace(/[,;:.!?\-]+$/, '');
+      const sliced = (lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).replace(/[,;:.!?\-]+$/, '');
+      return dropTrailingConnectors(sliced);
     };
     const HTML_ENT: Record<string, string> = { '&quot;': '"', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&apos;': "'", '&#39;': "'", '&nbsp;': ' ' };
     const cleanText = (s: string): string => s.replace(/&[a-z#0-9]+;/gi, (m) => HTML_ENT[m] || m)
@@ -564,7 +595,7 @@ export function padContentBlocks(
       items = stepChunk.map((s, i) => ({
         label: `Step ${i + 1}`,
         desc: truncWord(cleanText(s), 60),
-        icon: 'mdi/arrow-right-circle',
+        icon: 'mdi/arrow-right',
       }));
     } else if (vizType === 'comparison' && compItems.length >= 2) {
       const pair = compItems.slice(0, 2);
@@ -581,10 +612,12 @@ export function padContentBlocks(
         icon: 'mdi/chart-bar',
       }));
     } else {
-      // No viz-specific real data — try findings, then bullets, then
-      // topic-derived fallback. NEVER use generic Purpose/Approach/Timing/
-      // Context skeleton — that's what produces the placeholder slides
-      // users complained about.
+      // No viz-specific real data — try findings, then CP bullets.
+      // If neither has real material, STOP padding entirely. Better to
+      // ship fewer slides with real research-backed content than to
+      // pad with placeholder boxes (People/Process/Tools, Purpose/
+      // Approach/Timing/Context). The Streamlit reference accepts a
+      // shorter deck; we should too.
       const found = tryFindingsItems(4);
       if (found && found.length >= 2) {
         items = found;
@@ -599,10 +632,10 @@ export function padContentBlocks(
           };
         });
       } else {
-        // Last resort — derive items from the TOPIC TITLE itself, so
-        // every card stays topic-relevant. We never want generic
-        // Purpose/Approach/Timing/Context filler in the final deck.
-        items = topicDerivedItems(topicTitle, concept, vizType, bi);
+        // No real content available — abort the padding loop. The block
+        // we were about to push would have been a placeholder; skipping
+        // it keeps deck quality high at the cost of a few slides.
+        break;
       }
     }
 

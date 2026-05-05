@@ -112,11 +112,19 @@ function relevanceScore(article: WikiSearchResult, topicKws: Set<string>): numbe
   const articleKws = topicKeywords(blob);
   let overlap = 0;
   for (const k of articleKws) if (topicKws.has(k)) overlap++;
-  // Articles whose title contains a topic keyword get a small boost.
+  // Articles whose TITLE shares a topic keyword are far more reliable
+  // than ones where overlap is only in the excerpt — reject the
+  // Wikipedia "Truth" article from being adopted as a source for an AI
+  // ethics topic just because the excerpt happened to mention "AI".
   const titleLower = (article.title || '').toLowerCase();
   let titleBoost = 0;
-  for (const k of topicKws) if (titleLower.includes(k)) { titleBoost += 1; break; }
+  for (const k of topicKws) if (titleLower.includes(k)) { titleBoost += 2; break; }
   return overlap + titleBoost;
+}
+function articleTitleSharesTopicWord(article: WikiSearchResult, topicKws: Set<string>): boolean {
+  const titleLower = (article.title || '').toLowerCase();
+  for (const k of topicKws) if (titleLower.includes(k)) return true;
+  return false;
 }
 
 export async function wikipediaResearch(topicTitle: string, courseTitle: string): Promise<ResearchEntry> {
@@ -147,14 +155,28 @@ export async function wikipediaResearch(topicTitle: string, courseTitle: string)
   // Score every article against topic+course keywords; reject low-relevance
   const topicKws = topicKeywords(`${cleanTopic} ${courseTitle}`);
   const scored = allPages
-    .map((p) => ({ page: p, score: relevanceScore(p, topicKws) }))
+    .map((p) => ({ page: p, score: relevanceScore(p, topicKws), titleHit: articleTitleSharesTopicWord(p, topicKws) }))
     .sort((a, b) => b.score - a.score);
-  // Require at least 1 keyword overlap; if too aggressive (no articles pass),
-  // fall back to top 5 unfiltered to ensure we always return SOMETHING.
-  const filtered = scored.filter((s) => s.score >= 1).map((s) => s.page);
-  const finalPages = filtered.length >= 2 ? filtered : scored.slice(0, 5).map((s) => s.page);
+  // Two-tier filter:
+  //   Tier 1 (preferred): article TITLE contains a topic keyword.
+  //     Wikipedia returning "Truth" / "Child development" for an AI-
+  //     ethics topic was the loud failure mode — title overlap rules
+  //     those out.
+  //   Tier 2 (fallback): score >= 3 (multiple keyword hits in
+  //     excerpt + boost), only used when no title-hit articles exist.
+  //   Tier 3 (final): top 5 unfiltered so we never return zero.
+  const titleHits = scored.filter((s) => s.titleHit).map((s) => s.page);
+  const strongOverlap = scored.filter((s) => s.score >= 3).map((s) => s.page);
+  const finalPages = titleHits.length >= 2
+    ? titleHits
+    : strongOverlap.length >= 2
+      ? strongOverlap
+      : scored.slice(0, 5).map((s) => s.page);
+  // Fatter raw findings pool — pull summaries for all 5 top pages so
+  // padContentBlocks has more distinct sentences to populate cards
+  // before it has to abort. Was 3.
   const topPages = finalPages.slice(0, 5);
-  const summaryPromises = topPages.slice(0, 3).map((p) => p.key ? wikiSummary(p.key) : Promise.resolve(null));
+  const summaryPromises = topPages.map((p) => p.key ? wikiSummary(p.key) : Promise.resolve(null));
   const summaries = await Promise.all(summaryPromises);
 
   // Decode common HTML entities and strip noise that Wikipedia injects

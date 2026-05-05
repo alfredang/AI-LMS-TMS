@@ -126,7 +126,7 @@ const ICON_KEYWORD_MAP: Array<[RegExp, string]> = [
   [/\b(cloud|aws|azure|gcp|saas|paas)/i, 'mdi/cloud'],
   [/\b(server|host|backend|infra|deploy)/i, 'mdi/server'],
   [/\b(code|programming|develop|script|python|java|api|sdk)/i, 'mdi/code-tags'],
-  [/\b(machine learning|deep learning|neural|llm|gpt|model|algorithm|ai\b)/i, 'mdi/brain'],
+  [/\b(machine learning|deep learning|neural|llm|gpt|model|algorithm|ai\b)/i, 'mdi/lightbulb'],
   [/\b(web|http|browser|url|website)/i, 'mdi/web'],
   [/\b(email|mail|notify|message)/i, 'mdi/email'],
   [/\b(account|user|person|people|team|staff|stakeholder|role|practitioner|developer|engineer|trainer|learner)/i, 'mdi/account-multiple'],
@@ -164,31 +164,50 @@ const ICON_KEYWORD_MAP: Array<[RegExp, string]> = [
 ];
 
 // Snap an arbitrary icon name to the closest cached icon, OR if no
-// usable name is supplied, derive one from the card's label/desc. The
-// model frequently picks names that aren't in our 80-icon bundle, AND
-// padding/fallback paths often supply only a generic fallback. Without
-// content-aware derivation every card on the slide ends up with the
-// same default lightbulb (the user-visible bug).
+// usable name is supplied, derive one from the card's label/desc.
+//
+// CRITICAL: every value returned here MUST be a key that exists in
+// iconCache. The AntV page renders icons by looking them up in
+// __ICON_CACHE__; a name that isn't cached renders as an empty circle.
+// Hence we wrap every keyword-map result in `pickIfCached()` and fall
+// back to a known-cached default if the keyword target isn't bundled.
 function snapToCachedIcon(name: string | undefined, fallbackIdx: number, contextText?: string): string {
-  // 1) Use the supplied name if it's directly in the cache
-  if (name && typeof name === 'string') {
-    if (iconCache.has(name)) return name;
-    const cleaned = name.replace(/^mdi-/, 'mdi/').replace(/_/g, '-');
+  const pickIfCached = (n: string | undefined): string | null => {
+    if (!n) return null;
+    if (iconCache.has(n)) return n;
+    const cleaned = n.replace(/^mdi-/, 'mdi/').replace(/_/g, '-');
     if (iconCache.has(cleaned)) return cleaned;
-    // Try keyword-mapping the supplied name
+    return null;
+  };
+  // 1) Direct cache hit on supplied name
+  const direct = pickIfCached(name);
+  if (direct) return direct;
+  // 2) Keyword-map the supplied name
+  if (name && typeof name === 'string') {
     for (const [re, cached] of ICON_KEYWORD_MAP) {
-      if (re.test(name.toLowerCase())) return cached;
+      if (re.test(name.toLowerCase())) {
+        const hit = pickIfCached(cached);
+        if (hit) return hit;
+      }
     }
   }
-  // 2) Fall back to keyword-mapping the card's content text (label + desc)
+  // 3) Keyword-map the card's content text (label + desc)
   if (contextText && typeof contextText === 'string') {
     for (const [re, cached] of ICON_KEYWORD_MAP) {
-      if (re.test(contextText)) return cached;
+      if (re.test(contextText)) {
+        const hit = pickIfCached(cached);
+        if (hit) return hit;
+      }
     }
   }
-  // 3) Final fallback — rotate through COMMON_ICONS by index so cards in
-  //    the same slide don't all share the same default glyph.
-  return COMMON_ICONS[fallbackIdx % COMMON_ICONS.length];
+  // 4) Rotate through COMMON_ICONS by index. Filter to only icons that
+  //    are actually in the cache, so the final fallback can never miss.
+  for (let off = 0; off < COMMON_ICONS.length; off++) {
+    const candidate = COMMON_ICONS[(fallbackIdx + off) % COMMON_ICONS.length];
+    const hit = pickIfCached(candidate);
+    if (hit) return hit;
+  }
+  return 'mdi/lightbulb';
 }
 
 function iconCacheToJson(): string {
@@ -355,21 +374,47 @@ export interface InfographicResult {
 // Deterministic AntV DSL builder — mirrors build_antv_dsl() in Python
 // ────────────────────────────────────────────────────────────────────────────
 
+// Trailing-word stop list — words that should NEVER end a truncated
+// description because they leave the reader hanging mid-clause:
+//   "Truth is conformity to reality or"          → "Truth is conformity to reality"
+//   "It outlined four core ethical principles in"→ "It outlined four core ethical principles"
+//   "OCR issued guidance on the ethical use of"  → "OCR issued guidance on the ethical use"
+const TRAILING_DROP = new Set([
+  'a','an','the','and','or','but','of','in','on','at','to','from','for','by','with',
+  'as','is','are','was','were','be','been','being','that','which','this','these','those',
+  'it','its','their','his','her','our','your','my','than','then','also','such','about',
+  'into','onto','upon','via','per','no','not','if','when','where','while',
+]);
+
 function truncateAtWord(text: string, maxLen: number): string {
   if (!text) return '';
   const trimmed = String(text).trim();
-  if (trimmed.length <= maxLen) return trimmed;
+  if (trimmed.length <= maxLen) {
+    // Even if the input fits, drop a trailing connector that leaves a
+    // dangling clause. Wikipedia summaries often hand us phrases like
+    // "intelligence covers a broad range of" — same problem.
+    return stripTrailingConnectors(trimmed);
+  }
   const cut = trimmed.slice(0, maxLen);
   const lastSpace = cut.lastIndexOf(' ');
-  // Always prefer breaking at a word boundary if one exists at all,
-  // not just past the half-length threshold. The half-length rule was
-  // intended to prevent "B" being returned for a 14-char limit on a
-  // long single-word string, but in practice it dropped the last
-  // letter of words like "Fairness" whose last space sat at position
-  // 6 of a 14-char window. Safer rule: use the last space when ≥ 4
-  // chars are kept; otherwise hard-cut.
-  if (lastSpace >= 4) return cut.slice(0, lastSpace).replace(/[.,;:\-]+$/, '');
-  return cut.replace(/[.,;:\-]+$/, '');
+  let result: string;
+  if (lastSpace >= 4) result = cut.slice(0, lastSpace);
+  else result = cut;
+  return stripTrailingConnectors(result.replace(/[.,;:\-]+$/, ''));
+}
+
+function stripTrailingConnectors(s: string): string {
+  let out = s.trim().replace(/[.,;:\-]+$/, '');
+  // Drop up to 3 trailing stop-words. e.g. "exceed or augment" survives
+  // (augment isn't a stop word) but "scope of" → "scope" and
+  // "matters in" → "matters".
+  for (let i = 0; i < 3; i++) {
+    const m = out.match(/^(.*?)\s+([A-Za-z']+)\s*$/);
+    if (!m) break;
+    if (!TRAILING_DROP.has(m[2].toLowerCase())) break;
+    out = m[1].trim();
+  }
+  return out.replace(/[.,;:\-]+$/, '');
 }
 
 // Template-specific text limits — mirrors _enforce_dsl_text_limits() in
@@ -400,13 +445,13 @@ function templateLimits(template: string): {
     return { labelMax: 20, descMax: 0, titleMax: 38, topDescMax: 50, maxItems: 4 };
   }
   if (isSequence && isHorizontal) {
-    return { labelMax: 18, descMax: 36, titleMax: 38, topDescMax: 48, maxItems: 3 };
+    return { labelMax: 18, descMax: 48, titleMax: 38, topDescMax: 48, maxItems: 3 };
   }
   if (isSequence) {
-    return { labelMax: 18, descMax: 35, titleMax: 38, topDescMax: 50, maxItems: 4 };
+    return { labelMax: 18, descMax: 50, titleMax: 38, topDescMax: 50, maxItems: 4 };
   }
   if (isCompare) {
-    return { labelMax: 18, descMax: 32, titleMax: 38, topDescMax: 48, maxItems: 4 };
+    return { labelMax: 18, descMax: 48, titleMax: 38, topDescMax: 48, maxItems: 4 };
   }
   if (isList || isGrid || isColumn || isRow) {
     return { labelMax: 22, descMax: 42, titleMax: 42, topDescMax: 55, maxItems: 6 };
