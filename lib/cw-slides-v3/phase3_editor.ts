@@ -586,12 +586,14 @@ CRITICAL:
 - assigned_template must be valid for the viz_type's family
 - Vary templates across consecutive slides`;
 
+  // Force FAST_MODEL (Haiku) — Streamlit-aligned, more reliable for JSON in prod
+  console.log(`[cw-slides-v3] phase3 calling Claude: prompt=${prompt.length}b, model=${FAST_MODEL}`);
   try {
     const result = await runAgentJson({
       prompt,
       systemPrompt: EDITOR_SYSTEM_PROMPT,
       maxTurns: EDITOR_MAX_TURNS,
-      model: model || FAST_MODEL,
+      model: FAST_MODEL,
       apiKey,
     });
     const skeleton = result as Skeleton;
@@ -603,7 +605,10 @@ CRITICAL:
     console.log(`[cw-slides-v3] editor skeleton built: ${totalAssignments} infographic assignments across ${skeleton.learning_outcomes.length} LOs`);
     return skeleton;
   } catch (e: any) {
-    console.warn(`[cw-slides-v3] editor agent failed (${e.message?.slice(0, 200)}); using deterministic fallback skeleton`);
+    const errMsg = e?.message || String(e);
+    const errCode = e?.code || '?';
+    const errName = e?.name || '?';
+    console.error(`[cw-slides-v3] PHASE 3 FAILED: ${errMsg} | code=${errCode} | name=${errName} — using deterministic fallback skeleton`);
     return fallbackSkeleton(context, totalHours, contentMap);
   }
 }
