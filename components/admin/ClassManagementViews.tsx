@@ -274,15 +274,24 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         const configured = (trainingProviderProfile as any)?.integrations?.virtualMeetingProvider;
         return configured === 'zoom' || configured === 'teams' ? configured : 'google_meet';
     });
+    const [storedVirtualMeetingLink, setStoredVirtualMeetingLink] = useState(courseToEdit?.virtualMeetingLink || '');
+    const [storedVirtualMeetingProvider, setStoredVirtualMeetingProvider] = useState<'google_meet' | 'zoom' | 'teams' | ''>(() => {
+        const stored = courseToEdit?.virtualMeetingProvider;
+        return stored === 'zoom' || stored === 'teams' || stored === 'google_meet' ? stored : '';
+    });
     const [meetingBusy, setMeetingBusy] = useState(false);
 
     useEffect(() => {
-        setVirtualMeetingLink(courseToEdit?.virtualMeetingLink || '');
+        const nextStoredLink = courseToEdit?.virtualMeetingLink || '';
+        setVirtualMeetingLink(nextStoredLink);
+        setStoredVirtualMeetingLink(nextStoredLink);
         const stored = courseToEdit?.virtualMeetingProvider;
         if (stored === 'zoom' || stored === 'teams' || stored === 'google_meet') {
             setVirtualMeetingProvider(stored);
+            setStoredVirtualMeetingProvider(stored);
             return;
         }
+        setStoredVirtualMeetingProvider('');
         const configured = (trainingProviderProfile as any)?.integrations?.virtualMeetingProvider;
         if (configured === 'zoom' || configured === 'teams' || configured === 'google_meet') {
             setVirtualMeetingProvider(configured);
@@ -326,11 +335,12 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const disabledInputClasses = "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed";
     const virtualMeetingProviderLabel = virtualMeetingProvider === 'zoom' ? 'Zoom' : virtualMeetingProvider === 'teams' ? 'Microsoft Teams' : 'Google Meet';
     const canGenerateZoomMeeting = classType === 'Virtual' || classType === 'Hybrid';
+    const hasStoredZoomMeeting = storedVirtualMeetingProvider === 'zoom' && !!storedVirtualMeetingLink;
 
     const handleGenerateZoomMeeting = async (force = false) => {
         if (!courseToEdit?.id) return;
-        if (force && virtualMeetingLink) {
-            const shouldRegenerate = confirm('Regenerate the Zoom meeting for this class? This will replace the stored virtual meeting link with a new Zoom link.');
+        if (force && storedVirtualMeetingLink) {
+            const shouldRegenerate = confirm('Generate a new Zoom meeting and replace the currently stored virtual meeting link? The new Zoom link will become the active meeting link shown to learners and trainers.');
             if (!shouldRegenerate) return;
         }
 
@@ -347,6 +357,8 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             const joinUrl = meeting.join_url || meeting.joinUrl || '';
             if (joinUrl) setVirtualMeetingLink(joinUrl);
             setVirtualMeetingProvider('zoom');
+            if (joinUrl) setStoredVirtualMeetingLink(joinUrl);
+            setStoredVirtualMeetingProvider('zoom');
             alert(result.data?.reused ? 'Existing Zoom meeting link reused.' : force ? 'Zoom meeting regenerated.' : 'Zoom meeting created.');
         } catch (error) {
             alert(error instanceof Error ? error.message : 'Failed to create Zoom meeting');
@@ -359,6 +371,14 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         if (!courseToEdit?.id) {
             showErrorPopup('No course run selected.');
             return;
+        }
+
+        if (
+            storedVirtualMeetingLink &&
+            (storedVirtualMeetingLink !== virtualMeetingLink || storedVirtualMeetingProvider !== virtualMeetingProvider)
+        ) {
+            const shouldReplace = confirm('Save this virtual meeting link and make it the active link shown to learners and trainers? This will replace the currently stored meeting link for this class.');
+            if (!shouldReplace) return;
         }
 
         try {
@@ -378,6 +398,8 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
 
             setVirtualMeetingLink(result.data?.virtual_meeting_link || virtualMeetingLink);
             setVirtualMeetingProvider(result.data?.virtual_meeting_provider || virtualMeetingProvider);
+            setStoredVirtualMeetingLink(result.data?.virtual_meeting_link || virtualMeetingLink);
+            setStoredVirtualMeetingProvider(result.data?.virtual_meeting_provider || virtualMeetingProvider);
             showSuccessPopup('Virtual meeting link saved.');
         } catch (error) {
             showErrorPopup(error instanceof Error ? error.message : 'Failed to save virtual meeting link');
@@ -1615,6 +1637,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
 
         if (virtualMeetingLinkFromResponse) {
             setVirtualMeetingLink(virtualMeetingLinkFromResponse);
+            setStoredVirtualMeetingLink(virtualMeetingLinkFromResponse);
         }
         if (
             virtualMeetingProviderFromResponse === 'google_meet' ||
@@ -1622,6 +1645,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
             virtualMeetingProviderFromResponse === 'teams'
         ) {
             setVirtualMeetingProvider(virtualMeetingProviderFromResponse);
+            setStoredVirtualMeetingProvider(virtualMeetingProviderFromResponse);
         }
 
         setSsgDataPopulated(true);
@@ -2494,24 +2518,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Provider</label>
                                             <select
                                                 value={virtualMeetingProvider}
-                                                onChange={async (e) => {
+                                                onChange={(e) => {
                                                     const nextProvider = e.target.value as 'google_meet' | 'zoom' | 'teams';
                                                     setVirtualMeetingProvider(nextProvider);
-                                                    if (courseToEdit?.id) {
-                                                        try {
-                                                            const response = await fetch(getApiUrl('/api/admin/upcoming-classes'), {
-                                                                method: 'PUT',
-                                                                headers: { 'Content-Type': 'application/json' },
-                                                                body: JSON.stringify({ id: courseToEdit.id, virtual_meeting_provider: nextProvider }),
-                                                            });
-                                                            const result = await response.json();
-                                                            if (!response.ok || !result.success) {
-                                                                throw new Error(result.error || 'Failed to save virtual meeting provider');
-                                                            }
-                                                        } catch (error) {
-                                                            showErrorPopup(error instanceof Error ? error.message : 'Failed to save virtual meeting provider');
-                                                        }
-                                                    }
+                                                    setVirtualMeetingLink(nextProvider === storedVirtualMeetingProvider ? storedVirtualMeetingLink : '');
                                                 }}
                                                 className={inputClasses}
                                             >
@@ -2527,11 +2537,11 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                         variant="secondary"
                                                         size="sm"
                                                         type="button"
-                                                        onClick={() => handleGenerateZoomMeeting(!!virtualMeetingLink)}
+                                                        onClick={() => handleGenerateZoomMeeting(!!storedVirtualMeetingLink)}
                                                         disabled={meetingBusy || !canGenerateZoomMeeting}
                                                         className="w-auto flex-none"
                                                     >
-                                                        {meetingBusy ? 'Generating...' : virtualMeetingLink ? 'Regenerate Zoom Meeting' : 'Generate Zoom Meeting'}
+                                                        {meetingBusy ? 'Generating...' : hasStoredZoomMeeting ? 'Regenerate Zoom Meeting' : 'Generate Zoom Meeting'}
                                                     </Button>
                                                 </div>
                                                 {!canGenerateZoomMeeting && (
