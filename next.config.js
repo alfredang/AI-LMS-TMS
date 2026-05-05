@@ -57,7 +57,20 @@ const nextConfig = {
     unoptimized: process.env.NODE_ENV !== 'production',
   },
 
-  serverExternalPackages: ['node-cron'],
+  serverExternalPackages: ['node-cron', '@anthropic-ai/claude-agent-sdk'],
+
+  // Force-include the Claude Agent SDK's runtime files in the standalone
+  // bundle. The SDK loads `cli.js` and `vendor/` (ripgrep + audio-capture)
+  // dynamically at runtime, which Next.js's static tracer cannot detect,
+  // so without this they get stripped from the production image and the
+  // SDK throws: "Native CLI binary for linux-x64 not found." Including
+  // the whole package directory ensures every runtime asset travels into
+  // the standalone output.
+  outputFileTracingIncludes: {
+    '/api/**': [
+      './node_modules/@anthropic-ai/claude-agent-sdk/**',
+    ],
+  },
 
   // Webpack configuration
   webpack: (config, { isServer }) => {
