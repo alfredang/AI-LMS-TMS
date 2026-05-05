@@ -466,6 +466,29 @@ END;
 $$;
 
 
+--
+-- Name: app_user_lowercase_email(); Type: FUNCTION; Schema: public; Owner: -
+--
+-- Forces email and secondary_email to lowercase on every INSERT/UPDATE.
+-- Paired with the app_user_email_lower_key unique index. Together they make
+-- email comparisons case-insensitive without requiring write-site changes.
+--
+
+CREATE FUNCTION public.app_user_lowercase_email() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.email IS NOT NULL THEN
+    NEW.email := LOWER(NEW.email);
+  END IF;
+  IF NEW.secondary_email IS NOT NULL THEN
+    NEW.secondary_email := LOWER(NEW.secondary_email);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -3367,11 +3390,15 @@ ALTER TABLE ONLY public.app_config
 
 
 --
--- Name: app_user app_user_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: app_user_email_lower_key; Type: INDEX; Schema: public; Owner: -
+--
+-- Case-insensitive uniqueness on email. Replaces the legacy case-sensitive
+-- UNIQUE(email) constraint. Paired with app_user_lowercase_email_trg below
+-- which forces stored values to lowercase, so the index is effectively a
+-- plain unique on the canonical email.
 --
 
-ALTER TABLE ONLY public.app_user
-    ADD CONSTRAINT app_user_email_key UNIQUE (email);
+CREATE UNIQUE INDEX app_user_email_lower_key ON public.app_user (LOWER(email));
 
 
 --
@@ -4822,6 +4849,13 @@ CREATE TRIGGER touch_da_application_updated_at BEFORE UPDATE ON public.da_applic
 --
 
 CREATE TRIGGER trg_app_user_touch BEFORE UPDATE ON public.app_user FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+
+--
+-- Name: app_user app_user_lowercase_email_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER app_user_lowercase_email_trg BEFORE INSERT OR UPDATE OF email, secondary_email ON public.app_user FOR EACH ROW EXECUTE FUNCTION public.app_user_lowercase_email();
 
 
 --
