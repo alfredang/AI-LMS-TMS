@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
+import { cancelInvoiceJobOnEnrolmentCancelled } from '../../../lib/services/invoiceJobs';
 
 /**
  * POST /api/enrolments/cancel
@@ -41,6 +42,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.warn('[enrolments/cancel] ssg_enrolments sync:', e);
       }
     }
+
+    void cancelInvoiceJobOnEnrolmentCancelled(enrolmentId.trim()).catch((e: unknown) =>
+      console.warn('[enrolments/cancel] invoice job cancel:', e instanceof Error ? e.message : e)
+    );
 
     return res.status(200).json({
       success: true,
