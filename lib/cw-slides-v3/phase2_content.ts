@@ -318,35 +318,48 @@ function fallbackContentBlocks(
     return (lastSpace >= 4 ? cut.slice(0, lastSpace) : cut).replace(/[.,;:\-]+$/, '');
   };
 
-  const blocks: ContentBlock[] = [];
+  // Keyword overlap score — used to pick research findings RELATED to a
+  // specific CP bullet (so each per-bullet block stays on-topic).
+  const STOPWORDS = new Set(['the','a','an','of','in','on','at','to','for','and','or','with','by','is','are','was','were','be','been','this','that','these','those','it','its','their','as','from','about','using','use','used']);
+  const tokens = (s: string): Set<string> => {
+    return new Set(
+      s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+        .filter((w) => w.length >= 4 && !STOPWORDS.has(w)),
+    );
+  };
+  const findingsForBullet = (bullet: string, max = 5, exclude: Set<string>): string[] => {
+    const bullKw = tokens(bullet);
+    const scored = findings
+      .map((f, i) => {
+        if (exclude.has(`${i}`)) return null;
+        const fKw = tokens(f);
+        let overlap = 0;
+        for (const k of fKw) if (bullKw.has(k)) overlap++;
+        return { idx: i, finding: f, score: overlap };
+      })
+      .filter((x): x is { idx: number; finding: string; score: number } => x !== null && x.score >= 1)
+      .sort((a, b) => b.score - a.score);
+    const picked: string[] = [];
+    for (const s of scored) {
+      if (picked.length >= max) break;
+      picked.push(s.finding);
+      exclude.add(`${s.idx}`);
+    }
+    return picked;
+  };
 
-  // Block 0 — Overview built from research summary or CP bullets
+  const blocks: ContentBlock[] = [];
+  const usedFindingIdxs = new Set<string>();
+
+  // ── Block 0 — Overview: each CP bullet becomes a card ─────────────
+  // This anchors the topic to the CP from slide one.
   const overviewItems: ContentBlockItem[] = [];
-  if (findings.length >= 3) {
-    const seen = new Set<string>();
-    for (const f of findings) {
-      if (overviewItems.length >= 4) break;
-      const desc = cleanText(f);
-      const lbl = labelFromSentence(desc);
-      if (!lbl) continue;
-      const key = lbl.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      overviewItems.push({
-        label: truncWord(lbl, 24),
-        desc: truncWord(desc, 80),
-        icon: 'mdi/lightbulb',
-      });
-    }
-  }
-  if (overviewItems.length < 3 && bps.length) {
-    for (const bp of bps.slice(0, 4 - overviewItems.length)) {
-      overviewItems.push({
-        label: truncWord(bp.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
-        desc: truncWord(cleanText(bp), 80),
-        icon: 'mdi/information',
-      });
-    }
+  for (const bp of bps.slice(0, 5)) {
+    overviewItems.push({
+      label: truncWord(bp.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
+      desc: truncWord(cleanText(bp), 80),
+      icon: 'mdi/information',
+    });
   }
   if (overviewItems.length === 0) {
     overviewItems.push({ label: 'Overview', desc: `Key aspects of ${topicTitle}`, icon: 'mdi/information' });
@@ -361,31 +374,69 @@ function fallbackContentBlocks(
     sources_used: [],
   });
 
-  // Middle blocks — cycle through research data types so each block has
-  // a different visualization. Streamlit-style sequence: process →
-  // comparison → statistics → hierarchy → timeline → overview-from-findings.
+  // ── Block per CP bullet — research enrichment, on-topic ─────────────
+  // Each block is dedicated to one CP bullet. Cards are built from
+  // research findings whose words overlap with the bullet's words. If
+  // no overlapping findings exist, the bullet is expanded structurally
+  // (sub-aspects derived from the bullet itself, never random Wikipedia).
+  for (let bi = 0; bi < bps.length && blocks.length < numBlocks - 1; bi++) {
+    const bullet = bps[bi];
+    const matchedFindings = findingsForBullet(bullet, 4, usedFindingIdxs);
+    const items: ContentBlockItem[] = [];
+
+    // Derive 1 card from the bullet itself as the structural anchor
+    items.push({
+      label: truncWord(bullet.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
+      desc: truncWord(cleanText(bullet), 80),
+      icon: 'mdi/star',
+    });
+    // Up to 3 enrichment cards from on-topic research findings
+    const seen = new Set<string>();
+    for (const f of matchedFindings) {
+      if (items.length >= 4) break;
+      const desc = cleanText(f);
+      const lbl = labelFromSentence(desc);
+      if (!lbl) continue;
+      const key = lbl.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({
+        label: truncWord(lbl, 24),
+        desc: truncWord(desc, 80),
+        icon: 'mdi/lightbulb',
+      });
+    }
+
+    blocks.push({
+      block_index: blocks.length,
+      sub_title: truncWord(cleanText(bullet), 60),
+      visualization_type: 'overview',
+      suggested_template: bi % 2 === 0 ? 'list-grid-candy-card-lite' : 'list-row-horizontal-icon-arrow',
+      data: { title: truncWord(cleanText(bullet), 40), items },
+      caption: '',
+      sources_used: [],
+    });
+  }
+
+  // ── Remaining blocks — process / comparison / statistics / timeline,
+  // but ONLY using research data that exists. Otherwise use unused
+  // findings as overview cards. NO off-topic content. ─────────────────
   let procCursor = 0;
-  let findingCursor = 0;
-  const findingsAvailable = () => findings.length - findingCursor;
   let pickIdx = 0;
-
   while (blocks.length < numBlocks - 1) {
-    const bi = blocks.length;
     let block: ContentBlock | null = null;
-
-    // Try in priority order, falling through if data unavailable
-    const tryProcess = pickIdx % 5 === 0 && procSteps.length - procCursor >= 3;
-    const tryComp = pickIdx % 5 === 1 && compItems.length >= 2;
-    const tryStats = pickIdx % 5 === 2 && chartData.length >= 2;
-    const tryTimeline = pickIdx % 5 === 3 && timelineData.length >= 2;
+    const tryProcess = pickIdx % 4 === 0 && procSteps.length - procCursor >= 3;
+    const tryComp = pickIdx % 4 === 1 && compItems.length >= 2;
+    const tryStats = pickIdx % 4 === 2 && chartData.length >= 2;
+    const tryTimeline = pickIdx % 4 === 3 && timelineData.length >= 2;
     pickIdx++;
 
     if (tryProcess) {
       const stepChunk = procSteps.slice(procCursor, procCursor + 5);
       procCursor += stepChunk.length;
       block = {
-        block_index: bi,
-        sub_title: `${topicTitle} — Step-by-Step`,
+        block_index: blocks.length,
+        sub_title: `${topicTitle} — Process Steps`,
         visualization_type: 'process',
         suggested_template: 'sequence-snake-steps-compact-card',
         data: {
@@ -402,12 +453,12 @@ function fallbackContentBlocks(
     } else if (tryComp) {
       const pair = compItems.slice(0, 2);
       block = {
-        block_index: bi,
+        block_index: blocks.length,
         sub_title: `${topicTitle} — Approach Comparison`,
         visualization_type: 'comparison',
         suggested_template: 'compare-binary-horizontal-badge-card-arrow',
         data: {
-          title: 'Comparison',
+          title: 'Approaches',
           items: pair.map((c, i) => ({
             label: truncWord(String(c.label ?? (i === 0 ? 'Traditional' : 'Modern')), 22),
             desc: truncWord(String(c.desc ?? ''), 60),
@@ -419,13 +470,13 @@ function fallbackContentBlocks(
       };
     } else if (tryStats) {
       block = {
-        block_index: bi,
+        block_index: blocks.length,
         sub_title: `${topicTitle} — Industry Metrics`,
         visualization_type: 'statistics',
         suggested_template: 'chart-bar-plain-text',
         data: {
           title: 'Key Metrics',
-          items: chartData.slice(0, 5).map((d) => ({
+          items: chartData.slice(0, 5).map((d: any) => ({
             label: truncWord(String(d.label || ''), 18) || 'Metric',
             value: typeof d.value === 'number' && Number.isFinite(d.value) ? d.value : 50,
             desc: '',
@@ -437,13 +488,13 @@ function fallbackContentBlocks(
       };
     } else if (tryTimeline) {
       block = {
-        block_index: bi,
+        block_index: blocks.length,
         sub_title: `${topicTitle} — Timeline`,
         visualization_type: 'timeline',
         suggested_template: 'sequence-timeline-simple',
         data: {
           title: 'Evolution',
-          items: timelineData.slice(0, 5).map((d) => ({
+          items: timelineData.slice(0, 5).map((d: any) => ({
             label: truncWord(String(d.year || ''), 14) || 'Phase',
             desc: truncWord(String(d.event || ''), 60),
             icon: 'mdi/clock',
@@ -454,13 +505,20 @@ function fallbackContentBlocks(
       };
     }
 
-    // Default: build an overview from research findings (next 4 unused)
+    // Fallback path within fallback: re-expand from the most-relevant
+    // bullets using the topic title as the keyword anchor.
     if (!block) {
+      const topicKw = tokens(topicTitle);
+      const scored = findings
+        .map((f, i) => ({ idx: i, finding: f, score: [...tokens(f)].filter((k) => topicKw.has(k)).length }))
+        .filter((x) => x.score >= 1 && !usedFindingIdxs.has(`${x.idx}`))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 4);
+      if (scored.length < 2) break; // truly nothing relevant — stop padding
       const items: ContentBlockItem[] = [];
       const seen = new Set<string>();
-      while (items.length < 4 && findingCursor < findings.length) {
-        const f = findings[findingCursor++];
-        const desc = cleanText(f);
+      for (const s of scored) {
+        const desc = cleanText(s.finding);
         const lbl = labelFromSentence(desc);
         if (!lbl) continue;
         const key = lbl.toLowerCase();
@@ -471,27 +529,15 @@ function fallbackContentBlocks(
           desc: truncWord(desc, 80),
           icon: 'mdi/lightbulb',
         });
+        usedFindingIdxs.add(`${s.idx}`);
       }
-      // If we ran out of findings, use bullets
-      if (items.length < 2 && bps.length) {
-        for (const bp of bps) {
-          if (items.length >= 4) break;
-          items.push({
-            label: truncWord(bp.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
-            desc: truncWord(cleanText(bp), 80),
-            icon: 'mdi/chevron-right',
-          });
-        }
-      }
-      // If still nothing, the topic genuinely has no research/bullets — abort
-      // adding more blocks (better short deck than placeholder).
       if (items.length < 2) break;
       block = {
-        block_index: bi,
-        sub_title: `${topicTitle} — Key Concepts ${blocks.length}`,
+        block_index: blocks.length,
+        sub_title: `${topicTitle} — Further Reading`,
         visualization_type: 'overview',
-        suggested_template: blocks.length % 2 === 0 ? 'list-grid-candy-card-lite' : 'list-zigzag-down-compact-card',
-        data: { title: 'Key Concepts', items },
+        suggested_template: 'list-zigzag-down-compact-card',
+        data: { title: 'Additional Insights', items },
         caption: '',
         sources_used: [],
       };
@@ -499,28 +545,16 @@ function fallbackContentBlocks(
     blocks.push(block);
   }
 
-  // Final block — Key Takeaways from findings or bullets
+  // ── Final block — Key Takeaways: ALWAYS recap CP bullets ────────────
+  // Each takeaway card maps to one CP bullet so the slide reinforces the
+  // mandatory CP coverage from the source of truth.
   const ktItems: ContentBlockItem[] = [];
-  if (findings.length >= 3 && findingCursor < findings.length) {
-    const seen = new Set<string>();
-    for (let i = findingCursor; i < findings.length && ktItems.length < 4; i++) {
-      const desc = cleanText(findings[i]);
-      const lbl = labelFromSentence(desc);
-      if (!lbl) continue;
-      const key = lbl.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      ktItems.push({ label: truncWord(lbl, 24), desc: truncWord(desc, 80), icon: 'mdi/star' });
-    }
-  }
-  if (ktItems.length < 3 && bps.length) {
-    for (const bp of bps.slice(0, 4 - ktItems.length)) {
-      ktItems.push({
-        label: truncWord(bp.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
-        desc: truncWord(cleanText(bp), 80),
-        icon: 'mdi/star',
-      });
-    }
+  for (const bp of bps.slice(0, 5)) {
+    ktItems.push({
+      label: truncWord(bp.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
+      desc: truncWord(cleanText(bp), 80),
+      icon: 'mdi/star',
+    });
   }
   if (ktItems.length === 0) {
     ktItems.push({ label: 'Key Concept', desc: `Apply ${topicTitle} principles consistently`, icon: 'mdi/star' });
@@ -608,18 +642,32 @@ async function generateTopicContent(
     ? `\nNOTE: Research data is thin (${sources.length} sources). Use WebSearch to find 1-2 supplementary sources about "${topic.topic_title}" to enrich the blocks. Keep searches focused — 1 search max.`
     : '';
 
-  // Streamlit's prompt — ported verbatim with template substitutions.
-  const prompt = `Create ${numBlocks} content blocks for this topic. Each block = one infographic slide.
+  // CP-BULLET-ANCHORED prompt: bullets are the source of truth for what
+  // the topic teaches. Every content block MUST address one or more
+  // bullets. Research is for ENRICHMENT only — examples, statistics,
+  // frameworks that illustrate a bullet — never for off-topic content.
+  // This is what produces aligned slides instead of the deck-23 issue
+  // where Wikipedia "ChatGPT" facts appeared on ethics slides.
+  const bullets = (topic.bullet_points || []).filter((b) => String(b ?? '').trim().length > 0);
+  const bulletList = bullets.length
+    ? bullets.map((b, i) => `  ${i + 1}. ${b}`).join('\n')
+    : '  (no CP bullets — use the topic title as the sole anchor)';
+
+  const prompt = `Generate ${numBlocks} content blocks for one infographic slide each.
 
 COURSE: ${courseTitle}
 LEARNING UNIT: ${topic.lu_title}
 LEARNING OUTCOME: ${topic.lo_description}
 TOPIC: ${topic.topic_title}
-${bpText}
+
+CP COVERAGE REQUIREMENTS — these bullets are the SOURCE OF TRUTH for what the slides MUST teach:
+${bulletList}
+
+EVERY content block MUST directly teach or expand on one of the CP bullets above. Do NOT include facts that don't relate to a bullet. Research data below is for ENRICHMENT — examples, frameworks, statistics that illustrate a bullet — never as standalone content.
 ${researchText}
 ${researchHint}
 
-Return this JSON:
+Return JSON:
 {
   "topic": "${topic.topic_title}",
   "content_blocks": [
@@ -628,101 +676,125 @@ Return this JSON:
       "sub_title": "What is ${topic.topic_title}?",
       "visualization_type": "overview",
       "suggested_template": "list-grid-badge-card",
+      "addresses_bullet": "<which CP bullet number this addresses, or 'overview-of-all'>",
       "data": {
-        "title": "Short Title Here (3-6 words)",
-        "desc": "Brief one-line overview (max 8 words)",
+        "title": "Short Title (3-6 words)",
         "items": [
-          {"label": "Key Point", "desc": "Short complete phrase (4-8 words)", "icon": "mdi/icon-name"},
-          {"label": "Framework", "desc": "Another short complete phrase", "icon": "mdi/icon-name"},
-          {"label": "Best Practice", "desc": "Concise actionable description", "icon": "mdi/icon-name"},
-          {"label": "Assessment", "desc": "Clear measurable outcome", "icon": "mdi/icon-name"}
+          {"label": "Concept Name", "desc": "Short clause (4-8 words)", "icon": "mdi/icon-name"}
         ]
       },
-      "caption": "Source: Name, Year",
-      "sources_used": ["Source Name"]
+      "caption": "Source: Name, Year"
     }
-    /* ${numBlocks} blocks total — VARY visualization_type across blocks */
   ],
   "activity": {
-    "title": "Exercise Name",
-    "scenario": "Real-world scenario description",
-    "steps": ["Step 1: Action", "Step 2: Action", "Step 3: Action"],
-    "expected_output": "What learners produce",
+    "title": "Workplace exercise name",
+    "scenario": "Singapore-relevant 1-2 sentence scenario",
+    "steps": ["Step 1: ...", "Step 2: ...", "Step 3: ..."],
+    "expected_output": "Concrete deliverable",
     "duration": "20 minutes"
   }
 }
 
-MANDATORY BLOCK SEQUENCE:
-1. Block 0: "overview" — introduce the topic (list-grid or list-row template)
-2. Block 1-${numBlocks - 2}: VARY types — use process, comparison, statistics, hierarchy, timeline
-3. Block ${numBlocks - 1}: "overview" — key takeaways summary
+MANDATORY BLOCK STRUCTURE:
+- Block 0: overview introducing the topic — items list each CP bullet as a card
+${bullets.map((_, i) => `- Block ${i + 1}: dedicated to CP bullet ${i + 1} (${bullets[i].slice(0, 50)})`).join('\n')}
+- Remaining blocks (if numBlocks > ${bullets.length + 2}): expand on the bullets using research data — process steps, comparisons, statistics, frameworks
+- Final block: Key Takeaways recapping the bullets
+
+VISUALIZATION TYPES — choose what fits the bullet's content:
+- overview: list-grid-badge-card / list-row-horizontal-icon-arrow
+- process: sequence-snake-steps-compact-card (use when bullet describes steps)
+- comparison: compare-binary-horizontal-badge-card-arrow (use when bullet compares 2 things)
+- statistics: chart-bar-plain-text / chart-pie-compact-card (use when research has numbers)
+- hierarchy: hierarchy-tree-curved-line-rounded-rect-node (use for taxonomies)
+- timeline: sequence-timeline-simple (use for evolution / phases)
 
 RULES:
 - EXACTLY ${numBlocks} content blocks
-- Labels: 2-3 words MAX (e.g. "Risk Assessment", "Data Security")
-- Descriptions: SHORT complete phrase, 4-8 words (e.g. "Systematic approach to compliance management")
-- Title: 3-6 words, Desc: max 8 words — these appear on INFOGRAPHIC IMAGES with limited space
-- NEVER write long sentences — every description must be a SHORT, COMPLETE phrase
-- For "comparison": exactly 2 root items with children
-- For "statistics": items MUST have numeric "value" field
-- Include citations "(Source, Year)" in captions
-- Include at least 1 statistics block if research has numbers`;
+- Labels: 2-3 words MAX
+- Descs: SHORT complete clause, 4-8 words, never end mid-sentence
+- For comparison: exactly 2 items
+- For statistics: items MUST have numeric "value"
+- Icons: mdi/* names from standard set (lock, scale-balance, chart-bar, account-multiple, cog, lightbulb, alert, check-circle, etc.)`;
 
+  // Force FAST_MODEL (Haiku) — Streamlit-aligned and proven for JSON in
+  // production. Caller's `model` parameter ignored to prevent Sonnet-only
+  // failure modes from poisoning Phase 2 (deck 22, 23 root cause).
   const tools = sources.length < 2 ? ['WebSearch'] : [];
+  console.log(
+    `[cw-slides-v3] phase2 calling Claude for '${topic.topic_title.slice(0, 60)}': ` +
+    `prompt=${prompt.length}b, tools=[${tools.join(',')}], model=${FAST_MODEL}, bullets=${bullets.length}, sources=${sources.length}`,
+  );
 
-  try {
-    const result = await runAgentJson({
-      prompt,
-      systemPrompt: CONTENT_SYSTEM_PROMPT,
-      tools,
-      maxTurns: CONTENT_MAX_TURNS,
-      model: model || FAST_MODEL,
-      apiKey,
-    });
-    let blocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
-    const types = blocks.map((b) => b.visualization_type).join(', ');
-    console.log(`[cw-slides-v3] '${topic.topic_title.slice(0, 60)}': ${blocks.length}/${numBlocks} blocks, types: [${types}]`);
+  // Up to 2 attempts — second attempt uses a tighter prompt without the
+  // research enrichment block, since most production failures are from
+  // prompt-size or output-truncation issues.
+  let lastErr: any = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const promptForAttempt = attempt === 1 ? prompt : prompt.replace(researchText, sources.length ? `\nRESEARCH SOURCES (${sources.length}):\n` + sources.slice(0, 5).map((s: any) => `  - ${s.title || ''}`).join('\n') : '');
+    try {
+      const result = await runAgentJson({
+        prompt: promptForAttempt,
+        systemPrompt: CONTENT_SYSTEM_PROMPT,
+        tools: attempt === 2 ? [] : tools,
+        maxTurns: attempt === 2 ? 3 : CONTENT_MAX_TURNS,
+        model: FAST_MODEL,
+        apiKey,
+      });
+      let blocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
+      const types = blocks.map((b) => b.visualization_type).join(', ');
+      console.log(`[cw-slides-v3] phase2 '${topic.topic_title.slice(0, 60)}' attempt ${attempt}: ${blocks.length}/${numBlocks} blocks, types: [${types}]`);
 
-    // ENFORCE exact count — pad with CP bullets if AI returned fewer
-    if (blocks.length < numBlocks) {
-      console.warn(`[cw-slides-v3] '${topic.topic_title.slice(0, 60)}': AI produced ${blocks.length} blocks, padding to ${numBlocks}`);
-      blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks);
-    } else {
-      blocks = blocks.slice(0, numBlocks);
+      if (blocks.length === 0) {
+        // Treat zero blocks as a failure — retry or fall through
+        lastErr = new Error(`AI returned 0 blocks on attempt ${attempt}`);
+        continue;
+      }
+
+      // Pad if AI returned fewer than requested
+      if (blocks.length < numBlocks) {
+        console.warn(`[cw-slides-v3] phase2 '${topic.topic_title.slice(0, 60)}': AI produced ${blocks.length} blocks, padding to ${numBlocks}`);
+        blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks);
+      } else {
+        blocks = blocks.slice(0, numBlocks);
+      }
+
+      if (blocks.length > 0 && blocks[blocks.length - 1].visualization_type !== 'overview') {
+        const last = blocks[blocks.length - 1];
+        last.visualization_type = 'overview';
+        last.suggested_template = 'list-grid-badge-card';
+        last.sub_title = 'Key Takeaways';
+        if (last.data) last.data.title = `${topic.topic_title} — Key Takeaways`;
+      }
+
+      const baseCaption = captionFromResearch(research);
+      for (const b of blocks) {
+        if (!b.caption || b.caption.trim().length === 0) b.caption = baseCaption;
+      }
+
+      return {
+        topic: topic.topic_title,
+        content_blocks: blocks,
+        activity: result.activity as ActivityData | undefined,
+      };
+    } catch (e: any) {
+      lastErr = e;
+      const errMsg = e?.message || String(e);
+      console.warn(
+        `[cw-slides-v3] phase2 '${topic.topic_title.slice(0, 60)}' attempt ${attempt} FAILED: ` +
+        `${errMsg.slice(0, 250)} | code=${e?.code || '?'} | name=${e?.name || '?'}`,
+      );
     }
-
-    // Always force last block to be Key Takeaways
-    if (blocks.length > 0 && blocks[blocks.length - 1].visualization_type !== 'overview') {
-      const last = blocks[blocks.length - 1];
-      last.visualization_type = 'overview';
-      last.suggested_template = 'list-grid-badge-card';
-      last.sub_title = 'Key Takeaways';
-      if (last.data) last.data.title = `${topic.topic_title} — Key Takeaways`;
-    }
-
-    // Apply research-derived caption to blocks that lack one
-    const baseCaption = captionFromResearch(research);
-    for (const b of blocks) {
-      if (!b.caption || b.caption.trim().length === 0) b.caption = baseCaption;
-    }
-
-    return {
-      topic: topic.topic_title,
-      content_blocks: blocks,
-      activity: result.activity as ActivityData | undefined,
-    };
-  } catch (e: any) {
-    // Verbose error so production Coolify logs can surface the root cause
-    // (auth, network, JSON parse, model, tool-availability, etc.). Was
-    // truncated to 200 chars before — that hid the actual failure mode.
-    const errMsg = e?.message || String(e);
-    const errStack = e?.stack ? String(e.stack).split('\n').slice(0, 5).join(' | ') : '';
-    console.error(
-      `[cw-slides-v3] PHASE 2 FAILED for '${topic.topic_title.slice(0, 60)}': ` +
-      `${errMsg} | code=${e?.code || '?'} | name=${e?.name || '?'} | stack: ${errStack}`,
-    );
-    return fallbackContentBlocks(topic.topic_title, topic.bullet_points, numBlocks, research);
   }
+
+  // All attempts failed — log full diagnostic and use research-rich fallback
+  const errMsg = lastErr?.message || String(lastErr);
+  const errStack = lastErr?.stack ? String(lastErr.stack).split('\n').slice(0, 5).join(' | ') : '';
+  console.error(
+    `[cw-slides-v3] PHASE 2 ALL ATTEMPTS FAILED for '${topic.topic_title.slice(0, 60)}': ` +
+    `${errMsg} | code=${lastErr?.code || '?'} | name=${lastErr?.name || '?'} | stack: ${errStack}`,
+  );
+  return fallbackContentBlocks(topic.topic_title, topic.bullet_points, numBlocks, research);
 }
 
 // ────────────────────────────────────────────────────────────────────────────

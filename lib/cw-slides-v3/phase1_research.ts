@@ -220,14 +220,18 @@ Return this JSON structure:
   // Tools: prefer SDK WebSearch when web results are thin.
   const tools = webResults.length < 2 ? ['WebSearch'] : [];
 
-  // Synthesis with maxTurns=5 — enrichment over Wikipedia base
+  // Synthesis with maxTurns=5. Force FAST_MODEL (Haiku) regardless of
+  // caller's `model` parameter — Haiku is far more reliable for JSON
+  // output in the production Coolify container, and Streamlit's
+  // reference uses Haiku for research.
+  console.log(`[cw-slides-v3] phase1 calling Claude for '${topic.topic_title.slice(0, 60)}': prompt=${synthPrompt.length}b, tools=[${tools.join(',')}], model=${FAST_MODEL}`);
   try {
     const result = await runAgentJson({
       prompt: synthPrompt,
       systemPrompt: RESEARCH_SYSTEM_PROMPT,
       tools,
       maxTurns: RESEARCH_MAX_TURNS,
-      model: model || FAST_MODEL,
+      model: FAST_MODEL,
       apiKey,
     });
     const r = result as ResearchEntry;
@@ -250,9 +254,12 @@ Return this JSON structure:
       }
       return r;
     }
-    console.warn(`[cw-slides-v2] synthesis returned 0 sources for '${topic.topic_title.slice(0, 60)}', falling back`);
+    console.warn(`[cw-slides-v3] phase1 synthesis returned 0 sources for '${topic.topic_title.slice(0, 60)}', falling back`);
   } catch (e: any) {
-    console.warn(`[cw-slides-v2] synthesis failed for '${topic.topic_title.slice(0, 60)}': ${e.message}, falling back`);
+    const errMsg = e?.message || String(e);
+    const errCode = e?.code || '?';
+    const errName = e?.name || '?';
+    console.error(`[cw-slides-v3] phase1 PHASE 1 FAILED for '${topic.topic_title.slice(0, 60)}': ${errMsg} | code=${errCode} | name=${errName}`);
   }
 
   // If Wikipedia gave us real sources, return those — guaranteed real

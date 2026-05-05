@@ -50,6 +50,13 @@ export async function generateSlides(
   const model = config.model || DEFAULT_MODEL;
   const company = config.company;
 
+  // Diagnostic header — visible in production Coolify logs so we can
+  // trace which token type is in use and confirm cli.js is bundled.
+  const tokenType = apiKey?.startsWith('sk-ant-oat') ? 'subscription (CLAUDE_CODE_OAUTH_TOKEN)'
+                  : apiKey?.startsWith('sk-ant-api') ? 'API key (ANTHROPIC_API_KEY)'
+                  : `unknown prefix (${apiKey?.slice(0, 12)}...)`;
+  console.log(`[cw-slides-v3] BEGIN — model=${model}, token=${tokenType}, NODE_ENV=${process.env.NODE_ENV}`);
+
   const courseTitle = String(ctx.Course_Title || 'Course');
   const lus = Array.isArray(ctx.Learning_Units) ? ctx.Learning_Units : [];
   const totalTopics = lus.reduce(
