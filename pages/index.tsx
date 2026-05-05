@@ -6,6 +6,7 @@ import TrainerLayout from '@/layouts/TrainerLayout'
 import DeveloperLayout from '@/layouts/DeveloperLayout'
 import AdminLayout from '@/layouts/AdminLayout'
 import FinanceLayout from '@/layouts/FinanceLayout'
+import PayrollLayout from '@/layouts/PayrollLayout'
 import TrainingProviderLayout from '@/layouts/TrainingProviderLayout'
 import { useLms } from '@contexts/LmsContext'
 import { UserRole } from '@app-types'
@@ -132,6 +133,19 @@ const Home: NextPage = () => {
           <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
         </Head>
         <FinanceLayout />
+      </>
+    );
+  }
+
+  if (role === UserRole.Payroll) {
+    return (
+      <>
+        <Head>
+          <title>{appTitle} LMS TMS - Payroll Dashboard</title>
+          <meta name="description" content="Payroll management dashboard" />
+          <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
+        </Head>
+        <PayrollLayout />
       </>
     );
   }

@@ -561,7 +561,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             auto_generate_qb_invoice = $51,
             sanitise_after_months = $52,
             auto_add_learner_to_calendar = $53,
-            google_service_account_json = COALESCE($54, google_service_account_json)
+            google_service_account_json = COALESCE($54, google_service_account_json),
+            ssg_app_count = $55,
+            ssg_app_names = $56
         WHERE id = $36
         RETURNING *
       `;
@@ -620,7 +622,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.adminSettings?.autoGenerateQbInvoice || false,
         Math.max(1, Math.min(60, parseInt(String(profileData.securitySettings?.sanitiseAfterMonths ?? 6), 10) || 6)),
         profileData.adminSettings?.autoAddLearnerToCalendar || false,
-        filePaths.google_service_account_json || null
+        filePaths.google_service_account_json || null,
+        Math.max(1, Math.min(4, parseInt(String(profileData.ssgAppCount ?? 1), 10) || 1)),
+        JSON.stringify(profileData.ssgAppNames && typeof profileData.ssgAppNames === 'object' ? profileData.ssgAppNames : {})
       ];
 
       console.log('🔍 File upload parameters being sent to database:', {
@@ -728,6 +732,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await autoCreateAndUpdate([
         { name: 'support_email', value: profileData.contactPerson?.email || null },
       ]);
+      // Virtual Meeting provider (validated allow-list; defaults to google_meet)
+      try {
+        const allowedVirtualMeetingProviders = ['google_meet', 'zoom', 'teams'];
+        const requested = profileData.integrations?.virtualMeetingProvider;
+        const virtualMeetingProvider = allowedVirtualMeetingProviders.includes(requested)
+          ? requested
+          : 'google_meet';
+        await pool.query(
+          'UPDATE training_provider SET virtual_meeting_provider = $1 WHERE id = $2',
+          [virtualMeetingProvider, trainingProviderId]
+        );
+      } catch (e) {
+        console.warn('⚠️ virtual_meeting_provider column missing; run database/migrations/add_virtual_meeting_provider.sql');
+      }
       // Admin thresholds
       await autoCreateAndUpdate([
         { name: 'upcoming_classes_threshold_days', value: String(profileData.adminSettings?.upcomingClassesThresholdDays || 21) },
@@ -735,6 +753,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { name: 'gst_registration_number', value: profileData.fundingSettings?.gstRegistrationNumber || '' },
         { name: 'cas_threshold', value: String(profileData.adminSettings?.casThreshold ?? 70) },
         { name: 'es_threshold', value: String(profileData.adminSettings?.esThreshold ?? 40) },
+        { name: 'certificate_delivery_label', value: (profileData.adminSettings?.certificateDeliveryLabel || 'TP Course Evaluation') },
       ]);
 
       // Handle API keys - delete existing and insert new ones (with selected model)

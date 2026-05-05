@@ -1356,7 +1356,18 @@ export const ViewDirectApplicationView: React.FC = () => {
                                         {paginatedApplications.map((app, index) => (
                                             <tr key={app.id || index} className={`hover:bg-gray-50 dark:hover:bg-gray-600 ${selectedIds.has(app.application_id) ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}>
                                                 <td className="px-2 py-1.5"><input type="checkbox" checked={selectedIds.has(app.application_id)} onChange={() => toggleSelect(app.application_id)} className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300" /></td>
-                                                <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(app.enrolment_id && String(app.enrolment_id).trim() !== '')} onChange={(e) => toggleDaField(app.id, 'enrol', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.enrolment_id ? 'text-green-600 accent-green-600' : ''}`} title={app.enrolment_id ? `Enrolled: ${app.enrolment_id}` : 'Click to mark as enrolled'} /></td>
+                                                <td className="px-2 py-1.5 text-center">
+                                                    {(() => {
+                                                        const isCancelled = app.enrolment_status === 'Cancelled' || (app.application_status || '').toLowerCase() === 'cancelled';
+                                                        const hasEnrolmentId = !!(app.enrolment_id && String(app.enrolment_id).trim() !== '');
+                                                        
+                                                        if (isCancelled && hasEnrolmentId) {
+                                                            return <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-600 border border-red-200" title={`Cancelled Enrolment: ${app.enrolment_id}`}>X</span>;
+                                                        }
+                                                        
+                                                        return <input type="checkbox" checked={hasEnrolmentId && !isCancelled} onChange={(e) => toggleDaField(app.id, 'enrol', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${hasEnrolmentId ? 'text-green-600 accent-green-600' : ''}`} title={app.enrolment_id ? `Enrolled: ${app.enrolment_id}` : 'Click to mark as enrolled'} />;
+                                                    })()}
+                                                </td>
                                                 <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!app.calendar_added} onChange={(e) => toggleDaField(app.id, 'calendar', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`} title={app.calendar_added ? 'Added to calendar' : 'Click to mark'} /></td>
                                                 <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={isInvoiceCheckboxChecked(app)} onChange={(e) => toggleDaField(app.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${isInvoiceCheckboxChecked(app) ? 'text-amber-600 accent-amber-600' : ''}`} title={hasRealInvoice(app.invoice_id) ? (isInvoiceCheckboxChecked(app) ? `Invoice: ${getDisplayInvoiceNumber(app)} - click to uncheck` : `Invoice: ${getDisplayInvoiceNumber(app)} - document may have been deleted`) : hasInvoiceMarker(app.invoice_id) ? 'Marked as invoiced manually - no invoice document linked yet' : 'Click to mark as invoiced'} /></td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">{app.application_id || 'N/A'}</td>

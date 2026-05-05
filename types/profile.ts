@@ -1,4 +1,6 @@
 // User role types
+export type VirtualMeetingProvider = 'google_meet' | 'zoom' | 'teams';
+
 export enum UserRole {
   Learner = 'Learner',
   Trainer = 'Trainer',
@@ -224,6 +226,11 @@ export interface ApiKeyWithModel {
 
 export interface TrainingProviderProfile extends BaseProfile {
   password?: string;
+  // Top-level mirrors of selected adminSettings, populated by /api/training-provider/info
+  // for non-admin contexts (e.g. learner/trainer course view).
+  showLessonPlanLearnerView?: boolean;
+  showCertificateDelivery?: boolean;
+  certificateDeliveryLabel?: string;
   companyName: string;
   companyShortname: string;
   uen: string;
@@ -258,6 +265,8 @@ export interface TrainingProviderProfile extends BaseProfile {
   ssgApp4ClientId?: string;
   ssgApp4ClientSecret?: string;
   ssgDefaultApp?: string;
+  ssgAppCount?: number;
+  ssgAppNames?: Record<string, string>;
   integrations: {
     syncGoogleCalendar: boolean;
     googleCalendarUrl?: string;
@@ -285,6 +294,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     openClawHooksPath?: string;
     openClawAgentId?: string;
     openClawCallbackUrl?: string;
+    virtualMeetingProvider?: VirtualMeetingProvider;
   };
   adminSettings: {
     autoSendProFormaInvoice: boolean;
@@ -297,6 +307,8 @@ export interface TrainingProviderProfile extends BaseProfile {
     autoGenerateQbInvoice: boolean;
     autoAddLearnerToCalendar: boolean;
     showLessonPlanLearnerView: boolean;
+    showCertificateDelivery: boolean;
+    certificateDeliveryLabel: string;
     upcomingClassesThresholdDays: number;
     certificateAttendanceThreshold: number;
     casThreshold: number;

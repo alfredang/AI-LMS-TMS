@@ -326,6 +326,8 @@ async function getTrainingProviderProfile(userId: string) {
         tp.ssg_app4_client_id,
         tp.ssg_app4_client_secret,
         tp.ssg_default_app,
+        tp.ssg_app_count,
+        tp.ssg_app_names,
         tp.sync_google_calendar,
         tp.sync_ms_calendar,
         tp.google_calendar_url,
@@ -349,6 +351,8 @@ async function getTrainingProviderProfile(userId: string) {
         tp.auto_generate_qb_invoice,
         tp.auto_add_learner_to_calendar,
         tp.show_lesson_plan_learner_view,
+        tp.show_certificate_delivery,
+        tp.certificate_delivery_label,
         tp.auto_mask_sensitive_data,
         tp.auto_delete_after_six_months,
         tp.enable_otp_login,
@@ -419,6 +423,8 @@ async function getTrainingProviderProfile(userId: string) {
         tp.auto_generate_qb_invoice,
         tp.auto_add_learner_to_calendar,
         tp.show_lesson_plan_learner_view,
+        tp.show_certificate_delivery,
+        tp.certificate_delivery_label,
           tp.auto_mask_sensitive_data,
           tp.auto_delete_after_six_months,
           tp.enable_otp_login,
@@ -489,6 +495,8 @@ async function getTrainingProviderProfile(userId: string) {
         tp.auto_generate_qb_invoice,
         tp.auto_add_learner_to_calendar,
         tp.show_lesson_plan_learner_view,
+        tp.show_certificate_delivery,
+        tp.certificate_delivery_label,
           tp.auto_mask_sensitive_data,
           tp.auto_delete_after_six_months,
           tp.enable_otp_login,
@@ -604,6 +612,14 @@ async function getTrainingProviderProfile(userId: string) {
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
 
+  // Virtual Meeting provider (tolerant of pre-migration DBs)
+  let virtualMeetingProvider: 'google_meet' | 'zoom' | 'teams' = 'google_meet';
+  try {
+    const r = await pool.query(`SELECT virtual_meeting_provider FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    const v = r.rows[0]?.virtual_meeting_provider;
+    if (v === 'zoom' || v === 'teams') virtualMeetingProvider = v;
+  } catch (e) { /* column doesn't exist yet */ }
+
   // Parse color scheme - now returning as string instead of object
   let colorScheme;
   try {
@@ -657,6 +673,8 @@ async function getTrainingProviderProfile(userId: string) {
     ssgApp4ClientId: profileData.ssg_app4_client_id || '',
     ssgApp4ClientSecret: profileData.ssg_app4_client_secret || '',
     ssgDefaultApp: profileData.ssg_default_app || 'app2',
+    ssgAppCount: typeof profileData.ssg_app_count === 'number' ? profileData.ssg_app_count : 1,
+    ssgAppNames: profileData.ssg_app_names || {},
     integrations: {
       syncGoogleCalendar: profileData.sync_google_calendar || false,
       googleCalendarUrl: profileData.google_calendar_url || '',
@@ -668,6 +686,7 @@ async function getTrainingProviderProfile(userId: string) {
       googleRefreshToken: profileData.google_refresh_token || '',
       googleSlidesTemplateId: profileData.google_slides_template_id || '',
       googleServiceAccountJson: profileData.google_service_account_json || '',
+      virtualMeetingProvider,
       trainerProfileImageUrl: refLinks.trainer_profile_image_url || '',
       certificateFolderUrl: profileData.certificate_folder_url || '',
       masterListUrl: refLinks.master_list_url || '',
@@ -697,6 +716,8 @@ async function getTrainingProviderProfile(userId: string) {
       autoGenerateQbInvoice: profileData.auto_generate_qb_invoice || false,
       autoAddLearnerToCalendar: profileData.auto_add_learner_to_calendar || false,
       showLessonPlanLearnerView: profileData.show_lesson_plan_learner_view || false,
+      showCertificateDelivery: profileData.show_certificate_delivery || false,
+      certificateDeliveryLabel: profileData.certificate_delivery_label || 'TP Course Evaluation',
       upcomingClassesThresholdDays,
       certificateAttendanceThreshold,
       casThreshold,

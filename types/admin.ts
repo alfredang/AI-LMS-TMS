@@ -17,6 +17,7 @@ export enum UserRole {
   Developer = 'developer',
   Admin = 'admin',
   Finance = 'finance',
+  Payroll = 'payroll',
   TrainingProvider = 'trainingProvider'
 }
 

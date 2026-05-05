@@ -109,6 +109,10 @@ export function buildSchedule(context: any): Schedule {
   const lus: any[] = context.Learning_Units || [];
   type TopicBlock = { lu_num: number; lu_title: string; topic_desc: string; methods: string };
   const topicBlocks: TopicBlock[] = [];
+  // Topic numbering is global across LUs (T1, T2, T3, …) — matches the CP's
+  // Course Outline / Topics section convention. Per-LU numbering would reset
+  // to T1 in every LU, which masks topic counts when each LU has one topic.
+  let topicNum = 0;
   lus.forEach((lu, i) => {
     const topics: any[] = lu.Topics || [];
     const methodsArr: string[] = lu.Instructional_Methods || [];
@@ -117,12 +121,16 @@ export function buildSchedule(context: any): Schedule {
     if (!topics.length) {
       topicBlocks.push({ lu_num: i + 1, lu_title: luTitle, topic_desc: luTitle, methods });
     } else {
-      topics.forEach((t, j) => {
-        const title = t.Topic_Title || t.title || `Topic ${j + 1}`;
+      topics.forEach((t) => {
+        topicNum += 1;
+        const rawTitle = t.Topic_Title || t.title || `Topic ${topicNum}`;
+        // Strip any leading "Tn:" / "Topic n:" the CP author may have included
+        // so we don't render "T2: T2: …" when the extractor preserved the prefix.
+        const title = String(rawTitle).replace(/^\s*(?:T|Topic\s*)\d+\s*[:\-–]\s*/i, '');
         topicBlocks.push({
           lu_num: i + 1,
           lu_title: luTitle,
-          topic_desc: `T${j + 1}: ${title}`,
+          topic_desc: `T${topicNum}: ${title}`,
           methods,
         });
       });
@@ -288,10 +296,14 @@ export function buildSchedule(context: any): Schedule {
     }
 
     if (current < DAY_END) {
+      // On the last day with no assessment extracted from the CP, the leftover
+      // window is treated as a Q&A wrap-up rather than a break — courses
+      // without a formal assessment still benefit from a closing Q&A slot.
+      const isQna = isLastDay && assessMins === 0;
       slots.push({
         timing: `${fmtTime(current)} - ${fmtTime(DAY_END)}`,
         duration: `${DAY_END - current} mins`,
-        description: ['Break'],
+        description: [isQna ? 'Q&A' : 'Break'],
         methods: '-',
       });
     }

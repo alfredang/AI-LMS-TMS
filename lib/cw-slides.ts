@@ -1738,7 +1738,7 @@ function fuzzyGetContent<T>(map: Record<string, T> | undefined, key: string): T 
   return undefined;
 }
 
-function buildSkeleton(context: any, contentMap: Record<string, ContentMapEntry>): Skeleton {
+export function buildSkeleton(context: any, contentMap: Record<string, ContentMapEntry>): Skeleton {
   // Reset the global template-usage counter so each deck gets fair rotation
   // across the whole pool.
   resetTemplateCounter();
@@ -1997,7 +1997,7 @@ function repairContentMap(contentMap: Record<string, ContentMapEntry>): void {
   }
 }
 
-function assemble(
+export function assemble(
   skeleton: Skeleton,
   contentMap: Record<string, ContentMapEntry>,
   infographicMap: Record<string, InfographicResult[]>,
@@ -2071,7 +2071,7 @@ function assemble(
 // All positions expressed in inches (1 inch = 914400 EMU).
 // ────────────────────────────────────────────────────────────────────────────
 
-function makePres(): PptxGenJS {
+export function makePres(): PptxGenJS {
   const pres = new PptxGenJS();
   pres.defineLayout({ name: 'WSQ_STD', width: SLIDE_W_INCHES, height: SLIDE_H_INCHES });
   pres.layout = 'WSQ_STD';
@@ -2115,6 +2115,25 @@ function cleanKaRefs(text: string): string {
     .replace(/\s*[-–—]\s*[KA]\d+[\s,KA\d]*$/g, '')
     .replace(/\s*[KA]\d+\s*[,&]\s*[KA]\d+[\s,&KA\d]*$/g, '')
     .trim();
+}
+
+// Strip ALL parenthetical content from a topic/header for clean display.
+// Topic titles in CPs often dump examples or qualifiers in parens
+// ("Apply privacy measures when handling data for AI applications
+// (e.g., implement simple data anonymisation and de-identification…)").
+// On a slide header that turns into an unreadable wall of text. Strip
+// the parenthetical, then word-boundary truncate to a sane length.
+function cleanTopicForDisplay(text: string, maxLen = 90): string {
+  let s = cleanKaRefs(text);
+  // Drop "(...)" / "[...]" entirely — including nested parens up to 2 deep
+  for (let i = 0; i < 2; i++) s = s.replace(/\s*[(\[][^()\[\]]*[)\]]/g, '');
+  // Strip "e.g., ..." / "i.e., ..." trailers
+  s = s.replace(/\s*[,;]?\s*(e\.g\.|i\.e\.)[,.]?\s.*$/i, '');
+  s = s.replace(/\s+/g, ' ').trim();
+  if (s.length <= maxLen) return s;
+  const cut = s.slice(0, maxLen);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > maxLen / 2 ? cut.slice(0, lastSpace) : cut).replace(/[.,;:\-]+$/, '') + '…';
 }
 
 // ── Footer (copyright bar) — mirrors _add_copyright() ──────────────────────
@@ -2391,13 +2410,11 @@ function addInfographicSlide(
     });
   }
 
-  // Source caption: x=0.17, y=5.14 (4700000), w=9.62, h=0.27 (247000)
-  if (caption) {
-    slide.addText(caption, {
-      x: 0.17, y: 5.14, w: 9.62, h: 0.27,
-      fontSize: 9, italic: true, color: COLOR_GRAY, fontFace: 'Arial', align: 'left',
-    });
-  }
+  // Source caption rendering disabled per user requirement — sources are
+  // still tracked internally (research data drives content / icon picks)
+  // but not displayed on the slide. The caption parameter is preserved
+  // in the function signature for backward compatibility.
+  void caption;
 
   addFooter(slide, copyrightText(company));
 }
@@ -2407,7 +2424,7 @@ function addInfographicSlide(
 // Auto-shrink font AND enforce body height = copyright_y − body_y so content
 // can't overflow under the footer line.
 function addActivitySlide(pres: PptxGenJS, topicTitle: string, steps: string[], company: CwCompanyInfo | undefined): void {
-  const fullTitle = `Activity: ${cleanKaRefs(topicTitle)}`;
+  const fullTitle = `Activity: ${cleanTopicForDisplay(topicTitle, 80)}`;
   // Wider title band + larger title font so it doesn't get clipped on long
   // topic titles. Title shrinks gradually only on extreme lengths.
   const titleSize = fullTitle.length > 90 ? 20 : fullTitle.length > 65 ? 22 : 26;
@@ -2572,7 +2589,7 @@ function addCertificateSlide(pres: PptxGenJS, tscCode: string, company: CwCompan
 // ────────────────────────────────────────────────────────────────────────────
 // Standard intro slides (10 total) — exact content match with build_pptx.py
 // ────────────────────────────────────────────────────────────────────────────
-function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | undefined): void {
+export function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | undefined): void {
   const courseTitle = ctx.Course_Title || 'Course';
   const tgsCode = ctx.TGS_Ref_No || ctx.TGS_Number || ctx.Course_Code || '';
   const tscCode = ctx.TSC_Code || '';
@@ -2618,10 +2635,9 @@ function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | unde
   sf.push('', 'Learning Outcomes:');
   lus.forEach((lu: any, i: number) => {
     const luNum = lu.LU_Number || `LU${i + 1}`;
-    const luTitle = lu.LU_Title || '';
+    const luTitle = cleanTopicForDisplay(lu.LU_Title || '', 80);
     const lo = lu.LO || '';
-    let loDesc = lu.LO_Description || '';
-    if (loDesc && loDesc.length > 120) loDesc = loDesc.slice(0, 117) + '...';
+    const loDesc = cleanTopicForDisplay(lu.LO_Description || '', 130);
     const loText = loDesc ? `${lo}: ${loDesc}` : lo;
     sf.push(`  ${luNum} (${luTitle})`);
     sf.push(`    ${loText}`);
@@ -2633,24 +2649,22 @@ function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | unde
   for (let i = 0; i < lus.length; i++) {
     const lu = lus[i];
     const luNum = lu.LU_Number || `LU${i + 1}`;
-    const luTitle = lu.LU_Title || '';
+    const luTitle = cleanTopicForDisplay(lu.LU_Title || '', 90);
     const kList = lu.K_numbering_description || lu.K_Statements || [];
     const aList = lu.A_numbering_description || lu.A_Statements || [];
     if (kList.length || aList.length) {
       ka.push(`${luNum}: ${luTitle}`);
       for (const k of kList) {
         if (k && typeof k === 'object') {
-          let d = k.Description || '';
-          if (d.length > 150) d = d.slice(0, 147) + '...';
+          const d = cleanTopicForDisplay(k.Description || '', 140);
           ka.push(`  ${k.K_number || ''}: ${d}`);
-        } else if (typeof k === 'string') ka.push(`  ${k.slice(0, 150)}`);
+        } else if (typeof k === 'string') ka.push(`  ${cleanTopicForDisplay(k, 140)}`);
       }
       for (const a of aList) {
         if (a && typeof a === 'object') {
-          let d = a.Description || '';
-          if (d.length > 150) d = d.slice(0, 147) + '...';
+          const d = cleanTopicForDisplay(a.Description || '', 140);
           ka.push(`  ${a.A_number || ''}: ${d}`);
-        } else if (typeof a === 'string') ka.push(`  ${a.slice(0, 150)}`);
+        } else if (typeof a === 'string') ka.push(`  ${cleanTopicForDisplay(a, 140)}`);
       }
       ka.push('');
     }
@@ -2661,14 +2675,16 @@ function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | unde
     addTitleBodySlide(pres, 'Knowledge & Ability Statements', ka, company, kaFont);
   }
 
-  // 8. Course Outline
+  // 8. Course Outline — strip parentheticals from LU and topic titles so
+  // the outline is readable. Long parens like "(e.g., implement…)" make
+  // entries wrap and force the auto-shrink down to illegible 5-6 pt.
   const outline: string[] = [];
   lus.forEach((lu: any, i: number) => {
     const luNum = lu.LU_Number || `LU${i + 1}`;
-    const luTitle = lu.LU_Title || '';
+    const luTitle = cleanTopicForDisplay(lu.LU_Title || '', 90);
     outline.push(`${luNum}: ${luTitle}`);
     (lu.Topics || []).forEach((t: any, ti: number) => {
-      outline.push(`  T${ti + 1}: ${t.Topic_Title || ''}`);
+      outline.push(`  T${ti + 1}: ${cleanTopicForDisplay(t.Topic_Title || '', 100)}`);
     });
     outline.push('');
   });
@@ -2714,7 +2730,7 @@ function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | unde
 // ────────────────────────────────────────────────────────────────────────────
 // Standard closing slides (7 total) — exact content match with build_pptx.py
 // ────────────────────────────────────────────────────────────────────────────
-function addClosingSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | undefined): void {
+export function addClosingSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo | undefined): void {
   const tscCode = ctx.TSC_Code || '';
 
   // 1. Summary & Q&A (section)
@@ -2782,10 +2798,13 @@ function addTopicSlides(
   company: CwCompanyInfo | undefined,
 ): number {
   let slidesAdded = 0;
-  const title = cleanKaRefs(topic.title);
+  // Use cleanTopicForDisplay so headers stay readable even when CP topic
+  // titles include long parentheticals/examples.
+  const titleClean = cleanTopicForDisplay(topic.title, 110);
+  const title = cleanKaRefs(topic.title); // unmodified-length for activity slide
 
   // Section header: "LO1 | LU1 | Topic 1: Title"
-  const topicLabel = `Topic ${topicIdx + 1}: ${title.replace(/^Topic\s*\d+\s*:\s*/, '').trim() || title}`;
+  const topicLabel = `Topic ${topicIdx + 1}: ${titleClean.replace(/^Topic\s*\d+\s*:\s*/, '').trim() || titleClean}`;
   const parts: string[] = [];
   if (topic.lo_number) parts.push(topic.lo_number);
   if (topic.lu_number) parts.push(topic.lu_number);
@@ -2818,22 +2837,37 @@ function addTopicSlides(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// LU builder — add all topics in order (no LU section header — topic headers
-// already carry the LO|LU|T prefix, matching build_pptx.py's flat flow).
+// LU builder — adds an LU section divider before its topics, then each topic.
+// The LU divider matches the Streamlit reference deck (gives the deck clear
+// chapter breaks instead of one continuous run of topic-header → slides).
 // ────────────────────────────────────────────────────────────────────────────
-function addLuSlides(
+export function addLuSlides(
   pres: PptxGenJS,
   lu: { topics: AssemblyTopic[] },
   company: CwCompanyInfo | undefined,
 ): number {
   let added = 0;
+  // LU divider: navy section slide titled "LU#: <LU title>"
+  // Read LU number/title from the first topic (we don't have them on `lu`
+  // itself in this signature). All topics in this LU share the same
+  // lu_number/lu_title so any topic works.
+  if (lu.topics.length > 0) {
+    const t0 = lu.topics[0];
+    const luNum = (t0.lu_number || '').trim();
+    const luTitleClean = cleanTopicForDisplay(t0.lu_title || '', 90);
+    if (luNum || luTitleClean) {
+      const dividerText = luNum && luTitleClean ? `${luNum}: ${luTitleClean}` : (luTitleClean || luNum);
+      addSectionSlide(pres, dividerText);
+      added++;
+    }
+  }
   for (let i = 0; i < lu.topics.length; i++) {
     added += addTopicSlides(pres, lu.topics[i], i, company);
   }
   return added;
 }
 
-async function buildPptxBuffer(
+export async function buildPptxBuffer(
   ctx: any,
   skeleton: Skeleton,
   luDataMap: Record<string, { topics: AssemblyTopic[] }>,
@@ -2877,7 +2911,7 @@ async function buildPptxBuffer(
 // opens the deck. python-pptx (used by Streamlit) emits `<p:grpSpPr/>`
 // instead and PowerPoint accepts that cleanly. This post-processor strips
 // the zero-dim xfrm out of every slide XML so the deck opens cleanly.
-function scrubPptxBuffer(buf: Buffer): Buffer {
+export function scrubPptxBuffer(buf: Buffer): Buffer {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const PizZip = require('pizzip');

@@ -7,6 +7,7 @@ import { TrainingProviderProfile } from '@app-types/profile';
 import { useLms } from '@contexts/LmsContext';
 import { applyPrimaryColor, useColorScheme, ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
+import PayrollSettingsView from './payroll/PayrollSettingsView';
 
 // Constants for styling consistency
 const inputClasses = "block w-full px-3 py-2 text-on-surface bg-surface border border-default rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent";
@@ -282,6 +283,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isSsgOpen, setIsSsgOpen] = useState(false);
     const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false);
     const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
+    const [isPayrollOpen, setIsPayrollOpen] = useState(false);
     const [isSecurityOpen, setIsSecurityOpen] = useState(false);
     const [isGamificationOpen, setIsGamificationOpen] = useState(false);
     const [isSsgFundingOpen, setIsSsgFundingOpen] = useState(false);
@@ -334,6 +336,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoGenerateQbInvoice: "Auto Generate QuickBooks Invoice for Direct Applications",
         autoAddLearnerToCalendar: "Auto Add Learner to Calendar for Direct Applications",
         showLessonPlanLearnerView: "Show Lesson Plan on Learner View",
+        showCertificateDelivery: "Show Certificate Delivery on Course Page (in addition to TRAQOM Survey)",
     };
 
     useEffect(() => {
@@ -545,6 +548,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoGenerateQbInvoice: 'auto_generate_qb_invoice',
         autoAddLearnerToCalendar: 'auto_add_learner_to_calendar',
         showLessonPlanLearnerView: 'show_lesson_plan_learner_view',
+        showCertificateDelivery: 'show_certificate_delivery',
     };
 
     const handleToggleChange = (section: 'adminSettings' | 'securitySettings' | 'integrations' | 'gamingSettings' | 'fundingSettings', key: string) => {
@@ -890,6 +894,13 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             )}
         </div>
     );
+
+    const ssgAppCount = Math.max(1, Math.min(4, formData.ssgAppCount ?? 1));
+    const getSsgAppLabel = (appKey: 'app1' | 'app2' | 'app3' | 'app4') => {
+        const n = appKey.replace('app', '');
+        const customName = formData.ssgAppNames?.[appKey]?.trim();
+        return customName ? `App ${n} (${customName})` : `App ${n}`;
+    };
 
     const renderSsgAppHeader = (
         title: string,
@@ -1615,6 +1626,75 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         </div>
                     </div>
 
+                    {/* ===== Virtual Meeting Subsection ===== */}
+                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
+                        <h3 className="text-lg font-bold text-on-surface mb-4">Virtual Meeting</h3>
+                        <div className="p-3 bg-surface rounded-md border border-default">
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-3">Provider</label>
+                            {(() => {
+                                const selected = (formData.integrations as any).virtualMeetingProvider || 'google_meet';
+                                const options: Array<{ value: 'google_meet' | 'zoom' | 'teams'; label: string; sub: string }> = [
+                                    { value: 'google_meet', label: 'Google Meet', sub: 'Default' },
+                                    { value: 'zoom', label: 'Zoom', sub: 'zoom.us' },
+                                    { value: 'teams', label: 'Microsoft Teams', sub: 'teams.microsoft.com' },
+                                ];
+                                return (
+                                    <div role="radiogroup" aria-label="Virtual meeting provider" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        {options.map(opt => {
+                                            const isSelected = selected === opt.value;
+                                            const interactive = isEditing;
+                                            return (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    role="radio"
+                                                    aria-checked={isSelected}
+                                                    disabled={!interactive}
+                                                    onClick={() => {
+                                                        if (!interactive) return;
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                virtualMeetingProvider: opt.value,
+                                                            },
+                                                        }));
+                                                    }}
+                                                    className={[
+                                                        'relative text-left p-4 rounded-lg border-2 transition-all',
+                                                        isSelected
+                                                            ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                                                            : 'border-default bg-surface-elevated hover:border-primary/50',
+                                                        interactive ? 'cursor-pointer' : 'cursor-default opacity-90',
+                                                    ].join(' ')}
+                                                >
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="min-w-0">
+                                                            <p className={`text-sm font-semibold ${isSelected ? 'text-primary' : 'text-on-surface'}`}>{opt.label}</p>
+                                                            <p className="text-[11px] text-on-surface-secondary mt-0.5 truncate">{opt.sub}</p>
+                                                        </div>
+                                                        <span
+                                                            className={[
+                                                                'flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
+                                                                isSelected ? 'border-primary bg-primary' : 'border-on-surface-secondary/40 bg-transparent',
+                                                            ].join(' ')}
+                                                            aria-hidden="true"
+                                                        >
+                                                            {isSelected && <span className="w-2 h-2 rounded-full bg-white" />}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                            <p className="text-[10px] text-on-surface-secondary mt-3">
+                                Determines the conferencing label shown to Learners and Trainers in My Classes.
+                            </p>
+                        </div>
+                    </div>
+
                 </div>}
 
                 <div className="border-t my-6"></div>
@@ -1820,6 +1900,41 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             isEditing={true}
                         />
                     ))}
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            Certificate Delivery Label
+                        </label>
+                        <p className="text-xs text-on-surface-secondary mb-2 font-normal">
+                            Title shown on the Certificate Delivery card on the course page (when enabled above).
+                        </p>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.adminSettings.certificateDeliveryLabel ?? 'TP Course Evaluation'}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        adminSettings: {
+                                            ...prev.adminSettings,
+                                            certificateDeliveryLabel: e.target.value,
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="TP Course Evaluation"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface">
+                                {formData.adminSettings.certificateDeliveryLabel ?? 'TP Course Evaluation'}
+                            </p>
+                        )}
+                    </div>
+                </div>}
+
+                <div className="border-t my-6"></div>
+                {renderSectionHeader('Payroll', isPayrollOpen, () => setIsPayrollOpen(prev => !prev), 'text-xl font-bold')}
+                {isPayrollOpen && <div className="mt-4">
+                    <PayrollSettingsView />
                 </div>}
 
                 <div className="border-t my-6"></div>
@@ -2030,8 +2145,40 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 {renderSectionHeader('SSG Authentication Setting', isSsgOpen, () => setIsSsgOpen(prev => !prev), 'text-xl font-bold')}
                 {isSsgOpen && <div className="space-y-4 mt-2">
 
+                    {/* App count + per-app name editor (edit mode only) */}
+                    {isEditing && (
+                        <div className="rounded-md border border-default bg-surface-elevated p-4 space-y-3">
+                            <div>
+                                <label htmlFor="ssgAppCount" className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Number of SSG Apps</label>
+                                <select
+                                    id="ssgAppCount"
+                                    value={ssgAppCount}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, ssgAppCount: parseInt(e.target.value, 10) }))}
+                                    className={inputClasses}
+                                >
+                                    {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}</option>)}
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {(['app1', 'app2', 'app3', 'app4'] as const).slice(0, ssgAppCount).map(key => (
+                                    <div key={key}>
+                                        <label htmlFor={`ssgAppName-${key}`} className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">App {key.replace('app', '')} Name</label>
+                                        <input
+                                            type="text"
+                                            id={`ssgAppName-${key}`}
+                                            value={formData.ssgAppNames?.[key] || ''}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, ssgAppNames: { ...(prev.ssgAppNames || {}), [key]: e.target.value } }))}
+                                            className={inputClasses}
+                                            placeholder={`App ${key.replace('app', '')} name`}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* App 1 */}
-                    {renderSsgAppHeader('App 1 (SKILLETO TERTIARY)', 'app1', isSsgApp1Open, () => setIsSsgApp1Open(prev => !prev))}
+                    {ssgAppCount >= 1 && renderSsgAppHeader(getSsgAppLabel('app1'), 'app1', isSsgApp1Open, () => setIsSsgApp1Open(prev => !prev))}
                     {isSsgApp1Open && (isEditing ? (
                         <div className="space-y-4 ml-4">
                             <div>
@@ -2084,8 +2231,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     ))}
 
                     {/* App 2 */}
-                    {renderSsgAppHeader('App 2 (Training Management System)', 'app2', isSsgApp2Open, () => setIsSsgApp2Open(prev => !prev))}
-                    {isSsgApp2Open && (isEditing ? (
+                    {ssgAppCount >= 2 && renderSsgAppHeader(getSsgAppLabel('app2'), 'app2', isSsgApp2Open, () => setIsSsgApp2Open(prev => !prev))}
+                    {ssgAppCount >= 2 && isSsgApp2Open && (isEditing ? (
                         <div className="space-y-4 ml-4">
                             <div>
                                 <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Self Signing Cert File</label>
@@ -2137,8 +2284,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     ))}
 
                     {/* App 3 */}
-                    {renderSsgAppHeader('App 3 (TIPL Tertiary Infotech Academy)', 'app3', isSsgApp3Open, () => setIsSsgApp3Open(prev => !prev))}
-                    {isSsgApp3Open && (isEditing ? (
+                    {ssgAppCount >= 3 && renderSsgAppHeader(getSsgAppLabel('app3'), 'app3', isSsgApp3Open, () => setIsSsgApp3Open(prev => !prev))}
+                    {ssgAppCount >= 3 && isSsgApp3Open && (isEditing ? (
                         <div className="space-y-4 ml-4">
                             <div>
                                 <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Self Signing Cert File</label>
@@ -2190,8 +2337,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     ))}
 
                     {/* App 4 */}
-                    {renderSsgAppHeader('App 4 (TMS API)', 'app4', isSsgApp4Open, () => setIsSsgApp4Open(prev => !prev))}
-                    {isSsgApp4Open && (isEditing ? (
+                    {ssgAppCount >= 4 && renderSsgAppHeader(getSsgAppLabel('app4'), 'app4', isSsgApp4Open, () => setIsSsgApp4Open(prev => !prev))}
+                    {ssgAppCount >= 4 && isSsgApp4Open && (isEditing ? (
                         <div className="space-y-4 ml-4">
                             <div>
                                 <label htmlFor="ssgApp4ClientId" className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">Client ID</label>

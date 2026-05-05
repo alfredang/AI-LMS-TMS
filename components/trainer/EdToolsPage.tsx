@@ -46,6 +46,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/whiteboard/',
   },
   {
+    title: 'Padlet',
+    description: 'Collaborative wall for posting notes, links, and media',
+    icon: IconName.Bookmark,
+    href: 'https://alfredang.github.io/padlet/',
+  },
+  {
     title: 'Collaborative Note',
     description: 'Shared notes for real-time collaboration in class',
     icon: IconName.FileText,

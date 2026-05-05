@@ -42,6 +42,7 @@ export enum UserRole {
   Developer = 'developer',
   Admin = 'admin',
   Finance = 'finance',
+  Payroll = 'payroll',
   TrainingProvider = 'trainingProvider'
 }
 
@@ -161,7 +162,6 @@ export enum DeveloperPage {
   CwGenerateAssessment = 'cwGenerateAssessment',
   CwGenerateSlides = 'cwGenerateSlides',
   CwGenerateBrochure = 'cwGenerateBrochure',
-  CwConvertDocuments = 'cwConvertDocuments',
   CwCoursewareAudit = 'cwCoursewareAudit',
 }
 
@@ -188,6 +188,7 @@ export enum TrainerPage {
   TrainingHours = 'trainingHours',
   LessonDeliveryGuide = 'lessonDeliveryGuide',
   AssessmentGuide = 'assessmentGuide',
+  PaymentHistory = 'paymentHistory',
 }
 
 // Course related interfaces
@@ -355,6 +356,8 @@ export interface TrainingProviderProfile {
   contactTel?: string;
   companyAddress?: string;
   showLessonPlanLearnerView?: boolean;
+  showCertificateDelivery?: boolean;
+  certificateDeliveryLabel?: string;
 }
 
 export interface CurrentUserProfile {

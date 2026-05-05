@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Next.js-14-black?logo=next.js" alt="Next.js" />
+  <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js" />
   <img src="https://img.shields.io/badge/TypeScript-5-blue?logo=typescript" alt="TypeScript" />
   <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react" alt="React" />
   <img src="https://img.shields.io/badge/PostgreSQL-17-336791?logo=postgresql" alt="PostgreSQL" />
@@ -34,7 +34,8 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 - **AI-Powered Learning**: Nemo AI agent (Claude Agent SDK) with persistent memory and tool use, SEO metadata generator, plus Gemini chatbot and GenAI authoring tools
 - **SSG Integration**: Full SkillsFuture Singapore API support for course runs, enrolments, assessments, grants, and claims
-- **Multi-Role System**: 6 roles with dedicated dashboards — Learner, Trainer, Admin, Developer, Finance, Training Provider
+- **Multi-Role System**: 7 roles with dedicated dashboards — Learner, Trainer, Admin, Developer, Finance, Payroll, Training Provider
+- **Multi-Tenant**: Same codebase deployed for multiple tenants on Coolify — Tertiary builds via **Dockerfile**, other tenants (Chariot, Intellisoft) build via **Docker Compose**
 - **Financial Operations**: QuickBooks integration, personal/company invoice workflows, grant calculators, claim tracking, billing history
 - **Singapore-Ready**: NRIC/FIN validation, UEN verification, WSQ/IBF course support, funding calculations
 - **Automation**: Task Scheduler, webhooks, n8n workflows for trainer invitations, certificate generation, enrollment sync, and more
@@ -83,6 +84,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
   - [Flash Cards](https://alfredang.github.io/flashcard/) — Interactive learning flash cards
   - [Live Q&A](https://alfredang.github.io/live-qna/) — Real-time question and answer board
   - [Whiteboard](https://alfredang.github.io/whiteboard/) — Interactive drawing and annotations
+  - [Padlet](https://alfredang.github.io/padlet/) — Collaborative wall for posting notes, links, and media
   - [Collaborative Note](https://alfredang.github.io/collabnote/) — Shared real-time notes
   - [Collaborative Flow](https://alfredang.github.io/collabflow/) — Visual workflow collaboration
   - [Collaborative Kanban](https://alfredang.github.io/kanban/) — Shared kanban task board
@@ -230,6 +232,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | **Developer** | Course developers | Create and edit course content, assessments, learning materials, SEO metadata generation |
 | **Admin** | System administrators | Full class management, trainer/learner assignment, TPG management, certificate generation, ticket system, workflow guides |
 | **Finance** | Financial operations | Financial dashboard, FMS automation, QuickBooks, claims, grants, personal/company invoice workflows, Bizfile lookup |
+| **Payroll** | Trainer payout operations | Manage payout tiers, per-class trainer payouts, approval workflow, payout history (gated by `payroll_enabled` feature flag) |
 | **Training Provider** | Organization admins | Company settings, user/role management, finance management, scheduler, webhooks, email templates, API documentation |
 
 ## Technology Stack
@@ -239,7 +242,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | **Framework** | Next.js 16 (Pages Router, TypeScript) |
 | **Frontend** | React 18, Tailwind CSS |
 | **Database** | PostgreSQL 17 |
-| **Authentication** | JWT + OTP (bcryptjs, jsonwebtoken) |
+| **Authentication** | bcryptjs password hashing + OTP flow (no JWT — session held client-side and re-checked against DB) |
 | **AI Integration** | Claude Agent SDK, Anthropic SDK, Google Generative AI (Gemini), OpenAI, MiniMax, Kimi, DeepSeek |
 | **Finance Integration** | QuickBooks Online (OAuth2), Bizfile API |
 | **File Uploads** | Multer, Google Drive API |
@@ -428,7 +431,7 @@ ai-lms-tms/
 | Table | Description |
 |-------|-------------|
 | `app_user` | Core user accounts with email, password hash, and profile |
-| `user_role_map` | Maps users to roles (Learner, Trainer, Admin, Developer, Training Provider) |
+| `user_role_map` | Maps users to roles (Learner, Trainer, Admin, Developer, Finance, Payroll, Training Provider) |
 | `training_provider` | Organization settings, templates, integrations, and security config |
 | `training_provider_member` | User membership in training provider organizations |
 | `course` | Course templates with metadata, materials, funding info, and assessment methods |
@@ -494,9 +497,6 @@ DATABASE_URL=postgresql://user:password@host:port/database
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 BASE_URL=http://localhost:3000
 
-# JWT Authentication
-JWT_SECRET=your-secure-jwt-secret
-
 # Google Gemini AI
 NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY=your-gemini-api-key
 
@@ -509,11 +509,20 @@ EXTERNAL_API_KEY_FOR_CLAWDBOT=your-external-api-key
 
 ## Deployment
 
-### Coolify (Current)
+### Coolify (Multi-Tenant)
 
-The application is deployed on Coolify at `https://ai-lms-tms.tertiaryinfo.tech`. Pushes to `main` trigger automatic redeployment.
+The same codebase is deployed across multiple tenants on **Coolify** (self-hosted PaaS — not Vercel, not Nixpacks). Pushes to `main` trigger automatic redeployment for each tenant.
 
-### Manual Deployment
+| Tenant | Build Pack | URL |
+|--------|------------|-----|
+| **Tertiary Infotech Academy** | Dockerfile | https://ai-lms-tms.tertiaryinfo.tech |
+| **Chariot / Intellisoft** | Docker Compose | (per-tenant) |
+
+Tenant-specific behavior is gated via DB config, env vars, or feature flags (e.g. `payroll_enabled` in `lib/payroll/featureFlag.ts`) — never by forking shared code.
+
+### Local Docker
+
+A `docker-compose.yml` is provided for local development (Next.js app + Postgres 17, ports 3003 / 6434).
 
 ```bash
 # Build for production

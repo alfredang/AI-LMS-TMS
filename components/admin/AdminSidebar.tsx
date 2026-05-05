@@ -374,6 +374,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                     { label: 'Corppass', href: 'https://www.corppass.gov.sg/portal' },
                     { label: 'SSG API Portal', href: 'https://ssg-api-portal.vercel.app/' },
                     { label: 'SSG Developer', href: 'https://developer.ssg-wsg.gov.sg/webapp/home' },
+                    { label: 'TRAQOM', href: 'https://ssgtraqom.qualtrics.com/login' },
                 ].map(({ label, href }) => (
                     <a
                         key={label}

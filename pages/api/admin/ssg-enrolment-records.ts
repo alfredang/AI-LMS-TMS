@@ -4,9 +4,8 @@ import pool from '../../../lib/db';
 /**
  * GET /api/admin/ssg-enrolment-records?limit=500&search=...
  *
- * Returns enrolments from the local enrollment table where the enrolment_date
- * is yesterday or today AND the course start date is in the future.
- * Sorted by enrolment_date DESC (today first, then yesterday).
+ * Returns rows from ssg_enrolment_record (populated by sync-ssg-enrolments).
+ * Filters to enrolments synced in the last 7 days; sorted newest first.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -18,25 +17,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const conditions: string[] = [
-      // Enrolment date = yesterday or today (include NULL dates)
-      `(e.enrolment_date IS NULL OR e.enrolment_date >= CURRENT_DATE - INTERVAL '1 day')`,
-      // Course starts in the future
-      `cr.start_date >= CURRENT_DATE`,
-      // Exclude removed/cancelled
-      `LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')`,
+      `(r.enrolment_date IS NULL OR r.enrolment_date >= CURRENT_DATE - INTERVAL '7 days')`,
+      `LOWER(COALESCE(r.status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')`,
     ];
     const params: any[] = [];
     let paramIdx = 1;
 
     if (search) {
       conditions.push(`(
-        COALESCE(au.full_name, e.nric, '') ILIKE $${paramIdx}
-        OR e.nric ILIKE $${paramIdx}
-        OR COALESCE(au.email, e.email, '') ILIKE $${paramIdx}
-        OR e.enrolment_id ILIKE $${paramIdx}
-        OR c.title ILIKE $${paramIdx}
-        OR c.course_code ILIKE $${paramIdx}
-        OR cr.course_run_id ILIKE $${paramIdx}
+        COALESCE(r.learner_name, '') ILIKE $${paramIdx}
+        OR COALESCE(r.learner_nric, '') ILIKE $${paramIdx}
+        OR COALESCE(r.learner_email, '') ILIKE $${paramIdx}
+        OR r.enrolment_reference ILIKE $${paramIdx}
+        OR COALESCE(r.course_title, '') ILIKE $${paramIdx}
+        OR COALESCE(r.course_ref_code, '') ILIKE $${paramIdx}
+        OR COALESCE(r.course_run_id, '') ILIKE $${paramIdx}
       )`);
       params.push(`%${search}%`);
       paramIdx++;
@@ -46,23 +41,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const dataRes = await pool.query(
       `SELECT
-        e.id,
-        e.enrolment_id AS enrolment_reference,
-        e.enrolment_date,
-        COALESCE(au.full_name, e.nric) AS learner_name,
-        e.nric AS learner_nric,
-        COALESCE(au.email, e.email) AS learner_email,
-        c.title AS course_title,
-        c.course_code AS course_ref_code,
-        cr.course_run_id,
-        cr.start_date,
-        e.enrolment_status AS status
-      FROM public.enrollment AS e
-      INNER JOIN public.course_run AS cr ON e.course_run_id = cr.id
-      INNER JOIN public.course AS c ON cr.course_id = c.id
-      LEFT JOIN public.app_user AS au ON e.user_id = au.id
+        r.id,
+        r.enrolment_reference,
+        r.enrolment_date,
+        r.learner_name,
+        r.learner_nric,
+        r.learner_email,
+        r.course_title,
+        r.course_ref_code,
+        r.course_run_id,
+        r.start_date,
+        r.status
+      FROM public.ssg_enrolment_record AS r
       ${whereClause}
-      ORDER BY e.enrolment_date DESC NULLS LAST, e.created_at DESC
+      ORDER BY r.enrolment_date DESC NULLS LAST, r.created_at DESC
       LIMIT $${paramIdx}`,
       [...params, limit]
     );

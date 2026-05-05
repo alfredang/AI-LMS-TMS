@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
 import pool from '../../../lib/db';
-import { generateSlides, type CwCompanyInfo, type SlideAgentConfig } from '../../../lib/cw-slides';
+import { generateSlides, type CwCompanyInfo, type SlideAgentConfig } from '../../../lib/cw-slides-v2';
 import { createJob, updateJob, updateProgress, slidesOutputDir } from '../../../lib/cw-slides-jobs';
 import { parseCpFile } from '../../../lib/cp-parser';
 

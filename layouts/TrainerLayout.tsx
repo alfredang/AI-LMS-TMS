@@ -29,6 +29,7 @@ import VirtualToolsPage from '../components/trainer/VirtualToolsPage';
 import AgenticAIToolsPage from '../components/trainer/AgenticAIToolsPage';
 import AssessmentGuidePage from '../components/trainer/AssessmentGuidePage';
 import TrainingHoursPage from '../components/trainer/TrainingHoursPage';
+import PaymentHistoryPage from '../components/trainer/PaymentHistoryPage';
 
 const TrainerLayout: React.FC = () => {
   const { currentView, trainerPage, selectedCourse } = useLms();
@@ -83,6 +84,8 @@ const TrainerLayout: React.FC = () => {
         return <LessonDeliveryGuidePage />;
       case TrainerPage.AssessmentGuide:
         return <AssessmentGuidePage />;
+      case TrainerPage.PaymentHistory:
+        return <PaymentHistoryPage />;
       default:
         return <TrainerHomePage />;
     }

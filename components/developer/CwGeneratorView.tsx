@@ -7,7 +7,6 @@ import CwGenerateLessonPlan from './courseware-generator/CwGenerateLessonPlan';
 import CwGenerateAssessment from './courseware-generator/CwGenerateAssessment';
 import CwGenerateSlides from './courseware-generator/CwGenerateSlides';
 import CwGenerateBrochure from './courseware-generator/CwGenerateBrochure';
-import CwConvertDocuments from './courseware-generator/CwConvertDocuments';
 import CwCoursewareAudit from './courseware-generator/CwCoursewareAudit';
 
 interface CwGeneratorViewProps {
@@ -36,8 +35,6 @@ const CwGeneratorInner: React.FC<CwGeneratorViewProps> = ({ currentStep }) => {
       return <CwGenerateSlides />;
     case DeveloperPage.CwGenerateBrochure:
       return <CwGenerateBrochure />;
-    case DeveloperPage.CwConvertDocuments:
-      return <CwConvertDocuments />;
     case DeveloperPage.CwCoursewareAudit:
       return <CwCoursewareAudit />;
     default:

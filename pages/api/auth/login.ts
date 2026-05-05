@@ -3,6 +3,7 @@ import { cors } from '../../../lib/cors';
 import bcrypt from 'bcryptjs';
 import pool from '../../../lib/db';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { isPayrollEnabled } from '../../../lib/payroll/featureFlag';
 
 
 interface LoginRequest {
@@ -270,10 +271,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
 
     const rolesResult = await pool.query(rolesQuery, [user.id]);
 
+    // Filter out tenant-disabled roles (Payroll is opt-in per training_provider)
+    const payrollEnabled = await isPayrollEnabled();
+    const dbRoleStrings = rolesResult.rows
+      .map((row: { role: string }) => row.role)
+      .filter((r) => payrollEnabled || r !== 'Payroll');
+
     // Convert database roles to lowercase for consistency
-    const userRoles: string[] = rolesResult.rows.map((row: { role: string }) => {
-      const dbRole = row.role;
-      // Convert "Training Provider" to "trainingProvider" for frontend compatibility
+    const userRoles: string[] = dbRoleStrings.map((dbRole: string) => {
       if (dbRole === 'Training Provider') return 'trainingProvider';
       return dbRole.toLowerCase();
     });

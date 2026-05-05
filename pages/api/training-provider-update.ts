@@ -608,6 +608,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       console.log('✅ training_provider updated, rows affected:', providerUpdateResult.rowCount);
 
+      // Virtual Meeting provider — separate UPDATE so a pre-migration DB
+      // (column missing) doesn't break the rest of the profile save.
+      try {
+        const allowedVirtualMeetingProviders = ['google_meet', 'zoom', 'teams'];
+        const requestedVirtualMeetingProvider = profileData.integrations?.virtualMeetingProvider;
+        const virtualMeetingProvider = allowedVirtualMeetingProviders.includes(requestedVirtualMeetingProvider)
+          ? requestedVirtualMeetingProvider
+          : 'google_meet';
+        await pool.query(
+          'UPDATE training_provider SET virtual_meeting_provider = $1 WHERE id = $2',
+          [virtualMeetingProvider, trainingProviderId]
+        );
+      } catch (e) {
+        console.warn('⚠️ virtual_meeting_provider column missing; run database/migrations/add_virtual_meeting_provider.sql');
+      }
+
       // Handle API keys - delete existing and insert new ones (with selected model)
       console.log('🔑 Processing API keys...');
       const deleteResult = await pool.query('DELETE FROM training_provider_api WHERE training_provider_id = $1', [userId]);

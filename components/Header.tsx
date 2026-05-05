@@ -64,6 +64,7 @@ const getRoleDisplayName = (role: UserRole): string => {
     case UserRole.Developer: return 'Developer';
     case UserRole.Admin: return 'Admin';
     case UserRole.Finance: return 'Finance';
+    case UserRole.Payroll: return 'Payroll';
     case UserRole.TrainingProvider: return 'Training Provider';
     default: return role;
   }
@@ -77,6 +78,7 @@ const getRoleIcon = (role: UserRole): string => {
     case UserRole.Developer: return '💻';
     case UserRole.Admin: return '⚙️';
     case UserRole.Finance: return '💰';
+    case UserRole.Payroll: return '🧾';
     case UserRole.TrainingProvider: return '🏢';
     default: return '👤';
   }
@@ -297,6 +299,9 @@ const Header: React.FC = () => {
       { view: View.Finance, label: 'Financial Dashboard', icon: IconName.DollarSign, financePage: 'dashboard' },
       { view: View.Finance, label: 'TPG Management', icon: IconName.Settings, financePage: 'tpgManagement' },
       { view: View.Finance, label: 'Claim Management', icon: IconName.ClipboardCheck, financePage: 'claimManagement' },
+    ],
+    [UserRole.Payroll]: [
+      { view: View.Dashboard, label: 'Payroll Dashboard', icon: IconName.DollarSign },
     ],
     [UserRole.TrainingProvider]: [
       { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },

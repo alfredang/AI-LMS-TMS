@@ -2759,9 +2759,13 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Google Meet */}
+                            {/* Virtual Meeting */}
+                            {(() => {
+                                const vmp = ((trainingProviderProfile as any)?.integrations?.virtualMeetingProvider as 'google_meet' | 'zoom' | 'teams' | undefined) || 'google_meet';
+                                const providerLabel = vmp === 'zoom' ? 'Zoom' : vmp === 'teams' ? 'Microsoft Teams' : 'Google Meet';
+                                return (
                             <div id={toId("Google Meet")}>
-                                <ContentSection title="Google Meet">
+                                <ContentSection title={providerLabel}>
                                     {(convertedCourse.classType === 'Virtual' || convertedCourse.classType === 'Hybrid') && convertedCourse.virtualMeetingLink ? (
                                         <a
                                             href={convertedCourse.virtualMeetingLink}
@@ -2771,7 +2775,7 @@ export const CourseDetail: React.FC = () => {
                                         >
                                             <Icon name={IconName.Video} className="w-6 h-6 text-green-600 flex-shrink-0" />
                                             <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-gray-900 dark:text-white">Join Google Meet</p>
+                                                <p className="font-semibold text-gray-900 dark:text-white">{`Join ${providerLabel}`}</p>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                                                     {convertedCourse.virtualMeetingLink}
                                                 </p>
@@ -2789,6 +2793,8 @@ export const CourseDetail: React.FC = () => {
                                     )}
                                 </ContentSection>
                             </div>
+                                );
+                            })()}
 
                             {/* Courseware - grouped container for Trainer/Developer/Admin/TrainingProvider */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
@@ -3087,17 +3093,18 @@ export const CourseDetail: React.FC = () => {
                                             onClick={() => setIsTraqomOpen(!isTraqomOpen)}
                                             aria-expanded={isTraqomOpen}
                                         >
-                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Certificate & TRAQOM Survey</h3>
+                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{trainingProviderProfile?.showCertificateDelivery ? `${trainingProviderProfile?.certificateDeliveryLabel || 'TP Course Evaluation'} & TRAQOM Survey` : 'TRAQOM Survey'}</h3>
                                             <Icon name={IconName.ChevronDown} className={`w-6 h-6 text-blue-600 flex-shrink-0 transition-transform ${isTraqomOpen ? 'rotate-180' : ''}`} />
                                         </button>
                                         {isTraqomOpen && (
                                             <div className="px-6 pb-6 border-t border-default">
-                                                <div className="pt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className={`pt-5 grid grid-cols-1 ${trainingProviderProfile?.showCertificateDelivery ? 'md:grid-cols-2' : ''} gap-4`}>
                                                                     {/* Certificate Delivery Card */}
+                                                    {trainingProviderProfile?.showCertificateDelivery && (
                                                     <div className="flex flex-col rounded-xl border border-default overflow-hidden">
                                                         <div className="bg-blue-600 px-4 py-2.5 flex items-center gap-2">
                                                             <Icon name={IconName.FileText} className="w-4 h-4 text-white flex-shrink-0" />
-                                                            <span className="text-sm font-semibold text-white">Certificate Delivery</span>
+                                                            <span className="text-sm font-semibold text-white">{trainingProviderProfile?.certificateDeliveryLabel || 'TP Course Evaluation'}</span>
                                                         </div>
                                                         <div className="flex flex-col items-center p-5 bg-surface flex-1 justify-between gap-3">
                                                             <div className="flex flex-col items-center gap-3 w-full">
@@ -3134,6 +3141,7 @@ export const CourseDetail: React.FC = () => {
                                                             </div>
                                                         </div>
                                                     </div>
+                                                    )}
 
                                                     {/* TRAQOM Survey Card */}
                                                     <div className="flex flex-col rounded-xl border border-default overflow-hidden">

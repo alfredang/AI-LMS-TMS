@@ -68,7 +68,6 @@ const DeveloperLayout: React.FC = () => {
       developerPage === DeveloperPage.CwGenerateAssessment ||
       developerPage === DeveloperPage.CwGenerateSlides ||
       developerPage === DeveloperPage.CwGenerateBrochure ||
-      developerPage === DeveloperPage.CwConvertDocuments ||
       developerPage === DeveloperPage.CwCoursewareAudit
     ) {
       return <CwGeneratorView currentStep={developerPage} />;
