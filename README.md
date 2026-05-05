@@ -170,7 +170,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Company Setting**
   - Company profile (name, UEN, address, logo, color scheme)
   - Contact person management
-  - **Integrations** — Google (Calendar, OAuth, Certificate Folder), n8n (Host URLs), Magento (Backend URL), Reference Links
+  - **Integrations** — Virtual meeting provider selection, Google (Calendar, OAuth, Certificate Folder), Zoom OAuth meeting generation, n8n, Magento, Reference Links
   - **SSG Authentication** — SSG certificate, private key, and encryption key (with support for App1, App3, App4 credentials)
   - **LLM Credentials** — Anthropic, OpenAI, Gemini, MiniMax, Kimi, DeepSeek with default and fallback provider selection
   - **Security Settings** — OTP login, default OTP, force first password change, default password, sensitive data masking

@@ -78,7 +78,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         c.resource_links,
         c.funding_validity,
         COALESCE(cr.class_type, 'Physical') AS class_type,
-        cr.virtual_meeting_link
+        cr.virtual_meeting_link,
+        cr.virtual_meeting_provider
       FROM trainer_profile tp
       JOIN course_run cr ON (
         tp.user_id = cr.assigned_trainer_id
@@ -229,7 +230,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           resourceLinks: courseDetail.resource_links ? (typeof courseDetail.resource_links === 'string' ? JSON.parse(courseDetail.resource_links) : courseDetail.resource_links) : [],
           fundingValidity: courseDetail.funding_validity || null,
           classType: courseDetail.class_type || 'Physical',
-          virtualMeetingLink: courseDetail.virtual_meeting_link || null
+          virtualMeetingLink: courseDetail.virtual_meeting_link || null,
+          virtualMeetingProvider: courseDetail.virtual_meeting_provider || null
         },
         learningUnits,
         bookmarkedSubtopics

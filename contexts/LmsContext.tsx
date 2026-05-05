@@ -615,6 +615,12 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   courseCode: cr.courseCode,
                   startDate: cr.startDate,
                   endDate: cr.endDate,
+                  classType: cr.classType,
+                  virtualMeetingLink: cr.virtualMeetingLink,
+                  virtualMeetingProvider: cr.virtualMeetingProvider,
+                  virtualMeetingExternalId: cr.virtualMeetingExternalId,
+                  virtualMeetingStatus: cr.virtualMeetingStatus,
+                  virtualMeetingSyncedAt: cr.virtualMeetingSyncedAt,
                 });
                 console.log(`📍 LmsContext: Restored editingCourseRun from URL: ${courseRunIdParam}`);
               }

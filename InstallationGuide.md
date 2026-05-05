@@ -501,9 +501,10 @@ Use this as a single-page reference for what needs to be configured before handi
 | 9 | Anthropic API key (for Nemo, CP Generator, Courseware Generator) | **Recommended** | Training Provider → API Keys (`training_provider_api`, `key_name = 'ANTHROPIC_API_KEY'`) | Without this, Nemo AI assistant and content generators won't work. Use a `sk-ant-oat*` token (subscription) or `sk-ant-api*` (PAYG) | [Step 6.3](#63-required-for-ai-features) |
 | 10 | Google Gemini API key | **Recommended** | API Keys + env var `NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY` | Powers the public-facing chatbot on marketing pages | [Step 6.3](#63-required-for-ai-features) |
 | 11 | Firecrawl API key | **Recommended** | API Keys (`key_name = 'FIRECRAWL_API_KEY'`) — also editable under TP profile → Credentials → Firecrawl | Trainer-profile enrichment from LinkedIn / personal sites | [CLAUDE.md → Web Scraping](CLAUDE.md) |
-| 12 | Google Calendar ID + sync toggle | **Recommended** | Company Settings → Google Integration | Class schedules push to a shared calendar — trainers see all upcoming classes | [10.3](#103-google-integration-optional) |
-| 13 | Google Drive folder URLs (certificates, uploads) | **Recommended** | Company Settings → Google Integration | Certificate PDFs and file uploads stored in client's Drive | [10.3](#103-google-integration-optional) |
-| 14 | Google Slides certificate template ID | **Recommended** | Company Settings → Google Integration | Auto-generated certificates render from this template | [10.3](#103-google-integration-optional) |
+| 12 | Google Calendar ID + sync toggle | **Recommended** | Company Settings → Google Integration | Class schedules push to a shared calendar — trainers see all upcoming classes | [10.3](#103-google--zoom-integrations-optional) |
+| 13 | Google Drive folder URLs (certificates, uploads) | **Recommended** | Company Settings → Google Integration | Certificate PDFs and file uploads stored in client's Drive | [10.3](#103-google--zoom-integrations-optional) |
+| 14 | Google Slides certificate template ID | **Recommended** | Company Settings → Google Integration | Auto-generated certificates render from this template | [10.3](#103-google--zoom-integrations-optional) |
+| 14a | Zoom virtual meetings | **Optional** | Company Settings → Integrations | Lets admins generate Zoom meeting links for course runs using the training provider's connected Zoom account | [10.3](#103-google--zoom-integrations-optional) |
 | 15 | GST registration & rate | **Recommended** (SG clients) | Company Settings → Financial | Tax line items on invoices, proforma invoices, receipts | [10.4](#104-financial-settings) |
 | 16 | Funding rates (Normal / Enhanced) | **Recommended** (SG clients) | Company Settings → Financial | SkillsFuture funding calculations on enrollment fees | [10.4](#104-financial-settings) |
 | 17 | **SSG TPGateway certificates** (App 1 / App 3 cert + private key + encryption key) | **Required for SG SSG clients** | Company Settings → SSG Configuration | mTLS auth for course publishing, enrollment submission, grant claims | [10.6](#106-ssgtpgateway-singapore-training-providers-only), [Appendix B](#appendix-b-ssg-tpgateway-certificate-setup-detailed) |
@@ -565,7 +566,7 @@ The detailed sections below cover each grouping in depth.
 > 14. Copy the **Refresh Token**
 > 15. Enter all three values in Company Settings > Integrations
 
-### 10.3 Google Integration (Optional)
+### 10.3 Google & Zoom Integrations (Optional)
 
 | Setting | Purpose |
 |---|---|
@@ -573,6 +574,12 @@ The detailed sections below cover each grouping in depth.
 | Google Drive Folder URLs | Certificate storage, file uploads |
 | Google Slides Template ID | Template for auto-generated certificates |
 | Sync Google Calendar toggle | Enable/disable calendar sync |
+
+**Virtual Meeting provider:** In **Company Settings > Integrations**, choose the default provider (`Google Meet`, `Zoom`, or `Microsoft Teams`). Selecting Google Meet opens the Google panel; selecting Zoom opens the Zoom panel.
+
+**Zoom setup:** Create one Zoom OAuth app in the Zoom App Marketplace for this app/deployment or training provider, then enter its **Zoom OAuth App Client ID** and **Zoom OAuth App Client Secret** in Company Settings. These are app credentials, not a user's Zoom username/password. For most client deployments, a **client-owned private/development OAuth app** is enough if the LMS only needs to connect that client's own Zoom account and is not being publicly distributed through the Zoom Marketplace. If the client already has a suitable production Zoom OAuth app, they can reuse that app's Client ID and Client Secret instead. A full production Marketplace listing is only needed when the integration must be published/distributed to external Zoom customers. In the Zoom app's **Basic Information** section, add this OAuth redirect URL: `https://your-domain.com/api/integrations/zoom/oauth/callback`. Add the granular scopes `user:read:user` and `meeting:write:meeting` to the Zoom app. After saving, click **Connect Zoom** and sign in as the Zoom account that should create/host course-run meetings. The app stores the returned Zoom OAuth tokens at the training-provider level.
+
+For existing deployments, apply `database/migrations/add_zoom_meeting_integration.sql` before using Zoom meeting generation. Fresh databases created from `database/01-schema.sql` already include the required columns.
 
 ### 10.4 Financial Settings
 
@@ -629,6 +636,7 @@ After deployment, go through this checklist:
 
 ### Optional Integrations
 - [ ] Google Calendar sync works (if configured)
+- [ ] Zoom connects and `Test` succeeds (if Zoom meeting generation is configured)
 - [ ] Certificate generation works (if Google Slides template configured)
 - [ ] QuickBooks invoice sync works (if configured)
 

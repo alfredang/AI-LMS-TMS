@@ -2761,7 +2761,11 @@ export const CourseDetail: React.FC = () => {
 
                             {/* Virtual Meeting */}
                             {(() => {
-                                const vmp = ((trainingProviderProfile as any)?.integrations?.virtualMeetingProvider as 'google_meet' | 'zoom' | 'teams' | undefined) || 'google_meet';
+                                const vmp = (
+                                    (convertedCourse as any)?.virtualMeetingProvider ||
+                                    ((trainingProviderProfile as any)?.integrations?.virtualMeetingProvider as 'google_meet' | 'zoom' | 'teams' | undefined) ||
+                                    'google_meet'
+                                );
                                 const providerLabel = vmp === 'zoom' ? 'Zoom' : vmp === 'teams' ? 'Microsoft Teams' : 'Google Meet';
                                 return (
                             <div id={toId("Google Meet")}>

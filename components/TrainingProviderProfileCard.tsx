@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
@@ -268,6 +268,17 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
     const [formData, setFormData] = useState(getInitialFormData(profile));
     const [isSaving, setIsSaving] = useState(false);
+    const [zoomStatus, setZoomStatus] = useState<{
+        configured: boolean;
+        connected: boolean;
+        userEmail?: string | null;
+    }>({
+        configured: !!(profile.integrations?.zoomClientId && profile.integrations?.zoomClientSecret),
+        connected: !!profile.integrations?.zoomConnected,
+        userEmail: profile.integrations?.zoomUserEmail || null,
+    });
+    const [zoomBusy, setZoomBusy] = useState(false);
+    const zoomPollIntervalRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
     const [newApiKey, setNewApiKey] = useState({ name: '', value: '' });
     const [visibleApiKeys, setVisibleApiKeys] = useState<{ [key: string]: boolean }>({});
     const [isApiKeysOpen, setIsApiKeysOpen] = useState(false);
@@ -282,6 +293,11 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isDocTemplatesOpen, setIsDocTemplatesOpen] = useState(false);
     const [isSsgOpen, setIsSsgOpen] = useState(false);
     const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false);
+    const [isGoogleIntegrationOpen, setIsGoogleIntegrationOpen] = useState(false);
+    const [isZoomIntegrationOpen, setIsZoomIntegrationOpen] = useState(false);
+    const [isOpenClawIntegrationOpen, setIsOpenClawIntegrationOpen] = useState(false);
+    const [isMagentoIntegrationOpen, setIsMagentoIntegrationOpen] = useState(false);
+    const [isN8nIntegrationOpen, setIsN8nIntegrationOpen] = useState(false);
     const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
     const [isPayrollOpen, setIsPayrollOpen] = useState(false);
     const [isSecurityOpen, setIsSecurityOpen] = useState(false);
@@ -341,6 +357,11 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     useEffect(() => {
         // Transform profile data to ensure colorScheme is a string
         setFormData(getInitialFormData(profile));
+        setZoomStatus({
+            configured: !!(profile.integrations?.zoomClientId && profile.integrations?.zoomClientSecret),
+            connected: !!profile.integrations?.zoomConnected,
+            userEmail: profile.integrations?.zoomUserEmail || null,
+        });
     }, [profile]);
 
     // Clean up blob URLs to prevent memory leaks
@@ -351,6 +372,21 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
             }
         };
     }, [formData.companyLogoUrl]);
+
+    useEffect(() => {
+        if (!isIntegrationsOpen) return;
+        const selectedProvider = (formData.integrations as any)?.virtualMeetingProvider || 'google_meet';
+        if (selectedProvider === 'google_meet') setIsGoogleIntegrationOpen(true);
+        if (selectedProvider === 'zoom') setIsZoomIntegrationOpen(true);
+    }, [isIntegrationsOpen, formData.integrations]);
+
+    useEffect(() => {
+        return () => {
+            if (zoomPollIntervalRef.current) {
+                window.clearInterval(zoomPollIntervalRef.current);
+            }
+        };
+    }, []);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -868,6 +904,87 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         }
     };
 
+    const refreshZoomStatus = async () => {
+        try {
+            const response = await fetch(getApiUrl('/api/integrations/zoom/status'));
+            const result = await response.json();
+            if (result.success) {
+                const nextStatus = {
+                    configured: !!result.data.configured,
+                    connected: !!result.data.connected,
+                    userEmail: result.data.userEmail || null,
+                };
+                setZoomStatus(nextStatus);
+                return nextStatus;
+            }
+        } catch {
+            // Best-effort status refresh only.
+        }
+        return null;
+    };
+
+    const handleConnectZoom = () => {
+        if (zoomPollIntervalRef.current) {
+            window.clearInterval(zoomPollIntervalRef.current);
+            zoomPollIntervalRef.current = null;
+        }
+
+        const popup = window.open(getApiUrl('/api/integrations/zoom/oauth/connect'), '_blank', 'noopener,noreferrer,width=720,height=760');
+        setZoomBusy(true);
+        const startedAt = Date.now();
+        const timeoutMs = 120000;
+
+        zoomPollIntervalRef.current = window.setInterval(async () => {
+            const status = await refreshZoomStatus();
+            const popupClosed = !!popup?.closed;
+            const timedOut = Date.now() - startedAt > timeoutMs;
+
+            if (status?.connected || popupClosed || timedOut) {
+                if (zoomPollIntervalRef.current) {
+                    window.clearInterval(zoomPollIntervalRef.current);
+                    zoomPollIntervalRef.current = null;
+                }
+                if (popupClosed && !status?.connected) {
+                    await refreshZoomStatus();
+                }
+                setZoomBusy(false);
+                if (timedOut && !status?.connected) {
+                    alert('Zoom authorization was not completed. Try Connect Zoom again if needed.');
+                }
+            }
+        }, 2000);
+    };
+
+    const handleTestZoom = async () => {
+        setZoomBusy(true);
+        try {
+            const response = await fetch(getApiUrl('/api/integrations/zoom/test'), { method: 'POST' });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.error || 'Zoom test failed');
+            await refreshZoomStatus();
+            alert(`Zoom connected as ${result.data?.email || 'the configured account'}`);
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Zoom test failed');
+        } finally {
+            setZoomBusy(false);
+        }
+    };
+
+    const handleDisconnectZoom = async () => {
+        if (!confirm('Disconnect Zoom for this training provider? Existing course run links will remain, but new Zoom meetings cannot be generated until Zoom is connected again.')) return;
+        setZoomBusy(true);
+        try {
+            const response = await fetch(getApiUrl('/api/integrations/zoom/disconnect'), { method: 'POST' });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.error || 'Zoom disconnect failed');
+            await refreshZoomStatus();
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Zoom disconnect failed');
+        } finally {
+            setZoomBusy(false);
+        }
+    };
+
     const handleCancelEdit = () => {
         setIsEditing(false);
         setFormData(getInitialFormData(profile));
@@ -894,6 +1011,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     );
 
     const ssgAppCount = Math.max(1, Math.min(4, formData.ssgAppCount ?? 1));
+    const hasZoomCredentialsInForm = !!((formData.integrations as any).zoomClientId && (formData.integrations as any).zoomClientSecret);
+    const zoomConnectButtonLabel = zoomBusy ? 'Waiting...' : isEditing ? 'Save first' : 'Connect Zoom';
     const getSsgAppLabel = (appKey: 'app1' | 'app2' | 'app3' | 'app4') => {
         const n = appKey.replace('app', '');
         const customName = formData.ssgAppNames?.[appKey]?.trim();
@@ -973,6 +1092,29 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 <Icon
                     name={IconName.ChevronDown}
                     className={`w-5 h-5 flex-shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                />
+            </div>
+        </button>
+    );
+
+    const renderIntegrationPanelHeader = (
+        title: string,
+        isOpen: boolean,
+        toggle: () => void
+    ) => (
+        <button
+            type="button"
+            onClick={toggle}
+            className={[
+                'w-full border border-default bg-surface-elevated px-4 py-3 text-left transition-colors hover:border-primary/40',
+                isOpen ? 'rounded-t-md rounded-b-none border-b-0' : 'rounded-md',
+            ].join(' ')}
+        >
+            <div className="flex items-center justify-between gap-4">
+                <h3 className="text-base font-bold text-on-surface">{title}</h3>
+                <Icon
+                    name={IconName.ChevronDown}
+                    className={`w-4 h-4 flex-shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                 />
             </div>
         </button>
@@ -1235,9 +1377,89 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 {renderSectionHeader('Integrations', isIntegrationsOpen, () => setIsIntegrationsOpen(prev => !prev), 'text-xl font-bold')}
                 {isIntegrationsOpen && <div className="space-y-6 font-semibold mt-4">
 
-                    {/* ===== Google Subsection ===== */}
+                    {/* ===== Virtual Meeting Subsection ===== */}
                     <div className="p-4 bg-surface-elevated rounded-lg border border-default">
-                        <h3 className="text-lg font-bold text-on-surface mb-4">Google</h3>
+                        <h3 className="text-lg font-bold text-on-surface mb-4">Virtual Meeting</h3>
+                        <div className="p-3 bg-surface rounded-md border border-default">
+                            <label className="block text-sm font-medium text-on-surface-secondary mb-3">Provider</label>
+                            {(() => {
+                                const selected = (formData.integrations as any).virtualMeetingProvider || 'google_meet';
+                                const options: Array<{ value: 'google_meet' | 'zoom' | 'teams'; label: string; sub: string }> = [
+                                    { value: 'google_meet', label: 'Google Meet', sub: 'Default' },
+                                    { value: 'zoom', label: 'Zoom', sub: 'zoom.us' },
+                                    { value: 'teams', label: 'Microsoft Teams', sub: 'teams.microsoft.com' },
+                                ];
+                                return (
+                                    <div role="radiogroup" aria-label="Virtual meeting provider" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        {options.map(opt => {
+                                            const isSelected = selected === opt.value;
+                                            return (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    role="radio"
+                                                    aria-checked={isSelected}
+                                                    onClick={() => {
+                                                        if (!isEditing) setIsEditing(true);
+                                                        if (opt.value === 'google_meet') {
+                                                            setIsGoogleIntegrationOpen(true);
+                                                            setIsZoomIntegrationOpen(false);
+                                                        }
+                                                        if (opt.value === 'zoom') {
+                                                            setIsZoomIntegrationOpen(true);
+                                                            setIsGoogleIntegrationOpen(false);
+                                                        }
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                virtualMeetingProvider: opt.value,
+                                                            },
+                                                        }));
+                                                    }}
+                                                    className={[
+                                                        'relative text-left p-4 rounded-lg border-2 transition-all',
+                                                        isSelected
+                                                            ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                                                            : 'border-default bg-surface-elevated hover:border-primary/50',
+                                                        'cursor-pointer',
+                                                    ].join(' ')}
+                                                >
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="min-w-0">
+                                                            <p className={`text-sm font-semibold ${isSelected ? 'text-primary' : 'text-on-surface'}`}>{opt.label}</p>
+                                                            <p className="text-[11px] text-on-surface-secondary mt-0.5 truncate">{opt.sub}</p>
+                                                        </div>
+                                                        <span
+                                                            className={[
+                                                                'flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
+                                                                isSelected ? 'border-primary bg-primary' : 'border-on-surface-secondary/40 bg-transparent',
+                                                            ].join(' ')}
+                                                            aria-hidden="true"
+                                                        >
+                                                            {isSelected && <span className="w-2 h-2 rounded-full bg-white" />}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                            <p className="text-[10px] text-on-surface-secondary mt-3">
+                                Determines the default conferencing provider used for new virtual meeting generation.
+                            </p>
+                            <p className="text-[10px] text-on-surface-secondary mt-1">
+                                {isEditing ? 'Save changes to apply this default provider.' : 'Selecting a provider will enter edit mode. Configure Zoom OAuth credentials in the Zoom section below before generating Zoom meetings.'}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* ===== Google Subsection ===== */}
+                    <div>
+                    {renderIntegrationPanelHeader('Google', isGoogleIntegrationOpen, () => setIsGoogleIntegrationOpen(prev => !prev))}
+                    {isGoogleIntegrationOpen && (
+                    <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
                         <div className="space-y-4">
                             {/* Gmail Configuration */}
                             <div className="space-y-3">
@@ -1481,11 +1703,99 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     )}
                                 </div>
                             )}
+                        </div>
+                    </div>
+                    )}
+                    </div>
+
+                    {/* ===== Zoom Subsection ===== */}
+                    <div>
+                    {renderIntegrationPanelHeader('Zoom', isZoomIntegrationOpen, () => setIsZoomIntegrationOpen(prev => !prev))}
+                    {isZoomIntegrationOpen && (
+                    <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                        <div className="p-3 bg-surface rounded-md border border-default">
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">Zoom OAuth App Client ID</label>
+                                        {isEditing ? (
+                                            <input
+                                                type="text"
+                                                value={(formData.integrations as any).zoomClientId || ''}
+                                                onChange={(e) =>
+                                                    setFormData((prev) => ({
+                                                        ...prev,
+                                                        integrations: {
+                                                            ...prev.integrations,
+                                                            zoomClientId: e.target.value,
+                                                        },
+                                                    }))
+                                                }
+                                                className={inputClasses}
+                                                placeholder="Zoom OAuth app client ID"
+                                            />
+                                        ) : (
+                                            <p className="text-sm text-on-surface truncate">{(formData.integrations as any).zoomClientId || 'Not Set'}</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">Zoom OAuth App Client Secret</label>
+                                        {isEditing ? (
+                                            <input
+                                                type="password"
+                                                value={(formData.integrations as any).zoomClientSecret || ''}
+                                                onChange={(e) =>
+                                                    setFormData((prev) => ({
+                                                        ...prev,
+                                                        integrations: {
+                                                            ...prev.integrations,
+                                                            zoomClientSecret: e.target.value,
+                                                        },
+                                                    }))
+                                                }
+                                                className={inputClasses}
+                                                placeholder="Zoom OAuth app client secret"
+                                            />
+                                        ) : (
+                                            <p className="text-sm text-on-surface">{(formData.integrations as any).zoomClientSecret ? 'Configured' : 'Not Set'}</p>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`text-xs font-semibold px-2 py-1 rounded ${zoomStatus.connected ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}`}>
+                                        {zoomStatus.connected ? `Connected${zoomStatus.userEmail ? `: ${zoomStatus.userEmail}` : ''}` : 'Not connected'}
+                                    </span>
+                                    <Button size="sm" variant="secondary" onClick={handleConnectZoom} disabled={isEditing || zoomBusy || !hasZoomCredentialsInForm}>
+                                        {zoomConnectButtonLabel}
+                                    </Button>
+                                    <Button size="sm" variant="secondary" onClick={handleTestZoom} disabled={isEditing || zoomBusy || !zoomStatus.connected}>
+                                        Test
+                                    </Button>
+                                    <Button size="sm" variant="danger" onClick={handleDisconnectZoom} disabled={isEditing || zoomBusy || !zoomStatus.connected}>
+                                        Disconnect
+                                    </Button>
+                                </div>
+                                {isEditing ? (
+                                    <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-700/70 dark:bg-amber-900/20 dark:text-amber-200">
+                                        Save the Zoom OAuth App Client ID and Secret before connecting. The Connect Zoom button will unlock after the credentials are saved.
+                                    </div>
+                                ) : (
+                                    <p className="text-[10px] text-on-surface-secondary">
+                                        Click Connect Zoom to authorize the Zoom account after the saved credentials are configured.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    )}
+                    </div>
 
                             {/* Nemo OpenClaw Configuration */}
-                            <div className="space-y-3">
-                                <h4 className="text-sm font-bold text-on-surface pl-3">Nemo OpenClaw</h4>
-                                <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                    <div>
+                    {renderIntegrationPanelHeader('Nemo OpenClaw', isOpenClawIntegrationOpen, () => setIsOpenClawIntegrationOpen(prev => !prev))}
+                    {isOpenClawIntegrationOpen && (
+                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                                <div className="p-3 bg-surface rounded-md border border-default">
                                     <div className="space-y-3">
                                         <div>
                                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Mode</label>
@@ -1551,11 +1861,15 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     </div>
                                 </div>
                             </div>
+                    )}
+                    </div>
 
                             {/* Magento Configuration */}
-                            <div className="space-y-3">
-                                <h4 className="text-sm font-bold text-on-surface pl-3">Magento</h4>
-                                <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                    <div>
+                    {renderIntegrationPanelHeader('Magento', isMagentoIntegrationOpen, () => setIsMagentoIntegrationOpen(prev => !prev))}
+                    {isMagentoIntegrationOpen && (
+                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                                <div className="p-3 bg-surface rounded-md border border-default">
                                     <div>
                                         <label className="block text-sm font-medium text-on-surface-secondary mb-1">Magento Backend URL</label>
                                         {isEditing ? (
@@ -1582,11 +1896,15 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     </div>
                                 </div>
                             </div>
+                    )}
+                    </div>
 
                             {/* n8n Configuration */}
-                            <div className="space-y-3">
-                                <h4 className="text-sm font-bold text-on-surface pl-3">n8n</h4>
-                                <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                    <div>
+                    {renderIntegrationPanelHeader('n8n', isN8nIntegrationOpen, () => setIsN8nIntegrationOpen(prev => !prev))}
+                    {isN8nIntegrationOpen && (
+                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                                <div className="p-3 bg-surface rounded-md border border-default">
                                     <div className="space-y-3">
                                         {[
                                             { key: 'n8nHost1Url' as const, label: 'Host 1 URL', placeholder: 'e.g. https://n8n-host1.example.com' },
@@ -1620,77 +1938,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     </div>
                                 </div>
                             </div>
-
-                        </div>
-                    </div>
-
-                    {/* ===== Virtual Meeting Subsection ===== */}
-                    <div className="p-4 bg-surface-elevated rounded-lg border border-default">
-                        <h3 className="text-lg font-bold text-on-surface mb-4">Virtual Meeting</h3>
-                        <div className="p-3 bg-surface rounded-md border border-default">
-                            <label className="block text-sm font-medium text-on-surface-secondary mb-3">Provider</label>
-                            {(() => {
-                                const selected = (formData.integrations as any).virtualMeetingProvider || 'google_meet';
-                                const options: Array<{ value: 'google_meet' | 'zoom' | 'teams'; label: string; sub: string }> = [
-                                    { value: 'google_meet', label: 'Google Meet', sub: 'Default' },
-                                    { value: 'zoom', label: 'Zoom', sub: 'zoom.us' },
-                                    { value: 'teams', label: 'Microsoft Teams', sub: 'teams.microsoft.com' },
-                                ];
-                                return (
-                                    <div role="radiogroup" aria-label="Virtual meeting provider" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                        {options.map(opt => {
-                                            const isSelected = selected === opt.value;
-                                            const interactive = isEditing;
-                                            return (
-                                                <button
-                                                    key={opt.value}
-                                                    type="button"
-                                                    role="radio"
-                                                    aria-checked={isSelected}
-                                                    disabled={!interactive}
-                                                    onClick={() => {
-                                                        if (!interactive) return;
-                                                        setFormData((prev) => ({
-                                                            ...prev,
-                                                            integrations: {
-                                                                ...prev.integrations,
-                                                                virtualMeetingProvider: opt.value,
-                                                            },
-                                                        }));
-                                                    }}
-                                                    className={[
-                                                        'relative text-left p-4 rounded-lg border-2 transition-all',
-                                                        isSelected
-                                                            ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
-                                                            : 'border-default bg-surface-elevated hover:border-primary/50',
-                                                        interactive ? 'cursor-pointer' : 'cursor-default opacity-90',
-                                                    ].join(' ')}
-                                                >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="min-w-0">
-                                                            <p className={`text-sm font-semibold ${isSelected ? 'text-primary' : 'text-on-surface'}`}>{opt.label}</p>
-                                                            <p className="text-[11px] text-on-surface-secondary mt-0.5 truncate">{opt.sub}</p>
-                                                        </div>
-                                                        <span
-                                                            className={[
-                                                                'flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
-                                                                isSelected ? 'border-primary bg-primary' : 'border-on-surface-secondary/40 bg-transparent',
-                                                            ].join(' ')}
-                                                            aria-hidden="true"
-                                                        >
-                                                            {isSelected && <span className="w-2 h-2 rounded-full bg-white" />}
-                                                        </span>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                );
-                            })()}
-                            <p className="text-[10px] text-on-surface-secondary mt-3">
-                                Determines the conferencing label shown to Learners and Trainers in My Classes.
-                            </p>
-                        </div>
+                    )}
                     </div>
 
                 </div>}
