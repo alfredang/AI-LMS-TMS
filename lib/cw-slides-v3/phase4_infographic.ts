@@ -15,7 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { type Browser } from 'playwright';
-import { launchHardenedChromium } from './chromium-launch';
+import { launchHardenedChromium } from '../chromium-launch';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -1034,7 +1034,7 @@ function fuzzyGetContent(map: Record<string, InfographicContentEntry>, key: stri
   return undefined;
 }
 
-export async function generateAllInfographicsImpl(
+export async function generateAllInfographics(
   skeleton: InfographicSkeleton,
   contentMap: Record<string, InfographicContentEntry>,
   outputDir?: string,

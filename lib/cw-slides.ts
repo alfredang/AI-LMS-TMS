@@ -2812,20 +2812,17 @@ function addTopicSlides(
   addSectionSlide(pres, parts.join(' | '));
   slidesAdded++;
 
-  // Infographic content slides. Prefer the rendered PNG when available;
-  // when Playwright failed for a particular block but the content itself
-  // is substantive, fall back to a clean text-bullet slide so the topic
-  // still surfaces that material. Only blocks `assemble` already filtered
-  // (genuinely empty) reach this loop, so no garbage slides slip through.
+  // Infographic-only content slides. Every content block must render as a
+  // PNG infographic; if Playwright failed to produce a PNG for a block,
+  // that block is DROPPED from the deck (no text-bullet fallback slide).
+  // User requirement: no bullet-form content slides anywhere — every
+  // content slide is a rendered infographic.
   for (const s of topic.infographic_slides) {
     if (s.image_path && fs.existsSync(s.image_path)) {
       addInfographicSlide(pres, s.title, s.image_path, s.caption || '', company);
-    } else if (s.fallback_bullets?.length) {
-      addTitleBodySlide(pres, s.title, s.fallback_bullets, company);
-    } else {
-      continue;
+      slidesAdded++;
     }
-    slidesAdded++;
+    // else: skip — no text-bullet fallback
   }
 
   // Activity slide
