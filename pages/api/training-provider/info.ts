@@ -48,7 +48,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.contact_tel,
           tp.company_tel,
           tp.company_address,
-          tp.show_lesson_plan_learner_view
+          tp.show_lesson_plan_learner_view,
+          tp.show_certificate_delivery,
+          tp.certificate_delivery_label
         FROM training_provider_member tpm
         JOIN training_provider tp ON tpm.provider_id = tp.id
         WHERE tpm.user_id = $1
@@ -72,7 +74,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.contact_tel,
             tp.company_tel,
             tp.company_address,
-            tp.show_lesson_plan_learner_view
+            tp.show_lesson_plan_learner_view,
+          tp.show_certificate_delivery,
+          tp.certificate_delivery_label
           FROM training_provider tp
           WHERE tp.id = $1
         `, [userId]);
@@ -96,7 +100,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.contact_tel,
             tp.company_tel,
             tp.company_address,
-            tp.show_lesson_plan_learner_view
+            tp.show_lesson_plan_learner_view,
+          tp.show_certificate_delivery,
+          tp.certificate_delivery_label
           FROM provider_admin_user pau
           JOIN training_provider tp ON pau.provider_id = tp.id
           WHERE pau.user_id = $1
@@ -155,6 +161,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           colorScheme: trainingProvider.color_scheme || null,
           forceFirstPasswordChange: trainingProvider.force_first_password_change || false,
           showLessonPlanLearnerView: trainingProvider.show_lesson_plan_learner_view || false,
+          showCertificateDelivery: trainingProvider.show_certificate_delivery || false,
+          certificateDeliveryLabel: trainingProvider.certificate_delivery_label || 'TP Course Evaluation',
           privacyPolicy: privacyPolicy || null,
           acceptableUsePolicy: acceptableUsePolicy || null,
           virtualMeetingProvider,
@@ -201,7 +209,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.contact_tel,
           tp.company_tel,
           tp.company_address,
-          tp.show_lesson_plan_learner_view
+          tp.show_lesson_plan_learner_view,
+          tp.show_certificate_delivery,
+          tp.certificate_delivery_label
         FROM user_role_map urm
         JOIN app_user au ON au.id = urm.user_id
         CROSS JOIN training_provider tp
@@ -242,6 +252,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         colorScheme: null,
         forceFirstPasswordChange: false,
         showLessonPlanLearnerView: false,
+        showCertificateDelivery: false,
+        certificateDeliveryLabel: 'TP Course Evaluation',
         privacyPolicy: null,
         acceptableUsePolicy: null
       };
@@ -289,6 +301,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       colorScheme: trainingProvider.color_scheme || null,
       forceFirstPasswordChange: trainingProvider.force_first_password_change || false,
       showLessonPlanLearnerView: trainingProvider.show_lesson_plan_learner_view || false,
+      showCertificateDelivery: trainingProvider.show_certificate_delivery || false,
+      certificateDeliveryLabel: trainingProvider.certificate_delivery_label || 'TP Course Evaluation',
       privacyPolicy: fallbackPrivacyPolicy || null,
       acceptableUsePolicy: fallbackAcceptableUsePolicy || null,
       virtualMeetingProvider: fallbackVirtualMeetingProvider

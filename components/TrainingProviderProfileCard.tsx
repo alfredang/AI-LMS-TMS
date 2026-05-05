@@ -336,6 +336,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoGenerateQbInvoice: "Auto Generate QuickBooks Invoice for Direct Applications",
         autoAddLearnerToCalendar: "Auto Add Learner to Calendar for Direct Applications",
         showLessonPlanLearnerView: "Show Lesson Plan on Learner View",
+        showCertificateDelivery: "Show Certificate Delivery on Course Page (in addition to TRAQOM Survey)",
     };
 
     useEffect(() => {
@@ -547,6 +548,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoGenerateQbInvoice: 'auto_generate_qb_invoice',
         autoAddLearnerToCalendar: 'auto_add_learner_to_calendar',
         showLessonPlanLearnerView: 'show_lesson_plan_learner_view',
+        showCertificateDelivery: 'show_certificate_delivery',
     };
 
     const handleToggleChange = (section: 'adminSettings' | 'securitySettings' | 'integrations' | 'gamingSettings' | 'fundingSettings', key: string) => {
@@ -1898,6 +1900,35 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             isEditing={true}
                         />
                     ))}
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            Certificate Delivery Label
+                        </label>
+                        <p className="text-xs text-on-surface-secondary mb-2 font-normal">
+                            Title shown on the Certificate Delivery card on the course page (when enabled above).
+                        </p>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.adminSettings.certificateDeliveryLabel ?? 'TP Course Evaluation'}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        adminSettings: {
+                                            ...prev.adminSettings,
+                                            certificateDeliveryLabel: e.target.value,
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="TP Course Evaluation"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface">
+                                {formData.adminSettings.certificateDeliveryLabel ?? 'TP Course Evaluation'}
+                            </p>
+                        )}
+                    </div>
                 </div>}
 
                 <div className="border-t my-6"></div>

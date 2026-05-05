@@ -753,6 +753,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { name: 'gst_registration_number', value: profileData.fundingSettings?.gstRegistrationNumber || '' },
         { name: 'cas_threshold', value: String(profileData.adminSettings?.casThreshold ?? 70) },
         { name: 'es_threshold', value: String(profileData.adminSettings?.esThreshold ?? 40) },
+        { name: 'certificate_delivery_label', value: (profileData.adminSettings?.certificateDeliveryLabel || 'TP Course Evaluation') },
       ]);
 
       // Handle API keys - delete existing and insert new ones (with selected model)
