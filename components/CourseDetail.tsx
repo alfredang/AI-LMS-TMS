@@ -2575,7 +2575,8 @@ export const CourseDetail: React.FC = () => {
 
     const traqomSurveyLink = 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr';
     const traqomQrCodeUrl = '/qr_codes/traqom_survey_qr_code.png';
-    const certDeliveryQrCodeUrl = '/qr_codes/cert_delivery_qr_code.png';
+    const certDeliveryLink = trainingProviderProfile?.certificateDeliveryLink || 'https://goo.gl/R2eumq';
+    const certDeliveryQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(certDeliveryLink)}`;
 
     const attendanceLink = convertedCourse.daId ? `https://www.myskillsfuture.gov.sg/api/take-attendance/${convertedCourse.daId}` : null;
     // const attendanceQrCodeUrl = attendanceLink ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(attendanceLink)}` : null;
@@ -3118,10 +3119,10 @@ export const CourseDetail: React.FC = () => {
                                                                 <p className="text-sm text-on-surface-secondary text-center">Scan to receive your certificate</p>
                                                             </div>
                                                             <div className="w-full flex flex-col gap-2">
-                                                                <p className="text-xs text-on-surface-secondary break-all px-1">https://goo.gl/R2eumq</p>
+                                                                <p className="text-xs text-on-surface-secondary break-all px-1">{certDeliveryLink}</p>
                                                                 <div className="flex gap-2">
                                                                     <a
-                                                                        href="https://goo.gl/R2eumq"
+                                                                        href={certDeliveryLink}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
                                                                         className="flex-1 text-center text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 transition-colors"
@@ -3129,7 +3130,7 @@ export const CourseDetail: React.FC = () => {
                                                                         Open Link
                                                                     </a>
                                                                     <button
-                                                                        onClick={() => { navigator.clipboard.writeText('https://goo.gl/R2eumq'); alert('Link copied!'); }}
+                                                                        onClick={() => { navigator.clipboard.writeText(certDeliveryLink); alert('Link copied!'); }}
                                                                         className="px-3 py-2 text-sm font-medium border border-default rounded-lg text-on-surface hover:bg-surface-elevated transition-colors"
                                                                     >
                                                                         Copy

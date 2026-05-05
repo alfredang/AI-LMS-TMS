@@ -129,4 +129,12 @@ pool
     console.warn('Auto-migration warning:', err.message);
   });
 
+pool
+  .query(`
+    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS certificate_delivery_link text DEFAULT 'https://goo.gl/R2eumq' NOT NULL;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
 export default pool;

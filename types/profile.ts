@@ -231,6 +231,7 @@ export interface TrainingProviderProfile extends BaseProfile {
   showLessonPlanLearnerView?: boolean;
   showCertificateDelivery?: boolean;
   certificateDeliveryLabel?: string;
+  certificateDeliveryLink?: string;
   companyName: string;
   companyShortname: string;
   uen: string;
@@ -309,6 +310,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     showLessonPlanLearnerView: boolean;
     showCertificateDelivery: boolean;
     certificateDeliveryLabel: string;
+    certificateDeliveryLink: string;
     upcomingClassesThresholdDays: number;
     certificateAttendanceThreshold: number;
     casThreshold: number;

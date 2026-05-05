@@ -564,6 +564,16 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ column: adminSettingDbColumns[key], value: newValue }),
                 }).catch(err => console.error('Failed to auto-save toggle:', err));
+
+                // Also update the global LmsContext so other pages (e.g. CourseDetail)
+                // reflect the change immediately without requiring a page refresh.
+                const contextKeys: Record<string, string> = {
+                    showCertificateDelivery: 'showCertificateDelivery',
+                    showLessonPlanLearnerView: 'showLessonPlanLearnerView',
+                };
+                if (contextKeys[key]) {
+                    updateTrainingProviderProfile({ [contextKeys[key]]: newValue } as any);
+                }
             }
 
             return {
@@ -836,9 +846,14 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 }));
 
                 // Update the training provider profile in the LMS context for header logo
+                // and admin settings that affect other pages (e.g. CourseDetail)
                 updateTrainingProviderProfile({
                     companyLogoUrl: serverProfile.companyLogoUrl,
-                    companyShortname: serverProfile.companyShortname || serverProfile.companyName
+                    companyShortname: serverProfile.companyShortname || serverProfile.companyName,
+                    certificateDeliveryLabel: formData.adminSettings?.certificateDeliveryLabel,
+                    certificateDeliveryLink: formData.adminSettings?.certificateDeliveryLink,
+                    showCertificateDelivery: formData.adminSettings?.showCertificateDelivery,
+                    showLessonPlanLearnerView: formData.adminSettings?.showLessonPlanLearnerView,
                 });
 
                 // Update the current user profile so the profile dropdown shows the same image
@@ -1926,6 +1941,35 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         ) : (
                             <p className="text-sm text-on-surface">
                                 {formData.adminSettings.certificateDeliveryLabel ?? 'TP Course Evaluation'}
+                            </p>
+                        )}
+                    </div>
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            Certificate Delivery Link
+                        </label>
+                        <p className="text-xs text-on-surface-secondary mb-2 font-normal">
+                            URL for the Certificate Delivery survey/form. A QR code will be auto-generated from this link on the course page.
+                        </p>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.adminSettings.certificateDeliveryLink ?? 'https://goo.gl/R2eumq'}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        adminSettings: {
+                                            ...prev.adminSettings,
+                                            certificateDeliveryLink: e.target.value,
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="https://goo.gl/R2eumq"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface break-all">
+                                {formData.adminSettings.certificateDeliveryLink ?? 'https://goo.gl/R2eumq'}
                             </p>
                         )}
                     </div>

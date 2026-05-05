@@ -754,6 +754,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { name: 'cas_threshold', value: String(profileData.adminSettings?.casThreshold ?? 70) },
         { name: 'es_threshold', value: String(profileData.adminSettings?.esThreshold ?? 40) },
         { name: 'certificate_delivery_label', value: (profileData.adminSettings?.certificateDeliveryLabel || 'TP Course Evaluation') },
+        { name: 'certificate_delivery_link', value: (profileData.adminSettings?.certificateDeliveryLink || 'https://goo.gl/R2eumq') },
       ]);
 
       // Handle API keys - delete existing and insert new ones (with selected model)

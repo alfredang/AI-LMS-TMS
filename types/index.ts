@@ -358,6 +358,7 @@ export interface TrainingProviderProfile {
   showLessonPlanLearnerView?: boolean;
   showCertificateDelivery?: boolean;
   certificateDeliveryLabel?: string;
+  certificateDeliveryLink?: string;
 }
 
 export interface CurrentUserProfile {
