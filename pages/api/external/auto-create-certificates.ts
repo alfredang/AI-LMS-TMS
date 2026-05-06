@@ -7,6 +7,13 @@ import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdent
 
 const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback';
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+// Prevents two concurrent runAutomation() calls (e.g. cron + manual "Run Now",
+// or two Turbopack module instances) from processing the same learners.
+// Hoisted onto globalThis so all module instances share the same flag.
+const g = globalThis as unknown as { __certAutomationRunning?: boolean };
+if (g.__certAutomationRunning === undefined) g.__certAutomationRunning = false;
+
 /**
  * Ensures the auto_create_certificates_log table exists.
  */
@@ -184,6 +191,22 @@ async function sendCertificateEmail(opts: {
 }
 
 export async function runAutomation(targetDate?: string) {
+    // ── Duplicate-run guard ────────────────────────────────────────────────
+    // If another invocation is already in progress, bail out immediately.
+    if (g.__certAutomationRunning) {
+        console.warn('[auto-create-certificates] Another run is already in progress — skipping this invocation to prevent duplicate emails.');
+        return { success: false, message: 'Skipped — another run is already in progress' };
+    }
+    g.__certAutomationRunning = true;
+
+    try {
+    return await _runAutomationInner(targetDate);
+    } finally {
+        g.__certAutomationRunning = false;
+    }
+}
+
+async function _runAutomationInner(targetDate?: string) {
     await ensureLogTable();
 
     // Use a unique UUID for this run batch
@@ -310,6 +333,22 @@ export async function runAutomation(targetDate?: string) {
                         };
 
                         try {
+                            // ── Atomic claim ──────────────────────────────────────
+                            // Set a placeholder so a concurrent run cannot pick up
+                            // this learner. The real URL overwrites it later.
+                            const claimed = await pool.query(
+                                `UPDATE enrollment
+                                    SET certificate = '__generating__'
+                                  WHERE id = $1
+                                    AND (certificate IS NULL OR certificate = '')
+                                  RETURNING id`,
+                                [trainee.enrolment_id]
+                            );
+                            if (claimed.rowCount === 0) {
+                                console.log(`[auto-create-certificates] ${trainee.learner_name} already claimed by another run — skipping`);
+                                continue;
+                            }
+
                             console.log(`[auto-create-certificates] Generating cert for ${trainee.learner_name} (${attendancePercent}% attendance)`);
                             const certificateUrl = await generateAndUploadCertificate(trainee.enrolment_id, pool, trainee.learner_name);
 
@@ -334,6 +373,12 @@ export async function runAutomation(targetDate?: string) {
                             totalGenerated++;
                         } catch (traineeErr: any) {
                             console.error(`[auto-create-certificates] Error for trainee ${trainee.nric} in run ${run.course_run_id}: `, traineeErr);
+                            // Revert the placeholder so this learner can be retried
+                            // on the next scheduled run.
+                            await pool.query(
+                                `UPDATE enrollment SET certificate = NULL WHERE id = $1 AND certificate = '__generating__'`,
+                                [trainee.enrolment_id]
+                            ).catch(() => {});
                             await logResult(runId, 'error', { ...traineeLogContext, errorMessage: traineeErr.message });
                             totalErrors++;
                         }

@@ -2117,6 +2117,25 @@ function cleanKaRefs(text: string): string {
     .trim();
 }
 
+// Strip ALL parenthetical content from a topic/header for clean display.
+// Topic titles in CPs often dump examples or qualifiers in parens
+// ("Apply privacy measures when handling data for AI applications
+// (e.g., implement simple data anonymisation and de-identification…)").
+// On a slide header that turns into an unreadable wall of text. Strip
+// the parenthetical, then word-boundary truncate to a sane length.
+function cleanTopicForDisplay(text: string, maxLen = 90): string {
+  let s = cleanKaRefs(text);
+  // Drop "(...)" / "[...]" entirely — including nested parens up to 2 deep
+  for (let i = 0; i < 2; i++) s = s.replace(/\s*[(\[][^()\[\]]*[)\]]/g, '');
+  // Strip "e.g., ..." / "i.e., ..." trailers
+  s = s.replace(/\s*[,;]?\s*(e\.g\.|i\.e\.)[,.]?\s.*$/i, '');
+  s = s.replace(/\s+/g, ' ').trim();
+  if (s.length <= maxLen) return s;
+  const cut = s.slice(0, maxLen);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > maxLen / 2 ? cut.slice(0, lastSpace) : cut).replace(/[.,;:\-]+$/, '') + '…';
+}
+
 // ── Footer (copyright bar) — mirrors _add_copyright() ──────────────────────
 function addFooter(slide: PptxGenJS.Slide, copyright: string): void {
   // Thin separator line at y=5.38" (EMU 4920000), x=0.33" (300000), w=9.34" (8544000)
@@ -2405,7 +2424,7 @@ function addInfographicSlide(
 // Auto-shrink font AND enforce body height = copyright_y − body_y so content
 // can't overflow under the footer line.
 function addActivitySlide(pres: PptxGenJS, topicTitle: string, steps: string[], company: CwCompanyInfo | undefined): void {
-  const fullTitle = `Activity: ${cleanKaRefs(topicTitle)}`;
+  const fullTitle = `Activity: ${cleanTopicForDisplay(topicTitle, 80)}`;
   // Wider title band + larger title font so it doesn't get clipped on long
   // topic titles. Title shrinks gradually only on extreme lengths.
   const titleSize = fullTitle.length > 90 ? 20 : fullTitle.length > 65 ? 22 : 26;
@@ -2616,10 +2635,9 @@ export function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo
   sf.push('', 'Learning Outcomes:');
   lus.forEach((lu: any, i: number) => {
     const luNum = lu.LU_Number || `LU${i + 1}`;
-    const luTitle = lu.LU_Title || '';
+    const luTitle = cleanTopicForDisplay(lu.LU_Title || '', 80);
     const lo = lu.LO || '';
-    let loDesc = lu.LO_Description || '';
-    if (loDesc && loDesc.length > 120) loDesc = loDesc.slice(0, 117) + '...';
+    const loDesc = cleanTopicForDisplay(lu.LO_Description || '', 130);
     const loText = loDesc ? `${lo}: ${loDesc}` : lo;
     sf.push(`  ${luNum} (${luTitle})`);
     sf.push(`    ${loText}`);
@@ -2631,24 +2649,22 @@ export function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo
   for (let i = 0; i < lus.length; i++) {
     const lu = lus[i];
     const luNum = lu.LU_Number || `LU${i + 1}`;
-    const luTitle = lu.LU_Title || '';
+    const luTitle = cleanTopicForDisplay(lu.LU_Title || '', 90);
     const kList = lu.K_numbering_description || lu.K_Statements || [];
     const aList = lu.A_numbering_description || lu.A_Statements || [];
     if (kList.length || aList.length) {
       ka.push(`${luNum}: ${luTitle}`);
       for (const k of kList) {
         if (k && typeof k === 'object') {
-          let d = k.Description || '';
-          if (d.length > 150) d = d.slice(0, 147) + '...';
+          const d = cleanTopicForDisplay(k.Description || '', 140);
           ka.push(`  ${k.K_number || ''}: ${d}`);
-        } else if (typeof k === 'string') ka.push(`  ${k.slice(0, 150)}`);
+        } else if (typeof k === 'string') ka.push(`  ${cleanTopicForDisplay(k, 140)}`);
       }
       for (const a of aList) {
         if (a && typeof a === 'object') {
-          let d = a.Description || '';
-          if (d.length > 150) d = d.slice(0, 147) + '...';
+          const d = cleanTopicForDisplay(a.Description || '', 140);
           ka.push(`  ${a.A_number || ''}: ${d}`);
-        } else if (typeof a === 'string') ka.push(`  ${a.slice(0, 150)}`);
+        } else if (typeof a === 'string') ka.push(`  ${cleanTopicForDisplay(a, 140)}`);
       }
       ka.push('');
     }
@@ -2659,14 +2675,16 @@ export function addIntroSlides(pres: PptxGenJS, ctx: any, company: CwCompanyInfo
     addTitleBodySlide(pres, 'Knowledge & Ability Statements', ka, company, kaFont);
   }
 
-  // 8. Course Outline
+  // 8. Course Outline — strip parentheticals from LU and topic titles so
+  // the outline is readable. Long parens like "(e.g., implement…)" make
+  // entries wrap and force the auto-shrink down to illegible 5-6 pt.
   const outline: string[] = [];
   lus.forEach((lu: any, i: number) => {
     const luNum = lu.LU_Number || `LU${i + 1}`;
-    const luTitle = lu.LU_Title || '';
+    const luTitle = cleanTopicForDisplay(lu.LU_Title || '', 90);
     outline.push(`${luNum}: ${luTitle}`);
     (lu.Topics || []).forEach((t: any, ti: number) => {
-      outline.push(`  T${ti + 1}: ${t.Topic_Title || ''}`);
+      outline.push(`  T${ti + 1}: ${cleanTopicForDisplay(t.Topic_Title || '', 100)}`);
     });
     outline.push('');
   });
@@ -2780,10 +2798,13 @@ function addTopicSlides(
   company: CwCompanyInfo | undefined,
 ): number {
   let slidesAdded = 0;
-  const title = cleanKaRefs(topic.title);
+  // Use cleanTopicForDisplay so headers stay readable even when CP topic
+  // titles include long parentheticals/examples.
+  const titleClean = cleanTopicForDisplay(topic.title, 110);
+  const title = cleanKaRefs(topic.title); // unmodified-length for activity slide
 
   // Section header: "LO1 | LU1 | Topic 1: Title"
-  const topicLabel = `Topic ${topicIdx + 1}: ${title.replace(/^Topic\s*\d+\s*:\s*/, '').trim() || title}`;
+  const topicLabel = `Topic ${topicIdx + 1}: ${titleClean.replace(/^Topic\s*\d+\s*:\s*/, '').trim() || titleClean}`;
   const parts: string[] = [];
   if (topic.lo_number) parts.push(topic.lo_number);
   if (topic.lu_number) parts.push(topic.lu_number);
@@ -2791,20 +2812,17 @@ function addTopicSlides(
   addSectionSlide(pres, parts.join(' | '));
   slidesAdded++;
 
-  // Infographic content slides. Prefer the rendered PNG when available;
-  // when Playwright failed for a particular block but the content itself
-  // is substantive, fall back to a clean text-bullet slide so the topic
-  // still surfaces that material. Only blocks `assemble` already filtered
-  // (genuinely empty) reach this loop, so no garbage slides slip through.
+  // Infographic-only content slides. Every content block must render as a
+  // PNG infographic; if Playwright failed to produce a PNG for a block,
+  // that block is DROPPED from the deck (no text-bullet fallback slide).
+  // User requirement: no bullet-form content slides anywhere — every
+  // content slide is a rendered infographic.
   for (const s of topic.infographic_slides) {
     if (s.image_path && fs.existsSync(s.image_path)) {
       addInfographicSlide(pres, s.title, s.image_path, s.caption || '', company);
-    } else if (s.fallback_bullets?.length) {
-      addTitleBodySlide(pres, s.title, s.fallback_bullets, company);
-    } else {
-      continue;
+      slidesAdded++;
     }
-    slidesAdded++;
+    // else: skip — no text-bullet fallback
   }
 
   // Activity slide
@@ -2816,8 +2834,9 @@ function addTopicSlides(
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// LU builder — add all topics in order (no LU section header — topic headers
-// already carry the LO|LU|T prefix, matching build_pptx.py's flat flow).
+// LU builder — adds an LU section divider before its topics, then each topic.
+// The LU divider matches the Streamlit reference deck (gives the deck clear
+// chapter breaks instead of one continuous run of topic-header → slides).
 // ────────────────────────────────────────────────────────────────────────────
 export function addLuSlides(
   pres: PptxGenJS,
@@ -2825,10 +2844,139 @@ export function addLuSlides(
   company: CwCompanyInfo | undefined,
 ): number {
   let added = 0;
+  // LU divider: navy section slide titled "LU#: <LU title>"
+  // Read LU number/title from the first topic (we don't have them on `lu`
+  // itself in this signature). All topics in this LU share the same
+  // lu_number/lu_title so any topic works.
+  if (lu.topics.length > 0) {
+    const t0 = lu.topics[0];
+    const luNum = (t0.lu_number || '').trim();
+    const luTitleClean = cleanTopicForDisplay(t0.lu_title || '', 90);
+    if (luNum || luTitleClean) {
+      const dividerText = luNum && luTitleClean ? `${luNum}: ${luTitleClean}` : (luTitleClean || luNum);
+      addSectionSlide(pres, dividerText);
+      added++;
+    }
+  }
   for (let i = 0; i < lu.topics.length; i++) {
     added += addTopicSlides(pres, lu.topics[i], i, company);
   }
   return added;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Text-based padding — adds Discussion / Knowledge Check / Practice / Recap
+// slides distributed across topics until the target slide count is met.
+// Each padded slide has REAL pedagogical content (no PNG duplicates).
+// ────────────────────────────────────────────────────────────────────────────
+
+const PADDING_TYPES = [
+  {
+    label: 'Discussion',
+    titlePrefix: 'Discussion:',
+    body: (topic: string): string[] => [
+      `Reflect on the key concepts of "${topic}".`,
+      '',
+      'Discuss in pairs or small groups:',
+      `  •  How does ${topic.toLowerCase()} apply to your current workplace?`,
+      '  •  What challenges might you face when implementing it?',
+      '  •  What resources or support would help you succeed?',
+      '',
+      'Time: 10 minutes group discussion + 5 minutes share-back.',
+    ],
+  },
+  {
+    label: 'Knowledge Check',
+    titlePrefix: 'Knowledge Check:',
+    body: (topic: string): string[] => [
+      `Quick check on "${topic}":`,
+      '',
+      `  1. What are the three key principles you have learnt about ${topic.toLowerCase()}?`,
+      `  2. Identify one practical example of ${topic.toLowerCase()} from your industry.`,
+      '  3. Which framework or tool would you apply first, and why?',
+      '',
+      'Take 5 minutes to write your answers, then share with a partner.',
+    ],
+  },
+  {
+    label: 'Practice Scenario',
+    titlePrefix: 'Practice:',
+    body: (topic: string): string[] => [
+      `Apply "${topic}" to a real situation:`,
+      '',
+      'Scenario: You are advising a colleague who is new to this topic.',
+      '',
+      `Walk them through how to approach ${topic.toLowerCase()}:`,
+      '  •  Identify the goal',
+      '  •  Outline the key steps',
+      '  •  Highlight risks to watch for',
+      '  •  Define what success looks like',
+      '',
+      'Pair-up exercise — 15 minutes.',
+    ],
+  },
+  {
+    label: 'Recap',
+    titlePrefix: 'Recap:',
+    body: (topic: string): string[] => [
+      `Quick summary of what we covered on "${topic}":`,
+      '',
+      '  •  Core concepts and definitions',
+      '  •  Practical applications and examples',
+      '  •  Common pitfalls and how to avoid them',
+      '  •  Best practices for your workplace',
+      '',
+      'Any questions before we move on?',
+    ],
+  },
+  {
+    label: 'Reflection',
+    titlePrefix: 'Reflect:',
+    body: (topic: string): string[] => [
+      `Take a moment to reflect on "${topic}":`,
+      '',
+      `  •  What is the most important thing you have learnt about ${topic.toLowerCase()}?`,
+      '  •  What surprised you?',
+      '  •  What will you start doing differently next week?',
+      '  •  What further support do you need?',
+      '',
+      'Note your reflections in your workbook.',
+    ],
+  },
+];
+
+function addPaddingSlides(
+  pres: PptxGenJS,
+  needed: number,
+  topicTitlesByLu: Array<{ luTitle: string; topicTitles: string[] }>,
+  company: CwCompanyInfo | undefined,
+): void {
+  // Build the rotation list: for each LU, cycle through its topics × each
+  // padding type. This distributes padding evenly across topics and types
+  // so the deck doesn't have a wall of "Discussion" slides at the end.
+  const rotation: Array<{ topic: string; padIdx: number }> = [];
+  const allTopics: string[] = [];
+  for (const lu of topicTitlesByLu) {
+    for (const t of (lu.topicTitles.length > 0 ? lu.topicTitles : [lu.luTitle])) {
+      allTopics.push(t || lu.luTitle || 'Topic');
+    }
+  }
+  if (allTopics.length === 0) {
+    allTopics.push('the course content'); // ultimate fallback
+  }
+  let i = 0;
+  while (rotation.length < needed) {
+    const topic = allTopics[i % allTopics.length];
+    const padIdx = Math.floor(i / allTopics.length) % PADDING_TYPES.length;
+    rotation.push({ topic, padIdx });
+    i++;
+  }
+
+  for (const r of rotation) {
+    const pad = PADDING_TYPES[r.padIdx];
+    const title = `${pad.titlePrefix} ${r.topic}`.slice(0, 80);
+    addTitleBodySlide(pres, title, pad.body(r.topic), company);
+  }
 }
 
 export async function buildPptxBuffer(
@@ -2841,21 +2989,38 @@ export async function buildPptxBuffer(
   const pres = makePres();
   addIntroSlides(pres, ctx, company);
 
+  // Collect topic titles as we go for padding context
+  const topicTitlesByLu: Array<{ luTitle: string; topicTitles: string[] }> = [];
   for (const lo of skeleton.learning_outcomes) {
     for (const lu of lo.learning_units) {
       const luData = luDataMap[lu.lu_number] ?? { topics: [] };
       addLuSlides(pres, luData, company);
+      topicTitlesByLu.push({
+        luTitle: String(lu.lu_title || lu.lu_number || ''),
+        topicTitles: luData.topics.map((t: any) => String(t.title || lu.lu_title || '')),
+      });
     }
   }
 
-  // NO padding — Streamlit reference never pads; it accepts whatever slide
-  // count the content pipeline naturally produces (~98 for a 1-day course
-  // targeted at 100). Padding previously recycled existing infographic PNGs,
-  // producing visible duplicates across the deck. Leaving slideTarget/
-  // CLOSING_SLIDES_COUNT imports touched only so the caller-visible stats
-  // remain consistent.
-  void slideTarget;
-  void CLOSING_SLIDES_COUNT;
+  // ── Target enforcement ──────────────────────────────────────────────
+  // Pad the deck up to the duration-driven target with TEXT-based
+  // instructional slides (Discussion / Knowledge Check / Practice /
+  // Recap). Avoids the previous bug where padding recycled existing
+  // infographic PNGs and produced visible duplicates. Text padding is
+  // pedagogically valuable (extra reflection / discussion prompts) AND
+  // visually distinct from infographic content slides.
+  if (slideTarget > 0) {
+    const currentCount = (pres as any)._slides?.length ?? 0;
+    const closingReserve = CLOSING_SLIDES_COUNT;
+    const padTo = slideTarget - closingReserve;
+    let needed = padTo - currentCount;
+    if (needed > 0) {
+      console.log(`[cw-slides] target=${slideTarget}, current=${currentCount}, closing-reserve=${closingReserve} → padding ${needed} text-instructional slides`);
+      addPaddingSlides(pres, needed, topicTitlesByLu, company);
+    } else {
+      console.log(`[cw-slides] target=${slideTarget} already met by ${currentCount} content slides — no padding needed`);
+    }
+  }
 
   addClosingSlides(pres, ctx, company);
 

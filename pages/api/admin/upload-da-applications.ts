@@ -346,26 +346,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     // 1. "Confirm application" → "Confirmed" or "Cancelled"
                     // 2. "Confirmed" → "Cancelled"
                     // 3. "Cancelled" → "Confirmed"
-                    const shouldUpdate =
+                    const shouldUpdateStatus =
                         (isExistingConfirmApplication && (isUploadedConfirmed || isUploadedCancelled)) ||
                         (isExistingConfirmed && isUploadedCancelled) ||
                         (isExistingCancelled && isUploadedConfirmed);
 
-                    if (shouldUpdate) {
-                        // Webhook should be called for all updates EXCEPT "Confirm application" → "Confirmed"
-                        // "Confirm application" → "Confirmed" is the default acceptance flow from TPG
-                        const skipWebhook = isExistingConfirmApplication && isUploadedConfirmed;
+                    // Webhook should be called for all updates EXCEPT "Confirm application" → "Confirmed"
+                    const skipWebhook = isExistingConfirmApplication && isUploadedConfirmed;
 
-                        toUpdate.push({
-                            application_id: appId,
-                            application_status: transformed.application_status,
-                            old_status: existing.application_status,
-                            old_enrolment_status: existing.enrolment_status,
-                            shouldCallWebhook: !skipWebhook,
-                            // Include all trainee info for webhook
-                            ...transformed,
-                        });
-                    } else {
+                    toUpdate.push({
+                        ...transformed,
+                        old_status: existing.application_status,
+                        old_enrolment_status: existing.enrolment_status,
+                        shouldCallWebhook: shouldUpdateStatus && !skipWebhook,
+                        // Override application_status to the existing one if the transition is invalid
+                        application_status: shouldUpdateStatus ? transformed.application_status : existing.application_status,
+                    });
+
+                    // If status didn't change, we still consider it a duplicate for reporting purposes
+                    if (!shouldUpdateStatus) {
                         duplicates.push(appId);
                     }
                     continue;
@@ -417,11 +416,67 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         for (const record of toUpdate) {
             try {
                 const result = await pool.query(
-                    `UPDATE da_application
-                        SET application_status = $1
-                      WHERE application_id = $2
+                    `UPDATE da_application SET
+                        trainee_id_type = COALESCE($1, trainee_id_type),
+                        trainee_id = COALESCE($2, trainee_id),
+                        date_of_birth = COALESCE($3, date_of_birth),
+                        trainee_name = COALESCE($4, trainee_name),
+                        course_run_id = COALESCE($5, course_run_id),
+                        trainee_email = COALESCE($6, trainee_email),
+                        trainee_phone_country_code = COALESCE($7, trainee_phone_country_code),
+                        trainee_phone = COALESCE($8, trainee_phone),
+                        sponsorship_type = COALESCE($9, sponsorship_type),
+                        application_date = COALESCE($10, application_date),
+                        application_cancelled_by = COALESCE($11, application_cancelled_by),
+                        payable_fee = COALESCE($12, payable_fee),
+                        full_course_fee = COALESCE($13, full_course_fee),
+                        gst = COALESCE($14, gst),
+                        skillsfuture_subsidy = COALESCE($15, skillsfuture_subsidy),
+                        skillsfuture_credit = COALESCE($16, skillsfuture_credit),
+                        skillsfuture_credit_claim_id = COALESCE($17, skillsfuture_credit_claim_id),
+                        grant_id = COALESCE($18, grant_id),
+                        application_status = COALESCE($19, application_status),
+                        enrolment_status = COALESCE($20, enrolment_status),
+                        enrolment_id = COALESCE($21, enrolment_id),
+                        course_title = COALESCE($22, course_title),
+                        course_reference_number = COALESCE($23, course_reference_number),
+                        course_start_date = COALESCE($24, course_start_date),
+                        course_end_date = COALESCE($25, course_end_date),
+                        highest_qualification = COALESCE($26, highest_qualification),
+                        highest_relevant_certification = COALESCE($27, highest_relevant_certification),
+                        updated_at = NOW()
+                      WHERE application_id = $28
                       RETURNING *`,
-                    [record.application_status, record.application_id]
+                    [
+                        record.trainee_id_type ?? null,
+                        record.trainee_id ?? null,
+                        record.date_of_birth ?? null,
+                        record.trainee_name ?? null,
+                        record.course_run_id ?? null,
+                        record.trainee_email ?? null,
+                        record.trainee_phone_country_code ?? null,
+                        record.trainee_phone ?? null,
+                        record.sponsorship_type ?? null,
+                        record.application_date ?? null,
+                        record.application_cancelled_by ?? null,
+                        record.payable_fee ?? null,
+                        record.full_course_fee ?? null,
+                        record.gst ?? null,
+                        record.skillsfuture_subsidy ?? null,
+                        record.skillsfuture_credit ?? null,
+                        record.skillsfuture_credit_claim_id ?? null,
+                        record.grant_id ?? null,
+                        record.application_status ?? null,
+                        record.enrolment_status ?? null,
+                        record.enrolment_id ?? null,
+                        record.course_title ?? null,
+                        record.course_reference_number ?? null,
+                        record.course_start_date ?? null,
+                        record.course_end_date ?? null,
+                        record.highest_qualification ?? null,
+                        record.highest_relevant_certification ?? null,
+                        record.application_id
+                    ]
                 );
                 if (result.rows.length > 0) {
                     updatedCount++;
@@ -558,23 +613,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 })
                 .map(r => r.id as string);
 
-            // Also pick up duplicates (same app_id, no status change) that still
-            // need enrolment — these are the records skipped by the status-transition
-            // check because their status hasn't changed (e.g. Confirmed → Confirmed).
-            let duplicateIds: string[] = [];
-            if (duplicates.length > 0) {
-                const dupResult = await pool.query(
-                    `SELECT id FROM da_application
-                     WHERE application_id = ANY($1)
-                       AND LOWER(application_status) IN ('confirmed', 'confirm application')
-                       AND (auto_enrol_status IS NULL OR auto_enrol_status = 'failed')
-                       AND enrolment_id IS NULL`,
-                    [duplicates]
-                );
-                duplicateIds = dupResult.rows.map((r: any) => r.id as string);
-            }
-
-            const allEligibleIds = [...new Set([...processedIds, ...duplicateIds])];
+            const allEligibleIds = [...new Set(processedIds)];
 
             if (allEligibleIds.length > 0) {
                 // Pre-mark as 'pending' so we can distinguish "never triggered" from "triggered but failed"
@@ -584,7 +623,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     [allEligibleIds]
                 );
 
-                console.log(`🚀 auto-enrol: queuing ${allEligibleIds.length} applications for background processing (${processedIds.length} new/updated + ${duplicateIds.length} previously skipped)`);
+                console.log(`🚀 auto-enrol: queuing ${allEligibleIds.length} applications for background processing`);
                 setImmediate(() => {
                     bulkProcessDirectApplications(allEligibleIds).catch(err => {
                         console.error('❌ Background auto-enrol failed:', err);

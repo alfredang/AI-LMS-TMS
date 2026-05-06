@@ -15,7 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { type Browser } from 'playwright';
-import { launchHardenedChromium } from './chromium-launch';
+import { launchHardenedChromium } from '../chromium-launch';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -390,17 +390,35 @@ function truncateAtWord(text: string, maxLen: number): string {
   if (!text) return '';
   const trimmed = String(text).trim();
   if (trimmed.length <= maxLen) {
-    // Even if the input fits, drop a trailing connector that leaves a
-    // dangling clause. Wikipedia summaries often hand us phrases like
-    // "intelligence covers a broad range of" — same problem.
+    // Already fits. Just clean trailing connectors that leave dangling
+    // clauses ("...covers a broad range of" → "...covers a broad range").
     return stripTrailingConnectors(trimmed);
   }
+  // STRICT word-boundary truncation. Never produce mid-word cuts like
+  // "professionalis" or "intellige". Three-tier strategy:
+  //   1. Try last space WITHIN maxLen → cleanest cut
+  //   2. If no space within maxLen, allow up to 20% overflow to find
+  //      the FIRST space past maxLen → slight overflow but complete word
+  //   3. If still no space (single very long word), just return the whole
+  //      single word — never mid-word cut
   const cut = trimmed.slice(0, maxLen);
   const lastSpace = cut.lastIndexOf(' ');
-  let result: string;
-  if (lastSpace >= 4) result = cut.slice(0, lastSpace);
-  else result = cut;
-  return stripTrailingConnectors(result.replace(/[.,;:\-]+$/, ''));
+  if (lastSpace >= 4) {
+    const truncated = cut.slice(0, lastSpace).replace(/[.,;:\-]+$/, '');
+    return stripTrailingConnectors(truncated);
+  }
+  // No good space within budget — look slightly past maxLen for the next space
+  const overflowMax = Math.floor(maxLen * 1.2);
+  const overflowIdx = trimmed.indexOf(' ', maxLen);
+  if (overflowIdx > 0 && overflowIdx <= overflowMax) {
+    return stripTrailingConnectors(trimmed.slice(0, overflowIdx).replace(/[.,;:\-]+$/, ''));
+  }
+  // The text is one very long word (rare). Return it whole rather than mid-word cut.
+  const firstSpace = trimmed.indexOf(' ');
+  if (firstSpace > 0) {
+    return trimmed.slice(0, firstSpace);
+  }
+  return trimmed;
 }
 
 function stripTrailingConnectors(s: string): string {
@@ -1034,7 +1052,7 @@ function fuzzyGetContent(map: Record<string, InfographicContentEntry>, key: stri
   return undefined;
 }
 
-export async function generateAllInfographicsImpl(
+export async function generateAllInfographics(
   skeleton: InfographicSkeleton,
   contentMap: Record<string, InfographicContentEntry>,
   outputDir?: string,

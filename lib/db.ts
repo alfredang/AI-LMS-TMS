@@ -115,4 +115,26 @@ pool
     console.warn('Auto-migration warning:', err.message);
   });
 
+pool
+  .query(`
+    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS show_certificate_delivery boolean DEFAULT false NOT NULL;
+    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS certificate_delivery_label text DEFAULT 'TP Course Evaluation' NOT NULL;
+    UPDATE training_provider
+      SET show_certificate_delivery = true,
+          certificate_delivery_label = 'Certificate Delivery'
+      WHERE uen = '201200696W'
+        AND certificate_delivery_label = 'TP Course Evaluation';
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS certificate_delivery_link text DEFAULT 'https://goo.gl/R2eumq' NOT NULL;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
 export default pool;

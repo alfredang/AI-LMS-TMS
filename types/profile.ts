@@ -226,6 +226,12 @@ export interface ApiKeyWithModel {
 
 export interface TrainingProviderProfile extends BaseProfile {
   password?: string;
+  // Top-level mirrors of selected adminSettings, populated by /api/training-provider/info
+  // for non-admin contexts (e.g. learner/trainer course view).
+  showLessonPlanLearnerView?: boolean;
+  showCertificateDelivery?: boolean;
+  certificateDeliveryLabel?: string;
+  certificateDeliveryLink?: string;
   companyName: string;
   companyShortname: string;
   uen: string;
@@ -306,6 +312,9 @@ export interface TrainingProviderProfile extends BaseProfile {
     autoGenerateQbInvoice: boolean;
     autoAddLearnerToCalendar: boolean;
     showLessonPlanLearnerView: boolean;
+    showCertificateDelivery: boolean;
+    certificateDeliveryLabel: string;
+    certificateDeliveryLink: string;
     upcomingClassesThresholdDays: number;
     certificateAttendanceThreshold: number;
     casThreshold: number;

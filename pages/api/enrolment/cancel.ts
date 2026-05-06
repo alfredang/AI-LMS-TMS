@@ -5,6 +5,7 @@ import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
 import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
+import { cancelInvoiceJobOnEnrolmentCancelled } from '../../../lib/services/invoiceJobs';
 
 /**
  * POST /api/enrolment/cancel
@@ -111,6 +112,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } catch (e) {
       console.warn('[enrolment/cancel] ssg_enrolments sync:', e);
     }
+
+    void cancelInvoiceJobOnEnrolmentCancelled(String(enrolmentId).trim()).catch((e: unknown) =>
+      console.warn('[enrolment/cancel] invoice job cancel:', e instanceof Error ? e.message : e)
+    );
 
     return res.status(200).json({ success: true, data: parsed?.data ?? parsed });
 

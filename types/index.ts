@@ -356,6 +356,9 @@ export interface TrainingProviderProfile {
   contactTel?: string;
   companyAddress?: string;
   showLessonPlanLearnerView?: boolean;
+  showCertificateDelivery?: boolean;
+  certificateDeliveryLabel?: string;
+  certificateDeliveryLink?: string;
 }
 
 export interface CurrentUserProfile {
