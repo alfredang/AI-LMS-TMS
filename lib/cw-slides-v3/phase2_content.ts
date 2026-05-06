@@ -350,6 +350,22 @@ function fallbackContentBlocks(
 
   const blocks: ContentBlock[] = [];
   const usedFindingIdxs = new Set<string>();
+  // Per-topic template registry — guarantees every block in a topic
+  // uses a different template so the deck has visual variety across
+  // every slide. Used by the helper below.
+  const usedTemplatesInTopic = new Set<string>();
+  const pickUnusedTemplate = (vizType: string, fallbackPool: string[]): string => {
+    for (const t of fallbackPool) {
+      if (!usedTemplatesInTopic.has(t)) {
+        usedTemplatesInTopic.add(t);
+        return t;
+      }
+    }
+    // All used — accept a repeat from the pool but rotate by topic-block index
+    const t = fallbackPool[blocks.length % fallbackPool.length];
+    usedTemplatesInTopic.add(t);
+    return t;
+  };
 
   // ── Block 0 — Overview: each CP bullet becomes a card ─────────────
   // This anchors the topic to the CP from slide one.
@@ -364,79 +380,115 @@ function fallbackContentBlocks(
   if (overviewItems.length === 0) {
     overviewItems.push({ label: 'Overview', desc: `Key aspects of ${topicTitle}`, icon: 'mdi/information' });
   }
+  const overviewTemplate = pickUnusedTemplate('overview', [
+    'list-grid-badge-card',
+    'list-grid-candy-card-lite',
+    'list-grid-ribbon-card',
+    'list-row-simple-illus',
+    'list-row-horizontal-icon-arrow',
+  ]);
   blocks.push({
     block_index: 0,
     sub_title: `What is ${topicTitle}?`,
     visualization_type: 'overview',
-    suggested_template: 'list-grid-badge-card',
+    suggested_template: overviewTemplate,
     data: { title: topicTitle.slice(0, 40), items: overviewItems },
     caption: '',
     sources_used: [],
   });
 
-  // ── Block per CP bullet — Definition / Why / How / Best Practice ────
-  // Each block is dedicated to one CP bullet, expanded into 4 teaching
-  // cards using a standard adult-learning framework. Research findings
-  // (when available and topic-aligned) replace the generic Definition
-  // card with a sourced one. This produces substantive content even
-  // when Phase 2 AI fails entirely.
-  const bulletNoun = (b: string): string => {
-    // First 3 content words = card label
-    const cleaned = cleanText(b).replace(/[.,;:!?()'"]/g, ' ').replace(/\s+/g, ' ').trim();
-    const words = cleaned.split(' ').filter((w) => w.length >= 2);
-    const STOPS_LOC = new Set(['the','a','an','of','in','on','at','to','for','and','or','with','by','is','are','was','using','use','used','this','that']);
-    const content = words.filter((w) => !STOPS_LOC.has(w.toLowerCase()));
-    return (content.length ? content : words).slice(0, 3).join(' ');
-  };
+  // ── Block per CP bullet — clean teaching framework ──────────────────
+  // Each block dedicated to one CP bullet. Cards use a teaching
+  // framework with CLEAN STATIC PHRASING (no noun-phrase concatenation
+  // that produced "Foundation for definition overview chatbots in what"
+  // grammatical garbage). Templates rotate across blocks for visual
+  // variety so the deck doesn't look identical slide-to-slide.
   const titleCase = (s: string): string => s.replace(/\b([a-z])/g, (_, c) => c.toUpperCase());
+
+  // Per-bullet template pool — 13 distinct list/grid/zigzag templates.
+  // pickUnusedTemplate() guarantees no two blocks in the same topic
+  // share a template (even if a topic has many bullets, each gets a
+  // different visual style). Mixed visualization_types so process-y
+  // bullets get sequence templates and list-y bullets get list templates.
+  const PER_BULLET_POOL: string[] = [
+    'list-grid-badge-card',
+    'list-grid-candy-card-lite',
+    'list-grid-ribbon-card',
+    'list-zigzag-down-compact-card',
+    'list-zigzag-up-compact-card',
+    'list-zigzag-down-simple',
+    'list-row-horizontal-icon-arrow',
+    'list-row-simple-illus',
+    'list-sector-plain-text',
+    'list-column-done-list',
+    'list-column-vertical-icon-arrow',
+    'sequence-stairs-front-pill-badge',
+    'sequence-snake-steps-compact-card',
+  ];
 
   for (let bi = 0; bi < bps.length && blocks.length < numBlocks - 1; bi++) {
     const bullet = bps[bi];
-    const noun = bulletNoun(bullet);
-    const matchedFindings = findingsForBullet(bullet, 1, usedFindingIdxs);
+    const matchedFindings = findingsForBullet(bullet, 3, usedFindingIdxs);
     const items: ContentBlockItem[] = [];
 
-    // Card 1 — Definition (from research finding if available, else bullet text)
-    if (matchedFindings.length > 0) {
+    if (matchedFindings.length >= 3) {
+      // We have on-topic research findings — use them directly. Each
+      // becomes a separate card with a noun-phrase label.
+      const seen = new Set<string>();
+      for (const f of matchedFindings) {
+        if (items.length >= 4) break;
+        const desc = cleanText(f);
+        const lbl = labelFromSentence(desc);
+        if (!lbl) continue;
+        const key = lbl.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push({
+          label: truncWord(lbl, 24),
+          desc: truncWord(desc, 100),
+          icon: 'mdi/lightbulb',
+        });
+      }
+    }
+
+    if (items.length < 3) {
+      // Sparse research — build 4-card teaching framework with CLEAN
+      // static phrasing. Each card is grammatically self-contained
+      // and references the bullet via the block's title (sub_title),
+      // not via concatenation in the desc.
+      const seedDesc = matchedFindings[0] ? cleanText(matchedFindings[0]) : cleanText(bullet);
+      items.length = 0; // reset
       items.push({
-        label: 'What It Is',
-        desc: truncWord(cleanText(matchedFindings[0]), 80),
+        label: 'Definition',
+        desc: truncWord(seedDesc, 100),
         icon: 'mdi/information',
       });
-    } else {
       items.push({
-        label: 'What It Is',
-        desc: truncWord(cleanText(bullet), 80),
-        icon: 'mdi/information',
+        label: 'Why It Matters',
+        desc: 'Critical knowledge area for effective practice in this topic.',
+        icon: 'mdi/star',
+      });
+      items.push({
+        label: 'How to Apply',
+        desc: 'Practise hands-on through guided exercises and real workplace scenarios.',
+        icon: 'mdi/cog',
+      });
+      items.push({
+        label: 'Key Outcome',
+        desc: 'Build confidence and capability ready for workplace application.',
+        icon: 'mdi/check-circle',
       });
     }
 
-    // Card 2 — Why It Matters (anchored to the topic + bullet)
-    items.push({
-      label: 'Why It Matters',
-      desc: `Foundation for ${truncWord(noun.toLowerCase(), 40)} in ${truncWord(topicTitle.toLowerCase(), 30)}`,
-      icon: 'mdi/star',
-    });
-
-    // Card 3 — How to Apply (action-oriented)
-    items.push({
-      label: 'How to Apply',
-      desc: `Practice ${truncWord(noun.toLowerCase(), 40)} as part of your ${truncWord(topicTitle.toLowerCase().split(' ').slice(0, 4).join(' '), 28)} workflow`,
-      icon: 'mdi/cog',
-    });
-
-    // Card 4 — Best Practice / Outcome
-    items.push({
-      label: 'Outcome',
-      desc: `Confidence applying ${truncWord(noun.toLowerCase(), 50)} in real workplace tasks`,
-      icon: 'mdi/check-circle',
-    });
-
+    const template = pickUnusedTemplate('overview', PER_BULLET_POOL);
+    // Visualization type matches template family (sequence templates →
+    // process viz_type so Phase 4 picks the right card layout).
+    const vizType = template.startsWith('sequence-') ? 'process' : 'overview';
     blocks.push({
       block_index: blocks.length,
       sub_title: truncWord(titleCase(cleanText(bullet)), 60),
-      visualization_type: 'overview',
-      suggested_template: bi % 2 === 0 ? 'list-grid-badge-card' : 'list-grid-candy-card-lite',
+      visualization_type: vizType,
+      suggested_template: template,
       data: { title: truncWord(titleCase(cleanText(bullet)), 40), items },
       caption: '',
       sources_used: [],
@@ -459,11 +511,20 @@ function fallbackContentBlocks(
     if (tryProcess) {
       const stepChunk = procSteps.slice(procCursor, procCursor + 5);
       procCursor += stepChunk.length;
+      const procTemplate = pickUnusedTemplate('process', [
+        'sequence-snake-steps-compact-card',
+        'sequence-roadmap-vertical-simple',
+        'sequence-stairs-front-compact-card',
+        'sequence-ascending-steps',
+        'sequence-mountain-underline-text',
+        'sequence-color-snake-steps-horizontal-icon-line',
+        'sequence-horizontal-zigzag-simple-illus',
+      ]);
       block = {
         block_index: blocks.length,
         sub_title: `${topicTitle} — Process Steps`,
         visualization_type: 'process',
-        suggested_template: 'sequence-snake-steps-compact-card',
+        suggested_template: procTemplate,
         data: {
           title: 'Implementation Steps',
           items: stepChunk.map((s, i) => ({
@@ -477,11 +538,17 @@ function fallbackContentBlocks(
       };
     } else if (tryComp) {
       const pair = compItems.slice(0, 2);
+      const compTemplate = pickUnusedTemplate('comparison', [
+        'compare-binary-horizontal-badge-card-arrow',
+        'compare-binary-horizontal-simple-fold',
+        'compare-binary-horizontal-underline-text-vs',
+        'compare-hierarchy-left-right-circle-node-pill-badge',
+      ]);
       block = {
         block_index: blocks.length,
         sub_title: `${topicTitle} — Approach Comparison`,
         visualization_type: 'comparison',
-        suggested_template: 'compare-binary-horizontal-badge-card-arrow',
+        suggested_template: compTemplate,
         data: {
           title: 'Approaches',
           items: pair.map((c, i) => ({
@@ -494,11 +561,18 @@ function fallbackContentBlocks(
         sources_used: [],
       };
     } else if (tryStats) {
+      const statsTemplate = pickUnusedTemplate('statistics', [
+        'chart-bar-plain-text',
+        'chart-pie-compact-card',
+        'chart-pie-donut-plain-text',
+        'chart-column-simple',
+        'chart-line-plain-text',
+      ]);
       block = {
         block_index: blocks.length,
         sub_title: `${topicTitle} — Industry Metrics`,
         visualization_type: 'statistics',
-        suggested_template: 'chart-bar-plain-text',
+        suggested_template: statsTemplate,
         data: {
           title: 'Key Metrics',
           items: chartData.slice(0, 5).map((d: any) => ({
@@ -512,11 +586,16 @@ function fallbackContentBlocks(
         sources_used: [],
       };
     } else if (tryTimeline) {
+      const tlTemplate = pickUnusedTemplate('timeline', [
+        'sequence-timeline-simple',
+        'sequence-timeline-rounded-rect-node',
+        'sequence-timeline-simple-illus',
+      ]);
       block = {
         block_index: blocks.length,
         sub_title: `${topicTitle} — Timeline`,
         visualization_type: 'timeline',
-        suggested_template: 'sequence-timeline-simple',
+        suggested_template: tlTemplate,
         data: {
           title: 'Evolution',
           items: timelineData.slice(0, 5).map((d: any) => ({
@@ -557,11 +636,18 @@ function fallbackContentBlocks(
         usedFindingIdxs.add(`${s.idx}`);
       }
       if (items.length < 2) break;
+      const frTemplate = pickUnusedTemplate('overview', [
+        'list-zigzag-down-compact-card',
+        'list-zigzag-up-compact-card',
+        'list-row-simple-illus',
+        'list-column-vertical-icon-arrow',
+        'list-sector-plain-text',
+      ]);
       block = {
         block_index: blocks.length,
         sub_title: `${topicTitle} — Further Reading`,
         visualization_type: 'overview',
-        suggested_template: 'list-zigzag-down-compact-card',
+        suggested_template: frTemplate,
         data: { title: 'Additional Insights', items },
         caption: '',
         sources_used: [],
@@ -584,11 +670,20 @@ function fallbackContentBlocks(
   if (ktItems.length === 0) {
     ktItems.push({ label: 'Key Concept', desc: `Apply ${topicTitle} principles consistently`, icon: 'mdi/star' });
   }
+  // Key Takeaways uses a distinct template too — different from block 0
+  // overview so the deck doesn't bookend with the same look.
+  const ktTemplate = pickUnusedTemplate('overview', [
+    'list-grid-ribbon-card',
+    'list-column-done-list',
+    'list-grid-candy-card-lite',
+    'list-grid-badge-card',
+    'list-row-horizontal-icon-arrow',
+  ]);
   blocks.push({
     block_index: blocks.length,
     sub_title: 'Key Takeaways',
     visualization_type: 'overview',
-    suggested_template: 'list-grid-badge-card',
+    suggested_template: ktTemplate,
     data: { title: `${topicTitle} — Key Takeaways`, items: ktItems },
     caption: '',
     sources_used: [],
@@ -736,11 +831,16 @@ VISUALIZATION TYPES — choose what fits the bullet's content:
 
 RULES:
 - EXACTLY ${numBlocks} content blocks
-- Labels: 2-3 words MAX
-- Descs: SHORT complete clause, 4-8 words, never end mid-sentence
+- Labels: 2-3 words MAX (e.g. "Risk Assessment", "Data Privacy")
+- Descs: COMPLETE GRAMMATICAL CLAUSE, 4-10 words, max 80 chars
+- DESCS MUST NEVER END ON A CONNECTOR WORD (or, and, the, of, in, for, to, a, an, is, are, was, with). Re-write the sentence if it would.
+- DESCS MUST NEVER BE A FRAGMENT OR INCOMPLETE PHRASE. Each must read as a full clause that could stand alone.
+- DESCS MUST NEVER REPEAT THE LABEL — write a new sentence that adds information.
 - For comparison: exactly 2 items
-- For statistics: items MUST have numeric "value"
-- Icons: mdi/* names from standard set (lock, scale-balance, chart-bar, account-multiple, cog, lightbulb, alert, check-circle, etc.)`;
+- For statistics: items MUST have numeric "value" (real percentages or counts, not made up)
+- Use DIFFERENT visualization_types across blocks within the same topic (don't make 6 overview blocks — vary across overview, process, comparison, statistics, hierarchy, timeline)
+- Use DIFFERENT suggested_template values across blocks (each block in a topic should use a DIFFERENT template — never repeat the same template within one topic)
+- Icons: mdi/* names from standard set (lock, scale-balance, chart-bar, account-multiple, cog, lightbulb, alert, check-circle, file-document, clock, earth, etc.)`;
 
   // Force FAST_MODEL (Haiku) — Streamlit-aligned and proven for JSON in
   // production. Caller's `model` parameter ignored to prevent Sonnet-only
