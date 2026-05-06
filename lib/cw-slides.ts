@@ -2864,6 +2864,121 @@ export function addLuSlides(
   return added;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Text-based padding — adds Discussion / Knowledge Check / Practice / Recap
+// slides distributed across topics until the target slide count is met.
+// Each padded slide has REAL pedagogical content (no PNG duplicates).
+// ────────────────────────────────────────────────────────────────────────────
+
+const PADDING_TYPES = [
+  {
+    label: 'Discussion',
+    titlePrefix: 'Discussion:',
+    body: (topic: string): string[] => [
+      `Reflect on the key concepts of "${topic}".`,
+      '',
+      'Discuss in pairs or small groups:',
+      `  •  How does ${topic.toLowerCase()} apply to your current workplace?`,
+      '  •  What challenges might you face when implementing it?',
+      '  •  What resources or support would help you succeed?',
+      '',
+      'Time: 10 minutes group discussion + 5 minutes share-back.',
+    ],
+  },
+  {
+    label: 'Knowledge Check',
+    titlePrefix: 'Knowledge Check:',
+    body: (topic: string): string[] => [
+      `Quick check on "${topic}":`,
+      '',
+      `  1. What are the three key principles you have learnt about ${topic.toLowerCase()}?`,
+      `  2. Identify one practical example of ${topic.toLowerCase()} from your industry.`,
+      '  3. Which framework or tool would you apply first, and why?',
+      '',
+      'Take 5 minutes to write your answers, then share with a partner.',
+    ],
+  },
+  {
+    label: 'Practice Scenario',
+    titlePrefix: 'Practice:',
+    body: (topic: string): string[] => [
+      `Apply "${topic}" to a real situation:`,
+      '',
+      'Scenario: You are advising a colleague who is new to this topic.',
+      '',
+      `Walk them through how to approach ${topic.toLowerCase()}:`,
+      '  •  Identify the goal',
+      '  •  Outline the key steps',
+      '  •  Highlight risks to watch for',
+      '  •  Define what success looks like',
+      '',
+      'Pair-up exercise — 15 minutes.',
+    ],
+  },
+  {
+    label: 'Recap',
+    titlePrefix: 'Recap:',
+    body: (topic: string): string[] => [
+      `Quick summary of what we covered on "${topic}":`,
+      '',
+      '  •  Core concepts and definitions',
+      '  •  Practical applications and examples',
+      '  •  Common pitfalls and how to avoid them',
+      '  •  Best practices for your workplace',
+      '',
+      'Any questions before we move on?',
+    ],
+  },
+  {
+    label: 'Reflection',
+    titlePrefix: 'Reflect:',
+    body: (topic: string): string[] => [
+      `Take a moment to reflect on "${topic}":`,
+      '',
+      `  •  What is the most important thing you have learnt about ${topic.toLowerCase()}?`,
+      '  •  What surprised you?',
+      '  •  What will you start doing differently next week?',
+      '  •  What further support do you need?',
+      '',
+      'Note your reflections in your workbook.',
+    ],
+  },
+];
+
+function addPaddingSlides(
+  pres: PptxGenJS,
+  needed: number,
+  topicTitlesByLu: Array<{ luTitle: string; topicTitles: string[] }>,
+  company: CwCompanyInfo | undefined,
+): void {
+  // Build the rotation list: for each LU, cycle through its topics × each
+  // padding type. This distributes padding evenly across topics and types
+  // so the deck doesn't have a wall of "Discussion" slides at the end.
+  const rotation: Array<{ topic: string; padIdx: number }> = [];
+  const allTopics: string[] = [];
+  for (const lu of topicTitlesByLu) {
+    for (const t of (lu.topicTitles.length > 0 ? lu.topicTitles : [lu.luTitle])) {
+      allTopics.push(t || lu.luTitle || 'Topic');
+    }
+  }
+  if (allTopics.length === 0) {
+    allTopics.push('the course content'); // ultimate fallback
+  }
+  let i = 0;
+  while (rotation.length < needed) {
+    const topic = allTopics[i % allTopics.length];
+    const padIdx = Math.floor(i / allTopics.length) % PADDING_TYPES.length;
+    rotation.push({ topic, padIdx });
+    i++;
+  }
+
+  for (const r of rotation) {
+    const pad = PADDING_TYPES[r.padIdx];
+    const title = `${pad.titlePrefix} ${r.topic}`.slice(0, 80);
+    addTitleBodySlide(pres, title, pad.body(r.topic), company);
+  }
+}
+
 export async function buildPptxBuffer(
   ctx: any,
   skeleton: Skeleton,
@@ -2874,21 +2989,38 @@ export async function buildPptxBuffer(
   const pres = makePres();
   addIntroSlides(pres, ctx, company);
 
+  // Collect topic titles as we go for padding context
+  const topicTitlesByLu: Array<{ luTitle: string; topicTitles: string[] }> = [];
   for (const lo of skeleton.learning_outcomes) {
     for (const lu of lo.learning_units) {
       const luData = luDataMap[lu.lu_number] ?? { topics: [] };
       addLuSlides(pres, luData, company);
+      topicTitlesByLu.push({
+        luTitle: String(lu.lu_title || lu.lu_number || ''),
+        topicTitles: luData.topics.map((t: any) => String(t.title || lu.lu_title || '')),
+      });
     }
   }
 
-  // NO padding — Streamlit reference never pads; it accepts whatever slide
-  // count the content pipeline naturally produces (~98 for a 1-day course
-  // targeted at 100). Padding previously recycled existing infographic PNGs,
-  // producing visible duplicates across the deck. Leaving slideTarget/
-  // CLOSING_SLIDES_COUNT imports touched only so the caller-visible stats
-  // remain consistent.
-  void slideTarget;
-  void CLOSING_SLIDES_COUNT;
+  // ── Target enforcement ──────────────────────────────────────────────
+  // Pad the deck up to the duration-driven target with TEXT-based
+  // instructional slides (Discussion / Knowledge Check / Practice /
+  // Recap). Avoids the previous bug where padding recycled existing
+  // infographic PNGs and produced visible duplicates. Text padding is
+  // pedagogically valuable (extra reflection / discussion prompts) AND
+  // visually distinct from infographic content slides.
+  if (slideTarget > 0) {
+    const currentCount = (pres as any)._slides?.length ?? 0;
+    const closingReserve = CLOSING_SLIDES_COUNT;
+    const padTo = slideTarget - closingReserve;
+    let needed = padTo - currentCount;
+    if (needed > 0) {
+      console.log(`[cw-slides] target=${slideTarget}, current=${currentCount}, closing-reserve=${closingReserve} → padding ${needed} text-instructional slides`);
+      addPaddingSlides(pres, needed, topicTitlesByLu, company);
+    } else {
+      console.log(`[cw-slides] target=${slideTarget} already met by ${currentCount} content slides — no padding needed`);
+    }
+  }
 
   addClosingSlides(pres, ctx, company);
 

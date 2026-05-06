@@ -28,9 +28,12 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 // Tuples are [min, target]. Target is what computeTotalTarget returns.
+// Targets per user spec (2026-05-06):
+//   1-day (8h)  → 100, 2-day (16h) → 160, 3-day (24h) → 210,
+//   4-day (32h) → 250, 5-day (40h) → 320
 export const SLIDE_TARGETS: Record<number, [number, number]> = {
   1: [60, 100],
-  2: [120, 140],
+  2: [140, 160],
   3: [195, 210],
   4: [230, 250],
   5: [290, 320],
