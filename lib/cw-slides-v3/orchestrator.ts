@@ -81,37 +81,52 @@ export async function generateSlides(
   const courseTitle = String(ctx.Course_Title || 'Course');
   const lus = Array.isArray(ctx.Learning_Units) ? ctx.Learning_Units : [];
 
-  // ── Collapse CP sub-topics into ONE topic per LU ────────────────────
-  // Streamlit reference deck (100 slides for 8h) treats each LU as a
-  // single topic with ~25 content blocks covering all sub-topic bullets.
-  // Without this collapse, a CP with 19 sub-topics × min 6 blocks each
-  // produces 114+ content slides — overshooting the 100-slide target by
-  // 73 slides regardless of duration math (deck Gemini-1: 173 slides).
-  // The collapse mutates ctx.Learning_Units in place so buildSkeleton
-  // and assemble see the collapsed shape too.
+  // ── Smart CP sub-topic collapse ─────────────────────────────────────
+  // PREFER keeping sub-topics intact: each sub-topic gets its own slot of
+  // infographic content blocks, so a 4-day course (250-slide target) with
+  // 20 sub-topics produces 20 × ~10 = 200 real infographic slides instead
+  // of 4 × 30 (capped) = 120 + 130 text padding.
+  //
+  // ONLY collapse when keeping sub-topics would force per-topic budget
+  // below 2 (e.g. an 8h CP with 30 sub-topics × min 2 = 60+ slides
+  // → overshoots 100 target). In that case we collapse to LU-level so
+  // computePerTopicDistribution can give each LU a healthy budget.
+  const rawTotalSubTopics = lus.reduce(
+    (n: number, lu: any) => n + (Array.isArray(lu.Topics) ? lu.Topics.length : 0),
+    0,
+  );
+  // First pass: resolve duration so we know the total target slide count
+  const provisionalDur = resolveDuration(ctx, rawTotalSubTopics);
+  const provisionalTarget = computeTotalTarget(provisionalDur.hours);
+  // Standard slides cost: 17 + 2 per topic (LO header + activity)
+  const standardCost = 17 + rawTotalSubTopics * 2;
+  const contentBudget = Math.max(0, provisionalTarget - standardCost);
+  const projectedPerSubTopic = rawTotalSubTopics > 0 ? contentBudget / rawTotalSubTopics : 0;
+
   let consolidatedSubTopicCount = 0;
-  for (const lu of lus) {
-    const subTopics = Array.isArray(lu.Topics) ? lu.Topics : [];
-    if (subTopics.length <= 1) continue; // already 1 topic per LU
-    consolidatedSubTopicCount += subTopics.length;
-    // Aggregate bullets, tagging sub-topic headings inline so Phase 2
-    // can structure blocks around the original CP sub-topics.
-    const aggregated: string[] = [];
-    for (const st of subTopics) {
-      const stTitle = String(st.Topic_Title || '').trim();
-      if (stTitle) aggregated.push(`[${stTitle}]`);
-      for (const bp of (Array.isArray(st.Bullet_Points) ? st.Bullet_Points : [])) {
-        const t = String(bp ?? '').trim();
-        if (t) aggregated.push(t);
+  if (projectedPerSubTopic < 2) {
+    // Too many sub-topics for the duration — collapse to LU-level
+    for (const lu of lus) {
+      const subTopics = Array.isArray(lu.Topics) ? lu.Topics : [];
+      if (subTopics.length <= 1) continue;
+      consolidatedSubTopicCount += subTopics.length;
+      const aggregated: string[] = [];
+      for (const st of subTopics) {
+        const stTitle = String(st.Topic_Title || '').trim();
+        if (stTitle) aggregated.push(`[${stTitle}]`);
+        for (const bp of (Array.isArray(st.Bullet_Points) ? st.Bullet_Points : [])) {
+          const t = String(bp ?? '').trim();
+          if (t) aggregated.push(t);
+        }
       }
+      lu.Topics = [{
+        Topic_Title: String(lu.LU_Title || lu.LU_Number || 'Topic'),
+        Bullet_Points: aggregated,
+      }];
     }
-    lu.Topics = [{
-      Topic_Title: String(lu.LU_Title || lu.LU_Number || 'Topic'),
-      Bullet_Points: aggregated,
-    }];
-  }
-  if (consolidatedSubTopicCount > 0) {
-    console.log(`[cw-slides-v3] COLLAPSED ${consolidatedSubTopicCount} CP sub-topics into ${lus.length} LU-level topics`);
+    console.log(`[cw-slides-v3] COLLAPSED ${consolidatedSubTopicCount} CP sub-topics → ${lus.length} LU-level topics (projected ${projectedPerSubTopic.toFixed(1)} blocks/sub-topic was too thin)`);
+  } else {
+    console.log(`[cw-slides-v3] Keeping ${rawTotalSubTopics} CP sub-topics intact (${projectedPerSubTopic.toFixed(1)} blocks/sub-topic budget — healthy)`);
   }
 
   const totalTopics = lus.reduce(

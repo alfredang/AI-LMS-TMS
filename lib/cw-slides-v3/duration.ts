@@ -40,7 +40,12 @@ export const SLIDE_TARGETS: Record<number, [number, number]> = {
 };
 
 const SLIDES_PER_DAY_DEFAULT = 70;
-export const MIN_BLOCKS_PER_TOPIC = 6;
+// Lowered from 6 → 2 so per-topic budget can be distributed across many
+// sub-topics without overshooting the duration target. With sub-topics
+// kept intact (orchestrator.ts smart-collapse logic), a 4-day course with
+// 20 sub-topics now gets ~10 blocks each instead of being forced to
+// collapse to 4 LUs × 30 capped blocks + huge text-padding fill.
+export const MIN_BLOCKS_PER_TOPIC = 2;
 export const MAX_SLIDES_PER_TOPIC = 30;
 
 // ────────────────────────────────────────────────────────────────────────────
