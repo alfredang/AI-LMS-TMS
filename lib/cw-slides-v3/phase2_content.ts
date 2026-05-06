@@ -531,6 +531,33 @@ function fallbackContentBlocks(
         'compare-binary-horizontal-underline-text-vs',
         'compare-hierarchy-left-right-circle-node-pill-badge',
       ]);
+      // Build comparison items that ALWAYS have meaningful desc. If
+      // research's comparison_items lack desc, derive it from CP bullets
+      // (first half = label A side, second half = label B side) so the
+      // arrow/badge templates render real content, not bare labels.
+      const halfBp = Math.max(1, Math.ceil(bps.length / 2));
+      const sideA = bps.slice(0, halfBp).map(cleanText);
+      const sideB = bps.slice(halfBp).map(cleanText);
+      const buildSide = (i: number, c: any, sideBullets: string[]): ContentBlockItem => {
+        const label = truncWord(String(c?.label ?? (i === 0 ? 'Approach A' : 'Approach B')), 22);
+        const rawDesc = String(c?.desc ?? '').trim();
+        const desc = rawDesc.length >= 8
+          ? truncWord(rawDesc, 80)
+          : sideBullets.length
+            ? truncWord(sideBullets[0], 80)
+            : truncWord(`Key approach to ${topicTitle.toLowerCase()} focusing on ${label.toLowerCase()} aspects`, 80);
+        const children = sideBullets.slice(1, 4).map((bp) => ({
+          label: truncWord(labelFromSentence(bp) || bp.split(/\s+/).slice(0, 3).join(' '), 24),
+          desc: truncWord(bp, 70),
+          icon: 'mdi/chevron-right',
+        }));
+        return {
+          label,
+          desc,
+          icon: i === 0 ? 'mdi/history' : 'mdi/rocket-launch',
+          ...(children.length > 0 ? { children } : {}),
+        };
+      };
       block = {
         block_index: blocks.length,
         sub_title: `${topicTitle} — Approach Comparison`,
@@ -538,11 +565,10 @@ function fallbackContentBlocks(
         suggested_template: compTemplate,
         data: {
           title: 'Approaches',
-          items: pair.map((c, i) => ({
-            label: truncWord(String(c.label ?? (i === 0 ? 'Traditional' : 'Modern')), 22),
-            desc: truncWord(String(c.desc ?? ''), 60),
-            icon: i === 0 ? 'mdi/history' : 'mdi/rocket-launch',
-          })),
+          items: [
+            buildSide(0, pair[0], sideA),
+            buildSide(1, pair[1], sideB),
+          ],
         },
         caption: '',
         sources_used: [],
@@ -562,12 +588,16 @@ function fallbackContentBlocks(
         suggested_template: statsTemplate,
         data: {
           title: 'Key Metrics',
-          items: chartData.slice(0, 5).map((d: any) => ({
-            label: truncWord(String(d.label || ''), 18) || 'Metric',
-            value: typeof d.value === 'number' && Number.isFinite(d.value) ? d.value : 50,
-            desc: '',
-            icon: 'mdi/chart-bar',
-          })),
+          items: chartData.slice(0, 5).map((d: any) => {
+            const label = truncWord(String(d.label || ''), 18) || 'Metric';
+            const src = String(d.source || '').trim();
+            return {
+              label,
+              value: typeof d.value === 'number' && Number.isFinite(d.value) ? d.value : 50,
+              desc: truncWord(src ? `${label} (${src})` : `${label} for ${topicTitle}`, 60),
+              icon: 'mdi/chart-bar',
+            };
+          }),
         },
         caption: '',
         sources_used: [],
@@ -899,6 +929,72 @@ RULES:
 // Public — generate content for all topics in parallel
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Walk every block / item produced by Phase 2 (AI or fallback) and guarantee
+ * each item has a non-empty `desc`. The infographic templates render label+desc;
+ * empty desc shows up as bare label-only arrows / cards (the "Pros / Cons with
+ * no description" bug from deck g9).
+ *
+ * If desc is missing or too short to be meaningful (<8 chars), synthesize one
+ * from CP bullets (preferred), then research findings, then a topic-anchored
+ * sentence. Never leaves an item with empty desc.
+ */
+function sanitizeBlockItems(
+  entry: ContentMapEntry,
+  topic: SlideTopic,
+  research: ResearchEntry | undefined,
+): void {
+  const topicTitle = entry.topic || topic.topic_title || 'this topic';
+  const bullets = (topic.bullet_points || [])
+    .map((b) => String(b ?? '').trim())
+    .filter((b) => b.length > 0 && !b.startsWith('['));
+  const findings: string[] = [];
+  for (const s of research?.sources || []) {
+    for (const f of (s.key_findings || [])) {
+      const t = String(f).trim();
+      if (t.length >= 20 && t.length <= 200) findings.push(t);
+    }
+  }
+  let bulletCursor = 0;
+  let findingCursor = 0;
+  const synthDesc = (label: string): string => {
+    if (bulletCursor < bullets.length) {
+      const bp = bullets[bulletCursor++];
+      return bp.length > 80 ? bp.slice(0, 77).replace(/\s+\S*$/, '') + '…' : bp;
+    }
+    if (findingCursor < findings.length) {
+      const f = findings[findingCursor++];
+      return f.length > 80 ? f.slice(0, 77).replace(/\s+\S*$/, '') + '…' : f;
+    }
+    return `Key aspect of ${topicTitle.toLowerCase()} — ${label.toLowerCase()}`;
+  };
+
+  let fixed = 0;
+  for (const block of entry.content_blocks || []) {
+    const items = Array.isArray(block.data?.items) ? block.data!.items : [];
+    for (const it of items) {
+      const desc = String(it?.desc ?? '').trim();
+      if (desc.length < 8) {
+        const label = String(it?.label ?? '').trim() || 'Key Point';
+        it.desc = synthDesc(label);
+        fixed++;
+      }
+      // Recursively sanitize children
+      const children = Array.isArray((it as any).children) ? (it as any).children : [];
+      for (const c of children) {
+        const cd = String(c?.desc ?? '').trim();
+        if (cd.length < 8) {
+          c.desc = synthDesc(String(c?.label ?? 'Sub-point'));
+          fixed++;
+        }
+      }
+    }
+  }
+  if (fixed > 0) {
+    console.log(`[cw-slides-v3] sanitizeBlockItems '${topicTitle.slice(0, 60)}': filled ${fixed} empty descs`);
+  }
+}
+
 export async function generateAllContent(
   topics: SlideTopic[],
   researchMap: Record<string, ResearchEntry>,
@@ -929,6 +1025,8 @@ export async function generateAllContent(
     } else {
       map[key] = r;
     }
+    // ALWAYS sanitize — guarantees no infographic renders with empty descs
+    sanitizeBlockItems(map[key], topics[i], researchMap[key]);
   });
   const totalBlocks = Object.values(map).reduce((n, c) => n + c.content_blocks.length, 0);
   const target = perTopicBlocks.reduce((a, b) => a + b, 0);
