@@ -260,6 +260,27 @@ export function padContentBlocks(
  * would have produced. Never emits "Detail N" placeholders or generic
  * "Apply X concepts in a workplace scenario" activities.
  */
+// Module-level deck-wide template registry. Tracks the LAST 6 templates
+// used across ALL topics in a deck-generation run, so consecutive blocks
+// (across topic boundaries) never share a template. Reset at the start
+// of every deck via `_resetDeckRegistry`. Without this, the per-topic
+// pickUnusedTemplate restarts at index 0 for each topic, causing block
+// 0 of every topic to reuse `list-grid-badge-card`.
+const _deckTemplateHistory: string[] = [];
+const DECK_NO_REPEAT_WINDOW = 6;
+function _deckSeenRecently(t: string): boolean {
+  return _deckTemplateHistory.includes(t);
+}
+function _markDeckUsed(t: string): void {
+  _deckTemplateHistory.push(t);
+  while (_deckTemplateHistory.length > DECK_NO_REPEAT_WINDOW) {
+    _deckTemplateHistory.shift();
+  }
+}
+export function _resetDeckRegistry(): void {
+  _deckTemplateHistory.length = 0;
+}
+
 function fallbackContentBlocks(
   topicTitle: string,
   bulletPoints: string[] = [],
@@ -350,20 +371,33 @@ function fallbackContentBlocks(
 
   const blocks: ContentBlock[] = [];
   const usedFindingIdxs = new Set<string>();
-  // Per-topic template registry — guarantees every block in a topic
-  // uses a different template so the deck has visual variety across
-  // every slide. Used by the helper below.
+  // Per-topic + deck-wide template registry. Block selection prefers
+  // templates not used IN THIS TOPIC and not used in the LAST 6 blocks
+  // ACROSS THE ENTIRE DECK. Without the deck-wide check, every topic
+  // restarts at the same first template, making decks look identical
+  // slide-by-slide across topic boundaries.
   const usedTemplatesInTopic = new Set<string>();
   const pickUnusedTemplate = (vizType: string, fallbackPool: string[]): string => {
+    // Tier 1: not in this topic AND not used recently anywhere
     for (const t of fallbackPool) {
-      if (!usedTemplatesInTopic.has(t)) {
+      if (!usedTemplatesInTopic.has(t) && !_deckSeenRecently(t)) {
         usedTemplatesInTopic.add(t);
+        _markDeckUsed(t);
         return t;
       }
     }
-    // All used — accept a repeat from the pool but rotate by topic-block index
+    // Tier 2: not in this topic (relax recent-window)
+    for (const t of fallbackPool) {
+      if (!usedTemplatesInTopic.has(t)) {
+        usedTemplatesInTopic.add(t);
+        _markDeckUsed(t);
+        return t;
+      }
+    }
+    // Tier 3: rotate by block index — accept a repeat
     const t = fallbackPool[blocks.length % fallbackPool.length];
     usedTemplatesInTopic.add(t);
+    _markDeckUsed(t);
     return t;
   };
 
@@ -934,6 +968,10 @@ export async function generateAllContent(
   apiKey: string,
   model?: string,
 ): Promise<Record<string, ContentMapEntry>> {
+  // Reset the deck-wide template registry so this run starts fresh —
+  // prevents stale state from a previous deck biasing template picks.
+  _resetDeckRegistry();
+
   const tasks = topics.map((t, i) => () => generateTopicContent(
     t,
     researchMap[t.topic_title] ?? { topic: t.topic_title, sources: [] },
