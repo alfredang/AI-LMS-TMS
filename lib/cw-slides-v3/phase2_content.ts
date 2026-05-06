@@ -173,7 +173,13 @@ export function padContentBlocks(
 ): ContentBlock[] {
   if (existing.length >= target) return existing.slice(0, target);
 
-  const bps = (bulletPoints || []).filter((b) => String(b ?? '').trim().length > 0);
+  // Strip "[Sub-topic name]" markers — those were inline hints for the AI
+  // prompt to know sub-topic boundaries. They must NOT become standalone
+  // slide cards or titles (deck g3 bug: [What are Chatbots?] showed up
+  // as a slide title).
+  const bps = (bulletPoints || [])
+    .map((b) => String(b ?? '').trim())
+    .filter((b) => b.length > 0 && !b.startsWith('['));
   const blocks: ContentBlock[] = [...existing];
   let padIdx = 0;
 
@@ -287,7 +293,13 @@ function fallbackContentBlocks(
   numBlocks = 6,
   research?: ResearchEntry,
 ): ContentMapEntry {
-  const bps = (bulletPoints || []).filter((b) => String(b ?? '').trim().length > 0);
+  // Strip "[Sub-topic name]" markers — those were inline hints for the AI
+  // prompt to know sub-topic boundaries. They must NOT become standalone
+  // slide cards or titles (deck g3 bug: [What are Chatbots?] showed up
+  // as a slide title).
+  const bps = (bulletPoints || [])
+    .map((b) => String(b ?? '').trim())
+    .filter((b) => b.length > 0 && !b.startsWith('['));
   const r = research;
   const procSteps: string[] = (r?.infographic_data?.process_steps || []).filter((s) => typeof s === 'string' && s.trim().length > 5);
   const compItems: any[] = r?.infographic_data?.comparison_items || [];
@@ -402,15 +414,20 @@ function fallbackContentBlocks(
   };
 
   // ── Block 0 — Overview: each CP bullet becomes a card ─────────────
-  // This anchors the topic to the CP from slide one.
+  // Use action-verb labels (Define, Apply, Identify, ...) so cards look
+  // visually distinct with the full bullet as desc — eliminates the
+  // label-equals-desc duplication seen in deck g3 ("Definition and
+  // overview" label + "Definition and overview of chatbots" desc).
+  const ACTION_VERBS = ['Define', 'Apply', 'Identify', 'Analyse', 'Implement', 'Compare', 'Evaluate', 'Master', 'Practice', 'Review'];
+  const ACTION_ICONS = ['mdi/flag', 'mdi/cog', 'mdi/lightbulb', 'mdi/chart-line', 'mdi/rocket-launch', 'mdi/scale-balance', 'mdi/check-circle', 'mdi/star', 'mdi/handshake', 'mdi/file-search'];
   const overviewItems: ContentBlockItem[] = [];
-  for (const bp of bps.slice(0, 5)) {
+  bps.slice(0, 5).forEach((bp, i) => {
     overviewItems.push({
-      label: truncWord(bp.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
-      desc: truncWord(cleanText(bp), 80),
-      icon: 'mdi/information',
+      label: ACTION_VERBS[i % ACTION_VERBS.length],
+      desc: truncWord(cleanText(bp), 100),
+      icon: ACTION_ICONS[i % ACTION_ICONS.length],
     });
-  }
+  });
   if (overviewItems.length === 0) {
     overviewItems.push({ label: 'Overview', desc: `Key aspects of ${topicTitle}`, icon: 'mdi/information' });
   }
@@ -691,16 +708,18 @@ function fallbackContentBlocks(
   }
 
   // ── Final block — Key Takeaways: ALWAYS recap CP bullets ────────────
-  // Each takeaway card maps to one CP bullet so the slide reinforces the
-  // mandatory CP coverage from the source of truth.
+  // Distinct labels (Remember / Practise / Apply / Reflect / Master)
+  // anchored to bullets — same anti-duplication treatment as Block 0.
+  const TAKEAWAY_VERBS = ['Remember', 'Practise', 'Apply', 'Reflect', 'Master'];
+  const TAKEAWAY_ICONS = ['mdi/star', 'mdi/check-circle', 'mdi/cog', 'mdi/lightbulb', 'mdi/trophy'];
   const ktItems: ContentBlockItem[] = [];
-  for (const bp of bps.slice(0, 5)) {
+  bps.slice(0, 5).forEach((bp, i) => {
     ktItems.push({
-      label: truncWord(bp.split(/[\s,;:]+/).slice(0, 3).join(' '), 24),
-      desc: truncWord(cleanText(bp), 80),
-      icon: 'mdi/star',
+      label: TAKEAWAY_VERBS[i % TAKEAWAY_VERBS.length],
+      desc: truncWord(cleanText(bp), 100),
+      icon: TAKEAWAY_ICONS[i % TAKEAWAY_ICONS.length],
     });
-  }
+  });
   if (ktItems.length === 0) {
     ktItems.push({ label: 'Key Concept', desc: `Apply ${topicTitle} principles consistently`, icon: 'mdi/star' });
   }
@@ -885,19 +904,50 @@ RULES:
     `prompt=${prompt.length}b, tools=[${tools.join(',')}], model=${FAST_MODEL}, bullets=${bullets.length}, sources=${sources.length}`,
   );
 
-  // Up to 2 attempts — second attempt uses a tighter prompt without the
-  // research enrichment block, since most production failures are from
-  // prompt-size or output-truncation issues.
+  // 4 progressive attempts — user requirement: "no fallback at all".
+  // Each attempt simplifies the request more aggressively to maximise
+  // chance of AI success in the production container:
+  //   #1: Full prompt + research enrichment + WebSearch (if sources<2)
+  //   #2: Same prompt minus research details (smaller payload)
+  //   #3: Tiny prompt — topic + bullets only, no research, no tools
+  //   #4: Tiny prompt + Sonnet 4.6 model (different model in case Haiku
+  //       4.5 has a transient issue with this token/account)
+  // Only after ALL 4 fail does fallback run.
+  const tinyPrompt = `Generate ${numBlocks} content blocks (JSON only) for this WSQ topic.
+
+TOPIC: ${topic.topic_title}
+LO: ${topic.lo_description}
+CP BULLETS (each block must address one):
+${bullets.map((b, i) => `  ${i + 1}. ${b}`).join('\n') || '  (none)'}
+
+Return ONLY this JSON:
+{
+  "topic": "${topic.topic_title}",
+  "content_blocks": [
+    {"block_index":0, "sub_title":"...", "visualization_type":"overview|process|comparison|statistics|hierarchy|timeline", "suggested_template":"list-grid-badge-card|sequence-snake-steps-compact-card|compare-binary-horizontal-badge-card-arrow|chart-bar-plain-text|hierarchy-tree-curved-line-rounded-rect-node|sequence-timeline-simple", "data":{"title":"...", "items":[{"label":"...", "desc":"...", "icon":"mdi/..."}]}, "caption":""}
+  ],
+  "activity": {"title":"...", "scenario":"...", "steps":["..."], "expected_output":"...", "duration":"20 minutes"}
+}
+
+Rules: ${numBlocks} blocks total, vary visualization_type per block, vary suggested_template per block, items 4-5 per block, labels 2-3 words, descs complete clauses (not fragments), icons mdi/* names.`;
+
   let lastErr: any = null;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const promptForAttempt = attempt === 1 ? prompt : prompt.replace(researchText, sources.length ? `\nRESEARCH SOURCES (${sources.length}):\n` + sources.slice(0, 5).map((s: any) => `  - ${s.title || ''}`).join('\n') : '');
+  const attempts: Array<{ p: string; tools: string[]; turns: number; model: string }> = [
+    { p: prompt, tools, turns: CONTENT_MAX_TURNS, model: FAST_MODEL },
+    { p: prompt.replace(researchText, sources.length ? `\nRESEARCH SOURCES (${sources.length}):\n` + sources.slice(0, 5).map((s: any) => `  - ${s.title || ''}`).join('\n') : ''), tools: [], turns: 3, model: FAST_MODEL },
+    { p: tinyPrompt, tools: [], turns: 2, model: FAST_MODEL },
+    { p: tinyPrompt, tools: [], turns: 2, model: 'claude-sonnet-4-6' },
+  ];
+  for (let attempt = 1; attempt <= attempts.length; attempt++) {
+    const cfg = attempts[attempt - 1];
     try {
+      console.log(`[cw-slides-v3] phase2 '${topic.topic_title.slice(0, 60)}' attempt ${attempt}/${attempts.length} (model=${cfg.model}, prompt=${cfg.p.length}b, tools=[${cfg.tools.join(',')}])`);
       const result = await runAgentJson({
-        prompt: promptForAttempt,
+        prompt: cfg.p,
         systemPrompt: CONTENT_SYSTEM_PROMPT,
-        tools: attempt === 2 ? [] : tools,
-        maxTurns: attempt === 2 ? 3 : CONTENT_MAX_TURNS,
-        model: FAST_MODEL,
+        tools: cfg.tools,
+        maxTurns: cfg.turns,
+        model: cfg.model,
         apiKey,
       });
       let blocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
