@@ -16,8 +16,7 @@
  * facts users complained about in deck 21.
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import { buildClaudeEnv } from '../anthropic-auth';
+import { callClaudeJson } from './anthropic-messages';
 import { CONTENT_SYSTEM_PROMPT } from './prompts';
 import type {
   ActivityData,
@@ -28,75 +27,12 @@ import type {
   SlideTopic,
 } from './types';
 
-// Streamlit's reference uses claude-3-5-haiku-20241022 — this model is
-// the most reliable for short JSON outputs in production. Haiku 4.5
-// (newer) was rejecting roughly half the prompts in the Coolify
-// container. Stick with Haiku 3.5 to match Streamlit.
+// Haiku 4.5 — fast, JSON-reliable, supported by both API keys and OAuth
+// subscription tokens. Same model the CP / AP / FG / LG generators use
+// in production today.
 const FAST_MODEL = 'claude-haiku-4-5-20251001';
-const CONTENT_MAX_TURNS = 5;
+const CONTENT_MAX_TOKENS = 8192;
 const CONCURRENCY = 5;
-
-// ────────────────────────────────────────────────────────────────────────────
-// Claude SDK helper
-// ────────────────────────────────────────────────────────────────────────────
-
-function extractJson(text: string): any {
-  if (!text) return null;
-  try { return JSON.parse(text.trim()); } catch {}
-  const fenced = text.match(/```(?:json)?\s*\n([\s\S]*?)\n```/);
-  if (fenced) {
-    try { return JSON.parse(fenced[1].trim()); } catch {}
-  }
-  const start = text.indexOf('{');
-  if (start !== -1) {
-    let depth = 0;
-    for (let i = start; i < text.length; i++) {
-      if (text[i] === '{') depth++;
-      else if (text[i] === '}') {
-        depth--;
-        if (depth === 0) {
-          try { return JSON.parse(text.slice(start, i + 1)); } catch { break; }
-        }
-      }
-    }
-  }
-  return null;
-}
-
-async function runAgentJson(opts: {
-  prompt: string;
-  systemPrompt?: string;
-  tools?: string[];
-  maxTurns?: number;
-  model?: string;
-  apiKey: string;
-}): Promise<any> {
-  const { prompt, systemPrompt, tools = [], maxTurns = CONTENT_MAX_TURNS, model, apiKey } = opts;
-  const env = buildClaudeEnv(apiKey);
-  env.CLAUDE_CODE_MAX_OUTPUT_TOKENS = env.CLAUDE_CODE_MAX_OUTPUT_TOKENS || '64000';
-  const sdkOptions: any = {
-    env,
-    allowedTools: tools,
-    permissionMode: 'bypassPermissions',
-    maxTurns,
-  };
-  if (model) sdkOptions.model = model;
-  if (systemPrompt) sdkOptions.systemPrompt = systemPrompt;
-
-  let lastText = '';
-  for await (const message of query({ prompt, options: sdkOptions })) {
-    if (message.type === 'assistant' && (message as any).message?.content) {
-      for (const block of (message as any).message.content) {
-        if (block.type === 'text' && block.text) lastText = block.text;
-      }
-    } else if (message.type === 'result' && (message as any).result) {
-      lastText = (message as any).result;
-    }
-  }
-  const parsed = extractJson(lastText);
-  if (!parsed) throw new Error(`Agent output not valid JSON. Output: ${lastText.slice(0, 500)}`);
-  return parsed;
-}
 
 async function runWithConcurrency<T>(items: Array<() => Promise<T>>, concurrency: number): Promise<Array<T | Error>> {
   const results: Array<T | Error> = new Array(items.length);
@@ -895,115 +831,68 @@ RULES:
 - Use DIFFERENT suggested_template values across blocks (each block in a topic should use a DIFFERENT template — never repeat the same template within one topic)
 - Icons: mdi/* names from standard set (lock, scale-balance, chart-bar, account-multiple, cog, lightbulb, alert, check-circle, file-document, clock, earth, etc.)`;
 
-  // Force FAST_MODEL (Haiku) — Streamlit-aligned and proven for JSON in
-  // production. Caller's `model` parameter ignored to prevent Sonnet-only
-  // failure modes from poisoning Phase 2 (deck 22, 23 root cause).
-  const tools = sources.length < 2 ? ['WebSearch'] : [];
   console.log(
-    `[cw-slides-v3] phase2 calling Claude for '${topic.topic_title.slice(0, 60)}': ` +
-    `prompt=${prompt.length}b, tools=[${tools.join(',')}], model=${FAST_MODEL}, bullets=${bullets.length}, sources=${sources.length}`,
+    `[cw-slides-v3] phase2 calling Messages API for '${topic.topic_title.slice(0, 60)}': ` +
+    `prompt=${prompt.length}b, model=${FAST_MODEL}, bullets=${bullets.length}, sources=${sources.length}`,
   );
 
-  // 4 progressive attempts — user requirement: "no fallback at all".
-  // Each attempt simplifies the request more aggressively to maximise
-  // chance of AI success in the production container:
-  //   #1: Full prompt + research enrichment + WebSearch (if sources<2)
-  //   #2: Same prompt minus research details (smaller payload)
-  //   #3: Tiny prompt — topic + bullets only, no research, no tools
-  //   #4: Tiny prompt + Sonnet 4.6 model (different model in case Haiku
-  //       4.5 has a transient issue with this token/account)
-  // Only after ALL 4 fail does fallback run.
-  const tinyPrompt = `Generate ${numBlocks} content blocks (JSON only) for this WSQ topic.
+  // Single Messages API call — same shape as cw-generate.ts which works
+  // in production today. The wrapper retries 429/5xx internally so we
+  // don't need an outer attempt loop. WebSearch was already done in
+  // Phase 1 (HTTP DDG + Wikipedia) so no tool calls needed here.
+  try {
+    const result = await callClaudeJson({
+      apiKey,
+      model: FAST_MODEL,
+      system: CONTENT_SYSTEM_PROMPT,
+      prompt,
+      maxTokens: CONTENT_MAX_TOKENS,
+      maxRetries: 2,
+    });
 
-TOPIC: ${topic.topic_title}
-LO: ${topic.lo_description}
-CP BULLETS (each block must address one):
-${bullets.map((b, i) => `  ${i + 1}. ${b}`).join('\n') || '  (none)'}
+    let blocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
+    const types = blocks.map((b) => b.visualization_type).join(', ');
+    console.log(`[cw-slides-v3] phase2 OK '${topic.topic_title.slice(0, 60)}': ${blocks.length}/${numBlocks} blocks, types: [${types}]`);
 
-Return ONLY this JSON:
-{
-  "topic": "${topic.topic_title}",
-  "content_blocks": [
-    {"block_index":0, "sub_title":"...", "visualization_type":"overview|process|comparison|statistics|hierarchy|timeline", "suggested_template":"list-grid-badge-card|sequence-snake-steps-compact-card|compare-binary-horizontal-badge-card-arrow|chart-bar-plain-text|hierarchy-tree-curved-line-rounded-rect-node|sequence-timeline-simple", "data":{"title":"...", "items":[{"label":"...", "desc":"...", "icon":"mdi/..."}]}, "caption":""}
-  ],
-  "activity": {"title":"...", "scenario":"...", "steps":["..."], "expected_output":"...", "duration":"20 minutes"}
-}
-
-Rules: ${numBlocks} blocks total, vary visualization_type per block, vary suggested_template per block, items 4-5 per block, labels 2-3 words, descs complete clauses (not fragments), icons mdi/* names.`;
-
-  let lastErr: any = null;
-  const attempts: Array<{ p: string; tools: string[]; turns: number; model: string }> = [
-    { p: prompt, tools, turns: CONTENT_MAX_TURNS, model: FAST_MODEL },
-    { p: prompt.replace(researchText, sources.length ? `\nRESEARCH SOURCES (${sources.length}):\n` + sources.slice(0, 5).map((s: any) => `  - ${s.title || ''}`).join('\n') : ''), tools: [], turns: 3, model: FAST_MODEL },
-    { p: tinyPrompt, tools: [], turns: 2, model: FAST_MODEL },
-    { p: tinyPrompt, tools: [], turns: 2, model: 'claude-sonnet-4-6' },
-  ];
-  for (let attempt = 1; attempt <= attempts.length; attempt++) {
-    const cfg = attempts[attempt - 1];
-    try {
-      console.log(`[cw-slides-v3] phase2 '${topic.topic_title.slice(0, 60)}' attempt ${attempt}/${attempts.length} (model=${cfg.model}, prompt=${cfg.p.length}b, tools=[${cfg.tools.join(',')}])`);
-      const result = await runAgentJson({
-        prompt: cfg.p,
-        systemPrompt: CONTENT_SYSTEM_PROMPT,
-        tools: cfg.tools,
-        maxTurns: cfg.turns,
-        model: cfg.model,
-        apiKey,
-      });
-      let blocks: ContentBlock[] = Array.isArray(result?.content_blocks) ? result.content_blocks : [];
-      const types = blocks.map((b) => b.visualization_type).join(', ');
-      console.log(`[cw-slides-v3] phase2 '${topic.topic_title.slice(0, 60)}' attempt ${attempt}: ${blocks.length}/${numBlocks} blocks, types: [${types}]`);
-
-      if (blocks.length === 0) {
-        // Treat zero blocks as a failure — retry or fall through
-        lastErr = new Error(`AI returned 0 blocks on attempt ${attempt}`);
-        continue;
-      }
-
-      // Pad if AI returned fewer than requested
-      if (blocks.length < numBlocks) {
-        console.warn(`[cw-slides-v3] phase2 '${topic.topic_title.slice(0, 60)}': AI produced ${blocks.length} blocks, padding to ${numBlocks}`);
-        blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks);
-      } else {
-        blocks = blocks.slice(0, numBlocks);
-      }
-
-      if (blocks.length > 0 && blocks[blocks.length - 1].visualization_type !== 'overview') {
-        const last = blocks[blocks.length - 1];
-        last.visualization_type = 'overview';
-        last.suggested_template = 'list-grid-badge-card';
-        last.sub_title = 'Key Takeaways';
-        if (last.data) last.data.title = `${topic.topic_title} — Key Takeaways`;
-      }
-
-      const baseCaption = captionFromResearch(research);
-      for (const b of blocks) {
-        if (!b.caption || b.caption.trim().length === 0) b.caption = baseCaption;
-      }
-
-      return {
-        topic: topic.topic_title,
-        content_blocks: blocks,
-        activity: result.activity as ActivityData | undefined,
-      };
-    } catch (e: any) {
-      lastErr = e;
-      const errMsg = e?.message || String(e);
-      console.warn(
-        `[cw-slides-v3] phase2 '${topic.topic_title.slice(0, 60)}' attempt ${attempt} FAILED: ` +
-        `${errMsg.slice(0, 250)} | code=${e?.code || '?'} | name=${e?.name || '?'}`,
-      );
+    if (blocks.length === 0) {
+      throw new Error('Messages API returned 0 content_blocks');
     }
-  }
 
-  // All attempts failed — log full diagnostic and use research-rich fallback
-  const errMsg = lastErr?.message || String(lastErr);
-  const errStack = lastErr?.stack ? String(lastErr.stack).split('\n').slice(0, 5).join(' | ') : '';
-  console.error(
-    `[cw-slides-v3] PHASE 2 ALL ATTEMPTS FAILED for '${topic.topic_title.slice(0, 60)}': ` +
-    `${errMsg} | code=${lastErr?.code || '?'} | name=${lastErr?.name || '?'} | stack: ${errStack}`,
-  );
-  return fallbackContentBlocks(topic.topic_title, topic.bullet_points, numBlocks, research);
+    // Pad if AI returned fewer than requested (rare — Haiku usually hits target)
+    if (blocks.length < numBlocks) {
+      console.warn(`[cw-slides-v3] phase2 '${topic.topic_title.slice(0, 60)}': AI produced ${blocks.length} blocks, padding to ${numBlocks}`);
+      blocks = padContentBlocks(blocks, topic.topic_title, topic.bullet_points, numBlocks);
+    } else {
+      blocks = blocks.slice(0, numBlocks);
+    }
+
+    if (blocks.length > 0 && blocks[blocks.length - 1].visualization_type !== 'overview') {
+      const last = blocks[blocks.length - 1];
+      last.visualization_type = 'overview';
+      last.suggested_template = 'list-grid-badge-card';
+      last.sub_title = 'Key Takeaways';
+      if (last.data) last.data.title = `${topic.topic_title} — Key Takeaways`;
+    }
+
+    const baseCaption = captionFromResearch(research);
+    for (const b of blocks) {
+      if (!b.caption || b.caption.trim().length === 0) b.caption = baseCaption;
+    }
+
+    return {
+      topic: topic.topic_title,
+      content_blocks: blocks,
+      activity: result.activity as ActivityData | undefined,
+    };
+  } catch (e: any) {
+    const errMsg = e?.message || String(e);
+    const status = e?.status || e?.response?.status;
+    console.error(
+      `[cw-slides-v3] PHASE 2 FAILED for '${topic.topic_title.slice(0, 60)}': ` +
+      `${errMsg.slice(0, 300)} | status=${status || '?'}`,
+    );
+    return fallbackContentBlocks(topic.topic_title, topic.bullet_points, numBlocks, research);
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────────────

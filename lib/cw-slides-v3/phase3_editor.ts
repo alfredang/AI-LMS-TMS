@@ -11,12 +11,11 @@
  * assignments than blocks, which would orphan content slides).
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import { buildClaudeEnv } from '../anthropic-auth';
+import { callClaudeJson } from './anthropic-messages';
 import type { ContentBlock, ContentMapEntry } from './types';
 
 const FAST_MODEL = 'claude-haiku-4-5-20251001';
-const EDITOR_MAX_TURNS = 3;
+const EDITOR_MAX_TOKENS = 16384;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Skeleton types
@@ -208,66 +207,6 @@ VISUAL FLOW RULES:
 7. Comparison content → use compare-* templates with EXACTLY 2 items
 
 Output ONLY valid JSON. No markdown, no explanation.`;
-
-// ────────────────────────────────────────────────────────────────────────────
-// Claude SDK helper
-// ────────────────────────────────────────────────────────────────────────────
-
-function extractJson(text: string): any {
-  if (!text) return null;
-  try { return JSON.parse(text.trim()); } catch {}
-  const fenced = text.match(/```(?:json)?\s*\n([\s\S]*?)\n```/);
-  if (fenced) {
-    try { return JSON.parse(fenced[1].trim()); } catch {}
-  }
-  const start = text.indexOf('{');
-  if (start !== -1) {
-    let depth = 0;
-    for (let i = start; i < text.length; i++) {
-      if (text[i] === '{') depth++;
-      else if (text[i] === '}') {
-        depth--;
-        if (depth === 0) {
-          try { return JSON.parse(text.slice(start, i + 1)); } catch { break; }
-        }
-      }
-    }
-  }
-  return null;
-}
-
-async function runAgentJson(opts: {
-  prompt: string;
-  systemPrompt?: string;
-  maxTurns?: number;
-  model?: string;
-  apiKey: string;
-}): Promise<any> {
-  const { prompt, systemPrompt, maxTurns = EDITOR_MAX_TURNS, model, apiKey } = opts;
-  const env = buildClaudeEnv(apiKey);
-  env.CLAUDE_CODE_MAX_OUTPUT_TOKENS = env.CLAUDE_CODE_MAX_OUTPUT_TOKENS || '64000';
-  const sdkOptions: any = {
-    env,
-    allowedTools: [],
-    permissionMode: 'bypassPermissions',
-    maxTurns,
-  };
-  if (model) sdkOptions.model = model;
-  if (systemPrompt) sdkOptions.systemPrompt = systemPrompt;
-  let lastText = '';
-  for await (const message of query({ prompt, options: sdkOptions })) {
-    if (message.type === 'assistant' && (message as any).message?.content) {
-      for (const block of (message as any).message.content) {
-        if (block.type === 'text' && block.text) lastText = block.text;
-      }
-    } else if (message.type === 'result' && (message as any).result) {
-      lastText = (message as any).result;
-    }
-  }
-  const parsed = extractJson(lastText);
-  if (!parsed) throw new Error(`Editor output not valid JSON. Output: ${lastText.slice(0, 500)}`);
-  return parsed;
-}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Fuzzy topic match (handles AI rephrasing)
@@ -586,15 +525,15 @@ CRITICAL:
 - assigned_template must be valid for the viz_type's family
 - Vary templates across consecutive slides`;
 
-  // Force FAST_MODEL (Haiku) — Streamlit-aligned, more reliable for JSON in prod
-  console.log(`[cw-slides-v3] phase3 calling Claude: prompt=${prompt.length}b, model=${FAST_MODEL}`);
+  console.log(`[cw-slides-v3] phase3 calling Messages API: prompt=${prompt.length}b, model=${FAST_MODEL}`);
   try {
-    const result = await runAgentJson({
-      prompt,
-      systemPrompt: EDITOR_SYSTEM_PROMPT,
-      maxTurns: EDITOR_MAX_TURNS,
-      model: FAST_MODEL,
+    const result = await callClaudeJson({
       apiKey,
+      model: FAST_MODEL,
+      system: EDITOR_SYSTEM_PROMPT,
+      prompt,
+      maxTokens: EDITOR_MAX_TOKENS,
+      maxRetries: 2,
     });
     const skeleton = result as Skeleton;
     validateSkeleton(skeleton, contentMap);
@@ -606,9 +545,8 @@ CRITICAL:
     return skeleton;
   } catch (e: any) {
     const errMsg = e?.message || String(e);
-    const errCode = e?.code || '?';
-    const errName = e?.name || '?';
-    console.error(`[cw-slides-v3] PHASE 3 FAILED: ${errMsg} | code=${errCode} | name=${errName} — using deterministic fallback skeleton`);
+    const status = e?.status || e?.response?.status;
+    console.error(`[cw-slides-v3] PHASE 3 FAILED: ${errMsg.slice(0, 250)} | status=${status || '?'} — using deterministic fallback skeleton`);
     return fallbackSkeleton(context, totalHours, contentMap);
   }
 }

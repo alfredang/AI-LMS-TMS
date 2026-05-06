@@ -18,8 +18,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import { buildClaudeEnv } from '../anthropic-auth';
+import { pingClaude } from './anthropic-messages';
 import { researchAllTopics } from './phase1_research';
 import { generateAllContent } from './phase2_content';
 import { buildSkeleton } from './phase3_editor';
@@ -59,44 +58,23 @@ export async function generateSlides(
                   : `unknown prefix (${apiKey?.slice(0, 12)}...)`;
   console.log(`[cw-slides-v3] BEGIN — model=${model}, token=${tokenType}, NODE_ENV=${process.env.NODE_ENV}`);
 
-  // ── Pre-flight Claude ping ──────────────────────────────────────────
-  // Tiny single-shot call before launching expensive phases. If auth
-  // is broken in the production container (token expired, CLI binary
-  // missing, network egress blocked), we surface that error in the
-  // first 5 seconds — instead of after Phase 1 burns 4+ min and Phase
-  // 2 silently falls back across all topics.
+  // ── Pre-flight Claude ping (Messages API) ───────────────────────────
+  // Tiny single-shot call before launching expensive phases. Uses the
+  // SAME Anthropic Messages API path as Phase 1/2/3 (and the same path
+  // the CP / AP / FG / LG generators in cw-generate.ts use), so if this
+  // ping succeeds the rest of the pipeline will too. If auth is broken
+  // (expired token, blocked egress) we surface that error in the first
+  // few seconds.
   try {
-    const env = buildClaudeEnv(apiKey);
-    env.CLAUDE_CODE_MAX_OUTPUT_TOKENS = env.CLAUDE_CODE_MAX_OUTPUT_TOKENS || '500';
-    const sdkOptions: any = {
-      env,
-      allowedTools: [],
-      permissionMode: 'bypassPermissions',
-      maxTurns: 1,
-      model: 'claude-haiku-4-5-20251001',
-    };
-    let pingText = '';
-    for await (const message of query({
-      prompt: 'Reply with exactly the JSON: {"ok":true}',
-      options: sdkOptions,
-    })) {
-      if (message.type === 'assistant' && (message as any).message?.content) {
-        for (const b of (message as any).message.content) {
-          if (b.type === 'text' && b.text) pingText = b.text;
-        }
-      } else if (message.type === 'result' && (message as any).result) {
-        pingText = (message as any).result;
-      }
-    }
-    const pingOk = /\{[^}]*"ok"\s*:\s*true[^}]*\}/.test(pingText);
-    console.log(`[cw-slides-v3] PRE-FLIGHT: Claude ping ${pingOk ? 'OK' : 'BAD'} (response: ${pingText.slice(0, 120).replace(/\n/g, ' ')})`);
-    if (!pingOk) {
-      console.warn(`[cw-slides-v3] PRE-FLIGHT WARNING: Claude is not responding correctly. All Phase 2/3 calls will likely fall back. Check token, network, and CLI binary in container.`);
+    const { ok, text } = await pingClaude(apiKey);
+    console.log(`[cw-slides-v3] PRE-FLIGHT: Messages API ping ${ok ? 'OK' : 'BAD'} (response: ${text.slice(0, 120).replace(/\n/g, ' ')})`);
+    if (!ok) {
+      console.warn(`[cw-slides-v3] PRE-FLIGHT WARNING: Claude responded but not with expected JSON. Phases will still run.`);
     }
   } catch (e: any) {
     console.error(
-      `[cw-slides-v3] PRE-FLIGHT FAILED — Claude unreachable: ${e?.message || String(e)} | code=${e?.code || '?'} | name=${e?.name || '?'}. ` +
-      `All Phase 2/3 calls will fall back to deterministic content. Investigate auth/network/CLI binary.`,
+      `[cw-slides-v3] PRE-FLIGHT FAILED — Anthropic Messages API unreachable: ${e?.message || String(e)} | status=${e?.status || '?'}. ` +
+      `Check ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN and outbound HTTPS to api.anthropic.com.`,
     );
   }
 
