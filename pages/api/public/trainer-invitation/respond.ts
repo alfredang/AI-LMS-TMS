@@ -14,7 +14,7 @@ import {
   DEFAULT_TRAINER_DECLINE_BODY,
 } from '@/lib/trainerInvitations';
 import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSender';
-import { addTrainerToCalendarEvent } from '@/lib/autoEnrolDirectApplications';
+import { getGoogleCredentials } from '@/lib/google-auth/googleAuth';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
   const colors = {
@@ -265,6 +265,65 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [action === 'accept' ? 'accepted' : 'declined', invitation.id]
     );
 
+    // If declined, remove any existing trainer assignment for this trainer
+    // so they no longer show as "assigned" in the admin UI.
+    if (action === 'decline') {
+      try {
+        // 1. Remove from course_run_trainer junction table
+        const delResult = await pool.query(
+          `DELETE FROM course_run_trainer
+           WHERE course_run_id = $1 AND LOWER(trainer_email) = LOWER($2)
+           RETURNING id`,
+          [invitation.course_run_id, invitation.trainer_email]
+        );
+        if (delResult.rowCount && delResult.rowCount > 0) {
+          console.log(
+            `🗑️ [trainer-invitation/respond] Removed ${delResult.rowCount} course_run_trainer row(s) for declined trainer "${invitation.trainer_name}"`
+          );
+        }
+
+        // 2. Clear TPG trainer assignment if it matches the declined trainer
+        const tpgClear = await pool.query(
+          `UPDATE course_run
+           SET tpg_assigned_trainer_name = NULL, tpg_assigned_trainer_email = NULL,
+               tpg_sync_status = 'declined', updated_at = NOW()
+           WHERE id = $1
+             AND (LOWER(tpg_assigned_trainer_email) = LOWER($2)
+                  OR LOWER(tpg_assigned_trainer_name) = LOWER($3))
+           RETURNING id`,
+          [invitation.course_run_id, invitation.trainer_email, invitation.trainer_name]
+        );
+        if (tpgClear.rowCount && tpgClear.rowCount > 0) {
+          console.log(
+            `🗑️ [trainer-invitation/respond] Cleared tpg_assigned_trainer for declined trainer "${invitation.trainer_name}"`
+          );
+        }
+
+        // 3. Clear legacy assigned_trainer fields if they match
+        const legacyClear = await pool.query(
+          `UPDATE course_run
+           SET assigned_trainer_name = NULL, assigned_trainer_email = NULL,
+               assigned_trainer_id = NULL, updated_at = NOW()
+           WHERE id = $1
+             AND (LOWER(assigned_trainer_email) = LOWER($2)
+                  OR LOWER(assigned_trainer_name) = LOWER($3))
+           RETURNING id`,
+          [invitation.course_run_id, invitation.trainer_email, invitation.trainer_name]
+        );
+        if (legacyClear.rowCount && legacyClear.rowCount > 0) {
+          console.log(
+            `🗑️ [trainer-invitation/respond] Cleared legacy assigned_trainer for declined trainer "${invitation.trainer_name}"`
+          );
+        }
+      } catch (cleanupErr) {
+        // Non-fatal — log but don't break the decline flow
+        console.error(
+          `❌ [trainer-invitation/respond] Failed to clean up trainer assignment on decline:`,
+          cleanupErr
+        );
+      }
+    }
+
     // If accepted, assign trainer to course run. Isolated in its own
     // try/catch so a failure here does NOT break the trainer-facing
     // "Invitation Accepted" page — the invitation status has already been
@@ -334,17 +393,158 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // #77: Add trainer to Google Calendar event on accept.
+      // Uses robust multi-strategy matching similar to DA calendar add:
+      //   1. courseRunId in event description/location (most reliable)
+      //   2. Title substring match + date match
+      //   3. Word-overlap title match + date match (fuzzy fallback)
       try {
-        const result = await addTrainerToCalendarEvent(
-          invitation.trainer_email,
-          invitation.course_title,
-          invitation.start_date
+        const tpCalRes = await pool.query(
+          `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
         );
-        console.log(
-          result.added > 0
-            ? `📅 [trainer-invitation/respond] Added ${invitation.trainer_email} to ${result.added}/${result.found} calendar events for "${invitation.course_title}"`
-            : `📅 [trainer-invitation/respond] Could not add to calendar (disabled, no match, or already attendee)`
-        );
+        const tpCalRow = tpCalRes.rows[0];
+        if (!tpCalRow?.sync_google_calendar) {
+          console.log(`📅 [trainer-invitation/respond] sync_google_calendar is off — skipping`);
+        } else {
+          const calCredentials = await getGoogleCredentials(pool);
+          let calendarId = 'primary';
+          const calUrl = tpCalRow.google_calendar_url || '';
+          if (calUrl) {
+            const cidMatch = calUrl.match(/[?&]cid=([^&]+)/);
+            if (cidMatch) {
+              try { calendarId = Buffer.from(cidMatch[1], 'base64').toString('utf-8'); }
+              catch { calendarId = cidMatch[1]; }
+            } else if (calUrl.includes('@')) { calendarId = calUrl; }
+          }
+
+          const calOAuth = new google.auth.OAuth2(
+            calCredentials.clientId,
+            calCredentials.clientSecret,
+            'https://developers.google.com/oauthplayground'
+          );
+          calOAuth.setCredentials({ refresh_token: calCredentials.refreshToken });
+          const calendar = google.calendar({ version: 'v3', auth: calOAuth });
+
+          const startDateIso = invitation.start_date
+            ? (invitation.start_date instanceof Date
+              ? invitation.start_date.toISOString().slice(0, 10)
+              : String(invitation.start_date).slice(0, 10))
+            : '';
+
+          if (!startDateIso) {
+            console.log(`📅 [trainer-invitation/respond] No start_date — skipping calendar add`);
+          } else {
+            // Search window: use end_date if available for multi-day classes
+            const dayBefore = new Date(startDateIso);
+            dayBefore.setDate(dayBefore.getDate() - 1);
+            const dayAfter = new Date(startDateIso);
+            if (invitation.end_date) {
+              const endIso = invitation.end_date instanceof Date
+                ? invitation.end_date.toISOString().slice(0, 10)
+                : String(invitation.end_date).slice(0, 10);
+              const endD = new Date(endIso);
+              dayAfter.setTime(Math.max(dayAfter.getTime(), endD.getTime()));
+            }
+            dayAfter.setDate(dayAfter.getDate() + 2);
+
+            const eventsRes = await calendar.events.list({
+              calendarId,
+              timeMin: dayBefore.toISOString(),
+              timeMax: dayAfter.toISOString(),
+              singleEvents: true,
+              maxResults: 200,
+            });
+            const allEvents = eventsRes.data.items || [];
+            const courseRunIdStr = invitation.external_course_run_id || '';
+            const stripPrefixes = (t: string) =>
+              (t || '').replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
+                       .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '').trim();
+            const strippedTitle = stripPrefixes(invitation.course_title || '').toLowerCase();
+            const titleWords = new Set(strippedTitle.split(/\s+/).filter((w: string) => w.length > 2));
+
+            // Strategy 1: Match by courseRunId in event description/location
+            let matchedEvent = courseRunIdStr
+              ? allEvents.find(evt => {
+                  const desc = ((evt.description || '') + ' ' + (evt.location || '')).toLowerCase();
+                  return desc.includes(courseRunIdStr.toLowerCase());
+                })
+              : undefined;
+
+            // Strategy 2: Exact title substring match + date match
+            if (!matchedEvent) {
+              matchedEvent = allEvents.find(evt => {
+                const evtSummary = stripPrefixes(evt.summary || '').toLowerCase();
+                const titleMatch = evtSummary.includes(strippedTitle) || strippedTitle.includes(evtSummary);
+                if (!titleMatch) return false;
+                const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
+                return evtDate === startDateIso;
+              });
+            }
+
+            // Strategy 3: Word-overlap title match + date match (fuzzy)
+            if (!matchedEvent && titleWords.size > 0) {
+              matchedEvent = allEvents.find(evt => {
+                const evtSummary = stripPrefixes(evt.summary || '').toLowerCase();
+                const evtWords = evtSummary.split(/\s+/).filter((w: string) => w.length > 2);
+                const overlap = evtWords.filter((w: string) => titleWords.has(w));
+                if (overlap.length < Math.ceil(titleWords.size * 0.6)) return false;
+                const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
+                return evtDate === startDateIso;
+              });
+              if (matchedEvent) {
+                console.log(`📅 [trainer-invitation/respond] Fuzzy word-overlap match: "${matchedEvent.summary}"`);
+              }
+            }
+
+            if (!matchedEvent || !matchedEvent.id) {
+              console.log(`📅 [trainer-invitation/respond] No matching calendar event for "${invitation.course_title}" on ${startDateIso}`);
+            } else {
+              // Check for recurring events and patch all siblings
+              const baseId = matchedEvent.id.includes('_') ? matchedEvent.id.split('_')[0] : null;
+              let eventsToUpdate: Array<{ id: string; attendees: any[] }> = [];
+
+              if (baseId) {
+                const wideStart = new Date(startDateIso);
+                wideStart.setDate(wideStart.getDate() - 7);
+                const wideEnd = new Date(startDateIso);
+                wideEnd.setDate(wideEnd.getDate() + 60);
+                const recurringRes = await calendar.events.list({
+                  calendarId,
+                  timeMin: wideStart.toISOString(),
+                  timeMax: wideEnd.toISOString(),
+                  singleEvents: true,
+                  maxResults: 2500,
+                });
+                eventsToUpdate = (recurringRes.data.items || [])
+                  .filter(evt => evt.id && evt.id.startsWith(baseId + '_'))
+                  .map(evt => ({ id: evt.id!, attendees: evt.attendees || [] }));
+              }
+              if (eventsToUpdate.length === 0) {
+                eventsToUpdate = [{ id: matchedEvent.id, attendees: matchedEvent.attendees || [] }];
+              }
+
+              const emailLower = invitation.trainer_email.trim().toLowerCase();
+              let addedCount = 0;
+              for (const evt of eventsToUpdate) {
+                if (evt.attendees.some((a: any) => (a.email || '').toLowerCase() === emailLower)) {
+                  addedCount++;
+                  continue;
+                }
+                await calendar.events.patch({
+                  calendarId,
+                  eventId: evt.id,
+                  requestBody: {
+                    attendees: [...evt.attendees, { email: invitation.trainer_email, responseStatus: 'needsAction' }],
+                  },
+                  sendUpdates: 'none',
+                });
+                addedCount++;
+              }
+              console.log(
+                `📅 [trainer-invitation/respond] Added ${invitation.trainer_email} to ${addedCount}/${eventsToUpdate.length} calendar events for "${invitation.course_title}"`
+              );
+            }
+          }
+        }
       } catch (calErr) {
         console.error(`❌ [trainer-invitation/respond] Calendar add failed:`, calErr);
       }
