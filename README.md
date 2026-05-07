@@ -483,7 +483,23 @@ ai-lms-tms/
    npm run dev
    ```
 
-   The application will be available at `http://localhost:3000`
+   The application will be available at `http://localhost:3000`.
+
+   `npm run dev` disables the startup cron scheduler by setting
+   `ENABLE_APP_SCHEDULER=false`. This prevents local development servers from
+   automatically executing production-like scheduled jobs when developers are
+   connected to shared, production, or production-clone databases.
+
+   To test scheduled jobs locally, run the scheduler-enabled dev script instead:
+
+   ```bash
+   npm run dev:scheduler
+   ```
+
+   Only one app instance connected to a shared database should run with
+   `ENABLE_APP_SCHEDULER=true`. Manual "Run Now" actions in the admin UI and
+   direct API-triggered jobs can still run even when the startup scheduler is
+   disabled.
 
 ## Environment Variables
 

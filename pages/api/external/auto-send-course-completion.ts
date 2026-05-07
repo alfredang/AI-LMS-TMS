@@ -34,6 +34,28 @@ async function ensureLogTable() {
             created_at TIMESTAMPTZ DEFAULT NOW()
         )
     `);
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS auto_send_course_completion_delivery (
+            delivery_key TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL,
+            course_run_id TEXT,
+            enrollment_id UUID,
+            learner_email TEXT,
+            status TEXT NOT NULL DEFAULT 'sending',
+            error_message TEXT,
+            claimed_at TIMESTAMPTZ DEFAULT NOW(),
+            sent_at TIMESTAMPTZ,
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    `);
+    await pool.query(`
+        ALTER TABLE auto_send_course_completion_delivery
+            ADD COLUMN IF NOT EXISTS enrollment_id UUID,
+            ADD COLUMN IF NOT EXISTS error_message TEXT,
+            ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
+    `);
 }
 
 async function logResult(
@@ -62,6 +84,59 @@ async function logResult(
         status,
         details.errorMessage || null,
     ]);
+}
+
+async function claimDelivery(details: {
+    deliveryKey: string;
+    runId: string;
+    courseRunId?: string;
+    enrollmentId?: string;
+    learnerEmail?: string;
+}): Promise<boolean> {
+    const result = await pool.query(`
+        INSERT INTO auto_send_course_completion_delivery
+            (delivery_key, run_id, course_run_id, enrollment_id, learner_email, status)
+        VALUES ($1, $2, $3, $4, $5, 'sending')
+        ON CONFLICT (delivery_key) DO NOTHING
+        RETURNING delivery_key
+    `, [
+        details.deliveryKey,
+        details.runId,
+        details.courseRunId || null,
+        details.enrollmentId || null,
+        details.learnerEmail || null,
+    ]);
+
+    return result.rowCount === 1;
+}
+
+async function hasPriorSentLog(courseRunId: string, learnerEmail: string): Promise<boolean> {
+    const result = await pool.query(`
+        SELECT 1
+          FROM auto_send_course_completion_log
+         WHERE course_run_id = $1
+           AND lower(learner_email) = lower($2)
+           AND status = 'sent'
+         LIMIT 1
+    `, [courseRunId, learnerEmail]);
+
+    return (result.rowCount || 0) > 0;
+}
+
+async function markDeliverySent(deliveryKey: string) {
+    await pool.query(`
+        UPDATE auto_send_course_completion_delivery
+           SET status = 'sent', sent_at = NOW(), updated_at = NOW(), error_message = NULL
+         WHERE delivery_key = $1
+    `, [deliveryKey]);
+}
+
+async function markDeliveryError(deliveryKey: string, errorMessage: string) {
+    await pool.query(`
+        UPDATE auto_send_course_completion_delivery
+           SET status = 'error', error_message = $2, updated_at = NOW()
+         WHERE delivery_key = $1
+    `, [deliveryKey, errorMessage.slice(0, 1000)]);
 }
 
 async function sendCourseCompletionEmail(opts: {
@@ -222,6 +297,30 @@ export async function runAutomation() {
                         continue;
                     }
 
+                    const normalizedEmail = String(learner.learner_email).trim().toLowerCase();
+                    if (await hasPriorSentLog(run.course_run_id, normalizedEmail)) {
+                        console.warn(`[auto-send-course-completion] Prior sent log found; skipping ${learner.learner_email} in run ${run.course_run_id}`);
+                        await logResult(runId, 'skipped', { ...traineeLogContext, errorMessage: 'Already sent according to completion log' });
+                        totalSkipped++;
+                        continue;
+                    }
+
+                    const deliveryKey = `${run.db_uuid}:${learner.enrolment_id}:${normalizedEmail}:course_completion`;
+                    const claimed = await claimDelivery({
+                        deliveryKey,
+                        runId,
+                        courseRunId: run.course_run_id,
+                        enrollmentId: learner.enrolment_id,
+                        learnerEmail: normalizedEmail,
+                    });
+
+                    if (!claimed) {
+                        console.warn(`[auto-send-course-completion] Duplicate delivery skipped for ${learner.learner_email} in run ${run.course_run_id}`);
+                        await logResult(runId, 'skipped', { ...traineeLogContext, errorMessage: 'Already claimed/sent by another run' });
+                        totalSkipped++;
+                        continue;
+                    }
+
                     try {
                         await sendCourseCompletionEmail({
                             studentName: learner.learner_name,
@@ -237,10 +336,12 @@ export async function runAutomation() {
                         });
 
                         console.log(`[auto-send-course-completion] Email sent to ${learner.learner_email}`);
+                        await markDeliverySent(deliveryKey);
                         await logResult(runId, 'sent', traineeLogContext);
                         totalSent++;
                     } catch (emailErr: any) {
                         console.error(`[auto-send-course-completion] Failed to email ${learner.learner_email}:`, emailErr.message);
+                        await markDeliveryError(deliveryKey, emailErr.message || 'Unknown email error').catch(() => {});
                         await logResult(runId, 'error', { ...traineeLogContext, errorMessage: emailErr.message });
                         totalErrors++;
                     }
