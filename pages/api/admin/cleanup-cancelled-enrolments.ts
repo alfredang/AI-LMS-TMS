@@ -4,16 +4,16 @@ import pool from '../../../lib/db';
 /**
  * POST /api/admin/cleanup-cancelled-enrolments
  *
- * Finds all enrollment rows where enrolment_status is already 'Cancelled'
- * in the local DB but the learner still appears in class lists (i.e. the
- * status was set but the code wasn't filtering it out before the fix).
+ * Finds all enrollment rows where enrolment_status is 'Cancelled' or
+ * 'Withdrawn' — these are already correctly marked but were previously
+ * not filtered out of class lists and courseware access.
  *
- * Also catches rows where ssg_enrolments shows cancelled but local
- * enrollment.enrolment_status was never updated.
+ * This endpoint simply lists them (dry run) or signals affected learners
+ * to refresh their course lists (apply mode).
  *
  * Query params:
- *   dryRun=1  (default) — preview only, no changes
- *   dryRun=0            — apply the fix
+ *   dryRun=1  (default) — preview only
+ *   dryRun=0            — signal affected learners to refresh
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -23,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const dryRun = req.query.dryRun !== '0';
 
   try {
-    // Find enrollment rows that should be marked Cancelled
+    // Find all enrollment rows with cancelled/withdrawn status
     const previewResult = await pool.query(`
       SELECT
         e.id AS enrollment_uuid,
@@ -32,22 +32,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         e.enrolment_id,
         e.enrolment_status AS current_status,
         cr.course_run_id,
-        c.title AS course_title,
-        CASE
-          WHEN LOWER(COALESCE(se.status, '')) = 'cancelled' THEN 'ssg_enrolments says cancelled'
-          WHEN LOWER(COALESCE(e.enrolment_status, '')) = 'cancelled' THEN 'already cancelled locally (filter fix only)'
-          ELSE 'unknown'
-        END AS reason
+        c.title AS course_title
       FROM enrollment e
       JOIN app_user au ON au.id = e.user_id
       JOIN course_run cr ON cr.id = e.course_run_id
       JOIN course c ON c.id = e.course_id
-      LEFT JOIN ssg_enrolments se ON se.enrolment_ref = e.enrolment_id
-      WHERE (
-        LOWER(COALESCE(se.status, '')) = 'cancelled'
-        OR LOWER(COALESCE(e.enrolment_status, '')) = 'cancelled'
-      )
-      AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed')
+      WHERE LOWER(COALESCE(e.enrolment_status, '')) IN ('cancelled', 'withdrawn')
       ORDER BY cr.course_run_id, au.full_name
     `);
 
@@ -55,42 +45,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({
         success: true,
         dryRun: true,
-        message: `Found ${previewResult.rows.length} enrollment(s) to clean up. Re-run with ?dryRun=0 to apply.`,
+        message: `Found ${previewResult.rows.length} cancelled/withdrawn enrollment(s). These are now automatically excluded from class lists and courseware after the code update. Run with ?dryRun=0 to signal affected learners to refresh.`,
+        count: previewResult.rows.length,
         data: previewResult.rows,
       });
     }
 
-    // Apply: mark any not-yet-cancelled rows as Cancelled
-    const updateResult = await pool.query(`
-      UPDATE enrollment
-      SET enrolment_status = 'Cancelled', updated_at = NOW()
-      WHERE id IN (
-        SELECT e.id
-        FROM enrollment e
-        LEFT JOIN ssg_enrolments se ON se.enrolment_ref = e.enrolment_id
-        WHERE LOWER(COALESCE(se.status, '')) = 'cancelled'
-          AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled')
-      )
-    `);
-
-    // Signal affected learners to refresh
-    await pool.query(`
+    // Signal affected learners to refresh their course lists
+    const signalResult = await pool.query(`
       UPDATE app_user
       SET courses_updated_at = NOW()
       WHERE id IN (
         SELECT DISTINCT e.user_id
         FROM enrollment e
-        LEFT JOIN ssg_enrolments se ON se.enrolment_ref = e.enrolment_id
-        WHERE LOWER(COALESCE(se.status, '')) = 'cancelled'
-          OR LOWER(COALESCE(e.enrolment_status, '')) = 'cancelled'
+        WHERE LOWER(COALESCE(e.enrolment_status, '')) IN ('cancelled', 'withdrawn')
       )
     `);
 
     return res.status(200).json({
       success: true,
       dryRun: false,
-      message: `Updated ${updateResult.rowCount} enrollment(s) to Cancelled. ${previewResult.rows.length} total affected.`,
-      updated: updateResult.rowCount,
+      message: `Signalled ${signalResult.rowCount} learner(s) to refresh. ${previewResult.rows.length} cancelled/withdrawn enrollment(s) are now excluded from all views.`,
+      learnersSignalled: signalResult.rowCount,
+      enrollmentsAffected: previewResult.rows.length,
       data: previewResult.rows,
     });
   } catch (error) {
