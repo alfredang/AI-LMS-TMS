@@ -33,7 +33,32 @@ function normDate(v: any): string | null {
   return null;
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const gCal = globalThis as unknown as { __addTodayCalRunning?: boolean };
+if (gCal.__addTodayCalRunning === undefined) gCal.__addTodayCalRunning = false;
+
 export async function runAutomation(): Promise<{
+  success: boolean;
+  pulled: number;
+  confirmedToday: number;
+  added: number;
+  alreadyAttendee: number;
+  noEvent: number;
+  errors: number;
+}> {
+  if (gCal.__addTodayCalRunning) {
+    console.warn('[auto-add-today-enrolments-to-calendar] Another run is already in progress — skipping');
+    return { success: false, pulled: 0, confirmedToday: 0, added: 0, alreadyAttendee: 0, noEvent: 0, errors: 0 };
+  }
+  gCal.__addTodayCalRunning = true;
+  try {
+    return await _runAutomationInner();
+  } finally {
+    gCal.__addTodayCalRunning = false;
+  }
+}
+
+async function _runAutomationInner(): Promise<{
   success: boolean;
   pulled: number;
   confirmedToday: number;

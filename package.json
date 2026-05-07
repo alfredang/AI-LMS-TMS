@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next dev",
+    "dev": "cross-env ENABLE_APP_SCHEDULER=false NODE_OPTIONS=--max-old-space-size=8192 next dev -p 3000",
+    "dev:scheduler": "cross-env ENABLE_APP_SCHEDULER=true NODE_OPTIONS=--max-old-space-size=8192 next dev -p 3000",
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next build --webpack",
     "start": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next start",
     "lint": "next lint",

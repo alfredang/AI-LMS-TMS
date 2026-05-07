@@ -8,12 +8,18 @@
 export async function register() {
     // Only run on the server side, not during build
     if (process.env.NEXT_RUNTIME === 'nodejs') {
-        // Always initialize the scheduler if it's the Node.js runtime
-        try {
-            const { initScheduler } = await import('./lib/scheduler/scheduler');
-            await initScheduler();
-        } catch (err) {
-            console.error('[Scheduler] Failed to initialize:', err);
+        const schedulerEnabled = process.env.ENABLE_APP_SCHEDULER === 'true'
+            || (process.env.NODE_ENV === 'production' && process.env.ENABLE_APP_SCHEDULER !== 'false');
+
+        if (schedulerEnabled) {
+            try {
+                const { initScheduler } = await import('./lib/scheduler/scheduler');
+                await initScheduler();
+            } catch (err) {
+                console.error('[Scheduler] Failed to initialize:', err);
+            }
+        } else {
+            console.log('[Scheduler] Startup scheduler disabled for this process');
         }
 
         // Ensure the CP Generator prompt-template table exists. Idempotent —

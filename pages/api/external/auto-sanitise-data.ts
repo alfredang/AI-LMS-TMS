@@ -365,9 +365,26 @@ async function applyUpdates(
   };
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __sanitiseDataRunning?: boolean };
+if (g.__sanitiseDataRunning === undefined) g.__sanitiseDataRunning = false;
+
 // ── Main runner ──────────────────────────────────────────────────────────────
 
 export async function runAutomation(): Promise<AutomationSummary> {
+  if (g.__sanitiseDataRunning) {
+    console.warn('[auto-sanitise-data] Another run is already in progress — skipping');
+    return { runId: '', startedAt: '', retentionMonths: 0, cutoffDate: '', enabled: false, totalScanned: 0, totalUpdated: 0, results: [] };
+  }
+  g.__sanitiseDataRunning = true;
+  try {
+    return await _runAutomationInner();
+  } finally {
+    g.__sanitiseDataRunning = false;
+  }
+}
+
+async function _runAutomationInner(): Promise<AutomationSummary> {
   await ensureLogTable();
 
   const now = new Date();

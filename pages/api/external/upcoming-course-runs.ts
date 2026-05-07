@@ -149,9 +149,26 @@ async function searchEnrolmentsForRun(
   return parsed?.data ?? [];
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __upcomingRunsRunning?: boolean };
+if (g.__upcomingRunsRunning === undefined) g.__upcomingRunsRunning = false;
+
 // ── Main runner ───────────────────────────────────────────────────────────────
 
 export async function runUpcomingCourseRuns() {
+  if (g.__upcomingRunsRunning) {
+    console.warn('[upcoming-course-runs] Another run is already in progress — skipping');
+    return { runId: '', startedAt: '', thresholdDays: 0, processed: 0, successCount: 0, errors: 0, results: [], skipped: true };
+  }
+  g.__upcomingRunsRunning = true;
+  try {
+    return await _runUpcomingCourseRunsInner();
+  } finally {
+    g.__upcomingRunsRunning = false;
+  }
+}
+
+async function _runUpcomingCourseRunsInner() {
   await ensureLogTable();
 
   const runId = `upcoming_${Date.now()}`;

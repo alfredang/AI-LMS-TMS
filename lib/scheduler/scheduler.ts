@@ -9,6 +9,21 @@
 
 import cron, { ScheduledTask } from 'node-cron';
 import pool from '../db';
+import crypto from 'crypto';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Deterministic 32-bit signed integer from a string, used as the key for
+ * PostgreSQL advisory locks.  Two tasks with the same ID always produce the
+ * same lock key, so even separate processes/containers contend on the same DB
+ * lock row.
+ */
+function hashStringToInt(s: string): number {
+    const hash = crypto.createHash('md5').update(s).digest();
+    // Read first 4 bytes as signed 32-bit int (pg advisory lock uses int4/int8)
+    return hash.readInt32BE(0);
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -340,16 +355,38 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
 // ── Execute a scheduled task ──────────────────────────────────────────────────
 
 async function executeTask(task: SchedulerTask) {
-    // In-flight lock — defense-in-depth against duplicate invocations from any
-    // source (sibling module instance's cron, admin Run Now while cron is mid-run,
-    // or any future code path). Lives on globalThis singleton so all module
-    // instances share the same lock set. JavaScript's single-threaded event loop
-    // makes the has-then-add sequence atomic.
+    // ── Layer 1: In-process lock (globalThis) ─────────────────────────────
+    // Catches duplicate invocations within the same Node.js process (e.g.
+    // two Turbopack module instances, admin Run Now while cron is mid-run).
     if (schedulerState.inFlight.has(task.id)) {
-        console.log(`⏰ [Scheduler] "${task.name}" already running — skipping duplicate invocation [instance=${INSTANCE_ID}]`);
+        console.log(`⏰ [Scheduler] "${task.name}" already running (in-process) — skipping [instance=${INSTANCE_ID}]`);
         return { success: false, error: 'already in-flight' };
     }
     schedulerState.inFlight.add(task.id);
+
+    // ── Layer 2: Cross-process lock (PostgreSQL advisory lock) ────────────
+    // This is the REAL guard.  In-memory flags are invisible to other
+    // containers / processes (e.g. during rolling deployments or if the
+    // hosting platform runs >1 replica).  Advisory locks are held in the
+    // shared database so only ONE process globally can execute a given task.
+    const lockKey = hashStringToInt(task.id);
+    let dbLockAcquired = false;
+    try {
+        const lockResult = await pool.query(
+            'SELECT pg_try_advisory_lock($1) AS acquired',
+            [lockKey]
+        );
+        dbLockAcquired = lockResult.rows[0]?.acquired === true;
+        if (!dbLockAcquired) {
+            console.log(`⏰ [Scheduler] "${task.name}" — DB advisory lock not acquired, another process is already running it — skipping`);
+            return { success: false, error: 'another process holds the lock' };
+        }
+    } catch (lockErr) {
+        // If the advisory lock query itself fails (e.g. DB hiccup), fall
+        // through and rely on the in-process lock alone rather than
+        // blocking the task entirely.
+        console.warn(`⏰ [Scheduler] "${task.name}" — advisory lock query failed, proceeding with in-process lock only:`, lockErr);
+    }
 
     const startTime = new Date();
     console.log(`⏰ [Scheduler] Running "${task.name}" at ${startTime.toISOString()} [instance=${INSTANCE_ID}]`);
@@ -411,8 +448,13 @@ async function executeTask(task: SchedulerTask) {
 
         return { success: false, error: errorMsg };
     } finally {
-        // Always release the lock, even on error/throw, so future invocations work.
+        // Release the in-process lock
         schedulerState.inFlight.delete(task.id);
+
+        // Release the DB advisory lock (if we acquired it)
+        if (dbLockAcquired) {
+            await pool.query('SELECT pg_advisory_unlock($1)', [lockKey]).catch(() => {});
+        }
     }
 }
 
@@ -426,6 +468,22 @@ function scheduleTask(task: SchedulerTask) {
         schedulerState.activeJobs.delete(task.id);
     }
 
+    // Also clean up node-cron's own internal global.scheduledTasks registry.
+    // node-cron stores every job created via cron.schedule() in a separate
+    // global Map keyed by a UUID. Calling .stop() clears the timer but does
+    // NOT remove the entry, so orphaned jobs accumulate. We purge stopped
+    // tasks to prevent any edge-case reactivation.
+    try {
+        const internalTasks = cron.getTasks();
+        if (internalTasks && typeof internalTasks.forEach === 'function') {
+            internalTasks.forEach((cronTask: any, key: string) => {
+                // A stopped task has timeout === null in its internal scheduler
+                if (cronTask?._scheduler?.timeout === null) {
+                    internalTasks.delete(key);
+                }
+            });
+        }
+    } catch { /* non-critical cleanup */ }
 
     if (!task.enabled) {
         console.log(`⏰ [Scheduler] "${task.name}" is disabled — skipping`);
@@ -456,6 +514,13 @@ export async function initScheduler() {
         console.log(`⏰ [Scheduler] initScheduler called again — already initialised, skipping [instance=${INSTANCE_ID}]`);
         return;
     }
+
+    // Set the flag EAGERLY — before any await — so that a concurrent call
+    // from a sibling Turbopack module instance cannot slip through the
+    // guard while we are awaiting DB queries.  If init fails we reset the
+    // flag so a future call can retry.
+    schedulerState.initialized = true;
+
     try {
         console.log(`⏰ [Scheduler] Initialising... [instance=${INSTANCE_ID}]`);
         await ensureSchedulerTable();
@@ -469,10 +534,10 @@ export async function initScheduler() {
             scheduleTask(task);
         }
 
-        // Only mark initialised on the success path so a failed init can be retried.
-        schedulerState.initialized = true;
         console.log(`⏰ [Scheduler] Initialised ${result.rows.length} task(s) [instance=${INSTANCE_ID}]`);
     } catch (err) {
+        // Reset flag so a subsequent call can retry initialisation.
+        schedulerState.initialized = false;
         console.error('⏰ [Scheduler] Failed to initialise:', err);
     }
 }

@@ -110,7 +110,24 @@ async function getWindowDays(): Promise<number> {
   return DEFAULT_WINDOW_DAYS;
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __trainerInvitationsRunning?: boolean };
+if (g.__trainerInvitationsRunning === undefined) g.__trainerInvitationsRunning = false;
+
 export async function runAutomation(): Promise<AutomationSummary> {
+  if (g.__trainerInvitationsRunning) {
+    console.warn('[auto-send-trainer-invitations] Another run is already in progress — skipping');
+    return { runId: '', startedAt: '', windowDays: 0, totalEligible: 0, sent: 0, skipped: 0, errors: 0, results: [] };
+  }
+  g.__trainerInvitationsRunning = true;
+  try {
+    return await _runAutomationInner();
+  } finally {
+    g.__trainerInvitationsRunning = false;
+  }
+}
+
+async function _runAutomationInner(): Promise<AutomationSummary> {
   await ensureLogTable();
 
   const runId = `trainer_invite_${Date.now()}`;

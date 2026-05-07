@@ -273,9 +273,26 @@ async function upsertLearner(
   }
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __createLearnersRunning?: boolean };
+if (g.__createLearnersRunning === undefined) g.__createLearnersRunning = false;
+
 // ── Main automation runner ────────────────────────────────────────────────────
 
 export async function runAutomation() {
+  if (g.__createLearnersRunning) {
+    console.warn('[auto-create-learners] Another run is already in progress — skipping');
+    return { runId: '', startedAt: '', processed: 0, results: [], skipped: true };
+  }
+  g.__createLearnersRunning = true;
+  try {
+    return await _runAutomationInner();
+  } finally {
+    g.__createLearnersRunning = false;
+  }
+}
+
+async function _runAutomationInner() {
   await ensureAutomationTable();
 
   const runId = `run_${Date.now()}`;

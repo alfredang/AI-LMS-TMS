@@ -189,7 +189,27 @@ async function sendPendingDaMainInvoiceEmails(runId: string): Promise<{
   return { sent, failed, failures };
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __daInvoicesRunning?: boolean };
+if (g.__daInvoicesRunning === undefined) g.__daInvoicesRunning = false;
+
 export async function runAutomation(): Promise<
+  | { success: true; runId: string; stats: RunStats }
+  | { success: false; runId: string; error: string }
+> {
+  if (g.__daInvoicesRunning) {
+    console.warn('[auto-generate-da-invoices] Another run is already in progress — skipping');
+    return { success: false, runId: '', error: 'Skipped — another run is already in progress' };
+  }
+  g.__daInvoicesRunning = true;
+  try {
+    return await _runAutomationInner();
+  } finally {
+    g.__daInvoicesRunning = false;
+  }
+}
+
+async function _runAutomationInner(): Promise<
   | { success: true; runId: string; stats: RunStats }
   | { success: false; runId: string; error: string }
 > {

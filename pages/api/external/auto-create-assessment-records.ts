@@ -67,9 +67,26 @@ async function ensureLogTable() {
     `);
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __assessmentRecordsRunning?: boolean };
+if (g.__assessmentRecordsRunning === undefined) g.__assessmentRecordsRunning = false;
+
 // ── Main automation runner ────────────────────────────────────────────────────
 
 export async function runAutomation() {
+    if (g.__assessmentRecordsRunning) {
+        console.warn('[auto-create-assessment-records] Another run is already in progress — skipping');
+        return { runId: '', startedAt: '', processed: 0, created: 0, existing: 0, errors: 0, results: [], skipped: true };
+    }
+    g.__assessmentRecordsRunning = true;
+    try {
+        return await _runAutomationInner();
+    } finally {
+        g.__assessmentRecordsRunning = false;
+    }
+}
+
+async function _runAutomationInner() {
     await ensureLogTable();
 
     const runId = `trainer_folder_${Date.now()}`;

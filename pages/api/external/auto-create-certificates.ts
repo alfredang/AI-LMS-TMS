@@ -26,6 +26,7 @@ async function ensureLogTable() {
             course_title TEXT,
             course_code TEXT,
             learner_name TEXT,
+            learner_email TEXT,
             nric TEXT,
             certificate_url TEXT,
             status TEXT NOT NULL,
@@ -34,6 +35,8 @@ async function ensureLogTable() {
             updated_at TIMESTAMPTZ DEFAULT NOW()
         )
     `);
+    // Ensure learner_email column exists for older tables
+    await pool.query(`ALTER TABLE auto_create_certificates_log ADD COLUMN IF NOT EXISTS learner_email TEXT`);
 }
 
 /**
@@ -41,12 +44,13 @@ async function ensureLogTable() {
  */
 async function logResult(
     runId: string,
-    status: 'created' | 'error',
+    status: 'created' | 'skipped' | 'error',
     details: {
         courseRunId?: string;
         courseTitle?: string;
         courseCode?: string;
         learnerName?: string;
+        learnerEmail?: string;
         nric?: string;
         certificateUrl?: string;
         errorMessage?: string;
@@ -54,14 +58,15 @@ async function logResult(
 ) {
     await pool.query(`
         INSERT INTO auto_create_certificates_log
-        (run_id, course_run_id, course_title, course_code, learner_name, nric, certificate_url, status, error_message)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        (run_id, course_run_id, course_title, course_code, learner_name, learner_email, nric, certificate_url, status, error_message)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     `, [
         runId,
         details.courseRunId || null,
         details.courseTitle || null,
         details.courseCode || null,
         details.learnerName || null,
+        details.learnerEmail || null,
         details.nric || null,
         details.certificateUrl || null,
         status,
@@ -263,6 +268,7 @@ async function _runAutomationInner(targetDate?: string) {
         console.log(`[auto-create-certificates] Found ${endingRuns.length} course runs ${dateLabel}.`);
 
         let totalGenerated = 0;
+        let totalSkipped = 0;
         let totalErrors = 0;
 
         for (const run of endingRuns) {
@@ -329,7 +335,8 @@ async function _runAutomationInner(targetDate?: string) {
                         const traineeLogContext = {
                             ...logContext,
                             nric: trainee.nric,
-                            learnerName: trainee.learner_name
+                            learnerName: trainee.learner_name,
+                            learnerEmail: trainee.learner_email || undefined,
                         };
 
                         try {
@@ -346,6 +353,8 @@ async function _runAutomationInner(targetDate?: string) {
                             );
                             if (claimed.rowCount === 0) {
                                 console.log(`[auto-create-certificates] ${trainee.learner_name} already claimed by another run — skipping`);
+                                await logResult(runId, 'skipped', { ...traineeLogContext, errorMessage: 'Already claimed by another run' });
+                                totalSkipped++;
                                 continue;
                             }
 
@@ -353,17 +362,34 @@ async function _runAutomationInner(targetDate?: string) {
                             const certificateUrl = await generateAndUploadCertificate(trainee.enrolment_id, pool, trainee.learner_name);
 
                             if (trainee.learner_email) {
-                                try {
-                                    await sendCertificateEmail({
-                                        studentName: trainee.learner_name,
-                                        studentEmail: trainee.learner_email,
-                                        courseName: run.course_title,
-                                        courseDates: run.course_dates || '',
-                                        certificateUrl,
-                                    });
-                                    console.log(`[auto-create-certificates] Certificate emailed to ${trainee.learner_email}`);
-                                } catch (emailErr: any) {
-                                    console.error(`[auto-create-certificates] Failed to email cert to ${trainee.learner_email}:`, emailErr.message);
+                                // ── Idempotency: skip email if already sent today ─
+                                const alreadyEmailed = await pool.query(
+                                    `SELECT 1 FROM auto_create_certificates_log
+                                     WHERE nric = $1
+                                       AND course_run_id = $2
+                                       AND status = 'created'
+                                       AND created_at >= (NOW() AT TIME ZONE 'Asia/Singapore')::date
+                                     LIMIT 1`,
+                                    [trainee.nric, run.course_run_id]
+                                );
+                                if (alreadyEmailed.rows.length > 0) {
+                                    console.log(`[auto-create-certificates] ${trainee.learner_name} already processed today — skipping email`);
+                                    await logResult(runId, 'skipped', { ...traineeLogContext, certificateUrl, errorMessage: 'Already emailed today' });
+                                    totalSkipped++;
+                                    continue;
+                                } else {
+                                    try {
+                                        await sendCertificateEmail({
+                                            studentName: trainee.learner_name,
+                                            studentEmail: trainee.learner_email,
+                                            courseName: run.course_title,
+                                            courseDates: run.course_dates || '',
+                                            certificateUrl,
+                                        });
+                                        console.log(`[auto-create-certificates] Certificate emailed to ${trainee.learner_email}`);
+                                    } catch (emailErr: any) {
+                                        console.error(`[auto-create-certificates] Failed to email cert to ${trainee.learner_email}:`, emailErr.message);
+                                    }
                                 }
                             } else {
                                 console.warn(`[auto-create-certificates] No email for ${trainee.learner_name} — certificate generated but not emailed`);
@@ -392,11 +418,11 @@ async function _runAutomationInner(targetDate?: string) {
             }
         }
 
-        console.log(`[auto-create-certificates] Run ${runId} completed. ${totalGenerated} generated, ${totalErrors} errors.`);
+        console.log(`[auto-create-certificates] Run ${runId} completed. ${totalGenerated} generated, ${totalSkipped} skipped, ${totalErrors} errors.`);
         return { 
             success: true, 
             runId, 
-            stats: { totalGenerated, totalErrors } 
+            stats: { totalGenerated, totalSkipped, totalErrors } 
         };
 
     } catch (error: any) {

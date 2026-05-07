@@ -188,6 +188,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
       LEFT JOIN learner_profile lp
         ON e.user_id = lp.user_id
       WHERE e.course_run_id = $1
+        AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
       ORDER BY au.full_name
     `;
 

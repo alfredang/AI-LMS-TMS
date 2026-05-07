@@ -993,6 +993,24 @@ ALTER SEQUENCE public.auto_send_course_completion_log_id_seq OWNED BY public.aut
 
 
 --
+-- Name: auto_send_course_completion_delivery; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auto_send_course_completion_delivery (
+    delivery_key text NOT NULL,
+    run_id text NOT NULL,
+    course_run_id text,
+    enrollment_id uuid,
+    learner_email text,
+    status text DEFAULT 'sending'::text NOT NULL,
+    error_message text,
+    claimed_at timestamp with time zone DEFAULT now(),
+    sent_at timestamp with time zone,
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+
+--
 -- Name: auto_send_courseware_attendance_log; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3519,6 +3537,14 @@ ALTER TABLE ONLY public.auto_send_confirmation_log
 
 ALTER TABLE ONLY public.auto_send_course_completion_log
     ADD CONSTRAINT auto_send_course_completion_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: auto_send_course_completion_delivery auto_send_course_completion_delivery_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auto_send_course_completion_delivery
+    ADD CONSTRAINT auto_send_course_completion_delivery_pkey PRIMARY KEY (delivery_key);
 
 
 --

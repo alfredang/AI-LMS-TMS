@@ -91,7 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          c.assessment_hours,
          (SELECT COUNT(*)::int FROM enrollment e
           WHERE e.course_run_id = cr.id
-            AND e.enrolment_status IS DISTINCT FROM 'Admin Removed') AS enrolled_count
+            AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')) AS enrolled_count
        FROM course_run cr
        JOIN course c ON c.id = cr.course_id
        ${where}

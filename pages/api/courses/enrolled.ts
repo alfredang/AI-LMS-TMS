@@ -92,7 +92,7 @@ export default async function handler(
         GROUP BY course_id
       ) assessment_count ON c.id = assessment_count.course_id
       WHERE u.id = $1
-        AND e.enrolment_status IS DISTINCT FROM 'Admin Removed'
+        AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
       ORDER BY cr.start_date DESC
     `;
 
