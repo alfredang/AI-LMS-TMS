@@ -650,7 +650,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setSendingInvitationFor(classItem.id);
         setActionMessage(null);
         try {
-            const overrideTrainerName = nextTrainerOverrides[classItem.id] || undefined;
+            // Send what the dropdown is showing (default = nextAvailableTrainer, or admin's selection).
+            // Without this fallback, clicking RESEND without touching the dropdown sent
+            // overrideTrainerName=undefined, which made the backend auto-escalate to a
+            // different trainer than the one shown — emails went to the wrong person.
+            const overrideTrainerName = nextTrainerOverrides[classItem.id] || classItem.nextAvailableTrainer || undefined;
             const response = await fetch(getApiUrl('/api/admin/send-trainer-invitation'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
