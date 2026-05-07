@@ -21,6 +21,9 @@ interface CourseRow {
   start_date: string;
   end_date: string;
   class_status: string;
+  class_type: string;
+  virtual_meeting_link: string;
+  virtual_meeting_provider: string;
   enrolment_id: string;
   enrolment_status: string;
   nric: string;
@@ -79,7 +82,9 @@ export default async function handler(
         cr.start_date,
         cr.end_date,
         cr.class_status,
-        COALESCE(cr.class_type, 'Physical') AS class_type
+        COALESCE(cr.class_type, 'Physical') AS class_type,
+        cr.virtual_meeting_link,
+        cr.virtual_meeting_provider
       FROM app_user u
       JOIN enrollment e ON u.id = e.user_id
       JOIN course c ON e.course_id = c.id
@@ -119,7 +124,9 @@ export default async function handler(
       startDate: row.start_date,
       endDate: row.end_date,
       classStatus: row.class_status,
-      classType: (row as any).class_type || 'Physical',
+      classType: row.class_type || 'Physical',
+      virtualMeetingLink: row.virtual_meeting_link || null,
+      virtualMeetingProvider: row.virtual_meeting_provider || null,
       enrolmentId: row.enrolment_id || null,
       enrolmentStatus: row.enrolment_status || null,
       nric: row.nric || null,

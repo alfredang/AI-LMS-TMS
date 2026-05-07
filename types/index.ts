@@ -212,6 +212,9 @@ export interface Course {
   startDate?: string;
   endDate?: string;
   classStatus?: string;
+  classType?: string;
+  virtualMeetingLink?: string | null;
+  virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' | string | null;
   enrollmentStatus?: string;
   courseRunId?: string; // Add this for course detail navigation
   courseRunCode?: string; // The actual course run identifier from database
@@ -289,6 +292,9 @@ export interface CourseDetail {
   publishedAssessmentMethods?: Record<string, boolean>;
   startDate?: string;
   endDate?: string;
+  classType?: string;
+  virtualMeetingLink?: string | null;
+  virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' | string | null;
   fundingValidity?: string;
   certificate: string;
 }

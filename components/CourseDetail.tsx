@@ -59,6 +59,9 @@ interface Course {
     courseType: string;
     modeOfLearning: string[];
     classStatus?: string;
+    classType?: string;
+    virtualMeetingLink?: string | null;
+    virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' | string | null;
     totalAssessments?: number;
     topics: Topic[];
     assessments?: Assessment[];
@@ -86,6 +89,15 @@ interface Course {
 
 // --- Utility Functions ---
 const toId = (label: string) => label.toLowerCase().replace(/ /g, '-');
+
+const inferVirtualMeetingProvider = (link?: string | null): 'google_meet' | 'zoom' | 'teams' | null => {
+    if (!link) return null;
+    const normalized = link.toLowerCase();
+    if (normalized.includes('zoom.us') || normalized.includes('zoomgov.com')) return 'zoom';
+    if (normalized.includes('teams.microsoft.com') || normalized.includes('teams.live.com')) return 'teams';
+    if (normalized.includes('meet.google.com')) return 'google_meet';
+    return null;
+};
 
 // --- Reusable Components ---
 const ContentSection: React.FC<{ title?: string; children: React.ReactNode; className?: string }> = ({ title, children, className }) => (
@@ -2471,6 +2483,7 @@ export const CourseDetail: React.FC = () => {
         practicalPerformanceAssessmentLink: effectiveDetail?.practicalPerformanceAssessmentLink,
         classType: (effectiveDetail as any)?.classType || selectedCourse.classType || 'Physical',
         virtualMeetingLink: (effectiveDetail as any)?.virtualMeetingLink || selectedCourse.virtualMeetingLink || null,
+        virtualMeetingProvider: (effectiveDetail as any)?.virtualMeetingProvider || selectedCourse.virtualMeetingProvider || null,
         fundingValidity: (effectiveDetail as any)?.fundingValidity || selectedCourse.fundingValidity || undefined,
         assessmentMethods: effectiveDetail?.assessmentMethods || undefined,
         publishedAssessmentMethods: effectiveDetail?.publishedAssessmentMethods || {},
@@ -2764,6 +2777,7 @@ export const CourseDetail: React.FC = () => {
                             {(() => {
                                 const vmp = (
                                     (convertedCourse as any)?.virtualMeetingProvider ||
+                                    inferVirtualMeetingProvider(convertedCourse.virtualMeetingLink) ||
                                     ((trainingProviderProfile as any)?.integrations?.virtualMeetingProvider as 'google_meet' | 'zoom' | 'teams' | undefined) ||
                                     'google_meet'
                                 );
