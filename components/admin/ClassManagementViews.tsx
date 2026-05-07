@@ -7226,139 +7226,182 @@ export const TrainerFolderLogsView: React.FC = () => {
 export const AutoCreateCertificatesLogView: React.FC = () => {
   const { setAdminPage } = useLms();
   const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ totalGenerated: number; totalSkipped: number; totalErrors: number } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
 
   const fetchLogs = async () => {
     setLoading(true);
-    setError(null);
     try {
-      const res = await fetch('/api/admin/auto-create-certificates-log');
+      const res = await fetch('/api/admin/auto-create-certificates-log?limit=500');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (!data.success) throw new Error(data.message || 'Error fetching logs');
-      setLogs(data.logs || []);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
+      if (data.success) setLogs(data.data || []);
+    } catch { /* silent */ } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch('/api/admin/run-auto-create-certificates', { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      const stats = json.stats || { totalGenerated: 0, totalSkipped: 0, totalErrors: 0 };
+      setRunResult(stats);
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  // Group by run_id
+  const batches = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
   useEffect(() => {
-    fetchLogs();
-  }, []);
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    const cls = status === 'created' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+      : status === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+      : status === 'skipped' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+        {status}
+      </span>
+    );
+  };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      <div className="flex justify-between items-center pb-5 border-b border-default">
-        <div>
-          <h2 className="text-2xl font-semibold text-on-surface">Auto-Create Certificates Logs</h2>
-          <p className="text-sm text-on-surface-secondary mt-1">Logs for the daily 6:30 PM background generation of certificates.</p>
-        </div>
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">Auto-Create Certificates Log</h2>
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchLogs}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-surface-elevated text-on-surface-secondary border border-default rounded-md hover:bg-surface-hover text-sm"
-          >
-            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-          </button>
-          <button
-            onClick={() => setAdminPage(AdminPage.Scheduler)}
-            className="flex items-center gap-2 px-4 py-2 bg-surface-elevated text-on-surface-secondary border border-default rounded-md hover:bg-surface-hover text-sm"
-          >
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Now'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Scheduler)}>
             ← Back to Scheduler
-          </button>
+          </Button>
         </div>
       </div>
 
-      {error ? (
-        <div className="p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-md">
-          {error}
-        </div>
-      ) : (
-        <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-surface-elevated border-b border-default text-on-surface-secondary font-semibold">
-                <tr>
-                  <th className="px-5 py-3">Timestamp</th>
-                  <th className="px-5 py-3">Batch/Run ID</th>
-                  <th className="px-5 py-3">Course Run ID</th>
-                  <th className="px-5 py-3">Course Code/Title</th>
-                  <th className="px-5 py-3">Learner Name</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3 max-w-sm text-right">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-default">
-                {logs.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-5 py-12 text-center text-muted">
-                      No matching logs found.
-                    </td>
-                  </tr>
-                ) : (
-                  logs.map((log: any) => (
-                    <tr key={log.id} className="hover:bg-surface-hover transition-colors">
-                      <td className="px-5 py-4 whitespace-nowrap text-on-surface font-mono text-xs">
-                        {new Date(log.created_at).toLocaleString('en-SG')}
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap text-on-surface-secondary font-mono text-xs" title={log.run_id}>
-                        {log.run_id ? log.run_id.substring(0, 8) + '...' : '—'}
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <span className="font-mono text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">{log.course_run_id || '—'}</span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="font-medium text-on-surface">{log.course_code || '—'}</div>
-                        <div className="text-xs text-on-surface-secondary truncate max-w-[200px]" title={log.course_title}>
-                          {log.course_title || '—'}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <div className="font-medium text-on-surface">{log.learner_name || '—'}</div>
-                        {log.nric && <div className="text-xs text-on-surface-secondary">{log.nric}</div>}
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        {log.status === 'error' ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400 border border-red-200 dark:border-red-500/20">
-                            Error
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400 border border-green-200 dark:border-green-500/20">
-                            Success
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-right max-w-sm">
-                        {log.status === 'error' ? (
-                          <div className="text-xs text-red-600 dark:text-red-400 break-words" title={log.error_message}>
-                            {log.error_message || 'Unknown error'}
-                          </div>
-                        ) : log.certificate_url ? (
-                          <a href={log.certificate_url} target="_blank" rel="noreferrer" className="text-primary hover:underline font-mono text-xs inline-flex items-center gap-1">
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                            View Cert
-                          </a>
-                        ) : (
-                          <span className="text-xs text-muted">No URL</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Daily at 6:30 PM SGT. Generates certificates for learners who meet attendance thresholds in recently-ended course runs, and emails them. Use <strong>Run Now</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          ✅ Done — {runResult.totalGenerated} generated, {runResult.totalSkipped} skipped, {runResult.totalErrors} error(s).
         </div>
       )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to trigger this cron manually.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const createdCount = rows.filter((r: any) => r.status === 'created').length;
+        const skippedCount = rows.filter((r: any) => r.status === 'skipped').length;
+        const errorCount   = rows.filter((r: any) => r.status === 'error').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
+                {createdCount > 0 && <span className="text-xs text-green-600 dark:text-green-400">{createdCount} created</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Course Run ID', 'Course Code', 'Course Title', 'Learner Name', 'Learner Email', 'NRIC', 'Status', 'Certificate', 'Error'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map((row: any) => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_code ?? '—'}</td>
+                        <td className="px-3 py-2 max-w-[260px] truncate" title={row.course_title ?? ''}>{row.course_title ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.learner_name ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.learner_email ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-500">{row.nric ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2">
+                          {row.certificate_url ? (
+                            <a href={row.certificate_url} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs inline-flex items-center gap-1">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              View
+                            </a>
+                          ) : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="px-3 py-2 max-w-[320px] truncate text-red-600 dark:text-red-400" title={row.error_message ?? ''}>{row.error_message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };
