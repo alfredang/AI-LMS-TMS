@@ -15,6 +15,7 @@ import {
 } from '@/lib/trainerInvitations';
 import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSender';
 import { getGoogleCredentials } from '@/lib/google-auth/googleAuth';
+import { pushTrainerToTpgForRun } from '@/lib/ssg/pushTrainerToTpgForRun';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
   const colors = {
@@ -380,6 +381,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           `✅ [trainer-invitation/respond] course_run_trainer ${row?.was_inserted ? 'INSERTED' : 'UPDATED'} ` +
           `id=${row?.id} for course_run=${invitation.course_run_id}`
         );
+        // Auto-push to SSG TPG so admin doesn't need a separate "Bulk TPG
+        // Assign" click. Isolated try/catch — TPG failure is recorded on
+        // course_run.tpg_sync_status and never breaks the trainer's accept.
+        try {
+          const tpgResult = await pushTrainerToTpgForRun(invitation.course_run_id);
+          console.log(
+            `🎯 [trainer-invitation/respond] TPG push: status=${tpgResult.status} ` +
+            `course_run=${invitation.course_run_id} trainer="${invitation.trainer_name}" ` +
+            `msg="${tpgResult.message}"`
+          );
+        } catch (tpgErr) {
+          console.error(
+            `❌ [trainer-invitation/respond] TPG push threw for course_run=${invitation.course_run_id}:`,
+            tpgErr
+          );
+        }
       } catch (crtErr) {
         // Log loudly but do NOT rethrow — the invitation is already marked
         // accepted and the trainer should still see the thank-you page.
