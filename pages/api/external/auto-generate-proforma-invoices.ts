@@ -16,6 +16,10 @@ export const config = {
 
 const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback';
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __proformaInvoicesRunning?: boolean };
+if (g.__proformaInvoicesRunning === undefined) g.__proformaInvoicesRunning = false;
+
 /**
  * Scheduled sweep — finds every active enrollment still missing a pro_forma_url
  * and generates one. Runs daily at 04:00 SGT (see lib/scheduler/scheduler.ts).
@@ -24,6 +28,19 @@ const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-
  * skipped. Idempotent: enrollments with pro_forma_url already set are skipped.
  */
 export async function runAutomation() {
+    if (g.__proformaInvoicesRunning) {
+        console.warn('[auto-generate-proforma-invoices] Another run is already in progress — skipping');
+        return { success: false, message: 'Skipped — another run is already in progress' };
+    }
+    g.__proformaInvoicesRunning = true;
+    try {
+        return await _runAutomationInner();
+    } finally {
+        g.__proformaInvoicesRunning = false;
+    }
+}
+
+async function _runAutomationInner() {
     await ensureProformaLogTable();
     await pool.query('ALTER TABLE enrollment ADD COLUMN IF NOT EXISTS pro_forma_url TEXT');
     await pool.query('ALTER TABLE enrollment ADD COLUMN IF NOT EXISTS proforma_invoice_number TEXT');

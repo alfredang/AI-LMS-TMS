@@ -153,9 +153,26 @@ async function sendConfirmationEmail(opts: {
     await gmail.users.messages.send({ userId: 'me', requestBody: { raw: encodedMessage } });
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __confirmationEmailRunning?: boolean };
+if (g.__confirmationEmailRunning === undefined) g.__confirmationEmailRunning = false;
+
 // ── Main automation ──────────────────────────────────────────────────────────
 
 export async function runAutomation(taskId: string = 'auto_send_course_confirmation') {
+    if (g.__confirmationEmailRunning) {
+        console.warn('[auto-send-confirmation] Another run is already in progress — skipping');
+        return { success: false, message: 'Skipped — another run is already in progress' };
+    }
+    g.__confirmationEmailRunning = true;
+    try {
+        return await _runAutomationInner(taskId);
+    } finally {
+        g.__confirmationEmailRunning = false;
+    }
+}
+
+async function _runAutomationInner(taskId: string = 'auto_send_course_confirmation') {
     await ensureLogTable();
 
     const runId = crypto.randomUUID();

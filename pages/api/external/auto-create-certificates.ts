@@ -353,17 +353,31 @@ async function _runAutomationInner(targetDate?: string) {
                             const certificateUrl = await generateAndUploadCertificate(trainee.enrolment_id, pool, trainee.learner_name);
 
                             if (trainee.learner_email) {
-                                try {
-                                    await sendCertificateEmail({
-                                        studentName: trainee.learner_name,
-                                        studentEmail: trainee.learner_email,
-                                        courseName: run.course_title,
-                                        courseDates: run.course_dates || '',
-                                        certificateUrl,
-                                    });
-                                    console.log(`[auto-create-certificates] Certificate emailed to ${trainee.learner_email}`);
-                                } catch (emailErr: any) {
-                                    console.error(`[auto-create-certificates] Failed to email cert to ${trainee.learner_email}:`, emailErr.message);
+                                // ── Idempotency: skip email if already sent today ─
+                                const alreadyEmailed = await pool.query(
+                                    `SELECT 1 FROM auto_create_certificates_log
+                                     WHERE nric = $1
+                                       AND course_run_id = $2
+                                       AND status = 'created'
+                                       AND created_at >= (NOW() AT TIME ZONE 'Asia/Singapore')::date
+                                     LIMIT 1`,
+                                    [trainee.nric, run.course_run_id]
+                                );
+                                if (alreadyEmailed.rows.length > 0) {
+                                    console.log(`[auto-create-certificates] ${trainee.learner_name} already processed today — skipping email`);
+                                } else {
+                                    try {
+                                        await sendCertificateEmail({
+                                            studentName: trainee.learner_name,
+                                            studentEmail: trainee.learner_email,
+                                            courseName: run.course_title,
+                                            courseDates: run.course_dates || '',
+                                            certificateUrl,
+                                        });
+                                        console.log(`[auto-create-certificates] Certificate emailed to ${trainee.learner_email}`);
+                                    } catch (emailErr: any) {
+                                        console.error(`[auto-create-certificates] Failed to email cert to ${trainee.learner_email}:`, emailErr.message);
+                                    }
                                 }
                             } else {
                                 console.warn(`[auto-create-certificates] No email for ${trainee.learner_name} — certificate generated but not emailed`);

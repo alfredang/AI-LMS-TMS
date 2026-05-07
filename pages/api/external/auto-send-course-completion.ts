@@ -6,6 +6,13 @@ import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdent
 
 const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback';
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+// Prevents two concurrent runAutomation() calls (e.g. cron + manual "Run Now",
+// or two Turbopack module instances) from processing the same learners.
+// Hoisted onto globalThis so all module instances share the same flag.
+const g = globalThis as unknown as { __completionEmailRunning?: boolean };
+if (g.__completionEmailRunning === undefined) g.__completionEmailRunning = false;
+
 /**
  * External API — Auto Send Course Completion and Thank You Emails
  *
@@ -133,6 +140,21 @@ async function sendCourseCompletionEmail(opts: {
 }
 
 export async function runAutomation() {
+    // ── Duplicate-run guard ────────────────────────────────────────────────
+    if (g.__completionEmailRunning) {
+        console.warn('[auto-send-course-completion] Another run is already in progress — skipping this invocation to prevent duplicate emails.');
+        return { success: false, message: 'Skipped — another run is already in progress' };
+    }
+    g.__completionEmailRunning = true;
+
+    try {
+        return await _runAutomationInner();
+    } finally {
+        g.__completionEmailRunning = false;
+    }
+}
+
+async function _runAutomationInner() {
     await ensureLogTable();
 
     const runId = crypto.randomUUID();
@@ -218,6 +240,24 @@ export async function runAutomation() {
                     if (!learner.learner_email) {
                         console.warn(`[auto-send-course-completion] No email for ${learner.learner_name} — skipping`);
                         await logResult(runId, 'skipped', { ...traineeLogContext, errorMessage: 'No email address' });
+                        totalSkipped++;
+                        continue;
+                    }
+
+                    // ── Idempotency: skip if already emailed today ───────
+                    // Defense-in-depth — even if two runs execute concurrently,
+                    // this DB check prevents sending the same email twice.
+                    const alreadySent = await pool.query(
+                        `SELECT 1 FROM auto_send_course_completion_log
+                         WHERE course_run_id = $1
+                           AND learner_email = $2
+                           AND status = 'sent'
+                           AND created_at >= (NOW() AT TIME ZONE 'Asia/Singapore')::date
+                         LIMIT 1`,
+                        [run.course_run_id, learner.learner_email]
+                    );
+                    if (alreadySent.rows.length > 0) {
+                        console.log(`[auto-send-course-completion] ${learner.learner_email} already emailed today for ${run.course_run_id} — skipping`);
                         totalSkipped++;
                         continue;
                     }

@@ -16,7 +16,24 @@ import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdent
  * the admin Run Once button.
  */
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __syncSsgEnrolmentsRunning?: boolean };
+if (g.__syncSsgEnrolmentsRunning === undefined) g.__syncSsgEnrolmentsRunning = false;
+
 export async function runAutomation(): Promise<{ success: boolean; inserted: number; skipped: number; errors: number; daysChecked: number }> {
+  if (g.__syncSsgEnrolmentsRunning) {
+    console.warn('[sync-ssg-enrolments] Another run is already in progress — skipping');
+    return { success: false, inserted: 0, skipped: 0, errors: 0, daysChecked: 0 };
+  }
+  g.__syncSsgEnrolmentsRunning = true;
+  try {
+    return await _runAutomationInner();
+  } finally {
+    g.__syncSsgEnrolmentsRunning = false;
+  }
+}
+
+async function _runAutomationInner(): Promise<{ success: boolean; inserted: number; skipped: number; errors: number; daysChecked: number }> {
   let inserted = 0;
   let skipped = 0;
   let errors = 0;

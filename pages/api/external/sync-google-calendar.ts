@@ -24,7 +24,24 @@ async function ensureColumns() {
   await pool.query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS virtual_meeting_link TEXT`);
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __syncCalendarRunning?: boolean };
+if (g.__syncCalendarRunning === undefined) g.__syncCalendarRunning = false;
+
 export async function runSyncGoogleCalendar(options?: { startDate?: string; endDate?: string }) {
+  if (g.__syncCalendarRunning) {
+    console.warn('[sync-google-calendar] Another run is already in progress — skipping');
+    return { success: false, message: 'Skipped — another run is already in progress' };
+  }
+  g.__syncCalendarRunning = true;
+  try {
+    return await _runSyncGoogleCalendarInner(options);
+  } finally {
+    g.__syncCalendarRunning = false;
+  }
+}
+
+async function _runSyncGoogleCalendarInner(options?: { startDate?: string; endDate?: string }) {
   await ensureColumns();
 
   // Read configurable look-ahead days from scheduler_config

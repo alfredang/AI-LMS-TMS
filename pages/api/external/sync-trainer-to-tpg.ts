@@ -90,9 +90,26 @@ export function classifySsgError(ssgErrorMsg: string, ssgStatus?: number): strin
   return `error:${ssgErrorMsg.slice(0, 100)}`;
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __syncTrainerTpgRunning?: boolean };
+if (g.__syncTrainerTpgRunning === undefined) g.__syncTrainerTpgRunning = false;
+
 // ── Main runner ───────────────────────────────────────────────────────────────
 
 export async function runSyncTrainerToTpg() {
+  if (g.__syncTrainerTpgRunning) {
+    console.warn('[sync-trainer-to-tpg] Another run is already in progress — skipping');
+    return { runId: '', startedAt: '', thresholdDays: 0, total: 0, successCount: 0, skipped: 0, errors: 0, cleared: 0, skippedDuplicate: true };
+  }
+  g.__syncTrainerTpgRunning = true;
+  try {
+    return await _runSyncTrainerToTpgInner();
+  } finally {
+    g.__syncTrainerTpgRunning = false;
+  }
+}
+
+async function _runSyncTrainerToTpgInner() {
   await ensureLogTable();
 
   const runId = `sync_trainer_${Date.now()}`;

@@ -71,9 +71,26 @@ function parseSsgDate(d: number | string | undefined): string | null {
   return null;
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __dateSyncRunning?: boolean };
+if (g.__dateSyncRunning === undefined) g.__dateSyncRunning = false;
+
 // ── Main sync runner ──────────────────────────────────────────────────────────
 
 export async function runDateSync() {
+  if (g.__dateSyncRunning) {
+    console.warn('[sync-course-run-dates] Another run is already in progress — skipping');
+    return { runId: '', startedAt: '', processed: 0, updated: 0, noChange: 0, errors: 0, results: [], skipped: true };
+  }
+  g.__dateSyncRunning = true;
+  try {
+    return await _runDateSyncInner();
+  } finally {
+    g.__dateSyncRunning = false;
+  }
+}
+
+async function _runDateSyncInner() {
   await ensureLogTable();
 
   const runId = `sync_${Date.now()}`;
