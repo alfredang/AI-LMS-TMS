@@ -66,8 +66,8 @@ async function handleGet(req: NextApiRequest, res: NextApiResponse) {
       params.push(String(payment_status));
     }
 
-    // Exclude admin-removed enrollments
-    conditions.push(`e.enrolment_status IS DISTINCT FROM 'Admin Removed'`);
+    // Exclude inactive enrollments
+    conditions.push(`LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')`);
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 

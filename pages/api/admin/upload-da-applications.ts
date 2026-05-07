@@ -603,13 +603,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         //   - Updated records (status transitions)
         //   - Duplicate records that already exist but were never auto-enrolled
         try {
+            // Helper: only real SSG enrolment references (ENR-...) count as "already enrolled"
+            const isRealSsgEnrolmentId = (value: unknown): boolean =>
+                /^ENR-/i.test(String(value || '').trim());
+
             // Collect IDs from inserted + updated records
             const processedIds = [...insertedRecords, ...updatedRecords]
                 .filter(r => {
                     if (!r?.id) return false;
                     const status = (r.application_status || '').toLowerCase();
                     const alreadyEnrolled = r.auto_enrol_status && !['failed'].includes(r.auto_enrol_status);
-                    return (status === 'confirmed' || status === 'confirm application') && !alreadyEnrolled && !r.enrolment_id;
+                    // Only skip if the row already has a real SSG enrolment reference (ENR-...)
+                    // Placeholder values like "N/A", "-", "MANUAL", or empty are NOT real enrolments
+                    return (status === 'confirmed' || status === 'confirm application') && !alreadyEnrolled && !isRealSsgEnrolmentId(r.enrolment_id);
                 })
                 .map(r => r.id as string);
 
