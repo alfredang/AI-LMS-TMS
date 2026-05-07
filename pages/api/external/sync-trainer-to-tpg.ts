@@ -7,20 +7,29 @@ import type { RunTrainerEditInfo } from '../../../lib/ssg/models/edit-delete-cou
 
 
 /**
- * External API — Sync Trainer (Local) to TPG/SSG
+ * External API — Sync Trainer (Local) to TPG/SSG (sanity check)
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * SCHEDULE: Run daily after "Fetch TGS Enrolments & Assign Trainers"
  * ─────────────────────────────────────────────────────────────────────────────
  *
- * FLOW:
- *   1. Find all upcoming course runs that have a local trainer assigned
- *      (course_run_trainer) but no TPG trainer yet (tpg_assigned_trainer_name IS NULL).
- *   2. For each run, resolve the trainer's NRIC via:
- *        a. app_user.email or app_user.secondary_email  → trainer_profile.nric
- *   3. Call SSG Edit Course Run with linkCourseRunTrainer payload.
- *   4. On success, write tpg_assigned_trainer_name/email to course_run.
- *   5. Log each attempt with NRIC presence status and SSG response.
+ * Real-time TPG push happens at trainer-invitation accept-time
+ * (lib/ssg/pushTrainerToTpgForRun.ts), so this scheduled run is a SANITY CHECK
+ * that only acts on two cases:
+ *   1. MISSING TPG — local trainer assigned but tpg_assigned_trainer_name is
+ *      empty (e.g. admin assigned via UI without invitation, or the accept-time
+ *      push failed transiently).
+ *   2. MISMATCHED TPG — TPG trainer name differs from the current local trainer
+ *      (e.g. trainer was reassigned locally and TPG still has the old name).
+ *
+ * Runs where TPG already matches local are filtered out at the SQL level — no
+ * SSG API call is made for already-synced runs, saving rate-limit budget.
+ *
+ * FLOW (per matching run):
+ *   1. Resolve trainer NRIC via trainer_id → email → name fallback.
+ *   2. Call SSG Edit Course Run with linkCourseRunTrainer payload.
+ *   3. On success, write tpg_assigned_trainer_name/email and tpg_sync_status.
+ *   4. Log each attempt with NRIC presence and SSG response.
  *
  * POST /api/external/sync-trainer-to-tpg
  * Headers: x-api-key: <EXTERNAL_API_KEY_FOR_CLAWDBOT>
@@ -127,34 +136,58 @@ async function _runSyncTrainerToTpgInner() {
   const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
   const courseApi = createSSGCourseAPI(ssgBaseUrl, credentials);
 
-  // ── Find eligible runs: has local trainer (junction OR scalar), upcoming ─────
-  // Includes runs where TPG is empty OR TPG doesn't match local (mismatch override).
-  // Skips runs where TPG already matches local.
+  // ── Find runs needing attention (sanity-check scope) ─────────────────────────
+  // The accept-invitation handler now auto-pushes accepted trainers to TPG, so
+  // the scheduled run only needs to handle two cases:
+  //   1. Missing TPG — local trainer assigned but tpg_assigned_trainer_name is empty
+  //      (e.g. trainer assigned via admin UI without going through invitation,
+  //       or accept-time TPG push failed transiently)
+  //   2. Mismatched TPG — TPG trainer name differs from current local trainer
+  //      (e.g. trainer was reassigned locally but TPG still has the old name)
+  // Runs where TPG already matches local are filtered out at the SQL level so
+  // we don't waste SSG API quota or rate-limit budget on already-synced runs.
   const runsResult = await pool.query<{
     id: string;
     course_run_id: string;
     course_ref_number: string;
     course_code: string;
     tpg_assigned_trainer_name: string | null;
+    local_primary_name: string;
   }>(
-    `SELECT DISTINCT cr.id, cr.course_run_id, c.course_code,
+    `WITH local_primary AS (
+       -- One row per course_run with the primary local trainer (junction first, scalar fallback)
+       SELECT cr.id AS course_run_uuid,
+              COALESCE(
+                (SELECT trainer_name FROM course_run_trainer
+                  WHERE course_run_id = cr.id
+                  ORDER BY assigned_at ASC LIMIT 1),
+                NULLIF(cr.assigned_trainer_name, '')
+              ) AS local_name
+       FROM course_run cr
+     )
+     SELECT cr.id, cr.course_run_id, c.course_code,
             c.course_code AS course_ref_number,
-            cr.tpg_assigned_trainer_name
+            cr.tpg_assigned_trainer_name,
+            lp.local_name AS local_primary_name
      FROM course_run cr
      JOIN course c ON c.id = cr.course_id
-     LEFT JOIN course_run_trainer crt ON crt.course_run_id = cr.id
+     JOIN local_primary lp ON lp.course_run_uuid = cr.id
      WHERE cr.class_status = 'Confirmed'
        AND cr.end_date >= (NOW() AT TIME ZONE 'Asia/Singapore')::date
        AND cr.start_date <= (NOW() AT TIME ZONE 'Asia/Singapore')::date + ($1 * INTERVAL '1 day')
+       AND lp.local_name IS NOT NULL
        AND (
-         crt.trainer_name IS NOT NULL
-         OR (cr.assigned_trainer_name IS NOT NULL AND cr.assigned_trainer_name <> '')
+         -- Case 1: TPG missing
+         cr.tpg_assigned_trainer_name IS NULL
+         OR cr.tpg_assigned_trainer_name = ''
+         -- Case 2: TPG mismatched (case-insensitive comparison)
+         OR LOWER(cr.tpg_assigned_trainer_name) <> LOWER(lp.local_name)
        )
      ORDER BY cr.course_run_id ASC`,
     [thresholdDays]
   );
 
-  console.log(`🎓 sync-trainer-to-tpg: ${runsResult.rows.length} run(s) to check`);
+  console.log(`🎓 sync-trainer-to-tpg (sanity check): ${runsResult.rows.length} run(s) need attention (missing or mismatched TPG)`);
 
   let successCount = 0, errors = 0, skipped = 0;
 
