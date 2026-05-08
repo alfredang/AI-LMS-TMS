@@ -82,6 +82,7 @@ export enum AdminPage {
   ApplyNewClaim = 'applyNewClaim',
   UploadCourseRuns = 'uploadCourseRuns',
   SearchGrant = 'searchGrant',
+  CourseRun = 'courseRun',
   SearchEnrolment = 'searchEnrolment',
   ViewEnrolment = 'viewEnrolment',
   UploadDirectApplication = 'uploadDirectApplication',

@@ -409,9 +409,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Previously this only considered the junction table — rows with a
       // TPG-only trainer OR a legacy (pre-junction) local trainer would be
       // stomped back to Pending on every page load.
+      const hasUnacceptedInvitation = (name: string) => {
+        if (!name) return false;
+        const norm = normalizeTrainerName(name);
+        const inv = invitations.find(i => normalizeTrainerName(i.trainer_name) === norm);
+        return inv ? (inv.status === 'pending' || inv.status === 'declined') : false;
+      };
+
+      const rawTpgTrainer = (row.tpg_assigned_trainer_name || '').toString().trim();
+      const rawLegacyTrainer = (row.legacy_assigned_trainer_name || '').toString().trim();
+      
+      const effectiveTpgTrainer = hasUnacceptedInvitation(rawTpgTrainer) ? '' : rawTpgTrainer;
+      const effectiveLegacyTrainer = hasUnacceptedInvitation(rawLegacyTrainer) ? '' : rawLegacyTrainer;
+
       const hasLocalTrainer = !!(allLocalPairs[0]?.name);
-      const hasLegacyLocalTrainer = !!((row.legacy_assigned_trainer_name || '').toString().trim());
-      const hasTpgTrainer = !!((row.tpg_assigned_trainer_name || '').toString().trim());
+      const hasLegacyLocalTrainer = !!effectiveLegacyTrainer;
+      const hasTpgTrainer = !!effectiveTpgTrainer;
       const hasLearners = Number(row.num_learners) > 0;
       const derivedStatus = (row.class_status === 'Cancelled' || row.class_status === 'Unconfirmed')
         ? row.class_status
@@ -468,7 +481,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         numLearners: parseInt(row.num_learners || '0', 10),
         tpgTrainerName: row.tpg_assigned_trainer_name || '',
         tpgTrainerEmail: row.tpg_assigned_trainer_email || '',
-        localTrainerName: displayLocal.name || (row.legacy_assigned_trainer_name || '').toString().trim(),
+        localTrainerName: displayLocal.name || effectiveLegacyTrainer,
         localTrainerEmail: displayLocal.email,
         localTrainers: allLocalPairs,
         nextAvailableTrainer,

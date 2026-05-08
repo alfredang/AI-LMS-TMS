@@ -250,6 +250,17 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
   const declinedSet = new Set<string>(declinedResult.rows.map((r: any) => normalizeTrainerName(r.trainer_name)));
   const pendingSet = new Set<string>(pendingResult.rows.map((r: any) => normalizeTrainerName(r.trainer_name)));
 
+  // If ANY trainer is already locally assigned to this course run, stop immediately.
+  // The course is covered, so we shouldn't send invitations to the next person.
+  if (localSet.size > 0) {
+    return {
+      ...baseResult,
+      status: 'skipped_already_assigned',
+      courseRunUuid,
+      message: 'A trainer is already locally assigned to this course run',
+    };
+  }
+
   // 3. Pick next trainer
   const approvedTrainers = splitTrainerList(classRow.trainers_list);
   if (approvedTrainers.length === 0) {
