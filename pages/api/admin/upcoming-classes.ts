@@ -187,6 +187,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       trainer,
       classStatus,
       learnerFilter,
+      trainerAssignmentFilter,
       startDateFrom,
       endDateUntil,
       page = 0,
@@ -264,6 +265,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )`);
       params.push(`%${trainer}%`);
       paramIndex++;
+    }
+
+    const trainerAssignedSql = `(
+      EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
+      OR NULLIF(BTRIM(COALESCE(cr.assigned_trainer_name, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(cr.assigned_trainer_email, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(${tpgNameExpr}, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(${tpgEmailExpr}, '')), '') IS NOT NULL
+    )`;
+
+    if (trainerAssignmentFilter === 'withTrainers') {
+      filters.push(trainerAssignedSql);
+    } else if (trainerAssignmentFilter === 'noTrainers') {
+      filters.push(`NOT ${trainerAssignedSql}`);
     }
 
     if (classStatus === 'Confirmed' || classStatus === 'Pending' || classStatus === 'Cancelled') {

@@ -82,6 +82,8 @@ export default async function handler(
       courseCode = '',
       courseRunId = '',
       trainer = '',
+      learnerFilter = '',
+      trainerAssignmentFilter = '',
       startDateFrom = '',
       endDateUntil = ''
     } = req.query;
@@ -98,6 +100,8 @@ export default async function handler(
       courseCode,
       courseRunId,
       trainer,
+      learnerFilter,
+      trainerAssignmentFilter,
       startDateFrom,
       endDateUntil
     });
@@ -145,6 +149,26 @@ export default async function handler(
       )`);
       queryParams.push(`%${trainer}%`);
       paramCounter++;
+    }
+
+    if (learnerFilter === 'withLearners') {
+      whereConditions.push(`EXISTS (SELECT 1 FROM enrollment e WHERE e.course_run_id = cr.id)`);
+    } else if (learnerFilter === 'noLearners') {
+      whereConditions.push(`NOT EXISTS (SELECT 1 FROM enrollment e WHERE e.course_run_id = cr.id)`);
+    }
+
+    const trainerAssignedSql = `(
+      EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
+      OR NULLIF(BTRIM(COALESCE(cr.assigned_trainer_name, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(cr.assigned_trainer_email, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(cr.tpg_assigned_trainer_name, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(cr.tpg_assigned_trainer_email, '')), '') IS NOT NULL
+    )`;
+
+    if (trainerAssignmentFilter === 'withTrainers') {
+      whereConditions.push(trainerAssignedSql);
+    } else if (trainerAssignmentFilter === 'noTrainers') {
+      whereConditions.push(`NOT ${trainerAssignedSql}`);
     }
 
     const classStatus = req.query.classStatus;

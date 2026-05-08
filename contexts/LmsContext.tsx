@@ -815,10 +815,16 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const navigateAdminPage = useCallback((page: AdminPage) => {
     setAdminPage(page);
     setSelectedCourse(null);
+    if (role === UserRole.Admin) {
+      setCurrentView(View.Admin);
+    }
     const newQuery: any = { ...router.query, adminPage: page };
+    if (role === UserRole.Admin) {
+      newQuery.view = View.Admin;
+    }
     delete newQuery.courseId;
     pushQueryIfDifferent(newQuery);
-  }, [router, pushQueryIfDifferent]);
+  }, [role, router, pushQueryIfDifferent]);
 
   // Wrapped setTrainerPage to sync with URL
   const navigateTrainerPage = useCallback((page: TrainerPage) => {

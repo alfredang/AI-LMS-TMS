@@ -322,7 +322,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled'>('ActiveOnly');
     const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External'>('all');
     const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
-    const [selectedLearnerFilter, setSelectedLearnerFilter] = useState<'all' | 'withLearners' | 'noLearners'>('all');
+    const [selectedLearnerFilter, setSelectedLearnerFilter] = useState<'all' | 'withLearners' | 'noLearners'>('withLearners');
+    const [selectedTrainerAssignmentFilter, setSelectedTrainerAssignmentFilter] = useState<'all' | 'withTrainers' | 'noTrainers'>('all');
     const [startDateFrom, setStartDateFrom] = useState('');
     const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -435,6 +436,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             if (selectedClassType !== 'all') params.append('classType', selectedClassType);
             if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
             if (selectedLearnerFilter !== 'all') params.append('learnerFilter', selectedLearnerFilter);
+            if (selectedTrainerAssignmentFilter !== 'all') params.append('trainerAssignmentFilter', selectedTrainerAssignmentFilter);
             if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
             if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -497,7 +499,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             return;
         }
         setCurrentPage(0);
-    }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter]);
+    }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter]);
 
     // Mark initial mount as done AFTER all other mount effects have executed
     useEffect(() => {
@@ -508,7 +510,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     // Fetch data when debounced filters or pagination change
     useEffect(() => {
         fetchUpcomingClasses();
-    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, debouncedStartDate, debouncedEndDate]);
+    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter, debouncedStartDate, debouncedEndDate]);
 
     // Auto-refresh when the tab becomes visible again. Common flow: admin
     // sends an invitation, switches to email to test, then comes back — this
@@ -558,7 +560,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setSelectedClassStatus('ActiveOnly');
         setSelectedClassType('all');
         setSelectedCourseType('all');
-        setSelectedLearnerFilter('all');
+        setSelectedLearnerFilter('withLearners');
+        setSelectedTrainerAssignmentFilter('all');
         setStartDateFrom('');
         setEndDateUntil('');
         setCurrentPage(0);
@@ -998,6 +1001,20 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </select>
                                         </div>
 
+                                        {/* Trainer Assignment Filter */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer Assignment</label>
+                                            <select
+                                                value={selectedTrainerAssignmentFilter}
+                                                onChange={(e) => setSelectedTrainerAssignmentFilter(e.target.value as 'all' | 'withTrainers' | 'noTrainers')}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            >
+                                                <option value="all">All</option>
+                                                <option value="withTrainers">With Trainers</option>
+                                                <option value="noTrainers">No Trainers Only</option>
+                                            </select>
+                                        </div>
+
                                         {/* Start Date From */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
@@ -1047,7 +1064,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         <p className="text-gray-500 text-lg">No upcoming classes found</p>
                         <p className="text-gray-400 text-sm mt-2">
                             {/* 'ActiveOnly' is the default — don't count it as a user-applied filter */}
-                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || (selectedClassStatus !== 'all' && selectedClassStatus !== 'ActiveOnly') || selectedClassType !== 'all' || selectedCourseType !== 'all' || startDateFrom || endDateUntil
+                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || (selectedClassStatus !== 'all' && selectedClassStatus !== 'ActiveOnly') || selectedClassType !== 'all' || selectedCourseType !== 'all' || selectedLearnerFilter !== 'withLearners' || selectedTrainerAssignmentFilter !== 'all' || startDateFrom || endDateUntil
                                 ? 'Try adjusting your search filters'
                                 : 'No classes are scheduled for the future'}
                         </p>
