@@ -2,27 +2,21 @@ import React from 'react';
 import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
 
-const BLOCKCHAIN_TOOLS = [
+const CYBER_SECURITY_TOOLS = [
   {
-    title: 'Certify NFT',
-    description: 'Issue and verify blockchain-based certificates as NFTs for course completions',
-    icon: IconName.Award,
-    href: 'https://alfredang.github.io/certifynft/',
-  },
-  {
-    title: 'Supply Verify',
-    description: 'Track and verify supply chain provenance on the blockchain',
-    icon: IconName.Link,
-    href: 'https://alfredang.github.io/supplyverify/',
+    title: 'Pentest',
+    description: 'Hands-on penetration testing playground against a mock vulnerable banking app',
+    icon: IconName.Shield,
+    href: 'https://pentest-fauxbank.vercel.app/',
   },
 ];
 
-const BlockchainToolsPage: React.FC = () => {
+const CyberSecurityToolsPage: React.FC = () => {
   return (
     <div>
-      <h2 className="text-3xl font-bold mb-6 dark:text-white">Blockchain Tools</h2>
+      <h2 className="text-3xl font-bold mb-6 dark:text-white">Cyber Security Tools</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {BLOCKCHAIN_TOOLS.map(tool => (
+        {CYBER_SECURITY_TOOLS.map(tool => (
           <a
             key={tool.title}
             href={tool.href}
@@ -44,4 +38,4 @@ const BlockchainToolsPage: React.FC = () => {
   );
 };
 
-export default BlockchainToolsPage;
+export default CyberSecurityToolsPage;

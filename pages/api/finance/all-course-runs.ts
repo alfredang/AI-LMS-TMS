@@ -179,7 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ij.qbo_sfc_status AS qbo_sfc_status,
         ij.grn_doc_number AS grn_doc_number,
         ij.drive_web_view_link AS invoice_drive_web_view_link,
-        ij.grn_drive_web_view_link AS grn_drive_web_view_link,
+        COALESCE(ij.grn_drive_web_view_link, da_chk.grant_invoice_drive_web_view_link) AS grn_drive_web_view_link,
         (da_chk.found IS NOT NULL) AS is_da
       FROM ssg_enrolments se
       LEFT JOIN LATERAL (
@@ -214,7 +214,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         LIMIT 1
       ) sc ON true
       LEFT JOIN LATERAL (
-        SELECT 1 AS found
+        SELECT 1 AS found,
+               da.grant_invoice_drive_web_view_link,
+               da.grant_invoice_drive_file_id
         FROM public.da_application da
         WHERE LOWER(TRIM(COALESCE(da.enrolment_id,''))) = LOWER(TRIM(COALESCE(se.enrolment_id,'')))
         LIMIT 1

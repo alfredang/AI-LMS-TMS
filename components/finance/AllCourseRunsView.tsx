@@ -370,6 +370,7 @@ const AllCourseRunsView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncingGrnPdfs, setSyncingGrnPdfs] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
   // Import Course Run modal (Finance)
   const [showImportModal, setShowImportModal] = useState(false);
@@ -449,6 +450,18 @@ const AllCourseRunsView: React.FC = () => {
         if ((d.total ?? 0) > 0) await fetchData();
       } catch {
         // silent — never blocks the UI
+      }
+
+      // Also backfill GRN invoice PDFs (NON-DA_GRANT_QB_invoice_{grnRef}.pdf) to Drive.
+      try {
+        const grnRes = await fetch('/api/finance/invoice-jobs/backfill-grn-drive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const grnJson = await grnRes.json();
+        if (grnRes.ok && grnJson?.data?.resolved > 0) await fetchData();
+      } catch {
+        // silent
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -574,6 +587,33 @@ const AllCourseRunsView: React.FC = () => {
       setSyncToast(e instanceof Error ? e.message : 'Sync failed');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const syncGrnPdfs = async () => {
+    setSyncingGrnPdfs(true);
+    setSyncToast(null);
+    try {
+      const res = await fetch('/api/finance/invoice-jobs/backfill-grn-drive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Sync failed');
+      const d = json.data as { resolved: number; failed: number; total: number; failedRefs?: string[] };
+      if (d.total === 0) {
+        setSyncToast('GRN PDFs: all up to date — no pending rows found.');
+      } else if (d.resolved > 0) {
+        setSyncToast(`GRN PDFs: ${d.resolved} uploaded to Drive.${d.failed > 0 ? ` ${d.failed} could not be found in QuickBooks.` : ''}`);
+        await fetchData();
+      } else {
+        const hint = d.failedRefs && d.failedRefs.length > 0 ? ` (${d.failedRefs.slice(0, 3).join(', ')})` : '';
+        setSyncToast(`GRN PDFs: ${d.failed} invoice(s) not found in QuickBooks${hint}. Check that GRN invoices exist in QB.`);
+      }
+    } catch (e) {
+      setSyncToast(e instanceof Error ? e.message : 'GRN PDF sync failed');
+    } finally {
+      setSyncingGrnPdfs(false);
     }
   };
 
@@ -899,6 +939,13 @@ const AllCourseRunsView: React.FC = () => {
                 disabled={syncing || loading || queueing || sending}
               >
                 Import course run
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => void syncGrnPdfs()}
+                disabled={syncingGrnPdfs || syncing || loading || queueing}
+              >
+                {syncingGrnPdfs ? 'Syncing GRN PDFs…' : 'Sync GRN PDFs'}
               </Button>
             </div>
 
