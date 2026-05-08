@@ -1,16 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../auth/[...nextauth]';
 import { addTrainerToCalendar } from '../../../lib/calendar/addTrainerToCalendar';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
-  }
-
-  const session = await getServerSession(req, res, authOptions);
-  if (!session || session.user.role !== 'Admin') {
-    return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
 
   const { courseRunId, trainerEmail } = req.body;
