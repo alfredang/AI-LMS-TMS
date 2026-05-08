@@ -70,41 +70,40 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Calendar view for scheduled classes
 
 ### Trainer Features
-- View assigned classes (upcoming, ongoing, completed)
-- Digital attendance (eAttendance) tracking
-- Assessment grading with rubric support
-- Past attendance and assessment history
-- Training hours tracking
-- Lesson delivery guide and assessment guide
-- **Ed Tools** — Suite of interactive educational tools:
-  - [Ice Breaker](https://alfredang.github.io/ice-breaker/) — Fun activities to engage learners
-  - [Pinboard](https://alfredang.github.io/pinboard/) — Collaborative idea sharing board
-  - [Break Timer](https://alfredang.github.io/musical-timer-countdown/) — Musical countdown timer
-  - [Word Cloud](https://alfredang.github.io/wordcloud/) — Real-time word clouds
-  - [Flash Cards](https://alfredang.github.io/flashcard/) — Interactive learning flash cards
-  - [Live Q&A](https://alfredang.github.io/live-qna/) — Real-time question and answer board
-  - [Whiteboard](https://alfredang.github.io/whiteboard/) — Interactive drawing and annotations
-  - [Padlet](https://alfredang.github.io/padlet/) — Collaborative wall for posting notes, links, and media
-  - [Collaborative Note](https://alfredang.github.io/collabnote/) — Shared real-time notes
-  - [Collaborative Flow](https://alfredang.github.io/collabflow/) — Visual workflow collaboration
-  - [Collaborative Kanban](https://alfredang.github.io/kanban/) — Shared kanban task board
-  - [Live Poll](https://alfredang.github.io/livepoll/) — Real-time polling and voting
-  - [MindMaps](https://alfredang.github.io/mindmapping/) — Collaborative mind mapping
-  - [Spinning Wheel](https://alfredang.github.io/spinning-wheel/) — Random selection spinner
-  - [5 Whys](https://alfredang.github.io/5whys/) — Root cause analysis tool
-  - [Fishbone Diagram](https://alfredang.github.io/fishbone/) — Cause-and-effect (Ishikawa) diagram
-  - [Pareto Chart](https://alfredang.github.io/paretochart/) — Identify the most significant factors
-  - [System Thinking](https://alfredang.github.io/systemloop/) — Feedback loop visualisation
-  - [Mock Data Generator](https://alfredang.github.io/mockdatagen/) — Generate sample datasets
-- **Virtual Collaboration Tools** — Google Meet, Microsoft Teams, Zoom
-- **Data Analytics Tools** — [Pivot Visualization](https://alfredang.github.io/novapivot/)
-- **Statistics Tools** — Descriptive, Correlation, Regression, Hypothesis, Chi-Square, ANOVA ([NovaStats](https://alfredang.github.io/novastats/))
-- **Design of Experiments (DOE)** — Full Factorial, Fractional Factorial, Taguchi, Central Composite, Box-Behnken, Plackett-Burman, Latin Square, Response Surface ([NovaDOE](https://alfredang.github.io/novadoe/))
-- **Statistical Process Control (SPC)** — c Chart, u Chart, np Chart, p Chart, X-mR Chart, X̄-R Chart, X̄-s Chart, Distribution, Process Capability ([NovaSPC](https://alfredang.github.io/novaspc/))
-- **Finance Tools** — [Tax Calculator](https://alfredang.github.io/novataxsg/), [Financial Planning & Analysis](https://alfredang.github.io/novafinance/), [Financial Ratio Calculators](https://alfredang.github.io/novafinancialratiocalculator/)
+- **My Classes** — View assigned classes (upcoming, ongoing, completed)
+- **E-Attendance** — Digital attendance tracking
+- **Assessment Grading** — Rubric-based grading with Assessment Summary Record support
+- **Training Hours** — Trainer training hours tracking
+- **Past Attendance** / **Past Assessment** — Historical records
+- **Lesson Delivery Guide** / **Assessment Guide**
+- **Trainer Payout History** — View past payouts and tier breakdown
+
+#### Trainer Tools
+
+- **Ed Tools** — Interactive classroom tools:
+  - [Ice Breaker](https://alfredang.github.io/ice-breaker/), [Pinboard](https://alfredang.github.io/pinboard/), [Break Timer](https://alfredang.github.io/musical-timer-countdown/), [Word Cloud](https://alfredang.github.io/wordcloud/), [Flash Cards](https://alfredang.github.io/flashcard/), [Live Q&A](https://alfredang.github.io/live-qna/), [Whiteboard](https://alfredang.github.io/whiteboard/), [Padlet](https://alfredang.github.io/padlet/), [Collaborative Note](https://alfredang.github.io/collabnote/), [Collaborative Flow](https://alfredang.github.io/collabflow/), [Collaborative Kanban](https://alfredang.github.io/kanban/), [Live Poll](https://alfredang.github.io/livepoll/), [MindMaps](https://alfredang.github.io/mindmapping/), [Spinning Wheel](https://alfredang.github.io/spinning-wheel/)
+- **Problem Solving Tools** — [5 Whys](https://alfredang.github.io/5whys/), [Fishbone Diagram](https://alfredang.github.io/fishbone/), [Pareto Chart](https://alfredang.github.io/paretochart/), [System Thinking](https://alfredang.github.io/systemloop/)
+- **Cyber Security Tools** — [Pentest (FauxBank)](https://pentest-fauxbank.vercel.app/), [Cyber Threats Simulator](https://alfredang.github.io/cybersecuritysimulator/)
+- **Data Analytics Tools** — [Pivot Visualization](https://alfredang.github.io/novapivot/), [Anomaly Detection](https://alfredang.github.io/anamolydetection2/), [Factor Analysis](https://multifactoranalysis.streamlit.app/), [ML Classification](https://ml-classification-888.streamlit.app/), [Mock Data Generator](https://alfredang.github.io/mockdatagen/)
+- **Finance Tools** — [Tax Calculator](https://alfredang.github.io/novataxsg/), [Financial Planning & Analysis](https://alfredang.github.io/novafinance/), [Financial Ratio Calculators](https://alfredang.github.io/novafinancialratiocalculator/), [Financial Trend Analysis](https://alfredang.github.io/financialtrend/), [Credit Loan Analysis](https://creditloananalysis.streamlit.app/)
+- **Statistical Tools** — Descriptive, Correlation, Regression, Hypothesis, Chi-Square, ANOVA ([NovaStats](https://alfredang.github.io/novastats/))
+- **DOE Tools** — Full Factorial, Fractional Factorial, Taguchi, Central Composite, Box-Behnken, Plackett-Burman, Latin Square, Response Surface ([NovaDOE](https://alfredang.github.io/novadoe/))
+- **SPC Tools** — c, u, np, p, X-mR, X̄-R, X̄-s charts, Distribution, Process Capability ([NovaSPC](https://alfredang.github.io/novaspc/))
 - **Sustainability Tools** — [Carbon Footprint Calculator](https://alfredang.github.io/sgcarboncalculator/)
-- **GenAI Tools** — Curated links to ChatGPT, Gemini, Claude, and UI design tools (Figma, Stitch)
-- **Agentic AI Tools** — No/Low Code Platforms (AgentX, Opal, Relevance AI, n8n, Langflow, Flowise), Voice Agents (ElevenLabs, Retell AI, Vapi), Video Agents (HeyGen, Synthesia)
+- **Blockchain Tools** — [Certify NFT](https://alfredang.github.io/certifynft/), [Supply Verify](https://alfredang.github.io/supplyverify/)
+- **GenAI Tools** — Curated links across:
+  - **Text**: ChatGPT, Gemini, Claude, Grok, DeepSeek, Kimi, Qwen, Perplexity
+  - **Image**: Firefly, Nano Banana, Microsoft Designer, Leonardo, Face Swap
+  - **Video**: Kling, Invideo, Veed, Descript, Pictory
+  - **Music**: Suno
+  - **Presentation**: Gamma, NotebookLM, Napkin
+  - **UI Design**: Figma, Stitch
+- **Agentic AI Tools** —
+  - **No Code Platforms**: AgentX, Opal, Relevance AI, Promptly AI
+  - **Low Code Platforms**: n8n, Langflow, Flowise
+  - **Voice Agents**: ElevenLabs, Retell AI, Vapi
+  - **Video Agents**: HeyGen, Synthesia
+- **Virtual Tools** — Google Meet, Microsoft Teams, Zoom
 
 ### Admin Features
 - **Admin Dashboard** — KPI cards: Ongoing Classes, Upcoming Classes, Completed Classes, Assigned Trainers (Local), Missing Trainers (Local/TPG)

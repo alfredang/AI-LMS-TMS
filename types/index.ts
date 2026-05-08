@@ -189,6 +189,7 @@ export enum TrainerPage {
   AgenticAITools = 'agenticAITools',
   TrainingHours = 'trainingHours',
   LessonDeliveryGuide = 'lessonDeliveryGuide',
+  VirtualClassGuide = 'virtualClassGuide',
   AssessmentGuide = 'assessmentGuide',
   PaymentHistory = 'paymentHistory',
 }

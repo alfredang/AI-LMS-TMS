@@ -84,7 +84,9 @@ const TrainerLayout: React.FC = () => {
       case TrainerPage.AgenticAITools:
         return <AgenticAIToolsPage />;
       case TrainerPage.LessonDeliveryGuide:
-        return <LessonDeliveryGuidePage />;
+        return <LessonDeliveryGuidePage variant="physical" />;
+      case TrainerPage.VirtualClassGuide:
+        return <LessonDeliveryGuidePage variant="virtual" />;
       case TrainerPage.AssessmentGuide:
         return <AssessmentGuidePage />;
       case TrainerPage.PaymentHistory:

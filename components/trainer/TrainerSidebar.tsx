@@ -15,7 +15,8 @@ const NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
   { page: TrainerPage.TrainingHours,      label: 'Training Hours',      icon: IconName.Clock          },
   { page: TrainerPage.PastAttendance,     label: 'Past Attendance',     icon: IconName.ClipboardCheck },
   { page: TrainerPage.PastAssessment,     label: 'Past Assessment',     icon: IconName.Award          },
-  { page: TrainerPage.LessonDeliveryGuide, label: 'Lesson Delivery Guide', icon: IconName.BookOpen },
+  { page: TrainerPage.LessonDeliveryGuide, label: 'Physical Class Guide', icon: IconName.BookOpen },
+  { page: TrainerPage.VirtualClassGuide,  label: 'Virtual Class Guide',  icon: IconName.BookOpen },
   { page: TrainerPage.AssessmentGuide,   label: 'Assessment Guide',    icon: IconName.BookOpen        },
   { page: TrainerPage.PaymentHistory,    label: 'Trainer Payout History', icon: IconName.Analytics       },
 ];
