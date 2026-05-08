@@ -48,6 +48,7 @@ const PROBLEM_SOLVING_TOOL_ITEMS: { label: string; icon: IconName; href: string 
 
 const CYBER_SECURITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Pentest', icon: IconName.Shield, href: 'https://pentest-fauxbank.vercel.app/' },
+  { label: 'Cyber Threats', icon: IconName.Shield, href: 'https://alfredang.github.io/cybersecuritysimulator/' },
 ];
 
 const VIRTUAL_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [

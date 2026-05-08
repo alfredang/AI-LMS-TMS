@@ -9,6 +9,12 @@ const CYBER_SECURITY_TOOLS = [
     icon: IconName.Shield,
     href: 'https://pentest-fauxbank.vercel.app/',
   },
+  {
+    title: 'Cyber Threats',
+    description: 'Interactive simulator exploring common cyber threats and attack scenarios',
+    icon: IconName.Shield,
+    href: 'https://alfredang.github.io/cybersecuritysimulator/',
+  },
 ];
 
 const CyberSecurityToolsPage: React.FC = () => {
