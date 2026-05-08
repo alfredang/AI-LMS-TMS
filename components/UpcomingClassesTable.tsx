@@ -259,6 +259,11 @@ interface UpcomingClass {
     calendarNameMismatch: boolean;
     attendanceScore: number | null;
     trainersList: string;
+    virtualMeetingLink?: string;
+    virtualMeetingHostLink?: string;
+    virtualMeetingProvider?: string;
+    virtualMeetingExternalId?: string;
+    virtualMeetingStatus?: string;
 }
 
 interface Trainer {

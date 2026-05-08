@@ -59,6 +59,11 @@ interface Course {
     courseType: string;
     modeOfLearning: string[];
     classStatus?: string;
+    classType?: string;
+    virtualMeetingLink?: string | null;
+    virtualMeetingHostLink?: string | null;
+    virtualMeetingJoinLink?: string | null;
+    virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' | string | null;
     totalAssessments?: number;
     topics: Topic[];
     assessments?: Assessment[];
@@ -86,6 +91,15 @@ interface Course {
 
 // --- Utility Functions ---
 const toId = (label: string) => label.toLowerCase().replace(/ /g, '-');
+
+const inferVirtualMeetingProvider = (link?: string | null): 'google_meet' | 'zoom' | 'teams' | null => {
+    if (!link) return null;
+    const normalized = link.toLowerCase();
+    if (normalized.includes('zoom.us') || normalized.includes('zoomgov.com')) return 'zoom';
+    if (normalized.includes('teams.microsoft.com') || normalized.includes('teams.live.com')) return 'teams';
+    if (normalized.includes('meet.google.com')) return 'google_meet';
+    return null;
+};
 
 // --- Reusable Components ---
 const ContentSection: React.FC<{ title?: string; children: React.ReactNode; className?: string }> = ({ title, children, className }) => (
@@ -2471,6 +2485,9 @@ export const CourseDetail: React.FC = () => {
         practicalPerformanceAssessmentLink: effectiveDetail?.practicalPerformanceAssessmentLink,
         classType: (effectiveDetail as any)?.classType || selectedCourse.classType || 'Physical',
         virtualMeetingLink: (effectiveDetail as any)?.virtualMeetingLink || selectedCourse.virtualMeetingLink || null,
+        virtualMeetingHostLink: (effectiveDetail as any)?.virtualMeetingHostLink || selectedCourse.virtualMeetingHostLink || null,
+        virtualMeetingJoinLink: (effectiveDetail as any)?.virtualMeetingJoinLink || selectedCourse.virtualMeetingJoinLink || null,
+        virtualMeetingProvider: (effectiveDetail as any)?.virtualMeetingProvider || selectedCourse.virtualMeetingProvider || null,
         fundingValidity: (effectiveDetail as any)?.fundingValidity || selectedCourse.fundingValidity || undefined,
         assessmentMethods: effectiveDetail?.assessmentMethods || undefined,
         publishedAssessmentMethods: effectiveDetail?.publishedAssessmentMethods || {},
@@ -2764,29 +2781,76 @@ export const CourseDetail: React.FC = () => {
                             {(() => {
                                 const vmp = (
                                     (convertedCourse as any)?.virtualMeetingProvider ||
+                                    inferVirtualMeetingProvider(convertedCourse.virtualMeetingLink) ||
                                     ((trainingProviderProfile as any)?.integrations?.virtualMeetingProvider as 'google_meet' | 'zoom' | 'teams' | undefined) ||
                                     'google_meet'
                                 );
                                 const providerLabel = vmp === 'zoom' ? 'Zoom' : vmp === 'teams' ? 'Microsoft Teams' : 'Google Meet';
+                                const isZoom = vmp === 'zoom';
+                                const zoomStartUrl = (convertedCourse as any)?.virtualMeetingHostLink || convertedCourse.virtualMeetingLink || '';
+                                const zoomJoinUrl = (convertedCourse as any)?.virtualMeetingJoinLink || '';
+                                const isTrainerView = userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider || userRole === UserRole.Developer;
+                                const hasVirtualMeetingLink = isZoom && isTrainerView
+                                    ? !!(zoomStartUrl || zoomJoinUrl)
+                                    : !!convertedCourse.virtualMeetingLink;
                                 return (
                             <div id={toId("Google Meet")}>
                                 <ContentSection title={providerLabel}>
-                                    {(convertedCourse.classType === 'Virtual' || convertedCourse.classType === 'Hybrid') && convertedCourse.virtualMeetingLink ? (
-                                        <a
-                                            href={convertedCourse.virtualMeetingLink}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                                        >
-                                            <Icon name={IconName.Video} className="w-6 h-6 text-green-600 flex-shrink-0" />
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-gray-900 dark:text-white">{`Join ${providerLabel}`}</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                                    {convertedCourse.virtualMeetingLink}
-                                                </p>
+                                    {(convertedCourse.classType === 'Virtual' || convertedCourse.classType === 'Hybrid') && hasVirtualMeetingLink ? (
+                                        isZoom && isTrainerView ? (
+                                            <div className="space-y-3">
+                                                {zoomStartUrl && (
+                                                    <a
+                                                        href={zoomStartUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                    >
+                                                        <Icon name={IconName.Video} className="w-6 h-6 text-green-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Start Zoom Meeting</p>
+                                                            <p className="text-xs text-amber-600 dark:text-amber-400 truncate">
+                                                                Trainer-only host URL. Do not share with learners.
+                                                            </p>
+                                                        </div>
+                                                        <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                    </a>
+                                                )}
+                                                {zoomJoinUrl && (
+                                                    <a
+                                                        href={zoomJoinUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                    >
+                                                        <Icon name={IconName.Video} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Join as Participant</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                                {zoomJoinUrl}
+                                                            </p>
+                                                        </div>
+                                                        <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                    </a>
+                                                )}
                                             </div>
-                                            <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                        </a>
+                                        ) : (
+                                            <a
+                                                href={convertedCourse.virtualMeetingLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                            >
+                                                <Icon name={IconName.Video} className="w-6 h-6 text-green-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-900 dark:text-white">{`Join ${providerLabel}`}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                        {convertedCourse.virtualMeetingLink}
+                                                    </p>
+                                                </div>
+                                                <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                            </a>
+                                        )
                                     ) : (
                                         <div className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                                             <Icon name={IconName.Video} className="w-6 h-6 text-gray-400 flex-shrink-0" />

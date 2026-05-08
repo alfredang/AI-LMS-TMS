@@ -28,6 +28,7 @@ interface UpcomingClass {
   invitationRepliesBlocked?: boolean;
   trainerInCalendar?: boolean;
   virtualMeetingLink?: string;
+  virtualMeetingHostLink?: string;
   virtualMeetingProvider?: string;
   virtualMeetingExternalId?: string;
   virtualMeetingStatus?: string;
@@ -64,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // PUT — Update class status and/or class type
   if (req.method === 'PUT') {
     try {
-      const { id, class_status, class_type, virtual_meeting_link, virtual_meeting_provider } = req.body;
+      const { id, class_status, class_type, virtual_meeting_link, virtual_meeting_host_link, virtual_meeting_provider } = req.body;
       if (!id) {
         return res.status(400).json({ success: false, error: 'id is required' });
       }
@@ -99,6 +100,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         values.push(virtual_meeting_link);
       }
 
+      if (virtual_meeting_host_link !== undefined) {
+        await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS virtual_meeting_host_link TEXT');
+        setClauses.push(`virtual_meeting_host_link = $${paramIdx++}`);
+        values.push(virtual_meeting_host_link);
+      }
+
       if (virtual_meeting_provider !== undefined) {
         const validProviders = ['google_meet', 'zoom', 'teams'];
         if (virtual_meeting_provider && !validProviders.includes(virtual_meeting_provider)) {
@@ -128,7 +135,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       values.push(id);
       const result = await pool.query(
         `UPDATE course_run SET ${setClauses.join(', ')} WHERE id = $${paramIdx}
-         RETURNING id, virtual_meeting_link, virtual_meeting_provider`,
+         RETURNING id, virtual_meeting_link, virtual_meeting_host_link, virtual_meeting_provider`,
         values
       );
 
@@ -331,6 +338,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           COALESCE(cr.invitation_replies_blocked, false) AS invitation_replies_blocked,
           cr.trainer_in_calendar,
           cr.virtual_meeting_link,
+          cr.virtual_meeting_host_link,
           cr.virtual_meeting_provider,
           cr.virtual_meeting_external_id,
           cr.virtual_meeting_status,
@@ -354,6 +362,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.end_date,
           cr.class_type,
           cr.virtual_meeting_link,
+          cr.virtual_meeting_host_link,
           cr.virtual_meeting_provider,
           cr.virtual_meeting_external_id,
           cr.virtual_meeting_status,
@@ -685,6 +694,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         invitationRepliesBlocked: !!row.invitation_replies_blocked,
         trainerInCalendar: row.trainer_in_calendar,
         virtualMeetingLink: row.virtual_meeting_link || '',
+        virtualMeetingHostLink: row.virtual_meeting_host_link || '',
         virtualMeetingProvider: row.virtual_meeting_provider || '',
         virtualMeetingExternalId: row.virtual_meeting_external_id || '',
         virtualMeetingStatus: row.virtual_meeting_status || '',

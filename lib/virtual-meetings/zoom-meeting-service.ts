@@ -26,6 +26,7 @@ export async function createZoomMeetingForCourseRun(courseRunUuid: string, optio
        cr.class_type,
        cr.virtual_meeting_external_id,
        cr.virtual_meeting_link,
+       cr.virtual_meeting_host_link,
        c.title AS course_title,
        c.course_code
      FROM course_run cr
@@ -44,6 +45,7 @@ export async function createZoomMeetingForCourseRun(courseRunUuid: string, optio
       meeting: {
         id: run.virtual_meeting_external_id,
         join_url: run.virtual_meeting_link,
+        start_url: run.virtual_meeting_host_link,
       },
     };
   }
