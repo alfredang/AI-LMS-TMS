@@ -591,9 +591,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // rows with a TPG-only trainer OR a legacy (pre-junction) local trainer
       // would be stomped back to Pending on every page load, undoing both
       // the auto-confirm write-paths and the backfill migration.
+      // Helper to check if a trainer name has a pending or declined invitation
+      const hasUnacceptedInvitation = (name: string) => {
+        if (!name) return false;
+        const norm = normalizeTrainerName(name);
+        const inv = invitations.find(i => normalizeTrainerName(i.trainer_name) === norm);
+        return inv ? (inv.status === 'pending' || inv.status === 'declined') : false;
+      };
+
+      // Filter out TPG and Legacy trainers if they have an unaccepted invitation
+      const rawTpgTrainer = (row.assigned_trainer_tpg || '').toString().trim();
+      const rawLegacyTrainer = (row.legacy_assigned_trainer_name || '').toString().trim();
+      
+      const effectiveTpgTrainer = hasUnacceptedInvitation(rawTpgTrainer) ? '' : rawTpgTrainer;
+      const effectiveLegacyTrainer = hasUnacceptedInvitation(rawLegacyTrainer) ? '' : rawLegacyTrainer;
+
       const hasLocalTrainer = !!(allLocalPairs[0]?.name);
-      const hasLegacyLocalTrainer = !!((row.legacy_assigned_trainer_name || '').toString().trim());
-      const hasTpgTrainer = !!((row.assigned_trainer_tpg || '').toString().trim());
+      const hasLegacyLocalTrainer = !!effectiveLegacyTrainer;
+      const hasTpgTrainer = !!effectiveTpgTrainer;
       const hasLearners = Number(row.num_of_trainee) > 0;
       const derivedStatus = (row.class_status === 'Cancelled' || row.class_status === 'Unconfirmed')
         ? row.class_status
@@ -613,10 +628,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         digitalAttendanceId: row.digital_attendance_id || '',
         startDate: row.start_date,
         endDate: row.end_date,
-        assignedTrainerTpg: row.assigned_trainer_tpg || '',
+        assignedTrainerTpg: rawTpgTrainer,
         assignedTrainerTpgEmail: row.assigned_trainer_tpg_email || '',
         tpgSyncStatus: row.tpg_sync_status || null,
-        assignedTrainerLocal: allLocalPairs[0]?.name || (row.legacy_assigned_trainer_name || '').toString().trim() || '',
+        assignedTrainerLocal: allLocalPairs[0]?.name || effectiveLegacyTrainer,
         assignedTrainerLocalEmail: allLocalPairs[0]?.email || '',
         nextAvailableTrainer,
         nextAvailableTrainerEmail,

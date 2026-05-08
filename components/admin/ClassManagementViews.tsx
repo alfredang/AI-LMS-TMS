@@ -3408,6 +3408,41 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         >
                                             {loading ? 'Assigning...' : 'Assign to TPG'}
                                         </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={async () => {
+                                                const localEmail = assignedTrainersList[0]?.trainer_email || localAssignedTrainerEmail;
+                                                const localName = assignedTrainersList[0]?.trainer_name || localAssignedTrainerName;
+                                                if (!localEmail) {
+                                                    showErrorPopup('No email found for the locally assigned trainer. Cannot add to calendar.');
+                                                    return;
+                                                }
+                                                setLoading(true);
+                                                try {
+                                                    const res = await fetch('/api/admin/add-trainer-to-calendar', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ courseRunId, trainerEmail: localEmail })
+                                                    });
+                                                    const data = await res.json();
+                                                    if (res.ok && data.success) {
+                                                        showSuccessPopup(`Trainer ${localName} added to ${data.addedCount} calendar event(s).`);
+                                                    } else {
+                                                        showErrorPopup(data.error || 'Failed to add trainer to calendar.');
+                                                    }
+                                                } catch (err) {
+                                                    console.error('Error adding to calendar:', err);
+                                                    showErrorPopup('An error occurred while adding to calendar.');
+                                                } finally {
+                                                    setLoading(false);
+                                                }
+                                            }}
+                                            disabled={loading || (!assignedTrainersList.length && !localAssignedTrainerName)}
+                                            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                                            size="sm"
+                                        >
+                                            {loading ? 'Adding...' : 'Add to Calendar'}
+                                        </Button>
                                     </div>
                                 </div>
                                 {(assignedTrainersList.length > 0 || localAssignedTrainerName) ? (

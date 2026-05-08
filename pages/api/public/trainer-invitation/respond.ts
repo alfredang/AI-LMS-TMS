@@ -570,6 +570,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               console.log(
                 `📅 [trainer-invitation/respond] Added ${invitation.trainer_email} to ${addedCount}/${eventsToUpdate.length} calendar events for "${invitation.course_title}"`
               );
+              
+              if (addedCount > 0) {
+                await pool.query(
+                  `UPDATE course_run SET trainer_in_calendar = true, updated_at = NOW() WHERE id = $1`,
+                  [invitation.course_run_id]
+                );
+                console.log(`✅ [trainer-invitation/respond] Updated trainer_in_calendar=true for course_run=${invitation.course_run_id}`);
+              }
             }
           }
         }
