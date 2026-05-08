@@ -268,6 +268,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         return 'Physical';
     });
     const [virtualMeetingLink, setVirtualMeetingLink] = useState(courseToEdit?.virtualMeetingLink || '');
+    const [virtualMeetingHostLink, setVirtualMeetingHostLink] = useState(courseToEdit?.virtualMeetingHostLink || '');
     const [virtualMeetingProvider, setVirtualMeetingProvider] = useState<'google_meet' | 'zoom' | 'teams'>(() => {
         const stored = courseToEdit?.virtualMeetingProvider;
         if (stored === 'zoom' || stored === 'teams' || stored === 'google_meet') return stored;
@@ -275,6 +276,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         return configured === 'zoom' || configured === 'teams' ? configured : 'google_meet';
     });
     const [storedVirtualMeetingLink, setStoredVirtualMeetingLink] = useState(courseToEdit?.virtualMeetingLink || '');
+    const [storedVirtualMeetingHostLink, setStoredVirtualMeetingHostLink] = useState(courseToEdit?.virtualMeetingHostLink || '');
     const [storedVirtualMeetingProvider, setStoredVirtualMeetingProvider] = useState<'google_meet' | 'zoom' | 'teams' | ''>(() => {
         const stored = courseToEdit?.virtualMeetingProvider;
         return stored === 'zoom' || stored === 'teams' || stored === 'google_meet' ? stored : '';
@@ -283,8 +285,11 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
 
     useEffect(() => {
         const nextStoredLink = courseToEdit?.virtualMeetingLink || '';
+        const nextStoredHostLink = courseToEdit?.virtualMeetingHostLink || '';
         setVirtualMeetingLink(nextStoredLink);
         setStoredVirtualMeetingLink(nextStoredLink);
+        setVirtualMeetingHostLink(nextStoredHostLink);
+        setStoredVirtualMeetingHostLink(nextStoredHostLink);
         const stored = courseToEdit?.virtualMeetingProvider;
         if (stored === 'zoom' || stored === 'teams' || stored === 'google_meet') {
             setVirtualMeetingProvider(stored);
@@ -296,7 +301,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         if (configured === 'zoom' || configured === 'teams' || configured === 'google_meet') {
             setVirtualMeetingProvider(configured);
         }
-    }, [courseToEdit?.id, courseToEdit?.virtualMeetingLink, courseToEdit?.virtualMeetingProvider, trainingProviderProfile]);
+    }, [courseToEdit?.id, courseToEdit?.virtualMeetingLink, courseToEdit?.virtualMeetingHostLink, courseToEdit?.virtualMeetingProvider, trainingProviderProfile]);
 
     // ViewCourseRun state management
     const [includeExpired, setIncludeExpired] = useState(false);
@@ -335,12 +340,13 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const disabledInputClasses = "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed";
     const virtualMeetingProviderLabel = virtualMeetingProvider === 'zoom' ? 'Zoom' : virtualMeetingProvider === 'teams' ? 'Microsoft Teams' : 'Google Meet';
     const canGenerateZoomMeeting = classType === 'Virtual' || classType === 'Hybrid';
-    const hasStoredZoomMeeting = storedVirtualMeetingProvider === 'zoom' && !!storedVirtualMeetingLink;
+    const isZoomMeetingProvider = virtualMeetingProvider === 'zoom';
+    const hasStoredZoomMeeting = storedVirtualMeetingProvider === 'zoom' && !!(storedVirtualMeetingHostLink || storedVirtualMeetingLink);
 
     const handleGenerateZoomMeeting = async (force = false) => {
         if (!courseToEdit?.id) return;
-        if (force && storedVirtualMeetingLink) {
-            const shouldRegenerate = confirm('Generate a new Zoom meeting and replace the currently stored virtual meeting link? The new Zoom link will become the active meeting link shown to learners and trainers.');
+        if (force && (storedVirtualMeetingHostLink || storedVirtualMeetingLink)) {
+            const shouldRegenerate = confirm('Generate a new Zoom meeting and replace the currently stored Zoom links? The learner join URL and trainer start URL will both be replaced.');
             if (!shouldRegenerate) return;
         }
 
@@ -355,9 +361,12 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             if (!response.ok || !result.success) throw new Error(result.error || 'Failed to create Zoom meeting');
             const meeting = result.data?.meeting || {};
             const joinUrl = meeting.join_url || meeting.joinUrl || '';
+            const startUrl = meeting.start_url || meeting.startUrl || '';
             if (joinUrl) setVirtualMeetingLink(joinUrl);
+            if (startUrl) setVirtualMeetingHostLink(startUrl);
             setVirtualMeetingProvider('zoom');
             if (joinUrl) setStoredVirtualMeetingLink(joinUrl);
+            if (startUrl) setStoredVirtualMeetingHostLink(startUrl);
             setStoredVirtualMeetingProvider('zoom');
             alert(result.data?.reused ? 'Existing Zoom meeting link reused.' : force ? 'Zoom meeting regenerated.' : 'Zoom meeting created.');
         } catch (error) {
@@ -373,11 +382,22 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             return;
         }
 
+        const hasStoredMeetingLinks = isZoomMeetingProvider
+            ? !!(storedVirtualMeetingHostLink || storedVirtualMeetingLink)
+            : !!storedVirtualMeetingLink;
+        const meetingLinksChanged = isZoomMeetingProvider
+            ? storedVirtualMeetingHostLink !== virtualMeetingHostLink || storedVirtualMeetingLink !== virtualMeetingLink
+            : storedVirtualMeetingLink !== virtualMeetingLink;
+
         if (
-            storedVirtualMeetingLink &&
-            (storedVirtualMeetingLink !== virtualMeetingLink || storedVirtualMeetingProvider !== virtualMeetingProvider)
+            hasStoredMeetingLinks &&
+            (meetingLinksChanged || storedVirtualMeetingProvider !== virtualMeetingProvider)
         ) {
-            const shouldReplace = confirm('Save this virtual meeting link and make it the active link shown to learners and trainers? This will replace the currently stored meeting link for this class.');
+            const shouldReplace = confirm(
+                isZoomMeetingProvider
+                    ? 'Save these Zoom meeting URLs? The trainer start URL is sensitive and should only be shared with trainers.'
+                    : 'Save this virtual meeting link and make it the active link shown to learners and trainers? This will replace the currently stored meeting link for this class.'
+            );
             if (!shouldReplace) return;
         }
 
@@ -387,7 +407,9 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     id: courseToEdit.id,
-                    virtual_meeting_link: virtualMeetingLink,
+                    ...(isZoomMeetingProvider
+                        ? { virtual_meeting_host_link: virtualMeetingHostLink, virtual_meeting_link: virtualMeetingLink }
+                        : { virtual_meeting_link: virtualMeetingLink }),
                     virtual_meeting_provider: virtualMeetingProvider,
                 }),
             });
@@ -397,8 +419,10 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             }
 
             setVirtualMeetingLink(result.data?.virtual_meeting_link || virtualMeetingLink);
+            setVirtualMeetingHostLink(result.data?.virtual_meeting_host_link || virtualMeetingHostLink);
             setVirtualMeetingProvider(result.data?.virtual_meeting_provider || virtualMeetingProvider);
             setStoredVirtualMeetingLink(result.data?.virtual_meeting_link || virtualMeetingLink);
+            setStoredVirtualMeetingHostLink(result.data?.virtual_meeting_host_link || virtualMeetingHostLink);
             setStoredVirtualMeetingProvider(result.data?.virtual_meeting_provider || virtualMeetingProvider);
             showSuccessPopup('Virtual meeting link saved.');
         } catch (error) {
@@ -2552,32 +2576,85 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             </div>
                                         )}
                                     </div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Virtual Meeting Link</label>
-                                    <div className="flex gap-3">
-                                        <input
-                                            type="url"
-                                            value={virtualMeetingLink}
-                                            onChange={(e) => setVirtualMeetingLink(e.target.value)}
-                                            placeholder={virtualMeetingProvider === 'zoom' ? 'https://zoom.us/j/...' : virtualMeetingProvider === 'teams' ? 'https://teams.microsoft.com/l/meetup-join/...' : 'https://meet.google.com/xxx-xxxx-xxx'}
-                                            className={inputClasses}
-                                        />
-                                        <Button
-                                            variant="primary"
-                                            size="sm"
-                                            type="button"
-                                            onClick={handleSaveVirtualMeeting}
-                                        >
-                                            Save
-                                        </Button>
-                                    </div>
-                                    {virtualMeetingLink && (
-                                        <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
-                                            Open {virtualMeetingProviderLabel}
-                                        </a>
+                                    {isZoomMeetingProvider ? (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Trainer Zoom Start URL</label>
+                                                <input
+                                                    type="url"
+                                                    value={virtualMeetingHostLink}
+                                                    onChange={(e) => setVirtualMeetingHostLink(e.target.value)}
+                                                    placeholder="https://zoom.us/s/..."
+                                                    className={inputClasses}
+                                                />
+                                                {virtualMeetingHostLink && (
+                                                    <a href={virtualMeetingHostLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                        Open trainer start URL
+                                                    </a>
+                                                )}
+                                                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                                    Sensitive trainer-only URL. This starts the Zoom meeting with host access and must not be shared with learners.
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Join URL</label>
+                                                <input
+                                                    type="url"
+                                                    value={virtualMeetingLink}
+                                                    onChange={(e) => setVirtualMeetingLink(e.target.value)}
+                                                    placeholder="https://zoom.us/j/..."
+                                                    className={inputClasses}
+                                                />
+                                                {virtualMeetingLink && (
+                                                    <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                        Open learner join URL
+                                                    </a>
+                                                )}
+                                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                    This URL is shown to learners. Trainers can also join with it, but may not have host/admin controls.
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    type="button"
+                                                    onClick={handleSaveVirtualMeeting}
+                                                >
+                                                    Save Zoom URLs
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Virtual Meeting Link</label>
+                                            <div className="flex gap-3">
+                                                <input
+                                                    type="url"
+                                                    value={virtualMeetingLink}
+                                                    onChange={(e) => setVirtualMeetingLink(e.target.value)}
+                                                    placeholder={virtualMeetingProvider === 'teams' ? 'https://teams.microsoft.com/l/meetup-join/...' : 'https://meet.google.com/xxx-xxxx-xxx'}
+                                                    className={inputClasses}
+                                                />
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    type="button"
+                                                    onClick={handleSaveVirtualMeeting}
+                                                >
+                                                    Save
+                                                </Button>
+                                            </div>
+                                            {virtualMeetingLink && (
+                                                <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                    Open {virtualMeetingProviderLabel}
+                                                </a>
+                                            )}
+                                            <p className="mt-1 text-xs text-gray-400">
+                                                Google Meet links are synced from Google Calendar; Teams links can be entered manually.
+                                            </p>
+                                        </>
                                     )}
-                                    <p className="mt-1 text-xs text-gray-400">
-                                        Google Meet links are synced from Google Calendar; Zoom links can be generated here or entered manually.
-                                    </p>
                                 </div>
                             </FormSection>
                         )}

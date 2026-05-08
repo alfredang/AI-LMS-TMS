@@ -216,6 +216,8 @@ export interface Course {
   classStatus?: string;
   classType?: string;
   virtualMeetingLink?: string | null;
+  virtualMeetingHostLink?: string | null;
+  virtualMeetingJoinLink?: string | null;
   virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' | string | null;
   enrollmentStatus?: string;
   courseRunId?: string; // Add this for course detail navigation
@@ -296,6 +298,8 @@ export interface CourseDetail {
   endDate?: string;
   classType?: string;
   virtualMeetingLink?: string | null;
+  virtualMeetingHostLink?: string | null;
+  virtualMeetingJoinLink?: string | null;
   virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' | string | null;
   fundingValidity?: string;
   certificate: string;

@@ -33,7 +33,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.end_date,
           cr.mode_of_learning,
           COALESCE(cr.class_type, 'Physical') AS class_type,
-          cr.virtual_meeting_link,
+          CASE
+            WHEN cr.virtual_meeting_provider = 'zoom'
+              THEN COALESCE(cr.virtual_meeting_host_link, cr.virtual_meeting_link)
+            ELSE cr.virtual_meeting_link
+          END AS virtual_meeting_link,
+          cr.virtual_meeting_host_link,
+          cr.virtual_meeting_link AS virtual_meeting_join_link,
           cr.virtual_meeting_provider
       FROM course_run cr
       JOIN course c ON cr.course_id = c.id
@@ -72,6 +78,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       endDate: row.end_date,
       classType: row.class_type || 'Physical',
       virtualMeetingLink: row.virtual_meeting_link || null,
+      virtualMeetingHostLink: row.virtual_meeting_host_link || null,
+      virtualMeetingJoinLink: row.virtual_meeting_join_link || null,
       virtualMeetingProvider: row.virtual_meeting_provider || null,
       modeOfLearning: Array.isArray(row.mode_of_learning) 
         ? row.mode_of_learning 
