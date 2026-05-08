@@ -296,6 +296,10 @@ export interface TrainingProviderProfile extends BaseProfile {
     openClawAgentId?: string;
     openClawCallbackUrl?: string;
     virtualMeetingProvider?: VirtualMeetingProvider;
+    zoomClientId?: string;
+    zoomClientSecret?: string;
+    zoomConnected?: boolean;
+    zoomUserEmail?: string;
   };
   adminSettings: {
     autoSendProFormaInvoice: boolean;

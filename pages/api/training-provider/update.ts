@@ -739,9 +739,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const virtualMeetingProvider = allowedVirtualMeetingProviders.includes(requested)
           ? requested
           : 'google_meet';
+        await pool.query(`
+          ALTER TABLE training_provider
+            ADD COLUMN IF NOT EXISTS virtual_meeting_provider text DEFAULT 'google_meet',
+            ADD COLUMN IF NOT EXISTS zoom_oauth_client_id text,
+            ADD COLUMN IF NOT EXISTS zoom_oauth_client_secret text
+        `);
         await pool.query(
-          'UPDATE training_provider SET virtual_meeting_provider = $1 WHERE id = $2',
-          [virtualMeetingProvider, trainingProviderId]
+          `UPDATE training_provider
+           SET virtual_meeting_provider = $1,
+               zoom_oauth_client_id = $2,
+               zoom_oauth_client_secret = $3
+           WHERE id = $4`,
+          [
+            virtualMeetingProvider,
+            profileData.integrations?.zoomClientId || null,
+            profileData.integrations?.zoomClientSecret || null,
+            trainingProviderId
+          ]
         );
       } catch (e) {
         console.warn('⚠️ virtual_meeting_provider column missing; run database/migrations/add_virtual_meeting_provider.sql');

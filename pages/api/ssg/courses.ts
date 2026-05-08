@@ -15,6 +15,7 @@ import {
 } from '../../../lib/ssg/models/course-runs';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import pool from '../../../lib/db';
 
 // Get base URL from credentials (DB-first, env fallback)
 const getBaseUrl = async () => {
@@ -118,11 +119,59 @@ async function handleGetCourseRun(
   const includeExpiredOption = getOptionalSelector(includeExpired);
   const result = await ssgAPI.viewCourseRun(runId, includeExpiredOption);
 
-  if (result.error) {
+  const hasSsgError = !!(
+    result.error &&
+    (result.error.code || result.error.message || (Array.isArray(result.error.details) && result.error.details.length > 0))
+  );
+
+  if (hasSsgError) {
     return res.status(result.status || 400).json(result);
   }
 
+  await enrichCourseRunWithLocalVirtualMeeting(result, runId);
+
   res.status(200).json(result);
+}
+
+async function enrichCourseRunWithLocalVirtualMeeting(result: any, runId: string) {
+  try {
+    const localResult = await pool.query(
+      `SELECT
+         virtual_meeting_link,
+         virtual_meeting_provider,
+         virtual_meeting_external_id,
+         virtual_meeting_status,
+         virtual_meeting_synced_at
+       FROM course_run
+       WHERE course_run_id = $1
+       LIMIT 1`,
+      [runId]
+    );
+
+    const local = localResult.rows[0];
+    if (!local || !result?.data) return;
+
+    const virtualMeetingFields = {
+      virtualMeetingLink: local.virtual_meeting_link || null,
+      virtualMeetingProvider: local.virtual_meeting_provider || null,
+      virtualMeetingExternalId: local.virtual_meeting_external_id || null,
+      virtualMeetingStatus: local.virtual_meeting_status || null,
+      virtualMeetingSyncedAt: local.virtual_meeting_synced_at || null,
+    };
+
+    const runTargets = [
+      result.data.run,
+      result.data.course?.run,
+    ].filter((target) => target && typeof target === 'object');
+
+    for (const run of runTargets) {
+      Object.assign(run, virtualMeetingFields);
+    }
+
+    Object.assign(result.data, virtualMeetingFields);
+  } catch (error) {
+    console.warn('[api/ssg/courses] Failed to enrich virtual meeting fields:', error);
+  }
 }
 
 async function handleAddCourseRun(
