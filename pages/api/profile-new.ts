@@ -615,12 +615,24 @@ async function getTrainingProviderProfile(userId: string) {
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
 
-  // Virtual Meeting provider (tolerant of pre-migration DBs)
+  // Virtual Meeting provider + Zoom connection (tolerant of pre-migration DBs)
   let virtualMeetingProvider: 'google_meet' | 'zoom' | 'teams' = 'google_meet';
+  let zoomClientId = '';
+  let zoomClientSecret = '';
+  let zoomConnected = false;
+  let zoomUserEmail = '';
   try {
-    const r = await pool.query(`SELECT virtual_meeting_provider FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    const r = await pool.query(
+      `SELECT virtual_meeting_provider, zoom_oauth_client_id, zoom_oauth_client_secret, zoom_oauth_refresh_token, zoom_user_email
+       FROM training_provider WHERE id = $1`,
+      [profileData.provider_id]
+    );
     const v = r.rows[0]?.virtual_meeting_provider;
     if (v === 'zoom' || v === 'teams') virtualMeetingProvider = v;
+    zoomClientId = r.rows[0]?.zoom_oauth_client_id || '';
+    zoomClientSecret = r.rows[0]?.zoom_oauth_client_secret || '';
+    zoomConnected = !!r.rows[0]?.zoom_oauth_refresh_token;
+    zoomUserEmail = r.rows[0]?.zoom_user_email || '';
   } catch (e) { /* column doesn't exist yet */ }
 
   // Parse color scheme - now returning as string instead of object
@@ -690,6 +702,10 @@ async function getTrainingProviderProfile(userId: string) {
       googleSlidesTemplateId: profileData.google_slides_template_id || '',
       googleServiceAccountJson: profileData.google_service_account_json || '',
       virtualMeetingProvider,
+      zoomClientId,
+      zoomClientSecret,
+      zoomConnected,
+      zoomUserEmail,
       trainerProfileImageUrl: refLinks.trainer_profile_image_url || '',
       certificateFolderUrl: profileData.certificate_folder_url || '',
       masterListUrl: refLinks.master_list_url || '',

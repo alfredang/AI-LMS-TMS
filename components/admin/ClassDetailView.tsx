@@ -342,6 +342,9 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
               courseCode: classDetail.operationalSummary.tgsRef,
               startDate: classDetail.operationalSummary.startDate,
               endDate: classDetail.operationalSummary.endDate,
+              classType: classDetail.operationalSummary.classType,
+              virtualMeetingLink: classDetail.operationalSummary.virtualMeetingLink,
+              virtualMeetingProvider: classDetail.operationalSummary.virtualMeetingProvider,
             });
             setAdminPage(AdminPage.EditClass);
           }}
