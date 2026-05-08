@@ -657,7 +657,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
         if (grnInvoiceId) {
           try {
             const grnPdf = await qboFetchInvoicePdf(undefined, grnInvoiceId);
-            const grnFileName = `GRN_invoice_${safeText(desiredGrnRef)}.pdf`;
+            const grnFileName = `NON-DA_GRANT_QB_invoice_${safeText(desiredGrnRef)}.pdf`;
             const grnDrive = await uploadInvoicePdfToDrive({ pdf: grnPdf, fileName: grnFileName });
             await pool.query(
               `UPDATE public.invoice_jobs
