@@ -160,10 +160,3 @@ n8nworkflows.md/
 # Playwright MCP / CLI session artifacts (logs + page snapshots)
 .playwright-cli/
 .playwright-mcp/
-next-env.d.ts
-package-lock.json
-database/01-schema-new.sql
-package.json
-/markdown/
-.gitignore
-package-lock.json

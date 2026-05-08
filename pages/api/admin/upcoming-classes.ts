@@ -155,22 +155,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    let thresholdDays = 21;
-    try {
-      const thresholdResult = await pool.query(
-        `SELECT upcoming_classes_threshold_days
-         FROM training_provider
-         LIMIT 1`
-      );
-      const rawThreshold = thresholdResult.rows[0]?.upcoming_classes_threshold_days;
-      const parsedThreshold = parseInt(String(rawThreshold || '21'), 10);
-      if (!Number.isNaN(parsedThreshold) && parsedThreshold > 0) {
-        thresholdDays = parsedThreshold;
-      }
-    } catch (error) {
-      // Column may not exist yet; keep the default.
-    }
-
     const hasInvitationTable = (
       await pool.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'trainer_invitation' LIMIT 1`)
     ).rows.length > 0;
@@ -188,6 +172,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       classStatus,
       learnerFilter,
       trainerAssignmentFilter,
+      thresholdDays: requestedThresholdDays,
       startDateFrom,
       endDateUntil,
       page = 0,
@@ -197,6 +182,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const pageNum = parseInt(page as string, 10) || 0;
     const limitNum = parseInt(limit as string, 10) || 20;
     const offset = pageNum * limitNum;
+
+    let thresholdDays = 30;
+    const parsedRequestThreshold = parseInt(String(requestedThresholdDays || ''), 10);
+    if (!Number.isNaN(parsedRequestThreshold) && parsedRequestThreshold > 0) {
+      thresholdDays = Math.min(parsedRequestThreshold, 730);
+    } else {
+      try {
+        const thresholdResult = await pool.query(
+          `SELECT upcoming_classes_threshold_days
+           FROM training_provider
+           LIMIT 1`
+        );
+        const rawThreshold = thresholdResult.rows[0]?.upcoming_classes_threshold_days;
+        const parsedProviderThreshold = parseInt(String(rawThreshold || ''), 10);
+        if (!Number.isNaN(parsedProviderThreshold) && parsedProviderThreshold > 0) {
+          thresholdDays = Math.min(parsedProviderThreshold, 730);
+        }
+      } catch (error) {
+        // Column may not exist yet; keep the screen default.
+      }
+    }
 
     // Ensure columns exist
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS class_type TEXT DEFAULT \'Physical\'');
@@ -286,8 +292,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(classStatus);
       paramIndex++;
     } else if (classStatus === 'ActiveOnly') {
-      // Default Upcoming Classes view: hide cancelled runs, show only
-      // Confirmed/Pending with at least 1 learner enrolled.
+      // Default Upcoming Classes status view: hide cancelled runs.
+      // Learner presence is controlled separately by learnerFilter.
       filters.push(`cr.class_status IN ('Confirmed', 'Pending')`);
     }
 
