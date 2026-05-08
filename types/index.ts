@@ -176,6 +176,7 @@ export enum TrainerPage {
   GenAIAuthoring = 'genAIAuthoring',
   EdTools = 'edTools',
   ProblemSolvingTools = 'problemSolvingTools',
+  CyberSecurityTools = 'cyberSecurityTools',
   DataAnalyticsTools = 'dataAnalyticsTools',
   FinanceTools = 'financeTools',
   StatTools = 'statTools',

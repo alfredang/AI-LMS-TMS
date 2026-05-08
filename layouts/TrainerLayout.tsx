@@ -17,6 +17,7 @@ import PastAttendance from '../components/trainer/PastAttendance';
 import PastAssessment from '../components/trainer/PastAssessment';
 import EdToolsPage from '../components/trainer/EdToolsPage';
 import ProblemSolvingToolsPage from '../components/trainer/ProblemSolvingToolsPage';
+import CyberSecurityToolsPage from '../components/trainer/CyberSecurityToolsPage';
 import DataAnalyticsToolsPage from '../components/trainer/DataAnalyticsToolsPage';
 import FinanceToolsPage from '../components/trainer/FinanceToolsPage';
 import StatToolsPage from '../components/trainer/StatToolsPage';
@@ -62,6 +63,8 @@ const TrainerLayout: React.FC = () => {
         return <EdToolsPage />;
       case TrainerPage.ProblemSolvingTools:
         return <ProblemSolvingToolsPage />;
+      case TrainerPage.CyberSecurityTools:
+        return <CyberSecurityToolsPage />;
       case TrainerPage.DataAnalyticsTools:
         return <DataAnalyticsToolsPage />;
       case TrainerPage.FinanceTools:
