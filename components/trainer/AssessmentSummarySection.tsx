@@ -46,7 +46,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
         }
     }, [userRole, courseRunUuid]);
 
-    if (userRole !== UserRole.Trainer && userRole !== UserRole.Admin && userRole !== UserRole.Developer && userRole !== UserRole.TrainingProvider) {
+    if (userRole !== UserRole.Trainer && userRole !== UserRole.Admin && userRole !== UserRole.Developer && userRole !== UserRole.TrainingProvider && userRole !== UserRole.Learner) {
         return null;
     }
 

@@ -19,6 +19,7 @@ interface CourseDetailRow {
   written_assessment_published: boolean;
   practical_assessment_published: boolean;
   certificate: string;
+  assessment_summary_record_url: string | null;
 }
 
 export default async function handler(
@@ -70,6 +71,7 @@ export default async function handler(
           c.slides_url,
           c.written_assessment_link,
           c.practical_performance_assessment_link,
+          c.assessment_summary_record_url,
           cr.written_assessment_published,
           cr.practical_assessment_published,
           cr.start_date,
@@ -107,6 +109,7 @@ export default async function handler(
           c.slides_url,
           c.written_assessment_link,
           c.practical_performance_assessment_link,
+          c.assessment_summary_record_url,
           cr.written_assessment_published,
           cr.practical_assessment_published,
           cr.start_date,
@@ -195,6 +198,7 @@ export default async function handler(
         slidesUrl: courseDetail.slides_url,
         writtenAssessmentLink: courseDetail.written_assessment_link,
         practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
+        assessmentSummaryRecordUrl: courseDetail.assessment_summary_record_url,
         writtenAssessmentPublished: courseDetail.written_assessment_published ?? false,
         practicalAssessmentPublished: courseDetail.practical_assessment_published ?? false,
         assessmentMethods: assessmentMethodsValue,

@@ -3273,6 +3273,17 @@ export const CourseDetail: React.FC = () => {
                                 />
                             </div>
 
+                            {/* Assessment Summary Record — Learner view */}
+                            {userRole === UserRole.Learner && convertedCourse.assessmentSummaryRecordUrl && (
+                                <div id={toId("Assessment Summary Record")}>
+                                    <AssessmentSummarySection
+                                        course={convertedCourse}
+                                        userRole={userRole}
+                                        courseRunUuid={effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || ''}
+                                    />
+                                </div>
+                            )}
+
                             {/* Assessment Grading (includes Assessment Record + Grading button) */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
                                 <div id={toId("Assessment Grading")}>
