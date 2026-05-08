@@ -489,6 +489,42 @@ END;
 $$;
 
 
+--
+-- Name: app_user_email_propagate(); Type: FUNCTION; Schema: public; Owner: -
+--
+-- Keeps denormalized trainer_email columns in sync with app_user.email.
+-- When a trainer's email changes, propagate to:
+--   course_run_trainer.trainer_email,
+--   course_run.assigned_trainer_email,
+--   course_run.tpg_assigned_trainer_email,
+--   course_session.trainer_email.
+-- Log/history tables (trainer_invitation, *_log, masterlist_table) are
+-- intentionally NOT updated — they represent what was sent at the time.
+--
+
+CREATE FUNCTION public.app_user_email_propagate() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.email IS DISTINCT FROM OLD.email THEN
+    UPDATE public.course_run_trainer
+       SET trainer_email = NEW.email
+     WHERE trainer_id = NEW.id;
+    UPDATE public.course_run
+       SET assigned_trainer_email = NEW.email, updated_at = now()
+     WHERE assigned_trainer_id = NEW.id;
+    UPDATE public.course_run
+       SET tpg_assigned_trainer_email = NEW.email, updated_at = now()
+     WHERE tpg_assigned_trainer_id = NEW.id;
+    UPDATE public.course_session
+       SET trainer_email = NEW.email, updated_at = now()
+     WHERE trainer_id = NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -4898,6 +4934,13 @@ CREATE TRIGGER trg_app_user_touch BEFORE UPDATE ON public.app_user FOR EACH ROW 
 --
 
 CREATE TRIGGER app_user_lowercase_email_trg BEFORE INSERT OR UPDATE OF email, secondary_email ON public.app_user FOR EACH ROW EXECUTE FUNCTION public.app_user_lowercase_email();
+
+
+--
+-- Name: app_user app_user_email_propagate_trg; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER app_user_email_propagate_trg AFTER UPDATE OF email ON public.app_user FOR EACH ROW EXECUTE FUNCTION public.app_user_email_propagate();
 
 
 --

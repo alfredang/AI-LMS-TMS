@@ -317,6 +317,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled'>('ActiveOnly');
     const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External'>('all');
     const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
+    const [selectedLearnerFilter, setSelectedLearnerFilter] = useState<'all' | 'withLearners' | 'noLearners'>('all');
     const [startDateFrom, setStartDateFrom] = useState('');
     const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -428,6 +429,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
             if (selectedClassType !== 'all') params.append('classType', selectedClassType);
             if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
+            if (selectedLearnerFilter !== 'all') params.append('learnerFilter', selectedLearnerFilter);
             if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
             if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -490,7 +492,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             return;
         }
         setCurrentPage(0);
-    }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType]);
+    }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter]);
 
     // Mark initial mount as done AFTER all other mount effects have executed
     useEffect(() => {
@@ -501,7 +503,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     // Fetch data when debounced filters or pagination change
     useEffect(() => {
         fetchUpcomingClasses();
-    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, debouncedStartDate, debouncedEndDate]);
+    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, debouncedStartDate, debouncedEndDate]);
 
     // Auto-refresh when the tab becomes visible again. Common flow: admin
     // sends an invitation, switches to email to test, then comes back — this
@@ -551,6 +553,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setSelectedClassStatus('ActiveOnly');
         setSelectedClassType('all');
         setSelectedCourseType('all');
+        setSelectedLearnerFilter('all');
         setStartDateFrom('');
         setEndDateUntil('');
         setCurrentPage(0);
@@ -647,7 +650,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setSendingInvitationFor(classItem.id);
         setActionMessage(null);
         try {
-            const overrideTrainerName = nextTrainerOverrides[classItem.id] || undefined;
+            // Send what the dropdown is showing (default = nextAvailableTrainer, or admin's selection).
+            // Without this fallback, clicking RESEND without touching the dropdown sent
+            // overrideTrainerName=undefined, which made the backend auto-escalate to a
+            // different trainer than the one shown — emails went to the wrong person.
+            const overrideTrainerName = nextTrainerOverrides[classItem.id] || classItem.nextAvailableTrainer || undefined;
             const response = await fetch(getApiUrl('/api/admin/send-trainer-invitation'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -969,6 +976,20 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 <option value="WSQ">WSQ</option>
                                                 <option value="IBF">IBF</option>
                                                 <option value="Non-WSQ">Non-WSQ</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Learner Filter */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Learners</label>
+                                            <select
+                                                value={selectedLearnerFilter}
+                                                onChange={(e) => setSelectedLearnerFilter(e.target.value as 'all' | 'withLearners' | 'noLearners')}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            >
+                                                <option value="all">All</option>
+                                                <option value="withLearners">With Learners</option>
+                                                <option value="noLearners">No Learners Only</option>
                                             </select>
                                         </div>
 

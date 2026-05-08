@@ -179,6 +179,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       courseRunId,
       trainer,
       classStatus,
+      learnerFilter,
       startDateFrom,
       endDateUntil,
       page = 0,
@@ -296,8 +297,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
-    // In ActiveOnly mode (default), only show classes with at least 1 learner
-    const minLearners = (classStatus === 'ActiveOnly' || !classStatus) ? 1 : 0;
+    // Learner filter: 'noLearners' shows only 0-learner runs,
+    // 'withLearners' requires ≥1, default 'all' shows everything.
+    const havingClause = learnerFilter === 'noLearners'
+      ? 'HAVING COUNT(e.id) = 0'
+      : learnerFilter === 'withLearners'
+        ? 'HAVING COUNT(e.id) >= 1'
+        : '';
+    const hasHaving = havingClause !== '';
 
     const baseQuery = `
       FROM course_run cr
@@ -355,7 +362,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ${tpgEmailExpr},
           cr.tpg_sync_status,
           cr.assigned_trainer_name
-        HAVING COUNT(e.id) >= ${minLearners}
+        ${havingClause}
         ORDER BY cr.start_date ASC NULLS LAST, cr.end_date ASC NULLS LAST
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `,
@@ -363,14 +370,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     const countResult = await pool.query(
-      minLearners > 0
+      hasHaving
         ? `SELECT COUNT(*) AS total_count FROM (
              SELECT cr.id FROM course_run cr
              JOIN course c ON cr.course_id = c.id
              LEFT JOIN enrollment e ON e.course_run_id = cr.id
              ${whereClause}
              GROUP BY cr.id
-             HAVING COUNT(e.id) >= ${minLearners}
+             ${havingClause}
            ) sub`
         : `SELECT COUNT(DISTINCT cr.id) AS total_count
            FROM course_run cr
@@ -380,25 +387,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     const statsResult = await pool.query(
-      `
-        SELECT
-          COUNT(DISTINCT cr.id) AS total_classes,
-          COUNT(DISTINCT cr.id) FILTER (
-            WHERE EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
-          ) AS total_confirmed_classes,
-          COUNT(DISTINCT cr.id) FILTER (
-            WHERE NOT EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
-          ) AS total_pending_classes,
-          COUNT(DISTINCT cr.id) FILTER (
-            WHERE COALESCE(${tpgNameExpr}, '') <> ''
-          ) AS total_assigned_tpg_classes,
-          COUNT(DISTINCT cr.id) FILTER (
-            WHERE EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
-          ) AS total_assigned_local_classes
-        FROM course_run cr
-        JOIN course c ON cr.course_id = c.id
-        ${whereClause}
-      `,
+      hasHaving
+        ? `
+          SELECT
+            COUNT(*) AS total_classes,
+            COUNT(*) FILTER (
+              WHERE EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = sub.id)
+            ) AS total_confirmed_classes,
+            COUNT(*) FILTER (
+              WHERE NOT EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = sub.id)
+            ) AS total_pending_classes,
+            COUNT(*) FILTER (
+              WHERE COALESCE(sub.tpg_name, '') <> ''
+            ) AS total_assigned_tpg_classes,
+            COUNT(*) FILTER (
+              WHERE EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = sub.id)
+            ) AS total_assigned_local_classes
+          FROM (
+            SELECT cr.id, ${tpgNameExpr} AS tpg_name
+            FROM course_run cr
+            JOIN course c ON cr.course_id = c.id
+            LEFT JOIN enrollment e ON e.course_run_id = cr.id
+            ${whereClause}
+            GROUP BY cr.id, ${tpgNameExpr}
+            ${havingClause}
+          ) sub
+        `
+        : `
+          SELECT
+            COUNT(DISTINCT cr.id) AS total_classes,
+            COUNT(DISTINCT cr.id) FILTER (
+              WHERE EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
+            ) AS total_confirmed_classes,
+            COUNT(DISTINCT cr.id) FILTER (
+              WHERE NOT EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
+            ) AS total_pending_classes,
+            COUNT(DISTINCT cr.id) FILTER (
+              WHERE COALESCE(${tpgNameExpr}, '') <> ''
+            ) AS total_assigned_tpg_classes,
+            COUNT(DISTINCT cr.id) FILTER (
+              WHERE EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
+            ) AS total_assigned_local_classes
+          FROM course_run cr
+          JOIN course c ON cr.course_id = c.id
+          ${whereClause}
+        `,
       params
     );
 
