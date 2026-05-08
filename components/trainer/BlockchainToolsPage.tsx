@@ -9,6 +9,12 @@ const BLOCKCHAIN_TOOLS = [
     icon: IconName.Award,
     href: 'https://alfredang.github.io/certifynft/',
   },
+  {
+    title: 'Supply Verify',
+    description: 'Track and verify supply chain provenance on the blockchain',
+    icon: IconName.Link,
+    href: 'https://alfredang.github.io/supplyverify/',
+  },
 ];
 
 const BlockchainToolsPage: React.FC = () => {
