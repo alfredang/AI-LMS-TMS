@@ -10,6 +10,7 @@ import { extractFilenameFromPath } from '@utils/fileUtils';
 import { courseService } from '@lib/services/courseService';
 import { getApiUrl, getDownloadUrl } from '@/lib/urlHelpers';
 import { AssessmentSummarySection } from './trainer/AssessmentSummarySection';
+import { ClassPhotoUpload } from './trainer/ClassPhotoUpload';
 import QuizTakerModal from './QuizTakerModal';
 
 // --- Types (assuming these exist in your project) ---
@@ -2860,6 +2861,10 @@ export const CourseDetail: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
+                                    <ClassPhotoUpload
+                                        courseRunUuid={effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || ''}
+                                        userRole={userRole}
+                                    />
                                 </ContentSection>
                             </div>
                                 );
