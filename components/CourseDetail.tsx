@@ -3274,7 +3274,7 @@ export const CourseDetail: React.FC = () => {
                             </div>
 
                             {/* Assessment Summary Record — Learner view */}
-                            {userRole === UserRole.Learner && convertedCourse.assessmentSummaryRecordUrl && (
+                            {userRole === UserRole.Learner && (
                                 <div id={toId("Assessment Summary Record")}>
                                     <AssessmentSummarySection
                                         course={convertedCourse}
