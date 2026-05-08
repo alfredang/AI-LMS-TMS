@@ -441,11 +441,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           calOAuth.setCredentials({ refresh_token: calCredentials.refreshToken });
           const calendar = google.calendar({ version: 'v3', auth: calOAuth });
 
-          const startDateIso = invitation.start_date
-            ? (invitation.start_date instanceof Date
-              ? invitation.start_date.toISOString().slice(0, 10)
-              : String(invitation.start_date).slice(0, 10))
-            : '';
+          // pg returns DATE columns as JS Date at midnight SGT (= 16:00 UTC
+          // previous day). .toISOString() gives the UTC date which is off by
+          // one day. Add +8h to get the SGT date, matching the sgtDate()
+          // pattern used in auto-add-today-enrolments-to-calendar.ts.
+          const toSgtDate = (v: any): string => {
+            if (!v) return '';
+            const s = String(v);
+            // Already an ISO date string from the query? Use as-is.
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s.trim())) return s.trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+            // Date object or locale string — parse + shift to SGT
+            const d = v instanceof Date ? v : new Date(s);
+            if (isNaN(d.getTime())) return '';
+            return new Date(d.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+          };
+          const startDateIso = toSgtDate(invitation.start_date);
 
           if (!startDateIso) {
             console.log(`📅 [trainer-invitation/respond] No start_date — skipping calendar add`);
@@ -455,11 +466,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             dayBefore.setDate(dayBefore.getDate() - 1);
             const dayAfter = new Date(startDateIso);
             if (invitation.end_date) {
-              const endIso = invitation.end_date instanceof Date
-                ? invitation.end_date.toISOString().slice(0, 10)
-                : String(invitation.end_date).slice(0, 10);
-              const endD = new Date(endIso);
-              dayAfter.setTime(Math.max(dayAfter.getTime(), endD.getTime()));
+              const endIso = toSgtDate(invitation.end_date);
+              if (endIso) {
+                const endD = new Date(endIso);
+                dayAfter.setTime(Math.max(dayAfter.getTime(), endD.getTime()));
+              }
             }
             dayAfter.setDate(dayAfter.getDate() + 2);
 
