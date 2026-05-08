@@ -106,7 +106,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
 
                 {userRole === UserRole.Trainer && (
                     <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
-                        <h4 className="text-sm font-bold text-blue-900 dark:text-blue-100 mb-3 uppercase tracking-wider">Upload Learner Summary Record</h4>
+                        <h4 className="text-sm font-bold text-blue-900 dark:text-blue-100 mb-3 uppercase tracking-wider">Upload Assessment Summary Record after fill up the trainer info and signed</h4>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
