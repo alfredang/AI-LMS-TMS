@@ -324,6 +324,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
     const [selectedLearnerFilter, setSelectedLearnerFilter] = useState<'all' | 'withLearners' | 'noLearners'>('withLearners');
     const [selectedTrainerAssignmentFilter, setSelectedTrainerAssignmentFilter] = useState<'all' | 'withTrainers' | 'noTrainers'>('all');
+    const [selectedUpcomingWindow, setSelectedUpcomingWindow] = useState<'30' | '60' | '90' | 'custom'>('30');
+    const [customUpcomingWindowDays, setCustomUpcomingWindowDays] = useState('');
+    const [debouncedCustomUpcomingWindowDays, setDebouncedCustomUpcomingWindowDays] = useState('');
     const [startDateFrom, setStartDateFrom] = useState('');
     const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -388,6 +391,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     const ITEMS_PER_PAGE = 20;
     const totalUnassignedTrainers = Math.max(stats.totalClasses - stats.totalAssignedLocalClasses, 0);
+    const getUpcomingThresholdDays = () => {
+        if (selectedUpcomingWindow !== 'custom') return selectedUpcomingWindow;
+        const parsed = parseInt(debouncedCustomUpcomingWindowDays, 10);
+        return Number.isFinite(parsed) && parsed > 0 ? String(Math.min(parsed, 730)) : '30';
+    };
 
     // Fetch trainers from API
     const fetchTrainers = async () => {
@@ -437,6 +445,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
             if (selectedLearnerFilter !== 'all') params.append('learnerFilter', selectedLearnerFilter);
             if (selectedTrainerAssignmentFilter !== 'all') params.append('trainerAssignmentFilter', selectedTrainerAssignmentFilter);
+            params.append('thresholdDays', getUpcomingThresholdDays());
             if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
             if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -493,13 +502,23 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         return () => clearTimeout(timer);
     }, [searchQuery, courseTitle, courseCode, courseRunId, startDateFrom, endDateUntil]);
 
+    useEffect(() => {
+        if (isInitialMount.current) {
+            return;
+        }
+        const timer = setTimeout(() => {
+            setDebouncedCustomUpcomingWindowDays(customUpcomingWindowDays);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [customUpcomingWindowDays]);
+
     // Reset page immediately for non-debounced filters (dropdowns)
     useEffect(() => {
         if (isInitialMount.current) {
             return;
         }
         setCurrentPage(0);
-    }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter]);
+    }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter, selectedUpcomingWindow, debouncedCustomUpcomingWindowDays]);
 
     // Mark initial mount as done AFTER all other mount effects have executed
     useEffect(() => {
@@ -510,7 +529,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     // Fetch data when debounced filters or pagination change
     useEffect(() => {
         fetchUpcomingClasses();
-    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter, debouncedStartDate, debouncedEndDate]);
+    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter, selectedUpcomingWindow, debouncedCustomUpcomingWindowDays, debouncedStartDate, debouncedEndDate]);
 
     // Auto-refresh when the tab becomes visible again. Common flow: admin
     // sends an invitation, switches to email to test, then comes back — this
@@ -562,6 +581,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setSelectedCourseType('all');
         setSelectedLearnerFilter('withLearners');
         setSelectedTrainerAssignmentFilter('all');
+        setSelectedUpcomingWindow('30');
+        setCustomUpcomingWindowDays('');
+        setDebouncedCustomUpcomingWindowDays('');
         setStartDateFrom('');
         setEndDateUntil('');
         setCurrentPage(0);
@@ -1015,6 +1037,36 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </select>
                                         </div>
 
+                                        {/* Upcoming Window Filter */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Upcoming Window</label>
+                                            <select
+                                                value={selectedUpcomingWindow}
+                                                onChange={(e) => setSelectedUpcomingWindow(e.target.value as '30' | '60' | '90' | 'custom')}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            >
+                                                <option value="30">Next 30 days</option>
+                                                <option value="60">Next 60 days</option>
+                                                <option value="90">Next 90 days</option>
+                                                <option value="custom">Next custom days</option>
+                                            </select>
+                                        </div>
+
+                                        {selectedUpcomingWindow === 'custom' && (
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Next Days</label>
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={730}
+                                                    placeholder="Enter days..."
+                                                    value={customUpcomingWindowDays}
+                                                    onChange={(e) => setCustomUpcomingWindowDays(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                />
+                                            </div>
+                                        )}
+
                                         {/* Start Date From */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
@@ -1053,7 +1105,13 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         {actionMessage.text}
                     </div>
                 )}
-                {loading ? (
+                {loading && upcomingClasses.length > 0 && (
+                    <div className="mb-3 inline-flex items-center rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                        <div className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-blue-300 border-t-blue-700 dark:border-blue-700 dark:border-t-blue-200" />
+                        Updating results...
+                    </div>
+                )}
+                {loading && upcomingClasses.length === 0 ? (
                     <div className="text-center py-8">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
                         <p className="text-gray-500 text-lg">Loading upcoming classes...</p>
@@ -1064,7 +1122,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         <p className="text-gray-500 text-lg">No upcoming classes found</p>
                         <p className="text-gray-400 text-sm mt-2">
                             {/* 'ActiveOnly' is the default — don't count it as a user-applied filter */}
-                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || (selectedClassStatus !== 'all' && selectedClassStatus !== 'ActiveOnly') || selectedClassType !== 'all' || selectedCourseType !== 'all' || selectedLearnerFilter !== 'withLearners' || selectedTrainerAssignmentFilter !== 'all' || startDateFrom || endDateUntil
+                            {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || (selectedClassStatus !== 'all' && selectedClassStatus !== 'ActiveOnly') || selectedClassType !== 'all' || selectedCourseType !== 'all' || selectedLearnerFilter !== 'withLearners' || selectedTrainerAssignmentFilter !== 'all' || selectedUpcomingWindow !== '30' || startDateFrom || endDateUntil
                                 ? 'Try adjusting your search filters'
                                 : 'No classes are scheduled for the future'}
                         </p>
