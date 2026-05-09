@@ -226,7 +226,6 @@ const subItemClass = 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:ho
 const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed = false }) => {
   const { trainerPage, setTrainerPage, setCurrentView, setSelectedCourse } = useLms();
   const [trainerGuidesOpen, setTrainerGuidesOpen] = useState(
-    trainerPage === TrainerPage.TrainerGuides ||
     trainerPage === TrainerPage.LessonDeliveryGuide ||
     trainerPage === TrainerPage.VirtualClassGuide ||
     trainerPage === TrainerPage.AssessmentGuide
