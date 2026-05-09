@@ -13,6 +13,16 @@ RUN npm ci
 
 COPY . .
 
+# Diagnostic: surface whether .git made it into the build context and whether
+# git can read it. Output goes to Coolify's build log. Always exits 0 so the
+# build is not blocked by the probe itself.
+RUN echo "=== version probe ===" \
+    && (ls -la .git 2>&1 | head -5 || echo "NO .git directory") \
+    && (git rev-parse HEAD 2>&1 || echo "git rev-parse FAILED") \
+    && (git log -1 --format='%h %ci' 2>&1 || echo "git log FAILED") \
+    && echo "=== end version probe ===" \
+    || true
+
 # next.config.js must have output: 'standalone'
 RUN npm run build
 
