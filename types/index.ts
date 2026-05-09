@@ -140,6 +140,7 @@ export enum DeveloperPage {
   Dashboard = 'dashboard',
   CourseList = 'courseList',
   SeoMetadata = 'seoMetadata',
+  CoursewareTools = 'coursewareTools',
   CpGenerator = 'cpGenerator',
   CpCourseDetails = 'cpCourseDetails',
   CpAboutCourse = 'cpAboutCourse',

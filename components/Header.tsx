@@ -285,10 +285,8 @@ const Header: React.FC = () => {
       { view: View.Dashboard, label: 'GenAI Tools', icon: IconName.Create, trainerPage: TrainerPage.GenAIAuthoring },
     ],
     [UserRole.Developer]: [
-      { view: View.Courses, label: 'Courses', icon: IconName.Courses },
-      { view: View.Create, label: 'SEO Metadata Generator', icon: IconName.Create },
-      { view: View.Dashboard, label: 'CP Generator', icon: IconName.FileText, developerPage: DeveloperPage.CpCourseDetails },
-      { view: View.Dashboard, label: 'Courseware Generator', icon: IconName.BookOpen, developerPage: DeveloperPage.CwExtractCourseInfo },
+      { view: View.Dashboard, label: 'Course Management', icon: IconName.Courses, developerPage: DeveloperPage.CourseList },
+      { view: View.Dashboard, label: 'Courseware Tools', icon: IconName.BookOpen, developerPage: DeveloperPage.CoursewareTools },
     ],
     [UserRole.Admin]: [
       { view: View.Admin, label: 'Admin Dashboard', icon: IconName.Admin, page: AdminPage.Dashboard },
