@@ -680,8 +680,6 @@ export const MultiRoleProfileCard: React.FC = () => {
         } finally { setIsSaving(false); }
     };
 
-    const roleLabels = data.roles.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join(' & ');
-
     return (
         <div className="max-w-5xl mx-auto">
             {/* ===== SHARED BIO DATA ===== */}
@@ -703,7 +701,6 @@ export const MultiRoleProfileCard: React.FC = () => {
                     </div>
                     <div className="text-center sm:text-left flex-grow">
                         <h1 className="text-2xl font-bold text-on-surface">{sharedForm.name}</h1>
-                        <p className="text-subtle">{roleLabels} Profile</p>
                         <div className="flex gap-2 mt-1">
                             {data.roles.map(role => (
                                 <span key={role} className={`text-xs font-semibold px-2 py-0.5 rounded-full ${role.toLowerCase() === 'trainer' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
