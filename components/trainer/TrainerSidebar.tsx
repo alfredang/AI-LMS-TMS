@@ -231,7 +231,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
     trainerPage === TrainerPage.VirtualClassGuide ||
     trainerPage === TrainerPage.AssessmentGuide
   );
-  const [edToolsOpen, setEdToolsOpen] = useState(true);
+  const [edToolsOpen, setEdToolsOpen] = useState(trainerPage === TrainerPage.EdTools);
   const [problemSolvingOpen, setProblemSolvingOpen] = useState(trainerPage === TrainerPage.ProblemSolvingTools);
   const [cyberSecurityOpen, setCyberSecurityOpen] = useState(trainerPage === TrainerPage.CyberSecurityTools);
   const [dataAnalyticsOpen, setDataAnalyticsOpen] = useState(trainerPage === TrainerPage.DataAnalyticsTools);
