@@ -83,7 +83,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Ed Tools** — Interactive classroom tools:
   - [Ice Breaker](https://alfredang.github.io/ice-breaker/), [Pinboard](https://alfredang.github.io/pinboard/), [Break Timer](https://alfredang.github.io/musical-timer-countdown/), [Word Cloud](https://alfredang.github.io/wordcloud/), [Flash Cards](https://alfredang.github.io/flashcard/), [Live Q&A](https://alfredang.github.io/live-qna/), [Whiteboard](https://alfredang.github.io/whiteboard/), [Padlet](https://alfredang.github.io/padlet/), [Collaborative Note](https://alfredang.github.io/collabnote/), [Collaborative Flow](https://alfredang.github.io/collabflow/), [Collaborative Kanban](https://alfredang.github.io/kanban/), [Live Poll](https://alfredang.github.io/livepoll/), [MindMaps](https://alfredang.github.io/mindmapping/), [Spinning Wheel](https://alfredang.github.io/spinning-wheel/)
 - **Problem Solving Tools** — [5 Whys](https://alfredang.github.io/5whys/), [Fishbone Diagram](https://alfredang.github.io/fishbone/), [Pareto Chart](https://alfredang.github.io/paretochart/), [System Thinking](https://alfredang.github.io/systemloop/)
-- **Cyber Security Tools** — [Pentest (FauxBank)](https://pentest-fauxbank.vercel.app/), [Cyber Threats Simulator](https://alfredang.github.io/cybersecuritysimulator/)
+- **Cyber Security Tools** — [CyberLabs](https://alfredang.github.io/cybersecuritysimulator/), [HackLabs](https://alfredang.github.io/ethnicalhacking/), [Pentest (FauxBank)](https://pentest-fauxbank.vercel.app/)
 - **Data Analytics Tools** — [Pivot Visualization](https://alfredang.github.io/novapivot/), [Anomaly Detection](https://alfredang.github.io/anamolydetection2/), [Factor Analysis](https://multifactoranalysis.streamlit.app/), [ML Classification](https://ml-classification-888.streamlit.app/), [Mock Data Generator](https://alfredang.github.io/mockdatagen/)
 - **Finance Tools** — [Tax Calculator](https://alfredang.github.io/novataxsg/), [Financial Planning & Analysis](https://alfredang.github.io/novafinance/), [Financial Ratio Calculators](https://alfredang.github.io/novafinancialratiocalculator/), [Financial Trend Analysis](https://alfredang.github.io/financialtrend/), [Credit Loan Analysis](https://creditloananalysis.streamlit.app/)
 - **Statistical Tools** — Descriptive, Correlation, Regression, Hypothesis, Chi-Square, ANOVA ([NovaStats](https://alfredang.github.io/novastats/))
@@ -103,7 +103,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
   - **Low Code Platforms**: n8n, Langflow, Flowise
   - **Voice Agents**: ElevenLabs, Retell AI, Vapi
   - **Video Agents**: HeyGen, Synthesia
-- **Virtual Tools** — Google Meet, Microsoft Teams, Zoom
+- **Virtual Tools** — Google Meet, Microsoft Teams, Zoom (integrated for virtual class delivery — meeting links auto-generated and attached to course runs)
 
 ### Admin Features
 - **Admin Dashboard** — KPI cards: Ongoing Classes, Upcoming Classes, Completed Classes, Assigned Trainers (Local), Missing Trainers (Local/TPG)
@@ -169,7 +169,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Company Setting**
   - Company profile (name, UEN, address, logo, color scheme)
   - Contact person management
-  - **Integrations** — Virtual meeting provider selection, course-run meeting links override the company default, Google (Calendar, OAuth, Certificate Folder), Zoom OAuth meeting generation, n8n, Magento, Reference Links
+  - **Integrations** — Virtual class meeting provider selection (Google Meet, Zoom, Microsoft Teams), course-run meeting links override the company default, Google (Calendar, OAuth, Certificate Folder), Zoom OAuth meeting generation, Microsoft Teams meeting generation, n8n, Magento, Reference Links
   - **SSG Authentication** — SSG certificate, private key, and encryption key (with support for App1, App3, App4 credentials)
   - **LLM Credentials** — Anthropic, OpenAI, Gemini, MiniMax, Kimi, DeepSeek with default and fallback provider selection
   - **Security Settings** — OTP login, default OTP, force first password change, default password, sensitive data masking
