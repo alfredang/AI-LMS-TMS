@@ -9,6 +9,12 @@ const PROJECT_MGT_TOOLS = [
     icon: IconName.ClipboardCheck,
     href: 'https://alfredang.github.io/raci/',
   },
+  {
+    title: 'Digital/AI Transformation',
+    description: 'Plan and assess digital and AI transformation initiatives',
+    icon: IconName.Analytics,
+    href: 'https://alfredang.github.io/digitaltransformation/',
+  },
 ];
 
 const ProjectMgtToolsPage: React.FC = () => {
