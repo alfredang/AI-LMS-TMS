@@ -1889,7 +1889,7 @@ type NavItem = { type: 'link'; label: string; icon: IconName } | { type: 'separa
 
 const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingView, selectedCourse, onMobileItemClick }) => {
     const { setTrainerPage, setSelectedCourse, trainingProviderProfile } = useLms();
-    const defaultActive = userRole === UserRole.Learner ? 'Learning Outcomes' : 'Lesson';
+    const defaultActive = 'Lesson';
     const [activeItem, setActiveItem] = useState(defaultActive);
     const showLessonPlanForLearner = !!trainingProviderProfile?.showLessonPlanLearnerView;
 
@@ -1898,7 +1898,8 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         setActiveItem(label);
 
         let targetId = toId(label);
-        if (label === 'Lesson' || label === 'Lessons' || label === 'Learning Outcomes') targetId = 'lessons';
+        if (label === 'Lesson' || label === 'Lessons') targetId = 'lessons';
+        else if (label === 'Lesson Plan' || label === 'Learner Guide' || label === 'Learner Slides') targetId = toId('Courseware Link');
         else if (label === 'Assessment' || label === 'Assessments') targetId = 'assessments';
         else if (label === 'Certificate') targetId = 'certificate';
         else if (label === 'Announcements') targetId = 'announcements';
@@ -1917,10 +1918,11 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     };
 
     const learnerNavItems: NavItem[] = [
+        { type: 'link', label: "E-Attendance", icon: IconName.ClipboardCheck },
         ...(showLessonPlanForLearner ? [{ type: 'link', label: "Lesson Plan", icon: IconName.BookOpen } as NavItem] : []),
         { type: 'link', label: "Learner Guide", icon: IconName.FileText },
         { type: 'link', label: "Learner Slides", icon: IconName.FileText },
-        { type: 'link', label: "Learning Outcomes", icon: IconName.BookOpen },
+        { type: 'link', label: "Lesson", icon: IconName.BookOpen },
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Announcements", icon: IconName.Bell },
@@ -2715,13 +2717,14 @@ export const CourseDetail: React.FC = () => {
                         {/* Main Content */}
                         <main className="space-y-6">
                             {/* Back Button + Action Buttons */}
+                            {(userRole === UserRole.Developer || userRole === UserRole.Admin) && (
                             <div className="mb-6 flex justify-between items-center">
-                                {userRole !== UserRole.Trainer ? (
+                                {userRole === UserRole.Developer ? (
                                 <button
                                     onClick={handleBackToDashboard}
                                     className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white rounded-lg flex items-center gap-2"
                                 >
-                                    {userRole === UserRole.Developer ? 'Back to All Courses' : 'Back to Dashboard'}
+                                    Back to All Courses
                                 </button>
                                 ) : <div />}
                                 {!isLoading && (
@@ -2744,6 +2747,7 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                                 )}
                             </div>
+                            )}
 
                             {/* Show loading skeleton while data is being fetched */}
                             {isLoading ? (
@@ -2774,6 +2778,34 @@ export const CourseDetail: React.FC = () => {
                                             </div>
                                             <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                         </button>
+                                    </ContentSection>
+                                </div>
+                            )}
+
+                            {userRole === UserRole.Learner && (
+                                <div id={toId("E-Attendance")}>
+                                    <ContentSection title="E-Attendance">
+                                        {attendanceLink ? (
+                                            <a
+                                                href={attendanceLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 p-3 w-full text-left bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                            >
+                                                <Icon name={IconName.ClipboardCheck} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-900 dark:text-white">E-Attendance</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                        Open E-Attendance for Course Run {selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || ''}
+                                                    </p>
+                                                </div>
+                                                <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                            </a>
+                                        ) : (
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                                                E-Attendance link not yet available for this course run.
+                                            </p>
+                                        )}
                                     </ContentSection>
                                 </div>
                             )}
@@ -3022,94 +3054,82 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Learner-only: Lesson Plan (gated by Company Admin Setting) */}
-                            {userRole !== UserRole.Trainer && userRole !== UserRole.Developer && userRole !== UserRole.Admin && userRole !== UserRole.TrainingProvider && trainingProviderProfile?.showLessonPlanLearnerView && (
-                                <div id={toId("Lesson Plan")}>
-                                    <ContentSection title="Lesson Plan">
-                                        {!isMaterialsUnlocked ? (
-                                            <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
-                                        ) : convertedCourse.lessonPlanUrl ? (
-                                            isLessonPlanExternal ? (
-                                                <a href={convertedCourse.lessonPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                    </div>
-                                                </a>
-                                            ) : (
-                                                <div onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
-                                                    </div>
-                                                </div>
-                                            )
-                                        ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">No lesson plan available for this course.</p>
-                                        )}
-                                    </ContentSection>
-                                </div>
-                            )}
-
-                            {/* Learner-only: Learner Guide */}
+                            {/* Learner-only: Courseware (Lesson Plan, Learner Guide, Learner Slides) */}
                             {userRole !== UserRole.Trainer && userRole !== UserRole.Developer && userRole !== UserRole.Admin && userRole !== UserRole.TrainingProvider && (
-                                <div id={toId("Learner Guide")}>
-                                    <ContentSection title="Learner Guide">
+                                <div id={toId("Courseware Link")}>
+                                    <ContentSection title="Courseware">
                                         {!isMaterialsUnlocked ? (
                                             <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
-                                        ) : convertedCourse.learnerGuideUrl ? (
-                                            isLearnerGuideExternal ? (
-                                                <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                    </div>
-                                                </a>
-                                            ) : (
-                                                <div onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
-                                                    </div>
-                                                </div>
-                                            )
                                         ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">No learner guide available for this course.</p>
-                                        )}
-                                    </ContentSection>
-                                </div>
-                            )}
+                                            <div className="space-y-3">
+                                                {/* Lesson Plan (gated by Company Admin Setting) */}
+                                                {trainingProviderProfile?.showLessonPlanLearnerView && convertedCourse.lessonPlanUrl && (
+                                                    isLessonPlanExternal ? (
+                                                        <a href={convertedCourse.lessonPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            </div>
+                                                        </a>
+                                                    ) : (
+                                                        <div onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                )}
 
-                            {/* Learner Slides - non-trainer only */}
-                            {userRole !== UserRole.Trainer && userRole !== UserRole.Developer && userRole !== UserRole.Admin && userRole !== UserRole.TrainingProvider && (
-                                <div id={toId("Learner Slides")}>
-                                    <ContentSection title="Learner Slides">
-                                        {!isMaterialsUnlocked ? (
-                                            <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
-                                        ) : convertedCourse.slidesUrl ? (
-                                            isLearnerSlidesExternal ? (
-                                                <a href={convertedCourse.slidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                    </div>
-                                                </a>
-                                            ) : (
-                                                <div onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
-                                                    </div>
-                                                </div>
-                                            )
-                                        ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">No learner slides available for this course.</p>
+                                                {/* Learner Guide */}
+                                                {convertedCourse.learnerGuideUrl && (
+                                                    isLearnerGuideExternal ? (
+                                                        <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            </div>
+                                                        </a>
+                                                    ) : (
+                                                        <div onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                )}
+
+                                                {/* Learner Slides */}
+                                                {convertedCourse.slidesUrl && (
+                                                    isLearnerSlidesExternal ? (
+                                                        <a href={convertedCourse.slidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            </div>
+                                                        </a>
+                                                    ) : (
+                                                        <div onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                )}
+
+                                                {/* Empty state */}
+                                                {!convertedCourse.learnerGuideUrl && !convertedCourse.slidesUrl && !(trainingProviderProfile?.showLessonPlanLearnerView && convertedCourse.lessonPlanUrl) && (
+                                                    <p className="text-gray-500 dark:text-gray-400 text-sm">No courseware available.</p>
+                                                )}
+                                            </div>
                                         )}
                                     </ContentSection>
                                 </div>
@@ -3119,7 +3139,7 @@ export const CourseDetail: React.FC = () => {
                             <div id="lessons">
                                 <Card className="p-0 overflow-hidden">
                                     <button className="w-full text-left p-6 flex justify-between items-center" onClick={() => setIsLessonsOpen(!isLessonsOpen)} aria-expanded={isLessonsOpen}>
-                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">{role === UserRole.Learner ? 'Learning Outcomes' : 'Lesson'}</h3>
+                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Lesson</h3>
                                         <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform duration-200 ${isLessonsOpen ? 'rotate-180' : ''}`} />
                                     </button>
                                     {isLessonsOpen && (
