@@ -7,10 +7,11 @@ const COMMIT_HASH = (() => {
     return `${dd}-${mm}-${yyyy}`;
   };
   try {
-    const isoDate = execSync('git log -1 --format=%ci').toString().trim();
-    const shortHash = execSync('git log -1 --format=%h').toString().trim();
+    const isoDate = execSync('git log -1 --format=%ci', { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
+    const shortHash = execSync('git log -1 --format=%h', { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
     return `${formatDate(new Date(isoDate))} (${shortHash})`;
-  } catch {
+  } catch (e) {
+    console.warn('[version] git lookup failed, falling back to build date:', e.message);
     return formatDate(new Date());
   }
 })();

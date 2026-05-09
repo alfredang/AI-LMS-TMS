@@ -2,8 +2,11 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# git is needed at build time so next.config.js can stamp the commit hash/date
-RUN apk add --no-cache git
+# git is needed at build time so next.config.js can stamp the commit hash/date.
+# safe.directory bypass is required because COPY-ed files are owned by root,
+# which trips modern git's "dubious ownership" guard.
+RUN apk add --no-cache git \
+    && git config --global --add safe.directory '*'
 
 COPY package*.json ./
 RUN npm ci
