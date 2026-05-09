@@ -2,6 +2,9 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# git is needed at build time so next.config.js can stamp the commit hash/date
+RUN apk add --no-cache git
+
 COPY package*.json ./
 RUN npm ci
 

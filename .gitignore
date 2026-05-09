@@ -160,3 +160,4 @@ n8nworkflows.md/
 # Playwright MCP / CLI session artifacts (logs + page snapshots)
 .playwright-cli/
 .playwright-mcp/
+.version
