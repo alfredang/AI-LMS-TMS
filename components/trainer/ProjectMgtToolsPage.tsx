@@ -21,6 +21,12 @@ const PROJECT_MGT_TOOLS = [
     icon: IconName.ClipboardCheck,
     href: 'https://alfredang.github.io/scrum/',
   },
+  {
+    title: 'Design Thinking Studio',
+    description: 'Design Thinking workspace for empathising, ideation, prototyping, and testing',
+    icon: IconName.Create,
+    href: 'https://alfredang.github.io/designthinking/',
+  },
 ];
 
 const ProjectMgtToolsPage: React.FC = () => {
