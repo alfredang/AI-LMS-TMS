@@ -15,6 +15,12 @@ const PROJECT_MGT_TOOLS = [
     icon: IconName.Analytics,
     href: 'https://alfredang.github.io/digitaltransformation/',
   },
+  {
+    title: 'Agile/Scrum',
+    description: 'Agile and Scrum framework toolkit for sprint planning and team workflows',
+    icon: IconName.ClipboardCheck,
+    href: 'https://alfredang.github.io/scrum/',
+  },
 ];
 
 const ProjectMgtToolsPage: React.FC = () => {

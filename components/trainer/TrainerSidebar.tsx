@@ -47,6 +47,7 @@ const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
 const PROJECT_MGT_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'RACI Matrix', icon: IconName.ClipboardCheck, href: 'https://alfredang.github.io/raci/' },
   { label: 'Digital/AI Transformation', icon: IconName.Analytics, href: 'https://alfredang.github.io/digitaltransformation/' },
+  { label: 'Agile/Scrum', icon: IconName.ClipboardCheck, href: 'https://alfredang.github.io/scrum/' },
 ];
 
 // Problem Solving tools — split out from Ed Tools so root-cause analysis
