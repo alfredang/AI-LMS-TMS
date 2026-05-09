@@ -287,6 +287,14 @@ const ManagementCourseList: React.FC = () => {
             if (role === UserRole.Admin || role === UserRole.Developer) {
                 return (b.courseCode || '').localeCompare(a.courseCode || '');
             }
+            if (role === UserRole.Trainer && trainerClassView === 'upcoming') {
+                const aStart = parseLocalDate(a.startDate);
+                const bStart = parseLocalDate(b.startDate);
+                if (aStart && bStart) return aStart.getTime() - bStart.getTime();
+                if (aStart) return -1;
+                if (bStart) return 1;
+                return 0;
+            }
             return 0;
         });
     }, [relevantCourses, searchQuery, filterCourseCode, filterCourseType, filterMode, filterStartDate, role, trainerClassView, trainerStatusFilter]);
