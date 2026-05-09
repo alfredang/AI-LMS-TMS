@@ -75,7 +75,7 @@ const buildSteps = (variant: LessonDeliveryVariant): (Step & { number: number })
   if (variant === 'virtual') {
     const photoStep = (after: string): Step => ({
       title: `Take Class Photo after ${after}`,
-      description: `Take a class photo immediately after ${after}. ${PHOTO_REMARK}`,
+      description: `Take a class photo and upload to the assessment folder. ${PHOTO_REMARK}`,
       actor: 'trainer',
       icon: IconName.ClipboardCheck,
     });

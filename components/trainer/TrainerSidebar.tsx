@@ -15,10 +15,16 @@ const NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
   { page: TrainerPage.TrainingHours,      label: 'Training Hours',      icon: IconName.Clock          },
   { page: TrainerPage.PastAttendance,     label: 'Past Attendance',     icon: IconName.ClipboardCheck },
   { page: TrainerPage.PastAssessment,     label: 'Past Assessment',     icon: IconName.Award          },
+];
+
+const TRAINER_GUIDE_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
   { page: TrainerPage.LessonDeliveryGuide, label: 'Physical Class Guide', icon: IconName.BookOpen },
-  { page: TrainerPage.VirtualClassGuide,  label: 'Virtual Class Guide',  icon: IconName.BookOpen },
-  { page: TrainerPage.AssessmentGuide,   label: 'Assessment Guide',    icon: IconName.BookOpen        },
-  { page: TrainerPage.PaymentHistory,    label: 'Trainer Payout History', icon: IconName.Analytics       },
+  { page: TrainerPage.VirtualClassGuide,   label: 'Virtual Class Guide',  icon: IconName.BookOpen },
+  { page: TrainerPage.AssessmentGuide,     label: 'Assessment Guide',     icon: IconName.BookOpen },
+];
+
+const POST_GUIDE_NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
+  { page: TrainerPage.PaymentHistory, label: 'Trainer Payout History', icon: IconName.Analytics },
 ];
 
 const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -48,8 +54,9 @@ const PROBLEM_SOLVING_TOOL_ITEMS: { label: string; icon: IconName; href: string 
 ];
 
 const CYBER_SECURITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'CyberLabs', icon: IconName.Shield, href: 'https://alfredang.github.io/cybersecuritysimulator/' },
+  { label: 'HackLabs', icon: IconName.Shield, href: 'https://alfredang.github.io/ethnicalhacking/' },
   { label: 'Pentest', icon: IconName.Shield, href: 'https://pentest-fauxbank.vercel.app/' },
-  { label: 'Cyber Threats', icon: IconName.Shield, href: 'https://alfredang.github.io/cybersecuritysimulator/' },
 ];
 
 const VIRTUAL_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -218,6 +225,11 @@ const subItemClass = 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:ho
 
 const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed = false }) => {
   const { trainerPage, setTrainerPage, setCurrentView, setSelectedCourse } = useLms();
+  const [trainerGuidesOpen, setTrainerGuidesOpen] = useState(
+    trainerPage === TrainerPage.LessonDeliveryGuide ||
+    trainerPage === TrainerPage.VirtualClassGuide ||
+    trainerPage === TrainerPage.AssessmentGuide
+  );
   const [edToolsOpen, setEdToolsOpen] = useState(true);
   const [problemSolvingOpen, setProblemSolvingOpen] = useState(trainerPage === TrainerPage.ProblemSolvingTools);
   const [cyberSecurityOpen, setCyberSecurityOpen] = useState(trainerPage === TrainerPage.CyberSecurityTools);
@@ -275,6 +287,85 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               {!collapsed && <span className="truncate">{label}</span>}
             </a>
           ))}
+
+          {POST_GUIDE_NAV_ITEMS.map(({ page, label, icon }) => (
+            <a
+              key={page}
+              href="#"
+              title={collapsed ? label : undefined}
+              onClick={(e) => { e.preventDefault(); navigateTo(page); }}
+              className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+                trainerPage === page
+                  ? 'bg-primary/10 text-primary'
+                  : inactiveClass
+              }`}
+            >
+              <Icon
+                name={icon}
+                className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                  trainerPage === page ? 'text-primary' : inactiveIconClass
+                }`}
+              />
+              {!collapsed && <span className="truncate">{label}</span>}
+            </a>
+          ))}
+
+          {/* Trainer Guides — expandable */}
+          {(() => {
+            const guidesActive = TRAINER_GUIDE_ITEMS.some(g => g.page === trainerPage);
+            return (
+              <>
+                <button
+                  onClick={() => setTrainerGuidesOpen(prev => !prev)}
+                  title={collapsed ? 'Trainer Guides' : undefined}
+                  className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+                    guidesActive ? 'bg-primary/10 text-primary' : inactiveClass
+                  }`}
+                >
+                  <Icon
+                    name={IconName.BookOpen}
+                    className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                      guidesActive ? 'text-primary' : inactiveIconClass
+                    }`}
+                  />
+                  {!collapsed && <span className="truncate">Trainer Guides</span>}
+                  {!collapsed && (
+                    <Icon
+                      name={IconName.ChevronDown}
+                      className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                        trainerGuidesOpen ? 'rotate-0' : '-rotate-90'
+                      } ${guidesActive ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+                    />
+                  )}
+                </button>
+
+                {!collapsed && trainerGuidesOpen && (
+                  <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+                    {TRAINER_GUIDE_ITEMS.map(({ page, label, icon }) => (
+                      <a
+                        key={page}
+                        href="#"
+                        onClick={(e) => { e.preventDefault(); navigateTo(page); }}
+                        className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${
+                          trainerPage === page ? 'bg-primary/10 text-primary' : subItemClass
+                        }`}
+                      >
+                        <Icon
+                          name={icon}
+                          className={`w-4 h-4 flex-shrink-0 transition-colors ${
+                            trainerPage === page
+                              ? 'text-primary'
+                              : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white'
+                          }`}
+                        />
+                        <span className="truncate">{label}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         {/* Divider — Tools */}

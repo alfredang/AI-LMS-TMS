@@ -4,16 +4,22 @@ import { Icon, IconName } from '../ui/Icon';
 
 const CYBER_SECURITY_TOOLS = [
   {
+    title: 'CyberLabs',
+    description: 'Interactive simulator exploring common cyber threats and attack scenarios',
+    icon: IconName.Shield,
+    href: 'https://alfredang.github.io/cybersecuritysimulator/',
+  },
+  {
+    title: 'HackLabs',
+    description: 'Hands-on ethical hacking labs covering common attack techniques and tools',
+    icon: IconName.Shield,
+    href: 'https://alfredang.github.io/ethnicalhacking/',
+  },
+  {
     title: 'Pentest',
     description: 'Hands-on penetration testing playground against a mock vulnerable banking app',
     icon: IconName.Shield,
     href: 'https://pentest-fauxbank.vercel.app/',
-  },
-  {
-    title: 'Cyber Threats',
-    description: 'Interactive simulator exploring common cyber threats and attack scenarios',
-    icon: IconName.Shield,
-    href: 'https://alfredang.github.io/cybersecuritysimulator/',
   },
 ];
 
