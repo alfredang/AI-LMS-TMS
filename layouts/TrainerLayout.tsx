@@ -16,6 +16,7 @@ import AssessmentGrading from '../components/trainer/AssessmentGrading';
 import PastAttendance from '../components/trainer/PastAttendance';
 import PastAssessment from '../components/trainer/PastAssessment';
 import EdToolsPage from '../components/trainer/EdToolsPage';
+import ProjectMgtToolsPage from '../components/trainer/ProjectMgtToolsPage';
 import ProblemSolvingToolsPage from '../components/trainer/ProblemSolvingToolsPage';
 import CyberSecurityToolsPage from '../components/trainer/CyberSecurityToolsPage';
 import DataAnalyticsToolsPage from '../components/trainer/DataAnalyticsToolsPage';
@@ -62,6 +63,8 @@ const TrainerLayout: React.FC = () => {
         return <CreateView />;
       case TrainerPage.EdTools:
         return <EdToolsPage />;
+      case TrainerPage.ProjectMgtTools:
+        return <ProjectMgtToolsPage />;
       case TrainerPage.ProblemSolvingTools:
         return <ProblemSolvingToolsPage />;
       case TrainerPage.CyberSecurityTools:
