@@ -27,6 +27,12 @@ const PROJECT_MGT_TOOLS = [
     icon: IconName.Create,
     href: 'https://alfredang.github.io/designthinking/',
   },
+  {
+    title: 'BMC Studio',
+    description: 'Business Model Canvas studio for mapping value propositions, customers, and revenue',
+    icon: IconName.Create,
+    href: 'https://alfredang.github.io/bcm/',
+  },
 ];
 
 const ProjectMgtToolsPage: React.FC = () => {

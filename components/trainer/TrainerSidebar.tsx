@@ -49,6 +49,7 @@ const PROJECT_MGT_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] 
   { label: 'Digital/AI Transformation', icon: IconName.Analytics, href: 'https://alfredang.github.io/digitaltransformation/' },
   { label: 'Agile/Scrum', icon: IconName.ClipboardCheck, href: 'https://alfredang.github.io/scrum/' },
   { label: 'Design Thinking Studio', icon: IconName.Create, href: 'https://alfredang.github.io/designthinking/' },
+  { label: 'BMC Studio', icon: IconName.Create, href: 'https://alfredang.github.io/bcm/' },
 ];
 
 // Problem Solving tools — split out from Ed Tools so root-cause analysis
