@@ -26,6 +26,7 @@ import SpcToolsPage from '../components/trainer/SpcToolsPage';
 import SustainabilityToolsPage from '../components/trainer/SustainabilityToolsPage';
 import BlockchainToolsPage from '../components/trainer/BlockchainToolsPage';
 import LessonDeliveryGuidePage from '../components/trainer/LessonDeliveryGuidePage';
+import TrainerGuidesPage from '../components/trainer/TrainerGuidesPage';
 import VirtualToolsPage from '../components/trainer/VirtualToolsPage';
 import AgenticAIToolsPage from '../components/trainer/AgenticAIToolsPage';
 import AssessmentGuidePage from '../components/trainer/AssessmentGuidePage';
@@ -83,6 +84,8 @@ const TrainerLayout: React.FC = () => {
         return <VirtualToolsPage />;
       case TrainerPage.AgenticAITools:
         return <AgenticAIToolsPage />;
+      case TrainerPage.TrainerGuides:
+        return <TrainerGuidesPage />;
       case TrainerPage.LessonDeliveryGuide:
         return <LessonDeliveryGuidePage variant="physical" />;
       case TrainerPage.VirtualClassGuide:

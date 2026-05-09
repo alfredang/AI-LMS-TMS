@@ -226,6 +226,7 @@ const subItemClass = 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:ho
 const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed = false }) => {
   const { trainerPage, setTrainerPage, setCurrentView, setSelectedCourse } = useLms();
   const [trainerGuidesOpen, setTrainerGuidesOpen] = useState(
+    trainerPage === TrainerPage.TrainerGuides ||
     trainerPage === TrainerPage.LessonDeliveryGuide ||
     trainerPage === TrainerPage.VirtualClassGuide ||
     trainerPage === TrainerPage.AssessmentGuide
@@ -312,11 +313,16 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
 
           {/* Trainer Guides — expandable */}
           {(() => {
-            const guidesActive = TRAINER_GUIDE_ITEMS.some(g => g.page === trainerPage);
+            const guidesActive =
+              trainerPage === TrainerPage.TrainerGuides ||
+              TRAINER_GUIDE_ITEMS.some(g => g.page === trainerPage);
             return (
               <>
                 <button
-                  onClick={() => setTrainerGuidesOpen(prev => !prev)}
+                  onClick={() => {
+                    setTrainerGuidesOpen(prev => !prev);
+                    navigateTo(TrainerPage.TrainerGuides);
+                  }}
                   title={collapsed ? 'Trainer Guides' : undefined}
                   className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
                     guidesActive ? 'bg-primary/10 text-primary' : inactiveClass
