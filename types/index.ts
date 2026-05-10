@@ -181,6 +181,7 @@ export enum TrainerPage {
   CyberSecurityTools = 'cyberSecurityTools',
   DataAnalyticsTools = 'dataAnalyticsTools',
   FinanceTools = 'financeTools',
+  HRTools = 'hrTools',
   StatTools = 'statTools',
   DoeTools = 'doeTools',
   SpcTools = 'spcTools',

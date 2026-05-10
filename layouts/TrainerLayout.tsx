@@ -21,6 +21,7 @@ import ProblemSolvingToolsPage from '../components/trainer/ProblemSolvingToolsPa
 import CyberSecurityToolsPage from '../components/trainer/CyberSecurityToolsPage';
 import DataAnalyticsToolsPage from '../components/trainer/DataAnalyticsToolsPage';
 import FinanceToolsPage from '../components/trainer/FinanceToolsPage';
+import HRToolsPage from '../components/trainer/HRToolsPage';
 import StatToolsPage from '../components/trainer/StatToolsPage';
 import DoeToolsPage from '../components/trainer/DoeToolsPage';
 import SpcToolsPage from '../components/trainer/SpcToolsPage';
@@ -74,6 +75,8 @@ const TrainerLayout: React.FC = () => {
         return <DataAnalyticsToolsPage />;
       case TrainerPage.FinanceTools:
         return <FinanceToolsPage />;
+      case TrainerPage.HRTools:
+        return <HRToolsPage />;
       case TrainerPage.StatTools:
         return <StatToolsPage />;
       case TrainerPage.DoeTools:
