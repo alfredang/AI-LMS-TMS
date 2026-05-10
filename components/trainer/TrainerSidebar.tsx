@@ -139,6 +139,10 @@ const SUSTAINABILITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }
   { label: 'Carbon Footprint Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/sgcarboncalculator/' },
 ];
 
+const NETWORKING_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'IP Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/ipcalculator/' },
+];
+
 const BLOCKCHAIN_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Certify NFT', icon: IconName.Award, href: 'https://alfredang.github.io/certifynft/' },
   { label: 'Supply Verify', icon: IconName.Link, href: 'https://alfredang.github.io/supplyverify/' },
@@ -267,6 +271,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
   const [spcToolsOpen, setSpcToolsOpen] = useState(trainerPage === TrainerPage.SpcTools);
   const [videoCreationToolsOpen, setVideoCreationToolsOpen] = useState(trainerPage === TrainerPage.VideoCreationTools);
   const [sustainabilityToolsOpen, setSustainabilityToolsOpen] = useState(trainerPage === TrainerPage.SustainabilityTools);
+  const [networkingToolsOpen, setNetworkingToolsOpen] = useState(trainerPage === TrainerPage.NetworkingTools);
   const [blockchainToolsOpen, setBlockchainToolsOpen] = useState(trainerPage === TrainerPage.BlockchainTools);
   const [quantumToolsOpen, setQuantumToolsOpen] = useState(trainerPage === TrainerPage.QuantumTools);
   const [genAiOpen, setGenAiOpen] = useState(trainerPage === TrainerPage.GenAIAuthoring);
@@ -938,6 +943,51 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
           {!collapsed && sustainabilityToolsOpen && (
             <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
               {SUSTAINABILITY_TOOL_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Networking Tools — expandable */}
+          <button
+            onClick={() => {
+              setNetworkingToolsOpen(prev => !prev);
+              navigateTo(TrainerPage.NetworkingTools);
+            }}
+            className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.NetworkingTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Analytics}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.NetworkingTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            {!collapsed && <span className="truncate">Networking Tools</span>}
+            {!collapsed && <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                networkingToolsOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.NetworkingTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />}
+          </button>
+
+          {!collapsed && networkingToolsOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {NETWORKING_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
                   href={href}
