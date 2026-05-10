@@ -506,7 +506,7 @@ const AssessmentsSection: React.FC<{
     const hasEnabledMethods = course.assessmentMethods && Object.values(course.assessmentMethods).some(m => m.enabled && m.link);
     if ((!effectiveAssessments || effectiveAssessments.length === 0) && !course.writtenAssessmentLink && !course.practicalPerformanceAssessmentLink && !hasEnabledMethods) {
         return (
-            <ContentSection title="Assessment">
+            <ContentSection title="Assessment" collapsible>
                 <div className="text-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border dark:border-gray-700">
                     <Icon name={IconName.ClipboardCheck} className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <h4 className="text-lg font-medium text-gray-600 dark:text-gray-300 mb-2">No Assessments Available</h4>
@@ -880,7 +880,7 @@ const AssessmentsSection: React.FC<{
     };
 
     return (
-        <ContentSection title="Assessment">
+        <ContentSection title="Assessment" collapsible>
             {userRole === UserRole.Learner && (
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                     Download the assessment file as a Microsoft Word or make a new Google Doc copy, complete all questions, then upload the finished file below.
@@ -1375,7 +1375,7 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
     const isTrainerOrAdmin = userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider;
 
     return (
-        <ContentSection title="Announcements">
+        <ContentSection title="Announcements" collapsible>
             <div className="space-y-4">
                 {isTrainerOrAdmin && !composing && (
                     <div className="flex justify-between items-center">
@@ -2850,7 +2850,7 @@ export const CourseDetail: React.FC = () => {
                                     : !!convertedCourse.virtualMeetingLink;
                                 return (
                             <div id={toId("Google Meet")}>
-                                <ContentSection title={providerLabel}>
+                                <ContentSection title={providerLabel} collapsible>
                                     {(convertedCourse.classType === 'Virtual' || convertedCourse.classType === 'Hybrid') && hasVirtualMeetingLink ? (
                                         isZoom && isTrainerView ? (
                                             <div className="space-y-3">
@@ -3334,7 +3334,7 @@ export const CourseDetail: React.FC = () => {
                             {/* Assessment Grading (includes Assessment Record + Grading button) */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
                                 <div id={toId("Assessment Grading")}>
-                                    <ContentSection title="Assessment Grading">
+                                    <ContentSection title="Assessment Grading" collapsible>
                                         <div className="space-y-3">
                                             {convertedCourse.assessmentRecordLink && (
                                                 <a
