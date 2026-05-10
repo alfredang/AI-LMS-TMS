@@ -103,12 +103,34 @@ const inferVirtualMeetingProvider = (link?: string | null): 'google_meet' | 'zoo
 };
 
 // --- Reusable Components ---
-const ContentSection: React.FC<{ title?: string; children: React.ReactNode; className?: string }> = ({ title, children, className }) => (
-    <Card className={`p-6 ${className}`}>
-        {title && <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>}
-        {children}
-    </Card>
-);
+const ContentSection: React.FC<{ title?: string; children: React.ReactNode; className?: string; collapsible?: boolean; defaultOpen?: boolean }> = ({ title, children, className, collapsible = false, defaultOpen = true }) => {
+    const [open, setOpen] = useState(defaultOpen);
+    if (collapsible && title) {
+        return (
+            <Card className={`p-6 ${className}`}>
+                <button
+                    type="button"
+                    onClick={() => setOpen(prev => !prev)}
+                    className="w-full flex items-center justify-between text-left"
+                    aria-expanded={open}
+                >
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h3>
+                    <Icon
+                        name={IconName.ChevronDown}
+                        className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${open ? 'rotate-0' : '-rotate-90'}`}
+                    />
+                </button>
+                {open && <div className="mt-4">{children}</div>}
+            </Card>
+        );
+    }
+    return (
+        <Card className={`p-6 ${className}`}>
+            {title && <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>}
+            {children}
+        </Card>
+    );
+};
 
 // --- Leaderboard Component ---
 // const Leaderboard: React.FC<{ course: Course }> = ({ course }) => {
@@ -2905,7 +2927,7 @@ export const CourseDetail: React.FC = () => {
                             {/* Courseware - grouped container for Trainer/Developer/Admin/TrainingProvider */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
                                 <div id={toId("Courseware Link")}>
-                                    <ContentSection title="Courseware">
+                                    <ContentSection title="Courseware" collapsible>
                                         <div className="space-y-3">
                                             {/* Courseware Link */}
                                             {convertedCourse.courseLink && (
