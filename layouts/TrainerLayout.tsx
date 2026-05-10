@@ -20,6 +20,7 @@ import ProjectMgtToolsPage from '../components/trainer/ProjectMgtToolsPage';
 import ProblemSolvingToolsPage from '../components/trainer/ProblemSolvingToolsPage';
 import CyberSecurityToolsPage from '../components/trainer/CyberSecurityToolsPage';
 import DataAnalyticsToolsPage from '../components/trainer/DataAnalyticsToolsPage';
+import MLToolsPage from '../components/trainer/MLToolsPage';
 import FinanceToolsPage from '../components/trainer/FinanceToolsPage';
 import HRToolsPage from '../components/trainer/HRToolsPage';
 import StatToolsPage from '../components/trainer/StatToolsPage';
@@ -73,6 +74,8 @@ const TrainerLayout: React.FC = () => {
         return <CyberSecurityToolsPage />;
       case TrainerPage.DataAnalyticsTools:
         return <DataAnalyticsToolsPage />;
+      case TrainerPage.MLTools:
+        return <MLToolsPage />;
       case TrainerPage.FinanceTools:
         return <FinanceToolsPage />;
       case TrainerPage.HRTools:

@@ -2,39 +2,27 @@ import React from 'react';
 import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
 
-const DATA_ANALYTICS_TOOLS = [
+const ML_TOOLS = [
   {
-    title: 'Pivot Visualization',
-    description: 'Interactive pivot tables and visualizations for exploring and analysing data',
+    title: 'Classification',
+    description: 'Build and evaluate machine learning classification models with interactive visualizations',
     icon: IconName.Analytics,
-    href: 'https://alfredang.github.io/novapivot/',
+    href: 'https://ml-classification-888.streamlit.app/',
   },
   {
-    title: 'Anomaly Detection',
-    description: 'Detect outliers and anomalies in datasets using statistical methods and visualizations',
-    icon: IconName.Warning,
-    href: 'https://alfredang.github.io/anamolydetection2/',
-  },
-  {
-    title: 'Factor Analysis',
-    description: 'Identify underlying factors and relationships in multivariate datasets',
+    title: 'Clustering',
+    description: 'Explore unsupervised clustering algorithms to discover patterns and groupings in data',
     icon: IconName.Analytics,
-    href: 'https://multifactoranalysis.streamlit.app/',
-  },
-  {
-    title: 'Mock Data Generator',
-    description: 'Generate realistic mock data for testing and demonstrations',
-    icon: IconName.FileText,
-    href: 'https://alfredang.github.io/mockdatagen/',
+    href: 'https://mlclustering-888.streamlit.app/',
   },
 ];
 
-const DataAnalyticsToolsPage: React.FC = () => {
+const MLToolsPage: React.FC = () => {
   return (
     <div>
-      <h2 className="text-3xl font-bold mb-6 dark:text-white">Data Analytics Tools</h2>
+      <h2 className="text-3xl font-bold mb-6 dark:text-white">ML Tools</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {DATA_ANALYTICS_TOOLS.map(tool => (
+        {ML_TOOLS.map(tool => (
           <a
             key={tool.title}
             href={tool.href}
@@ -56,4 +44,4 @@ const DataAnalyticsToolsPage: React.FC = () => {
   );
 };
 
-export default DataAnalyticsToolsPage;
+export default MLToolsPage;

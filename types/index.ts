@@ -180,6 +180,7 @@ export enum TrainerPage {
   ProblemSolvingTools = 'problemSolvingTools',
   CyberSecurityTools = 'cyberSecurityTools',
   DataAnalyticsTools = 'dataAnalyticsTools',
+  MLTools = 'mlTools',
   FinanceTools = 'financeTools',
   HRTools = 'hrTools',
   StatTools = 'statTools',
