@@ -9,6 +9,12 @@ const NETWORKING_TOOLS = [
     icon: IconName.Analytics,
     href: 'https://alfredang.github.io/ipcalculator/',
   },
+  {
+    title: 'PCAP Analyzer',
+    description: 'Inspect and analyze packet capture files to investigate network traffic and protocols',
+    icon: IconName.Analytics,
+    href: 'https://alfredang.github.io/pcapanalyzer/',
+  },
 ];
 
 const NetworkingToolsPage: React.FC = () => {
