@@ -25,7 +25,7 @@ interface Grant {
 /**
  * POST /api/finance/invoice/generate-proforma
  * Bulk-generates pro forma PDFs for enrollments missing a pro_forma_url.
- * Filename format: PRFM_{course_code}_{learner_name}.pdf
+ * Filename format: PF-{enrolment_id}_{learner_name}.pdf
  * Saves proforma_invoice_number to enrollment table.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -246,10 +246,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         const filledDocx = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
-        // Build invoice number: PRFM_{course_code}_{learner_name}
-        const safeCourseCode = (enr.course_code || order || 'invoice').replace(/[^a-zA-Z0-9-]/g, '_');
+        // Build invoice number: PF-{enrolment_id}_{learner_name}.  Strip leading '#' and
+        // any existing 'PF-' prefix so dirty data doesn't double-prefix the filename.
+        const enrolmentRef = (enr.enrolment_id ?? '').replace('#', '').replace(/^PF-/i, '').trim();
+        const safeRef = (enrolmentRef || enr.course_code || 'invoice').replace(/[^a-zA-Z0-9-]/g, '_');
         const safeName = enr.full_name.replace(/[^a-zA-Z0-9]/g, '_');
-        const invoiceNumber = `PRFM_${safeCourseCode}_${safeName}`;
+        const invoiceNumber = `PF-${safeRef}_${safeName}`;
 
         // Upload filled docx to Drive as a Google Doc (Drive converts it automatically)
         const tempDocRes = await uploadDrive.files.create({
