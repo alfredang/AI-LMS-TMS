@@ -150,7 +150,7 @@ const NETWORKING_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] =
 const BLOCKCHAIN_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Certify NFT', icon: IconName.Award, href: 'https://alfredang.github.io/certifynft/' },
   { label: 'Supply Verify', icon: IconName.Link, href: 'https://alfredang.github.io/supplyverify/' },
-  { label: 'Hash Encoder/Decoder', icon: IconName.Shield, href: 'https://alfredang.github.io/hashgenerator/' },
+  { label: 'Hashing Tool', icon: IconName.Shield, href: 'https://alfredang.github.io/hashgenerator/' },
 ];
 
 const QUANTUM_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
