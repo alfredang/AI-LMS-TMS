@@ -4,6 +4,7 @@ import { isEnrolmentBlockedFromAutoInvoice, isEnrolmentEligibleForAutoInvoice } 
 import { refreshGrantsForEnrolments, upsertSsgEnrolmentFromLocalEnrollment } from './billingSync';
 import { uploadInvoicePdfToDrive } from './invoiceDriveUpload';
 import { resolveGrantDeductionLinesForInvoice } from './daInvoiceGrantLines';
+import { formatDateOnlyEnSg } from '../utils/dateOnly';
 import {
   qboCreateInvoice,
   qboFetchInvoicePdf,
@@ -55,18 +56,7 @@ function maskNric(nric: string | null | undefined): string {
 }
 
 function formatDate(d: string | Date | null | undefined): string {
-  if (!d) return '—';
-  const s = typeof d === 'string' ? d.trim() : '';
-  if (s && /^\d{8}$/.test(s)) {
-    const iso = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-    const x = new Date(iso);
-    if (!Number.isNaN(x.getTime())) {
-      return x.toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
-    }
-  }
-  return new Date(d).toLocaleDateString('en-SG', {
-    day: '2-digit', month: 'short', year: 'numeric'
-  });
+  return formatDateOnlyEnSg(d, '-');
 }
 
 type InvoiceContext = {

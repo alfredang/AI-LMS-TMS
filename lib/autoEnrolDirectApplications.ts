@@ -41,6 +41,7 @@ import { driveFileExists, uploadInvoicePdfToDrive } from './services/invoiceDriv
 import { ensureInvoiceJobsTable } from './services/invoiceJobs';
 import { qboFetchInvoicePdf, qboReadInvoice, qboSendInvoice, qboSparseUpdateInvoice } from './services/qboInvoiceService';
 import { shouldSendQboInvoiceEmailFromQuickBooks } from './services/qboInvoiceEmailPolicy';
+import { toDateOnlyIso } from './utils/dateOnly';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from './google-auth/googleAuth';
 
@@ -957,17 +958,46 @@ export async function processDirectApplication(
   // snapshot and doesn't pick up the UPDATE we issue after the main invoice
   // create, so the supplemental grant/SFC steps need this local copy.
   let customerRef: string | null = row.qb_customer_ref || null;
+  let mainInvoiceDriveFileId: string | null = row.invoice_drive_file_id || null;
   try {
+    if (invoiceId) {
+      try {
+        await qboReadInvoice(undefined, invoiceId);
+      } catch (err) {
+        if (!isQboObjectNotFoundError(err)) throw err;
+        console.warn(
+          `auto-enrol [${applicationId}] main invoice id ${invoiceId} is stale in QBO; clearing and regenerating`
+        );
+        invoiceId = null;
+        invoiceDocNumber = null;
+        mainInvoiceDriveFileId = null;
+        await updateRow(appId, {
+          invoice_id: null,
+          invoice_doc_number: null,
+          invoice_drive_file_id: null,
+          invoice_drive_web_view_link: null,
+        });
+      }
+    }
+
     if (!invoiceId) {
+      if (invoiceDocNumber || mainInvoiceDriveFileId || row.invoice_drive_web_view_link) {
+        invoiceDocNumber = null;
+        mainInvoiceDriveFileId = null;
+        await updateRow(appId, {
+          invoice_doc_number: null,
+          invoice_drive_file_id: null,
+          invoice_drive_web_view_link: null,
+        });
+      }
+
       const forInvoice: DaApplicationForInvoice & { enrolment_id?: string } = {
         id: row.id,
         trainee_name: row.trainee_name,
         trainee_email: row.trainee_email,
         course_title: row.course_title,
         course_reference_number: row.course_reference_number,
-        course_start_date: row.course_start_date
-          ? new Date(row.course_start_date).toISOString().slice(0, 10)
-          : null,
+        course_start_date: toDateOnlyIso(row.course_start_date),
         full_course_fee: row.full_course_fee,
         gst: row.gst,
         skillsfuture_subsidy: row.skillsfuture_subsidy,
@@ -975,7 +1005,7 @@ export async function processDirectApplication(
         qb_customer_ref: row.qb_customer_ref,
         // Add missing fields with fallback to null or appropriate value
         trainee_id: row.trainee_id ?? null,
-        course_end_date: row.course_end_date ? new Date(row.course_end_date).toISOString().slice(0, 10) : null,
+        course_end_date: toDateOnlyIso(row.course_end_date),
         course_run_id: row.course_run_id ?? null,
         grant_id: grantId ?? null,
         application_id: row.application_id ?? null,
@@ -990,6 +1020,7 @@ export async function processDirectApplication(
       invoiceId = created.invoiceId;
       invoiceDocNumber = created.docNumber || null;
       customerRef = created.customerRef;
+      mainInvoiceDriveFileId = null;
 
       await updateRow(appId, {
         invoice_id: created.invoiceId,
@@ -1017,8 +1048,8 @@ export async function processDirectApplication(
   // Upload main invoice PDF to Drive if we haven't yet — or if the previously
   // stored Drive file is missing (deleted/trashed/moved). `driveFileExists`
   // lets the pipeline self-heal stale `invoice_drive_file_id` values.
-  const mainDriveFileOk = row.invoice_drive_file_id
-    ? await driveFileExists(row.invoice_drive_file_id)
+  const mainDriveFileOk = mainInvoiceDriveFileId
+    ? await driveFileExists(mainInvoiceDriveFileId)
     : false;
   if (invoiceId && !mainDriveFileOk) {
     try {
