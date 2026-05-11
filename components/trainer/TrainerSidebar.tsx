@@ -142,6 +142,7 @@ const SUSTAINABILITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }
 const NETWORKING_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'IP Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/ipcalculator/' },
   { label: 'PCAP Analyzer', icon: IconName.Analytics, href: 'https://alfredang.github.io/pcapanalyzer/' },
+  { label: 'Regex Generator', icon: IconName.Analytics, href: 'https://alfredang.github.io/regexgenerator/' },
 ];
 
 const BLOCKCHAIN_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [

@@ -15,6 +15,12 @@ const NETWORKING_TOOLS = [
     icon: IconName.Analytics,
     href: 'https://alfredang.github.io/pcapanalyzer/',
   },
+  {
+    title: 'Regex Generator',
+    description: 'Build and test regular expressions for parsing logs, IPs, and network configuration patterns',
+    icon: IconName.Analytics,
+    href: 'https://alfredang.github.io/regexgenerator/',
+  },
 ];
 
 const NetworkingToolsPage: React.FC = () => {
