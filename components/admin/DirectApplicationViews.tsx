@@ -550,6 +550,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     // [ARCHIVED] const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
     const [isAddingToCal, setIsAddingToCal] = useState(false);
     const [isGeneratingInv, setIsGeneratingInv] = useState(false);
+    const [isSendingInvoiceEmail, setIsSendingInvoiceEmail] = useState(false);
     const [isSyncingEnrol, setIsSyncingEnrol] = useState(false);
     const [isSyncingGrants, setIsSyncingGrants] = useState(false);
     const [isSyncingCal, setIsSyncingCal] = useState(false);
@@ -859,6 +860,95 @@ export const ViewDirectApplicationView: React.FC = () => {
             showToast('Invoice generation failed. Please try again.', true);
         } finally {
             setIsGeneratingInv(false);
+        }
+    };
+
+    const handleSendInvoiceEmail = async () => {
+        const selectedRows = applications.filter(app => selectedIds.has(app.application_id));
+        if (selectedRows.length === 0) {
+            showToast('No applications selected.', true);
+            return;
+        }
+
+        const isAppCancelled = (app: any) =>
+            app.enrolment_status === 'Cancelled' || (app.application_status || '').toLowerCase() === 'cancelled';
+        const isEnrolDone = (app: any) => {
+            return !!(app.enrolment_id && String(app.enrolment_id).trim()) && !isAppCancelled(app);
+        };
+        const isCalDone = (app: any) => !!app.calendar_added;
+        const isInvDone = (app: any) => isInvoiceCheckboxChecked(app);
+
+        const cancelled = selectedRows.filter(app => isAppCancelled(app));
+        if (cancelled.length > 0) {
+            const first = cancelled[0];
+            const label = first.application_id || first.trainee_name || 'one application';
+            const msg = cancelled.length === 1
+                ? `Cannot send: ${label} enrolment is cancelled (red X in the Enrol column). Re-enrol the learner before emailing.`
+                : `Cannot send: ${cancelled.length} selected application(s) have a cancelled enrolment (red X in the Enrol column). Re-enrol before emailing.`;
+            showToast(msg, true);
+            return;
+        }
+
+        const incomplete = selectedRows.filter(app => !isEnrolDone(app) || !isCalDone(app) || !isInvDone(app));
+        if (incomplete.length > 0) {
+            const first = incomplete[0];
+            const missing: string[] = [];
+            if (!isEnrolDone(first)) missing.push('Enrol');
+            if (!isCalDone(first)) missing.push('Cal');
+            if (!isInvDone(first)) missing.push('Inv');
+            const label = first.application_id || first.trainee_name || 'one application';
+            const msg = incomplete.length === 1
+                ? `Cannot send: ${label} is missing ${missing.join(' + ')}. All three columns (Enrol, Cal, Inv) must be ticked before emailing.`
+                : `Cannot send: ${incomplete.length} selected application(s) are missing one or more of Enrol/Cal/Inv. All three columns must be ticked first.`;
+            showToast(msg, true);
+            return;
+        }
+
+        const alreadySent = selectedRows.filter(app => !!app.invoice_sent_at);
+        if (alreadySent.length > 0) {
+            const first = alreadySent[0];
+            const label = first.application_id || first.trainee_name || 'this application';
+            const sentOn = first.invoice_sent_at ? new Date(first.invoice_sent_at).toLocaleString('en-SG') : '';
+            const msg = alreadySent.length === 1
+                ? `Cannot send: invoice email for ${label} was already sent${sentOn ? ` on ${sentOn}` : ''}. Re-sending is not allowed.`
+                : `Cannot send: ${alreadySent.length} selected application(s) already had their invoice email sent. Re-sending is not allowed.`;
+            showToast(msg, true);
+            return;
+        }
+
+        const cancelledStatuses = ['cancelled', 'rejected', 'failed'];
+        const rows = selectedRows.filter(app =>
+            app.id &&
+            hasVisibleMainInvoice(app) &&
+            app.trainee_email &&
+            !cancelledStatuses.includes((app.application_status || '').toLowerCase())
+        );
+        const ids = rows.map(app => app.id).filter(Boolean);
+        if (ids.length === 0) {
+            showToast('No eligible invoices to email. Selected rows are missing a learner email or use a manual invoice marker (no real QBO invoice to send).', true);
+            return;
+        }
+        if (!window.confirm(`Send ${ids.length} generated tax invoice email${ids.length !== 1 ? 's' : ''} to learner${ids.length !== 1 ? 's' : ''}?`)) return;
+
+        setIsSendingInvoiceEmail(true);
+        try {
+            const res = await fetch('/api/admin/da-send-invoice-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: ids }),
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) throw new Error(json.error || 'Send failed');
+            fetchApplications();
+            const parts = [`${json.sent || 0} sent`];
+            if (json.skipped) parts.push(`${json.skipped} skipped`);
+            if (json.failed) parts.push(`${json.failed} failed`);
+            const detail = json.failures?.[0]?.error || json.skippedRows?.[0]?.reason;
+            showToast(detail ? `${parts.join(' | ')} - ${detail}` : parts.join(' | '), !!json.failed);
+        } catch (err) {
+            showToast(`Invoice email send failed: ${err instanceof Error ? err.message : 'Unknown error'}`, true);
+        } finally {
+            setIsSendingInvoiceEmail(false);
         }
     };
 
@@ -1185,6 +1275,14 @@ export const ViewDirectApplicationView: React.FC = () => {
                             >
                                 {isGeneratingInv ? 'Generating...' : 'Generate Invoice'}
                             </button>
+                            <button
+                                onClick={handleSendInvoiceEmail}
+                                disabled={isSendingInvoiceEmail || selectedIds.size === 0}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed"
+                                title="Send selected generated tax invoice emails to learners"
+                            >
+                                {isSendingInvoiceEmail ? 'Sending...' : 'Send Invoice Email'}
+                            </button>
                             <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
                             <button
                                 onClick={async () => {
@@ -1316,6 +1414,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="SSG Enrolment Done">Enrol</th>
                                             <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Added to Google Calendar">Cal</th>
                                             <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Invoice Generated">Inv</th>
+                                            <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="Tax invoice email sent to learner">Email</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Application ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">DA Date</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">ID Type</th>
@@ -1370,6 +1469,24 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                 </td>
                                                 <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!app.calendar_added} onChange={(e) => toggleDaField(app.id, 'calendar', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${app.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`} title={app.calendar_added ? 'Added to calendar' : 'Click to mark'} /></td>
                                                 <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={isInvoiceCheckboxChecked(app)} onChange={(e) => toggleDaField(app.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${isInvoiceCheckboxChecked(app) ? 'text-amber-600 accent-amber-600' : ''}`} title={hasRealInvoice(app.invoice_id) ? (isInvoiceCheckboxChecked(app) ? `Invoice: ${getDisplayInvoiceNumber(app)} - click to uncheck` : `Invoice: ${getDisplayInvoiceNumber(app)} - document may have been deleted`) : hasInvoiceMarker(app.invoice_id) ? 'Marked as invoiced manually - no invoice document linked yet' : 'Click to mark as invoiced'} /></td>
+                                                <td className="px-2 py-1.5 text-center">
+                                                    {app.invoice_sent_at ? (
+                                                        <span
+                                                            className="relative inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-900/30 ring-1 ring-inset ring-emerald-200 dark:ring-emerald-700/60 transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+                                                            title={`Sent${app.invoice_sent_to ? ` to ${app.invoice_sent_to}` : ''} on ${new Date(app.invoice_sent_at).toLocaleString('en-SG')}`}
+                                                        >
+                                                            <Icon name={IconName.Mail} className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-700" />
+                                                        </span>
+                                                    ) : (
+                                                        <span
+                                                            className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-dashed border-gray-300 dark:border-gray-600 bg-transparent"
+                                                            title="Not sent to learner"
+                                                        >
+                                                            <Icon name={IconName.Mail} className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+                                                        </span>
+                                                    )}
+                                                </td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">{app.application_id || 'N/A'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_id_type || 'N/A'}</td>

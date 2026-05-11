@@ -458,9 +458,10 @@ export async function qboSendInvoice(appOverride: string | undefined, invoiceId:
 
   if (Object.keys(mergedSparseFields).length > 0) {
     const invoice = await qboReadInvoice(appOverride, invoiceId);
-    if (invoice.syncToken) {
-      await qboSparseUpdateInvoice(appOverride, invoiceId, invoice.syncToken, mergedSparseFields);
+    if (!invoice.syncToken) {
+      throw new Error(`QBO invoice ${invoiceId} returned no SyncToken — cannot apply BillEmail/CC/BCC before send`);
     }
+    await qboSparseUpdateInvoice(appOverride, invoiceId, invoice.syncToken, mergedSparseFields);
   }
   const sendPath = `${baseCompanyUrl(creds.realmId)}/invoice/${encodeURIComponent(invoiceId)}/send`;
   const params = new URLSearchParams({ minorversion: String(MINOR_VERSION) });
