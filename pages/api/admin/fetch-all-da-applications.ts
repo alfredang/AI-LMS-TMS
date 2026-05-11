@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
 
 /**
  * API endpoint to fetch all DA Application data from the database.
@@ -17,6 +18,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
         console.log('📊 Fetching all DA applications from database...');
+
+        await ensureInvoiceJobsTable();
 
         // Query all DA applications with course_run dates, ordered by created_at descending
         const result = await pool.query(`
@@ -65,6 +68,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 da.sfc_invoice_id,
                 da.sfc_invoice_drive_file_id,
                 da.sfc_invoice_drive_web_view_link,
+                ij.invoice_sent_at::text AS invoice_sent_at,
+                ij.invoice_sent_to,
                 da.created_at,
                 da.updated_at,
                 sg.bl_grant_id,
@@ -75,6 +80,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 sg.tg_amount
             FROM da_application da
             LEFT JOIN course_run cr ON da.course_run_id = cr.course_run_id
+            LEFT JOIN LATERAL (
+                SELECT ij.invoice_sent_at::text AS invoice_sent_at, ij.invoice_sent_to
+                FROM public.invoice_jobs ij
+                WHERE (
+                        NULLIF(TRIM(da.invoice_id::text), '') IS NOT NULL
+                    AND TRIM(COALESCE(ij.qbo_invoice_id::text, '')) = TRIM(da.invoice_id::text)
+                    )
+                   OR (
+                        NULLIF(TRIM(da.enrolment_id::text), '') IS NOT NULL
+                    AND LOWER(TRIM(COALESCE(ij.enrolment_id::text, ''))) = LOWER(TRIM(da.enrolment_id::text))
+                    AND TRIM(COALESCE(ij.qbo_invoice_id::text, '')) = ''
+                    )
+                ORDER BY
+                    CASE
+                        WHEN NULLIF(TRIM(da.invoice_id::text), '') IS NOT NULL
+                         AND TRIM(COALESCE(ij.qbo_invoice_id::text, '')) = TRIM(da.invoice_id::text)
+                        THEN 0 ELSE 1
+                    END,
+                    ij.invoice_sent_at DESC NULLS LAST
+                LIMIT 1
+            ) ij ON true
             LEFT JOIN (
                 SELECT
                     LOWER(TRIM(enrollment_id)) AS enrolment_key,
