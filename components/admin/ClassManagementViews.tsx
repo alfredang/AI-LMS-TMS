@@ -1596,15 +1596,23 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         const virtualMeetingLinkFromResponse = run.virtualMeetingLink || ssgResponse.data.virtualMeetingLink || '';
         const virtualMeetingProviderFromResponse = run.virtualMeetingProvider || ssgResponse.data.virtualMeetingProvider || '';
 
-        // Update form data with the actual SSG response structure
+        // Update form data with the actual SSG response structure, falling back to local database data
         const updatedFormData = {
-            // Registration dates - flat format ?? nested format fallback
-            openingRegistrationDate: (run.registrationOpeningDate ?? run.registrationDates?.opening) ? convertSsgDateToHtml(run.registrationOpeningDate ?? run.registrationDates?.opening) : undefined,
-            closingRegistrationDate: (run.registrationClosingDate ?? run.registrationDates?.closing) ? convertSsgDateToHtml(run.registrationClosingDate ?? run.registrationDates?.closing) : undefined,
+            // Registration dates - Local DB fallback to SSG
+            openingRegistrationDate: (courseToEdit as any)?.registrationOpeningDate 
+                ? String((courseToEdit as any).registrationOpeningDate).slice(0, 10) 
+                : ((run.registrationOpeningDate ?? run.registrationDates?.opening) ? convertSsgDateToHtml(run.registrationOpeningDate ?? run.registrationDates?.opening) : undefined),
+            closingRegistrationDate: (courseToEdit as any)?.registrationClosingDate
+                ? String((courseToEdit as any).registrationClosingDate).slice(0, 10)
+                : ((run.registrationClosingDate ?? run.registrationDates?.closing) ? convertSsgDateToHtml(run.registrationClosingDate ?? run.registrationDates?.closing) : undefined),
 
-            // Course dates - flat format ?? nested format fallback
-            courseStartDate: (run.courseStartDate ?? run.courseDates?.start) ? convertSsgDateToHtml(run.courseStartDate ?? run.courseDates?.start) : undefined,
-            courseEndDate: (run.courseEndDate ?? run.courseDates?.end) ? convertSsgDateToHtml(run.courseEndDate ?? run.courseDates?.end) : undefined,
+            // Course dates - Local DB fallback to SSG
+            courseStartDate: courseToEdit?.startDate 
+                ? String(courseToEdit.startDate).slice(0, 10) 
+                : ((run.courseStartDate ?? run.courseDates?.start) ? convertSsgDateToHtml(run.courseStartDate ?? run.courseDates?.start) : undefined),
+            courseEndDate: courseToEdit?.endDate
+                ? String(courseToEdit.endDate).slice(0, 10)
+                : ((run.courseEndDate ?? run.courseDates?.end) ? convertSsgDateToHtml(run.courseEndDate ?? run.courseDates?.end) : undefined),
 
             // Course vacancy
             courseVacancy: run.courseVacancy ? {
@@ -2285,8 +2293,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             setEditFormData(prev => ({
                 ...prev,
                 courseReferenceNumber: refNumber,
-                courseStartDate: courseToEdit.startDate || '',
-                courseEndDate: courseToEdit.endDate || ''
+                courseStartDate: courseToEdit.startDate ? String(courseToEdit.startDate).slice(0, 10) : '',
+                courseEndDate: courseToEdit.endDate ? String(courseToEdit.endDate).slice(0, 10) : '',
+                openingRegistrationDate: (courseToEdit as any).registrationOpeningDate ? String((courseToEdit as any).registrationOpeningDate).slice(0, 10) : '',
+                closingRegistrationDate: (courseToEdit as any).registrationClosingDate ? String((courseToEdit as any).registrationClosingDate).slice(0, 10) : ''
             }));
 
             // Automatically fetch course run data and course sessions, then switch to Course Run tab

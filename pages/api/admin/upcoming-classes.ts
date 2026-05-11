@@ -11,6 +11,8 @@ interface UpcomingClass {
   digitalAttendanceId: string;
   startDate: string;
   endDate: string;
+  registrationOpeningDate?: string;
+  registrationClosingDate?: string;
   assignedTrainerTpg: string;
   assignedTrainerTpgEmail: string;
   tpgSyncStatus: string | null;
@@ -354,6 +356,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.digital_attendance_id,
           cr.start_date,
           cr.end_date,
+          cr.registration_opening_date,
+          cr.registration_closing_date,
           cr.class_type,
           COALESCE(cr.invitation_paused, false) AS invitation_paused,
           COALESCE(cr.invitation_replies_blocked, false) AS invitation_replies_blocked,
@@ -381,6 +385,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.digital_attendance_id,
           cr.start_date,
           cr.end_date,
+          cr.registration_opening_date,
+          cr.registration_closing_date,
           cr.class_type,
           cr.virtual_meeting_link,
           cr.virtual_meeting_host_link,
@@ -697,6 +703,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         digitalAttendanceId: row.digital_attendance_id || '',
         startDate: row.start_date,
         endDate: row.end_date,
+        registrationOpeningDate: row.registration_opening_date,
+        registrationClosingDate: row.registration_closing_date,
         assignedTrainerTpg: rawTpgTrainer,
         assignedTrainerTpgEmail: row.assigned_trainer_tpg_email || '',
         tpgSyncStatus: row.tpg_sync_status || null,
