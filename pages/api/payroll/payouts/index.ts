@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
 import { estimatedPayout, DEFAULT_PAYOUT_TIERS, PayoutTier } from '@lib/payroll/calculate';
+import { requireRole } from '@lib/auth/requireRole';
 
 async function loadTiers(): Promise<PayoutTier[]> {
   try {
@@ -17,6 +18,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
+
+  const authed = await requireRole(req, res, ['payroll', 'admin']);
+  if (!authed) return;
 
   try {
     const months = Math.max(1, Math.min(24, parseInt((req.query.months as string) || '2')));
@@ -44,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       WHERE cr.end_date IS NOT NULL
         AND cr.end_date <= CURRENT_DATE
         AND cr.end_date >= (CURRENT_DATE - ($1 || ' months')::interval)
-        AND (cr.class_status IS NULL OR cr.class_status::text <> 'Cancelled')
+        AND cr.class_status::text = 'Confirmed'
         AND crt.trainer_id IS NOT NULL
     `;
     const candidates = await pool.query(candidatesQuery, [String(months)]);
@@ -92,6 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN app_user au ON au.id = tp.trainer_id
       WHERE cr.end_date >= (CURRENT_DATE - ($1 || ' months')::interval)
         AND cr.end_date <= CURRENT_DATE
+        AND (cr.class_status::text = 'Confirmed' OR tp.status = 'completed')
       ORDER BY cr.end_date DESC, c.course_code ASC
     `;
     const list = await pool.query(listQuery, [String(months)]);

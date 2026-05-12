@@ -6,6 +6,7 @@ import { ProfilePage } from '../components/ProfilePage';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import PayoutListView from '../components/payroll/PayoutListView';
 import PayrollSettingsView from '../components/payroll/PayrollSettingsView';
+import { Icon, IconName } from '../components/ui/Icon';
 import { useLms } from '@contexts/LmsContext';
 import { View } from '@app-types/index';
 
@@ -31,19 +32,23 @@ const PayrollLayout: React.FC = () => {
     );
   }
 
-  const NavItem: React.FC<{ target: PayrollPage; label: string }> = ({ target, label }) => {
+  const NavItem: React.FC<{ target: PayrollPage; label: string; icon: IconName }> = ({ target, label, icon }) => {
     const active = page === target;
     return (
       <button
         type="button"
         onClick={() => setPage(target)}
-        className={`w-full flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+        title={isSidebarOpen ? undefined : label}
+        className={`w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          isSidebarOpen ? '' : 'justify-center'
+        } ${
           active
             ? 'bg-primary text-white'
             : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
         }`}
       >
-        {label}
+        <Icon name={icon} className="w-5 h-5 flex-shrink-0" />
+        {isSidebarOpen && <span>{label}</span>}
       </button>
     );
   };
@@ -75,15 +80,15 @@ const PayrollLayout: React.FC = () => {
                 </svg>
               </button>
             </div>
-            {isSidebarOpen && (
-              <div className="flex-1 overflow-y-auto p-3 space-y-1">
+            <div className="flex-1 overflow-y-auto p-3 space-y-1">
+              {isSidebarOpen && (
                 <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
                   Payroll
                 </div>
-                <NavItem target="payouts" label="Payout List" />
-                <NavItem target="settings" label="Payout Tier Settings" />
-              </div>
-            )}
+              )}
+              <NavItem target="payouts" label="Payout List" icon={IconName.DollarSign} />
+              <NavItem target="settings" label="Payout Tier Settings" icon={IconName.Settings} />
+            </div>
             {isSidebarOpen && (
               <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">
                 version {appVersion}

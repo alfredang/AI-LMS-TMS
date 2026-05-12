@@ -298,9 +298,7 @@ const Header: React.FC = () => {
       { view: View.Finance, label: 'TPG Management', icon: IconName.Settings, financePage: 'tpgManagement' },
       { view: View.Finance, label: 'Claim Management', icon: IconName.ClipboardCheck, financePage: 'claimManagement' },
     ],
-    [UserRole.Payroll]: [
-      { view: View.Dashboard, label: 'Payroll Dashboard', icon: IconName.DollarSign },
-    ],
+    [UserRole.Payroll]: [],
     [UserRole.TrainingProvider]: [
       { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
       { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },
