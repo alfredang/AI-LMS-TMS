@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
+import { getAuthedUser } from '@lib/auth/requireRole';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -9,6 +10,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { id } = req.query;
   if (!id || typeof id !== 'string') {
     return res.status(400).json({ success: false, error: 'trainer id required' });
+  }
+
+  const authed = await getAuthedUser(req);
+  if (!authed) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' });
+  }
+  const isSelf = authed.id === id;
+  const isPrivileged = authed.roles.has('admin') || authed.roles.has('payroll');
+  if (!isSelf && !isPrivileged) {
+    return res.status(403).json({ success: false, error: 'Forbidden' });
   }
 
   try {
