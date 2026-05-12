@@ -55,6 +55,9 @@ NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY=your-api-key
 SSG_API_BASE_URL=https://api.ssg-wsg.sg
 SSG_AUTH_TOKEN=your-token
 SSG_ENCRYPTION_KEY=your-key
+
+# External API Authentication
+DIRECT_APPLICATION_EMAIL_INGEST_TOKEN=your-direct-application-email-ingest-token
 ```
 
 ### Step 3: Deploy
@@ -229,6 +232,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
       - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
+      - DIRECT_APPLICATION_EMAIL_INGEST_TOKEN=${DIRECT_APPLICATION_EMAIL_INGEST_TOKEN}
     restart: unless-stopped
 ```
 
