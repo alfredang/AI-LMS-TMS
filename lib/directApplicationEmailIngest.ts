@@ -196,8 +196,12 @@ export async function ingestDirectApplicationEmail(payload: DirectApplicationEma
     [row.id]
   );
 
+  const automationOptions = action === 'inserted'
+    ? { sendInvoiceEmail: true }
+    : { suppressInvoiceEmail: true };
+
   setImmediate(() => {
-    processDirectApplication(row.id, undefined, { sendInvoiceEmail: true }).catch(async (err) => {
+    processDirectApplication(row.id, undefined, automationOptions).catch(async (err) => {
       console.error('[direct-application-email] Background auto-enrol failed:', err);
       await logIngest({
         payload: normalized,

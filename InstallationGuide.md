@@ -324,6 +324,7 @@ Add each of these as a separate environment variable:
 | `ADMIN_FULL_NAME` | `System Admin` | Display name for the admin |
 | `COMPANY_NAME` | `Client Company Pte Ltd` | The client's company name |
 | `TRAINING_PARTNER_UEN` | `202412345X` | Singapore UEN (9+ characters), or placeholder if not SG |
+| `DIRECT_APPLICATION_EMAIL_INGEST_TOKEN` | `<generate-random-64-char-string>` | Shared bearer token for the MySkillsFuture Direct Application email-ingest endpoint. Must match the Google Apps Script `TMS_BEARER_TOKEN` if that automation is enabled. |
 
 > **How to generate secure values:**
 > ```bash
@@ -1566,6 +1567,7 @@ Then edit — most values copy across **unchanged**, but a few must be rewritten
 | `DB_PASSWORD` | Coolify (copy as-is) | — |
 | `DB_NAME` | Coolify (`lmsdb`) | — |
 | `JWT_SECRET` | Coolify (copy as-is) | — must match, otherwise existing user tokens won't validate |
+| `DIRECT_APPLICATION_EMAIL_INGEST_TOKEN` | Coolify (copy as-is) | — must match Google Apps Script `TMS_BEARER_TOKEN` when email ingest is enabled |
 | `ANTHROPIC_API_KEY` | Coolify (copy as-is) | — |
 | `GOOGLE_OAUTH_*`, `QBO_*`, SSG certs | Coolify (copy as-is) | — |
 | `DATABASE_URL` | **Build locally**, not from Coolify | `postgres://postgres:<DB_PASSWORD>@localhost:6434/lmsdb` (uses the SSH tunnel from D3, **not** the in-Docker hostname Coolify uses) |

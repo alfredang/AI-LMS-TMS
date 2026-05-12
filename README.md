@@ -520,6 +520,7 @@ SSG_API_BASE_URL=https://api.ssg-wsg.sg
 
 # External API Authentication
 EXTERNAL_API_KEY_FOR_CLAWDBOT=your-external-api-key
+DIRECT_APPLICATION_EMAIL_INGEST_TOKEN=your-direct-application-email-ingest-token
 ```
 
 ## Deployment
