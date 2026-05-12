@@ -47,7 +47,6 @@ import { getGoogleCredentials } from './google-auth/googleAuth';
 
 export type AutoEnrolStatus =
   | 'pending'
-  | 'pending_identity'
   | 'enroled'
   | 'grant_found'
   | 'invoiced'
@@ -793,22 +792,6 @@ export async function processDirectApplication(
       finalStatus: (row.auto_enrol_status as AutoEnrolStatus) || 'pending',
       error: `skipped: application_status is ${row.application_status}`,
       failedStep: 'load',
-    };
-  }
-
-  if (!hasIdentifier(row.trainee_id) && !options?.forceInvoice) {
-    const error = 'identity: Missing trainee ID/NRIC for SSG enrolment';
-    await updateRow(appId, {
-      auto_enrol_status: 'pending_identity',
-      auto_enrol_error: error,
-    });
-    return {
-      id: appId,
-      applicationId,
-      success: false,
-      finalStatus: 'pending_identity',
-      error,
-      failedStep: 'identity',
     };
   }
 

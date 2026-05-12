@@ -9,7 +9,7 @@ const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
         case 'approved': case 'success': case 'successful': case 'confirmed':
             return 'bg-green-100 text-green-800 border-green-200';
-        case 'processing': case 'pending': case 'pending_identity': case 'in progress':
+        case 'processing': case 'pending': case 'in progress':
             return 'bg-yellow-100 text-yellow-800 border-yellow-200';
         case 'rejected': case 'failed': case 'cancelled':
             return 'bg-red-100 text-red-800 border-red-200';
@@ -27,7 +27,7 @@ interface DaResultRow {
     trainee_name: string;
     trainee_id: string;
     message: string;
-    enrolStatus?: 'pending' | 'pending_identity' | 'enroled' | 'grant_found' | 'invoiced' | 'failed' | null;
+    enrolStatus?: 'pending' | 'enroled' | 'grant_found' | 'invoiced' | 'failed' | null;
     enrolmentId?: string | null;
     grantId?: string | null;
     enrolError?: string | null;
@@ -271,7 +271,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                     const byId = new Map<string, any>();
                     for (const row of json.data) { if (row.application_id && appIdSet.has(row.application_id)) byId.set(row.application_id, row); }
                     setAllResults(prev => prev.map(r => { const dbRow = byId.get(r.application_id); if (!dbRow) return r; return { ...r, enrolStatus: dbRow.auto_enrol_status || null, enrolmentId: dbRow.enrolment_id || null, grantId: dbRow.grant_id || null, enrolError: dbRow.auto_enrol_error || null }; }));
-                    const allDone = [...appIdSet].every(id => { const row = byId.get(id); return row && ['pending_identity', 'enroled', 'grant_found', 'invoiced', 'failed'].includes(row.auto_enrol_status); });
+                    const allDone = [...appIdSet].every(id => { const row = byId.get(id); return row && ['enroled', 'grant_found', 'invoiced', 'failed'].includes(row.auto_enrol_status); });
                     if (allDone || attempts >= 60) { setAutoEnrolPolling(false); return; }
                 }
             } catch { }
@@ -407,7 +407,6 @@ export const UploadDirectApplicationView: React.FC = () => {
                                                     if (r.action !== 'inserted' && r.action !== 'updated') return <span className="text-gray-300">-</span>;
                                                     const s = r.enrolStatus;
                                                     if (!s || s === 'pending') return autoEnrolPolling ? <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /> : <span className="inline-flex items-center justify-center w-5 h-5 rounded border-2 border-gray-300" />;
-                                                    if (s === 'pending_identity') return <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-yellow-100 text-yellow-700 text-xs font-bold" title={r.enrolError || 'Pending identity'}>!</span>;
                                                     if (s === 'failed') return <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-red-100 text-red-600 text-xs font-bold" title={r.enrolError || 'Failed'}>-</span>;
                                                     return <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-green-100 text-green-600 text-xs font-bold" title={`${s}${r.enrolmentId ? ` - ${r.enrolmentId}` : ''}`}>-</span>;
                                                 })()}

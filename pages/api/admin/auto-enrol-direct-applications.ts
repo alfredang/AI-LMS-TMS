@@ -28,29 +28,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let ids: string[] = [];
 
     if (Array.isArray(applicationIds) && applicationIds.length > 0) {
-      const requestedIds = applicationIds.filter((x: unknown): x is string => typeof x === 'string' && x.length > 0);
-      const result = await pool.query(
-        `SELECT id
-           FROM da_application
-          WHERE id = ANY($1)
-            AND NOT (
-              auto_enrol_status = 'pending_identity'
-              AND NULLIF(TRIM(COALESCE(trainee_id, '')), '') IS NULL
-            )`,
-        [requestedIds]
-      );
-      ids = result.rows.map(r => r.id);
+      ids = applicationIds.filter((x: unknown): x is string => typeof x === 'string' && x.length > 0);
     } else {
       const result = await pool.query(
         `SELECT id FROM da_application
-         WHERE (
-             auto_enrol_status IS NULL
-             OR auto_enrol_status = 'failed'
-             OR (
-               auto_enrol_status = 'pending_identity'
-               AND NULLIF(TRIM(COALESCE(trainee_id, '')), '') IS NOT NULL
-             )
-           )
+         WHERE (auto_enrol_status IS NULL OR auto_enrol_status = 'failed')
            AND LOWER(application_status) IN ('confirm application', 'confirmed')
          ORDER BY created_at ASC`
       );

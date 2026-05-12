@@ -772,21 +772,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { name: 'certificate_delivery_link', value: (profileData.adminSettings?.certificateDeliveryLink || 'https://goo.gl/R2eumq') },
       ]);
 
-      try {
-        await pool.query(`
-          ALTER TABLE training_provider
-            ADD COLUMN IF NOT EXISTS auto_import_da_from_email boolean DEFAULT false NOT NULL
-        `);
-        await pool.query(
-          `UPDATE training_provider
-              SET auto_import_da_from_email = $1
-            WHERE id = $2`,
-          [profileData.adminSettings?.autoImportDaFromEmail || false, trainingProviderId]
-        );
-      } catch (e) {
-        console.error('Failed to save auto_import_da_from_email:', e);
-      }
-
       // Handle API keys - delete existing and insert new ones (with selected model)
       console.log('🔑 Processing API keys...');
       const deleteResult = await pool.query('DELETE FROM training_provider_api WHERE training_provider_id = $1', [trainingProviderId]);

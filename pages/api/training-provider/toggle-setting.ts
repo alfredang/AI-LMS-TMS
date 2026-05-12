@@ -21,7 +21,6 @@ const ALLOWED_COLUMNS = new Set([
   'auto_send_receipt',
   'auto_send_certificate',
   'auto_send_thankyou_email',
-  'auto_import_da_from_email',
   'auto_enrol_direct_applications',
   'auto_generate_qb_invoice',
   'auto_add_learner_to_calendar',
