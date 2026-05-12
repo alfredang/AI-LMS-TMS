@@ -612,7 +612,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 .filter(r => {
                     if (!r?.id) return false;
                     const status = (r.application_status || '').toLowerCase();
-                    const alreadyEnrolled = r.auto_enrol_status && !['failed'].includes(r.auto_enrol_status);
+                    const autoStatus = String(r.auto_enrol_status || '').toLowerCase();
+                    const hasTraineeId = String(r.trainee_id || '').trim() !== '';
+                    const alreadyEnrolled = autoStatus && !['failed'].includes(autoStatus) && !(autoStatus === 'pending_identity' && hasTraineeId);
                     // Only skip if the row already has a real SSG enrolment reference (ENR-...)
                     // Placeholder values like "N/A", "-", "MANUAL", or empty are NOT real enrolments
                     return (status === 'confirmed' || status === 'confirm application') && !alreadyEnrolled && !isRealSsgEnrolmentId(r.enrolment_id);

@@ -278,7 +278,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         userEmail: profile.integrations?.zoomUserEmail || null,
     });
     const [zoomBusy, setZoomBusy] = useState(false);
-    const zoomPollIntervalRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
+    const zoomPollIntervalRef = useRef<number | null>(null);
     const [newApiKey, setNewApiKey] = useState({ name: '', value: '' });
     const [visibleApiKeys, setVisibleApiKeys] = useState<{ [key: string]: boolean }>({});
     const [isApiKeysOpen, setIsApiKeysOpen] = useState(false);
@@ -348,6 +348,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoSendReceiptOnPayment: "Auto Send Receipt Upon Payment Received",
         autoSendCertificateOnCompletion: "Auto Send Certificate On Achievement Upon Class Completed",
         autoSendThankYouEmail: "Auto Send Thank You Email Upon Class Completed",
+        autoImportDaFromEmail: "Auto Import Direct Applications from MySkillsFuture Email",
         autoEnrolDirectApplications: "Auto Submit Direct Applications to SSG",
         autoGenerateQbInvoice: "Auto Generate QuickBooks Invoice for Direct Applications",
         autoAddLearnerToCalendar: "Auto Add Learner to Calendar for Direct Applications",
@@ -580,6 +581,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoSendReceiptOnPayment: 'auto_send_receipt',
         autoSendCertificateOnCompletion: 'auto_send_certificate',
         autoSendThankYouEmail: 'auto_send_thankyou_email',
+        autoImportDaFromEmail: 'auto_import_da_from_email',
         autoEnrolDirectApplications: 'auto_enrol_direct_applications',
         autoGenerateQbInvoice: 'auto_generate_qb_invoice',
         autoAddLearnerToCalendar: 'auto_add_learner_to_calendar',
