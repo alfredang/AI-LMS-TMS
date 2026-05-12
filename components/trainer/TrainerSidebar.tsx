@@ -62,9 +62,10 @@ const PROBLEM_SOLVING_TOOL_ITEMS: { label: string; icon: IconName; href: string 
 ];
 
 const CYBER_SECURITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
-  { label: 'CyberLabs', icon: IconName.Shield, href: 'https://alfredang.github.io/cybersecuritysimulator/' },
-  { label: 'HackLabs', icon: IconName.Shield, href: 'https://alfredang.github.io/ethnicalhacking/' },
-  { label: 'Pentest', icon: IconName.Shield, href: 'https://pentest-fauxbank.vercel.app/' },
+  { label: 'Cyber Labs', icon: IconName.Shield, href: 'https://alfredang.github.io/cybersecuritysimulator/' },
+  { label: 'Ethical Hacking Labs', icon: IconName.Shield, href: 'https://alfredang.github.io/ethnicalhacking/' },
+  { label: 'Pentest Labs', icon: IconName.Shield, href: 'https://pentest-fauxbank.vercel.app/' },
+  { label: 'Cryptography', icon: IconName.Shield, href: 'https://alfredang.github.io/cryptography-toolkit/' },
 ];
 
 const VIRTUAL_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -100,12 +101,13 @@ const HR_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
 ];
 
 const STAT_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'Probability',  icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#probability' },
   { label: 'Descriptive',  icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/descriptive' },
   { label: 'Correlation',  icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/correlation' },
   { label: 'Regression',   icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/regression' },
   { label: 'Hypothesis',   icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/hypothesis' },
-  { label: 'Chi-Square',   icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/chi-square' },
-  { label: 'ANOVA',        icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/anova' },
+  { label: 'Confidence Interval', icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#confidence' },
+  { label: 'Bayesian Inference', icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#bayesian' },
 ];
 
 const DOE_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -142,11 +144,13 @@ const SUSTAINABILITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }
 const NETWORKING_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'IP Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/ipcalculator/' },
   { label: 'PCAP Analyzer', icon: IconName.Analytics, href: 'https://alfredang.github.io/pcapanalyzer/' },
+  { label: 'Regex Generator', icon: IconName.Analytics, href: 'https://alfredang.github.io/regexgenerator/' },
 ];
 
 const BLOCKCHAIN_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Certify NFT', icon: IconName.Award, href: 'https://alfredang.github.io/certifynft/' },
   { label: 'Supply Verify', icon: IconName.Link, href: 'https://alfredang.github.io/supplyverify/' },
+  { label: 'Hashing Tool', icon: IconName.Shield, href: 'https://alfredang.github.io/hashgenerator/' },
 ];
 
 const QUANTUM_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [

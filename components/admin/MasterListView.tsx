@@ -341,10 +341,16 @@ const InputCell: React.FC<InputCellProps> = ({ value, onChange, onPasteGrid, pla
         }}
         onPaste={e => {
           const text = e.clipboardData.getData('text');
-          if (onPasteGrid && /[\t\r\n]/.test(text)) {
+          if (!/[\t\r\n]/.test(text)) return;
+          const { isGrid, singleValue } = analyzeClipboardPaste(e);
+          if (isGrid) {
+            if (!onPasteGrid) return;
             e.preventDefault();
             onPasteGrid(text);
+            return;
           }
+          e.preventDefault();
+          onChange(digitsOnly ? singleValue.replace(/\D/g, '') : singleValue);
         }}
         placeholder={placeholder}
         inputMode={digitsOnly ? 'numeric' : 'text'}
@@ -445,9 +451,18 @@ const LookupCell: React.FC<LookupCellProps> = ({ value, onChange, onAutofill, on
         onChange={e => { onChange(e.target.value); search(e.target.value); }}
         onPaste={e => {
           const text = e.clipboardData.getData('text');
-          if (onPasteGrid && /[\t\r\n]/.test(text)) {
+          if (/[\t\r\n]/.test(text)) {
+            const { isGrid, singleValue } = analyzeClipboardPaste(e);
+            if (isGrid) {
+              if (!onPasteGrid) return;
+              e.preventDefault();
+              onPasteGrid(text);
+              return;
+            }
             e.preventDefault();
-            onPasteGrid(text);
+            const flat = singleValue.replace(/\s+/g, ' ').trim();
+            onChange(flat);
+            search(flat);
             return;
           }
           const el = e.currentTarget;
@@ -560,10 +575,18 @@ const SelectCell: React.FC<{ value: string; onChange: (v: string) => void; optio
       onChange={e => onChange(e.target.value)}
       onPaste={e => {
         const text = e.clipboardData.getData('text');
-        if (onPasteGrid && /[\t\r\n]/.test(text)) {
+        if (!/[\t\r\n]/.test(text)) return;
+        const { isGrid, singleValue } = analyzeClipboardPaste(e);
+        if (isGrid) {
+          if (!onPasteGrid) return;
           e.preventDefault();
           onPasteGrid(text);
+          return;
         }
+        e.preventDefault();
+        const v = singleValue.trim();
+        const matched = options.find(o => o.toLowerCase() === v.toLowerCase());
+        if (matched) onChange(matched);
       }}
       className="w-full px-1 py-1 text-xs bg-surface rounded focus:outline-none focus:ring-1 focus:ring-primary/30 text-on-surface cursor-pointer [&>option]:bg-surface [&>option]:text-on-surface"
     >
@@ -892,6 +915,34 @@ const parseClipboardGrid = (text: string): string[][] => {
   }
 
   return rows;
+};
+
+// Decide whether a paste is a single-cell value (with possible internal line breaks)
+// or a real multi-cell grid paste. Sheets/Excel emit an HTML clipboard with one <td>
+// per source cell, which lets us tell the two apart:
+//   - 1 <td>  (a single Sheets cell, possibly with <br> inside)  → single value
+//   - >1 <td> (multiple Sheets cells)                            → grid paste
+// Tab-separated text (multi-column TSV) without HTML also counts as a grid paste.
+const analyzeClipboardPaste = (e: React.ClipboardEvent): { isGrid: boolean; singleValue: string } => {
+  const text = e.clipboardData.getData('text');
+  if (!/[\t\r\n]/.test(text)) return { isGrid: false, singleValue: text };
+
+  const html = e.clipboardData.getData('text/html');
+  if (html && typeof DOMParser !== 'undefined') {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const tds = doc.querySelectorAll('td');
+    if (tds.length === 1) {
+      tds[0].querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+      return { isGrid: false, singleValue: (tds[0].textContent ?? '').replace(/\r\n/g, '\n') };
+    }
+    if (tds.length > 1) return { isGrid: true, singleValue: '' };
+  }
+
+  const grid = parseClipboardGrid(text);
+  if (grid.length === 1 && grid[0].length === 1) {
+    return { isGrid: false, singleValue: grid[0][0] };
+  }
+  return { isGrid: true, singleValue: '' };
 };
 
 const normalisePastedTraineeValue = (field: TraineeField, value: string): string => {

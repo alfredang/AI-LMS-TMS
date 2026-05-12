@@ -15,6 +15,12 @@ const BLOCKCHAIN_TOOLS = [
     icon: IconName.Link,
     href: 'https://alfredang.github.io/supplyverify/',
   },
+  {
+    title: 'Hashing Tool',
+    description: 'Generate and verify cryptographic hashes for blockchain data integrity',
+    icon: IconName.Shield,
+    href: 'https://alfredang.github.io/hashgenerator/',
+  },
 ];
 
 const BlockchainToolsPage: React.FC = () => {

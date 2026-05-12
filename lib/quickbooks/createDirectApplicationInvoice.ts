@@ -5,6 +5,7 @@
 
 import { refreshGrantsForEnrolments } from '../services/billingSync';
 import { resolveGrantDeductionLinesForInvoice } from '../services/daInvoiceGrantLines';
+import { formatDateOnlyEnSg } from '../utils/dateOnly';
 import {
   qboFindCustomerByName,
   qboFindInvoiceByDocNumber,
@@ -13,6 +14,7 @@ import {
   qboFindItemBySku,
   qboFindTermByName,
   qboGetDefaultInvoiceEmailFields,
+  qboReadInvoice,
   qboResolveInvoiceLineTaxCodeRef,
   qboResolveOosTaxCodeRef,
   qboSparseUpdateInvoice,
@@ -82,12 +84,7 @@ function toNumber(value: string | number | null | undefined): number {
 }
 
 function formatDate(d: string | Date | null | undefined): string {
-  if (!d) return '-';
-  return new Date(d).toLocaleDateString('en-SG', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDateOnlyEnSg(d, '-');
 }
 
 /**
@@ -100,6 +97,27 @@ function maskNric(value: string | null | undefined): string {
   if (!raw) return '-';
   if (raw.length <= 4) return raw;
   return 'X'.repeat(raw.length - 4) + raw.slice(-4);
+}
+
+export function buildDirectApplicationCourseDescription(app: Pick<
+  DaApplicationForInvoice,
+  'course_title' | 'course_reference_number' | 'trainee_name' | 'trainee_id' | 'course_start_date' | 'course_end_date' | 'course_run_id'
+>): string {
+  return [
+    `Course Name: ${app.course_title ?? app.course_reference_number}`,
+    `(${app.course_reference_number ?? ''})`,
+    `Participant Name: ${app.trainee_name ?? '-'}`,
+    `NRIC: ${maskNric(app.trainee_id)}`,
+    (() => {
+      const start = formatDate(app.course_start_date);
+      const end = formatDate(app.course_end_date);
+      if (start === end || !app.course_end_date) {
+        return `Course Date: ${start}`;
+      }
+      return `Course Date: ${start} - ${end}`;
+    })(),
+    `Course Run: ${app.course_run_id ?? '-'}`,
+  ].join('\n');
 }
 
 async function callQbProxy(body: Record<string, any>): Promise<any> {
@@ -233,21 +251,57 @@ export async function createDirectApplicationInvoice(
       ? await qboFindInvoiceByDocNumberLike(undefined, `TC%-${last6}`)
       : null;
   const orphan = existingByToday ?? existingByLast6;
+  let reusableOrphan = orphan;
+  let reusableOrphanInvoice: Awaited<ReturnType<typeof qboReadInvoice>> | null = null;
   if (orphan?.id) {
-    const reusedDoc = orphan.raw?.DocNumber ? String(orphan.raw.DocNumber) : docNumber;
-    const currentTermId = orphan.raw?.SalesTermRef?.value ? String(orphan.raw.SalesTermRef.value) : '';
-    const fieldsToUpdate = {
+    try {
+      reusableOrphanInvoice = await qboReadInvoice(undefined, orphan.id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err || '');
+      if (/\bObject Not Found\b/i.test(message) || /\(code 610\)/i.test(message) || /\berror 610\b/i.test(message)) {
+        console.warn(
+          `[QBO main invoice] Ignoring stale orphan invoice ${orphan.id} for enrolment ${enrolmentId}; it no longer exists in QBO`
+        );
+        reusableOrphan = null;
+      } else {
+        throw err;
+      }
+    }
+  }
+  if (reusableOrphan?.id) {
+    const reusedDoc = reusableOrphan.raw?.DocNumber ? String(reusableOrphan.raw.DocNumber) : docNumber;
+    const currentTermId = reusableOrphan.raw?.SalesTermRef?.value ? String(reusableOrphan.raw.SalesTermRef.value) : '';
+    const fieldsToUpdate: Record<string, any> = {
       ...(currentTermId !== mainTerm.id ? { SalesTermRef: { value: mainTerm.id } } : {}),
       ...defaultEmailFields,
     };
-    if (orphan.syncToken && Object.keys(fieldsToUpdate).length > 0) {
-      await qboSparseUpdateInvoice(undefined, orphan.id, orphan.syncToken, fieldsToUpdate);
+
+    const desiredDescription = buildDirectApplicationCourseDescription(app);
+    const existingLines = Array.isArray(reusableOrphanInvoice?.raw?.Line) ? reusableOrphanInvoice.raw.Line : [];
+    const courseLine =
+      existingLines.find((line: any) => line?.DetailType === 'SalesItemLineDetail' && line?.SalesItemLineDetail?.Qty === 1) ||
+      existingLines[0];
+    if (courseLine?.Id && courseLine.Description !== desiredDescription) {
+      fieldsToUpdate.Line = [
+        {
+          Id: courseLine.Id,
+          DetailType: courseLine.DetailType,
+          Amount: courseLine.Amount,
+          Description: desiredDescription,
+          SalesItemLineDetail: courseLine.SalesItemLineDetail,
+        },
+      ];
     }
-    console.log(`[QBO main invoice] Reusing orphan invoice ${orphan.id} (DocNumber ${reusedDoc}) for enrolment ${enrolmentId}`);
+
+    const reusableSyncToken = reusableOrphanInvoice?.syncToken || reusableOrphan.syncToken;
+    if (reusableSyncToken && Object.keys(fieldsToUpdate).length > 0) {
+      await qboSparseUpdateInvoice(undefined, reusableOrphan.id, reusableSyncToken, fieldsToUpdate);
+    }
+    console.log(`[QBO main invoice] Reusing orphan invoice ${reusableOrphan.id} (DocNumber ${reusedDoc}) for enrolment ${enrolmentId}`);
     return {
-      invoiceId: String(orphan.id),
+      invoiceId: String(reusableOrphan.id),
       docNumber: reusedDoc,
-      customerRef: orphan.customerRef || customerRef,
+      customerRef: reusableOrphan.customerRef || customerRef,
       netAmount,
     };
   }
@@ -260,21 +314,7 @@ export async function createDirectApplicationInvoice(
   lines.push({
     DetailType: 'SalesItemLineDetail',
     Amount: fullFee,
-    Description: [
-      `Course Name: ${app.course_title ?? app.course_reference_number}`,
-      `(${app.course_reference_number ?? ''})`,
-      `Participant Name: ${app.trainee_name ?? '-'}`,
-      `NRIC: ${maskNric(app.trainee_id)}`,
-      (() => {
-        const start = formatDate(app.course_start_date);
-        const end = formatDate(app.course_end_date);
-        if (start === end || !app.course_end_date) {
-          return `Course Date: ${start}`;
-        }
-        return `Course Date: ${start} - ${end}`;
-      })(),
-      `Course Run: ${app.course_run_id ?? '-'}`,
-    ].join('\n'),
+    Description: buildDirectApplicationCourseDescription(app),
     SalesItemLineDetail: {
       ItemRef: courseItemRef,
       Qty: 1,

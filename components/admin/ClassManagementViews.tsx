@@ -1596,15 +1596,23 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         const virtualMeetingLinkFromResponse = run.virtualMeetingLink || ssgResponse.data.virtualMeetingLink || '';
         const virtualMeetingProviderFromResponse = run.virtualMeetingProvider || ssgResponse.data.virtualMeetingProvider || '';
 
-        // Update form data with the actual SSG response structure
+        // Update form data with the actual SSG response structure, falling back to local database data
         const updatedFormData = {
-            // Registration dates - flat format ?? nested format fallback
-            openingRegistrationDate: (run.registrationOpeningDate ?? run.registrationDates?.opening) ? convertSsgDateToHtml(run.registrationOpeningDate ?? run.registrationDates?.opening) : undefined,
-            closingRegistrationDate: (run.registrationClosingDate ?? run.registrationDates?.closing) ? convertSsgDateToHtml(run.registrationClosingDate ?? run.registrationDates?.closing) : undefined,
+            // Registration dates - Local DB fallback to SSG
+            openingRegistrationDate: (courseToEdit as any)?.registrationOpeningDate 
+                ? String((courseToEdit as any).registrationOpeningDate).slice(0, 10) 
+                : ((run.registrationOpeningDate ?? run.registrationDates?.opening) ? convertSsgDateToHtml(run.registrationOpeningDate ?? run.registrationDates?.opening) : undefined),
+            closingRegistrationDate: (courseToEdit as any)?.registrationClosingDate
+                ? String((courseToEdit as any).registrationClosingDate).slice(0, 10)
+                : ((run.registrationClosingDate ?? run.registrationDates?.closing) ? convertSsgDateToHtml(run.registrationClosingDate ?? run.registrationDates?.closing) : undefined),
 
-            // Course dates - flat format ?? nested format fallback
-            courseStartDate: (run.courseStartDate ?? run.courseDates?.start) ? convertSsgDateToHtml(run.courseStartDate ?? run.courseDates?.start) : undefined,
-            courseEndDate: (run.courseEndDate ?? run.courseDates?.end) ? convertSsgDateToHtml(run.courseEndDate ?? run.courseDates?.end) : undefined,
+            // Course dates - Local DB fallback to SSG
+            courseStartDate: courseToEdit?.startDate 
+                ? String(courseToEdit.startDate).slice(0, 10) 
+                : ((run.courseStartDate ?? run.courseDates?.start) ? convertSsgDateToHtml(run.courseStartDate ?? run.courseDates?.start) : undefined),
+            courseEndDate: courseToEdit?.endDate
+                ? String(courseToEdit.endDate).slice(0, 10)
+                : ((run.courseEndDate ?? run.courseDates?.end) ? convertSsgDateToHtml(run.courseEndDate ?? run.courseDates?.end) : undefined),
 
             // Course vacancy
             courseVacancy: run.courseVacancy ? {
@@ -1769,7 +1777,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
     };
 
-    // Function to handle course run update specifically
+    // Function to handle course run update — pushes to SSG first, then saves locally
     const handleUpdateCourseRunOnly = async () => {
         if (!courseRunId.trim()) {
             showErrorPopup('Course Run ID is required for updating');
@@ -1777,8 +1785,70 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
 
         setLoading(true);
+        let ssgSuccess = false;
+        let ssgError = '';
+
         try {
-            const requestBody = {
+            // ── Step 1: Push to SSG (mirrors EditCourseRunView.handleSubmit) ──
+            if (courseReferenceNumber.trim()) {
+                const scheduleInfo = (editFormData.courseStartDate && editFormData.courseEndDate)
+                    ? (editFormData.courseStartDate === editFormData.courseEndDate
+                        ? editFormData.courseStartDate
+                        : `${editFormData.courseStartDate} - ${editFormData.courseEndDate}`)
+                    : '';
+
+                const ssgBody: any = {
+                    courseReferenceNumber,
+                    openingRegistrationDate: editFormData.openingRegistrationDate || undefined,
+                    closingRegistrationDate: editFormData.closingRegistrationDate || undefined,
+                    courseStartDate: editFormData.courseStartDate || undefined,
+                    courseEndDate: editFormData.courseEndDate || undefined,
+                    scheduleInfoTypeCode: '01',
+                    scheduleInfoTypeDescription: 'Description',
+                    scheduleInfo,
+                    block: editFormData.block || '',
+                    street: editFormData.street || '',
+                    floor: editFormData.floor || '',
+                    unit: editFormData.unit || '',
+                    building: editFormData.building || '',
+                    postalCode: editFormData.postalCode || '',
+                    room: editFormData.room || '',
+                    wheelChairAccess: editFormData.wheelChairAccess || OptionalSelector.NO,
+                    courseAdminEmail: editFormData.courseAdminEmail || currentUserEmail,
+                    courseVacancy: editFormData.courseVacancy || { code: 'A', description: 'Available' },
+                    fileName: '',
+                    fileContent: '',
+                };
+
+                console.log('📦 [Edit Class] Pushing to SSG:', JSON.stringify(ssgBody, null, 2));
+
+                const ssgRes = await fetch(
+                    `/api/ssg/courses/courseRuns/${encodeURIComponent(courseRunId.trim())}?action=edit`,
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ssgBody) }
+                );
+
+                const contentType = ssgRes.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    const ssgData = await ssgRes.json();
+                    if (!ssgRes.ok) {
+                        const msg = ssgData?.details?.[0] || ssgData?.message || ssgData?.error?.message || `SSG error ${ssgRes.status}`;
+                        ssgError = typeof msg === 'string' ? msg : JSON.stringify(msg);
+                        console.error('❌ [Edit Class] SSG update failed:', ssgError);
+                    } else {
+                        ssgSuccess = true;
+                        console.log('✅ [Edit Class] SSG update succeeded');
+                    }
+                } else {
+                    const text = await ssgRes.text();
+                    ssgError = `Server error ${ssgRes.status}: ${text.slice(0, 300)}`;
+                    console.error('❌ [Edit Class] SSG non-JSON response:', ssgError);
+                }
+            } else {
+                console.warn('⚠️ [Edit Class] No course reference number — skipping SSG update');
+            }
+
+            // ── Step 2: Save locally (always runs) ──
+            const localBody = {
                 courseRunId,
                 courseStartDate: editFormData.courseStartDate || undefined,
                 courseEndDate: editFormData.courseEndDate || undefined,
@@ -1799,21 +1869,28 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
                 classType: classType || undefined,
             };
 
-            const response = await fetch(getApiUrl('/api/admin/update-course-run-local'), {
+            const localRes = await fetch(getApiUrl('/api/admin/update-course-run-local'), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify(localBody)
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error: ${response.status}`);
+            if (!localRes.ok) {
+                const errorData = await localRes.json();
+                throw new Error(errorData.error || `Local save HTTP error: ${localRes.status}`);
             }
 
-            showSuccessPopup('Course run saved locally.');
+            // ── Step 3: Show combined result ──
+            if (ssgSuccess) {
+                showSuccessPopup('Course run updated on both SSG and local database.');
+            } else if (ssgError) {
+                showWarningPopup(`Local database saved, but SSG update failed:\n\n${ssgError}`, 'Partial Save');
+            } else {
+                showSuccessPopup('Course run saved locally. (SSG update skipped — no course reference number)');
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'An error occurred during update';
-            console.error('Local update error:', error);
+            console.error('Update error:', error);
             showErrorPopup('Failed to save course run: ' + errorMessage);
         } finally {
             setLoading(false);
@@ -2285,8 +2362,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             setEditFormData(prev => ({
                 ...prev,
                 courseReferenceNumber: refNumber,
-                courseStartDate: courseToEdit.startDate || '',
-                courseEndDate: courseToEdit.endDate || ''
+                courseStartDate: courseToEdit.startDate ? String(courseToEdit.startDate).slice(0, 10) : '',
+                courseEndDate: courseToEdit.endDate ? String(courseToEdit.endDate).slice(0, 10) : '',
+                openingRegistrationDate: (courseToEdit as any).registrationOpeningDate ? String((courseToEdit as any).registrationOpeningDate).slice(0, 10) : '',
+                closingRegistrationDate: (courseToEdit as any).registrationClosingDate ? String((courseToEdit as any).registrationClosingDate).slice(0, 10) : ''
             }));
 
             // Automatically fetch course run data and course sessions, then switch to Course Run tab
@@ -2341,7 +2420,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                                     Saving...
                                 </div>
-                            ) : 'Save to Local Database'}
+                            ) : 'Save Changes'}
                         </Button>
                     )}
                     {!isEditMode && (
