@@ -65,6 +65,9 @@ SMTP_FROM=your-email@gmail.com
 
 # Google Gemini AI (for chatbot)
 NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY=your-gemini-api-key
+
+# External API Authentication
+DIRECT_APPLICATION_EMAIL_INGEST_TOKEN=your-direct-application-email-ingest-token
 ```
 
 ### 4. Set Up the Database
@@ -96,6 +99,7 @@ The application will be available at **http://localhost:3000**
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://...` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | `https://xxx.supabase.co` |
 | `NEXT_PUBLIC_BASE_URL` | Application base URL | `http://localhost:3000` |
+| `DIRECT_APPLICATION_EMAIL_INGEST_TOKEN` | Shared bearer token for the MySkillsFuture Direct Application email-ingest endpoint | `openssl rand -hex 32` |
 
 ### Email Configuration
 
