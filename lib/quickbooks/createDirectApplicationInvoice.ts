@@ -172,6 +172,17 @@ export async function createDirectApplicationInvoice(
   const credit = toNumber(app.skillsfuture_credit);
 
   const enrolmentId = (app.enrolment_id || '').trim();
+
+  // Refuse to build an invoice from a placeholder enrolment reference.
+  // 'MANUAL'/'N/A'/'NA'/'-'/empty are markers for "not yet enrolled with SSG"
+  // and must not be allowed into the DocNumber — they collide across learners
+  // and produce the TC26-MMDD-MANUAL family of broken invoices.
+  if (!/^ENR-/i.test(enrolmentId)) {
+    throw new Error(
+      `Cannot generate DA invoice: enrolment_id is not a real SSG reference (got "${enrolmentId || 'empty'}"). Enrol the learner with SSG first.`
+    );
+  }
+
   if (enrolmentId) {
     try {
       await refreshGrantsForEnrolments([enrolmentId]);
