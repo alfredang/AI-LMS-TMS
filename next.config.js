@@ -20,13 +20,9 @@ const COMMIT_HASH = (() => {
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
-
   // Turbopack configuration (Next.js 16 default bundler)
   turbopack: {
     resolveAlias: {
