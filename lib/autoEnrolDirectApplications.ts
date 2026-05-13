@@ -1378,38 +1378,6 @@ export async function processDirectApplication(
     }
   }
 
-  if (row.trainee_email && invoiceId) {
-    const shouldSend =
-      !options?.suppressInvoiceEmail &&
-      autoSendInvoiceEmail &&
-      (options?.sendInvoiceEmail || shouldSendQboInvoiceEmailFromQuickBooks());
-    if (shouldSend) {
-      try {
-        await callInvoiceSend(invoiceId, row.trainee_email);
-        await pool.query(
-          `UPDATE public.invoice_jobs
-              SET invoice_sent_at = COALESCE(invoice_sent_at, now()),
-                  invoice_sent_to = COALESCE(invoice_sent_to, $2),
-                  updated_at = now()
-            WHERE qbo_invoice_id = $1`,
-          [String(invoiceId).trim(), String(row.trainee_email).trim()]
-        ).catch(() => {});
-      } catch (err) {
-        console.warn(
-          `⚠️  auto-enrol [${applicationId}] invoice send failed (non-fatal):`,
-          err instanceof Error ? err.message : err
-        );
-      }
-    } else {
-      const reason = options?.suppressInvoiceEmail
-        ? '(suppressed for manual generate / cron sweep)'
-        : !autoSendInvoiceEmail
-          ? '(auto_send_invoice_email toggle is OFF in DA admin view)'
-          : '— set QBO_SEND_INVOICE_EMAIL=true to send';
-      console.log(`ℹ️  auto-enrol [${applicationId}] skipping invoice email ${reason}`);
-    }
-  }
-
   // Step 5: Add learner to calendar (non-fatal)
   if (autoCalendar && row.trainee_email) {
     try {
@@ -1452,6 +1420,44 @@ export async function processDirectApplication(
       error: err instanceof Error ? err.message : String(err),
       failedStep: 'billing_history_sync',
     };
+  }
+
+  // Send the main tax invoice email AFTER the invoice_jobs row exists, so
+  // the UPDATE that stamps invoice_sent_at actually finds its row.
+  // Why: syncDaMainInvoiceToBillingHistory is what first inserts the
+  // invoice_jobs row keyed by qbo_invoice_id; sending earlier means the
+  // UPDATE matches 0 rows and the EMAIL column in the DA admin view stays
+  // greyed out even though QBO did deliver the email.
+  if (row.trainee_email && invoiceId) {
+    const shouldSend =
+      !options?.suppressInvoiceEmail &&
+      autoSendInvoiceEmail &&
+      (options?.sendInvoiceEmail || shouldSendQboInvoiceEmailFromQuickBooks());
+    if (shouldSend) {
+      try {
+        await callInvoiceSend(invoiceId, row.trainee_email);
+        await pool.query(
+          `UPDATE public.invoice_jobs
+              SET invoice_sent_at = COALESCE(invoice_sent_at, now()),
+                  invoice_sent_to = COALESCE(invoice_sent_to, $2),
+                  updated_at = now()
+            WHERE qbo_invoice_id = $1`,
+          [String(invoiceId).trim(), String(row.trainee_email).trim()]
+        ).catch(() => {});
+      } catch (err) {
+        console.warn(
+          `⚠️  auto-enrol [${applicationId}] invoice send failed (non-fatal):`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    } else {
+      const reason = options?.suppressInvoiceEmail
+        ? '(suppressed for manual generate / cron sweep)'
+        : !autoSendInvoiceEmail
+          ? '(auto_send_invoice_email toggle is OFF in DA admin view)'
+          : '— set QBO_SEND_INVOICE_EMAIL=true to send';
+      console.log(`ℹ️  auto-enrol [${applicationId}] skipping invoice email ${reason}`);
+    }
   }
 
   if (supplementalErrors.length > 0) {
