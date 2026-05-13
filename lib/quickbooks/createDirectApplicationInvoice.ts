@@ -104,7 +104,7 @@ export function buildDirectApplicationCourseDescription(app: Pick<
   'course_title' | 'course_reference_number' | 'trainee_name' | 'trainee_id' | 'course_start_date' | 'course_end_date' | 'course_run_id'
 >): string {
   return [
-    `Course Name: ${app.course_title ?? app.course_reference_number}`,
+    `Course Name: WSQ - ${app.course_title ?? app.course_reference_number}`,
     `(${app.course_reference_number ?? ''})`,
     `Participant Name: ${app.trainee_name ?? '-'}`,
     `NRIC: ${maskNric(app.trainee_id)}`,

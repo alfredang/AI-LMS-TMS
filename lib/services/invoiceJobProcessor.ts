@@ -379,7 +379,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
       TaxCodeRef: { value: taxCodeGst },
     },
     Description: [
-      `Course Name: ${hasDa ? (da.course_title ?? ctx.courseTitle) : ctx.courseTitle}`,
+      `Course Name: WSQ - ${hasDa ? (da.course_title ?? ctx.courseTitle) : ctx.courseTitle}`,
       `(${hasDa ? (da.course_reference_number ?? ctx.courseRef) : ctx.courseRef})`,
       `Participant Name: ${hasDa ? (da.trainee_name ?? ctx.traineeName) : ctx.traineeName}`,
       `NRIC: ${maskNric(hasDa ? (da.trainee_id ?? ctx.traineeNric) : ctx.traineeNric)}`,
