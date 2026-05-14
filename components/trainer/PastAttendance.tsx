@@ -65,24 +65,34 @@ const PastAttendance: React.FC<PastAttendanceProps> = ({ isAdminMode = false }) 
 
   const filteredClasses = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    const sFrom = startDateFrom ? new Date(startDateFrom) : null;
-    const sTo = startDateTo ? new Date(startDateTo) : null;
-    const eFrom = endDateFrom ? new Date(endDateFrom) : null;
-    const eTo = endDateTo ? new Date(endDateTo) : null;
-    if (sTo) sTo.setHours(23, 59, 59, 999);
-    if (eTo) eTo.setHours(23, 59, 59, 999);
+    // Compare as YYYY-MM-DD strings in Asia/Singapore so timestamps stored at
+    // T16:00:00Z (which is the next calendar day in SGT) line up with what
+    // the user sees in the UI.
+    const toSgDate = (iso: string | null | undefined): string | null => {
+      if (!iso) return null;
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return null;
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Singapore',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(d);
+      const y = parts.find(p => p.type === 'year')?.value;
+      const m = parts.find(p => p.type === 'month')?.value;
+      const day = parts.find(p => p.type === 'day')?.value;
+      return y && m && day ? `${y}-${m}-${day}` : null;
+    };
 
     return classes.filter(c => {
       if (q) {
         const haystack = `${c.run_id} ${c.run_code} ${c.course_title} ${c.course_code}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
-      const start = c.start_date ? new Date(c.start_date) : null;
-      const end = c.end_date ? new Date(c.end_date) : null;
-      if (sFrom && (!start || start < sFrom)) return false;
-      if (sTo && (!start || start > sTo)) return false;
-      if (eFrom && (!end || end < eFrom)) return false;
-      if (eTo && (!end || end > eTo)) return false;
+      const start = toSgDate(c.start_date);
+      const end = toSgDate(c.end_date);
+      if (startDateFrom && (!start || start < startDateFrom)) return false;
+      if (startDateTo && (!start || start > startDateTo)) return false;
+      if (endDateFrom && (!end || end < endDateFrom)) return false;
+      if (endDateTo && (!end || end > endDateTo)) return false;
       return true;
     });
   }, [classes, searchQuery, startDateFrom, startDateTo, endDateFrom, endDateTo]);
