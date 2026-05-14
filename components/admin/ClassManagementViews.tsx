@@ -269,6 +269,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [classStatus, setClassStatus] = useState(courseToEdit?.classStatus || 'Pending');
     const [invitationPaused, setInvitationPaused] = useState(!!(courseToEdit as any)?.invitationPaused);
     const [repliesBlocked, setRepliesBlocked] = useState(!!(courseToEdit as any)?.invitationRepliesBlocked);
+    const [coursewareEmailDisabled, setCoursewareEmailDisabled] = useState(!!(courseToEdit as any)?.coursewareEmailDisabled);
     const [classType, setClassType] = useState(() => {
         // Use DB class_type first, then fallback to modeOfTraining
         if (courseToEdit?.classType && courseToEdit.classType !== 'Physical') return courseToEdit.classType;
@@ -2563,6 +2564,41 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     </div>
                                 )}
                             </div>
+                            {isEditMode && (
+                                <div className="flex items-center gap-3 mt-4 px-1">
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={coursewareEmailDisabled}
+                                            onChange={async (e) => {
+                                                const newVal = e.target.checked;
+                                                setCoursewareEmailDisabled(newVal);
+                                                if (courseToEdit?.id) {
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ id: courseToEdit.id, courseware_email_disabled: newVal }),
+                                                        });
+                                                    } catch {
+                                                        setCoursewareEmailDisabled(!newVal);
+                                                    }
+                                                }
+                                            }}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500" />
+                                    </label>
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Disable Auto Courseware &amp; Attendance Email
+                                    </span>
+                                    <span className="text-xs text-gray-400">
+                                        {coursewareEmailDisabled
+                                            ? 'Scheduled auto-send is skipped for this class only'
+                                            : 'Scheduled auto-send will run for this class'}
+                                    </span>
+                                </div>
+                            )}
                         </FormSection>
 
                         {/* Class Status & Type */}

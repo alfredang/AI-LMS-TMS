@@ -1471,6 +1471,7 @@ CREATE TABLE public.course_run (
     trainer_in_calendar boolean,
     tpg_sync_status text,
     calendar_name_mismatch boolean DEFAULT false,
+    courseware_email_disabled boolean DEFAULT false NOT NULL,
     CONSTRAINT course_run_dates CHECK ((end_date >= start_date))
 );
 

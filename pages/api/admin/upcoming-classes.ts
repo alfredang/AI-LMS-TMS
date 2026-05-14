@@ -130,6 +130,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         values.push(!!req.body.invitation_replies_blocked);
       }
 
+      if (req.body.courseware_email_disabled !== undefined) {
+        await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS courseware_email_disabled BOOLEAN DEFAULT false NOT NULL');
+        setClauses.push(`courseware_email_disabled = $${paramIdx++}`);
+        values.push(!!req.body.courseware_email_disabled);
+      }
+
       if (setClauses.length === 0) {
         return res.status(400).json({ success: false, error: 'No fields to update' });
       }
@@ -212,6 +218,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_replies_blocked BOOLEAN DEFAULT false');
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS trainer_in_calendar BOOLEAN');
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS tpg_sync_status TEXT');
+    await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS courseware_email_disabled BOOLEAN DEFAULT false NOT NULL');
 
     const includeOngoing = req.query.includeOngoing === 'true';
 
@@ -361,6 +368,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.class_type,
           COALESCE(cr.invitation_paused, false) AS invitation_paused,
           COALESCE(cr.invitation_replies_blocked, false) AS invitation_replies_blocked,
+          COALESCE(cr.courseware_email_disabled, false) AS courseware_email_disabled,
           cr.trainer_in_calendar,
           cr.virtual_meeting_link,
           cr.virtual_meeting_host_link,
@@ -721,6 +729,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         classType: row.class_type || 'Physical',
         invitationPaused: !!row.invitation_paused,
         invitationRepliesBlocked: !!row.invitation_replies_blocked,
+        coursewareEmailDisabled: !!row.courseware_email_disabled,
         trainerInCalendar: row.trainer_in_calendar,
         virtualMeetingLink: row.virtual_meeting_link || '',
         virtualMeetingHostLink: row.virtual_meeting_host_link || '',
