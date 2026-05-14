@@ -6,6 +6,7 @@ import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
 import { AdminPage } from '@app-types';
 import { getApiUrl } from '@/lib/urlHelpers';
+import { getLocalYMD } from '@/lib/dateHelpers';
 
 /**
  * Fixed horizontal scrollbar pinned to the bottom of the viewport.
@@ -360,9 +361,9 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
 
     // Calendar sync state
     const [showCalendarModal, setShowCalendarModal] = useState(false);
-    const [calSyncStartDate, setCalSyncStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [calSyncStartDate, setCalSyncStartDate] = useState(() => getLocalYMD(new Date()));
     const [calSyncEndDate, setCalSyncEndDate] = useState(() => {
-        const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().slice(0, 10);
+        const d = new Date(); d.setMonth(d.getMonth() + 1); return getLocalYMD(d);
     });
     const [calSyncing, setCalSyncing] = useState(false);
     const [calSyncResult, setCalSyncResult] = useState<any>(null);

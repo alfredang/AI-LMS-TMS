@@ -21,6 +21,7 @@ import {
   qboSendInvoice,
 } from './qboInvoiceService';
 import { shouldSendQboInvoiceEmailFromQuickBooks } from './qboInvoiceEmailPolicy';
+import { getLocalYMD } from '../dateHelpers';
 
 // Grant QB items are fixed ("WSQ funding (Baseline)", "WSQ funding (MCES)").
 // Cache their IDs at module level so subsequent invoice jobs don't re-query QB.
@@ -618,7 +619,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
             Description: g.description,
           }));
 
-          const txnDate = new Date().toISOString().slice(0, 10);
+          const txnDate = getLocalYMD(new Date());
           const dueDate = addDaysIso(txnDate, 35);
           const grnBody: Record<string, unknown> = {
             CustomerRef: { value: wsgCustomerId },

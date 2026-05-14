@@ -5,6 +5,7 @@ import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { bulkProcessDirectApplications, createNativeEnrolmentFromDA, processDirectApplication } from '../../../lib/autoEnrolDirectApplications';
 import { addDaLearnerToCalendar, removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -672,7 +673,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                             const startDate = crRes.rows[0]?.start_date;
 
                             // Skip calendar add for past course runs
-                            if (startDate && new Date(startDate) < new Date(new Date().toISOString().slice(0, 10))) {
+                            if (startDate && new Date(startDate) < getLocalYMD(new Date(new Date()))) {
                                 console.log(`⏭️ Skipping calendar add for ${record.trainee_email} — course run ${record.course_run_id} already started`);
                             } else {
                                 const calResult = await addDaLearnerToCalendar(

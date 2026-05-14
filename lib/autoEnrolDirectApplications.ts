@@ -44,6 +44,7 @@ import { shouldSendQboInvoiceEmailFromQuickBooks } from './services/qboInvoiceEm
 import { toDateOnlyIso } from './utils/dateOnly';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from './google-auth/googleAuth';
+import { getLocalYMD } from './dateHelpers';
 
 export type AutoEnrolStatus =
   | 'pending'
@@ -512,7 +513,7 @@ async function addLearnerToCalendarEvent(
   let startDateIso: string;
   if (!courseStartDate) return false;
   if (courseStartDate instanceof Date) {
-    startDateIso = courseStartDate.toISOString().slice(0, 10);
+    startDateIso = getLocalYMD(courseStartDate);
   } else {
     startDateIso = String(courseStartDate).slice(0, 10);
   }
@@ -618,7 +619,7 @@ export async function addTrainerToCalendarEvent(
   let startDateIso: string;
   if (!courseStartDate) return result;
   if (courseStartDate instanceof Date) {
-    startDateIso = courseStartDate.toISOString().slice(0, 10);
+    startDateIso = getLocalYMD(courseStartDate);
   } else {
     startDateIso = String(courseStartDate).slice(0, 10);
   }

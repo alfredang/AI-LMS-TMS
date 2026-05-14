@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../../lib/db';
+import { getLocalYMD } from '../../../../lib/dateHelpers';
 
 /**
  * GET /api/admin/course-runs/local-by-run-id?courseRunId=XXXXXXX
@@ -89,8 +90,8 @@ export default async function handler(
       tpgAssignedTrainerName: row.tpg_assigned_trainer_name,
       tpgAssignedTrainerEmail: row.tpg_assigned_trainer_email,
       digitalAttendanceId: row.digital_attendance_id,
-      startDate: row.start_date ? new Date(row.start_date).toISOString().slice(0, 10) : null,
-      endDate: row.end_date ? new Date(row.end_date).toISOString().slice(0, 10) : null,
+      startDate: row.start_date ? getLocalYMD(row.start_date) : null,
+      endDate: row.end_date ? getLocalYMD(row.end_date) : null,
       modeOfLearning: row.mode_of_learning,
       updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
       courseId: row.course_id,

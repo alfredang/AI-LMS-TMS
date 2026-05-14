@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
+import { Checkbox } from '../ui/Checkbox';
+import { getLocalYMD } from '@/lib/dateHelpers';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -541,9 +543,9 @@ const AllCourseRunsView: React.FC = () => {
     setSyncToast(null);
     lastVerifiedIdsRef.current = ''; // allow re-verification after SSG sync
     try {
-      const todayIso = new Date().toISOString().slice(0, 10);
-      const defaultFromIso = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
-      const oneYearAheadIso = new Date(Date.now() + 365 * 86400_000).toISOString().slice(0, 10);
+      const todayIso = getLocalYMD(new Date());
+      const defaultFromIso = getLocalYMD(new Date(Date.now() - 30 * 86400_000));
+      const oneYearAheadIso = getLocalYMD(new Date(Date.now() + 365 * 86400_000));
 
       const rawFrom = viewFrom || defaultFromIso;
       const rawTo = viewTo || (includeFutureCourseRuns ? oneYearAheadIso : todayIso);
@@ -887,8 +889,8 @@ const AllCourseRunsView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  setViewFrom(new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10));
-                  setViewTo(new Date().toISOString().slice(0, 10));
+                  setViewFrom(getLocalYMD(new Date(Date.now() - 30 * 86400_000)));
+                  setViewTo(getLocalYMD(new Date()));
                   setPage(0);
                 }}
                 disabled={syncing || loading || queueing}

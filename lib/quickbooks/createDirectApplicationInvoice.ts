@@ -3,6 +3,7 @@
  * SkillsFuture subsidy and credit).
  */
 
+import { getLocalYMD } from '../dateHelpers';
 import { refreshGrantsForEnrolments } from '../services/billingSync';
 import { resolveGrantDeductionLinesForInvoice } from '../services/daInvoiceGrantLines';
 import { formatDateOnlyEnSg } from '../utils/dateOnly';
@@ -233,7 +234,7 @@ export async function createDirectApplicationInvoice(
   // them when sending is enabled.
   const customerRef = await resolveMainInvoiceCustomerRef();
 
-  const txnDate = new Date().toISOString().slice(0, 10);
+  const txnDate = getLocalYMD(new Date());
   const dueDate = txnDate;
 
   const last6 = enrolmentId.slice(-6).padStart(6, '0');

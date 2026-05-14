@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '../../../lib/db';
 import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 type ClassTabType =
   | 'virtual'
@@ -328,7 +329,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let startDate: string;
       if (evt.start?.dateTime) {
         const sgt = new Date(new Date(evt.start.dateTime).getTime() + 8 * 3600000);
-        startDate = sgt.toISOString().slice(0, 10);
+        startDate = getLocalYMD(sgt);
       } else if (evt.start?.date) {
         startDate = evt.start.date;
       } else {
@@ -339,12 +340,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let endDate: string = startDate;
       if (evt.end?.dateTime) {
         const sgt = new Date(new Date(evt.end.dateTime).getTime() + 8 * 3600000);
-        endDate = sgt.toISOString().slice(0, 10);
+        endDate = getLocalYMD(sgt);
       } else if (evt.end?.date) {
         // Google Calendar all-day end is exclusive → subtract 1 day
         const d = new Date(evt.end.date + 'T00:00:00Z');
         d.setUTCDate(d.getUTCDate() - 1);
-        endDate = d.toISOString().slice(0, 10);
+        endDate = getLocalYMD(d);
       }
 
       // Expand single multi-day event (e.g. Mon–Fri block) into daily entries
@@ -352,7 +353,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const end = new Date(endDate + 'T00:00:00Z');
       while (cur <= end) {
         flatEntries.push({
-          listDate: cur.toISOString().slice(0, 10),
+          listDate: getLocalYMD(cur),
           evtId,
           rawTitle,
           baseTitle,

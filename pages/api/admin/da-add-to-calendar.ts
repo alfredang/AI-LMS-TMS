@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
 
@@ -75,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get date range for calendar fetch
     const dates = rows.rows
-      .map(r => r.course_start_date ? new Date(r.course_start_date).toISOString().slice(0, 10) : null)
+      .map(r => r.course_start_date ? getLocalYMD(r.course_start_date) : null)
       .filter(Boolean) as string[];
     if (dates.length === 0) {
       return res.status(200).json({ success: true, results: [] });

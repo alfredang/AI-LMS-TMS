@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { getLocalYMD } from '@/lib/dateHelpers';
 import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
 
@@ -155,10 +156,7 @@ const modeToScheduleLabel = (mode: any): string => {
 const sessionDateToIso = (d: any): string => {
   if (!d) return '';
   if (d instanceof Date) {
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(d.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    return getLocalYMD(d);
   }
   const s = String(d).trim();
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -203,8 +201,9 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const toIsoDate = (s: string): string => {
   s = s.trim();
   if (s.includes('T')) {
-    const sgt = new Date(new Date(s).getTime() + 8 * 3_600_000);
-    return sgt.toISOString().slice(0, 10);
+    const d = new Date(s);
+    const sgt = new Date(d.getTime() + 8 * 3_600_000);
+    return getLocalYMD(sgt);
   }
   return s;
 };
@@ -1787,7 +1786,7 @@ function expandDateRange(value: string): string[] {
     const d = new Date(start);
     const endDate = new Date(end);
     while (d <= endDate) {
-      dates.push(d.toISOString().slice(0, 10));
+      dates.push(getLocalYMD(d));
       d.setDate(d.getDate() + 1);
     }
     return dates;
@@ -1823,7 +1822,7 @@ const classMatchesQuery = (cr: ClassRun, q: string): boolean => {
 };
 
 const MasterListView: React.FC = () => {
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(() => getLocalYMD(new Date()));
   const [activeTab, setActiveTab] = useState<ClassTab>('virtual');
   const [tabData, setTabData] = useState<TabData>(emptyTabData);
   const [loading, setLoading] = useState(false);

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useDeveloperCourses } from '@hooks/useDeveloperCourses';
 import { Card } from '../ui/Card';
+import { getLocalYMD } from '@/lib/dateHelpers';
 import { apiClient } from '@lib/services/apiClient';
 
 const FOUR_MONTHS_AHEAD = (date: Date) => {
@@ -37,7 +38,7 @@ const formatValidityDate = (value?: string | null) => {
 const toDateInputValue = (value?: string | null) => {
   const date = parseValidityDate(value);
   if (!date) return '';
-  return date.toISOString().slice(0, 10);
+  return getLocalYMD(date);
 };
 
 const isRenewed = (value?: string | null) => !!value && value.trim().length > 0;

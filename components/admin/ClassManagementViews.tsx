@@ -5,6 +5,17 @@ import { Button } from '../ui/Button';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
 
+// Helper to safely extract local YYYY-MM-DD from a date string (avoids timezone shift bugs from .slice(0, 10) on UTC strings)
+const extractLocalDate = (dateVal: string | Date | undefined | null): string => {
+    if (!dateVal) return '';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal).slice(0, 10);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 // Searchable select dropdown component
 const SearchableSelect: React.FC<{
     options: { value: string; label: string }[];
@@ -1600,18 +1611,18 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         const updatedFormData = {
             // Registration dates - Local DB fallback to SSG
             openingRegistrationDate: (courseToEdit as any)?.registrationOpeningDate 
-                ? String((courseToEdit as any).registrationOpeningDate).slice(0, 10) 
+                ? extractLocalDate((courseToEdit as any).registrationOpeningDate) 
                 : ((run.registrationOpeningDate ?? run.registrationDates?.opening) ? convertSsgDateToHtml(run.registrationOpeningDate ?? run.registrationDates?.opening) : undefined),
             closingRegistrationDate: (courseToEdit as any)?.registrationClosingDate
-                ? String((courseToEdit as any).registrationClosingDate).slice(0, 10)
+                ? extractLocalDate((courseToEdit as any).registrationClosingDate)
                 : ((run.registrationClosingDate ?? run.registrationDates?.closing) ? convertSsgDateToHtml(run.registrationClosingDate ?? run.registrationDates?.closing) : undefined),
 
             // Course dates - Local DB fallback to SSG
             courseStartDate: courseToEdit?.startDate 
-                ? String(courseToEdit.startDate).slice(0, 10) 
+                ? extractLocalDate(courseToEdit.startDate) 
                 : ((run.courseStartDate ?? run.courseDates?.start) ? convertSsgDateToHtml(run.courseStartDate ?? run.courseDates?.start) : undefined),
             courseEndDate: courseToEdit?.endDate
-                ? String(courseToEdit.endDate).slice(0, 10)
+                ? extractLocalDate(courseToEdit.endDate)
                 : ((run.courseEndDate ?? run.courseDates?.end) ? convertSsgDateToHtml(run.courseEndDate ?? run.courseDates?.end) : undefined),
 
             // Course vacancy
@@ -2362,10 +2373,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             setEditFormData(prev => ({
                 ...prev,
                 courseReferenceNumber: refNumber,
-                courseStartDate: courseToEdit.startDate ? String(courseToEdit.startDate).slice(0, 10) : '',
-                courseEndDate: courseToEdit.endDate ? String(courseToEdit.endDate).slice(0, 10) : '',
-                openingRegistrationDate: (courseToEdit as any).registrationOpeningDate ? String((courseToEdit as any).registrationOpeningDate).slice(0, 10) : '',
-                closingRegistrationDate: (courseToEdit as any).registrationClosingDate ? String((courseToEdit as any).registrationClosingDate).slice(0, 10) : ''
+                courseStartDate: extractLocalDate(courseToEdit.startDate),
+                courseEndDate: extractLocalDate(courseToEdit.endDate),
+                openingRegistrationDate: extractLocalDate((courseToEdit as any).registrationOpeningDate),
+                closingRegistrationDate: extractLocalDate((courseToEdit as any).registrationClosingDate)
             }));
 
             // Automatically fetch course run data and course sessions, then switch to Course Run tab

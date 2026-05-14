@@ -5,6 +5,7 @@ import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { refreshGrantsForEnrolments } from '../../../lib/services/billingSync';
 import { tryEnqueueInvoiceFromSsgRecord } from '../../../lib/services/invoiceJobs';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 const PAGE_SIZE = 100;
 const MAX_RUNS_DEFAULT = 80;
@@ -24,7 +25,7 @@ function toIsoDate(raw: unknown): string | null {
   if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString().slice(0, 10);
+  return getLocalYMD(d);
 }
 
 function withinRange(dateIso: string, fromIso: string, toIso: string): boolean {
@@ -173,10 +174,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = getLocalYMD(new Date());
   const rawFromIso = (typeof body.from === 'string' && body.from.trim())
     ? body.from.trim()
-    : new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+    : getLocalYMD(new Date(Date.now() - 30 * 86400_000));
   const rawToIso = (typeof body.to === 'string' && body.to.trim()) ? body.to.trim() : todayIso;
   const fromIso = rawFromIso <= rawToIso ? rawFromIso : rawToIso;
   const toIso = rawFromIso <= rawToIso ? rawToIso : rawFromIso;
