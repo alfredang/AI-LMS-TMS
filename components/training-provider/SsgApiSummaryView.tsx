@@ -191,7 +191,7 @@ const SsgApiSummaryView: React.FC = () => {
   };
 
   const filtered = rows.filter(r =>
-    !search || r.api_name.toLowerCase().includes(search.toLowerCase()) || r.version.toLowerCase().includes(search.toLowerCase())
+    !search || (r.api_name ?? '').toLowerCase().includes(search.toLowerCase()) || (r.version ?? '').toLowerCase().includes(search.toLowerCase())
   );
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
