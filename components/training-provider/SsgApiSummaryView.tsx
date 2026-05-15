@@ -19,7 +19,7 @@ interface CertExpiry {
 
 type AppKey = 'app1_status' | 'app2_status' | 'app3_status' | 'app4_status';
 
-const VALID_STATUSES = ['Active', 'Pending', 'Not Subscribed', 'Suspended', 'Rejected'];
+const VALID_STATUSES = ['Active', 'Pending', 'Not Subscribed', 'Suspended', 'Rejected', 'Inactive'];
 
 const CERT_CARDS = [
   { key: 'app1_cert_expiry'              as keyof CertExpiry, app: 'App 1 – SKILLETO TERTIARY',          label: 'Cert Expiry'           },
@@ -34,6 +34,7 @@ const STATUS_CLASSES: Record<string, string> = {
   'Suspended':      'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
   'Rejected':       'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   'Not Subscribed': 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+  'Inactive':       'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
 };
 
 const formatSgt = (isoStr: string | null): string => {
