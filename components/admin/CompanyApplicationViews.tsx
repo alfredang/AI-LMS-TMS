@@ -396,6 +396,220 @@ const parseCompanyApplicationRows = async (file: File): Promise<CompanyApplicati
   return parsedRows;
 };
 
+// Collapsible "How this works" explainer rendered on both Upload and View
+// pages. Each instance gets its own localStorage key so the two pages
+// remember the admin's collapse preference independently.
+type WorkflowStepType = 'auto' | 'click' | 'external';
+
+interface WorkflowStep {
+  title: string;
+  description: string;
+  icon: IconName;
+  type: WorkflowStepType;
+}
+
+const STEP_TYPE_LABELS: Record<WorkflowStepType, string> = {
+  auto: 'AUTO',
+  click: 'CLICK',
+  external: 'MANUAL',
+};
+
+const STEP_TYPE_BADGE_CLASSES: Record<WorkflowStepType, string> = {
+  auto: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700/50',
+  click: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border border-blue-200 dark:border-blue-700/50',
+  external: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 border border-amber-200 dark:border-amber-700/50',
+};
+
+const STEP_TYPE_ACCENT_CLASSES: Record<WorkflowStepType, string> = {
+  auto: 'bg-gradient-to-br from-emerald-500 to-emerald-600',
+  click: 'bg-gradient-to-br from-blue-500 to-indigo-600',
+  external: 'bg-gradient-to-br from-amber-500 to-orange-600',
+};
+
+const STEP_TYPE_CARD_CLASSES: Record<WorkflowStepType, string> = {
+  auto: 'bg-white dark:bg-gray-800/40 border-emerald-100 dark:border-emerald-800/30 hover:border-emerald-200 dark:hover:border-emerald-700/50',
+  click: 'bg-white dark:bg-gray-800/40 border-blue-100 dark:border-blue-800/30 hover:border-blue-200 dark:hover:border-blue-700/50',
+  external: 'bg-amber-50/70 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700/50 hover:border-amber-300 dark:hover:border-amber-600/60',
+};
+
+const WorkflowExplainer: React.FC<{
+  title: string;
+  subtitle?: string;
+  steps: WorkflowStep[];
+  storageKey: string;
+}> = ({ title, subtitle, steps, storageKey }) => {
+  const [open, setOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const stored = window.localStorage.getItem(storageKey);
+    return stored === 'open';
+  });
+
+  const toggle = () => {
+    setOpen(prev => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(storageKey, next ? 'open' : 'closed');
+      } catch {
+        // localStorage may be disabled — non-fatal, the toggle still works in-session.
+      }
+      return next;
+    });
+  };
+
+  // Tally of step types — shown as small chips in the header so admins can see
+  // at a glance how much of the workflow is automated vs manual.
+  const counts = steps.reduce(
+    (acc, s) => {
+      acc[s.type]++;
+      return acc;
+    },
+    { auto: 0, click: 0, external: 0 } as Record<WorkflowStepType, number>
+  );
+
+  return (
+    <div className="mb-6 rounded-xl border border-blue-200 dark:border-blue-800/60 bg-gradient-to-br from-blue-50 via-indigo-50/40 to-blue-50 dark:from-blue-950/30 dark:via-indigo-950/30 dark:to-blue-950/30 overflow-hidden shadow-sm">
+      <button
+        onClick={toggle}
+        className="w-full p-5 flex items-center justify-between text-left hover:bg-blue-100/30 dark:hover:bg-blue-900/20 transition-colors group"
+        aria-expanded={open}
+      >
+        <div className="flex items-start gap-4 min-w-0">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-500/20">
+            <Icon name={IconName.InfoCircle} className="w-6 h-6 text-white" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">{title}</h3>
+            {subtitle && (
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 leading-relaxed">{subtitle}</p>
+            )}
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {counts.auto > 0 && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STEP_TYPE_BADGE_CLASSES.auto}`}>
+                  {counts.auto} AUTO
+                </span>
+              )}
+              {counts.click > 0 && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STEP_TYPE_BADGE_CLASSES.click}`}>
+                  {counts.click} CLICK
+                </span>
+              )}
+              {counts.external > 0 && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STEP_TYPE_BADGE_CLASSES.external}`}>
+                  {counts.external} MANUAL
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+          <span className="text-xs font-medium text-blue-600 dark:text-blue-400 hidden sm:inline group-hover:text-blue-700 dark:group-hover:text-blue-300">
+            {open ? 'Hide' : 'Show'} steps
+          </span>
+          <Icon
+            name={open ? IconName.ChevronUp : IconName.ChevronDown}
+            className="w-5 h-5 text-blue-600 dark:text-blue-400"
+          />
+        </div>
+      </button>
+      {open && (
+        <div className="px-5 pb-5 pt-1">
+          <div className="space-y-2.5">
+            {steps.map((step, i) => (
+              <div
+                key={i}
+                className={`flex gap-3 p-3.5 rounded-lg border transition-colors ${STEP_TYPE_CARD_CLASSES[step.type]}`}
+              >
+                <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold text-white shadow-sm ${STEP_TYPE_ACCENT_CLASSES[step.type]}`}>
+                    {i + 1}
+                  </div>
+                  <Icon
+                    name={step.icon}
+                    className={`w-4 h-4 ${step.type === 'external' ? 'text-amber-600 dark:text-amber-400' : step.type === 'auto' ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                    <h4 className={`text-sm font-semibold ${step.type === 'external' ? 'text-amber-900 dark:text-amber-100' : 'text-gray-900 dark:text-white'}`}>
+                      {step.title}
+                    </h4>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${STEP_TYPE_BADGE_CLASSES[step.type]}`}>
+                      {STEP_TYPE_LABELS[step.type]}
+                    </span>
+                  </div>
+                  <p className={`text-xs leading-relaxed ${step.type === 'external' ? 'text-amber-800 dark:text-amber-200' : 'text-gray-600 dark:text-gray-300'}`}>
+                    {step.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const UPLOAD_WORKFLOW_STEPS: WorkflowStep[] = [
+  {
+    title: 'Upload the Excel file',
+    description: "Rows are dedup'd by NRIC + employer UEN + course title + start date — re-uploading the same row updates instead of duplicating.",
+    icon: IconName.Upload,
+    type: 'click',
+  },
+  {
+    title: 'Auto-enrol on SSG + add to Google Calendar',
+    description: 'Background pipeline POSTs each learner to SSG (returning an ENR-xxxx reference) and adds them to the matching Google Calendar events for the course run.',
+    icon: IconName.CheckCircle,
+    type: 'auto',
+  },
+  {
+    title: 'Search grants → auto-generate invoice + email',
+    description: 'Pipeline searches SSG for any pre-applied grants. If grants exist, the consolidated tax invoice is generated AND emailed to the employer automatically (when the toggle below is ON).',
+    icon: IconName.FileText,
+    type: 'auto',
+  },
+  {
+    title: 'Continue on the View Company Application page',
+    description: 'If no grants exist yet (the normal case), the pipeline stops at enrolment + calendar add. File the grant on the TPGateway portal, then continue from the View page.',
+    icon: IconName.ExternalLink,
+    type: 'external',
+  },
+];
+
+const VIEW_WORKFLOW_STEPS: WorkflowStep[] = [
+  {
+    title: 'Confirm enrolment status',
+    description: 'The Auto-Enrol Status column should show "enroled" or "grant_found". If a row failed, the reason is in the Auto-Enrol Error column — fix the data and click Re-process Pending to retry.',
+    icon: IconName.CheckCircle,
+    type: 'auto',
+  },
+  {
+    title: 'File grant application on TPGateway portal',
+    description: 'SSG does not expose a grant submission API. Log in to tpgateway.gov.sg and file the grant application manually for each ENR-xxxx reference.',
+    icon: IconName.Warning,
+    type: 'external',
+  },
+  {
+    title: 'Click "Sync Grants"',
+    description: 'Pulls the freshly-filed grant IDs back from SSG into this table. The Grant ID column populates once SSG confirms the grant.',
+    icon: IconName.Download,
+    type: 'click',
+  },
+  {
+    title: 'Click "Generate Invoice"',
+    description: 'Creates the consolidated tax invoice (one per employer × course-run) and per-learner grant invoices billed to WSG. PDFs uploaded to Google Drive.',
+    icon: IconName.FileText,
+    type: 'click',
+  },
+  {
+    title: 'Click "Send Invoice Email"',
+    description: 'Emails the consolidated invoice to the employer contact. Auto-fires immediately after Generate Invoice when the email toggle below is ON.',
+    icon: IconName.Mail,
+    type: 'click',
+  },
+];
+
 // Mirrors DA's "Send Tax Invoice Email to Learner" banner — same look + feel,
 // but reads/writes ca_auto_send_invoice_email and the CA CC/BCC columns, and
 // labels the recipient as the EMPLOYER (CA invoices are billed to the
@@ -725,6 +939,13 @@ export const UploadCompanyApplicationView: React.FC = () => {
           </Button>
         )}
       </div>
+
+      <WorkflowExplainer
+        title="How the Company Application Workflow Work"
+        subtitle="What happens when you upload — automated steps run in the background, manual steps need your attention."
+        steps={UPLOAD_WORKFLOW_STEPS}
+        storageKey="ca-workflow-explainer-upload"
+      />
 
       <CaEmailToggleBanner />
 
@@ -1498,6 +1719,13 @@ export const ViewCompanyApplicationView: React.FC = () => {
           </div>
         </Card>
       </div>
+
+      <WorkflowExplainer
+        title="How the Company Application Workflow Work"
+        subtitle="From uploaded data to sent invoice — the manual TPGateway step is the only one outside the TMS."
+        steps={VIEW_WORKFLOW_STEPS}
+        storageKey="ca-workflow-explainer-view"
+      />
 
       <CaEmailToggleBanner />
 
