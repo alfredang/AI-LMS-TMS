@@ -506,8 +506,8 @@ const WorkflowExplainer: React.FC<{
             {open ? 'Hide' : 'Show'} steps
           </span>
           <Icon
-            name={open ? IconName.ChevronUp : IconName.ChevronDown}
-            className="w-5 h-5 text-blue-600 dark:text-blue-400"
+            name={IconName.ChevronDown}
+            className={`w-5 h-5 text-blue-600 dark:text-blue-400 transition-transform ${open ? 'rotate-180' : ''}`}
           />
         </div>
       </button>
@@ -580,7 +580,7 @@ const UPLOAD_WORKFLOW_STEPS: WorkflowStep[] = [
 const VIEW_WORKFLOW_STEPS: WorkflowStep[] = [
   {
     title: 'Confirm enrolment status',
-    description: 'The Auto-Enrol Status column should show "enroled" or "grant_found". If a row failed, the reason is in the Auto-Enrol Error column — fix the data and click Re-process Pending to retry.',
+    description: 'The Auto-Enrol Status column should show "enroled" or "grant_found". If a row failed, the reason is in the Auto-Enrol Error column — fix the source Excel and re-upload that row to retry (dedup will UPDATE the existing row).',
     icon: IconName.CheckCircle,
     type: 'auto',
   },
@@ -591,10 +591,10 @@ const VIEW_WORKFLOW_STEPS: WorkflowStep[] = [
     type: 'external',
   },
   {
-    title: 'Click "Sync Grants"',
-    description: 'Pulls the freshly-filed grant IDs back from SSG into this table. The Grant ID column populates once SSG confirms the grant.',
+    title: 'Sync Grants — auto-runs on page open',
+    description: 'When you land on this page, grants auto-sync from SSG (throttled to once every 2 mins). The "Sync Grants" button is a manual override — click it any time to force a fresh pull.',
     icon: IconName.Download,
-    type: 'click',
+    type: 'auto',
   },
   {
     title: 'Click "Generate Invoice"',
@@ -1260,15 +1260,22 @@ const QboCustomerRescueModal: React.FC<{
   );
 };
 
+// Auto-sync throttle so rapid navigation back to the View page doesn't burn
+// SSG API quota. 2 minutes balances "fresh enough" with "not spammy".
+const AUTO_SYNC_GRANTS_THROTTLE_MS = 2 * 60 * 1000;
+const AUTO_SYNC_GRANTS_STORAGE_KEY = 'ca-last-auto-sync-grants-at';
+
 export const ViewCompanyApplicationView: React.FC = () => {
   const [rows, setRows] = useState<CompanyApplicationRow[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showPii, setShowPii] = useState(false);
-  const [isReprocessing, setIsReprocessing] = useState(false);
-  const [reprocessMessage, setReprocessMessage] = useState<string | null>(null);
   const [isSyncingGrants, setIsSyncingGrants] = useState(false);
+  // Prevents the auto-sync useEffect from re-firing as `rows` updates within
+  // a single page mount. Reset per-mount; on full reload, the throttle in
+  // localStorage takes over.
+  const didAutoSyncOnMountRef = useRef(false);
   const [grantSyncMessage, setGrantSyncMessage] = useState<string | null>(null);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const [invoiceMessage, setInvoiceMessage] = useState<string | null>(null);
@@ -1544,40 +1551,51 @@ export const ViewCompanyApplicationView: React.FC = () => {
     }
   };
 
-  const reprocessPending = async () => {
-    setIsReprocessing(true);
-    setReprocessMessage(null);
-    try {
-      const res = await fetch('/api/admin/auto-enrol-company-applications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || `Request failed (${res.status})`);
-      }
-      const queued = Number(data.queued) || 0;
-      setReprocessMessage(
-        queued === 0
-          ? 'No pending or failed rows to process.'
-          : `Re-processing ${queued} row${queued === 1 ? '' : 's'} in the background. The table will refresh automatically as rows complete.`
-      );
-      // Kick off polling-style refresh: reload now and again after a few seconds
-      void reloadRows();
-      window.setTimeout(() => void reloadRows(), 4000);
-      window.setTimeout(() => void reloadRows(), 10000);
-    } catch (err) {
-      console.error('Re-process failed:', err);
-      setReprocessMessage(err instanceof Error ? err.message : 'Re-process failed.');
-    } finally {
-      setIsReprocessing(false);
-    }
-  };
-
   useEffect(() => {
     void reloadRows();
   }, []);
+
+  // Auto-sync grants when the admin lands on this page so they don't have to
+  // click Sync Grants manually after filing on TPGateway. Triple-guarded so
+  // we don't spam SSG:
+  //   1. Ref ensures we only run once per page mount (no re-fire as rows update)
+  //   2. localStorage throttle blocks within 2 minutes of any prior auto-sync
+  //   3. Skip entirely if no row is actually waiting for a grant
+  // The manual "Sync Grants" button remains as a force-refresh option.
+  useEffect(() => {
+    if (didAutoSyncOnMountRef.current) return;
+    if (rows.length === 0) return; // wait for first row load
+
+    const hasPendingGrants = rows.some(row => {
+      if (hasValue(row['Auto-Enrol Error'])) return false;
+      if (isCheckedValue(row['Grant Ineligible'])) return false;
+      return hasValue(row['Enrolment ID']) && !hasValue(row['Grant ID']);
+    });
+    if (!hasPendingGrants) {
+      didAutoSyncOnMountRef.current = true;
+      return;
+    }
+
+    try {
+      const lastAt = Number(window.localStorage.getItem(AUTO_SYNC_GRANTS_STORAGE_KEY) || '0');
+      if (Date.now() - lastAt < AUTO_SYNC_GRANTS_THROTTLE_MS) {
+        didAutoSyncOnMountRef.current = true;
+        return;
+      }
+    } catch {
+      // localStorage disabled — proceed anyway (in-session ref still gates re-fires)
+    }
+
+    didAutoSyncOnMountRef.current = true;
+    try {
+      window.localStorage.setItem(AUTO_SYNC_GRANTS_STORAGE_KEY, String(Date.now()));
+    } catch {
+      // non-fatal
+    }
+
+    // Fire-and-forget — syncGrants owns its own state/message reporting.
+    void syncGrants();
+  }, [rows]);
 
   useEffect(() => {
     // Keep polling while ANY row is still progressing through the pipeline:
@@ -1779,24 +1797,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-2 flex-wrap">
               <button
-                onClick={() => void reprocessPending()}
-                disabled={isReprocessing}
-                title="Finds rows that still have an unfinished step (SSG enrolment, calendar add, or grant lookup) and finishes what's missing"
-                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isReprocessing ? (
-                  <>
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />
-                    Syncing...
-                  </>
-                ) : (
-                  <>
-                    <Icon name={IconName.Sync} className="w-3.5 h-3.5 mr-1.5" />
-                    Sync Now
-                  </>
-                )}
-              </button>
-              <button
                 onClick={() => void syncGrants()}
                 disabled={isSyncingGrants}
                 title="Pull grants from SSG for every current/future course run. Use after stakeholders apply grants in the SSG portal."
@@ -1851,9 +1851,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 )}
               </button>
             </div>
-            {reprocessMessage && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md text-right">{reprocessMessage}</p>
-            )}
             {grantSyncMessage && (
               <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md text-right">{grantSyncMessage}</p>
             )}
