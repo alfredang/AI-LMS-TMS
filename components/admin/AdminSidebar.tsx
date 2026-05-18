@@ -112,6 +112,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         cmClasses: true,
         cmLearnersTrainers: true,
         directApplication: false,
+        companyApplication: false,
         enrolment: false,
         tpgManagement: false,
         tpgCourseRun: false,
@@ -215,6 +216,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
             <NavSection title="Direct Application" icon={IconName.FileText} collapsed={collapsed} isOpen={openSections.directApplication} onToggle={() => toggleSection('directApplication')}>
                 <NavItem page={AdminPage.UploadDirectApplication} label="Upload Direct Application" isSubItem />
                 <NavItem page={AdminPage.ViewDirectApplication} label="View Direct Application" isSubItem />
+            </NavSection>
+
+            <NavSection title="COMPANY APPLICATION" icon={IconName.Building} collapsed={collapsed} isOpen={openSections.companyApplication} onToggle={() => toggleSection('companyApplication')}>
+                <NavItem page={AdminPage.UploadCompanyApplication} label="Upload Company Application" isSubItem />
+                <NavItem page={AdminPage.ViewCompanyApplication} label="View Company Application" isSubItem />
             </NavSection>
 
             <NavSection title="Enrolment" icon={IconName.Users} collapsed={collapsed} isOpen={openSections.enrolment} onToggle={() => toggleSection('enrolment')}>
