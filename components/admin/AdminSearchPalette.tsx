@@ -25,6 +25,8 @@ const ADMIN_ITEMS: AdminItem[] = [
   { id: AdminPage.UploadDirectApplication, page: AdminPage.UploadDirectApplication, label: 'Upload Direct Application', section: 'TPG Management → Direct Application' },
   { id: AdminPage.ViewDirectApplication, page: AdminPage.ViewDirectApplication, label: 'View Direct Application', section: 'TPG Management → Direct Application' },
   { id: AdminPage.UpdateDirectApplication, page: AdminPage.UpdateDirectApplication, label: 'Update Direct Application', section: 'TPG Management → Direct Application' },
+  { id: AdminPage.UploadCompanyApplication, page: AdminPage.UploadCompanyApplication, label: 'Upload Company Application', section: 'TPG Management → COMPANY APPLICATION', keywords: ['sponsorship', 'corporate'] },
+  { id: AdminPage.ViewCompanyApplication, page: AdminPage.ViewCompanyApplication, label: 'View Company Application', section: 'TPG Management → COMPANY APPLICATION', keywords: ['sponsorship', 'corporate'] },
 
   { id: AdminPage.UpcomingEnrolment, page: AdminPage.UpcomingEnrolment, label: 'Upcoming Enrolment', section: 'TPG Management → Enrolment' },
   { id: AdminPage.NewEnrolment, page: AdminPage.NewEnrolment, label: 'New Enrolment', section: 'TPG Management → Enrolment' },
