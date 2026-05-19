@@ -5459,6 +5459,43 @@ ALTER TABLE ONLY public.work_experience
 
 
 --
+-- Name: microsoft_redeem_session; Type: TABLE; Schema: public; Owner: -
+-- Backs Admin > Certificate > "Microsoft Certificate". Single-row table
+-- holding the Playwright storageState (Microsoft Learn auth cookies).
+--
+
+CREATE TABLE IF NOT EXISTS public.microsoft_redeem_session (
+    id              integer PRIMARY KEY DEFAULT 1,
+    storage_state   jsonb NOT NULL,
+    signed_in_email text,
+    updated_at      timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT microsoft_redeem_session_singleton CHECK (id = 1)
+);
+
+
+--
+-- Name: microsoft_redeem_code; Type: TABLE; Schema: public; Owner: -
+-- History of every generated Microsoft Learn achievement code.
+--
+
+CREATE TABLE IF NOT EXISTS public.microsoft_redeem_code (
+    id            uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    course_number text NOT NULL,
+    course_title  text,
+    code          text NOT NULL,
+    url           text,
+    students      integer NOT NULL DEFAULT 1,
+    requested_by  uuid,
+    created_at    timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_msredeem_code_course
+    ON public.microsoft_redeem_code(course_number);
+CREATE INDEX IF NOT EXISTS idx_msredeem_code_created
+    ON public.microsoft_redeem_code(created_at DESC);
+
+
+--
 -- PostgreSQL database dump complete
 --
 

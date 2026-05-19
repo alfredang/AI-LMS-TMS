@@ -130,6 +130,7 @@ export enum AdminPage {
   DeleteCertificate = 'deleteCertificate',
   SendCertificateSG = 'sendCertificateSG',
   SendCertificateGH = 'sendCertificateGH',
+  MicrosoftCertificate = 'microsoftCertificate',
   Calendar = 'calendar',
   Scheduler = 'scheduler',
   SchedulerSummary = 'schedulerSummary',
