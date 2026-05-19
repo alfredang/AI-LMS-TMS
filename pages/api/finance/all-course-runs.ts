@@ -66,8 +66,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const startFrom = rawStartFrom && rawStartTo ? (rawStartFrom <= rawStartTo ? rawStartFrom : rawStartTo) : rawStartFrom;
     const startTo = rawStartFrom && rawStartTo ? (rawStartFrom <= rawStartTo ? rawStartTo : rawStartFrom) : rawStartTo;
 
-    // When includeFuture is off: only runs with a parseable start date on or before today (SG). Rows with no parseable start date are excluded (they are not "through today").
-    const throughTodayClause = includeFuture
+    // An explicit Course Run ID search ("1353296"-style number, or the courseRunId param) means the user
+    // knows the exact run they want — bypass the "through today" and start-date-range filters so a known
+    // run never gets hidden by date scoping. Why: previously a future run would silently return zero rows
+    // and the UI would suggest re-importing, which is misleading when the row already exists in the DB.
+    const searchIsCourseRunId = /^\d{6,12}$/.test(search);
+    const targetedRunLookup = searchIsCourseRunId || !!courseRunId;
+
+    const throughTodayClause = (includeFuture || targetedRunLookup)
       ? ''
       : ` AND ${RUN_START_NORM_SQL} IS NOT NULL AND ${RUN_START_NORM_SQL} <= ${TODAY_SG_SQL}`;
 
@@ -106,8 +112,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Optional view filter by course run start date (normalized to YYYY-MM-DD).
-    // When filtering by a range, exclude rows without a parseable start date.
-    if (startFrom || startTo) {
+    // Skipped for targeted CR-ID lookups so a known run is never hidden by an ambient date range.
+    if (!targetedRunLookup && (startFrom || startTo)) {
       conditions.push(`${RUN_START_NORM_SQL} IS NOT NULL`);
       if (startFrom) {
         conditions.push(`${RUN_START_NORM_SQL} >= $${paramIndex}`);

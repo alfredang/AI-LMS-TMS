@@ -521,10 +521,27 @@ const AllCourseRunsView: React.FC = () => {
       });
       const result = await response.json();
       if (result.success) {
-        const { courseTitle, courseRunId: savedRunId, startDate, endDate, action } = result.data;
+        const {
+          courseTitle,
+          courseRunId: savedRunId,
+          startDate,
+          endDate,
+          action,
+          enrolmentsFetched,
+          enrolmentsUpserted,
+          enrolmentSyncError,
+        } = result.data;
+        const enrolPart =
+          typeof enrolmentsUpserted === 'number'
+            ? enrolmentSyncError
+              ? ` Enrolment sync failed: ${enrolmentSyncError}.`
+              : enrolmentsFetched === 0
+              ? ' SSG returned no enrolments for this run yet.'
+              : ` Imported ${enrolmentsUpserted}/${enrolmentsFetched} enrolment${enrolmentsFetched === 1 ? '' : 's'}.`
+            : '';
         setImportResult({
           success: true,
-          message: `Course run ${action === 'created' ? 'added' : 'updated'} successfully.`,
+          message: `Course run ${action === 'created' ? 'added' : 'updated'} successfully.${enrolPart}`,
           detail: `${courseTitle} (Run ID: ${savedRunId}, ${startDate ?? 'N/A'} → ${endDate ?? 'N/A'})`,
         });
         await fetchData();
