@@ -179,6 +179,105 @@ function traineeEmailFromSsgRecord(record: any): string | null {
   return null;
 }
 
+function traineeFullNameFromSsgRecord(record: any): string | null {
+  const t = record?.trainee;
+  if (!t) return null;
+  if (typeof t.fullName === 'string' && t.fullName.trim()) return t.fullName.trim();
+  return null;
+}
+
+function traineeNricFromSsgRecord(record: any): string | null {
+  const t = record?.trainee;
+  if (!t) return null;
+  if (typeof t.id === 'string' && t.id.trim()) return t.id.trim();
+  if (typeof t.idNumber === 'string' && t.idNumber.trim()) return t.idNumber.trim();
+  return null;
+}
+
+function nameFromEmail(email: string): string {
+  const local = email.split('@')[0] ?? email;
+  return local.replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Look up an existing learner by email (case-insensitive), or create a fresh
+ * `app_user` + `learner_profile` + `user_role_map` for an SSG-only enrolment.
+ *
+ * Returns the `app_user.id` or `null` if email is missing or provisioning fails.
+ *
+ * Why this exists: enrolments that arrive via SSG sync (TPGateway, Magento direct, etc.)
+ * never went through `runPostSsgEnrolSync`, so no LMS user exists for them — and the
+ * QBO invoice queue can't proceed without `user_id`. This mirrors the user-creation
+ * portion of `runPostSsgEnrolSync` (see lib/services/postSsgEnrolSync.ts).
+ */
+async function ensureLearnerUserFromSsgRecord(input: {
+  email: string;
+  fullName?: string | null;
+  nric?: string | null;
+}): Promise<string | null> {
+  const email = (input.email || '').trim();
+  if (!email) return null;
+
+  const existing = await pool.query(
+    `SELECT id FROM app_user WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) LIMIT 1`,
+    [email]
+  );
+  if (existing.rows[0]?.id) return existing.rows[0].id as string;
+
+  const fullName = (input.fullName || '').trim() || nameFromEmail(email);
+  const nric = (input.nric || '').trim() || null;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const recheck = await client.query(
+      `SELECT id FROM app_user WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) LIMIT 1`,
+      [email]
+    );
+    let userId: string;
+    if (recheck.rows[0]?.id) {
+      userId = recheck.rows[0].id;
+    } else {
+      const placeholderPwd = `ssg_import_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const ins = await client.query(
+        `INSERT INTO app_user (email, password, password_hash, full_name)
+         VALUES ($1, $2, $2, $3)
+         RETURNING id`,
+        [email, placeholderPwd, fullName]
+      );
+      userId = ins.rows[0].id;
+
+      await client.query(
+        `INSERT INTO learner_profile (user_id, tel, nric)
+         VALUES ($1, '', $2)
+         ON CONFLICT (user_id) DO NOTHING`,
+        [userId, nric]
+      );
+
+      await client.query(
+        `INSERT INTO user_role_map (user_id, role)
+         VALUES ($1, 'Learner')
+         ON CONFLICT (user_id, role) DO NOTHING`,
+        [userId]
+      );
+    }
+
+    await client.query('COMMIT');
+    console.log(`[invoice_jobs] provisioned app_user for SSG-only learner: ${email} (${userId})`);
+    return userId;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.warn(
+      '[invoice_jobs] ensureLearnerUserFromSsgRecord failed:',
+      err instanceof Error ? err.message : err
+    );
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * After SSG sync upserts `ssg_enrolments`, enqueue QBO invoice if Confirmed and a learner exists.
  * Covers rows that never went through `runPostSsgEnrolSync` (local enrollment + enqueue).
@@ -252,6 +351,15 @@ export async function enqueueInvoiceJobsFromConsolidatedFinance(
         learnerEmail,
       ]);
       userId = ur.rows[0]?.id as string | undefined;
+    }
+
+    if (!userId && learnerEmail) {
+      const provisioned = await ensureLearnerUserFromSsgRecord({
+        email: learnerEmail,
+        fullName: traineeFullNameFromSsgRecord(se?.raw_data),
+        nric: traineeNricFromSsgRecord(se?.raw_data),
+      });
+      if (provisioned) userId = provisioned;
     }
 
     if (!courseCode) {
@@ -341,6 +449,15 @@ export async function tryEnqueueInvoiceFromSsgRecord(record: any): Promise<void>
       [learnerEmail]
     );
     userId = ur.rows[0]?.id as string | undefined;
+  }
+
+  if (!userId && learnerEmail) {
+    const provisioned = await ensureLearnerUserFromSsgRecord({
+      email: learnerEmail,
+      fullName: traineeFullNameFromSsgRecord(record),
+      nric: traineeNricFromSsgRecord(record),
+    });
+    if (provisioned) userId = provisioned;
   }
 
   if (!courseCode || !learnerEmail || !userId) {
