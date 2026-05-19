@@ -292,6 +292,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <NavItem page={AdminPage.DeleteCertificate} label="Delete Certificate" isSubItem />
                 <NavItem page={AdminPage.SendCertificateSG} label="Send Certificate (SG)" isSubItem />
                 <NavItem page={AdminPage.SendCertificateGH} label="Send Certificate (GH)" isSubItem />
+                <NavItem page={AdminPage.MicrosoftCertificate} label="Microsoft Certificate" isSubItem />
             </NavSection>
 
             <NavSection title="Workflow Guides" icon={IconName.BookOpen} collapsed={collapsed} isOpen={openSections.workflowGuides} onToggle={() => toggleSection('workflowGuides')}>

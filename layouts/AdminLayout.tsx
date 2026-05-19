@@ -29,6 +29,7 @@ import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, 
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
+import { MicrosoftCertificateView } from '../components/admin/MicrosoftCertificate';
 import { CreateNewClassView } from '../components/admin/CreateNewClassView';
 import EnrollLearners from '../components/admin/EnrollLearners';
 import SearchPastLearners from '../components/admin/SearchPastLearners';
@@ -208,6 +209,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.DeleteCertificate]: 'Delete Certificate',
   [AdminPage.SendCertificateSG]: 'Send Certificate (SG)',
   [AdminPage.SendCertificateGH]: 'Send Certificate (GH)',
+  [AdminPage.MicrosoftCertificate]: 'Microsoft Certificate',
   [AdminPage.Calendar]: 'Calendar',
   [AdminPage.Scheduler]: 'Task Scheduler',
   [AdminPage.SchedulerSummary]: 'Schedule Summary',
@@ -464,6 +466,8 @@ const AdminLayout: React.FC = () => {
         return <SendCertificateSGView />;
       case AdminPage.SendCertificateGH:
         return <SendCertificateGHView />;
+      case AdminPage.MicrosoftCertificate:
+        return <MicrosoftCertificateView />;
       case AdminPage.Calendar:
         return <AdminCalendarView />;
       case AdminPage.Scheduler:
