@@ -2,6 +2,85 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
+import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
+import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { refreshGrantsForEnrolments } from '../../../lib/services/billingSync';
+import { tryEnqueueInvoiceFromSsgRecord } from '../../../lib/services/invoiceJobs';
+
+const ENROL_PAGE_SIZE = 100;
+
+async function fetchAllEnrolmentsForRun(
+  api: ReturnType<typeof createSSGEnrolmentAPI>,
+  tpUen: string,
+  tpCode: string,
+  runId: string
+): Promise<any[]> {
+  const all: any[] = [];
+  for (let pageIndex = 0; pageIndex < 50; pageIndex++) {
+    const result = await api.searchEnrolment({
+      parameters: { page: pageIndex, pageSize: ENROL_PAGE_SIZE },
+      enrolment: {
+        course: { run: { id: runId } },
+        trainingPartner: { uen: tpUen, code: tpCode },
+      },
+    } as any);
+    if (result.error) {
+      const code = String(result.status ?? 0);
+      if (code === '404') return all;
+      throw new Error(`SSG enrolment search failed for run ${runId}: ${code} ${result.error.message ?? ''}`.trim());
+    }
+    const wrapped: any[] = Array.isArray(result.data) ? result.data : [];
+    if (wrapped.length === 0) return all;
+    all.push(...wrapped);
+    if (wrapped.length < ENROL_PAGE_SIZE) return all;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return all;
+}
+
+async function upsertSsgEnrolmentStaging(record: any): Promise<void> {
+  const trainee = (record?.trainee ?? {}) as Record<string, unknown>;
+  const course = (record?.course ?? {}) as Record<string, unknown>;
+  const run = (course?.run ?? {}) as Record<string, unknown>;
+  const tp = (record?.trainingPartner ?? {}) as Record<string, unknown>;
+  const email = (trainee.email as Record<string, unknown>)?.full ?? null;
+
+  await pool.query(
+    `INSERT INTO ssg_enrolments (
+       id, enrolment_id, trainee_name, trainee_nric,
+       course_title, course_reference, course_run_id,
+       training_partner_code, enrolment_status, sponsorship_type,
+       enrolment_date, raw_data, created_date, imported_at
+     ) VALUES (
+       gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9,
+       $10::timestamptz, $11, NOW(), NOW()
+     )
+     ON CONFLICT (enrolment_id) DO UPDATE SET
+       trainee_name = EXCLUDED.trainee_name,
+       trainee_nric = EXCLUDED.trainee_nric,
+       course_title = EXCLUDED.course_title,
+       course_reference = EXCLUDED.course_reference,
+       course_run_id = EXCLUDED.course_run_id,
+       enrolment_status = EXCLUDED.enrolment_status,
+       sponsorship_type = EXCLUDED.sponsorship_type,
+       enrolment_date = EXCLUDED.enrolment_date,
+       raw_data = EXCLUDED.raw_data,
+       imported_at = NOW()`,
+    [
+      record?.referenceNumber ?? null,
+      (trainee.fullName as string) || null,
+      (trainee.id as string) || null,
+      (course.title as string) || null,
+      (course.referenceNumber as string) || null,
+      (run.id as string) || null,
+      (tp.code as string) || null,
+      (record?.status as string) || null,
+      (trainee.sponsorshipType as string) || null,
+      (trainee.enrolmentDate as string) || null,
+      JSON.stringify({ ...record, trainee: { ...trainee, email: { full: email } } }),
+    ]
+  );
+}
 
 function parseToISO(d: number | string | undefined): string | null {
   if (!d) return null;
@@ -44,16 +123,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let raCode: string | null;
   let modeOfLearning: string;
 
-  try {
-    const credentials = await getSSGCredentialsService().getSSGCredentials(
-      undefined,
-      (req.headers['x-ssg-app'] as string) || undefined
-    );
-    if (!credentials) {
-      return res.status(500).json({ success: false, error: 'SSG credentials not found' });
-    }
+  const ssgApp = (req.headers['x-ssg-app'] as string) || undefined;
+  const credentials = await getSSGCredentialsService().getSSGCredentials(undefined, ssgApp);
+  if (!credentials) {
+    return res.status(500).json({ success: false, error: 'SSG credentials not found' });
+  }
+  const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
 
-    const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+  try {
     const api = createSSGCourseAPI(ssgBaseUrl, credentials);
     const ssgResult = await api.viewCourseRun(courseRunId);
 
@@ -138,6 +215,51 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       action = 'created';
     }
 
+    // Pull enrolments for this run from SSG into ssg_enrolments. Without this step the
+    // Consolidated Finance Data page (which reads ssg_enrolments) stays empty after import,
+    // and the in-page "Refresh from SSG" cannot help because it discovers runs by scanning
+    // ssg_enrolments first (chicken-and-egg for a never-seen run).
+    let enrolmentsFetched = 0;
+    let enrolmentsUpserted = 0;
+    let enrolmentSyncError: string | null = null;
+    const upsertedEnrolmentIds: string[] = [];
+
+    try {
+      const tp = await getTrainingPartnerIdentifiers();
+      const tpUen = tp.uen || credentials.uen;
+      const tpCode = tp.code;
+      const enrolApi = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
+      const records = await fetchAllEnrolmentsForRun(enrolApi, tpUen, tpCode, courseRunId);
+      enrolmentsFetched = records.length;
+
+      for (const row of records) {
+        const rec = row?.enrolment ?? row;
+        const enrolId = rec?.referenceNumber ? String(rec.referenceNumber) : '';
+        if (!enrolId) continue;
+        try {
+          await upsertSsgEnrolmentStaging(rec);
+          enrolmentsUpserted++;
+          upsertedEnrolmentIds.push(enrolId);
+          void tryEnqueueInvoiceFromSsgRecord(rec).catch((e: unknown) =>
+            console.warn('[finance/import-course-run] tryEnqueueInvoiceFromSsgRecord:', e)
+          );
+        } catch (e) {
+          console.warn('[finance/import-course-run] upsert enrolment failed:', e);
+        }
+      }
+
+      if (upsertedEnrolmentIds.length > 0) {
+        try {
+          await refreshGrantsForEnrolments(upsertedEnrolmentIds, ssgApp);
+        } catch (e) {
+          console.warn('[finance/import-course-run] refreshGrantsForEnrolments:', e);
+        }
+      }
+    } catch (e) {
+      enrolmentSyncError = e instanceof Error ? e.message : String(e);
+      console.warn('[finance/import-course-run] enrolment sync failed:', enrolmentSyncError);
+    }
+
     return res.status(200).json({
       success: true,
       action,
@@ -149,6 +271,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         endDate: endDateISO,
         modeOfLearning,
         raCode,
+        enrolmentsFetched,
+        enrolmentsUpserted,
+        enrolmentSyncError,
       },
     });
   } catch (error) {
