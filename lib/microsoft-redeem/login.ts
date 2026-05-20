@@ -1,25 +1,22 @@
 /**
- * Interactive Microsoft Learn sign-in.
+ * Microsoft Learn sign-in.
  *
- * Ported from the original `microsoftredeemcode` Flask app (backend/login.py),
- * which opened a *headed* Chromium so a human could complete the sign-in.
+ * Two modes:
+ *   1. Interactive (headed Chromium) — preferred. A real window opens on
+ *      the host so the admin can complete passkey / MFA / captcha
+ *      themselves. Works on localhost; fails on headless Coolify (no X
+ *      server / DISPLAY).
+ *   2. Automated headless fallback — fires only when (1) can't launch
+ *      because the host has no display AND MS_EMAIL + MS_PASSWORD are
+ *      both set in env. Fills the email + password forms programmatically
+ *      and persists the session. Can't survive MFA / passkey / captcha;
+ *      if Microsoft challenges the flow, returns a clear error.
  *
- * We keep that design: a real Chromium window opens on the machine running
- * the LMS server, the admin signs in themselves (this handles passwordless
- * / passkey accounts, MFA and captchas — none of which a headless server
- * can pass), and once Microsoft auth cookies appear the Playwright
- * `storageState` is persisted to the `microsoft_redeem_session` table for
- * the code generator to reuse.
- *
- * MS_EMAIL, if set, is only used to pre-fill the email field as a
- * convenience — the admin still completes the rest in the window.
- *
- * NOTE: this requires a desktop/display on the host. It works for local
- * `npm run dev`; a headless Coolify container has no display and cannot
- * open the window.
+ * The captured session is stored in the `microsoft_redeem_session` table
+ * and reused by the (always-headless) code generator.
  */
 
-import { chromium, type Browser, type BrowserContext } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { saveSession } from './db';
 
 /** Microsoft consumer (outlook.com / live.com) account sign-in page. */
@@ -67,14 +64,163 @@ async function waitForAuthCookies(
   return false;
 }
 
+/** Recognise the launch failure modes the headless fallback should kick in on. */
+const NO_DISPLAY_RE =
+  /XServer|Missing X server|\$DISPLAY|target page, context or browser has been closed|browserType\.launch/i;
+
 /**
- * Open an interactive Microsoft sign-in window and persist the session.
- *
- * Resolves once the admin has signed in (auth cookies detected) or the
- * window times out.
+ * Drive the Microsoft password form programmatically. Used when no display
+ * is available on the host. Returns the same shape as runMicrosoftLogin.
  */
+async function runHeadlessLogin(
+  email: string,
+  password: string,
+): Promise<LoginResult> {
+  let browser: Browser | null = null;
+  try {
+    try {
+      browser = await chromium.launch({ headless: true });
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      if (/executable doesn't exist|Looks like Playwright/i.test(msg)) {
+        return {
+          ok: false,
+          error:
+            'Chromium is not installed for Playwright. Run ' +
+            '`npx playwright install chromium` on the server, then retry.',
+        };
+      }
+      return { ok: false, error: `Headless browser launch failed: ${msg}` };
+    }
+
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 860 },
+    });
+    const page = await context.newPage();
+
+    await page.goto(LIVE_LOGIN_URL, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+
+    // Step 1: email.
+    const emailInput = page.locator("input[type='email'], input[name='loginfmt']").first();
+    await emailInput.waitFor({ state: 'visible', timeout: 15000 });
+    await emailInput.fill(email);
+    await clickPrimary(page);
+
+    // Step 2: password. Microsoft sometimes shows a passwordless option
+    // first — if the password field never appears, we can't continue.
+    const pwdInput = page.locator("input[type='password'], input[name='passwd']").first();
+    try {
+      await pwdInput.waitFor({ state: 'visible', timeout: 15000 });
+    } catch {
+      const passwordless = await page.locator('text=/Sign in with a passkey|Use your face|use your password instead/i').count();
+      return {
+        ok: false,
+        error: passwordless
+          ? 'Microsoft is offering passwordless sign-in for this account, which automated headless sign-in can\'t complete. Use an account configured with a regular password.'
+          : 'Microsoft did not show the password field. The account may require MFA, passkey, or a captcha — automated headless sign-in can\'t handle those.',
+      };
+    }
+    await pwdInput.fill(password);
+    await clickPrimary(page);
+
+    // Step 3: MFA / "Stay signed in?" / errors. Race them against the
+    // auth-cookies poll so we exit as soon as we know the outcome.
+    const result = await Promise.race([
+      waitForAuthCookies(context, 45000).then((ok) => ({ kind: 'auth', ok }) as const),
+      page
+        .locator('text=/incorrect|wrong password|that password isn\'t correct/i')
+        .first()
+        .waitFor({ state: 'visible', timeout: 30000 })
+        .then(() => ({ kind: 'badpw' }) as const)
+        .catch(() => null),
+      page
+        .locator('text=/verify your identity|enter the code|approve sign in|set up your account|protect your account/i')
+        .first()
+        .waitFor({ state: 'visible', timeout: 30000 })
+        .then(() => ({ kind: 'mfa' }) as const)
+        .catch(() => null),
+    ]);
+
+    if (result?.kind === 'badpw') {
+      return {
+        ok: false,
+        error: 'MS_PASSWORD is incorrect for MS_EMAIL. Update the env var on the server and try again.',
+      };
+    }
+    if (result?.kind === 'mfa') {
+      return {
+        ok: false,
+        error:
+          'Microsoft is challenging the sign-in with MFA / a verification step. Automated headless sign-in can\'t complete this. ' +
+          'Use an account without MFA, or disable MFA on this account.',
+      };
+    }
+
+    // "Stay signed in?" page — try clicking Yes once, then poll for cookies again.
+    try {
+      const yesBtn = page.locator("#idSIButton9, input[value='Yes'], button:has-text('Yes')").first();
+      if (await yesBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await yesBtn.click();
+      }
+    } catch {
+      /* not shown */
+    }
+
+    const authed =
+      result?.kind === 'auth' && result.ok
+        ? true
+        : await waitForAuthCookies(context, 20000);
+    if (!authed) {
+      return {
+        ok: false,
+        error:
+          'Automated sign-in did not complete in time. Microsoft may be showing an interstitial that headless mode can\'t pass.',
+      };
+    }
+
+    // Land on learn.microsoft.com so its session cookies are captured too.
+    try {
+      await page.goto(LEARN_HOME_URL, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      await page.waitForTimeout(3000);
+    } catch {
+      /* non-fatal */
+    }
+
+    const storageState = (await context.storageState()) as Record<string, unknown>;
+    await saveSession(storageState, email);
+    return { ok: true, email };
+  } catch (err: any) {
+    return { ok: false, error: `Headless sign-in failed: ${err?.message || err}` };
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+/** Click the primary submit button on the current Microsoft form. */
+async function clickPrimary(page: Page): Promise<void> {
+  const btn = page
+    .locator(
+      "input[type='submit'], #idSIButton9, button[type='submit'], button:has-text('Next'), button:has-text('Sign in')",
+    )
+    .first();
+  await btn.click({ timeout: 10000 });
+}
+
 export async function runMicrosoftLogin(): Promise<LoginResult> {
   const email = (process.env.MS_EMAIL || '').trim();
+  const password = (process.env.MS_PASSWORD || '').trim();
 
   let browser: Browser | null = null;
   try {
@@ -93,11 +239,24 @@ export async function runMicrosoftLogin(): Promise<LoginResult> {
             '`npx playwright install chromium` on the server, then retry.',
         };
       }
+
+      // No display on this host (typical for headless Coolify). Fall back
+      // to automated headless sign-in if credentials are provided.
+      if (NO_DISPLAY_RE.test(msg)) {
+        if (email && password) {
+          return await runHeadlessLogin(email, password);
+        }
+        return {
+          ok: false,
+          error:
+            'No desktop display on this host, so the interactive sign-in window can\'t open. ' +
+            'Set MS_EMAIL and MS_PASSWORD as environment variables on the server to enable automated headless sign-in instead.',
+        };
+      }
+
       return {
         ok: false,
-        error:
-          'Could not open a sign-in browser window. This requires a desktop ' +
-          `display on the host running the LMS. Details: ${msg}`,
+        error: `Could not open a sign-in browser window. Details: ${msg}`,
       };
     }
 
