@@ -134,6 +134,16 @@ const API_KEY_CONFIGS: Record<string, { label: string; models: { value: string; 
         defaultModel: '',
         models: []
     },
+    'MS_EMAIL': {
+        label: 'Microsoft Learn Email',
+        defaultModel: '',
+        models: []
+    },
+    'MS_PASSWORD': {
+        label: 'Microsoft Learn Password',
+        defaultModel: '',
+        models: []
+    },
 };
 
 const LLM_API_KEY_NAMES = [
@@ -166,6 +176,10 @@ const QUICKBOOKS_APP1_KEY_NAMES = [
 const QUICKBOOKS_APP2_KEY_NAMES = [
     'QUICKBOOKS_APP2_CLIENT_ID',
     'QUICKBOOKS_APP2_CLIENT_SECRET',
+] as const;
+const MICROSOFT_API_KEY_NAMES = [
+    'MS_EMAIL',
+    'MS_PASSWORD',
 ] as const;
 
 // Helper function to clean filename for display
@@ -287,6 +301,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isN8nCredentialsOpen, setIsN8nCredentialsOpen] = useState(false);
     const [isFirecrawlCredentialsOpen, setIsFirecrawlCredentialsOpen] = useState(false);
     const [isBizfileCredentialsOpen, setIsBizfileCredentialsOpen] = useState(false);
+    const [isMicrosoftCredentialsOpen, setIsMicrosoftCredentialsOpen] = useState(false);
     const [isQuickbooksCredentialsOpen, setIsQuickbooksCredentialsOpen] = useState(false);
     const [isCompanyOpen, setIsCompanyOpen] = useState(false);
     const [isContactOpen, setIsContactOpen] = useState(false);
@@ -2727,6 +2742,55 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                         }}
                                                         disabled={!isEditing}
                                                         placeholder={config?.label || keyName}
+                                                        className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setVisibleApiKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
+                                                        className="p-2 text-muted hover:text-on-surface transition-colors"
+                                                    >
+                                                        {isVisible
+                                                            ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
+                                                            : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                        }
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        {renderSubsectionHeader('Microsoft Learn', isMicrosoftCredentialsOpen, () => setIsMicrosoftCredentialsOpen(prev => !prev))}
+                        {isMicrosoftCredentialsOpen && (
+                            <div className="rounded-md border border-default bg-surface p-5">
+                                <p className="text-xs text-muted mb-3">
+                                    Used by the Microsoft Certificate page on headless deployments (production). When the host can't open a sign-in window, the server signs in with these credentials. Accounts with MFA / passkey aren't supported.
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {MICROSOFT_API_KEY_NAMES.map((keyName) => {
+                                        const keyValue = (formData.apiKeys || {})[keyName] || '';
+                                        const isVisible = visibleApiKeys[keyName];
+                                        const config = API_KEY_CONFIGS[keyName];
+                                        return (
+                                            <div key={keyName}>
+                                                <label className="block text-xs font-medium text-muted mb-1">{config?.label || keyName}</label>
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type={isVisible ? 'text' : 'password'}
+                                                        value={keyValue}
+                                                        onChange={(e) => {
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                apiKeys: { ...prev.apiKeys, [keyName]: e.target.value }
+                                                            }));
+                                                        }}
+                                                        disabled={!isEditing}
+                                                        placeholder={config?.label || keyName}
+                                                        autoComplete={keyName === 'MS_EMAIL' ? 'username' : 'current-password'}
                                                         className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-60"
                                                     />
                                                     <button
