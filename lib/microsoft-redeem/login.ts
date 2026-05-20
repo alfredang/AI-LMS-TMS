@@ -121,7 +121,20 @@ async function runHeadlessLogin(
   let browser: Browser | null = null;
   try {
     try {
-      browser = await chromium.launch({ headless: true });
+      // Anti-bot detection: Microsoft's login.live.com flags vanilla
+      // headless Chromium with captchas / extra MFA prompts before it
+      // will even show the password field. These flags make the browser
+      // present itself less obviously as automation. We pair them with a
+      // realistic User-Agent on the BrowserContext below.
+      browser = await chromium.launch({
+        headless: true,
+        args: [
+          '--disable-blink-features=AutomationControlled',
+          '--no-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-features=IsolateOrigins,site-per-process',
+        ],
+      });
     } catch (err: any) {
       const msg = String(err?.message || err);
       if (/executable doesn't exist|Looks like Playwright/i.test(msg)) {
@@ -135,32 +148,108 @@ async function runHeadlessLogin(
       return { ok: false, error: `Headless browser launch failed: ${msg}` };
     }
 
-    const context = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 860 },
+      userAgent:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+        '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      locale: 'en-US',
+      timezoneId: 'Asia/Singapore',
+    });
+    // Hide the `navigator.webdriver` flag — one of the most common
+    // signals Microsoft's bot detection looks for.
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    });
     const page = await context.newPage();
     await page.goto(LIVE_LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-    // Email.
+    // Email — type with a per-keystroke delay so the input looks
+    // human-typed rather than instantly populated (another bot signal
+    // Microsoft watches for).
     const emailInput = page.locator("input[type='email'], input[name='loginfmt']").first();
     await emailInput.waitFor({ state: 'visible', timeout: 15000 });
-    await emailInput.fill(email);
+    await emailInput.click();
+    await emailInput.type(email, { delay: 60 });
+    await page.waitForTimeout(400);
     await clickPrimary(page);
 
-    // Password (or passwordless prompt).
+    // Password (or passwordless prompt). Microsoft can also intercept with
+    // "Verify it's you", "Approve sign-in", captchas, or — most commonly
+    // for accounts that have additional sign-in options — a passkey screen
+    // with a small "Use your password" link we can click through to get
+    // the password field.
     const pwdInput = page.locator("input[type='password'], input[name='passwd']").first();
-    try {
-      await pwdInput.waitFor({ state: 'visible', timeout: 15000 });
-    } catch {
-      const passwordless = await page
-        .locator('text=/Sign in with a passkey|Use your face|use your password instead/i')
-        .count();
+    let pwdVisible = await pwdInput
+      .waitFor({ state: 'visible', timeout: 15000 })
+      .then(() => true)
+      .catch(() => false);
+
+    // If we didn't land on the password screen, try the common "Use your
+    // password instead" / "Other ways to sign in" links Microsoft offers
+    // before falling back to an error.
+    if (!pwdVisible) {
+      const fallbackLinks = [
+        'text=/Use your password instead/i',
+        'text=/Sign in with your password/i',
+        'text=/Other ways to sign in/i',
+        'text=/Sign-in options/i',
+      ];
+      for (const sel of fallbackLinks) {
+        const link = page.locator(sel).first();
+        if (await link.isVisible({ timeout: 1500 }).catch(() => false)) {
+          await link.click().catch(() => undefined);
+          pwdVisible = await pwdInput
+            .waitFor({ state: 'visible', timeout: 8000 })
+            .then(() => true)
+            .catch(() => false);
+          if (pwdVisible) break;
+        }
+      }
+    }
+
+    if (!pwdVisible) {
+      // Diagnostic snapshot so the admin can see WHAT Microsoft showed
+      // instead of the password screen. Includes the page URL, title,
+      // any visible headings, and the first few visible non-trivial text
+      // snippets on the page.
+      let diagnostic = '';
+      try {
+        const url = page.url();
+        const title = await page.title().catch(() => '');
+        const headings = await page
+          .locator('h1, h2, [role="heading"]')
+          .allInnerTexts()
+          .catch(() => [] as string[]);
+        const visibleText = await page
+          .locator('body')
+          .innerText()
+          .catch(() => '');
+        const snippets = visibleText
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.length > 4 && line.length < 140)
+          .slice(0, 8);
+        diagnostic =
+          `URL: ${url} | Title: ${title}` +
+          (headings.length ? ` | Headings: ${headings.slice(0, 3).join(' · ')}` : '') +
+          (snippets.length ? ` | Visible: ${snippets.join(' · ')}` : '');
+      } catch {
+        /* diagnostic best-effort */
+      }
       return {
         ok: false,
-        error: passwordless
-          ? 'Microsoft is offering passwordless sign-in for this account, which automated headless sign-in can\'t complete. Use an account configured with a regular password.'
-          : 'Microsoft did not show the password field. The account may require MFA, passkey, or a captcha — automated headless sign-in can\'t handle those.',
+        error:
+          'Microsoft did not show the password field after the email step. The account most ' +
+          'likely has MFA / passkey / phone-approval turned on, or Microsoft is challenging ' +
+          'the automated sign-in. Disable two-step verification + passkeys at ' +
+          'https://account.live.com/proofs/Manage and try again. ' +
+          (diagnostic ? `[Microsoft showed: ${diagnostic}]` : ''),
       };
     }
-    await pwdInput.fill(password);
+    await pwdInput.click();
+    await pwdInput.type(password, { delay: 60 });
+    await page.waitForTimeout(400);
     await clickPrimary(page);
 
     // Outcome: auth cookies / bad password / MFA challenge.
