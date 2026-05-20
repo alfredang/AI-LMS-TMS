@@ -94,13 +94,17 @@ interface ClassRun {
   venue: string;
   notes: string;
   calendarEventId: string; // Google Calendar event ID (stored as "{evtId}_{date}")
+  // True when the row originated from a Google Calendar event that no longer
+  // exists. UI surfaces a warning so the admin can delete or keep the row.
+  // Manually-added rows (no calendarEventId) are never flagged orphan.
+  calendarOrphaned: boolean;
   scheduleEntries: ScheduleEntry[];
   trainees: TraineeRow[];
   headerColor: { bg: string; text: string };
 }
 
 type TraineeField = keyof TraineeRow;
-type ClassField = keyof Omit<ClassRun, 'id' | 'trainees' | 'scheduleEntries' | 'calendarEventId'>;
+type ClassField = keyof Omit<ClassRun, 'id' | 'trainees' | 'scheduleEntries' | 'calendarEventId' | 'calendarOrphaned'>;
 
 // ─── Header colour palette (random per class block) ──────────────────────────
 
@@ -177,7 +181,7 @@ const newClass = (): ClassRun => {
     id,
     courseTitle: '', courseRunNo: '', trainer: '', trainerEmail: '',
     qrAttendance: '', zoomId: '', meetingId: '',
-    classDate: '', venue: '', notes: '', calendarEventId: '',
+    classDate: '', venue: '', notes: '', calendarEventId: '', calendarOrphaned: false,
     scheduleEntries: [],
     trainees: [newTrainee()],
     headerColor: headerColorFromId(id),
@@ -206,6 +210,28 @@ const toIsoDate = (s: string): string => {
     return getLocalYMD(sgt);
   }
   return s;
+};
+
+// Inverse of toDisplayDate for ranges: parses what a trainee.date cell shows
+// and returns the ISO range used internally. Accepts hyphens, en-dash, em-dash,
+// or tilde as the range separator.
+//   "19/05/2026 – 21/05/2026"   → "2026-05-19~2026-05-21"
+//   "2026-05-19~2026-05-21"     → "2026-05-19~2026-05-21" (already ISO)
+//   anything else / single date → ""
+const parseDisplayDateRange = (v: string): string => {
+  const s = (v || '').trim();
+  if (!s) return '';
+  // Already ISO range — pass through after light validation
+  const isoMatch = s.match(/^(\d{4}-\d{2}-\d{2})~(\d{4}-\d{2}-\d{2})$/);
+  if (isoMatch) return s;
+  // Display range — split on any dash/tilde with surrounding whitespace
+  const dispMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s*[-–—~]\s*(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!dispMatch) return '';
+  const [, d1, m1, y1, d2, m2, y2] = dispMatch;
+  const start = `${y1}-${m1.padStart(2, '0')}-${d1.padStart(2, '0')}`;
+  const end   = `${y2}-${m2.padStart(2, '0')}-${d2.padStart(2, '0')}`;
+  if (!ISO_DATE_RE.test(start) || !ISO_DATE_RE.test(end)) return '';
+  return `${start}~${end}`;
 };
 
 const toDisplayDate = (v: string): string => {
@@ -1011,11 +1037,9 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [confirmDeleteRow, setConfirmDeleteRow] = useState<string | null>(null);
   const [confirmDeleteSession, setConfirmDeleteSession] = useState<string | null>(null);
-  const [importing, setImporting] = useState(false);
   const autoImportedRef = useRef(false);
 
   const handleImportTrainees = async () => {
-    setImporting(true);
     try {
       const params = new URLSearchParams({ course_title: classRun.courseTitle });
       if (selectedDate) params.set('list_date', selectedDate);
@@ -1036,8 +1060,6 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
       }
     } catch (e) {
       console.error('[masterlist] import trainees error:', e);
-    } finally {
-      setImporting(false);
     }
   };
 
@@ -1131,30 +1153,38 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
           onClassChange('courseTitle', lookJson.data.title);
         }
 
+        // The current day's schedule is now visible — drop the spinner.
+        // The linked-day propagation below fills *other* dates the user isn't
+        // looking at yet, so we deliberately let it run as a fire-and-forget
+        // background task. It's still bounded by `cancelled` so unmounting the
+        // block aborts in-flight calls.
+        if (!cancelled) setFetchingSessions(false);
+
         // Propagate per-date schedules to the other linked-day blocks in the
         // same date range. Each day's block stores its own scheduleEntries, so
         // we save each one directly to the masterlist endpoint. Blocks that
-        // already have entries are left alone.
+        // already have entries are left alone. Runs in parallel since each
+        // iteration targets a distinct date / row.
         if (!cancelled && classRun.classDate?.includes('~')) {
           const normTitle = (s: string) => (s || '').replace(/^Day\s+\d+\s*[-–—]\s*/i, '').toLowerCase().trim();
           const baseTitle = normTitle(resolvedTitle);
           const otherDates = expandDateRange(classRun.classDate).filter(d => d !== selectedDate);
 
-          for (const otherDate of otherDates) {
-            if (cancelled) break;
+          await Promise.all(otherDates.map(async otherDate => {
+            if (cancelled) return;
             const otherDaySessions = sorted.filter(s => sessionDateToIso(s.startDate) === otherDate);
-            if (otherDaySessions.length === 0) continue;
+            if (otherDaySessions.length === 0) return;
             const otherEntries = buildEntries(otherDaySessions);
 
             try {
               const res  = await fetch(`/api/admin/masterlist?date=${otherDate}&class_type=${activeTab}`);
               const json = await res.json();
-              if (!json.success) continue;
+              if (!json.success) return;
               const linked = rowsToClasses(json.data).find(
                 c => c.classDate === classRun.classDate && normTitle(c.courseTitle) === baseTitle,
               );
-              if (!linked) continue;
-              if (linked.scheduleEntries.length > 0) continue;
+              if (!linked) return;
+              if (linked.scheduleEntries.length > 0) return;
 
               const synced: ClassRun = {
                 ...linked,
@@ -1170,11 +1200,13 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
             } catch (e) {
               console.error('[masterlist] linked-day auto-fill error:', e);
             }
-          }
+          }));
         }
       } catch (err) {
         console.error('[masterlist] auto-fetch sessions error:', err);
       } finally {
+        // Safety net — the early setFetchingSessions(false) above is the
+        // common path; this handles the error case where it never ran.
         if (!cancelled) setFetchingSessions(false);
       }
     })();
@@ -1269,6 +1301,24 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
             <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border border-white/20 ${tabColors.headerBadgeBg} ${tabColors.headerBadgeText}`}>
               {tabLabel}
             </span>
+            {/* Off-calendar chip — single amber pill for rows that aren't in
+                Google Calendar. The wording distinguishes how the row got
+                here: "Manual entry" for admin-added rows (no calendar_event_id),
+                "Removed from Calendar" for orphan rows (calendar event was
+                deleted/renamed after sync). */}
+            {(!classRun.calendarEventId || classRun.calendarOrphaned) && (
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full font-bold border border-amber-200/60 bg-amber-300 text-amber-950 uppercase tracking-wide flex items-center gap-1"
+                title={
+                  !classRun.calendarEventId
+                    ? 'Added manually via the Add New Class button — not synced from Google Calendar'
+                    : 'The Google Calendar event for this class has been deleted or renamed. Verify and either keep (it becomes a manual entry) or delete the row.'
+                }
+              >
+                <Icon name={IconName.Warning} className="w-3 h-3" />
+                {!classRun.calendarEventId ? 'Manual — Not in Calendar' : 'Removed from Calendar'}
+              </span>
+            )}
             {/* Move to tab */}
             <div className="relative">
               <button
@@ -1294,23 +1344,6 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                 </div>
               )}
             </div>
-            <button
-              onClick={handleImportTrainees}
-              disabled={importing}
-              title="Import trainees from enrollments"
-              className={`p-1.5 rounded hover:bg-black/20 transition-colors opacity-70 hover:opacity-100 disabled:opacity-40 disabled:cursor-not-allowed ${classRun.headerColor.text}`}
-            >
-              {importing ? (
-                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v6m-3-3h6" />
-                </svg>
-              )}
-            </button>
             <button
               onClick={() => setConfirmDeleteClass(true)}
               title="Remove this class"
@@ -1646,6 +1679,7 @@ function rowsToClasses(rows: Record<string, any>[]): ClassRun[] {
         venue: row.venue ?? '',
         notes: row.notes ?? '',
         calendarEventId: row.calendar_event_id ?? '',
+        calendarOrphaned: !!row.calendar_orphaned,
         scheduleEntries: row.schedule_entries
           ? (typeof row.schedule_entries === 'string'
               ? JSON.parse(row.schedule_entries)
@@ -1655,7 +1689,19 @@ function rowsToClasses(rows: Record<string, any>[]): ClassRun[] {
         headerColor: headerColorFromId(row.class_id),
       });
     }
-    map.get(row.class_id)!.trainees.push({
+    const existing = map.get(row.class_id)!;
+    // Only the FIRST trainee row in a class block carries calendar_event_id
+    // (DB unique index allows one per class). When timestamps tie, the SELECT
+    // can return the empty-cal-id row first, which would otherwise make a
+    // calendar-synced block look manual. Promote the cal-id / orphan flag
+    // from whichever row in this group actually has it.
+    if (row.calendar_event_id && !existing.calendarEventId) {
+      existing.calendarEventId = row.calendar_event_id;
+    }
+    if (row.calendar_orphaned && !existing.calendarOrphaned) {
+      existing.calendarOrphaned = true;
+    }
+    existing.trainees.push({
       id: row.id,
       name: row.name ?? '',
       contact_no: row.contact_no ?? '',
@@ -1773,6 +1819,7 @@ function classToRows(cr: ClassRun, classType: ClassTab, listDate: string): Recor
     notes: cr.notes || null,
     // Preserve calendar_event_id on the first row only (unique index allows one per class)
     calendar_event_id: idx === 0 ? (cr.calendarEventId || null) : null,
+    calendar_orphaned: cr.calendarOrphaned,
   }));
 }
 
@@ -1941,7 +1988,15 @@ const MasterListView: React.FC = () => {
     setScrollTrigger(n => n + 1);
   };
 
-  const classes = tabData[activeTab];
+  // Sort flagged blocks (manual entries + orphans whose calendar event
+  // vanished) to the top of the tab so the rows needing admin attention
+  // are visible without scrolling. Within each group the original DB order
+  // is preserved by the stable sort.
+  const classes = useMemo(() => {
+    const raw = tabData[activeTab];
+    const isOffCalendar = (c: ClassRun) => !c.calendarEventId || c.calendarOrphaned;
+    return [...raw].sort((a, b) => Number(isOffCalendar(b)) - Number(isOffCalendar(a)));
+  }, [tabData, activeTab]);
 
   const setClasses = (updater: (prev: ClassRun[]) => ClassRun[]) =>
     setTabData(prev => ({ ...prev, [activeTab]: updater(prev[activeTab]) }));
@@ -2019,8 +2074,10 @@ const MasterListView: React.FC = () => {
         })
           .then(r => r.json())
           .then(json => {
-            if (json.success && json.added > 0) {
-              // New classes were added from calendar — re-fetch all tabs to show them
+            if (json.success && (json.added > 0 || json.removed > 0 || json.flagged > 0 || json.unflagged > 0)) {
+              // Calendar sync added new classes, removed empty orphans, or
+              // flipped the calendar_orphaned flag on existing rows —
+              // re-fetch all tabs so badges and warning chips reflect reality.
               return fetchAllTabs(snapDate);
             }
           })
@@ -2038,53 +2095,117 @@ const MasterListView: React.FC = () => {
   const saveClass = useCallback(async (cr: ClassRun, tab: ClassTab, date: string) => {
     setSaving(prev => ({ ...prev, [cr.id]: true }));
     try {
-      // Save the current day
+      // Manual blocks ("Add New Class") start with classDate = ''. If any
+      // trainee has typed a multi-day range in their Date cell (e.g.
+      // "19/05/2026 – 21/05/2026"), promote that to classDate so linked-day
+      // propagation has something to expand. Without this, manual multi-day
+      // classes never sync between days.
+      let effectiveCr = cr;
+      if (!cr.classDate?.includes('~')) {
+        for (const t of cr.trainees) {
+          const range = parseDisplayDateRange(t.date);
+          if (range) { effectiveCr = { ...cr, classDate: range }; break; }
+        }
+      }
+
+      // Save the current day (with the derived classDate, if any).
       await fetch('/api/admin/masterlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: classToRows(cr, tab, date) }),
+        body: JSON.stringify({ rows: classToRows(effectiveCr, tab, date) }),
       });
 
-      // Propagate to linked days in the same date range.
-      // Match by BOTH classDate AND normalised courseTitle so we never accidentally
-      // overwrite a different course that happens to share the same date range (e.g. PL-900).
-      if (cr.classDate?.includes('~')) {
+      // Propagate to linked days inside the same date range.
+      // Runs in parallel since each iteration targets a distinct date / row.
+      // Safety cap: skip propagation if the range expands to more than 14
+      // days — that's almost certainly a typo (e.g. wrong year on one end)
+      // and we shouldn't auto-create rows on dozens of dates.
+      if (effectiveCr.classDate?.includes('~')) {
         const normTitle = (s: string) =>
           (s || '').replace(/^Day\s+\d+\s*[-–—]\s*/i, '').toLowerCase().trim();
-        const baseTitle = normTitle(cr.courseTitle);
-        const sortedDates = expandDateRange(cr.classDate).sort();
+        const baseTitle = normTitle(effectiveCr.courseTitle);
+        const sortedDates = expandDateRange(effectiveCr.classDate).sort();
+        const RANGE_CAP_DAYS = 14;
 
-        for (const otherDate of sortedDates.filter(d => d !== date)) {
-          try {
-            const res  = await fetch(`/api/admin/masterlist?date=${otherDate}&class_type=${tab}`);
-            const json = await res.json();
-            if (!json.success) continue;
-            // Only update an already-existing copy of THIS specific course
-            const existing = rowsToClasses(json.data).find(
-              c => c.classDate === cr.classDate && normTitle(c.courseTitle) === baseTitle,
-            );
-            if (!existing) continue;
-            const synced: ClassRun = {
-              ...cr,
-              id: existing.id,
-              // Preserve the other day's calendar event ID so calendar sync stays deduped
-              calendarEventId: existing.calendarEventId || cr.calendarEventId,
-              headerColor: existing.headerColor,
-              trainees: cr.trainees.map((t, i) => ({
-                ...t,
-                id: existing.trainees[i]?.id ?? crypto.randomUUID(),
-              })),
-              // Each day keeps its own class schedule
-              scheduleEntries: existing.scheduleEntries,
-            };
-            await fetch('/api/admin/masterlist', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ rows: classToRows(synced, tab, otherDate) }),
-            });
-          } catch (e) {
-            console.error('[masterlist] linked-day sync error:', e);
-          }
+        if (sortedDates.length > RANGE_CAP_DAYS) {
+          console.warn(
+            `[masterlist] linked-day sync skipped — range too wide (${sortedDates.length} days), check classDate=${effectiveCr.classDate}`,
+          );
+        } else {
+          await Promise.all(sortedDates.filter(d => d !== date).map(async otherDate => {
+            try {
+              const res  = await fetch(`/api/admin/masterlist?date=${otherDate}&class_type=${tab}`);
+              const json = await res.json();
+              if (!json.success) return;
+
+              // Match by title only — we're already iterating dates that fall
+              // inside the editing block's range, so a same-titled row on this
+              // day is the same course run. Prefer rows whose classDate either
+              // matches ours or is empty (manual block we'll be linking) over
+              // any other classDate string, so a recurring course's future
+              // run on this date isn't accidentally overwritten.
+              const candidates = rowsToClasses(json.data).filter(
+                c => normTitle(c.courseTitle) === baseTitle,
+              );
+              const existing =
+                candidates.find(c => c.classDate === effectiveCr.classDate) ||
+                candidates.find(c => !c.classDate || !c.classDate.includes('~')) ||
+                candidates[0];
+
+              if (existing) {
+                // Update path — overwrite the existing row's data while keeping
+                // its identity (id / calendar_event_id / schedule / header colour).
+                //
+                // IMPORTANT: never inherit the editing block's calendar_event_id
+                // here. Each day's cal_id is bound to that day's calendar event
+                // (format `${evtId}_${listDate}`); propagating one across days
+                // collides with the unique index on calendar_event_id and the
+                // ON CONFLICT DO UPDATE clause in /api/admin/masterlist.ts then
+                // migrates the source row's list_date to the target day — which
+                // makes the source day appear empty. Only use what the target
+                // row already has (or none, for what is effectively a manual
+                // extension).
+                const synced: ClassRun = {
+                  ...effectiveCr,
+                  id: existing.id,
+                  calendarEventId: existing.calendarEventId,
+                  headerColor: existing.headerColor,
+                  trainees: effectiveCr.trainees.map((t, i) => ({
+                    ...t,
+                    id: existing.trainees[i]?.id ?? crypto.randomUUID(),
+                  })),
+                  scheduleEntries: existing.scheduleEntries,
+                };
+                await fetch('/api/admin/masterlist', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ rows: classToRows(synced, tab, otherDate) }),
+                });
+              } else {
+                // Create path — no row on this date yet. The course extends
+                // past where the calendar event covers (or the day's row was
+                // deleted), so mint a manual one so the class appears on
+                // every day in the range with the same data.
+                const newId = crypto.randomUUID();
+                const created: ClassRun = {
+                  ...effectiveCr,
+                  id: newId,
+                  calendarEventId: '',     // never in calendar — it's a manual extension
+                  calendarOrphaned: false,
+                  headerColor: headerColorFromId(newId),
+                  scheduleEntries: [],
+                  trainees: effectiveCr.trainees.map(t => ({ ...t, id: crypto.randomUUID() })),
+                };
+                await fetch('/api/admin/masterlist', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ rows: classToRows(created, tab, otherDate) }),
+                });
+              }
+            } catch (e) {
+              console.error('[masterlist] linked-day sync error:', e);
+            }
+          }));
         }
       }
     } catch (e) {
