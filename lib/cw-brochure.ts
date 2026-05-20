@@ -15,13 +15,30 @@ import os from 'os';
 import path from 'path';
 import { chromium } from 'playwright';
 
+// All the /tmp / /root / apt-get logic below is Linux-container specific
+// (Coolify). On Windows / macOS dev machines Playwright already knows the
+// right place to put its browser cache (%LOCALAPPDATA%\ms-playwright on
+// Windows, ~/Library/Caches/ms-playwright on macOS), so we leave the env
+// alone and let chromium.launch() resolve its own bundled binary.
+const IS_LINUX = process.platform === 'linux';
+
 // Force Playwright to use a writable cache under /tmp instead of /root/.cache.
 // In Coolify (and many container runtimes) /root is read-only or owned by a
 // different uid at runtime, so on-demand `playwright install chromium` fails
 // silently and the launch then errors with "Executable doesn't exist". /tmp
 // is universally writable.
-const CHROMIUM_CACHE = process.env.PLAYWRIGHT_BROWSERS_PATH || '/tmp/ms-playwright';
-process.env.PLAYWRIGHT_BROWSERS_PATH = CHROMIUM_CACHE;
+const CHROMIUM_CACHE = IS_LINUX
+  ? (process.env.PLAYWRIGHT_BROWSERS_PATH || '/tmp/ms-playwright')
+  : '';
+if (IS_LINUX) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = CHROMIUM_CACHE;
+} else if (process.env.PLAYWRIGHT_BROWSERS_PATH === '/tmp/ms-playwright') {
+  // An earlier version of this module unconditionally forced the env var
+  // to a Linux path. On Windows / macOS that breaks Playwright's binary
+  // resolution. Clear the stale override so chromium.launch() falls back
+  // to its own platform-appropriate default cache.
+  delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+}
 
 // Ordered list of candidate locations Playwright might resolve to —
 // /tmp first (our forced cache), then /root (the default). The launch
@@ -306,13 +323,27 @@ function extractTscCode($: cheerio.CheerioAPI): string {
 function extractTscTitle($: cheerio.CheerioAPI): string {
   const text = $('body').text();
   const patterns = [
+    // "CODE: Title under Framework" (legacy format)
     new RegExp(`follows.*?guideline.*?of\\s+${TSC_CODE_RE}:\\s+([\\w\\s&-]+?)\\s+under\\s+.+?Skills\\s+Framework`, 'i'),
     new RegExp(`guideline of\\s+(${TSC_CODE_RE}):\\s+(.*?)\\s+under\\s+.+?Skills`, 'i'),
     new RegExp(`(${TSC_CODE_RE}):\\s+([\\w\\s&-]+?)\\s+under\\s+.+?Skills\\s+Framework`, 'i'),
+    // "Title CODE under Framework" (current tertiarycourses.com.sg format —
+    // e.g. "Artificial Intelligence Application EGS-TEM-3026-1.1 under
+    // Engineering Services Skills Framework"). \s also matches the &nbsp;
+    // ( ) characters the source HTML uses between tokens.
+    new RegExp(`follows.*?guideline.*?of\\s+(.+?)\\s+${TSC_CODE_RE}\\s+under\\s+.+?Skills\\s+Framework`, 'i'),
+    new RegExp(`guideline of\\s+(.+?)\\s+${TSC_CODE_RE}\\s+under\\s+.+?Skills\\s+Framework`, 'i'),
   ];
   for (const re of patterns) {
     const m = text.match(re);
-    if (m) return m[m.length - 1].trim();
+    if (m) {
+      // Normalise non-breaking spaces and any other internal whitespace runs.
+      const raw = m[m.length - 1].replace(/[\s ]+/g, ' ').trim();
+      // Strip leftover decorative tokens that occasionally sit at the edges
+      // (e.g. lone punctuation, the word "TSC" if the author duplicated it).
+      const cleaned = raw.replace(/^\W+|\W+$/g, '').replace(/\s+TSC$/i, '').trim();
+      if (cleaned.length >= 3 && cleaned.length <= 120) return cleaned;
+    }
   }
   return 'Not Applicable';
 }
@@ -457,7 +488,12 @@ function extractDurationHrs($: cheerio.CheerioAPI): string {
 
 function extractCourseTopics($: cheerio.CheerioAPI): { title: string; subtopics: string[] }[] {
   const topics: { title: string; subtopics: string[] }[] = [];
-  const skipTerms = ['written assessment', 'wa-saq', 'practical performance', 'pp)', '(pp'];
+  // "final assessment" is filtered here because the renderer adds it as its
+  // own trailing row (see fallback below) — it shouldn't double up as a subtopic.
+  const skipTerms = [
+    'written assessment', 'wa-saq', 'practical performance', 'pp)', '(pp',
+    'final assessment',
+  ];
 
   $('strong').each((_, strong) => {
     const text = $(strong).text().trim();
@@ -511,6 +547,11 @@ function extractCourseTopics($: cheerio.CheerioAPI): { title: string; subtopics:
         } else if (/^T\d+:/.test(curText) && !skipTerms.some((t) => lowerCur.includes(t))) {
           subtopics.push(curText);
         }
+      } else if (tagName === 'p' && curText.length >= 3 && curText.length <= 200) {
+        // Plain <p> sibling — common pattern on tertiarycourses.com.sg where
+        // each subtopic is rendered as <p><em>Title</em></p> with no "T1:" /
+        // bullet prefix. Treat the paragraph's text as one subtopic.
+        if (!skipTerms.some((t) => lowerCur.includes(t))) subtopics.push(curText);
       }
       current = current.next();
     }
@@ -645,14 +686,19 @@ export function populateTemplate(templateHtml: string, data: BrochureData): stri
   if (tscTitle && tscCode) newSf = `<strong>${tscTitle} ${tscCode} TSC</strong> under ${framework} Skills Framework`;
   else if (tscCode) newSf = `<strong>${tscCode} TSC</strong> under ${framework} Skills Framework`;
   else newSf = `<strong>TSC</strong> under ${framework} Skills Framework`;
-  html = html.replace(
+  // The template carries this exact string in BOTH the cert section (page 1)
+  // and the Course Information block (page 3). `.replace()` only swaps the
+  // first match, which leaves page 3 stuck on the template default. Use
+  // split/join to swap every occurrence.
+  html = html.split(
     '<strong>User Interface Design ICT-DES-3008-1.1 TSC</strong> under ICT Skills Framework',
-    newSf,
-  );
+  ).join(newSf);
 
   html = html.split('$750.00 (Bef. GST)').join(`${data.gst_exclusive_price} (Bef. GST)`);
   html = html.split('$817.50 (Incl. GST)').join(`${data.gst_inclusive_price} (Incl. GST)`);
-  html = html.split('16hrs (2 days)').join(`${data.duration_hrs}hrs (${data.session_days} days)`);
+  // Singular vs plural: "1 day" not "1 days".
+  const daysWord = data.session_days === '1' ? 'day' : 'days';
+  html = html.split('16hrs (2 days)').join(`${data.duration_hrs}hrs (${data.session_days} ${daysWord})`);
   html = html.split('https://www.tertiarycourses.com.sg/wsq-bootstrap-web-design.html').join(data.course_url);
 
   if (data.wsq_funding['Full Fee'] !== 'Not Available') {
@@ -669,18 +715,24 @@ export function populateTemplate(templateHtml: string, data: BrochureData): stri
 // loads a `file://` path so the brochure's relative image references
 // (logo, header background) resolve to the same template directory.
 export async function renderPdf(htmlContent: string, templateDir: string, outputPath: string): Promise<void> {
-  // Resolve and pass executablePath explicitly so we don't rely on
-  // Playwright's internal path resolution (which has been picking up
-  // /root/.cache despite the PLAYWRIGHT_BROWSERS_PATH override).
-  const exePath = await resolveChromiumExe();
-  // Install Chromium's shared library deps if they're missing on this
-  // host (Coolify's slim Debian doesn't ship libglib / libnss / etc.
-  // out of the box).
-  await ensureChromiumSystemDeps();
+  // Linux deployment: resolve the binary path explicitly (Playwright's own
+  // resolution has picked up /root/.cache in some Coolify builds even with
+  // PLAYWRIGHT_BROWSERS_PATH set) and ensure Chromium's shared libs are
+  // installed (slim Debian images don't ship libglib / libnss / etc.).
+  // On Windows / macOS dev hosts, neither step is appropriate — apt-get
+  // doesn't exist and Playwright already knows its own cache path.
+  let exePath: string | undefined;
+  if (IS_LINUX) {
+    exePath = await resolveChromiumExe();
+    await ensureChromiumSystemDeps();
+  }
   const tmpHtml = path.join(templateDir, `_tmp_brochure_${process.pid}_${Date.now()}.html`);
   fs.writeFileSync(tmpHtml, htmlContent, 'utf-8');
   try {
-    const browser = await chromium.launch({ headless: true, executablePath: exePath });
+    const browser = await chromium.launch({
+      headless: true,
+      ...(exePath ? { executablePath: exePath } : {}),
+    });
     try {
       const page = await browser.newPage();
       await page.goto(`file://${tmpHtml.replace(/\\/g, '/')}`, { waitUntil: 'networkidle' });
