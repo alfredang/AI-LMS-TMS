@@ -325,6 +325,11 @@ export const MicrosoftCertificateView: React.FC = () => {
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  // Inline credential form — only revealed when the server tells us
+  // there's no display and we need to drive the sign-in form headlessly.
+  const [needsCreds, setNeedsCreds] = useState(false);
+  const [credEmail, setCredEmail] = useState('');
+  const [credPassword, setCredPassword] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initial sign-in status check.
@@ -374,19 +379,31 @@ export const MicrosoftCertificateView: React.FC = () => {
     }
   };
 
-  // Open the interactive Microsoft sign-in window and wait for it to finish.
-  const handleSignIn = async () => {
+  // Open the interactive Microsoft sign-in window OR — on a headless host
+  // — submit caller-provided credentials so the server can drive the
+  // login form itself. The two paths share the same endpoint; the body
+  // is empty for headed sign-in, populated for headless.
+  const handleSignIn = async (creds?: { email: string; password: string }) => {
     setLoggingIn(true);
     setAuthError(null);
     try {
       const res = await fetch('/api/admin/microsoft-redeem/login', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(creds ?? {}),
       });
       const data = await res.json();
       if (data.ok) {
         setSignedIn(true);
         setSignedInEmail(data.email ?? null);
         setAuthError(null);
+        setNeedsCreds(false);
+        setCredPassword('');
+      } else if (data.needsCredentials) {
+        // Headless server has no display — reveal the inline form so the
+        // admin can hand the backend an email + password to use.
+        setNeedsCreds(true);
+        setAuthError(data.error || null);
       } else {
         setAuthError(data.error || 'Sign-in failed');
       }
@@ -395,6 +412,12 @@ export const MicrosoftCertificateView: React.FC = () => {
     } finally {
       setLoggingIn(false);
     }
+  };
+
+  const handleCredSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!credEmail.trim() || !credPassword) return;
+    void handleSignIn({ email: credEmail.trim(), password: credPassword });
   };
 
   return (
@@ -423,7 +446,7 @@ export const MicrosoftCertificateView: React.FC = () => {
         </span>
         <button
           type="button"
-          onClick={handleSignIn}
+          onClick={() => handleSignIn()}
           disabled={loggingIn}
           className="ml-auto px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-slate-500 disabled:opacity-55 disabled:cursor-not-allowed"
         >
@@ -435,7 +458,66 @@ export const MicrosoftCertificateView: React.FC = () => {
         </button>
       </div>
 
-      {loggingIn && (
+      {/* Inline credential form — appears only when the server reports it
+          has no display and needs the admin to supply credentials so the
+          backend can drive Microsoft's login form headlessly. */}
+      {needsCreds && !signedIn && (
+        <form
+          onSubmit={handleCredSubmit}
+          className="mb-4 p-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-900/20 space-y-3"
+        >
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            This server can't open a sign-in window. Enter your Microsoft
+            email and password and the server will sign in for you. Your
+            password isn't stored — only the resulting session cookies.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <input
+              type="email"
+              required
+              autoComplete="username"
+              placeholder="Microsoft email"
+              value={credEmail}
+              onChange={(e) => setCredEmail(e.target.value)}
+              className="px-3 py-2 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <input
+              type="password"
+              required
+              autoComplete="current-password"
+              placeholder="Microsoft password"
+              value={credPassword}
+              onChange={(e) => setCredPassword(e.target.value)}
+              className="px-3 py-2 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="submit"
+              disabled={loggingIn || !credEmail.trim() || !credPassword}
+              className="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-55 disabled:cursor-not-allowed text-white"
+            >
+              {loggingIn ? 'Signing in…' : 'Sign in headlessly'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setNeedsCreds(false);
+                setCredPassword('');
+                setAuthError(null);
+              }}
+              className="px-3 py-2 text-xs font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-slate-500"
+            >
+              Cancel
+            </button>
+            <span className="text-xs text-blue-700 dark:text-blue-300">
+              MFA / passkey accounts won't work — automated sign-in only.
+            </span>
+          </div>
+        </form>
+      )}
+
+      {loggingIn && !needsCreds && (
         <div className="mb-4 p-3 rounded-md text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
           A Microsoft sign-in window has opened on the server desktop. Complete
           the sign-in there (email, passkey/password, MFA) — this page will
