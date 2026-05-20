@@ -52,6 +52,7 @@ const MIGRATE_COLUMNS = [
   `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS notes           text`,
   `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS cancelled       boolean DEFAULT false`,
   `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS calendar_event_id text`,
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS calendar_orphaned boolean DEFAULT false`,
   `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS invoice_no_color   text`,
   `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS payment_mode_color text`,
 ];
@@ -115,8 +116,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
              name, contact_no, email, magento_order_no, virtual_reschedule, comments,
              entry_date, "grant", invoice_no, payment_mode, course_fee,
              payment_status, followup_by, remark, schedule_entries, class_date, venue, notes, cancelled,
-             calendar_event_id, invoice_no_color, payment_mode_color)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+             calendar_event_id, invoice_no_color, payment_mode_color, calendar_orphaned)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
            ON CONFLICT (calendar_event_id) WHERE calendar_event_id IS NOT NULL
            DO UPDATE SET
              class_id = EXCLUDED.class_id,
@@ -150,6 +151,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
              cancelled = EXCLUDED.cancelled,
              invoice_no_color = EXCLUDED.invoice_no_color,
              payment_mode_color = EXCLUDED.payment_mode_color,
+             calendar_orphaned = EXCLUDED.calendar_orphaned,
              updated_at = now()`,
           [
             row.class_id, row.class_type, row.list_date || null,
@@ -167,6 +169,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             row.calendar_event_id || null,
             row.invoice_no_color || null,
             row.payment_mode_color || null,
+            row.calendar_orphaned ?? false,
           ],
         );
       }
