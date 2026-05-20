@@ -401,9 +401,11 @@ export const MicrosoftCertificateView: React.FC = () => {
         setCredPassword('');
       } else if (data.needsCredentials) {
         // Headless server has no display — reveal the inline form so the
-        // admin can hand the backend an email + password to use.
+        // admin can hand the backend an email + password to use. The form
+        // itself carries the explanatory text, so we don't also surface
+        // the backend's "needs creds" message as a red error.
         setNeedsCreds(true);
-        setAuthError(data.error || null);
+        setAuthError(null);
       } else {
         setAuthError(data.error || 'Sign-in failed');
       }
