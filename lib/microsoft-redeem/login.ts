@@ -31,12 +31,6 @@ export interface LoginResult {
   ok: boolean;
   email?: string;
   error?: string;
-  /**
-   * Set when the headless server can't open a window and no credentials
-   * were provided. The admin UI uses this to reveal an inline form that
-   * accepts email + password and retries the request.
-   */
-  needsCredentials?: boolean;
 }
 
 /** Cookie name prefixes that indicate an authenticated Microsoft session. */
@@ -224,19 +218,9 @@ async function clickPrimary(page: Page): Promise<void> {
   await btn.click({ timeout: 10000 });
 }
 
-export interface LoginInput {
-  /** Microsoft email. Optional — falls back to MS_EMAIL env var. */
-  email?: string;
-  /** Microsoft password. Optional — falls back to MS_PASSWORD env var. */
-  password?: string;
-}
-
-export async function runMicrosoftLogin(input: LoginInput = {}): Promise<LoginResult> {
-  // Caller-supplied creds (from the inline form on the admin UI) take
-  // priority. Env vars are a secondary path for deployments that prefer
-  // configuring secrets in the orchestrator.
-  const email = (input.email || process.env.MS_EMAIL || '').trim();
-  const password = (input.password || process.env.MS_PASSWORD || '').trim();
+export async function runMicrosoftLogin(): Promise<LoginResult> {
+  const email = (process.env.MS_EMAIL || '').trim();
+  const password = (process.env.MS_PASSWORD || '').trim();
 
   let browser: Browser | null = null;
   try {
@@ -262,15 +246,11 @@ export async function runMicrosoftLogin(input: LoginInput = {}): Promise<LoginRe
         if (email && password) {
           return await runHeadlessLogin(email, password);
         }
-        // The UI looks for `needsCredentials` to switch into the inline
-        // email + password form. Don't reword the error without updating
-        // the frontend.
         return {
           ok: false,
-          needsCredentials: true,
           error:
-            'This server has no desktop display, so the sign-in window can\'t open. ' +
-            'Enter your Microsoft email and password below to sign in automatically.',
+            'No desktop display on this host, so the interactive sign-in window can\'t open. ' +
+            'Set MS_EMAIL and MS_PASSWORD as environment variables on the server to enable automated headless sign-in instead.',
         };
       }
 

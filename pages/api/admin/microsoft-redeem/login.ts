@@ -19,10 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ ok: false, error: 'Method Not Allowed' });
   }
   try {
-    const body = req.body || {};
-    const email = typeof body.email === 'string' ? body.email : undefined;
-    const password = typeof body.password === 'string' ? body.password : undefined;
-    const result = await runMicrosoftLogin({ email, password });
+    const result = await runMicrosoftLogin();
     return res.status(result.ok ? 200 : 400).json(result);
   } catch (err: any) {
     return res
