@@ -325,9 +325,6 @@ export const MicrosoftCertificateView: React.FC = () => {
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [authNotice, setAuthNotice] = useState<string | null>(null);
-  const [importing, setImporting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initial sign-in status check.
@@ -378,13 +375,9 @@ export const MicrosoftCertificateView: React.FC = () => {
   };
 
   // Open the interactive Microsoft sign-in window and wait for it to finish.
-  // Only works on hosts with a desktop display (i.e. localhost). On headless
-  // Coolify / production containers this fails; admins should sign in on
-  // localhost, click "Download session", then import the file here.
   const handleSignIn = async () => {
     setLoggingIn(true);
     setAuthError(null);
-    setAuthNotice(null);
     try {
       const res = await fetch('/api/admin/microsoft-redeem/login', {
         method: 'POST',
@@ -404,72 +397,6 @@ export const MicrosoftCertificateView: React.FC = () => {
     }
   };
 
-  // Download the stored storageState as a JSON file. The admin runs this on
-  // localhost after a successful sign-in, then uploads the file on the
-  // headless production deployment via handleImport.
-  const handleExport = async () => {
-    setAuthError(null);
-    setAuthNotice(null);
-    try {
-      const res = await fetch('/api/admin/microsoft-redeem/export-session');
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setAuthError(data.error || 'No session to export. Sign in first.');
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const cd = res.headers.get('Content-Disposition') || '';
-      const fnMatch = cd.match(/filename="([^"]+)"/);
-      a.download = fnMatch ? fnMatch[1] : 'microsoft-learn-session.json';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      setAuthNotice('Session file downloaded. Upload it on the production deployment to sign in there.');
-    } catch (err: any) {
-      setAuthError(err?.message || 'Export failed');
-    }
-  };
-
-  // Upload a session JSON exported from localhost. Saves it server-side so
-  // generation can reuse the cookies without needing a real browser window.
-  const handleImport = async (file: File) => {
-    setImporting(true);
-    setAuthError(null);
-    setAuthNotice(null);
-    try {
-      const text = await file.text();
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        setAuthError('Selected file is not valid JSON.');
-        return;
-      }
-      const res = await fetch('/api/admin/microsoft-redeem/import-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(parsed),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setSignedIn(true);
-        setSignedInEmail(data.email ?? null);
-        setAuthNotice('Session imported. You can now generate codes.');
-      } else {
-        setAuthError(data.error || 'Import failed');
-      }
-    } catch (err: any) {
-      setAuthError(err?.message || 'Import failed');
-    } finally {
-      setImporting(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-5">
@@ -483,7 +410,7 @@ export const MicrosoftCertificateView: React.FC = () => {
       </div>
 
       {/* Auth bar */}
-      <div className="flex flex-wrap items-center gap-3 mb-2 px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div className="flex items-center gap-3 mb-4 px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
         <span
           className={`w-2.5 h-2.5 rounded-full flex-none ${
             signedIn ? 'bg-green-500' : 'bg-amber-500'
@@ -494,70 +421,25 @@ export const MicrosoftCertificateView: React.FC = () => {
             ? `Signed in to Microsoft Learn${signedInEmail ? ` as ${signedInEmail}` : ''}`
             : 'Not signed in to Microsoft Learn'}
         </span>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {signedIn && (
-            <button
-              type="button"
-              onClick={handleExport}
-              className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-slate-500"
-              title="Download the current session as a JSON file (use it to seed sign-in on the production deployment)."
-            >
-              Download session
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-            className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-slate-500 disabled:opacity-55 disabled:cursor-not-allowed"
-            title="Upload a session JSON exported from localhost."
-          >
-            {importing ? 'Importing…' : 'Import session'}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void handleImport(file);
-            }}
-          />
-          <button
-            type="button"
-            onClick={handleSignIn}
-            disabled={loggingIn}
-            className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-slate-500 disabled:opacity-55 disabled:cursor-not-allowed"
-          >
-            {loggingIn
-              ? 'Waiting for sign-in…'
-              : signedIn
-                ? 'Re-sign in'
-                : 'Sign in to Microsoft'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleSignIn}
+          disabled={loggingIn}
+          className="ml-auto px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-slate-500 disabled:opacity-55 disabled:cursor-not-allowed"
+        >
+          {loggingIn
+            ? 'Waiting for sign-in…'
+            : signedIn
+              ? 'Re-sign in'
+              : 'Sign in to Microsoft'}
+        </button>
       </div>
-
-      {!signedIn && (
-        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-          On a headless server (Coolify / production), the "Sign in to Microsoft" button can't open a
-          window. Run the LMS on localhost, sign in there, click <strong>Download session</strong>, then
-          come back here and use <strong>Import session</strong>.
-        </p>
-      )}
 
       {loggingIn && (
         <div className="mb-4 p-3 rounded-md text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
           A Microsoft sign-in window has opened on the server desktop. Complete
           the sign-in there (email, passkey/password, MFA) — this page will
           update automatically once it finishes.
-        </div>
-      )}
-
-      {authNotice && (
-        <div className="mb-4 p-3 rounded-md text-sm bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
-          {authNotice}
         </div>
       )}
 
