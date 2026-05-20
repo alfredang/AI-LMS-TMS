@@ -88,8 +88,12 @@ async function getQBOCredentials(appOverride?: string): Promise<QBOCredentialsRe
 }
 
 function credsCacheKey(creds: QBOCredentialsResolved): string {
-  // Key by clientId+realmId+refreshToken so app1/app2 tokens never mix.
-  return `${creds.clientId}|${creds.realmId}|${creds.refreshToken}`;
+  // Key by clientId+realmId only. The refresh token rotates on every refresh,
+  // so including it would invalidate the cache after each rotation and force
+  // every call to refresh again — causing token-rotation stampedes under
+  // concurrent load (batch invoice generation), which manifest as
+  // invalid_grant failures.
+  return `${creds.clientId}|${creds.realmId}`;
 }
 
 async function refreshAccessToken(creds: QBOCredentialsResolved, refreshTokenToUse: string): Promise<any> {
@@ -112,14 +116,21 @@ async function refreshAccessToken(creds: QBOCredentialsResolved, refreshTokenToU
   return await resp.json();
 }
 
-async function maybePersistRotatedRefreshToken(creds: QBOCredentialsResolved, newRefreshToken: string) {
+async function maybePersistRotatedRefreshToken(creds: QBOCredentialsResolved, oldRefreshToken: string, newRefreshToken: string) {
   const keyName = creds.refreshTokenKeyName || 'QUICKBOOKS_REFRESH_TOKEN';
   try {
-    await pool.query(
-      `UPDATE training_provider_api SET key_value = $1 WHERE key_name = $2`,
-      [newRefreshToken, keyName]
+    // Conditional update: only overwrite if the row still holds the token we
+    // just consumed. Prevents a slow rotation from clobbering a faster one
+    // that already wrote a newer token.
+    const r = await pool.query(
+      `UPDATE training_provider_api SET key_value = $1 WHERE key_name = $2 AND key_value = $3`,
+      [newRefreshToken, keyName, oldRefreshToken]
     );
-    console.log(`[qbo] Refresh token updated in DB (${keyName})`);
+    if (r.rowCount && r.rowCount > 0) {
+      console.log(`[qbo] Refresh token updated in DB (${keyName})`);
+    } else {
+      console.log(`[qbo] Refresh token rotation skipped (${keyName}) — DB already holds a newer token`);
+    }
   } catch (err) {
     console.warn('[qbo] Failed to update refresh token:', err);
   }
@@ -138,7 +149,7 @@ async function getAccessToken(creds: QBOCredentialsResolved): Promise<string> {
     try {
       const data = await refreshAccessToken(creds, creds.refreshToken);
       if (data.refresh_token && data.refresh_token !== creds.refreshToken) {
-        await maybePersistRotatedRefreshToken(creds, data.refresh_token);
+        await maybePersistRotatedRefreshToken(creds, creds.refreshToken, data.refresh_token);
       }
 
       const accessToken = data.access_token;
@@ -152,7 +163,7 @@ async function getAccessToken(creds: QBOCredentialsResolved): Promise<string> {
         const data = await refreshAccessToken(creds, creds.fallbackRefreshToken);
         if (data.refresh_token && data.refresh_token !== creds.fallbackRefreshToken) {
           // Persist to GLOBAL token key, because fallback is the global token by definition.
-          await maybePersistRotatedRefreshToken({ ...creds, refreshTokenKeyName: 'QUICKBOOKS_REFRESH_TOKEN' }, data.refresh_token);
+          await maybePersistRotatedRefreshToken({ ...creds, refreshTokenKeyName: 'QUICKBOOKS_REFRESH_TOKEN' }, creds.fallbackRefreshToken, data.refresh_token);
         }
         const accessToken = data.access_token;
         const accessTokenExpiry = Date.now() + (data.expires_in ? data.expires_in * 1000 - 60000 : 3300000);
