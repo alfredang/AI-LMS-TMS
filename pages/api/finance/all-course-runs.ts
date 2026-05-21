@@ -177,13 +177,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sc.qb_payment_id AS sfc_qb_payment_id,
         NULLIF(TRIM(COALESCE(ij.qbo_invoice_id::text, '')), '') AS invoice_id,
         COALESCE(
-          NULLIF(TRIM(COALESCE(ij.invoice_no, '')), ''),
-          NULLIF(TRIM(COALESCE(ij.qbo_doc_number, '')), ''),
+          CASE
+            WHEN ij.invoice_no IS NOT NULL
+             AND TRIM(ij.invoice_no) <> ''
+             AND TRIM(ij.invoice_no) NOT ILIKE 'GRN-%'
+            THEN TRIM(ij.invoice_no)
+          END,
+          CASE
+            WHEN ij.qbo_doc_number IS NOT NULL
+             AND TRIM(ij.qbo_doc_number) <> ''
+             AND TRIM(ij.qbo_doc_number) NOT ILIKE 'GRN-%'
+            THEN TRIM(ij.qbo_doc_number)
+          END,
           NULLIF(TRIM(COALESCE(ij.qbo_invoice_id::text, '')), '')
         ) AS invoice_no,
         ij.invoice_sent_at AS invoice_sent_at,
         ij.qbo_sfc_status AS qbo_sfc_status,
-        ij.grn_doc_number AS grn_doc_number,
+        COALESCE(
+          ij.grn_doc_number,
+          CASE WHEN TRIM(COALESCE(ij.invoice_no, '')) ILIKE 'GRN-%' THEN TRIM(ij.invoice_no) END,
+          CASE WHEN TRIM(COALESCE(ij.qbo_doc_number, '')) ILIKE 'GRN-%' THEN TRIM(ij.qbo_doc_number) END
+        ) AS grn_doc_number,
         ij.drive_web_view_link AS invoice_drive_web_view_link,
         COALESCE(ij.grn_drive_web_view_link, da_chk.grant_invoice_drive_web_view_link) AS grn_drive_web_view_link,
         (da_chk.found IS NOT NULL) AS is_da

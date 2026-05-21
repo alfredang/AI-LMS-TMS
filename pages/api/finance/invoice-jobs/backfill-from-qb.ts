@@ -53,6 +53,15 @@ function enrolmentLast6(enrolmentId: string): string {
 }
 
 /**
+ * Customer invoice DocNumber format. Grant (GRN-…) and SFC supplemental
+ * invoices share the enrolment suffix and would otherwise collide here.
+ */
+const CUSTOMER_INVOICE_DOC_NUMBER_RE = /^TC\d{2}-\d{4}-\d{6}$/i;
+function isCustomerInvoiceDocNumber(docNumber: string | null | undefined): boolean {
+  return CUSTOMER_INVOICE_DOC_NUMBER_RE.test(String(docNumber || '').trim());
+}
+
+/**
  * POST /api/finance/invoice-jobs/backfill-from-qb
  *
  * Three-pass backfill to link QB invoice IDs to enrolments:
@@ -186,6 +195,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Match QB invoices to missing enrolments by last-6 suffix
         // DocNumber format: TC{yy}-{mmdd}-{last6}  — last 6 chars of DocNumber = last6
+        // Only TC-format DocNumbers are eligible: GRN-/SFC- supplemental invoices share
+        // the enrolment suffix and would otherwise be misattributed as customer invoices.
         const enrolmentByLast6 = new Map<string, string>(); // last6 → enrolment_id (unique matches only)
         for (const [l6, enrolmentIds] of last6Map.entries()) {
           if (enrolmentIds.length === 1) {
@@ -195,6 +206,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         for (const [docNumber, inv] of allQbInvoices.entries()) {
+          if (!isCustomerInvoiceDocNumber(docNumber)) continue;
           const suffix = docNumber.slice(-6);
           const enrolmentId = enrolmentByLast6.get(suffix);
           if (!enrolmentId) continue;
