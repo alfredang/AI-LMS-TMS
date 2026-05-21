@@ -127,6 +127,7 @@ public/uploads/training_provider/private_key/*
 public/uploads/training_provider/self_signing_cert/*
 public/uploads/training_provider/ssg_app1_cert/*
 public/uploads/training_provider/ssg_app1_private_key/*
+public/uploads/training_provider/service_account/*
 # Claims import uploads (and any other runtime uploads)
 public/uploads/claims/*
 public/uploads/**/*.pdf
@@ -160,3 +161,4 @@ n8nworkflows.md/
 # Playwright MCP / CLI session artifacts (logs + page snapshots)
 .playwright-cli/
 .playwright-mcp/
+.version

@@ -41,11 +41,14 @@ import { driveFileExists, uploadInvoicePdfToDrive } from './services/invoiceDriv
 import { ensureInvoiceJobsTable } from './services/invoiceJobs';
 import { qboFetchInvoicePdf, qboReadInvoice, qboSendInvoice, qboSparseUpdateInvoice } from './services/qboInvoiceService';
 import { shouldSendQboInvoiceEmailFromQuickBooks } from './services/qboInvoiceEmailPolicy';
+import { toDateOnlyIso } from './utils/dateOnly';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from './google-auth/googleAuth';
+import { getLocalYMD } from './dateHelpers';
 
 export type AutoEnrolStatus =
   | 'pending'
+  | 'pending_identity'
   | 'enroled'
   | 'grant_found'
   | 'invoiced'
@@ -510,7 +513,7 @@ async function addLearnerToCalendarEvent(
   let startDateIso: string;
   if (!courseStartDate) return false;
   if (courseStartDate instanceof Date) {
-    startDateIso = courseStartDate.toISOString().slice(0, 10);
+    startDateIso = getLocalYMD(courseStartDate);
   } else {
     startDateIso = String(courseStartDate).slice(0, 10);
   }
@@ -616,7 +619,7 @@ export async function addTrainerToCalendarEvent(
   let startDateIso: string;
   if (!courseStartDate) return result;
   if (courseStartDate instanceof Date) {
-    startDateIso = courseStartDate.toISOString().slice(0, 10);
+    startDateIso = getLocalYMD(courseStartDate);
   } else {
     startDateIso = String(courseStartDate).slice(0, 10);
   }
@@ -794,6 +797,22 @@ export async function processDirectApplication(
     };
   }
 
+  if (!hasIdentifier(row.trainee_id) && !options?.forceInvoice) {
+    const error = 'identity: Missing trainee ID/NRIC for SSG enrolment';
+    await updateRow(appId, {
+      auto_enrol_status: 'pending_identity',
+      auto_enrol_error: error,
+    });
+    return {
+      id: appId,
+      applicationId,
+      success: false,
+      finalStatus: 'pending_identity',
+      error,
+      failedStep: 'identity',
+    };
+  }
+
   const tpRes = await pool.query(
     `SELECT auto_generate_qb_invoice, auto_add_learner_to_calendar, auto_send_invoice_email FROM training_provider LIMIT 1`
   );
@@ -957,17 +976,46 @@ export async function processDirectApplication(
   // snapshot and doesn't pick up the UPDATE we issue after the main invoice
   // create, so the supplemental grant/SFC steps need this local copy.
   let customerRef: string | null = row.qb_customer_ref || null;
+  let mainInvoiceDriveFileId: string | null = row.invoice_drive_file_id || null;
   try {
+    if (invoiceId) {
+      try {
+        await qboReadInvoice(undefined, invoiceId);
+      } catch (err) {
+        if (!isQboObjectNotFoundError(err)) throw err;
+        console.warn(
+          `auto-enrol [${applicationId}] main invoice id ${invoiceId} is stale in QBO; clearing and regenerating`
+        );
+        invoiceId = null;
+        invoiceDocNumber = null;
+        mainInvoiceDriveFileId = null;
+        await updateRow(appId, {
+          invoice_id: null,
+          invoice_doc_number: null,
+          invoice_drive_file_id: null,
+          invoice_drive_web_view_link: null,
+        });
+      }
+    }
+
     if (!invoiceId) {
+      if (invoiceDocNumber || mainInvoiceDriveFileId || row.invoice_drive_web_view_link) {
+        invoiceDocNumber = null;
+        mainInvoiceDriveFileId = null;
+        await updateRow(appId, {
+          invoice_doc_number: null,
+          invoice_drive_file_id: null,
+          invoice_drive_web_view_link: null,
+        });
+      }
+
       const forInvoice: DaApplicationForInvoice & { enrolment_id?: string } = {
         id: row.id,
         trainee_name: row.trainee_name,
         trainee_email: row.trainee_email,
         course_title: row.course_title,
         course_reference_number: row.course_reference_number,
-        course_start_date: row.course_start_date
-          ? new Date(row.course_start_date).toISOString().slice(0, 10)
-          : null,
+        course_start_date: toDateOnlyIso(row.course_start_date),
         full_course_fee: row.full_course_fee,
         gst: row.gst,
         skillsfuture_subsidy: row.skillsfuture_subsidy,
@@ -975,7 +1023,7 @@ export async function processDirectApplication(
         qb_customer_ref: row.qb_customer_ref,
         // Add missing fields with fallback to null or appropriate value
         trainee_id: row.trainee_id ?? null,
-        course_end_date: row.course_end_date ? new Date(row.course_end_date).toISOString().slice(0, 10) : null,
+        course_end_date: toDateOnlyIso(row.course_end_date),
         course_run_id: row.course_run_id ?? null,
         grant_id: grantId ?? null,
         application_id: row.application_id ?? null,
@@ -990,6 +1038,7 @@ export async function processDirectApplication(
       invoiceId = created.invoiceId;
       invoiceDocNumber = created.docNumber || null;
       customerRef = created.customerRef;
+      mainInvoiceDriveFileId = null;
 
       await updateRow(appId, {
         invoice_id: created.invoiceId,
@@ -1017,8 +1066,8 @@ export async function processDirectApplication(
   // Upload main invoice PDF to Drive if we haven't yet — or if the previously
   // stored Drive file is missing (deleted/trashed/moved). `driveFileExists`
   // lets the pipeline self-heal stale `invoice_drive_file_id` values.
-  const mainDriveFileOk = row.invoice_drive_file_id
-    ? await driveFileExists(row.invoice_drive_file_id)
+  const mainDriveFileOk = mainInvoiceDriveFileId
+    ? await driveFileExists(mainInvoiceDriveFileId)
     : false;
   if (invoiceId && !mainDriveFileOk) {
     try {
@@ -1330,38 +1379,6 @@ export async function processDirectApplication(
     }
   }
 
-  if (row.trainee_email && invoiceId) {
-    const shouldSend =
-      !options?.suppressInvoiceEmail &&
-      autoSendInvoiceEmail &&
-      (options?.sendInvoiceEmail || shouldSendQboInvoiceEmailFromQuickBooks());
-    if (shouldSend) {
-      try {
-        await callInvoiceSend(invoiceId, row.trainee_email);
-        await pool.query(
-          `UPDATE public.invoice_jobs
-              SET invoice_sent_at = COALESCE(invoice_sent_at, now()),
-                  invoice_sent_to = COALESCE(invoice_sent_to, $2),
-                  updated_at = now()
-            WHERE qbo_invoice_id = $1`,
-          [String(invoiceId).trim(), String(row.trainee_email).trim()]
-        ).catch(() => {});
-      } catch (err) {
-        console.warn(
-          `⚠️  auto-enrol [${applicationId}] invoice send failed (non-fatal):`,
-          err instanceof Error ? err.message : err
-        );
-      }
-    } else {
-      const reason = options?.suppressInvoiceEmail
-        ? '(suppressed for manual generate / cron sweep)'
-        : !autoSendInvoiceEmail
-          ? '(auto_send_invoice_email toggle is OFF in DA admin view)'
-          : '— set QBO_SEND_INVOICE_EMAIL=true to send';
-      console.log(`ℹ️  auto-enrol [${applicationId}] skipping invoice email ${reason}`);
-    }
-  }
-
   // Step 5: Add learner to calendar (non-fatal)
   if (autoCalendar && row.trainee_email) {
     try {
@@ -1404,6 +1421,44 @@ export async function processDirectApplication(
       error: err instanceof Error ? err.message : String(err),
       failedStep: 'billing_history_sync',
     };
+  }
+
+  // Send the main tax invoice email AFTER the invoice_jobs row exists, so
+  // the UPDATE that stamps invoice_sent_at actually finds its row.
+  // Why: syncDaMainInvoiceToBillingHistory is what first inserts the
+  // invoice_jobs row keyed by qbo_invoice_id; sending earlier means the
+  // UPDATE matches 0 rows and the EMAIL column in the DA admin view stays
+  // greyed out even though QBO did deliver the email.
+  if (row.trainee_email && invoiceId) {
+    const shouldSend =
+      !options?.suppressInvoiceEmail &&
+      autoSendInvoiceEmail &&
+      (options?.sendInvoiceEmail || shouldSendQboInvoiceEmailFromQuickBooks());
+    if (shouldSend) {
+      try {
+        await callInvoiceSend(invoiceId, row.trainee_email);
+        await pool.query(
+          `UPDATE public.invoice_jobs
+              SET invoice_sent_at = COALESCE(invoice_sent_at, now()),
+                  invoice_sent_to = COALESCE(invoice_sent_to, $2),
+                  updated_at = now()
+            WHERE qbo_invoice_id = $1`,
+          [String(invoiceId).trim(), String(row.trainee_email).trim()]
+        ).catch(() => {});
+      } catch (err) {
+        console.warn(
+          `⚠️  auto-enrol [${applicationId}] invoice send failed (non-fatal):`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    } else {
+      const reason = options?.suppressInvoiceEmail
+        ? '(suppressed for manual generate / cron sweep)'
+        : !autoSendInvoiceEmail
+          ? '(auto_send_invoice_email toggle is OFF in DA admin view)'
+          : '— set QBO_SEND_INVOICE_EMAIL=true to send';
+      console.log(`ℹ️  auto-enrol [${applicationId}] skipping invoice email ${reason}`);
+    }
   }
 
   if (supplementalErrors.length > 0) {

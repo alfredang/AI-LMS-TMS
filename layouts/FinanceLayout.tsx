@@ -127,9 +127,6 @@ const FinanceLayout: React.FC = () => {
     if (page.startsWith('tpg')) {
       setOpenSections(prev => ({ ...prev, tpgManagement: true }));
     }
-    if (page.startsWith('auto') || page === 'allCourseRuns') {
-      setOpenSections(prev => ({ ...prev, courseRunAutomations: true }));
-    }
     if (['claimCheck', 'viewClaim', 'cancelClaim', 'uploadDocument'].includes(page)) {
       setOpenSections(prev => ({ ...prev, claimManagement: true, claimSub: true }));
     }

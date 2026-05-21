@@ -34,7 +34,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ success: true });
     }
 
-    // Sync Calendar — uses the same session-aware logic as Direct Applications
+    // Sync Calendar — uses the same session-aware logic as Direct Applications.
+    // Skips Company-Application-originated enrolments: those have their own
+    // sync path (ca-calendar-sync.ts) that NEVER auto-creates events, whereas
+    // addDaLearnerToCalendar used below DOES auto-create on match failure
+    // and would produce duplicate recurring events for CA learners.
     if (action === 'sync-calendar') {
       const rows = await pool.query(`
         SELECT e.id, COALESCE(au.email, e.email) as email, c.title as course_title,
@@ -48,6 +52,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           AND COALESCE(au.email, e.email) IS NOT NULL
           AND COALESCE(au.email, e.email) <> ''
           AND cr.start_date >= CURRENT_DATE
+          AND NOT EXISTS (
+            SELECT 1 FROM company_application ca
+            WHERE LOWER(ca.trainee_email) = LOWER(COALESCE(au.email, e.email))
+              AND (ca.course_run_id = cr.course_run_id OR ca.course_run_id = cr.id::text)
+          )
       `);
       if (rows.rows.length === 0) return res.status(200).json({ success: true, checked: 0, matched: 0 });
 

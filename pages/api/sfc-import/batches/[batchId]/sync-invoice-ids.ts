@@ -15,6 +15,15 @@ function enrolmentLast6(enrolmentId: string): string {
   return '';
 }
 
+/**
+ * Customer invoice DocNumber format. Grant (GRN-…) and SFC supplemental
+ * invoices share the enrolment suffix and would otherwise collide here.
+ */
+const CUSTOMER_INVOICE_DOC_NUMBER_RE = /^TC\d{2}-\d{4}-\d{6}$/i;
+function isCustomerInvoiceDocNumber(docNumber: string | null | undefined): boolean {
+  return CUSTOMER_INVOICE_DOC_NUMBER_RE.test(String(docNumber || '').trim());
+}
+
 async function qbFetchAllInvoices(app: string): Promise<Array<{ id: string; docNumber: string | null }>> {
   const all: Array<{ id: string; docNumber: string | null }> = [];
   let startPos = 1;
@@ -130,12 +139,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Step 4: Bulk-fetch all QB invoices (paginated) and match by last-6 DocNumber suffix
+    // Step 4: Bulk-fetch all QB invoices (paginated) and match by last-6 DocNumber suffix.
+    // Only TC-format customer invoices are eligible — GRN-/SFC- supplemental invoices share
+    // the enrolment suffix and would otherwise be misattributed.
     const qbInvoiceByLast6 = new Map<string, { id: string; docNumber: string }>();
     for (const app of apps) {
       const allInvoices = await qbFetchAllInvoices(app);
       for (const inv of allInvoices) {
         if (!inv.docNumber) continue;
+        if (!isCustomerInvoiceDocNumber(inv.docNumber)) continue;
         const suffix = inv.docNumber.slice(-6);
         if (last6Map.has(suffix) && !qbInvoiceByLast6.has(suffix)) {
           qbInvoiceByLast6.set(suffix, { id: inv.id, docNumber: inv.docNumber });

@@ -223,6 +223,7 @@ async function _runAutomationInner() {
             JOIN course c ON cr.course_id = c.id
             WHERE cr.start_date = (NOW() AT TIME ZONE 'Asia/Singapore')::date
               AND (cr.class_status IS NULL OR cr.class_status::text NOT ILIKE 'cancelled')
+              AND COALESCE(cr.courseware_email_disabled, false) = false
         `);
 
         const courseRuns = courseRunsRes.rows;

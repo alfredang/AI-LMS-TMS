@@ -117,14 +117,21 @@ const EditableTopicAccordion: React.FC<{
     draggedResourceLinkId: string | null;
     onResourceLinkDragStart: (id: string) => void;
     onResourceLinkDragEnd: () => void;
+    // Bumped by parent to force-collapse / force-expand all topics. Each
+    // signal value carries the desired open state.
+    collapseSignal?: number;
+    expandSignal?: number;
 }> = ({
     topic, onUpdateTitle, onDelete, onAddSubtopic, onUpdateSubtopic, onDeleteSubtopic,
     draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDropAtEnd, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd, isSubtopicDragging,
     onSelfDragStart, onSelfDragEnd,
     resourceLinks, onAddResourceLink, onUpdateResourceLink, onUpdateResourceLinkQuiz, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink,
-    draggedResourceLinkId, onResourceLinkDragStart, onResourceLinkDragEnd
+    draggedResourceLinkId, onResourceLinkDragStart, onResourceLinkDragEnd,
+    collapseSignal, expandSignal
 }) => {
         const [isSubtopicsOpen, setSubtopicsOpen] = useState(true);
+        useEffect(() => { if (collapseSignal !== undefined) setSubtopicsOpen(false); }, [collapseSignal]);
+        useEffect(() => { if (expandSignal !== undefined) setSubtopicsOpen(true); }, [expandSignal]);
         // Tracks which Quiz-type resource link row has its editor modal open.
         // Only one modal at a time; clicking Edit Quiz on a row sets this to
         // the row id. Closing the modal clears it.
@@ -520,6 +527,10 @@ const CourseEditor: React.FC = () => {
 
     // Drag and Drop state for Resource Links (needed because dataTransfer.getData() returns '' during dragover)
     const [draggedResourceLinkId, setDraggedResourceLinkId] = useState<string | null>(null);
+    // Bumped to broadcast a collapse/expand-all action to every topic accordion.
+    const [collapseAllSignal, setCollapseAllSignal] = useState(0);
+    const [expandAllSignal, setExpandAllSignal] = useState(0);
+    const [allTopicsCollapsed, setAllTopicsCollapsed] = useState(false);
 
     // Use courseEditMode to determine if this is a new course, with fallback to ID check
     // If course has a real database ID (not starting with 'course_'), it's definitely existing
@@ -2165,6 +2176,21 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <h3 className="text-xl font-bold">Lesson</h3>
                                 {!isReadOnly && (
                                     <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                if (allTopicsCollapsed) {
+                                                    setExpandAllSignal(s => s + 1);
+                                                    setAllTopicsCollapsed(false);
+                                                } else {
+                                                    setCollapseAllSignal(s => s + 1);
+                                                    setAllTopicsCollapsed(true);
+                                                }
+                                            }}
+                                        >
+                                            {allTopicsCollapsed ? 'Expand All Topics' : 'Collapse All Topics'}
+                                        </Button>
                                         {!isNewCourse && (
                                             <Button variant="outline" size="sm" onClick={() => handleSaveCourse(true)} disabled={isSaving}>
                                                 {isSaving ? <Spinner size="sm" /> : 'Save & Continue Editing'}
@@ -2213,6 +2239,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         draggedResourceLinkId={draggedResourceLinkId}
                                         onResourceLinkDragStart={(id: string) => setDraggedResourceLinkId(id)}
                                         onResourceLinkDragEnd={() => setDraggedResourceLinkId(null)}
+                                        collapseSignal={collapseAllSignal}
+                                        expandSignal={expandAllSignal}
                                     />
                                 </div>
                             ))}

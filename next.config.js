@@ -1,25 +1,17 @@
 const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
 const COMMIT_HASH = (() => {
   const formatDate = (d) => {
     const dd = String(d.getDate()).padStart(2, '0');
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const yyyy = d.getFullYear();
-    const hh = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    return `${dd}-${mm}-${yyyy} ${hh}:${min}`;
+    return `${dd}-${mm}-${yyyy}`;
   };
-  // Try reading pre-generated .version file (used in Docker builds)
   try {
-    const v = fs.readFileSync(path.join(__dirname, '.version'), 'utf8').trim();
-    if (v) return v;
-  } catch {}
-  // Get commit timestamp, fall back to build time
-  try {
-    const isoDate = execSync('git log -1 --format=%ci').toString().trim();
-    return formatDate(new Date(isoDate));
-  } catch {
+    const isoDate = execSync('git log -1 --format=%ci', { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
+    const shortHash = execSync('git log -1 --format=%h', { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
+    return `${formatDate(new Date(isoDate))} (${shortHash})`;
+  } catch (e) {
+    console.warn('[version] git lookup failed, falling back to build date:', e.message);
     return formatDate(new Date());
   }
 })();
@@ -28,13 +20,9 @@ const COMMIT_HASH = (() => {
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
-
   // Turbopack configuration (Next.js 16 default bundler)
   turbopack: {
     resolveAlias: {
@@ -105,6 +93,15 @@ const nextConfig = {
   // NEVER expose database credentials or secrets here
   env: {
     NEXT_PUBLIC_COMMIT_HASH: COMMIT_HASH,
+  },
+
+  // Silence dev-server request logs for the sidebar badge poll (fires every
+  // 60s while admin sidebar is mounted). Errors from the handler still show
+  // because they go through console.error, not the request logger.
+  logging: {
+    incomingRequests: {
+      ignore: [/api\/admin\/ca-stuck-count/],
+    },
   },
 };
 

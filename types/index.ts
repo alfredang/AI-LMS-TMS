@@ -88,6 +88,9 @@ export enum AdminPage {
   UploadDirectApplication = 'uploadDirectApplication',
   ViewDirectApplication = 'viewDirectApplication',
   UpdateDirectApplication = 'updateDirectApplication',
+  CompanyApplication = 'companyApplication',
+  UploadCompanyApplication = 'uploadCompanyApplication',
+  ViewCompanyApplication = 'viewCompanyApplication',
   UploadEnrolments = 'uploadEnrolments',
   SearchCourseRuns = 'searchCourseRuns',
   ViewCourseRun = 'viewCourseRun',
@@ -127,6 +130,7 @@ export enum AdminPage {
   DeleteCertificate = 'deleteCertificate',
   SendCertificateSG = 'sendCertificateSG',
   SendCertificateGH = 'sendCertificateGH',
+  MicrosoftCertificate = 'microsoftCertificate',
   Calendar = 'calendar',
   Scheduler = 'scheduler',
   SchedulerSummary = 'schedulerSummary',
@@ -140,6 +144,7 @@ export enum DeveloperPage {
   Dashboard = 'dashboard',
   CourseList = 'courseList',
   SeoMetadata = 'seoMetadata',
+  CoursewareTools = 'coursewareTools',
   CpGenerator = 'cpGenerator',
   CpCourseDetails = 'cpCourseDetails',
   CpAboutCourse = 'cpAboutCourse',
@@ -175,19 +180,27 @@ export enum TrainerPage {
   TaskList = 'taskList',
   GenAIAuthoring = 'genAIAuthoring',
   EdTools = 'edTools',
+  ProjectMgtTools = 'projectMgtTools',
   ProblemSolvingTools = 'problemSolvingTools',
+  CyberSecurityTools = 'cyberSecurityTools',
   DataAnalyticsTools = 'dataAnalyticsTools',
+  MLTools = 'mlTools',
   FinanceTools = 'financeTools',
+  HRTools = 'hrTools',
   StatTools = 'statTools',
   DoeTools = 'doeTools',
   SpcTools = 'spcTools',
   VideoCreationTools = 'videoCreationTools',
   SustainabilityTools = 'sustainabilityTools',
+  NetworkingTools = 'networkingTools',
   BlockchainTools = 'blockchainTools',
+  QuantumTools = 'quantumTools',
   VirtualTools = 'virtualTools',
   AgenticAITools = 'agenticAITools',
   TrainingHours = 'trainingHours',
+  TrainerGuides = 'trainerGuides',
   LessonDeliveryGuide = 'lessonDeliveryGuide',
+  VirtualClassGuide = 'virtualClassGuide',
   AssessmentGuide = 'assessmentGuide',
   PaymentHistory = 'paymentHistory',
 }
@@ -213,6 +226,11 @@ export interface Course {
   startDate?: string;
   endDate?: string;
   classStatus?: string;
+  classType?: string;
+  virtualMeetingLink?: string | null;
+  virtualMeetingHostLink?: string | null;
+  virtualMeetingJoinLink?: string | null;
+  virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' | string | null;
   enrollmentStatus?: string;
   courseRunId?: string; // Add this for course detail navigation
   courseRunCode?: string; // The actual course run identifier from database
@@ -290,6 +308,11 @@ export interface CourseDetail {
   publishedAssessmentMethods?: Record<string, boolean>;
   startDate?: string;
   endDate?: string;
+  classType?: string;
+  virtualMeetingLink?: string | null;
+  virtualMeetingHostLink?: string | null;
+  virtualMeetingJoinLink?: string | null;
+  virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' | string | null;
   fundingValidity?: string;
   certificate: string;
 }

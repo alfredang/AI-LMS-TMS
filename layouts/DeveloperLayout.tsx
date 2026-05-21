@@ -12,6 +12,7 @@ import HelpAndSupportView from '../components/HelpAndSupportView';
 import DeveloperSidebar from '../components/developer/DeveloperSidebar';
 import CpGeneratorView from '../components/developer/CpGeneratorView';
 import CwGeneratorView from '../components/developer/CwGeneratorView';
+import CoursewareToolsView from '../components/developer/CoursewareToolsView';
 import { useAppVersion } from '@hooks/useAppVersion';
 
 const DeveloperLayout: React.FC = () => {
@@ -38,6 +39,9 @@ const DeveloperLayout: React.FC = () => {
     }
     if (selectedCourse) {
       return <CourseDetail />;
+    }
+    if (developerPage === DeveloperPage.CoursewareTools) {
+      return <CoursewareToolsView />;
     }
     if (currentView === View.Create || developerPage === DeveloperPage.SeoMetadata) {
       return <SeoGeneratorView />;

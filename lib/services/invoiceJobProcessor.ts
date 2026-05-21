@@ -4,6 +4,7 @@ import { isEnrolmentBlockedFromAutoInvoice, isEnrolmentEligibleForAutoInvoice } 
 import { refreshGrantsForEnrolments, upsertSsgEnrolmentFromLocalEnrollment } from './billingSync';
 import { uploadInvoicePdfToDrive } from './invoiceDriveUpload';
 import { resolveGrantDeductionLinesForInvoice } from './daInvoiceGrantLines';
+import { formatDateOnlyEnSg } from '../utils/dateOnly';
 import {
   qboCreateInvoice,
   qboFetchInvoicePdf,
@@ -20,6 +21,7 @@ import {
   qboSendInvoice,
 } from './qboInvoiceService';
 import { shouldSendQboInvoiceEmailFromQuickBooks } from './qboInvoiceEmailPolicy';
+import { getLocalYMD } from '../dateHelpers';
 
 // Grant QB items are fixed ("WSQ funding (Baseline)", "WSQ funding (MCES)").
 // Cache their IDs at module level so subsequent invoice jobs don't re-query QB.
@@ -55,18 +57,7 @@ function maskNric(nric: string | null | undefined): string {
 }
 
 function formatDate(d: string | Date | null | undefined): string {
-  if (!d) return '—';
-  const s = typeof d === 'string' ? d.trim() : '';
-  if (s && /^\d{8}$/.test(s)) {
-    const iso = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-    const x = new Date(iso);
-    if (!Number.isNaN(x.getTime())) {
-      return x.toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
-    }
-  }
-  return new Date(d).toLocaleDateString('en-SG', {
-    day: '2-digit', month: 'short', year: 'numeric'
-  });
+  return formatDateOnlyEnSg(d, '-');
 }
 
 type InvoiceContext = {
@@ -389,7 +380,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
       TaxCodeRef: { value: taxCodeGst },
     },
     Description: [
-      `Course Name: ${hasDa ? (da.course_title ?? ctx.courseTitle) : ctx.courseTitle}`,
+      `Course Name: WSQ - ${hasDa ? (da.course_title ?? ctx.courseTitle) : ctx.courseTitle}`,
       `(${hasDa ? (da.course_reference_number ?? ctx.courseRef) : ctx.courseRef})`,
       `Participant Name: ${hasDa ? (da.trainee_name ?? ctx.traineeName) : ctx.traineeName}`,
       `NRIC: ${maskNric(hasDa ? (da.trainee_id ?? ctx.traineeNric) : ctx.traineeNric)}`,
@@ -628,7 +619,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
             Description: g.description,
           }));
 
-          const txnDate = new Date().toISOString().slice(0, 10);
+          const txnDate = getLocalYMD(new Date());
           const dueDate = addDaysIso(txnDate, 35);
           const grnBody: Record<string, unknown> = {
             CustomerRef: { value: wsgCustomerId },

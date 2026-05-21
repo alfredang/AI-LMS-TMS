@@ -304,9 +304,12 @@ export async function generateProformaForEnrollment(
         const replacements = buildPlaceholders(enr, grants);
         const filledDocx = fillTemplate(templateBuffer, replacements);
 
-        const safeCourseCode = (enr.course_code || (enr.enrolment_id ?? '').replace('#', '') || 'invoice').replace(/[^a-zA-Z0-9-]/g, '_');
+        // PF-{enrolment_id}_{learner_name}. Strip leading '#' and any existing 'PF-' prefix
+        // (defensive against dirty data) so the filename doesn't end up as PF-PF-...
+        const enrolmentRef = (enr.enrolment_id ?? '').replace('#', '').replace(/^PF-/i, '').trim();
+        const safeRef = (enrolmentRef || enr.course_code || 'invoice').replace(/[^a-zA-Z0-9-]/g, '_');
         const safeName = enr.full_name.replace(/[^a-zA-Z0-9]/g, '_');
-        const invoiceNumber = `PRFM_${safeCourseCode}_${safeName}`;
+        const invoiceNumber = `PF-${safeRef}_${safeName}`;
 
         const driveUrl = await docxToPdfAndUpload(uploadDrive, filledDocx, invoiceNumber);
 

@@ -4,6 +4,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { getApiUrl } from '@/lib/urlHelpers';
+import { getLocalYMD } from '@/lib/dateHelpers';
 
 interface CourseRecord {
     id: string;
@@ -30,7 +31,7 @@ const TrainingHoursPage: React.FC = () => {
     const [summary, setSummary] = useState<Summary>({ totalCourses: 0, totalTrainingHours: 0, totalAssessmentHours: 0, totalHours: 0 });
     const [loading, setLoading] = useState(false);
     const [startDate, setStartDate] = useState('2026-01-01');
-    const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
+    const [endDate, setEndDate] = useState(getLocalYMD(new Date()));
     const [hasFetched, setHasFetched] = useState(false);
 
     const fetchHours = useCallback(async () => {

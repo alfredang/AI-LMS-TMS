@@ -139,6 +139,13 @@ async function seedDefaults() {
             api_endpoint: '/api/external/sync-course-run-dates',
         },
         {
+            id: 'auto_sync_attendance',
+            name: 'Auto Sync SSG Attendance',
+            description: 'Automatically pulls down SSG attendance records for classes ending recently, ensuring local DB is up to date before certificates are generated.',
+            cron_expression: '0 18 * * *', // 6:00 PM daily
+            api_endpoint: '/api/external/auto-sync-attendance',
+        },
+        {
             id: 'auto_create_certificates',
             name: 'Auto-Create Certificates and Send to Learner\'s Email',
             description: 'Automatically generates certificates and sends them via email to learners in courses ending today based on final session attendance.',
@@ -286,6 +293,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_create_learners', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-create-learners');
+            return runAutomation();
+        });
+        directHandlers.set('auto_sync_attendance', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-sync-attendance');
             return runAutomation();
         });
         directHandlers.set('auto_create_certificates', async () => {

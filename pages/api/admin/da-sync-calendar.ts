@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
 import { removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 /**
  * POST /api/admin/da-sync-calendar
@@ -62,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let matched = 0;
     if (rows.rows.length > 0) {
-      const dates = rows.rows.map(r => r.course_start_date ? new Date(r.course_start_date).toISOString().slice(0, 10) : null).filter(Boolean) as string[];
+      const dates = rows.rows.map(r => r.course_start_date ? getLocalYMD(new Date(r.course_start_date)) : null).filter(Boolean) as string[];
       dates.sort();
       const minDate = new Date(dates[0]); minDate.setDate(minDate.getDate() - 1);
       const maxDate = new Date(dates[dates.length - 1]); maxDate.setDate(maxDate.getDate() + 2);
@@ -78,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       for (const row of rows.rows) {
         if (!row.trainee_email || !row.course_title) continue;
-        const startDateIso = row.course_start_date ? new Date(row.course_start_date).toISOString().slice(0, 10) : '';
+        const startDateIso = row.course_start_date ? getLocalYMD(new Date(row.course_start_date)) : '';
         const strippedTitle = stripPrefixes(row.course_title).toLowerCase();
         const emailLower = row.trainee_email.trim().toLowerCase();
 

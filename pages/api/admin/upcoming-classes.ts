@@ -11,6 +11,8 @@ interface UpcomingClass {
   digitalAttendanceId: string;
   startDate: string;
   endDate: string;
+  registrationOpeningDate?: string;
+  registrationClosingDate?: string;
   assignedTrainerTpg: string;
   assignedTrainerTpgEmail: string;
   tpgSyncStatus: string | null;
@@ -28,6 +30,7 @@ interface UpcomingClass {
   invitationRepliesBlocked?: boolean;
   trainerInCalendar?: boolean;
   virtualMeetingLink?: string;
+  virtualMeetingHostLink?: string;
   virtualMeetingProvider?: string;
   virtualMeetingExternalId?: string;
   virtualMeetingStatus?: string;
@@ -64,7 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // PUT — Update class status and/or class type
   if (req.method === 'PUT') {
     try {
-      const { id, class_status, class_type, virtual_meeting_link, virtual_meeting_provider } = req.body;
+      const { id, class_status, class_type, virtual_meeting_link, virtual_meeting_host_link, virtual_meeting_provider } = req.body;
       if (!id) {
         return res.status(400).json({ success: false, error: 'id is required' });
       }
@@ -99,6 +102,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         values.push(virtual_meeting_link);
       }
 
+      if (virtual_meeting_host_link !== undefined) {
+        await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS virtual_meeting_host_link TEXT');
+        setClauses.push(`virtual_meeting_host_link = $${paramIdx++}`);
+        values.push(virtual_meeting_host_link);
+      }
+
       if (virtual_meeting_provider !== undefined) {
         const validProviders = ['google_meet', 'zoom', 'teams'];
         if (virtual_meeting_provider && !validProviders.includes(virtual_meeting_provider)) {
@@ -121,6 +130,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         values.push(!!req.body.invitation_replies_blocked);
       }
 
+      if (req.body.courseware_email_disabled !== undefined) {
+        await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS courseware_email_disabled BOOLEAN DEFAULT false NOT NULL');
+        setClauses.push(`courseware_email_disabled = $${paramIdx++}`);
+        values.push(!!req.body.courseware_email_disabled);
+      }
+
       if (setClauses.length === 0) {
         return res.status(400).json({ success: false, error: 'No fields to update' });
       }
@@ -128,7 +143,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       values.push(id);
       const result = await pool.query(
         `UPDATE course_run SET ${setClauses.join(', ')} WHERE id = $${paramIdx}
-         RETURNING id, virtual_meeting_link, virtual_meeting_provider`,
+         RETURNING id, virtual_meeting_link, virtual_meeting_host_link, virtual_meeting_provider`,
         values
       );
 
@@ -148,22 +163,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    let thresholdDays = 21;
-    try {
-      const thresholdResult = await pool.query(
-        `SELECT upcoming_classes_threshold_days
-         FROM training_provider
-         LIMIT 1`
-      );
-      const rawThreshold = thresholdResult.rows[0]?.upcoming_classes_threshold_days;
-      const parsedThreshold = parseInt(String(rawThreshold || '21'), 10);
-      if (!Number.isNaN(parsedThreshold) && parsedThreshold > 0) {
-        thresholdDays = parsedThreshold;
-      }
-    } catch (error) {
-      // Column may not exist yet; keep the default.
-    }
-
     const hasInvitationTable = (
       await pool.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'trainer_invitation' LIMIT 1`)
     ).rows.length > 0;
@@ -180,6 +179,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       trainer,
       classStatus,
       learnerFilter,
+      trainerAssignmentFilter,
+      thresholdDays: requestedThresholdDays,
       startDateFrom,
       endDateUntil,
       page = 0,
@@ -190,12 +191,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const limitNum = parseInt(limit as string, 10) || 20;
     const offset = pageNum * limitNum;
 
+    let thresholdDays = 30;
+    const parsedRequestThreshold = parseInt(String(requestedThresholdDays || ''), 10);
+    if (!Number.isNaN(parsedRequestThreshold) && parsedRequestThreshold > 0) {
+      thresholdDays = Math.min(parsedRequestThreshold, 730);
+    } else {
+      try {
+        const thresholdResult = await pool.query(
+          `SELECT upcoming_classes_threshold_days
+           FROM training_provider
+           LIMIT 1`
+        );
+        const rawThreshold = thresholdResult.rows[0]?.upcoming_classes_threshold_days;
+        const parsedProviderThreshold = parseInt(String(rawThreshold || ''), 10);
+        if (!Number.isNaN(parsedProviderThreshold) && parsedProviderThreshold > 0) {
+          thresholdDays = Math.min(parsedProviderThreshold, 730);
+        }
+      } catch (error) {
+        // Column may not exist yet; keep the screen default.
+      }
+    }
+
     // Ensure columns exist
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS class_type TEXT DEFAULT \'Physical\'');
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_paused BOOLEAN DEFAULT false');
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_replies_blocked BOOLEAN DEFAULT false');
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS trainer_in_calendar BOOLEAN');
     await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS tpg_sync_status TEXT');
+    await pool.query('ALTER TABLE course_run ADD COLUMN IF NOT EXISTS courseware_email_disabled BOOLEAN DEFAULT false NOT NULL');
 
     const includeOngoing = req.query.includeOngoing === 'true';
 
@@ -259,13 +282,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       paramIndex++;
     }
 
+    const trainerAssignedSql = `(
+      EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
+      OR NULLIF(BTRIM(COALESCE(cr.assigned_trainer_name, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(cr.assigned_trainer_email, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(${tpgNameExpr}, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(${tpgEmailExpr}, '')), '') IS NOT NULL
+    )`;
+
+    if (trainerAssignmentFilter === 'withTrainers') {
+      filters.push(trainerAssignedSql);
+    } else if (trainerAssignmentFilter === 'noTrainers') {
+      filters.push(`NOT ${trainerAssignedSql}`);
+    }
+
     if (classStatus === 'Confirmed' || classStatus === 'Pending' || classStatus === 'Cancelled') {
       filters.push(`cr.class_status = $${paramIndex}`);
       params.push(classStatus);
       paramIndex++;
     } else if (classStatus === 'ActiveOnly') {
-      // Default Upcoming Classes view: hide cancelled runs, show only
-      // Confirmed/Pending with at least 1 learner enrolled.
+      // Default Upcoming Classes status view: hide cancelled runs.
+      // Learner presence is controlled separately by learnerFilter.
       filters.push(`cr.class_status IN ('Confirmed', 'Pending')`);
     }
 
@@ -326,11 +363,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.digital_attendance_id,
           cr.start_date,
           cr.end_date,
+          cr.registration_opening_date,
+          cr.registration_closing_date,
           cr.class_type,
           COALESCE(cr.invitation_paused, false) AS invitation_paused,
           COALESCE(cr.invitation_replies_blocked, false) AS invitation_replies_blocked,
+          COALESCE(cr.courseware_email_disabled, false) AS courseware_email_disabled,
           cr.trainer_in_calendar,
           cr.virtual_meeting_link,
+          cr.virtual_meeting_host_link,
           cr.virtual_meeting_provider,
           cr.virtual_meeting_external_id,
           cr.virtual_meeting_status,
@@ -352,8 +393,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           cr.digital_attendance_id,
           cr.start_date,
           cr.end_date,
+          cr.registration_opening_date,
+          cr.registration_closing_date,
           cr.class_type,
           cr.virtual_meeting_link,
+          cr.virtual_meeting_host_link,
           cr.virtual_meeting_provider,
           cr.virtual_meeting_external_id,
           cr.virtual_meeting_status,
@@ -667,6 +711,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         digitalAttendanceId: row.digital_attendance_id || '',
         startDate: row.start_date,
         endDate: row.end_date,
+        registrationOpeningDate: row.registration_opening_date,
+        registrationClosingDate: row.registration_closing_date,
         assignedTrainerTpg: rawTpgTrainer,
         assignedTrainerTpgEmail: row.assigned_trainer_tpg_email || '',
         tpgSyncStatus: row.tpg_sync_status || null,
@@ -683,8 +729,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         classType: row.class_type || 'Physical',
         invitationPaused: !!row.invitation_paused,
         invitationRepliesBlocked: !!row.invitation_replies_blocked,
+        coursewareEmailDisabled: !!row.courseware_email_disabled,
         trainerInCalendar: row.trainer_in_calendar,
         virtualMeetingLink: row.virtual_meeting_link || '',
+        virtualMeetingHostLink: row.virtual_meeting_host_link || '',
         virtualMeetingProvider: row.virtual_meeting_provider || '',
         virtualMeetingExternalId: row.virtual_meeting_external_id || '',
         virtualMeetingStatus: row.virtual_meeting_status || '',

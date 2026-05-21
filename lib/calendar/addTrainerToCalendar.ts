@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import pool from '../db';
 import { getGoogleCredentials } from '../google-auth/googleAuth';
+import { getLocalYMD } from '../dateHelpers';
 
 const stripPrefixes = (t: string) =>
   (t || '').replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
@@ -10,8 +11,7 @@ const toSgtDate = (v: any) => {
   if (!v) return '';
   const d = v instanceof Date ? v : new Date(v);
   if (isNaN(d.getTime())) return '';
-  return new Date(d.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-};
+  return getLocalYMD(d)};
 
 export async function addTrainerToCalendar(courseRunId: string, trainerEmail: string): Promise<{ success: boolean; addedCount: number; message: string }> {
   try {

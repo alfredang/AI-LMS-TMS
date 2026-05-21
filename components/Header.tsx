@@ -238,6 +238,9 @@ const Header: React.FC = () => {
     AdminPage.UploadDirectApplication,
     AdminPage.ViewDirectApplication,
     AdminPage.UpdateDirectApplication,
+    AdminPage.CompanyApplication,
+    AdminPage.UploadCompanyApplication,
+    AdminPage.ViewCompanyApplication,
     AdminPage.SearchCourseRuns,
     AdminPage.ViewCourseRun,
     AdminPage.EditCourseRun,
@@ -285,10 +288,8 @@ const Header: React.FC = () => {
       { view: View.Dashboard, label: 'GenAI Tools', icon: IconName.Create, trainerPage: TrainerPage.GenAIAuthoring },
     ],
     [UserRole.Developer]: [
-      { view: View.Courses, label: 'Courses', icon: IconName.Courses },
-      { view: View.Create, label: 'SEO Metadata Generator', icon: IconName.Create },
-      { view: View.Dashboard, label: 'CP Generator', icon: IconName.FileText, developerPage: DeveloperPage.CpCourseDetails },
-      { view: View.Dashboard, label: 'Courseware Generator', icon: IconName.BookOpen, developerPage: DeveloperPage.CwExtractCourseInfo },
+      { view: View.Dashboard, label: 'Course Management', icon: IconName.Courses, developerPage: DeveloperPage.CourseList },
+      { view: View.Dashboard, label: 'Courseware Tools', icon: IconName.BookOpen, developerPage: DeveloperPage.CoursewareTools },
     ],
     [UserRole.Admin]: [
       { view: View.Admin, label: 'Admin Dashboard', icon: IconName.Admin, page: AdminPage.Dashboard },
@@ -300,9 +301,7 @@ const Header: React.FC = () => {
       { view: View.Finance, label: 'TPG Management', icon: IconName.Settings, financePage: 'tpgManagement' },
       { view: View.Finance, label: 'Claim Management', icon: IconName.ClipboardCheck, financePage: 'claimManagement' },
     ],
-    [UserRole.Payroll]: [
-      { view: View.Dashboard, label: 'Payroll Dashboard', icon: IconName.DollarSign },
-    ],
+    [UserRole.Payroll]: [],
     [UserRole.TrainingProvider]: [
       { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
       { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },

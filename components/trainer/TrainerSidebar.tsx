@@ -15,9 +15,16 @@ const NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
   { page: TrainerPage.TrainingHours,      label: 'Training Hours',      icon: IconName.Clock          },
   { page: TrainerPage.PastAttendance,     label: 'Past Attendance',     icon: IconName.ClipboardCheck },
   { page: TrainerPage.PastAssessment,     label: 'Past Assessment',     icon: IconName.Award          },
-  { page: TrainerPage.LessonDeliveryGuide, label: 'Lesson Delivery Guide', icon: IconName.BookOpen },
-  { page: TrainerPage.AssessmentGuide,   label: 'Assessment Guide',    icon: IconName.BookOpen        },
-  { page: TrainerPage.PaymentHistory,    label: 'Trainer Payout History', icon: IconName.Analytics       },
+];
+
+const TRAINER_GUIDE_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
+  { page: TrainerPage.LessonDeliveryGuide, label: 'Physical Class Guide', icon: IconName.BookOpen },
+  { page: TrainerPage.VirtualClassGuide,   label: 'Virtual Class Guide',  icon: IconName.BookOpen },
+  { page: TrainerPage.AssessmentGuide,     label: 'Assessment Guide',     icon: IconName.BookOpen },
+];
+
+const POST_GUIDE_NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
+  { page: TrainerPage.PaymentHistory, label: 'Trainer Payout History', icon: IconName.Analytics },
 ];
 
 const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -37,6 +44,14 @@ const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Spinning Wheel', icon: IconName.Spinner,  href: 'https://alfredang.github.io/spinning-wheel/' },
 ];
 
+const PROJECT_MGT_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'RACI Matrix', icon: IconName.ClipboardCheck, href: 'https://alfredang.github.io/raci/' },
+  { label: 'Digital/AI Transformation', icon: IconName.Analytics, href: 'https://alfredang.github.io/digitaltransformation/' },
+  { label: 'Agile/Scrum', icon: IconName.ClipboardCheck, href: 'https://alfredang.github.io/scrum/' },
+  { label: 'Design Thinking Studio', icon: IconName.Create, href: 'https://alfredang.github.io/designthinking/' },
+  { label: 'BMC Studio', icon: IconName.Create, href: 'https://alfredang.github.io/bcm/' },
+];
+
 // Problem Solving tools — split out from Ed Tools so root-cause analysis
 // tools have their own discoverable home in the sidebar.
 const PROBLEM_SOLVING_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -44,6 +59,13 @@ const PROBLEM_SOLVING_TOOL_ITEMS: { label: string; icon: IconName; href: string 
   { label: 'Fishbone Diagram', icon: IconName.Link, href: 'https://alfredang.github.io/fishbone/' },
   { label: 'Pareto Chart',    icon: IconName.Link, href: 'https://alfredang.github.io/paretochart/' },
   { label: 'System Thinking', icon: IconName.Link, href: 'https://alfredang.github.io/systemloop/' },
+];
+
+const CYBER_SECURITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'Cyber Labs', icon: IconName.Shield, href: 'https://alfredang.github.io/cybersecuritysimulator/' },
+  { label: 'Ethical Hacking Labs', icon: IconName.Shield, href: 'https://alfredang.github.io/ethnicalhacking/' },
+  { label: 'Pentest Labs', icon: IconName.Shield, href: 'https://pentest-fauxbank.vercel.app/' },
+  { label: 'Cryptography', icon: IconName.Shield, href: 'https://alfredang.github.io/cryptography-toolkit/' },
 ];
 
 const VIRTUAL_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -56,8 +78,12 @@ const DATA_ANALYTICS_ITEMS: { label: string; icon: IconName; href: string }[] = 
   { label: 'Pivot Visualization', icon: IconName.Analytics, href: 'https://alfredang.github.io/novapivot/' },
   { label: 'Anomaly Detection', icon: IconName.Warning, href: 'https://alfredang.github.io/anamolydetection2/' },
   { label: 'Factor Analysis', icon: IconName.Analytics, href: 'https://multifactoranalysis.streamlit.app/' },
-  { label: 'ML Classification', icon: IconName.Analytics, href: 'https://ml-classification-888.streamlit.app/' },
   { label: 'Mock Data Generator', icon: IconName.FileText, href: 'https://alfredang.github.io/mockdatagen/' },
+];
+
+const ML_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'Classification', icon: IconName.Analytics, href: 'https://ml-classification-888.streamlit.app/' },
+  { label: 'Clustering', icon: IconName.Analytics, href: 'https://mlclustering-888.streamlit.app/' },
 ];
 
 const FINANCE_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -68,13 +94,20 @@ const FINANCE_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Credit Loan Anal...', icon: IconName.Analytics, href: 'https://creditloananalysis.streamlit.app/' },
 ];
 
+const HR_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'MBTI', icon: IconName.Analytics, href: 'https://alfredang.github.io/mbti/#landing' },
+  { label: 'AI Interview Coach', icon: IconName.Chat, href: 'https://alfredang.github.io/ai-interviewing/' },
+  { label: 'HR Interview Gen', icon: IconName.Assignment, href: 'https://alfredang.github.io/hr-interviewing/' },
+];
+
 const STAT_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'Probability',  icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#probability' },
   { label: 'Descriptive',  icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/descriptive' },
   { label: 'Correlation',  icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/correlation' },
   { label: 'Regression',   icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/regression' },
   { label: 'Hypothesis',   icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/hypothesis' },
-  { label: 'Chi-Square',   icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/chi-square' },
-  { label: 'ANOVA',        icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#/anova' },
+  { label: 'Confidence Interval', icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#confidence' },
+  { label: 'Bayesian Inference', icon: IconName.Analytics, href: 'https://alfredang.github.io/novastats/#bayesian' },
 ];
 
 const DOE_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -108,8 +141,22 @@ const SUSTAINABILITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }
   { label: 'Carbon Footprint Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/sgcarboncalculator/' },
 ];
 
+const NETWORKING_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'IP Calculator', icon: IconName.Analytics, href: 'https://alfredang.github.io/ipcalculator/' },
+  { label: 'PCAP Analyzer', icon: IconName.Analytics, href: 'https://alfredang.github.io/pcapanalyzer/' },
+  { label: 'Regex Generator', icon: IconName.Analytics, href: 'https://alfredang.github.io/regexgenerator/' },
+];
+
 const BLOCKCHAIN_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Certify NFT', icon: IconName.Award, href: 'https://alfredang.github.io/certifynft/' },
+  { label: 'Supply Verify', icon: IconName.Link, href: 'https://alfredang.github.io/supplyverify/' },
+  { label: 'Hashing Tool', icon: IconName.Shield, href: 'https://alfredang.github.io/hashgenerator/' },
+];
+
+const QUANTUM_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
+  { label: 'Quantum Labs', icon: IconName.Sync, href: 'https://alfredang.github.io/quantumlabs/' },
+  { label: 'IBM Composer', icon: IconName.Edit, href: 'https://quantum.cloud.ibm.com/composer' },
+  { label: 'Quantum Programming Studio', icon: IconName.Create, href: 'https://quantum-circuit.com/' },
 ];
 
 
@@ -211,16 +258,27 @@ const subItemClass = 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:ho
 
 const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed = false }) => {
   const { trainerPage, setTrainerPage, setCurrentView, setSelectedCourse } = useLms();
-  const [edToolsOpen, setEdToolsOpen] = useState(true);
+  const [trainerGuidesOpen, setTrainerGuidesOpen] = useState(
+    trainerPage === TrainerPage.LessonDeliveryGuide ||
+    trainerPage === TrainerPage.VirtualClassGuide ||
+    trainerPage === TrainerPage.AssessmentGuide
+  );
+  const [edToolsOpen, setEdToolsOpen] = useState(trainerPage === TrainerPage.EdTools);
+  const [projectMgtOpen, setProjectMgtOpen] = useState(trainerPage === TrainerPage.ProjectMgtTools);
   const [problemSolvingOpen, setProblemSolvingOpen] = useState(trainerPage === TrainerPage.ProblemSolvingTools);
+  const [cyberSecurityOpen, setCyberSecurityOpen] = useState(trainerPage === TrainerPage.CyberSecurityTools);
   const [dataAnalyticsOpen, setDataAnalyticsOpen] = useState(trainerPage === TrainerPage.DataAnalyticsTools);
+  const [mlToolsOpen, setMlToolsOpen] = useState(trainerPage === TrainerPage.MLTools);
   const [financeToolsOpen, setFinanceToolsOpen] = useState(trainerPage === TrainerPage.FinanceTools);
+  const [hrToolsOpen, setHrToolsOpen] = useState(trainerPage === TrainerPage.HRTools);
   const [statToolsOpen, setStatToolsOpen] = useState(trainerPage === TrainerPage.StatTools);
   const [doeToolsOpen, setDoeToolsOpen] = useState(trainerPage === TrainerPage.DoeTools);
   const [spcToolsOpen, setSpcToolsOpen] = useState(trainerPage === TrainerPage.SpcTools);
   const [videoCreationToolsOpen, setVideoCreationToolsOpen] = useState(trainerPage === TrainerPage.VideoCreationTools);
   const [sustainabilityToolsOpen, setSustainabilityToolsOpen] = useState(trainerPage === TrainerPage.SustainabilityTools);
+  const [networkingToolsOpen, setNetworkingToolsOpen] = useState(trainerPage === TrainerPage.NetworkingTools);
   const [blockchainToolsOpen, setBlockchainToolsOpen] = useState(trainerPage === TrainerPage.BlockchainTools);
+  const [quantumToolsOpen, setQuantumToolsOpen] = useState(trainerPage === TrainerPage.QuantumTools);
   const [genAiOpen, setGenAiOpen] = useState(trainerPage === TrainerPage.GenAIAuthoring);
   const [genAiSubOpen, setGenAiSubOpen] = useState<Record<string, boolean>>({});
   const [virtualToolsOpen, setVirtualToolsOpen] = useState(trainerPage === TrainerPage.VirtualTools);
@@ -267,6 +325,90 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
               {!collapsed && <span className="truncate">{label}</span>}
             </a>
           ))}
+
+          {POST_GUIDE_NAV_ITEMS.map(({ page, label, icon }) => (
+            <a
+              key={page}
+              href="#"
+              title={collapsed ? label : undefined}
+              onClick={(e) => { e.preventDefault(); navigateTo(page); }}
+              className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+                trainerPage === page
+                  ? 'bg-primary/10 text-primary'
+                  : inactiveClass
+              }`}
+            >
+              <Icon
+                name={icon}
+                className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                  trainerPage === page ? 'text-primary' : inactiveIconClass
+                }`}
+              />
+              {!collapsed && <span className="truncate">{label}</span>}
+            </a>
+          ))}
+
+          {/* Trainer Guides — expandable */}
+          {(() => {
+            const guidesActive =
+              trainerPage === TrainerPage.TrainerGuides ||
+              TRAINER_GUIDE_ITEMS.some(g => g.page === trainerPage);
+            return (
+              <>
+                <button
+                  onClick={() => {
+                    setTrainerGuidesOpen(prev => !prev);
+                    navigateTo(TrainerPage.TrainerGuides);
+                  }}
+                  title={collapsed ? 'Trainer Guides' : undefined}
+                  className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+                    guidesActive ? 'bg-primary/10 text-primary' : inactiveClass
+                  }`}
+                >
+                  <Icon
+                    name={IconName.BookOpen}
+                    className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                      guidesActive ? 'text-primary' : inactiveIconClass
+                    }`}
+                  />
+                  {!collapsed && <span className="truncate">Trainer Guides</span>}
+                  {!collapsed && (
+                    <Icon
+                      name={IconName.ChevronDown}
+                      className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                        trainerGuidesOpen ? 'rotate-0' : '-rotate-90'
+                      } ${guidesActive ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+                    />
+                  )}
+                </button>
+
+                {!collapsed && trainerGuidesOpen && (
+                  <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+                    {TRAINER_GUIDE_ITEMS.map(({ page, label, icon }) => (
+                      <a
+                        key={page}
+                        href="#"
+                        onClick={(e) => { e.preventDefault(); navigateTo(page); }}
+                        className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${
+                          trainerPage === page ? 'bg-primary/10 text-primary' : subItemClass
+                        }`}
+                      >
+                        <Icon
+                          name={icon}
+                          className={`w-4 h-4 flex-shrink-0 transition-colors ${
+                            trainerPage === page
+                              ? 'text-primary'
+                              : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white'
+                          }`}
+                        />
+                        <span className="truncate">{label}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         {/* Divider — Tools */}
@@ -311,6 +453,51 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
           {!collapsed && edToolsOpen && (
             <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
               {ED_TOOL_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Project Mgt Tools — expandable */}
+          <button
+            onClick={() => {
+              setProjectMgtOpen(prev => !prev);
+              navigateTo(TrainerPage.ProjectMgtTools);
+            }}
+            className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.ProjectMgtTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.ClipboardCheck}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.ProjectMgtTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            {!collapsed && <span className="truncate">Project Mgt Tools</span>}
+            {!collapsed && <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                projectMgtOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.ProjectMgtTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />}
+          </button>
+
+          {!collapsed && projectMgtOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {PROJECT_MGT_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
                   href={href}
@@ -371,36 +558,36 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             </div>
           )}
 
-          {/* Data Analytics Tools — expandable */}
+          {/* Cyber Security Tools — expandable */}
           <button
             onClick={() => {
-              setDataAnalyticsOpen(prev => !prev);
-              navigateTo(TrainerPage.DataAnalyticsTools);
+              setCyberSecurityOpen(prev => !prev);
+              navigateTo(TrainerPage.CyberSecurityTools);
             }}
             className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
-              trainerPage === TrainerPage.DataAnalyticsTools
+              trainerPage === TrainerPage.CyberSecurityTools
                 ? 'bg-primary/10 text-primary'
                 : inactiveClass
             }`}
           >
             <Icon
-              name={IconName.Analytics}
+              name={IconName.Shield}
               className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
-                trainerPage === TrainerPage.DataAnalyticsTools ? 'text-primary' : inactiveIconClass
+                trainerPage === TrainerPage.CyberSecurityTools ? 'text-primary' : inactiveIconClass
               }`}
             />
-            {!collapsed && <span className="truncate">Data Analytics Tools</span>}
+            {!collapsed && <span className="truncate">Cyber Security Tools</span>}
             {!collapsed && <Icon
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
-                dataAnalyticsOpen ? 'rotate-0' : '-rotate-90'
-              } ${trainerPage === TrainerPage.DataAnalyticsTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+                cyberSecurityOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.CyberSecurityTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
             />}
           </button>
 
-          {!collapsed && dataAnalyticsOpen && (
+          {!collapsed && cyberSecurityOpen && (
             <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
-              {DATA_ANALYTICS_ITEMS.map(({ label, icon, href }) => (
+              {CYBER_SECURITY_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
                   href={href}
@@ -446,6 +633,141 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
           {!collapsed && financeToolsOpen && (
             <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
               {FINANCE_TOOL_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* HR Tools — expandable */}
+          <button
+            onClick={() => {
+              setHrToolsOpen(prev => !prev);
+              navigateTo(TrainerPage.HRTools);
+            }}
+            className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.HRTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Analytics}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.HRTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            {!collapsed && <span className="truncate">HR Tools</span>}
+            {!collapsed && <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                hrToolsOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.HRTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />}
+          </button>
+
+          {!collapsed && hrToolsOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {HR_TOOL_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Data Analytics Tools — expandable */}
+          <button
+            onClick={() => {
+              setDataAnalyticsOpen(prev => !prev);
+              navigateTo(TrainerPage.DataAnalyticsTools);
+            }}
+            className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.DataAnalyticsTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Analytics}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.DataAnalyticsTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            {!collapsed && <span className="truncate">Data Analytics Tools</span>}
+            {!collapsed && <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                dataAnalyticsOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.DataAnalyticsTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />}
+          </button>
+
+          {!collapsed && dataAnalyticsOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {DATA_ANALYTICS_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* ML Tools — expandable */}
+          <button
+            onClick={() => {
+              setMlToolsOpen(prev => !prev);
+              navigateTo(TrainerPage.MLTools);
+            }}
+            className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.MLTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Analytics}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.MLTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            {!collapsed && <span className="truncate">ML Tools</span>}
+            {!collapsed && <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                mlToolsOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.MLTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />}
+          </button>
+
+          {!collapsed && mlToolsOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {ML_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
                   href={href}
@@ -641,6 +963,51 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
             </div>
           )}
 
+          {/* Networking Tools — expandable */}
+          <button
+            onClick={() => {
+              setNetworkingToolsOpen(prev => !prev);
+              navigateTo(TrainerPage.NetworkingTools);
+            }}
+            className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.NetworkingTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Analytics}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.NetworkingTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            {!collapsed && <span className="truncate">Networking Tools</span>}
+            {!collapsed && <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                networkingToolsOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.NetworkingTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />}
+          </button>
+
+          {!collapsed && networkingToolsOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {NETWORKING_TOOL_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
+
           {/* Blockchain Tools — expandable */}
           <button
             onClick={() => {
@@ -671,6 +1038,51 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
           {!collapsed && blockchainToolsOpen && (
             <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
               {BLOCKCHAIN_TOOL_ITEMS.map(({ label, icon, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`group flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all duration-150 ${subItemClass}`}
+                >
+                  <Icon name={icon} className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+                  <span className="truncate">{label}</span>
+                  <Icon name={IconName.ExternalLink} className="w-3 h-3 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Quantum Tools — expandable */}
+          <button
+            onClick={() => {
+              setQuantumToolsOpen(prev => !prev);
+              navigateTo(TrainerPage.QuantumTools);
+            }}
+            className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+              trainerPage === TrainerPage.QuantumTools
+                ? 'bg-primary/10 text-primary'
+                : inactiveClass
+            }`}
+          >
+            <Icon
+              name={IconName.Sync}
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                trainerPage === TrainerPage.QuantumTools ? 'text-primary' : inactiveIconClass
+              }`}
+            />
+            {!collapsed && <span className="truncate">Quantum Tools</span>}
+            {!collapsed && <Icon
+              name={IconName.ChevronDown}
+              className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
+                quantumToolsOpen ? 'rotate-0' : '-rotate-90'
+              } ${trainerPage === TrainerPage.QuantumTools ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
+            />}
+          </button>
+
+          {!collapsed && quantumToolsOpen && (
+            <div className="ml-5 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+              {QUANTUM_TOOL_ITEMS.map(({ label, icon, href }) => (
                 <a
                   key={label}
                   href={href}

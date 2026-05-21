@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
 import { getGoogleCredentials } from '@lib/google-auth/googleAuth';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 /**
  * POST /api/external/sync-google-calendar
@@ -120,7 +121,7 @@ async function _runSyncGoogleCalendarInner(options?: { startDate?: string; endDa
      JOIN course c ON c.id = cr.course_id
      WHERE cr.start_date >= $1::date
        AND cr.start_date <= $2::date`,
-    [startDate.toISOString().slice(0, 10), futureDate.toISOString().slice(0, 10)]
+    [getLocalYMD(startDate), getLocalYMD(futureDate)]
   );
 
   // Build lookup maps
@@ -181,7 +182,7 @@ async function _runSyncGoogleCalendarInner(options?: { startDate?: string; endDa
       for (const [title, runs] of courseRunsByTitle) {
         if (cleanTitle.includes(title) || title.includes(cleanTitle)) {
           const dateMatch = runs.find(r => {
-            const crDate = r.start_date ? new Date(r.start_date).toISOString().slice(0, 10) : '';
+            const crDate = r.start_date ? getLocalYMD(new Date(r.start_date)) : '';
             return crDate === eventDate;
           });
           if (dateMatch) { matched = dateMatch; break; }

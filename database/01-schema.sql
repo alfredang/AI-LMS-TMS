@@ -1471,6 +1471,7 @@ CREATE TABLE public.course_run (
     trainer_in_calendar boolean,
     tpg_sync_status text,
     calendar_name_mismatch boolean DEFAULT false,
+    courseware_email_disabled boolean DEFAULT false NOT NULL,
     CONSTRAINT course_run_dates CHECK ((end_date >= start_date))
 );
 
@@ -5455,6 +5456,43 @@ ALTER TABLE ONLY public.webhook_logs
 
 ALTER TABLE ONLY public.work_experience
     ADD CONSTRAINT work_experience_developer_id_fkey FOREIGN KEY (developer_id) REFERENCES public.developer_profile(user_id);
+
+
+--
+-- Name: microsoft_redeem_session; Type: TABLE; Schema: public; Owner: -
+-- Backs Admin > Certificate > "Microsoft Certificate". Single-row table
+-- holding the Playwright storageState (Microsoft Learn auth cookies).
+--
+
+CREATE TABLE IF NOT EXISTS public.microsoft_redeem_session (
+    id              integer PRIMARY KEY DEFAULT 1,
+    storage_state   jsonb NOT NULL,
+    signed_in_email text,
+    updated_at      timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT microsoft_redeem_session_singleton CHECK (id = 1)
+);
+
+
+--
+-- Name: microsoft_redeem_code; Type: TABLE; Schema: public; Owner: -
+-- History of every generated Microsoft Learn achievement code.
+--
+
+CREATE TABLE IF NOT EXISTS public.microsoft_redeem_code (
+    id            uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    course_number text NOT NULL,
+    course_title  text,
+    code          text NOT NULL,
+    url           text,
+    students      integer NOT NULL DEFAULT 1,
+    requested_by  uuid,
+    created_at    timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_msredeem_code_course
+    ON public.microsoft_redeem_code(course_number);
+CREATE INDEX IF NOT EXISTS idx_msredeem_code_created
+    ON public.microsoft_redeem_code(created_at DESC);
 
 
 --

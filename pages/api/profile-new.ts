@@ -45,6 +45,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       profileData = await getAdminProfile(userId);
     } else if (role === 'finance') {
       profileData = await getFinanceProfile(userId);
+    } else if (role === 'payroll') {
+      profileData = await getPayrollProfile(userId);
     } else if (role === 'trainer') {
       profileData = await getTrainerProfile(userId);
     } else if (role === 'training_provider') {
@@ -225,6 +227,41 @@ async function getFinanceProfile(userId: string) {
   };
 }
 
+async function getPayrollProfile(userId: string) {
+  console.log('💵 Fetching payroll profile for userId:', userId);
+
+  const result = await pool.query(`
+    SELECT
+        au.id AS user_id,
+        au.full_name,
+        au.email,
+        au.password,
+        au.profile_picture_url
+    FROM app_user au
+    WHERE au.id = $1
+  `, [userId]);
+
+  if (result.rows.length === 0) {
+    console.log('❌ No user found with ID:', userId);
+    return null;
+  }
+
+  const profile = result.rows[0];
+  console.log('✅ Payroll profile found:', profile.full_name);
+
+  return {
+    id: profile.user_id,
+    name: profile.full_name,
+    email: profile.email,
+    tel: '',
+    loginId: profile.email,
+    profilePictureUrl: profile.profile_picture_url || `https://i.pravatar.cc/150?img=2`,
+    password: profile.password,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
 async function getTrainerProfile(userId: string) {
   console.log('👨‍🏫 Fetching trainer profile for userId:', userId);
 
@@ -347,6 +384,7 @@ async function getTrainingProviderProfile(userId: string) {
         tp.auto_send_receipt,
         tp.auto_send_certificate,
         tp.auto_send_thankyou_email,
+        tp.auto_import_da_from_email,
         tp.auto_enrol_direct_applications,
         tp.auto_generate_qb_invoice,
         tp.auto_add_learner_to_calendar,
@@ -420,6 +458,7 @@ async function getTrainingProviderProfile(userId: string) {
           tp.auto_send_receipt,
           tp.auto_send_certificate,
           tp.auto_send_thankyou_email,
+        tp.auto_import_da_from_email,
         tp.auto_enrol_direct_applications,
         tp.auto_generate_qb_invoice,
         tp.auto_add_learner_to_calendar,
@@ -493,6 +532,7 @@ async function getTrainingProviderProfile(userId: string) {
           tp.auto_send_receipt,
           tp.auto_send_certificate,
           tp.auto_send_thankyou_email,
+        tp.auto_import_da_from_email,
         tp.auto_enrol_direct_applications,
         tp.auto_generate_qb_invoice,
         tp.auto_add_learner_to_calendar,
@@ -731,6 +771,7 @@ async function getTrainingProviderProfile(userId: string) {
       autoSendReceiptOnPayment: profileData.auto_send_receipt || false,
       autoSendCertificateOnCompletion: profileData.auto_send_certificate || false,
       autoSendThankYouEmail: profileData.auto_send_thankyou_email || false,
+      autoImportDaFromEmail: profileData.auto_import_da_from_email || false,
       autoEnrolDirectApplications: profileData.auto_enrol_direct_applications || false,
       autoGenerateQbInvoice: profileData.auto_generate_qb_invoice || false,
       autoAddLearnerToCalendar: profileData.auto_add_learner_to_calendar || false,

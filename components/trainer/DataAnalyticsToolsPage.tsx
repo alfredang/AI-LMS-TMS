@@ -22,12 +22,6 @@ const DATA_ANALYTICS_TOOLS = [
     href: 'https://multifactoranalysis.streamlit.app/',
   },
   {
-    title: 'ML Classification',
-    description: 'Build and evaluate machine learning classification models with interactive visualizations',
-    icon: IconName.Analytics,
-    href: 'https://ml-classification-888.streamlit.app/',
-  },
-  {
     title: 'Mock Data Generator',
     description: 'Generate realistic mock data for testing and demonstrations',
     icon: IconName.FileText,

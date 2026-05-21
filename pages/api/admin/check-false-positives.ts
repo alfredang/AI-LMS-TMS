@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '../../../lib/db';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 function stripPrefixes(title: string): string {
   if (!title) return '';
@@ -53,13 +54,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (sessionRes.rows.length > 0) {
         datesToSync = sessionRes.rows
           .filter(r => r.start_date && !isNaN(new Date(r.start_date).getTime()))
-          .map(r => new Date(r.start_date).toISOString().slice(0, 10));
+          .map(r => getLocalYMD(new Date(r.start_date)));
       } 
       
       if (datesToSync.length === 0 && row.course_start_date) {
         const bd = new Date(row.course_start_date);
         if (!isNaN(bd.getTime())) {
-           datesToSync = [bd.toISOString().slice(0, 10)];
+           datesToSync = [getLocalYMD(bd)];
         }
       }
       

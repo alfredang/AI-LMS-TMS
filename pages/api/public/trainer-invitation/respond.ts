@@ -16,6 +16,7 @@ import {
 import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSender';
 import { getGoogleCredentials } from '@/lib/google-auth/googleAuth';
 import { pushTrainerToTpgForRun } from '@/lib/ssg/pushTrainerToTpgForRun';
+import { getLocalYMD } from '../../../../lib/dateHelpers';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
   const colors = {
@@ -454,8 +455,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Date object or locale string — parse + shift to SGT
             const d = v instanceof Date ? v : new Date(s);
             if (isNaN(d.getTime())) return '';
-            return new Date(d.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-          };
+            return getLocalYMD(d)          };
           const startDateIso = toSgtDate(invitation.start_date);
 
           if (!startDateIso) {

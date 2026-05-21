@@ -27,8 +27,6 @@ const sidebarItems: NavItem[] = [
   { view: View.GrantCalculator, label: 'Grant Calculator', icon: IconName.Calculator },
   { view: View.BillingHistory, label: 'Billing History', icon: IconName.DollarSign },
   { view: View.CertificateHistory, label: 'Certificate History', icon: IconName.Award },
-  { view: View.Courses, label: 'Certificate Delivery', icon: IconName.Award, href: 'https://docs.google.com/forms/d/e/1FAIpQLSegSnbaBMlH3ghEskSPDqI19lbkVx05zFPdHvP9Ltf3Nlv6EQ/viewform' },
-  { view: View.Courses, label: 'TRAQOM Survey', icon: IconName.ClipboardCheck, href: 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr' },
 ];
 
 const LearnerLayout: React.FC = () => {

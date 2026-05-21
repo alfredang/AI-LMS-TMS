@@ -29,6 +29,7 @@ import { ClassManagerView, AssignTrainerView, AssignStudentView, AddCourseView, 
 import { CreateCertificateView, DeleteCertificateView } from '../components/admin/CertificateManagement';
 import { SendCertificateSGView } from '../components/admin/SendCertificateSG';
 import { SendCertificateGHView } from '../components/admin/SendCertificateGH';
+import { MicrosoftCertificateView } from '../components/admin/MicrosoftCertificate';
 import { CreateNewClassView } from '../components/admin/CreateNewClassView';
 import EnrollLearners from '../components/admin/EnrollLearners';
 import SearchPastLearners from '../components/admin/SearchPastLearners';
@@ -69,6 +70,7 @@ import CourseSessionTimingView from '../components/admin/CourseSessionTimingView
 import SupportTicketsView from '../components/admin/SupportTicketsView';
 import SupportTicketDetailView from '../components/admin/SupportTicketDetailView';
 import MasterListView from '../components/admin/MasterListView';
+import { UploadCompanyApplicationView, ViewCompanyApplicationView } from '../components/admin/CompanyApplicationViews';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -94,6 +96,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
 
   const tpgManagementLinks: NavBoxProps[] = [
     { title: "Direct Application", description: "Upload and review direct applications before enrolment processing.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.TpgDirectApplication) },
+    { title: "COMPANY APPLICATION", description: "Upload and review company-sponsored application records.", icon: IconName.Building, onClick: () => setAdminPage(AdminPage.CompanyApplication) },
     { title: "Course Run", description: "Create, search, view, edit, and upload course runs for SSG workflows.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.TpgCourseRun) },
     { title: "Course Session", description: "Manage session setup, timings, and attendance records for each course run.", icon: IconName.Clock, onClick: () => setAdminPage(AdminPage.TpgCourseSession) },
     { title: "Enrollment", description: "Upload, search, view, and update learner enrolments for course runs.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.TpgEnrollment) },
@@ -155,6 +158,9 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.ViewTrainers]: 'View Trainers',
   [AdminPage.FundingValidity]: 'Funding Validity',
   [AdminPage.ViewLearners]: 'View Learners',
+  [AdminPage.CompanyApplication]: 'COMPANY APPLICATION',
+  [AdminPage.UploadCompanyApplication]: 'Upload Company Application',
+  [AdminPage.ViewCompanyApplication]: 'View Company Application',
   [AdminPage.UpcomingClasses]: 'Upcoming Classes',
   [AdminPage.ViewClassByDate]: 'View Class By Date',
   [AdminPage.OngoingClasses]: 'Ongoing Classes',
@@ -203,6 +209,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.DeleteCertificate]: 'Delete Certificate',
   [AdminPage.SendCertificateSG]: 'Send Certificate (SG)',
   [AdminPage.SendCertificateGH]: 'Send Certificate (GH)',
+  [AdminPage.MicrosoftCertificate]: 'Microsoft Certificate',
   [AdminPage.Calendar]: 'Calendar',
   [AdminPage.Scheduler]: 'Task Scheduler',
   [AdminPage.SchedulerSummary]: 'Schedule Summary',
@@ -222,6 +229,10 @@ const AdminLayout: React.FC = () => {
     [AdminPage.TpgDirectApplication]: [
       { title: "Upload Direct Application", description: "Import direct application records into the system.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.UploadDirectApplication) },
       { title: "View Direct Application", description: "Review and manage uploaded direct application records.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewDirectApplication) },
+    ],
+    [AdminPage.CompanyApplication]: [
+      { title: "Upload Company Application", description: "Import company-sponsored application records into the system.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.UploadCompanyApplication) },
+      { title: "View Company Application", description: "Review and manage company-sponsored application records.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewCompanyApplication) },
     ],
     [AdminPage.TpgCourseRun]: [
       { title: "View Class By Date", description: "Browse classes grouped by day from the local database.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.ViewClassByDate) },
@@ -309,6 +320,7 @@ const AdminLayout: React.FC = () => {
       case AdminPage.TpgAttendance:
       case AdminPage.TpgAssessment:
       case AdminPage.TpgClaims:
+      case AdminPage.CompanyApplication:
         return <AdminSubDashboard title={PAGE_LABELS[adminPage] || formatAdminPageTitle(adminPage)} links={tpgSubDashboards[adminPage] || []} />;
       case AdminPage.ViewCourses:
         return <CourseList />;
@@ -398,6 +410,10 @@ const AdminLayout: React.FC = () => {
         return <UploadDirectApplicationView />;
       case AdminPage.ViewDirectApplication:
         return <ViewDirectApplicationView />;
+      case AdminPage.UploadCompanyApplication:
+        return <UploadCompanyApplicationView />;
+      case AdminPage.ViewCompanyApplication:
+        return <ViewCompanyApplicationView />;
       case AdminPage.UpdateDirectApplication:
         return <UpdateDirectApplicationView />;
       case AdminPage.CheckAttendance:
@@ -450,6 +466,8 @@ const AdminLayout: React.FC = () => {
         return <SendCertificateSGView />;
       case AdminPage.SendCertificateGH:
         return <SendCertificateGHView />;
+      case AdminPage.MicrosoftCertificate:
+        return <MicrosoftCertificateView />;
       case AdminPage.Calendar:
         return <AdminCalendarView />;
       case AdminPage.Scheduler:

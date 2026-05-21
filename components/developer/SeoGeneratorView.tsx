@@ -41,7 +41,10 @@ function parseSections(text: string): SeoSection[] {
   if (currentLabel) {
     sections.push({ label: currentLabel, content: currentContent.join('\n').trim() });
   }
-  return sections;
+  return sections.map(s => ({
+    ...s,
+    content: s.content.replace(/\n*-{3,}\s*$/g, '').trimEnd(),
+  }));
 }
 
 const SeoGeneratorView: React.FC = () => {
@@ -50,6 +53,9 @@ const SeoGeneratorView: React.FC = () => {
   const [error, setError] = useState('');
   const [result, setResult] = useState('');
   const [sections, setSections] = useState<SeoSection[]>([]);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
+  const [viewMode, setViewMode] = useState<'rendered' | 'html'>('rendered');
 
   // WSQ fields
   const [courseTitle, setCourseTitle] = useState('');
@@ -94,13 +100,58 @@ const SeoGeneratorView: React.FC = () => {
     }
   };
 
-  const handleCopySection = (content: string) => {
-    navigator.clipboard.writeText(content);
+  const escapeHtml = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const sectionToHtml = (content: string): string => {
+    const rawLines = content.split('\n');
+    const trimmed = rawLines.map(l => l.trim()).filter(Boolean);
+    const isList = trimmed.length > 1 && trimmed.every(l => /^[-*]\s+/.test(l));
+    if (isList) {
+      const items = trimmed.map(l => `  <li>${escapeHtml(l.replace(/^[-*]\s+/, ''))}</li>`).join('\n');
+      return `<ul>\n${items}\n</ul>`;
+    }
+    // Split on blank lines into paragraphs
+    const paragraphs: string[] = [];
+    let buf: string[] = [];
+    for (const line of rawLines) {
+      if (line.trim() === '') {
+        if (buf.length) { paragraphs.push(buf.join(' ').trim()); buf = []; }
+      } else {
+        buf.push(line.trim());
+      }
+    }
+    if (buf.length) paragraphs.push(buf.join(' ').trim());
+    return paragraphs.map(p => `<p>${escapeHtml(p)}</p>`).join('\n');
+  };
+
+  const handleCopySection = (section: SeoSection, idx: number) => {
+    const text = viewMode === 'html' ? sectionToHtml(section.content) : section.content;
+    navigator.clipboard.writeText(text);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(prev => (prev === idx ? null : prev)), 1500);
   };
 
   const handleCopyAll = () => {
-    navigator.clipboard.writeText(result);
+    const text = viewMode === 'html'
+      ? sections.map(s => `<h3>${escapeHtml(s.label)}</h3>\n${sectionToHtml(s.content)}`).join('\n\n')
+      : result;
+    navigator.clipboard.writeText(text);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 1500);
   };
+
+  const CopyIcon = (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </svg>
+  );
+
+  const CheckIcon = (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  );
 
   return (
     <div className="space-y-6">
@@ -240,27 +291,82 @@ const SeoGeneratorView: React.FC = () => {
             <>
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Generated Results</h3>
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-md overflow-hidden border border-gray-300 dark:border-gray-600">
+                    <button
+                      onClick={() => setViewMode('rendered')}
+                      className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                        viewMode === 'rendered'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      Rendered
+                    </button>
+                    <button
+                      onClick={() => setViewMode('html')}
+                      className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                        viewMode === 'html'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      HTML
+                    </button>
+                  </div>
                 <button
                   onClick={handleCopyAll}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                  title={copiedAll ? 'Copied' : 'Copy all'}
+                  aria-label={copiedAll ? 'Copied' : 'Copy all'}
+                  className={`p-1.5 rounded-md transition-colors ${
+                    copiedAll
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                  }`}
                 >
-                  Copy All
+                  {copiedAll ? CheckIcon : CopyIcon}
                 </button>
+                </div>
               </div>
               {sections.map((section, i) => (
                 <Card key={i} className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-sm font-bold text-gray-900 dark:text-white">{section.label}</h4>
                     <button
-                      onClick={() => handleCopySection(section.content)}
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                      onClick={() => handleCopySection(section, i)}
+                      title={copiedIdx === i ? 'Copied' : 'Copy'}
+                      aria-label={copiedIdx === i ? 'Copied' : 'Copy'}
+                      className={`p-1.5 rounded-md transition-colors ${
+                        copiedIdx === i
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                      }`}
                     >
-                      Copy
+                      {copiedIdx === i ? CheckIcon : CopyIcon}
                     </button>
                   </div>
-                  <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                    {section.content}
-                  </pre>
+                  {viewMode === 'html' ? (
+                    <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                      {sectionToHtml(section.content)}
+                    </pre>
+                  ) : (() => {
+                    const lines = section.content.split('\n').map(l => l.trim()).filter(Boolean);
+                    const isBulletList = lines.length > 1 && lines.every(l => /^[-*]\s+/.test(l));
+                    if (isBulletList) {
+                      return (
+                        <ul className="list-disc pl-6 text-sm text-gray-700 dark:text-gray-300 leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-1">
+                          {lines.map((l, j) => (
+                            <li key={j}>{l.replace(/^[-*]\s+/, '')}</li>
+                          ))}
+                        </ul>
+                      );
+                    }
+                    return (
+                      <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans leading-relaxed bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                        {section.content}
+                      </pre>
+                    );
+                  })()}
                 </Card>
               ))}
             </>

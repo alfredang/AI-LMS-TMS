@@ -308,6 +308,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     autoSendReceiptOnPayment: boolean;
     autoSendCertificateOnCompletion: boolean;
     autoSendThankYouEmail: boolean;
+    autoImportDaFromEmail: boolean;
     autoEnrolDirectApplications: boolean;
     autoGenerateQbInvoice: boolean;
     autoAddLearnerToCalendar: boolean;

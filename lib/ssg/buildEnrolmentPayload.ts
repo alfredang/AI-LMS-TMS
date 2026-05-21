@@ -25,9 +25,7 @@ export function buildEnrolmentPayload(
     idType: { type: buildIdType(String(app.trainee_id || ''), app.trainee_id_type) },
     id: String(app.trainee_id || ''),
     dateOfBirth: app.date_of_birth ? (
-      app.date_of_birth instanceof Date 
-        ? app.date_of_birth.toISOString().split('T')[0] 
-        : String(app.date_of_birth).split('T')[0]
+      new Date(app.date_of_birth).toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })
     ) : undefined,
     fullName: String(app.trainee_name || ''),
     emailAddress: String(app.trainee_email || ''),

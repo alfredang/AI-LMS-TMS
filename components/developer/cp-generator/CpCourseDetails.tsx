@@ -465,7 +465,7 @@ const CpCourseDetails: React.FC = () => {
       <Card className="p-5 space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <StepperInput label="Course Duration (hrs)" value={cp.courseDuration} onChange={cp.setCourseDuration} min={1} max={200} />
-          <StepperInput label="No. of Topics" value={cp.numTopics} onChange={cp.setNumTopics} min={1} max={20} />
+          <StepperInput label="No. of Topics" value={cp.numTopics} onChange={cp.setNumTopics} min={1} max={30} />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <StepperInput label="Instructional Duration (hrs)" value={cp.instructionalHours} onChange={cp.setInstructionalHours} min={0} max={200} />

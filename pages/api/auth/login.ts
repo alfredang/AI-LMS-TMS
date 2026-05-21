@@ -29,6 +29,7 @@ interface LoginResponse {
     roles: string[]; // All available roles for role selection
     token?: string;
     forcePasswordChange?: boolean;
+    requiresProfileSetup?: boolean;
   };
   error?: string;
 }
@@ -210,6 +211,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
     const userResult = await pool.query(userQuery2, [email]);
 
     let user: any;
+    let requiresProfileSetup = false;
 
     if (userResult.rows.length === 0 && loginType === 'otp') {
       // Create new user for OTP login (similar to OAuth flow)
@@ -240,6 +242,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       `, [user.id]);
 
       console.log(`✅ Created new user and assigned Learner role: ${email}`);
+      requiresProfileSetup = true;
     } else {
       user = userResult.rows[0];
 
@@ -345,7 +348,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
         role: primaryRole,
         roles: userRoles,
         token: `mock-jwt-token-${user.id}`, // In production, generate a real JWT
-        forcePasswordChange
+        forcePasswordChange,
+        requiresProfileSetup
       }
     };
 

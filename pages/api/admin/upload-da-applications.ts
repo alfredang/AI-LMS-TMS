@@ -5,6 +5,7 @@ import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { bulkProcessDirectApplications, createNativeEnrolmentFromDA, processDirectApplication } from '../../../lib/autoEnrolDirectApplications';
 import { addDaLearnerToCalendar, removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -612,7 +613,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 .filter(r => {
                     if (!r?.id) return false;
                     const status = (r.application_status || '').toLowerCase();
-                    const alreadyEnrolled = r.auto_enrol_status && !['failed'].includes(r.auto_enrol_status);
+                    const autoStatus = String(r.auto_enrol_status || '').toLowerCase();
+                    const hasTraineeId = String(r.trainee_id || '').trim() !== '';
+                    const alreadyEnrolled = autoStatus && !['failed'].includes(autoStatus) && !(autoStatus === 'pending_identity' && hasTraineeId);
                     // Only skip if the row already has a real SSG enrolment reference (ENR-...)
                     // Placeholder values like "N/A", "-", "MANUAL", or empty are NOT real enrolments
                     return (status === 'confirmed' || status === 'confirm application') && !alreadyEnrolled && !isRealSsgEnrolmentId(r.enrolment_id);
@@ -670,7 +673,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                             const startDate = crRes.rows[0]?.start_date;
 
                             // Skip calendar add for past course runs
-                            if (startDate && new Date(startDate) < new Date(new Date().toISOString().slice(0, 10))) {
+                            if (startDate && new Date(startDate) < getLocalYMD(new Date(new Date()))) {
                                 console.log(`⏭️ Skipping calendar add for ${record.trainee_email} — course run ${record.course_run_id} already started`);
                             } else {
                                 const calResult = await addDaLearnerToCalendar(

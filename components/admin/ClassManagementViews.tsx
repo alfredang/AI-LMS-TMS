@@ -5,6 +5,17 @@ import { Button } from '../ui/Button';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
 
+// Helper to safely extract local YYYY-MM-DD from a date string (avoids timezone shift bugs from .slice(0, 10) on UTC strings)
+const extractLocalDate = (dateVal: string | Date | undefined | null): string => {
+    if (!dateVal) return '';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal).slice(0, 10);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 // Searchable select dropdown component
 const SearchableSelect: React.FC<{
     options: { value: string; label: string }[];
@@ -258,6 +269,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [classStatus, setClassStatus] = useState(courseToEdit?.classStatus || 'Pending');
     const [invitationPaused, setInvitationPaused] = useState(!!(courseToEdit as any)?.invitationPaused);
     const [repliesBlocked, setRepliesBlocked] = useState(!!(courseToEdit as any)?.invitationRepliesBlocked);
+    const [coursewareEmailDisabled, setCoursewareEmailDisabled] = useState(!!(courseToEdit as any)?.coursewareEmailDisabled);
     const [classType, setClassType] = useState(() => {
         // Use DB class_type first, then fallback to modeOfTraining
         if (courseToEdit?.classType && courseToEdit.classType !== 'Physical') return courseToEdit.classType;
@@ -268,6 +280,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         return 'Physical';
     });
     const [virtualMeetingLink, setVirtualMeetingLink] = useState(courseToEdit?.virtualMeetingLink || '');
+    const [virtualMeetingHostLink, setVirtualMeetingHostLink] = useState(courseToEdit?.virtualMeetingHostLink || '');
     const [virtualMeetingProvider, setVirtualMeetingProvider] = useState<'google_meet' | 'zoom' | 'teams'>(() => {
         const stored = courseToEdit?.virtualMeetingProvider;
         if (stored === 'zoom' || stored === 'teams' || stored === 'google_meet') return stored;
@@ -275,6 +288,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         return configured === 'zoom' || configured === 'teams' ? configured : 'google_meet';
     });
     const [storedVirtualMeetingLink, setStoredVirtualMeetingLink] = useState(courseToEdit?.virtualMeetingLink || '');
+    const [storedVirtualMeetingHostLink, setStoredVirtualMeetingHostLink] = useState(courseToEdit?.virtualMeetingHostLink || '');
     const [storedVirtualMeetingProvider, setStoredVirtualMeetingProvider] = useState<'google_meet' | 'zoom' | 'teams' | ''>(() => {
         const stored = courseToEdit?.virtualMeetingProvider;
         return stored === 'zoom' || stored === 'teams' || stored === 'google_meet' ? stored : '';
@@ -283,8 +297,11 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
 
     useEffect(() => {
         const nextStoredLink = courseToEdit?.virtualMeetingLink || '';
+        const nextStoredHostLink = courseToEdit?.virtualMeetingHostLink || '';
         setVirtualMeetingLink(nextStoredLink);
         setStoredVirtualMeetingLink(nextStoredLink);
+        setVirtualMeetingHostLink(nextStoredHostLink);
+        setStoredVirtualMeetingHostLink(nextStoredHostLink);
         const stored = courseToEdit?.virtualMeetingProvider;
         if (stored === 'zoom' || stored === 'teams' || stored === 'google_meet') {
             setVirtualMeetingProvider(stored);
@@ -296,7 +313,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         if (configured === 'zoom' || configured === 'teams' || configured === 'google_meet') {
             setVirtualMeetingProvider(configured);
         }
-    }, [courseToEdit?.id, courseToEdit?.virtualMeetingLink, courseToEdit?.virtualMeetingProvider, trainingProviderProfile]);
+    }, [courseToEdit?.id, courseToEdit?.virtualMeetingLink, courseToEdit?.virtualMeetingHostLink, courseToEdit?.virtualMeetingProvider, trainingProviderProfile]);
 
     // ViewCourseRun state management
     const [includeExpired, setIncludeExpired] = useState(false);
@@ -335,12 +352,13 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const disabledInputClasses = "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed";
     const virtualMeetingProviderLabel = virtualMeetingProvider === 'zoom' ? 'Zoom' : virtualMeetingProvider === 'teams' ? 'Microsoft Teams' : 'Google Meet';
     const canGenerateZoomMeeting = classType === 'Virtual' || classType === 'Hybrid';
-    const hasStoredZoomMeeting = storedVirtualMeetingProvider === 'zoom' && !!storedVirtualMeetingLink;
+    const isZoomMeetingProvider = virtualMeetingProvider === 'zoom';
+    const hasStoredZoomMeeting = storedVirtualMeetingProvider === 'zoom' && !!(storedVirtualMeetingHostLink || storedVirtualMeetingLink);
 
     const handleGenerateZoomMeeting = async (force = false) => {
         if (!courseToEdit?.id) return;
-        if (force && storedVirtualMeetingLink) {
-            const shouldRegenerate = confirm('Generate a new Zoom meeting and replace the currently stored virtual meeting link? The new Zoom link will become the active meeting link shown to learners and trainers.');
+        if (force && (storedVirtualMeetingHostLink || storedVirtualMeetingLink)) {
+            const shouldRegenerate = confirm('Generate a new Zoom meeting and replace the currently stored Zoom links? The learner join URL and trainer start URL will both be replaced.');
             if (!shouldRegenerate) return;
         }
 
@@ -355,9 +373,12 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             if (!response.ok || !result.success) throw new Error(result.error || 'Failed to create Zoom meeting');
             const meeting = result.data?.meeting || {};
             const joinUrl = meeting.join_url || meeting.joinUrl || '';
+            const startUrl = meeting.start_url || meeting.startUrl || '';
             if (joinUrl) setVirtualMeetingLink(joinUrl);
+            if (startUrl) setVirtualMeetingHostLink(startUrl);
             setVirtualMeetingProvider('zoom');
             if (joinUrl) setStoredVirtualMeetingLink(joinUrl);
+            if (startUrl) setStoredVirtualMeetingHostLink(startUrl);
             setStoredVirtualMeetingProvider('zoom');
             alert(result.data?.reused ? 'Existing Zoom meeting link reused.' : force ? 'Zoom meeting regenerated.' : 'Zoom meeting created.');
         } catch (error) {
@@ -373,11 +394,22 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             return;
         }
 
+        const hasStoredMeetingLinks = isZoomMeetingProvider
+            ? !!(storedVirtualMeetingHostLink || storedVirtualMeetingLink)
+            : !!storedVirtualMeetingLink;
+        const meetingLinksChanged = isZoomMeetingProvider
+            ? storedVirtualMeetingHostLink !== virtualMeetingHostLink || storedVirtualMeetingLink !== virtualMeetingLink
+            : storedVirtualMeetingLink !== virtualMeetingLink;
+
         if (
-            storedVirtualMeetingLink &&
-            (storedVirtualMeetingLink !== virtualMeetingLink || storedVirtualMeetingProvider !== virtualMeetingProvider)
+            hasStoredMeetingLinks &&
+            (meetingLinksChanged || storedVirtualMeetingProvider !== virtualMeetingProvider)
         ) {
-            const shouldReplace = confirm('Save this virtual meeting link and make it the active link shown to learners and trainers? This will replace the currently stored meeting link for this class.');
+            const shouldReplace = confirm(
+                isZoomMeetingProvider
+                    ? 'Save these Zoom meeting URLs? The trainer start URL is sensitive and should only be shared with trainers.'
+                    : 'Save this virtual meeting link and make it the active link shown to learners and trainers? This will replace the currently stored meeting link for this class.'
+            );
             if (!shouldReplace) return;
         }
 
@@ -387,7 +419,9 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     id: courseToEdit.id,
-                    virtual_meeting_link: virtualMeetingLink,
+                    ...(isZoomMeetingProvider
+                        ? { virtual_meeting_host_link: virtualMeetingHostLink, virtual_meeting_link: virtualMeetingLink }
+                        : { virtual_meeting_link: virtualMeetingLink }),
                     virtual_meeting_provider: virtualMeetingProvider,
                 }),
             });
@@ -397,8 +431,10 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             }
 
             setVirtualMeetingLink(result.data?.virtual_meeting_link || virtualMeetingLink);
+            setVirtualMeetingHostLink(result.data?.virtual_meeting_host_link || virtualMeetingHostLink);
             setVirtualMeetingProvider(result.data?.virtual_meeting_provider || virtualMeetingProvider);
             setStoredVirtualMeetingLink(result.data?.virtual_meeting_link || virtualMeetingLink);
+            setStoredVirtualMeetingHostLink(result.data?.virtual_meeting_host_link || virtualMeetingHostLink);
             setStoredVirtualMeetingProvider(result.data?.virtual_meeting_provider || virtualMeetingProvider);
             showSuccessPopup('Virtual meeting link saved.');
         } catch (error) {
@@ -1572,15 +1608,23 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         const virtualMeetingLinkFromResponse = run.virtualMeetingLink || ssgResponse.data.virtualMeetingLink || '';
         const virtualMeetingProviderFromResponse = run.virtualMeetingProvider || ssgResponse.data.virtualMeetingProvider || '';
 
-        // Update form data with the actual SSG response structure
+        // Update form data with the actual SSG response structure, falling back to local database data
         const updatedFormData = {
-            // Registration dates - flat format ?? nested format fallback
-            openingRegistrationDate: (run.registrationOpeningDate ?? run.registrationDates?.opening) ? convertSsgDateToHtml(run.registrationOpeningDate ?? run.registrationDates?.opening) : undefined,
-            closingRegistrationDate: (run.registrationClosingDate ?? run.registrationDates?.closing) ? convertSsgDateToHtml(run.registrationClosingDate ?? run.registrationDates?.closing) : undefined,
+            // Registration dates - Local DB fallback to SSG
+            openingRegistrationDate: (courseToEdit as any)?.registrationOpeningDate 
+                ? extractLocalDate((courseToEdit as any).registrationOpeningDate) 
+                : ((run.registrationOpeningDate ?? run.registrationDates?.opening) ? convertSsgDateToHtml(run.registrationOpeningDate ?? run.registrationDates?.opening) : undefined),
+            closingRegistrationDate: (courseToEdit as any)?.registrationClosingDate
+                ? extractLocalDate((courseToEdit as any).registrationClosingDate)
+                : ((run.registrationClosingDate ?? run.registrationDates?.closing) ? convertSsgDateToHtml(run.registrationClosingDate ?? run.registrationDates?.closing) : undefined),
 
-            // Course dates - flat format ?? nested format fallback
-            courseStartDate: (run.courseStartDate ?? run.courseDates?.start) ? convertSsgDateToHtml(run.courseStartDate ?? run.courseDates?.start) : undefined,
-            courseEndDate: (run.courseEndDate ?? run.courseDates?.end) ? convertSsgDateToHtml(run.courseEndDate ?? run.courseDates?.end) : undefined,
+            // Course dates - Local DB fallback to SSG
+            courseStartDate: courseToEdit?.startDate 
+                ? extractLocalDate(courseToEdit.startDate) 
+                : ((run.courseStartDate ?? run.courseDates?.start) ? convertSsgDateToHtml(run.courseStartDate ?? run.courseDates?.start) : undefined),
+            courseEndDate: courseToEdit?.endDate
+                ? extractLocalDate(courseToEdit.endDate)
+                : ((run.courseEndDate ?? run.courseDates?.end) ? convertSsgDateToHtml(run.courseEndDate ?? run.courseDates?.end) : undefined),
 
             // Course vacancy
             courseVacancy: run.courseVacancy ? {
@@ -1745,7 +1789,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
     };
 
-    // Function to handle course run update specifically
+    // Function to handle course run update — pushes to SSG first, then saves locally
     const handleUpdateCourseRunOnly = async () => {
         if (!courseRunId.trim()) {
             showErrorPopup('Course Run ID is required for updating');
@@ -1753,8 +1797,70 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
 
         setLoading(true);
+        let ssgSuccess = false;
+        let ssgError = '';
+
         try {
-            const requestBody = {
+            // ── Step 1: Push to SSG (mirrors EditCourseRunView.handleSubmit) ──
+            if (courseReferenceNumber.trim()) {
+                const scheduleInfo = (editFormData.courseStartDate && editFormData.courseEndDate)
+                    ? (editFormData.courseStartDate === editFormData.courseEndDate
+                        ? editFormData.courseStartDate
+                        : `${editFormData.courseStartDate} - ${editFormData.courseEndDate}`)
+                    : '';
+
+                const ssgBody: any = {
+                    courseReferenceNumber,
+                    openingRegistrationDate: editFormData.openingRegistrationDate || undefined,
+                    closingRegistrationDate: editFormData.closingRegistrationDate || undefined,
+                    courseStartDate: editFormData.courseStartDate || undefined,
+                    courseEndDate: editFormData.courseEndDate || undefined,
+                    scheduleInfoTypeCode: '01',
+                    scheduleInfoTypeDescription: 'Description',
+                    scheduleInfo,
+                    block: editFormData.block || '',
+                    street: editFormData.street || '',
+                    floor: editFormData.floor || '',
+                    unit: editFormData.unit || '',
+                    building: editFormData.building || '',
+                    postalCode: editFormData.postalCode || '',
+                    room: editFormData.room || '',
+                    wheelChairAccess: editFormData.wheelChairAccess || OptionalSelector.NO,
+                    courseAdminEmail: editFormData.courseAdminEmail || currentUserEmail,
+                    courseVacancy: editFormData.courseVacancy || { code: 'A', description: 'Available' },
+                    fileName: '',
+                    fileContent: '',
+                };
+
+                console.log('📦 [Edit Class] Pushing to SSG:', JSON.stringify(ssgBody, null, 2));
+
+                const ssgRes = await fetch(
+                    `/api/ssg/courses/courseRuns/${encodeURIComponent(courseRunId.trim())}?action=edit`,
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ssgBody) }
+                );
+
+                const contentType = ssgRes.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    const ssgData = await ssgRes.json();
+                    if (!ssgRes.ok) {
+                        const msg = ssgData?.details?.[0] || ssgData?.message || ssgData?.error?.message || `SSG error ${ssgRes.status}`;
+                        ssgError = typeof msg === 'string' ? msg : JSON.stringify(msg);
+                        console.error('❌ [Edit Class] SSG update failed:', ssgError);
+                    } else {
+                        ssgSuccess = true;
+                        console.log('✅ [Edit Class] SSG update succeeded');
+                    }
+                } else {
+                    const text = await ssgRes.text();
+                    ssgError = `Server error ${ssgRes.status}: ${text.slice(0, 300)}`;
+                    console.error('❌ [Edit Class] SSG non-JSON response:', ssgError);
+                }
+            } else {
+                console.warn('⚠️ [Edit Class] No course reference number — skipping SSG update');
+            }
+
+            // ── Step 2: Save locally (always runs) ──
+            const localBody = {
                 courseRunId,
                 courseStartDate: editFormData.courseStartDate || undefined,
                 courseEndDate: editFormData.courseEndDate || undefined,
@@ -1775,21 +1881,28 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
                 classType: classType || undefined,
             };
 
-            const response = await fetch(getApiUrl('/api/admin/update-course-run-local'), {
+            const localRes = await fetch(getApiUrl('/api/admin/update-course-run-local'), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify(localBody)
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error: ${response.status}`);
+            if (!localRes.ok) {
+                const errorData = await localRes.json();
+                throw new Error(errorData.error || `Local save HTTP error: ${localRes.status}`);
             }
 
-            showSuccessPopup('Course run saved locally.');
+            // ── Step 3: Show combined result ──
+            if (ssgSuccess) {
+                showSuccessPopup('Course run updated on both SSG and local database.');
+            } else if (ssgError) {
+                showWarningPopup(`Local database saved, but SSG update failed:\n\n${ssgError}`, 'Partial Save');
+            } else {
+                showSuccessPopup('Course run saved locally. (SSG update skipped — no course reference number)');
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'An error occurred during update';
-            console.error('Local update error:', error);
+            console.error('Update error:', error);
             showErrorPopup('Failed to save course run: ' + errorMessage);
         } finally {
             setLoading(false);
@@ -2261,8 +2374,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             setEditFormData(prev => ({
                 ...prev,
                 courseReferenceNumber: refNumber,
-                courseStartDate: courseToEdit.startDate || '',
-                courseEndDate: courseToEdit.endDate || ''
+                courseStartDate: extractLocalDate(courseToEdit.startDate),
+                courseEndDate: extractLocalDate(courseToEdit.endDate),
+                openingRegistrationDate: extractLocalDate((courseToEdit as any).registrationOpeningDate),
+                closingRegistrationDate: extractLocalDate((courseToEdit as any).registrationClosingDate)
             }));
 
             // Automatically fetch course run data and course sessions, then switch to Course Run tab
@@ -2317,7 +2432,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                                     Saving...
                                 </div>
-                            ) : 'Save to Local Database'}
+                            ) : 'Save Changes'}
                         </Button>
                     )}
                     {!isEditMode && (
@@ -2449,6 +2564,41 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     </div>
                                 )}
                             </div>
+                            {isEditMode && (
+                                <div className="flex items-center gap-3 mt-4 px-1">
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={coursewareEmailDisabled}
+                                            onChange={async (e) => {
+                                                const newVal = e.target.checked;
+                                                setCoursewareEmailDisabled(newVal);
+                                                if (courseToEdit?.id) {
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ id: courseToEdit.id, courseware_email_disabled: newVal }),
+                                                        });
+                                                    } catch {
+                                                        setCoursewareEmailDisabled(!newVal);
+                                                    }
+                                                }
+                                            }}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500" />
+                                    </label>
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Disable Auto Courseware &amp; Attendance Email
+                                    </span>
+                                    <span className="text-xs text-gray-400">
+                                        {coursewareEmailDisabled
+                                            ? 'Scheduled auto-send is skipped for this class only'
+                                            : 'Scheduled auto-send will run for this class'}
+                                    </span>
+                                </div>
+                            )}
                         </FormSection>
 
                         {/* Class Status & Type */}
@@ -2552,32 +2702,85 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             </div>
                                         )}
                                     </div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Virtual Meeting Link</label>
-                                    <div className="flex gap-3">
-                                        <input
-                                            type="url"
-                                            value={virtualMeetingLink}
-                                            onChange={(e) => setVirtualMeetingLink(e.target.value)}
-                                            placeholder={virtualMeetingProvider === 'zoom' ? 'https://zoom.us/j/...' : virtualMeetingProvider === 'teams' ? 'https://teams.microsoft.com/l/meetup-join/...' : 'https://meet.google.com/xxx-xxxx-xxx'}
-                                            className={inputClasses}
-                                        />
-                                        <Button
-                                            variant="primary"
-                                            size="sm"
-                                            type="button"
-                                            onClick={handleSaveVirtualMeeting}
-                                        >
-                                            Save
-                                        </Button>
-                                    </div>
-                                    {virtualMeetingLink && (
-                                        <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
-                                            Open {virtualMeetingProviderLabel}
-                                        </a>
+                                    {isZoomMeetingProvider ? (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Trainer Zoom Start URL</label>
+                                                <input
+                                                    type="url"
+                                                    value={virtualMeetingHostLink}
+                                                    onChange={(e) => setVirtualMeetingHostLink(e.target.value)}
+                                                    placeholder="https://zoom.us/s/..."
+                                                    className={inputClasses}
+                                                />
+                                                {virtualMeetingHostLink && (
+                                                    <a href={virtualMeetingHostLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                        Open trainer start URL
+                                                    </a>
+                                                )}
+                                                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                                    Sensitive trainer-only URL. This starts the Zoom meeting with host access and must not be shared with learners.
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Join URL</label>
+                                                <input
+                                                    type="url"
+                                                    value={virtualMeetingLink}
+                                                    onChange={(e) => setVirtualMeetingLink(e.target.value)}
+                                                    placeholder="https://zoom.us/j/..."
+                                                    className={inputClasses}
+                                                />
+                                                {virtualMeetingLink && (
+                                                    <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                        Open learner join URL
+                                                    </a>
+                                                )}
+                                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                    This URL is shown to learners. Trainers can also join with it, but may not have host/admin controls.
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    type="button"
+                                                    onClick={handleSaveVirtualMeeting}
+                                                >
+                                                    Save Zoom URLs
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Virtual Meeting Link</label>
+                                            <div className="flex gap-3">
+                                                <input
+                                                    type="url"
+                                                    value={virtualMeetingLink}
+                                                    onChange={(e) => setVirtualMeetingLink(e.target.value)}
+                                                    placeholder={virtualMeetingProvider === 'teams' ? 'https://teams.microsoft.com/l/meetup-join/...' : 'https://meet.google.com/xxx-xxxx-xxx'}
+                                                    className={inputClasses}
+                                                />
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    type="button"
+                                                    onClick={handleSaveVirtualMeeting}
+                                                >
+                                                    Save
+                                                </Button>
+                                            </div>
+                                            {virtualMeetingLink && (
+                                                <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                    Open {virtualMeetingProviderLabel}
+                                                </a>
+                                            )}
+                                            <p className="mt-1 text-xs text-gray-400">
+                                                Google Meet links are synced from Google Calendar; Teams links can be entered manually.
+                                            </p>
+                                        </>
                                     )}
-                                    <p className="mt-1 text-xs text-gray-400">
-                                        Google Meet links are synced from Google Calendar; Zoom links can be generated here or entered manually.
-                                    </p>
                                 </div>
                             </FormSection>
                         )}

@@ -1,0 +1,1026 @@
+[
+  {
+    "courseNumber": "AB-100T00",
+    "title": "AB-100T00: Architecting agentic AI business solutions",
+    "solutionArea": "Business Applications",
+    "duration": "3 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ab-100t00"
+  },
+  {
+    "courseNumber": "AB-210T00",
+    "title": "AB-210T00: Accelerate sales pipelines with AI in Dynamics 365",
+    "solutionArea": "Business Applications",
+    "duration": "3 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ab-210t00"
+  },
+  {
+    "courseNumber": "AB-250T00",
+    "title": "AB-250T00: Transform contact center experiences with AI in Dynamics 365",
+    "solutionArea": "Business Applications",
+    "duration": "3 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ab-250t00"
+  },
+  {
+    "courseNumber": "AB-410T00",
+    "title": "AB-410T00: Build intelligent applications",
+    "solutionArea": "Business Applications",
+    "duration": "3 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ab-410t00"
+  },
+  {
+    "courseNumber": "AB-6002",
+    "title": "AB-6002: Introduction to finance in Dynamics 365",
+    "solutionArea": "Business Applications",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ab-6002"
+  },
+  {
+    "courseNumber": "AB-6004",
+    "title": "AB-6004: Introduction to service in Dynamics 365",
+    "solutionArea": "Business Applications",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ab-6004"
+  },
+  {
+    "courseNumber": "AB-620T00",
+    "title": "AB-620T00: Design and build integrated AI agent solutions in Copilot Studio",
+    "solutionArea": "Modern Work",
+    "duration": "3 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/AB-620T00"
+  },
+  {
+    "courseNumber": "AB-7011",
+    "title": "AB-7011: Introduction to navigating the modern Contact Center",
+    "solutionArea": "Business Applications",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ab-7011"
+  },
+  {
+    "courseNumber": "AB-730T00",
+    "title": "AB-730T00: Transform business workflows with generative AI",
+    "solutionArea": "Modern Work",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ab-730t00"
+  },
+  {
+    "courseNumber": "AB-731T00",
+    "title": "AB-731T00: Drive AI transformation in your organization",
+    "solutionArea": "Modern Work",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ab-731t00"
+  },
+  {
+    "courseNumber": "AB-900T00",
+    "title": "AB-900T00: Introduction to Microsoft 365 and AI administration",
+    "solutionArea": "Modern Work",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ab-900t00"
+  },
+  {
+    "courseNumber": "AI-102T00",
+    "title": "AI-102T00: Develop AI solutions in Azure",
+    "solutionArea": "Data & AI",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ai-102t00"
+  },
+  {
+    "courseNumber": "AI-103T00",
+    "title": "AI-103T00: Develop AI apps and agents on Azure",
+    "solutionArea": "Data & AI",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ai-103t00"
+  },
+  {
+    "courseNumber": "AI-200T00",
+    "title": "AI-200T00: Develop AI cloud solutions on Azure",
+    "solutionArea": "Data & AI",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ai-200t00"
+  },
+  {
+    "courseNumber": "AI-3003",
+    "title": "AI-3003: Develop natural language solutions in Azure​",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/develop-language-solutions-azure-ai/"
+  },
+  {
+    "courseNumber": "AI-3008",
+    "title": "AI-3008: Extract insights from visual data on Azure",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ai-3008"
+  },
+  {
+    "courseNumber": "AI-300T00",
+    "title": "AI-300T00: Operationalize machine learning and generative AI solutions",
+    "solutionArea": "Data & AI",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ai-300t00"
+  },
+  {
+    "courseNumber": "AI-3016",
+    "title": "AI-3016: Develop generative AI apps in Azure",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/create-custom-copilots-ai-studio/"
+  },
+  {
+    "courseNumber": "AI-3019",
+    "title": "AI-3019: Build AI Apps with Azure Database for PostgreSQL",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/build-ai-apps-azure-database-postgresql/"
+  },
+  {
+    "courseNumber": "AI-3022",
+    "title": "AI-3022: Implement knowledge mining with Azure AI Search",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/implement-knowledge-mining-azure-cognitive-search/"
+  },
+  {
+    "courseNumber": "AI-3025",
+    "title": "AI-3025: Work smarter with AI",
+    "solutionArea": "Data & AI",
+    "duration": "3 hour",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ai-3025"
+  },
+  {
+    "courseNumber": "AI-3026",
+    "title": "AI-3026: Develop AI agents on Azure",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ai-3026"
+  },
+  {
+    "courseNumber": "AI-900T00",
+    "title": "AI-900T00: Introduction to AI in Azure",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ai-900t00"
+  },
+  {
+    "courseNumber": "AI-901T00",
+    "title": "AI-901T00: Introduction to AI in Azure",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ai-901t00"
+  },
+  {
+    "courseNumber": "AZ-040T00",
+    "title": "AZ-040T00: Automate Administration with PowerShell",
+    "solutionArea": "Infrastructure",
+    "duration": "5 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-040t00"
+  },
+  {
+    "courseNumber": "AZ-1002",
+    "title": "AZ-1002: Configure secure access to your workloads using networking with Azure Virtual Network",
+    "solutionArea": "Infrastructure",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/configure-secure-workloads-using-azure-virtual-networking/"
+  },
+  {
+    "courseNumber": "AZ-1003",
+    "title": "AZ-1003: Secure storage for Azure Files and Azure Blob Storage",
+    "solutionArea": "Infrastructure",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/implement-storage-azure-files-azure-blob-storage/"
+  },
+  {
+    "courseNumber": "AZ-1004",
+    "title": "AZ-1004: Deploy and configure Azure Monitor",
+    "solutionArea": "Infrastructure",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/deploy-configure-azure-monitor/"
+  },
+  {
+    "courseNumber": "AZ-1007",
+    "title": "AZ-1007: Deploy and administer Linux virtual machines on Azure",
+    "solutionArea": "Infrastructure",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-1007"
+  },
+  {
+    "courseNumber": "AZ-1008",
+    "title": "AZ-1008: Administer Active Directory Domain Services",
+    "solutionArea": "Infrastructure",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/administer-active-directory-domain-services/"
+  },
+  {
+    "courseNumber": "AZ-104T00",
+    "title": "AZ-104T00: Microsoft Azure Administrator",
+    "solutionArea": "Infrastructure",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-104t00"
+  },
+  {
+    "courseNumber": "AZ-120T00",
+    "title": "AZ-120T00: Planning and Deploying SAP on Azure",
+    "solutionArea": "Infrastructure",
+    "duration": "3 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-120t00"
+  },
+  {
+    "courseNumber": "AZ-140T00",
+    "title": "AZ-140T00: Configure and Operate Microsoft Azure Virtual Desktop",
+    "solutionArea": "Infrastructure",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-140t00"
+  },
+  {
+    "courseNumber": "AZ-2001",
+    "title": "AZ-2001: Implement security through a pipeline using Azure DevOps",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/implement-security-through-pipeline-using-devops/"
+  },
+  {
+    "courseNumber": "AZ-2003",
+    "title": "AZ-2003: Deploy cloud-native apps using Azure Container Apps",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/deploy-cloud-native-applications-to-azure-container-apps/"
+  },
+  {
+    "courseNumber": "AZ-2005",
+    "title": "AZ-2005: Develop Generative AI solutions using Azure OpenAI and the Semantic Kernel SDK",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/develop-ai-agents-azure-open-ai-semantic-kernel-sdk/"
+  },
+  {
+    "courseNumber": "AZ-2006",
+    "title": "AZ-2006: Automate Azure Load Testing by using GitHub Actions",
+    "solutionArea": "Infrastructure",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/automate-azure-load-testing-github/"
+  },
+  {
+    "courseNumber": "AZ-2007",
+    "title": "AZ-2007: Get started with AI-assisted development",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/accelerate-app-development-using-github-copilot/"
+  },
+  {
+    "courseNumber": "AZ-2008",
+    "title": "AZ-2008: DevOps Foundations: The Core Principles and Practices",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-2008"
+  },
+  {
+    "courseNumber": "AZ-2010",
+    "title": "AZ-2010: Design and Implement Platform Engineering",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-2010"
+  },
+  {
+    "courseNumber": "AZ-204T00",
+    "title": "AZ-204T00: Develop Solutions for Microsoft Azure",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-204t00"
+  },
+  {
+    "courseNumber": "AZ-305T00",
+    "title": "AZ-305T00: Design Microsoft Azure Infrastructure Solutions",
+    "solutionArea": "Infrastructure",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-305t00"
+  },
+  {
+    "courseNumber": "AZ-400T00",
+    "title": "AZ-400T00: Design and Implement Microsoft DevOps solutions",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-400t00"
+  },
+  {
+    "courseNumber": "AZ-500T00",
+    "title": "AZ-500T00: Secure cloud resources with Microsoft security technologies",
+    "solutionArea": "Security",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-500t00"
+  },
+  {
+    "courseNumber": "AZ-700T00",
+    "title": "AZ-700T00: Design and Implement Microsoft Azure Network Solutions",
+    "solutionArea": "Infrastructure",
+    "duration": "3 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-700t00"
+  },
+  {
+    "courseNumber": "AZ-800T00",
+    "title": "AZ-800T00: Administer Windows Server Hybrid Core Infrastructure",
+    "solutionArea": "Infrastructure",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-800t00"
+  },
+  {
+    "courseNumber": "AZ-801T00",
+    "title": "AZ-801T00: Configure Windows Server Hybrid Advanced Services",
+    "solutionArea": "Infrastructure",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-801t00"
+  },
+  {
+    "courseNumber": "AZ-900T00",
+    "title": "AZ-900T00: Introduction to Cloud Infrastructure",
+    "solutionArea": "Infrastructure",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/az-900t00"
+  },
+  {
+    "courseNumber": "DP-080T00",
+    "title": "DP-080T00: Query and modify data with Transact-SQL",
+    "solutionArea": "Data & AI",
+    "duration": "2 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-080t00"
+  },
+  {
+    "courseNumber": "DP-100T01",
+    "title": "DP-100T01: Designing and implementing a data science solution on Azure",
+    "solutionArea": "Data & AI",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-100t01"
+  },
+  {
+    "courseNumber": "DP-3001",
+    "title": "DP-3001: Migrate SQL Server workload to Azure SQL",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/migrate-sql-workloads-azure/"
+  },
+  {
+    "courseNumber": "DP-300T00",
+    "title": "DP-300T00: Implement scalable database solutions using Azure SQL",
+    "solutionArea": "Data & AI",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-300t00"
+  },
+  {
+    "courseNumber": "DP-3011",
+    "title": "DP-3011: Implement a Data Analytics Solution with Azure Databricks",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-3011"
+  },
+  {
+    "courseNumber": "DP-3014",
+    "title": "DP-3014: Build machine learning solutions using Azure Databricks",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-3014"
+  },
+  {
+    "courseNumber": "DP-3015",
+    "title": "DP-3015: Get started with Azure Cosmos DB NoSQL development",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-3015"
+  },
+  {
+    "courseNumber": "DP-3020",
+    "title": "DP-3020: Develop data-driven applications with Azure SQL Database",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/develop-data-driven-app-sql-db/"
+  },
+  {
+    "courseNumber": "DP-3021",
+    "title": "DP-3021: Configure and migrate to Azure Database for PostgreSQL",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/microsoft-learn-azure-database-for-postgresql/"
+  },
+  {
+    "courseNumber": "DP-3028",
+    "title": "DP-3028: Implement Generative AI engineering with Azure Databricks",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-3028"
+  },
+  {
+    "courseNumber": "DP-3029",
+    "title": "DP-3029: Work smarter with Copilot in Microsoft Fabric",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-3029"
+  },
+  {
+    "courseNumber": "DP-420T00",
+    "title": "DP-420T00: Design and implement cloud-native applications with Microsoft Azure Cosmos DB",
+    "solutionArea": "Data & AI",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-420t00"
+  },
+  {
+    "courseNumber": "DP-600T00",
+    "title": "DP-600T00: Microsoft Fabric Analytics Engineer",
+    "solutionArea": "Data & AI",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-600t00"
+  },
+  {
+    "courseNumber": "DP-601T00",
+    "title": "DP-601T00: Implement a Lakehouse with Microsoft Fabric",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-601t00"
+  },
+  {
+    "courseNumber": "DP-602T00",
+    "title": "DP-602T00: Implement a Data Warehouse with Microsoft Fabric",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/work-with-data-warehouses-using-microsoft-fabric/"
+  },
+  {
+    "courseNumber": "DP-603T00",
+    "title": "DP-603T00: Implement Real-Time Intelligence with Microsoft Fabric",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/explore-real-time-analytics-microsoft-fabric/"
+  },
+  {
+    "courseNumber": "DP-604T00",
+    "title": "DP-604T00: Implement a data science and machine learning solution for AI with Microsoft Fabric",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-604t00"
+  },
+  {
+    "courseNumber": "DP-605T00",
+    "title": "DP-605T00: Prepare and visualize data with Microsoft Power BI",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-605t00"
+  },
+  {
+    "courseNumber": "DP-700T00",
+    "title": "DP-700T00: Implement data engineering solutions using Microsoft Fabric",
+    "solutionArea": "Data & AI",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-700t00"
+  },
+  {
+    "courseNumber": "DP-750T00",
+    "title": "DP-750T00: Implement data engineering solutions using Azure Databricks",
+    "solutionArea": "Data & AI",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-750t00"
+  },
+  {
+    "courseNumber": "DP-800T00",
+    "title": "DP-800T00: Develop AI-enabled database solutions",
+    "solutionArea": "Data & AI",
+    "duration": "3 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-800t00"
+  },
+  {
+    "courseNumber": "DP-900T00",
+    "title": "DP-900T00: Introduction to Microsoft Azure Data",
+    "solutionArea": "Data & AI",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/dp-900t00"
+  },
+  {
+    "courseNumber": "GH-100T00",
+    "title": "GH-100T00: GitHub fundamentals - Administration basics and product features",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/gh-100t00"
+  },
+  {
+    "courseNumber": "GH-200T00",
+    "title": "GH-200T00: Automate your workflow with GitHub Actions",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/gh-200t00"
+  },
+  {
+    "courseNumber": "GH-300T00",
+    "title": "GH-300T00: GitHub Copilot",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/gh-300t00"
+  },
+  {
+    "courseNumber": "GH-500T00",
+    "title": "GH-500T00: GitHub Advanced Security",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/gh-500t00"
+  },
+  {
+    "courseNumber": "GH-900T00",
+    "title": "GH-900T00: GitHub Foundations",
+    "solutionArea": "Digital and App Innovation",
+    "duration": "2 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/gh-900t00"
+  },
+  {
+    "courseNumber": "MB-230T01",
+    "title": "MB-230T01: Implement customer service solutions using Microsoft Dynamics 365 Customer Service",
+    "solutionArea": "Business Applications",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-230t01"
+  },
+  {
+    "courseNumber": "MB-240T00",
+    "title": "MB-240T00: Implement field service solutions using Microsoft Dynamics 365 Field Service",
+    "solutionArea": "Business Applications",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-240t00"
+  },
+  {
+    "courseNumber": "MB-280T01",
+    "title": "MB-280T01: Configure Dynamics 365 customer experience model-driven apps",
+    "solutionArea": "Business Applications",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-280t01"
+  },
+  {
+    "courseNumber": "MB-280T02",
+    "title": "MB-280T02: Empower sellers with Dynamics 365 Sales",
+    "solutionArea": "Business Applications",
+    "duration": "2 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-280t02"
+  },
+  {
+    "courseNumber": "MB-280T03",
+    "title": "MB-280T03: Design and deliver powerful customer experiences with Dynamics 365 Customer Insights",
+    "solutionArea": "Business Applications",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-280t03"
+  },
+  {
+    "courseNumber": "MB-280T04",
+    "title": "MB-280T04: Configure a Dynamics 365 customer experience solution",
+    "solutionArea": "Business Applications",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-280t04"
+  },
+  {
+    "courseNumber": "MB-310T00",
+    "title": "MB-310T00: Manage Financial Operations with Dynamics 365 Finance",
+    "solutionArea": "Business Applications",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-310t00"
+  },
+  {
+    "courseNumber": "MB-330T00",
+    "title": "MB-330T00: Conceptualize Supply Chain Management in Microsoft Dynamics 365",
+    "solutionArea": "Business Applications",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-330t00"
+  },
+  {
+    "courseNumber": "MB-335T00",
+    "title": "MB-335T00: Augment advance level Supply Chain Management solutions with Microsoft Dynamics 365",
+    "solutionArea": "Business Applications",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-335t00"
+  },
+  {
+    "courseNumber": "MB-500T00",
+    "title": "MB-500T00: Develop Finance and Operations Apps with Dynamics 365",
+    "solutionArea": "Business Applications",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-500t00"
+  },
+  {
+    "courseNumber": "MB-700T00",
+    "title": "MB-700T00: Architect solutions for Microsoft Dynamics 365 Finance and Operations Apps",
+    "solutionArea": "Business Applications",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-700t00"
+  },
+  {
+    "courseNumber": "MB-800T00",
+    "title": "MB-800T00: Manage business solutions with Microsoft Dynamics 365 Business Central",
+    "solutionArea": "Business Applications",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-800t00"
+  },
+  {
+    "courseNumber": "MB-820T00",
+    "title": "MB-820T00: Develop solutions with Dynamics 365 Business Central",
+    "solutionArea": "Business Applications",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/mb-820t00"
+  },
+  {
+    "courseNumber": "MD-102T00",
+    "title": "MD-102T00: Microsoft 365 Endpoint Administrator",
+    "solutionArea": "Modern Work",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/md-102t00"
+  },
+  {
+    "courseNumber": "MD-4011",
+    "title": "MD-4011: Enhance endpoint security with Microsoft Intune and Microsoft Security Copilot",
+    "solutionArea": "Modern Work",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/md-4011"
+  },
+  {
+    "courseNumber": "MS-102T00",
+    "title": "MS-102T00: Microsoft 365 Administrator",
+    "solutionArea": "Modern Work",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ms-102t00"
+  },
+  {
+    "courseNumber": "MS-4002",
+    "title": "MS-4002: Prepare security and compliance to support Microsoft 365 Copilot",
+    "solutionArea": "Modern Work",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/prepare-security-compliance-support-microsoft-365-copilot/"
+  },
+  {
+    "courseNumber": "MS-4004",
+    "title": "MS-4004: Empower your workforce with Microsoft 365 Copilot Use Cases",
+    "solutionArea": "Modern Work",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ms-4004"
+  },
+  {
+    "courseNumber": "MS-4010",
+    "title": "MS-4010: Extend Microsoft 365 Copilot with declarative agents by using Visual Studio Code",
+    "solutionArea": "Modern Work",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/build-plugins-connectors-microsoft-copilot-microsoft-365/"
+  },
+  {
+    "courseNumber": "MS-4014",
+    "title": "MS-4014: Build a foundation to build AI agents and extend Microsoft 365 Copilot",
+    "solutionArea": "Modern Work",
+    "duration": "4 hour",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ms-4014"
+  },
+  {
+    "courseNumber": "MS-4015",
+    "title": "MS-4015: Build custom engine agents with the Microsoft 365 Agents SDK",
+    "solutionArea": "Modern Work",
+    "duration": "4 hour",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ms-4015"
+  },
+  {
+    "courseNumber": "MS-4017",
+    "title": "MS-4017: Manage and extend Microsoft 365 Copilot",
+    "solutionArea": "Modern Work",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/MS-4017"
+  },
+  {
+    "courseNumber": "MS-4018",
+    "title": "MS-4018: Draft, analyze, and present with Microsoft 365 Copilot",
+    "solutionArea": "Modern Work",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ms-4018"
+  },
+  {
+    "courseNumber": "MS-4019",
+    "title": "MS-4019: Transform your everyday business processes with agents",
+    "solutionArea": "Modern Work",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ms-4019"
+  },
+  {
+    "courseNumber": "MS-4021",
+    "title": "MS-4021: Copilot Immersion Experience",
+    "solutionArea": "Modern Work",
+    "duration": "2 hour",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ms-4021"
+  },
+  {
+    "courseNumber": "MS-4022",
+    "title": "MS-4022: Extend Microsoft 365 Copilot in Copilot Studio",
+    "solutionArea": "Modern Work",
+    "duration": "4 hour",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ms-4022"
+  },
+  {
+    "courseNumber": "MS-4023",
+    "title": "MS-4023: Transform Ideas into Action with Copilot Chat (Basic)",
+    "solutionArea": "Modern Work",
+    "duration": "3 hour",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ms-4023"
+  },
+  {
+    "courseNumber": "MS-700T00",
+    "title": "MS-700T00: Manage collaboration and communication with Microsoft Teams",
+    "solutionArea": "Modern Work",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ms-700t00"
+  },
+  {
+    "courseNumber": "MS-721T00",
+    "title": "MS-721T00: Plan, configure, and manage collaboration communications systems with Microsoft Teams",
+    "solutionArea": "Modern Work",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/ms-721t00"
+  },
+  {
+    "courseNumber": "PL-200T00",
+    "title": "PL-200T00: Microsoft Power Platform Functional Consultant",
+    "solutionArea": "Business Applications",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/pl-200t00"
+  },
+  {
+    "courseNumber": "PL-300T00",
+    "title": "PL-300T00: Design and manage analytics solutions using Power BI",
+    "solutionArea": "Data & AI",
+    "duration": "3 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/pl-300t00"
+  },
+  {
+    "courseNumber": "PL-400T00",
+    "title": "PL-400T00: Microsoft Power Platform Developer",
+    "solutionArea": "Business Applications",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/pl-400t00"
+  },
+  {
+    "courseNumber": "PL-500T00",
+    "title": "PL-500T00: Microsoft Power Automate RPA Developer",
+    "solutionArea": "Business Applications",
+    "duration": "5 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/pl-500t00"
+  },
+  {
+    "courseNumber": "PL-600T00",
+    "title": "PL-600T00: Microsoft Power Platform Solution Architect",
+    "solutionArea": "Business Applications",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/pl-600t00"
+  },
+  {
+    "courseNumber": "PL-7001",
+    "title": "PL-7001: Create and Manage Canvas Apps with Power Apps",
+    "solutionArea": "Business Applications",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/create-manage-canvas-apps-power-apps/"
+  },
+  {
+    "courseNumber": "PL-7002",
+    "title": "PL-7002: Create and Manage Automated Processes by using Power Automate",
+    "solutionArea": "Business Applications",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/create-manage-automated-processes-by-using-power-automate/"
+  },
+  {
+    "courseNumber": "PL-7003",
+    "title": "PL-7003: Create and Manage Model-Driven Apps with Power Apps and Dataverse",
+    "solutionArea": "Business Applications",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/create-manage-model-driven-apps/"
+  },
+  {
+    "courseNumber": "PL-7008",
+    "title": "PL-7008: Create agents in Microsoft Copilot Studio",
+    "solutionArea": "Business Applications",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/create-extend-custom-copilots-microsoft-copilot-studio/"
+  },
+  {
+    "courseNumber": "PL-900T00",
+    "title": "PL-900T00: Introduction to Microsoft Power Platform",
+    "solutionArea": "Business Applications",
+    "duration": "2 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/pl-900t00"
+  },
+  {
+    "courseNumber": "SC-100T00",
+    "title": "SC-100T00: Microsoft Cybersecurity Architect",
+    "solutionArea": "Security",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/sc-100t00"
+  },
+  {
+    "courseNumber": "SC-200T00",
+    "title": "SC-200T00: Defend against cyberthreats with Microsoft's security operations platform",
+    "solutionArea": "Security",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/sc-200t00"
+  },
+  {
+    "courseNumber": "SC-300T00",
+    "title": "SC-300T00: Microsoft Identity and Access Administrator",
+    "solutionArea": "Security",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/sc-300t00"
+  },
+  {
+    "courseNumber": "SC-401T00",
+    "title": "SC-401T00: Protect sensitive information with Microsoft Purview in the AI era",
+    "solutionArea": "Security",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/sc-401t00"
+  },
+  {
+    "courseNumber": "SC-5001",
+    "title": "SC-5001: Configure SIEM security operations using Microsoft Sentinel",
+    "solutionArea": "Security",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/sc-5001"
+  },
+  {
+    "courseNumber": "SC-5002",
+    "title": "SC-5002: Secure Azure services and workloads with Microsoft Defender for Cloud regulatory compliance controls",
+    "solutionArea": "Security",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/secure-azure-services-workloads-defender-cloud/"
+  },
+  {
+    "courseNumber": "SC-5003",
+    "title": "SC-5003: Implement information protection and data loss prevention by using Microsoft Purview",
+    "solutionArea": "Security",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/purview-implement-information-protection-data-loss-prevention"
+  },
+  {
+    "courseNumber": "SC-5004",
+    "title": "SC-5004: Defend against cyberthreats with Microsoft Defender XDR",
+    "solutionArea": "Security",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/sc-5004-defend-against-cyberthreats-defender/"
+  },
+  {
+    "courseNumber": "SC-5006",
+    "title": "SC-5006: Enhance security operations by using Microsoft Security Copilot",
+    "solutionArea": "Security",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/sc-5006"
+  },
+  {
+    "courseNumber": "SC-5007",
+    "title": "SC-5007: Implement retention, eDiscovery, and Communication compliance in Microsoft Purview",
+    "solutionArea": "Security",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/paths/purview-implement-retention-ediscovery-communication-compliance/"
+  },
+  {
+    "courseNumber": "SC-5008",
+    "title": "SC-5008: Configure and govern entitlement with Microsoft Entra ID",
+    "solutionArea": "Security",
+    "duration": "1 day",
+    "credential": "N/A",
+    "baseUrl": "https://learn.microsoft.com/training/courses/sc-5008"
+  },
+  {
+    "courseNumber": "SC-5009",
+    "title": "SC-5009: Secure AI solutions in the cloud using Microsoft Defender for Cloud and Microsoft Entra",
+    "solutionArea": "Security",
+    "duration": "1 day",
+    "credential": "Applied Skills Assessment",
+    "baseUrl": "https://learn.microsoft.com/training/courses/sc-5009"
+  },
+  {
+    "courseNumber": "SC-500T00",
+    "title": "SC-500T00: Implement end‑to‑end security controls for cloud and AI workloads",
+    "solutionArea": "Security",
+    "duration": "4 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/sc-500T00"
+  },
+  {
+    "courseNumber": "SC-900T00",
+    "title": "SC-900T00: Introduction to Microsoft Security, Compliance, and Identity",
+    "solutionArea": "Security",
+    "duration": "1 day",
+    "credential": "Exam/Certification",
+    "baseUrl": "https://learn.microsoft.com/training/courses/sc-900t00"
+  }
+]

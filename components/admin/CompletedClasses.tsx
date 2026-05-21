@@ -89,6 +89,8 @@ const CompletedClasses: React.FC = () => {
   const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('all');
   const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External'>('all');
   const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
+  const [selectedLearnerFilter, setSelectedLearnerFilter] = useState<'all' | 'withLearners' | 'noLearners'>('withLearners');
+  const [selectedTrainerAssignmentFilter, setSelectedTrainerAssignmentFilter] = useState<'all' | 'withTrainers' | 'noTrainers'>('all');
   const [startDateFrom, setStartDateFrom] = useState('');
   const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -156,6 +158,8 @@ const CompletedClasses: React.FC = () => {
       if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
       if (selectedClassType !== 'all') params.append('classType', selectedClassType);
       if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
+      if (selectedLearnerFilter !== 'all') params.append('learnerFilter', selectedLearnerFilter);
+      if (selectedTrainerAssignmentFilter !== 'all') params.append('trainerAssignmentFilter', selectedTrainerAssignmentFilter);
       if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
       if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -221,7 +225,7 @@ const CompletedClasses: React.FC = () => {
       return;
     }
     setCurrentPage(0);
-  }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType]);
+  }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter]);
 
   // Mark initial mount as done AFTER all other mount effects have executed
   useEffect(() => {
@@ -232,7 +236,7 @@ const CompletedClasses: React.FC = () => {
   // Fetch data when debounced filters or pagination change
   useEffect(() => {
     fetchCompletedClasses();
-  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, debouncedStartDate, debouncedEndDate]);
+  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter, debouncedStartDate, debouncedEndDate]);
 
   // Date formatting function
   const formatDateInput = (value: string) => {
@@ -265,6 +269,8 @@ const CompletedClasses: React.FC = () => {
     setSelectedClassStatus('all');
     setSelectedClassType('all');
     setSelectedCourseType('all');
+    setSelectedLearnerFilter('withLearners');
+    setSelectedTrainerAssignmentFilter('all');
     setStartDateFrom('');
     setEndDateUntil('');
     setCurrentPage(0);
@@ -686,6 +692,32 @@ const CompletedClasses: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Learners</label>
+                  <select
+                    value={selectedLearnerFilter}
+                    onChange={(e) => setSelectedLearnerFilter(e.target.value as 'all' | 'withLearners' | 'noLearners')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="withLearners">With Learners</option>
+                    <option value="noLearners">No Learners Only</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer Assignment</label>
+                  <select
+                    value={selectedTrainerAssignmentFilter}
+                    onChange={(e) => setSelectedTrainerAssignmentFilter(e.target.value as 'all' | 'withTrainers' | 'noTrainers')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="withTrainers">With Trainers</option>
+                    <option value="noTrainers">No Trainers Only</option>
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
                   <input
                     type="text"
@@ -722,7 +754,7 @@ const CompletedClasses: React.FC = () => {
             <Icon name={IconName.CheckCircle} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2 dark:text-white">No completed classes found</h3>
             <p className="text-gray-500 mb-6 dark:text-gray-400">
-              {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassType !== 'all' || selectedCourseType !== 'all' || startDateFrom || endDateUntil
+              {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassStatus !== 'all' || selectedClassType !== 'all' || selectedCourseType !== 'all' || selectedLearnerFilter !== 'withLearners' || selectedTrainerAssignmentFilter !== 'all' || startDateFrom || endDateUntil
                 ? "No classes match your current search criteria."
                 : "There are no completed classes in the system yet."}
             </p>

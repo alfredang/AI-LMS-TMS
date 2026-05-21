@@ -104,6 +104,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         );
       case 'admin':
       case 'finance':
+      case 'payroll':
         return <AdminProfileCard profile={profile as AdminProfile} />;
       default:
         return (

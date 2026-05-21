@@ -1,10 +1,14 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
+import { requireRole } from '@lib/auth/requireRole';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT' && req.method !== 'PATCH') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
+
+  const authed = await requireRole(req, res, ['payroll', 'admin']);
+  if (!authed) return;
 
   const { id } = req.query;
   if (!id || typeof id !== 'string') {
@@ -12,7 +16,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { actual_payout, status, payment_date, remark, updated_by } = req.body || {};
+    const { actual_payout, status, payment_date, remark } = req.body || {};
+    const updated_by = authed.id;
 
     if (status && !['pending', 'completed', 'cancelled'].includes(status)) {
       return res.status(400).json({ success: false, error: 'invalid status' });
@@ -50,7 +55,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     sets.push(`updated_at = now()`);
     params.push(id);
 
-    const sql = `UPDATE trainer_payout SET ${sets.join(', ')} WHERE id = $${i} RETURNING *`;
+    const sql = `
+      UPDATE trainer_payout SET ${sets.join(', ')}
+       WHERE id = $${i}
+       RETURNING
+         id, course_run_id, trainer_id, num_learners, course_fee,
+         tier_percent, estimated_payout, actual_payout, status,
+         payment_date::text AS payment_date, remark, updated_at, updated_by
+    `;
     const r = await pool.query(sql, params);
     if (r.rowCount === 0) {
       return res.status(404).json({ success: false, error: 'payout not found' });

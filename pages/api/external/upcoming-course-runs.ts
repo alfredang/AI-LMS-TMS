@@ -7,6 +7,7 @@ import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { syncEnrolmentToDB } from '../../../lib/ssg/utils/sync-enrolment-to-db';
 import { splitTrainerList } from '../../../lib/trainerInvitations';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 /**
  * External API — Fetch TGS Enrolments & Assign Trainers
@@ -182,10 +183,10 @@ async function _runUpcomingCourseRunsInner() {
 
   // Date window strings for comparison (YYYY-MM-DD)
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = getLocalYMD(today);
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() + thresholdDays);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const cutoffStr = getLocalYMD(cutoff);
 
   console.log(`📋 upcoming-course-runs: window = ${todayStr} → ${cutoffStr} (${thresholdDays} days)`);
 

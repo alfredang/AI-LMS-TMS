@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@/lib/db';
 
-const VALID_STATUSES = ['Active', 'Pending', 'Not Subscribed', 'Suspended', 'Rejected'];
+const VALID_STATUSES = ['Active', 'Pending', 'Not Subscribed', 'Suspended', 'Rejected', 'Inactive'];
 
 async function ensureTable() {
   await pool.query(`

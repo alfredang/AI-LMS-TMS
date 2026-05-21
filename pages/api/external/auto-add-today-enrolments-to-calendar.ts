@@ -5,6 +5,7 @@ import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 /**
  * Scheduler endpoint: pulls today's (SGT) SSG enrolments, then for each
@@ -22,8 +23,7 @@ function stripPrefixes(title: string): string {
 function sgtDate(iso?: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return new Date(d.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-}
+  return getLocalYMD(d)}
 
 function normDate(v: any): string | null {
   if (!v) return null;
@@ -73,7 +73,7 @@ async function _runAutomationInner(): Promise<{
 
   const tp = await getTrainingPartnerIdentifiers();
   const api = createSSGEnrolmentAPI(process.env.SSG_API_URL || 'https://api.ssg-wsg.sg', credentials);
-  const todaySgt = new Date(new Date().getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  const todaySgt = getLocalYMD(new Date());
   const dateCompact = todaySgt.replace(/-/g, '');
 
   const result = await api.searchEnrolment({

@@ -2,6 +2,12 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# git is needed at build time so next.config.js can stamp the commit hash/date.
+# safe.directory bypass is required because COPY-ed files are owned by root,
+# which trips modern git's "dubious ownership" guard.
+RUN apk add --no-cache git \
+    && git config --global --add safe.directory '*'
+
 COPY package*.json ./
 RUN npm ci
 
@@ -17,6 +23,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+
+# Force the builder stage to complete before this stage starts its heavy work
+# (apt installs, Python venv compilation, ~400 MB of Playwright Chromium
+# downloads). Without this, BuildKit runs both stages in parallel and the peak
+# memory pressure can OOM-kill the build on smaller servers. Copying a tiny
+# always-changing file is enough to introduce the cross-stage dependency.
+COPY --from=builder /app/package.json /tmp/_builder_ready.json
+RUN rm -f /tmp/_builder_ready.json
 
 # Install Python 3 runtime for courseware generator scripts
 RUN apt-get update && apt-get install -y --no-install-recommends \

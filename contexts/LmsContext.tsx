@@ -815,10 +815,16 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const navigateAdminPage = useCallback((page: AdminPage) => {
     setAdminPage(page);
     setSelectedCourse(null);
+    if (role === UserRole.Admin) {
+      setCurrentView(View.Admin);
+    }
     const newQuery: any = { ...router.query, adminPage: page };
+    if (role === UserRole.Admin) {
+      newQuery.view = View.Admin;
+    }
     delete newQuery.courseId;
     pushQueryIfDifferent(newQuery);
-  }, [router, pushQueryIfDifferent]);
+  }, [role, router, pushQueryIfDifferent]);
 
   // Wrapped setTrainerPage to sync with URL
   const navigateTrainerPage = useCallback((page: TrainerPage) => {
@@ -1170,6 +1176,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           assessmentPlanUrl: trainerData.data.courseDetail.assessmentPlanUrl,
           courseLink: trainerData.data.courseDetail.courseLink,
           assessmentRecordLink: trainerData.data.courseDetail.assessmentRecordLink,
+          assessmentSummaryRecordUrl: trainerData.data.courseDetail.assessmentSummaryRecordUrl,
           writtenAssessmentLink: trainerData.data.courseDetail.writtenAssessmentLink,
           practicalPerformanceAssessmentLink: trainerData.data.courseDetail.practicalPerformanceAssessmentLink,
           writtenAssessmentPublished: trainerData.data.courseDetail.writtenAssessmentPublished ?? false,

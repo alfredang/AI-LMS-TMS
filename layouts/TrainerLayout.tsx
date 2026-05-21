@@ -16,15 +16,22 @@ import AssessmentGrading from '../components/trainer/AssessmentGrading';
 import PastAttendance from '../components/trainer/PastAttendance';
 import PastAssessment from '../components/trainer/PastAssessment';
 import EdToolsPage from '../components/trainer/EdToolsPage';
+import ProjectMgtToolsPage from '../components/trainer/ProjectMgtToolsPage';
 import ProblemSolvingToolsPage from '../components/trainer/ProblemSolvingToolsPage';
+import CyberSecurityToolsPage from '../components/trainer/CyberSecurityToolsPage';
 import DataAnalyticsToolsPage from '../components/trainer/DataAnalyticsToolsPage';
+import MLToolsPage from '../components/trainer/MLToolsPage';
 import FinanceToolsPage from '../components/trainer/FinanceToolsPage';
+import HRToolsPage from '../components/trainer/HRToolsPage';
 import StatToolsPage from '../components/trainer/StatToolsPage';
 import DoeToolsPage from '../components/trainer/DoeToolsPage';
 import SpcToolsPage from '../components/trainer/SpcToolsPage';
 import SustainabilityToolsPage from '../components/trainer/SustainabilityToolsPage';
+import NetworkingToolsPage from '../components/trainer/NetworkingToolsPage';
 import BlockchainToolsPage from '../components/trainer/BlockchainToolsPage';
+import QuantumToolsPage from '../components/trainer/QuantumToolsPage';
 import LessonDeliveryGuidePage from '../components/trainer/LessonDeliveryGuidePage';
+import TrainerGuidesPage from '../components/trainer/TrainerGuidesPage';
 import VirtualToolsPage from '../components/trainer/VirtualToolsPage';
 import AgenticAIToolsPage from '../components/trainer/AgenticAIToolsPage';
 import AssessmentGuidePage from '../components/trainer/AssessmentGuidePage';
@@ -60,12 +67,20 @@ const TrainerLayout: React.FC = () => {
         return <CreateView />;
       case TrainerPage.EdTools:
         return <EdToolsPage />;
+      case TrainerPage.ProjectMgtTools:
+        return <ProjectMgtToolsPage />;
       case TrainerPage.ProblemSolvingTools:
         return <ProblemSolvingToolsPage />;
+      case TrainerPage.CyberSecurityTools:
+        return <CyberSecurityToolsPage />;
       case TrainerPage.DataAnalyticsTools:
         return <DataAnalyticsToolsPage />;
+      case TrainerPage.MLTools:
+        return <MLToolsPage />;
       case TrainerPage.FinanceTools:
         return <FinanceToolsPage />;
+      case TrainerPage.HRTools:
+        return <HRToolsPage />;
       case TrainerPage.StatTools:
         return <StatToolsPage />;
       case TrainerPage.DoeTools:
@@ -74,14 +89,22 @@ const TrainerLayout: React.FC = () => {
         return <SpcToolsPage />;
       case TrainerPage.SustainabilityTools:
         return <SustainabilityToolsPage />;
+      case TrainerPage.NetworkingTools:
+        return <NetworkingToolsPage />;
       case TrainerPage.BlockchainTools:
         return <BlockchainToolsPage />;
+      case TrainerPage.QuantumTools:
+        return <QuantumToolsPage />;
       case TrainerPage.VirtualTools:
         return <VirtualToolsPage />;
       case TrainerPage.AgenticAITools:
         return <AgenticAIToolsPage />;
+      case TrainerPage.TrainerGuides:
+        return <TrainerGuidesPage />;
       case TrainerPage.LessonDeliveryGuide:
-        return <LessonDeliveryGuidePage />;
+        return <LessonDeliveryGuidePage variant="physical" />;
+      case TrainerPage.VirtualClassGuide:
+        return <LessonDeliveryGuidePage variant="virtual" />;
       case TrainerPage.AssessmentGuide:
         return <AssessmentGuidePage />;
       case TrainerPage.PaymentHistory:
