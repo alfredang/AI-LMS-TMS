@@ -14,6 +14,19 @@ interface QBOCredentials {
 
 let cachedToken: { token: string; expiresAt: number; appKey: string } | null = null;
 
+// Fire-and-forget: push the rotated token to HRMS so both apps stay in sync.
+// Requires TOKEN_SYNC_SECRET and HRMS_URL env vars on this server.
+function pushTokenToHrms(newToken: string): void {
+  const hrmsUrl = process.env.HRMS_URL;
+  const secret = process.env.TOKEN_SYNC_SECRET;
+  if (!hrmsUrl || !secret) return;
+  fetch(`${hrmsUrl}/api/internal/sync-qb-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+    body: JSON.stringify({ refreshToken: newToken }),
+  }).catch(() => {/* best-effort, never throw */});
+}
+
 async function getQBOCredentials(appOverride?: string): Promise<(QBOCredentials & { selectedApp: 'app1' | 'app2' }) | null> {
   try {
     const result = await pool.query(
@@ -122,6 +135,8 @@ async function getAccessToken(creds: QBOCredentials, appKey: string): Promise<st
     } catch {
       // ignore
     }
+    // Push the new token to HRMS so both apps stay in sync
+    pushTokenToHrms(data.refresh_token);
   }
 
   cachedToken = {
