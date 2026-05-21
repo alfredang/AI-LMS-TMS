@@ -302,9 +302,16 @@ export async function addDaLearnerToCalendar(
       }
     }
 
-    if (missingDates.length > 0) {
-      console.log(`ℹ️ [da-calendar-sync] Missing calendar events for ${missingDates.length} dates. Creating event(s)...`);
-      
+    // Only auto-create when ZERO matches landed across all dates. If any
+    // session matched, the course is already on the calendar and the
+    // "missing" dates here are almost always title/date matching glitches,
+    // not genuinely absent events — creating for them produces duplicate
+    // recurring series (the bug reported for CA learners caught by the
+    // generic sync-calendar admin button). Only-when-empty preserves the
+    // original "brand new course → auto-populate calendar" workflow.
+    if (missingDates.length > 0 && result.addedTo === 0) {
+      console.log(`ℹ️ [da-calendar-sync] No existing events found for "${courseTitle}" — creating ${missingDates.length} event(s)...`);
+
       const firstMissing = missingDates[0];
       const lockString = `cal-create-${courseRunUuid}-${firstMissing.date}`;
       const lockId = parseInt(crypto.createHash('sha256').update(lockString).digest('hex').slice(0, 15), 16);
@@ -401,6 +408,12 @@ export async function addDaLearnerToCalendar(
       } finally {
         await pool.query('SELECT pg_advisory_unlock($1)', [lockId]);
       }
+    } else if (missingDates.length > 0) {
+      // Partial match — some dates patched, others not. Skipped create to
+      // avoid duplicates; admin should investigate the title/date matching.
+      console.warn(
+        `⚠️ [da-calendar-sync] ${learnerEmail}: ${missingDates.length} date(s) unmatched for "${courseTitle}" but ${result.addedTo} other date(s) DID match — skipping auto-create to avoid duplicate event. Unmatched: ${missingDates.map(m => m.date).join(', ')}`
+      );
     }
 
     return result;
