@@ -4,6 +4,7 @@ import { AdminPage } from '@app-types';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
+import SupportingDocsModal from './SupportingDocsModal';
 
 export const COMPANY_APPLICATION_COLUMNS = [
   'Course Title*',
@@ -37,9 +38,10 @@ export const COMPANY_APPLICATION_COLUMNS = [
   'Amount',
   'TG Amt',
   'Invoice Doc Number',
-  'Email',
   'Tax Invoice',
   'Grant Invoice',
+  'Doc Verified',
+  'Email',
 ];
 
 const EXCEL_APPLICATION_COLUMNS = [
@@ -100,6 +102,7 @@ const COLUMN_DISPLAY_LABELS: Record<string, string> = {
   'Email': 'Email',
   'Tax Invoice': 'Tax Invoice',
   'Grant Invoice': 'Grant Invoice',
+  'Doc Verified': 'Doc Verified',
 };
 
 const VISIBLE_COLUMNS = COMPANY_APPLICATION_COLUMNS;
@@ -176,9 +179,10 @@ const COLUMN_GROUPS: Array<{ label: string; columns: string[]; className: string
     className: 'bg-black text-gray-300 border-b-2 border-gray-500',
     columns: [
       'Invoice Doc Number',
-      'Email',
       'Tax Invoice',
       'Grant Invoice',
+      'Doc Verified',
+      'Email',
     ],
   },
 ];
@@ -396,220 +400,6 @@ const parseCompanyApplicationRows = async (file: File): Promise<CompanyApplicati
   return parsedRows;
 };
 
-// Collapsible "How this works" explainer rendered on both Upload and View
-// pages. Each instance gets its own localStorage key so the two pages
-// remember the admin's collapse preference independently.
-type WorkflowStepType = 'auto' | 'click' | 'external';
-
-interface WorkflowStep {
-  title: string;
-  description: string;
-  icon: IconName;
-  type: WorkflowStepType;
-}
-
-const STEP_TYPE_LABELS: Record<WorkflowStepType, string> = {
-  auto: 'AUTO',
-  click: 'CLICK',
-  external: 'MANUAL',
-};
-
-const STEP_TYPE_BADGE_CLASSES: Record<WorkflowStepType, string> = {
-  auto: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700/50',
-  click: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border border-blue-200 dark:border-blue-700/50',
-  external: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300 border border-amber-200 dark:border-amber-700/50',
-};
-
-const STEP_TYPE_ACCENT_CLASSES: Record<WorkflowStepType, string> = {
-  auto: 'bg-gradient-to-br from-emerald-500 to-emerald-600',
-  click: 'bg-gradient-to-br from-blue-500 to-indigo-600',
-  external: 'bg-gradient-to-br from-amber-500 to-orange-600',
-};
-
-const STEP_TYPE_CARD_CLASSES: Record<WorkflowStepType, string> = {
-  auto: 'bg-white dark:bg-gray-800/40 border-emerald-100 dark:border-emerald-800/30 hover:border-emerald-200 dark:hover:border-emerald-700/50',
-  click: 'bg-white dark:bg-gray-800/40 border-blue-100 dark:border-blue-800/30 hover:border-blue-200 dark:hover:border-blue-700/50',
-  external: 'bg-amber-50/70 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700/50 hover:border-amber-300 dark:hover:border-amber-600/60',
-};
-
-const WorkflowExplainer: React.FC<{
-  title: string;
-  subtitle?: string;
-  steps: WorkflowStep[];
-  storageKey: string;
-}> = ({ title, subtitle, steps, storageKey }) => {
-  const [open, setOpen] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    const stored = window.localStorage.getItem(storageKey);
-    return stored === 'open';
-  });
-
-  const toggle = () => {
-    setOpen(prev => {
-      const next = !prev;
-      try {
-        window.localStorage.setItem(storageKey, next ? 'open' : 'closed');
-      } catch {
-        // localStorage may be disabled — non-fatal, the toggle still works in-session.
-      }
-      return next;
-    });
-  };
-
-  // Tally of step types — shown as small chips in the header so admins can see
-  // at a glance how much of the workflow is automated vs manual.
-  const counts = steps.reduce(
-    (acc, s) => {
-      acc[s.type]++;
-      return acc;
-    },
-    { auto: 0, click: 0, external: 0 } as Record<WorkflowStepType, number>
-  );
-
-  return (
-    <div className="mb-6 rounded-xl border border-blue-200 dark:border-blue-800/60 bg-gradient-to-br from-blue-50 via-indigo-50/40 to-blue-50 dark:from-blue-950/30 dark:via-indigo-950/30 dark:to-blue-950/30 overflow-hidden shadow-sm">
-      <button
-        onClick={toggle}
-        className="w-full p-5 flex items-center justify-between text-left hover:bg-blue-100/30 dark:hover:bg-blue-900/20 transition-colors group"
-        aria-expanded={open}
-      >
-        <div className="flex items-start gap-4 min-w-0">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-500/20">
-            <Icon name={IconName.InfoCircle} className="w-6 h-6 text-white" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">{title}</h3>
-            {subtitle && (
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 leading-relaxed">{subtitle}</p>
-            )}
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {counts.auto > 0 && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STEP_TYPE_BADGE_CLASSES.auto}`}>
-                  {counts.auto} AUTO
-                </span>
-              )}
-              {counts.click > 0 && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STEP_TYPE_BADGE_CLASSES.click}`}>
-                  {counts.click} CLICK
-                </span>
-              )}
-              {counts.external > 0 && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STEP_TYPE_BADGE_CLASSES.external}`}>
-                  {counts.external} MANUAL
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-          <span className="text-xs font-medium text-blue-600 dark:text-blue-400 hidden sm:inline group-hover:text-blue-700 dark:group-hover:text-blue-300">
-            {open ? 'Hide' : 'Show'} steps
-          </span>
-          <Icon
-            name={IconName.ChevronDown}
-            className={`w-5 h-5 text-blue-600 dark:text-blue-400 transition-transform ${open ? 'rotate-180' : ''}`}
-          />
-        </div>
-      </button>
-      {open && (
-        <div className="px-5 pb-5 pt-1">
-          <div className="space-y-2.5">
-            {steps.map((step, i) => (
-              <div
-                key={i}
-                className={`flex gap-3 p-3.5 rounded-lg border transition-colors ${STEP_TYPE_CARD_CLASSES[step.type]}`}
-              >
-                <div className="flex flex-col items-center gap-2 flex-shrink-0">
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold text-white shadow-sm ${STEP_TYPE_ACCENT_CLASSES[step.type]}`}>
-                    {i + 1}
-                  </div>
-                  <Icon
-                    name={step.icon}
-                    className={`w-4 h-4 ${step.type === 'external' ? 'text-amber-600 dark:text-amber-400' : step.type === 'auto' ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-                    <h4 className={`text-sm font-semibold ${step.type === 'external' ? 'text-amber-900 dark:text-amber-100' : 'text-gray-900 dark:text-white'}`}>
-                      {step.title}
-                    </h4>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${STEP_TYPE_BADGE_CLASSES[step.type]}`}>
-                      {STEP_TYPE_LABELS[step.type]}
-                    </span>
-                  </div>
-                  <p className={`text-xs leading-relaxed ${step.type === 'external' ? 'text-amber-800 dark:text-amber-200' : 'text-gray-600 dark:text-gray-300'}`}>
-                    {step.description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const UPLOAD_WORKFLOW_STEPS: WorkflowStep[] = [
-  {
-    title: 'Upload the Excel file',
-    description: "Rows are dedup'd by NRIC + employer UEN + course title + start date — re-uploading the same row updates instead of duplicating.",
-    icon: IconName.Upload,
-    type: 'click',
-  },
-  {
-    title: 'Auto-enrol on SSG + add to Google Calendar',
-    description: 'Background pipeline POSTs each learner to SSG (returning an ENR-xxxx reference) and adds them to the matching Google Calendar events for the course run.',
-    icon: IconName.CheckCircle,
-    type: 'auto',
-  },
-  {
-    title: 'Search grants → auto-generate invoice + email',
-    description: 'Pipeline searches SSG for any pre-applied grants. If grants exist, the consolidated tax invoice is generated AND emailed to the employer automatically (when the toggle below is ON).',
-    icon: IconName.FileText,
-    type: 'auto',
-  },
-  {
-    title: 'Continue on the View Company Application page',
-    description: 'If no grants exist yet (the normal case), the pipeline stops at enrolment + calendar add. File the grant on the TPGateway portal, then continue from the View page.',
-    icon: IconName.ExternalLink,
-    type: 'external',
-  },
-];
-
-const VIEW_WORKFLOW_STEPS: WorkflowStep[] = [
-  {
-    title: 'Confirm enrolment status',
-    description: 'The Auto-Enrol Status column should show "enroled" or "grant_found". If a row failed, the reason is in the Auto-Enrol Error column — fix the source Excel and re-upload that row to retry (dedup will UPDATE the existing row).',
-    icon: IconName.CheckCircle,
-    type: 'auto',
-  },
-  {
-    title: 'File grant application on TPGateway portal',
-    description: 'SSG does not expose a grant submission API. Log in to tpgateway.gov.sg and file the grant application manually for each ENR-xxxx reference.',
-    icon: IconName.Warning,
-    type: 'external',
-  },
-  {
-    title: 'Sync Grants — auto-runs on page open',
-    description: 'When you land on this page, grants auto-sync from SSG (throttled to once every 2 mins). The "Sync Grants" button is a manual override — click it any time to force a fresh pull.',
-    icon: IconName.Download,
-    type: 'auto',
-  },
-  {
-    title: 'Click "Generate Invoice"',
-    description: 'Creates the consolidated tax invoice (one per employer × course-run) and per-learner grant invoices billed to WSG. PDFs uploaded to Google Drive.',
-    icon: IconName.FileText,
-    type: 'click',
-  },
-  {
-    title: 'Click "Send Invoice Email"',
-    description: 'Emails the consolidated invoice to the employer contact. Auto-fires immediately after Generate Invoice when the email toggle below is ON.',
-    icon: IconName.Mail,
-    type: 'click',
-  },
-];
-
 // Mirrors DA's "Send Tax Invoice Email to Learner" banner — same look + feel,
 // but reads/writes ca_auto_send_invoice_email and the CA CC/BCC columns, and
 // labels the recipient as the EMPLOYER (CA invoices are billed to the
@@ -767,6 +557,10 @@ export const UploadCompanyApplicationView: React.FC = () => {
   const [backendStatus, setBackendStatus] = useState<'idle' | 'processing' | 'complete'>('idle');
   const [backendDoneCount, setBackendDoneCount] = useState(0);
   const [backendProgress, setBackendProgress] = useState(0); // 0..1, finer-grained per-step progress
+  // SupportingDocsModal opens when the pipeline finishes (backendStatus
+  // flips to 'complete'). Stays mounted until the admin closes it or all
+  // rows are verified.
+  const [docsModalOpen, setDocsModalOpen] = useState(false);
 
   const handleFile = (selectedFile?: File | null) => {
     if (!selectedFile) return;
@@ -867,17 +661,19 @@ export const UploadCompanyApplicationView: React.FC = () => {
         if (matchingRows.length >= ids.length && rowsFullyDone >= ids.length) {
           setBackendProgress(1);
           setBackendStatus('complete');
+          // Pipeline finished — open the supporting-docs verification modal.
+          // Admin chooses Yes (verify now) or No (skip; close + navigate).
+          setDocsModalOpen(true);
           return;
         }
       } catch (err) {
         console.warn('Failed to poll company application processing:', err);
       }
 
-      if (attempts >= 60) {
-        setBackendStatus('complete');
-        return;
-      }
-
+      // No attempt cap — the backend pipeline polls SSG until every row has
+      // its grant (or is marked grant_ineligible), so the spinner stays up
+      // until everything actually finishes. Cleanup on unmount clears the
+      // timer (see useEffect below).
       backendTimerRef.current = window.setTimeout(poll, 2500);
     };
 
@@ -939,13 +735,6 @@ export const UploadCompanyApplicationView: React.FC = () => {
           </Button>
         )}
       </div>
-
-      <WorkflowExplainer
-        title="How the Company Application Workflow Work"
-        subtitle="What happens when you upload — automated steps run in the background, manual steps need your attention."
-        steps={UPLOAD_WORKFLOW_STEPS}
-        storageKey="ca-workflow-explainer-upload"
-      />
 
       <CaEmailToggleBanner />
 
@@ -1085,6 +874,19 @@ export const UploadCompanyApplicationView: React.FC = () => {
             <Button onClick={() => setAdminPage(AdminPage.ViewCompanyApplication)}>View Company Application</Button>
           </div>
         </Card>
+      )}
+
+      {docsModalOpen && uploadResult && uploadResult.insertedIds.length > 0 && (
+        <SupportingDocsModal
+          applicationIds={uploadResult.insertedIds}
+          onClose={() => {
+            setDocsModalOpen(false);
+            // Admin chose "No" or closed mid-flow — send them to the View
+            // page where they can finish verification later via the
+            // "Verify & Send" button.
+            setAdminPage(AdminPage.ViewCompanyApplication);
+          }}
+        />
       )}
     </div>
   );
@@ -1260,14 +1062,184 @@ const QboCustomerRescueModal: React.FC<{
   );
 };
 
+const DeleteConfirmModal: React.FC<{
+  rows: CompanyApplicationRow[];
+  isDeleting: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}> = ({ rows, isDeleting, onConfirm, onClose }) => {
+  const count = rows.length;
+
+  // Esc-to-close. Skipped while a delete is in flight so the user can't dismiss
+  // the modal mid-request and lose track of the in-progress action.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isDeleting) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isDeleting, onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      onClick={() => { if (!isDeleting) onClose(); }}
+    >
+      <div
+        className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden ring-1 ring-red-200/60 dark:ring-red-900/40"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="relative px-6 py-5 border-b dark:border-gray-800 bg-gradient-to-br from-red-50 via-white to-white dark:from-red-950/30 dark:via-gray-900 dark:to-gray-900">
+          <span className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-red-500 via-red-400 to-red-500" />
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/40 ring-1 ring-red-200 dark:ring-red-800/60 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Icon name={IconName.Warning} className="w-6 h-6 text-red-600 dark:text-red-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
+                  Delete {count} Company Application row{count === 1 ? '' : 's'}?
+                </h3>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 ring-1 ring-red-300/60 dark:ring-red-800/60">
+                  Destructive
+                </span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
+                Only the <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-[11px] text-gray-700 dark:text-gray-300">company_application</code> record is removed.
+                The LMS enrolment, QBO invoice, and Drive files <strong className="text-gray-800 dark:text-gray-200">stay in place</strong> and must be cleaned manually if needed.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 bg-gray-50/60 dark:bg-gray-950/40">
+          <div className="flex items-center justify-between mb-2.5">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              Rows to delete
+            </p>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+              {count} selected
+            </span>
+          </div>
+          <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-x-auto shadow-sm">
+            <table className="min-w-full text-xs">
+              <thead className="bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-800">
+                <tr>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Trainee</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">NRIC</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Employer</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Course</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Enrolment</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Invoice</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800/60">
+                {rows.map((r, i) => {
+                  const nric = String(r['Trainee NRIC/FIN Number*'] || '').trim();
+                  const maskedNric = nric.length >= 4
+                    ? `${nric.charAt(0)}****${nric.slice(-3)}`
+                    : (nric || '-');
+                  return (
+                    <tr key={r.id || i} className="hover:bg-red-50/40 dark:hover:bg-red-900/10 transition-colors">
+                      <td
+                        className="px-4 py-2.5 font-semibold text-gray-900 dark:text-gray-100 max-w-[160px] truncate"
+                        title={r['Trainee FULL Name as on government ID*']}
+                      >
+                        {r['Trainee FULL Name as on government ID*'] || '(unnamed)'}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                        {maskedNric}
+                      </td>
+                      <td
+                        className="px-4 py-2.5 text-gray-700 dark:text-gray-300 max-w-[150px] truncate"
+                        title={r['Employer Organization Name*']}
+                      >
+                        {r['Employer Organization Name*'] || '-'}
+                      </td>
+                      <td
+                        className="px-4 py-2.5 text-gray-700 dark:text-gray-300 max-w-[180px] truncate"
+                        title={r['Course Title*']}
+                      >
+                        {r['Course Title*'] || '-'}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                        {r['Enrolment ID'] || '-'}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                        {r['Invoice Doc Number'] || '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t dark:border-gray-800 flex items-center justify-between gap-3 bg-white dark:bg-gray-900">
+          <p className="text-[11px] text-gray-500 dark:text-gray-500 hidden sm:flex items-center gap-1.5">
+            Press <kbd className="px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-mono text-[10px] text-gray-600 dark:text-gray-400">Esc</kbd> to cancel
+          </p>
+          <div className="flex gap-2 ml-auto">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isDeleting}
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={isDeleting || count === 0}
+              className="inline-flex items-center px-4 py-2 text-sm font-semibold rounded-lg text-white bg-red-600 hover:bg-red-700 shadow-md shadow-red-900/30 ring-1 ring-red-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isDeleting ? (
+                <>
+                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Icon name={IconName.Delete} className="w-3.5 h-3.5 mr-1.5" />
+                  Confirm Delete
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Auto-sync throttle so rapid navigation back to the View page doesn't burn
 // SSG API quota. 2 minutes balances "fresh enough" with "not spammy".
 const AUTO_SYNC_GRANTS_THROTTLE_MS = 2 * 60 * 1000;
 const AUTO_SYNC_GRANTS_STORAGE_KEY = 'ca-last-auto-sync-grants-at';
 
+interface PipelineWarning {
+  step: string;
+  error: string;
+  at: string;
+}
+
+function parseRowWarnings(row: CompanyApplicationRow): PipelineWarning[] {
+  const raw = row._pipeline_warnings;
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export const ViewCompanyApplicationView: React.FC = () => {
   const [rows, setRows] = useState<CompanyApplicationRow[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showStuckOnly, setShowStuckOnly] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showPii, setShowPii] = useState(false);
@@ -1279,6 +1251,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
   const [grantSyncMessage, setGrantSyncMessage] = useState<string | null>(null);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const [invoiceMessage, setInvoiceMessage] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [invoiceErrors, setInvoiceErrors] = useState<InvoiceError[]>([]);
   const [rescueTarget, setRescueTarget] = useState<RescueTarget | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1286,7 +1261,27 @@ export const ViewCompanyApplicationView: React.FC = () => {
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
   const [brokenDocumentKeys, setBrokenDocumentKeys] = useState<Set<string>>(new Set());
   const [verifyingDocumentKey, setVerifyingDocumentKey] = useState<string | null>(null);
-  const [docToast, setDocToast] = useState<string | null>(null);
+  // Toast state mirrors DirectApplicationViews.tsx so CA + DA show errors
+  // identically. toastVisible drives the slide-in animation; toastMsg is
+  // cleared 300ms after the slide-out completes so the DOM unmounts cleanly.
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [toastIsError, setToastIsError] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastTimerRef = useRef<number | null>(null);
+
+  const showToast = React.useCallback((message: string, isError = false) => {
+    setToastMsg(message);
+    setToastIsError(isError);
+    setToastVisible(true);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastVisible(false);
+      window.setTimeout(() => setToastMsg(null), 300);
+    }, 5000);
+  }, []);
+  // Supporting-docs verification modal. Opens for the currently-selected
+  // rows when admin clicks "Verify & Send" on the View page.
+  const [supportingDocsTargetIds, setSupportingDocsTargetIds] = useState<string[] | null>(null);
 
   const getDocumentKey = (row: CompanyApplicationRow, kind: 'main' | 'grant') => `${row.id || ''}:${kind}`;
 
@@ -1300,8 +1295,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
 
     if (!url && !fileId) {
       setBrokenDocumentKeys(prev => new Set(prev).add(key));
-      setDocToast('Document may have been deleted');
-      window.setTimeout(() => setDocToast(null), 4000);
+      showToast('Document may have been deleted', true);
       return;
     }
 
@@ -1316,8 +1310,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
         window.open(url || `https://drive.google.com/file/d/${fileId}/view`, '_blank', 'noopener');
       } else {
         setBrokenDocumentKeys(prev => new Set(prev).add(key));
-        setDocToast('Document may have been deleted');
-        window.setTimeout(() => setDocToast(null), 4000);
+        showToast('Document may have been deleted', true);
         void reloadRows();
       }
     } catch {
@@ -1374,6 +1367,40 @@ export const ViewCompanyApplicationView: React.FC = () => {
       setRows([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const deleteSelected = () => {
+    if (selectedIds.size === 0) {
+      setDeleteMessage('Select at least one row first.');
+      return;
+    }
+    setDeleteMessage(null);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    setIsDeleting(true);
+    setDeleteMessage(null);
+    try {
+      const res = await fetch('/api/admin/ca-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationIds: Array.from(selectedIds) }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `Request failed (${res.status})`);
+      }
+      setDeleteMessage(`Deleted ${data.deleted} row${data.deleted === 1 ? '' : 's'}.`);
+      setSelectedIds(new Set());
+      setDeleteConfirmOpen(false);
+      void reloadRows();
+    } catch (err) {
+      console.error('Delete failed:', err);
+      setDeleteMessage(err instanceof Error ? err.message : 'Delete failed.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1453,9 +1480,24 @@ export const ViewCompanyApplicationView: React.FC = () => {
       setEmailMessage('Select at least one row first.');
       return;
     }
+    // Gate on supporting-doc verification. If any selected row is not yet
+    // verified, open the SupportingDocsModal so admin completes verification
+    // first — the verify-and-send API then fires the email automatically
+    // when the group is fully verified. Only when every selected row is
+    // already verified do we send directly via the legacy endpoint.
+    const unverified = Array.from(selectedIds).filter(id => {
+      const row = rows.find(r => String(r.id) === String(id));
+      if (!row) return false;
+      const status = String(row['Supporting Doc Verification Status'] || '').trim().toLowerCase();
+      return status !== 'verified';
+    });
+    if (unverified.length > 0) {
+      setSupportingDocsTargetIds(unverified);
+      return;
+    }
     if (!window.confirm(
       'Send the consolidated tax invoice email to the EMPLOYER contact for the selected rows?\n\n' +
-      'Make sure supporting documents have been reviewed first. Already-sent invoices will be skipped.'
+      'Already-sent invoices will be skipped.'
     )) return;
     setIsSendingEmail(true);
     setEmailMessage(null);
@@ -1530,19 +1572,40 @@ export const ViewCompanyApplicationView: React.FC = () => {
   const syncGrants = async () => {
     setIsSyncingGrants(true);
     setGrantSyncMessage(null);
+    // Snapshot which of admin's rows already had a grant_id BEFORE the sync.
+    // Diff against the post-sync rows to report only the newly-linked ones —
+    // the SSG endpoint also caches grants for unrelated learners in the same
+    // course runs but the admin shouldn't be told about those.
+    // A row is "linked" if EITHER the Baseline grant or the MCES/SME/Other
+    // grant is present — some learners only qualify for one of them.
+    const hasAnyGrant = (r: CompanyApplicationRow) =>
+      hasValue(r['Grant ID (BL)']) || hasValue(r['Grant ID']);
+    const idsWithGrantBefore = new Set(
+      rows.filter(hasAnyGrant).map(r => String(r.id))
+    );
     try {
       const res = await fetch('/api/admin/ca-sync-grants', { method: 'POST' });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Request failed (${res.status})`);
       }
-      const upserted = Number(data.totalGrantsUpserted) || 0;
-      const runs = Number(data.runsProcessed) || 0;
       const errors = Array.isArray(data.errors) ? data.errors.length : 0;
-      const parts = [`${upserted} grant${upserted === 1 ? '' : 's'} synced across ${runs} course run${runs === 1 ? '' : 's'}`];
-      if (errors > 0) parts.push(`${errors} error${errors === 1 ? '' : 's'}`);
+
+      const fetched = await fetchRows();
+      setRows(fetched);
+
+      const newlyLinked = fetched.filter(r =>
+        hasAnyGrant(r) && !idsWithGrantBefore.has(String(r.id))
+      ).length;
+      const linkedNow = fetched.filter(hasAnyGrant).length;
+
+      const parts: string[] = [];
+      if (newlyLinked > 0) {
+        parts.push(`${newlyLinked} new grant${newlyLinked === 1 ? '' : 's'} linked`);
+      }
+      parts.push(`${linkedNow} of ${fetched.length} application${fetched.length === 1 ? '' : 's'} now have grant IDs`);
+      if (errors > 0) parts.push(`${errors} sync error${errors === 1 ? '' : 's'}`);
       setGrantSyncMessage(parts.join(' · '));
-      void reloadRows();
     } catch (err) {
       console.error('Sync grants failed:', err);
       setGrantSyncMessage(err instanceof Error ? err.message : 'Sync grants failed.');
@@ -1625,24 +1688,28 @@ export const ViewCompanyApplicationView: React.FC = () => {
     });
     if (!hasProcessingRows) return undefined;
 
-    const MAX_POLL_ATTEMPTS = 60; // 60 × 5s = 5 minutes ceiling
-    let attempts = 0;
+    // No attempt cap — the backend grant poll has no timeout, so the view
+    // page keeps reloading every 5s until every row has flipped out of
+    // 'pending'. Interval is cleared by the effect cleanup when rows change.
     const timer = window.setInterval(() => {
-      attempts++;
-      if (attempts > MAX_POLL_ATTEMPTS) {
-        window.clearInterval(timer);
-        return;
-      }
       void reloadRows();
     }, 5000);
     return () => window.clearInterval(timer);
   }, [rows]);
 
+  const stuckRowCount = useMemo(
+    () => rows.filter(r => r._stuck === '1').length,
+    [rows],
+  );
+
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const matched = query
+    const queryMatched = query
       ? rows.filter(row => VISIBLE_COLUMNS.some(column => (row[column] || '').toLowerCase().includes(query)))
       : rows;
+    const matched = showStuckOnly
+      ? queryMatched.filter(row => row._stuck === '1')
+      : queryMatched;
     // Sort so rows sharing the same Invoice ID are adjacent — keeps the
     // (employer, course-run) groups together so the Invoice # / Tax Invoice
     // cell-merging below picks them up. Within a group, trainee name is the
@@ -1660,7 +1727,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const nb = (b['Trainee FULL Name as on government ID*'] || '').trim();
       return na.localeCompare(nb);
     });
-  }, [rows, searchQuery]);
+  }, [rows, searchQuery, showStuckOnly]);
 
   // For each row, compute whether its Invoice # / Tax Invoice cells should
   // render with rowSpan (first row in a consolidated group) or be skipped
@@ -1738,13 +1805,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
         </Card>
       </div>
 
-      <WorkflowExplainer
-        title="How the Company Application Workflow Work"
-        subtitle="From uploaded data to sent invoice — the manual TPGateway step is the only one outside the TMS."
-        steps={VIEW_WORKFLOW_STEPS}
-        storageKey="ca-workflow-explainer-view"
-      />
-
       <CaEmailToggleBanner />
 
       <Card className="p-6 mb-6">
@@ -1756,6 +1816,26 @@ export const ViewCompanyApplicationView: React.FC = () => {
               <input id="search-company-application" type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search by trainee, employer, course, UEN, or email..." className={`${inputClasses} pl-9`} />
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowStuckOnly(v => !v)}
+            title={
+              stuckRowCount === 0
+                ? 'No rows need attention — every application is either complete or progressing normally.'
+                : 'Show only applications that failed or have non-blocking pipeline warnings (calendar / native enrol / partial grant sync).'
+            }
+            className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
+              showStuckOnly
+                ? 'border-red-500 bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 dark:border-red-400'
+                : stuckRowCount > 0
+                  ? 'border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/20'
+                  : 'border-gray-300 text-gray-500 dark:border-gray-600 dark:text-gray-400 cursor-default'
+            }`}
+            disabled={stuckRowCount === 0 && !showStuckOnly}
+          >
+            <Icon name={IconName.Warning} className="w-4 h-4 mr-2" />
+            {showStuckOnly ? 'Showing stuck only' : `Needs attention (${stuckRowCount})`}
+          </button>
           <Button onClick={() => void reloadRows()} disabled={isLoading}>
             {isLoading ? (
               <div className="flex items-center">
@@ -1800,11 +1880,11 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 onClick={() => void syncGrants()}
                 disabled={isSyncingGrants}
                 title="Pull grants from SSG for every current/future course run. Use after stakeholders apply grants in the SSG portal."
-                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-500 text-purple-700 dark:text-purple-300 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-purple-600 hover:bg-purple-700 shadow-sm shadow-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSyncingGrants ? (
                   <>
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2" />
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />
                     Syncing...
                   </>
                 ) : (
@@ -1818,7 +1898,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 onClick={() => void generateInvoiceForSelected()}
                 disabled={isGeneratingInvoice || selectedIds.size === 0}
                 title="Generate one consolidated QuickBooks invoice per (employer, course) group for the selected rows. Skips groups that already have an invoice."
-                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-orange-600 hover:bg-orange-700 shadow-sm shadow-orange-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isGeneratingInvoice ? (
                   <>
@@ -1835,8 +1915,8 @@ export const ViewCompanyApplicationView: React.FC = () => {
               <button
                 onClick={() => void sendInvoiceEmailForSelected()}
                 disabled={isSendingEmail || selectedIds.size === 0}
-                title="Email the consolidated main tax invoice to the EMPLOYER contact for the selected rows. One email per shared invoice. Skips already-sent invoices. Grant invoices are never emailed."
-                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Verify supporting documents and email the consolidated main tax invoice to the EMPLOYER contact for the selected rows. If any selected learner is unverified, the verification modal opens first; otherwise the email sends immediately. Already-sent invoices are skipped."
+                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 ring-1 ring-indigo-400/50 shadow-md shadow-indigo-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSendingEmail ? (
                   <>
@@ -1845,8 +1925,26 @@ export const ViewCompanyApplicationView: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <Icon name={IconName.Mail} className="w-3.5 h-3.5 mr-1.5" />
-                    Send Invoice Email
+                    <Icon name={IconName.Shield} className="w-3.5 h-3.5 mr-1.5" />
+                    Verify &amp; Send
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => void deleteSelected()}
+                disabled={isDeleting || selectedIds.size === 0}
+                title="Temporary admin cleanup: delete the selected Company Application rows. Does NOT remove the LMS enrolment, invoice, or Drive files — those must be cleaned manually if needed."
+                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-red-600 hover:bg-red-700 shadow-sm shadow-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Icon name={IconName.Delete} className="w-3.5 h-3.5 mr-1.5" />
+                    Delete Selected
                   </>
                 )}
               </button>
@@ -1859,6 +1957,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
             )}
             {invoiceMessage && (
               <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md text-right">{invoiceMessage}</p>
+            )}
+            {deleteMessage && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md text-right">{deleteMessage}</p>
             )}
             {invoiceErrors.length > 0 && (
               <div className="mt-1 max-w-md text-right space-y-1">
@@ -1895,9 +1996,34 @@ export const ViewCompanyApplicationView: React.FC = () => {
             onLinked={onRescueLinked}
           />
         )}
-        {docToast && (
-          <div className="fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg shadow-lg bg-red-600 text-white text-sm">
-            {docToast}
+        {supportingDocsTargetIds && supportingDocsTargetIds.length > 0 && (
+          <SupportingDocsModal
+            applicationIds={supportingDocsTargetIds}
+            initialStep="verify"
+            onClose={() => {
+              setSupportingDocsTargetIds(null);
+              void reloadRows();
+            }}
+          />
+        )}
+        {deleteConfirmOpen && (
+          <DeleteConfirmModal
+            rows={rows.filter(r => selectedIds.has(String(r.id || '')))}
+            isDeleting={isDeleting}
+            onConfirm={() => void confirmDelete()}
+            onClose={() => setDeleteConfirmOpen(false)}
+          />
+        )}
+        {toastMsg && (
+          <div className={`fixed top-5 right-5 z-[9999] max-w-sm w-full transition-all duration-300 ${toastVisible ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'}`}>
+            <div className={`flex items-start gap-3 px-4 py-3.5 rounded-xl shadow-lg border backdrop-blur-sm ${toastIsError ? 'bg-red-950/90 border-red-800/40 text-red-200' : 'bg-emerald-950/90 border-emerald-800/40 text-emerald-200'}`}>
+              <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center ${toastIsError ? 'bg-red-500/20' : 'bg-emerald-500/20'}`}>
+                {toastIsError
+                  ? <Icon name={IconName.Close} className="w-3 h-3 text-red-400" />
+                  : <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+              </div>
+              <p className="text-sm leading-snug">{toastMsg}</p>
+            </div>
           </div>
         )}
 
@@ -1956,16 +2082,44 @@ export const ViewCompanyApplicationView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
-              {filteredRows.length > 0 ? filteredRows.map((row, index) => { const groupMeta = invoiceGroupMeta[index] || { isFirst: true, size: 1 }; return (
-                <tr key={`${row.id || index}-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-600">
+              {filteredRows.length > 0 ? filteredRows.map((row, index) => {
+                const groupMeta = invoiceGroupMeta[index] || { isFirst: true, size: 1 };
+                const isStuck = row._stuck === '1';
+                const warnings = isStuck ? parseRowWarnings(row) : [];
+                const warningTooltip = warnings.length > 0
+                  ? warnings.map(w => `[${w.step}] ${w.error}`).join('\n')
+                  : '';
+                return (
+                <tr
+                  key={`${row.id || index}-${index}`}
+                  className={
+                    isStuck
+                      ? 'bg-red-50/60 hover:bg-red-100/70 dark:bg-red-900/15 dark:hover:bg-red-900/25'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-600'
+                  }
+                >
                   <td className="px-2 py-1.5">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(String(row.id || ''))}
-                      onChange={() => toggleRowSelected(String(row.id || ''))}
-                      disabled={!row.id}
-                      className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 cursor-pointer"
-                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(String(row.id || ''))}
+                        onChange={() => toggleRowSelected(String(row.id || ''))}
+                        disabled={!row.id}
+                        className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 cursor-pointer"
+                      />
+                      {isStuck && (
+                        <span
+                          title={
+                            warnings.length > 0
+                              ? `Pipeline warnings:\n${warningTooltip}`
+                              : 'Auto-enrol failed — see Auto-Enrol Error column'
+                          }
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                        >
+                          <Icon name={IconName.Warning} className="w-3 h-3" />
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-2 py-1.5 text-center">
                     <input
@@ -2124,6 +2278,62 @@ export const ViewCompanyApplicationView: React.FC = () => {
                               title="Not sent to employer"
                             >
                               <Icon name={IconName.Mail} className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
+                            </span>
+                          )}
+                        </td>
+                      );
+                    }
+                    if (column === 'Doc Verified') {
+                      const status = String(row['Supporting Doc Verification Status'] || '').trim().toLowerCase();
+                      const hasDoc = !!String(row['Supporting Doc Drive Link'] || '').trim();
+                      const link = String(row['Supporting Doc Drive Link'] || '').trim();
+                      let badge: { text: string; icon: IconName; className: string };
+                      if (status === 'verified') {
+                        badge = {
+                          text: 'Verified',
+                          icon: IconName.CheckCircle,
+                          className: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-300/60',
+                        };
+                      } else if (status === 'mismatch') {
+                        badge = {
+                          text: 'Mismatch',
+                          icon: IconName.Warning,
+                          className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 ring-1 ring-red-300/60',
+                        };
+                      } else if (hasDoc) {
+                        badge = {
+                          text: 'Pending',
+                          icon: IconName.Eye,
+                          className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 ring-1 ring-amber-300/60',
+                        };
+                      } else {
+                        badge = {
+                          text: 'No Doc',
+                          icon: IconName.Upload,
+                          className: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 ring-1 ring-gray-300/60',
+                        };
+                      }
+                      const inner = (
+                        <>
+                          <Icon name={badge.icon} className="w-3 h-3 mr-1" />
+                          {badge.text}
+                        </>
+                      );
+                      return (
+                        <td key={column} className="px-2 py-1.5 whitespace-nowrap text-center">
+                          {link ? (
+                            <a
+                              href={link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${badge.className} hover:opacity-80 transition-opacity`}
+                              title="Open supporting document"
+                            >
+                              {inner}
+                            </a>
+                          ) : (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${badge.className}`}>
+                              {inner}
                             </span>
                           )}
                         </td>

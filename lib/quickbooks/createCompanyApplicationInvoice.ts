@@ -18,6 +18,7 @@
  */
 
 import pool from '../db';
+import { appendPipelineWarning } from '../companyApplicationsTable';
 import { findEmployerQboDisplayNameByUen, upsertEmployerQboAlias } from '../employerQboAliasTable';
 import { refreshGrantsForEnrolments } from '../services/billingSync';
 import {
@@ -649,13 +650,16 @@ function buildCourseLineDescription(input: CreateCaInvoiceInput): string {
     ? `${prefixWsq(input.courseTitle)} (${input.courseReferenceNumber})`
     : prefixWsq(input.courseTitle);
   parts.push(`Course Name: ${titleWithCode}`);
-  // Each participant gets one self-contained line. The previous format had
-  // "Participant Name:" on its own line followed by "1. NAME" on the next
-  // — QBO's PDF renderer treats the trailing colon as a label-value pair
-  // and collapses the next line into it, swallowing the "1." prefix.
-  // Inline "Participant 1: NAME (NRIC: ...)" preserves the numbering.
+  // Multi-line participant block. Earlier inline format ("Participant 1:
+  // NAME (NRIC: ...)") was a workaround for QBO's PDF renderer collapsing
+  // "Participant Name:" + "1. NAME" into one line. Reverting to the
+  // requested label-then-list layout — verify the QB template renders it
+  // correctly; if numbering gets swallowed again the workaround is to
+  // drop the colon or use a different label.
+  parts.push('Participant Name:');
   input.learners.forEach((learner, i) => {
-    parts.push(`Participant ${i + 1}: ${learner.fullName || '-'} (NRIC: ${maskNric(learner.nric)})`);
+    parts.push(`${i + 1}. ${learner.fullName || '-'}`);
+    parts.push(`NRIC: ${maskNric(learner.nric)}`);
   });
 
   const dateRange = formatCourseDateRange(input.courseStartDate, input.courseEndDate);
@@ -668,11 +672,13 @@ function buildCourseLineDescription(input: CreateCaInvoiceInput): string {
 function buildGrantLineDescription(scheme: SchemeAggregate): string {
   const parts: string[] = [];
   parts.push(`Less: WSQ funding (${scheme.schemeLabel})`);
-  // Inline format mirrors buildCourseLineDescription's participant lines —
-  // each reference on its own self-contained line so QBO's PDF renderer
-  // doesn't swallow the numbering or render the punctuation oddly.
-  scheme.grantRefs.forEach((ref, i) => {
-    parts.push(`Grant Reference ${i + 1}: ${ref}`);
+  // One "Grant Ref#" line per grant — positionally aligned with the
+  // Participant list in buildCourseLineDescription (1st grant ref ↔
+  // participant 1, etc.) as long as all participants share the same
+  // scheme. Across-scheme groups list per scheme, so alignment within
+  // each scheme block still holds.
+  scheme.grantRefs.forEach((ref) => {
+    parts.push(`Grant Ref#: ${ref}`);
   });
   return parts.join('\n');
 }
@@ -1272,18 +1278,37 @@ async function processGrantInvoicesForGroup(
             // fall through to fresh generation
           } else {
             console.warn(`[ca-grant-invoice] Drive re-upload for learner ${applicationId} failed (non-fatal):`, err instanceof Error ? err.message : err);
+            await appendPipelineWarning(applicationId, 'grant_invoice_drive_reupload', err);
             continue;
           }
         }
       }
 
       // Fresh generation — returns null if SSG has no positive grants for this
-      // learner (perfectly valid — that learner just doesn't get a grant inv).
+      // learner (perfectly valid — that learner just doesn't get a grant inv,
+      // e.g. grant_ineligible). But if a grant_id IS present on the row, a
+      // null return signals out-of-sync data (grant materialised in
+      // company_application but never landed in ssg_grants) — surface that
+      // so admin can spot it.
       const grantInv = await createCompanyApplicationGrantInvoice({
         enrolmentId,
         mainInvoiceDocNumber: mainInvoiceDocNumber || null,
       });
-      if (!grantInv) continue;
+      if (!grantInv) {
+        const grantId = String(r.grant_id || '').trim();
+        const grantIneligible = r.grant_ineligible === true;
+        if (grantId && !grantIneligible) {
+          console.warn(
+            `[ca-grant-invoice] Skipped fresh generation for learner ${applicationId} — ssg_grants has no positive amount for enrolment ${enrolmentId} despite company_application.grant_id=${grantId}. Run Sync Grants to populate ssg_grants.`
+          );
+          await appendPipelineWarning(
+            applicationId,
+            'grant_invoice_missing_ssg_data',
+            `ssg_grants has no positive grant for enrolment ${enrolmentId} (CA row has grant_id=${grantId}). Click Sync Grants then retry Generate Invoice.`
+          );
+        }
+        continue;
+      }
 
       // Persist id first so a Drive failure doesn't cause a duplicate next run.
       await pool.query(
@@ -1311,9 +1336,11 @@ async function processGrantInvoicesForGroup(
         );
       } catch (err) {
         console.warn(`[ca-grant-invoice] Drive upload for learner ${applicationId} failed (non-fatal):`, err instanceof Error ? err.message : err);
+        await appendPipelineWarning(applicationId, 'grant_invoice_drive_upload', err);
       }
     } catch (err) {
       console.warn(`[ca-grant-invoice] Generation failed for learner ${applicationId} (enrolment ${enrolmentId}) (non-fatal):`, err instanceof Error ? err.message : err);
+      await appendPipelineWarning(applicationId, 'grant_invoice_generation', err);
     }
   }
 }

@@ -94,6 +94,15 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_COMMIT_HASH: COMMIT_HASH,
   },
+
+  // Silence dev-server request logs for the sidebar badge poll (fires every
+  // 60s while admin sidebar is mounted). Errors from the handler still show
+  // because they go through console.error, not the request logger.
+  logging: {
+    incomingRequests: {
+      ignore: [/api\/admin\/ca-stuck-count/],
+    },
+  },
 };
 
 module.exports = nextConfig;

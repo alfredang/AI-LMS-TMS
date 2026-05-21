@@ -48,6 +48,12 @@ const DB_TO_COLUMN: Record<string, string> = {
   grant_invoice_doc_number: 'Grant Invoice Doc Number',
   grant_invoice_drive_file_id: 'Grant Invoice Drive File ID',
   grant_invoice_drive_web_view_link: 'Grant Invoice Drive Link',
+  supporting_doc_drive_file_id: 'Supporting Doc Drive File ID',
+  supporting_doc_drive_web_view_link: 'Supporting Doc Drive Link',
+  supporting_doc_uploaded_at: 'Supporting Doc Uploaded At',
+  supporting_doc_verification_status: 'Supporting Doc Verification Status',
+  supporting_doc_verified_at: 'Supporting Doc Verified At',
+  supporting_doc_verified_by: 'Supporting Doc Verified By',
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -63,12 +69,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ca.employer_contact_designation, ca.employer_contact_phone, ca.employer_contact_email,
         ca.ssg_funding_before, ca.consent_ssg_terms, ca.declaration_truthful, ca.consent_marketing,
         ca.grant_application_nos, ca.course_reference_number, ca.course_run_id, ca.enrolment_id,
-        ca.enrolment_status, ca.auto_enrol_status, ca.auto_enrol_error,
+        ca.enrolment_status, ca.auto_enrol_status, ca.auto_enrol_error, ca.pipeline_warnings,
         ca.calendar_added, ca.grant_ineligible, ca.invoice_id, ca.invoice_doc_number,
         ca.invoice_drive_file_id, ca.invoice_drive_web_view_link,
         ca.invoice_sent_at, ca.invoice_sent_to,
         ca.grant_invoice_id, ca.grant_invoice_doc_number,
         ca.grant_invoice_drive_file_id, ca.grant_invoice_drive_web_view_link,
+        ca.supporting_doc_drive_file_id, ca.supporting_doc_drive_web_view_link,
+        ca.supporting_doc_uploaded_at, ca.supporting_doc_verification_status,
+        ca.supporting_doc_verified_at, ca.supporting_doc_verified_by,
         ca.created_at, ca.updated_at,
         sg.bl_grant_id, sg.bl_amount, sg.other_grant_id, sg.other_scheme_code, sg.other_amount, sg.tg_amount
       FROM public.company_application ca
@@ -108,9 +117,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const v = r[dbCol];
         out[label] = v == null ? '' : String(v);
       });
+      // Meta fields used by the UI to highlight rows that need admin
+      // attention. _pipeline_warnings carries the raw warning array so the
+      // UI can render a tooltip listing every failed step; _stuck is a
+      // pre-computed flag combining hard failures (auto_enrol_status =
+      // 'failed') with any non-empty warnings — letting the UI add a
+      // single "stuck-only" filter without re-deriving the logic.
+      const warnings = Array.isArray(r.pipeline_warnings)
+        ? r.pipeline_warnings
+        : (r.pipeline_warnings ? [] : []);
+      const isFailed = String(r.auto_enrol_status || '').trim().toLowerCase() === 'failed';
+      const isStuck = isFailed || warnings.length > 0;
+      out._pipeline_warnings = JSON.stringify(warnings);
+      out._stuck = isStuck ? '1' : '';
       return out;
     });
-    return res.status(200).json({ rows });
+    const stuckCount = rows.filter((r) => r._stuck === '1').length;
+    return res.status(200).json({ rows, stuckCount });
   } catch (err: any) {
     console.error('fetch-company-applications error:', err);
     return res.status(500).json({ message: err?.message || 'Failed to fetch company applications' });

@@ -46,24 +46,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       'Accept': 'application/json',
     });
 
-    // Distinct course_run_ids for current/future course runs only — past runs
-    // shouldn't generate new grant activity and skipping them keeps the SSG
-    // call count down.
+    // Include course runs that are current/future OR ended within the last
+    // 60 days. Previously this hard-filtered to start_date >= today, which
+    // silently excluded any course whose grants hadn't been pulled in by the
+    // time the course began — a real failure mode we found in production
+    // (grants sit in SSG but never make it into ssg_grants, because the
+    // sweep skips the run forever once it's started).
+    //
+    // course_run.end_date is the source of truth; for CA rows where the run
+    // hasn't been resolved yet (no JOIN match) we approximate with
+    // course_start_date + 7 days, which covers ~95% of WSQ courses.
     const runRes = await pool.query(
       `SELECT DISTINCT ca.course_run_id
          FROM public.company_application ca
          LEFT JOIN public.course_run cr ON ca.course_run_id = cr.course_run_id
         WHERE ca.course_run_id IS NOT NULL
           AND ca.course_run_id <> ''
-          AND COALESCE(cr.start_date, ca.course_start_date::date) >= CURRENT_DATE`
+          AND COALESCE(
+                cr.end_date,
+                ca.course_start_date::date + INTERVAL '7 days'
+              ) >= CURRENT_DATE - INTERVAL '60 days'`
     );
     const courseRunIds: string[] = runRes.rows.map((r: any) => String(r.course_run_id));
 
+    interface RunResult {
+      courseRunId: string;
+      grantsUpserted: number;
+      grantsFailed: number;
+      error?: string;
+    }
+    const runs: RunResult[] = [];
     let totalGrants = 0;
-    let runsProcessed = 0;
+    let runsSucceeded = 0;
+    let runsFailed = 0;
     const errors: string[] = [];
 
     for (const courseRunId of courseRunIds) {
+      const runResult: RunResult = { courseRunId, grantsUpserted: 0, grantsFailed: 0 };
       try {
         const ssgPayload = {
           grants: {
@@ -89,7 +108,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const httpResponse = await httpClient.request(builder.build());
 
         if (httpResponse.status !== 200) {
-          errors.push(`Run ${courseRunId}: SSG returned ${httpResponse.status}`);
+          const msg = `SSG returned ${httpResponse.status}`;
+          runResult.error = msg;
+          errors.push(`Run ${courseRunId}: ${msg}`);
+          runs.push(runResult);
+          runsFailed++;
           continue;
         }
 
@@ -104,7 +127,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const hasError = parsed?.error && (parsed.error.code || parsed.error.message);
         if (hasError) {
-          errors.push(`Run ${courseRunId}: ${parsed.error.message || parsed.error.code}`);
+          const msg = parsed.error.message || parsed.error.code;
+          runResult.error = msg;
+          errors.push(`Run ${courseRunId}: ${msg}`);
+          runs.push(runResult);
+          runsFailed++;
           continue;
         }
 
@@ -112,16 +139,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         for (const grant of grants) {
           try {
             await upsertSsgGrant(grant);
+            runResult.grantsUpserted++;
             totalGrants++;
           } catch (e) {
             console.warn(`[ca-sync-grants] Failed to upsert grant for run ${courseRunId}:`, e);
+            runResult.grantsFailed++;
           }
         }
 
-        runsProcessed++;
+        // A run with any upsert failures is not fully succeeded — surface it
+        // so the admin knows to investigate even if some grants came through.
+        if (runResult.grantsFailed > 0) {
+          runResult.error = `${runResult.grantsFailed} of ${grants.length} grant upserts failed`;
+          errors.push(`Run ${courseRunId}: ${runResult.error}`);
+          runsFailed++;
+        } else {
+          runsSucceeded++;
+        }
+        runs.push(runResult);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        runResult.error = msg;
         errors.push(`Run ${courseRunId}: ${msg}`);
+        runs.push(runResult);
+        runsFailed++;
       }
     }
 
@@ -162,10 +203,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          AND (COALESCE(ca.grant_id, '') = '' OR ca.grant_id <> sg.grant_id)`
     );
 
+    // Reconcile auto_enrol_status for rows whose auto-pipeline poll was
+    // interrupted by a server restart. Same CASE the bulk runner applies at
+    // the end of bulkProcessCompanyApplications — rows stay 'pending' until
+    // the final flip, so a manual Sync Grants needs to perform the same
+    // reconciliation or the View page will show "Pending" forever even though
+    // the work is done.
+    await pool.query(
+      `UPDATE public.company_application
+          SET auto_enrol_status = CASE
+                WHEN enrolment_id IS NULL THEN 'failed'
+                WHEN COALESCE(grant_id, '') <> '' OR COALESCE(grant_ineligible, false) = true THEN 'grant_found'
+                ELSE 'enroled'
+              END,
+              updated_at = now()
+        WHERE auto_enrol_status = 'pending'`
+    );
+
     return res.status(200).json({
       success: true,
-      runsProcessed,
+      runsProcessed: runs.length,
+      runsSucceeded,
+      runsFailed,
       totalGrantsUpserted: totalGrants,
+      runs,
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (err) {
