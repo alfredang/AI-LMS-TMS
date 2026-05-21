@@ -275,7 +275,6 @@ const WORKFLOWS: Workflow[] = [
       { title: '4. Upload + Verify Documents', detail: 'A popup appears right after upload to do it now, or come back via "Check Supporting Document" later.\n\nPer learner:\n• Upload the doc (e.g. NRIC scan) → saved to Drive\n• Confirm name / NRIC / employer / UEN match\n• Mark Verified or Mismatch (mismatch clears the file — re-upload required)', type: 'action' },
       { title: '5. Invoice Email Auto-Sent', detail: 'Verify the LAST learner in a group → email goes out to the employer instantly. No button. Already-sent invoices are never re-sent.', type: 'email' },
       { title: '6. Track in View Company Application', detail: 'Your dashboard. Each row shows Enrolment ID, Grant ID, Amount, Invoice Doc Number, Doc Verified, Email status. The red sidebar badge counts rows still needing attention.', type: 'success' },
-      { title: 'Heads-Up: Past Class (>30 Days)', detail: 'If the course ended >30 days ago, the invoice step is skipped — past-class billing is handled separately. Enrolment + grant lookup still run as usual.', type: 'warning' },
     ],
     endpoints: [
       { method: 'POST', url: '/api/admin/upload-company-applications', description: 'Upload Excel rows and queue them for the auto-enrol pipeline' },
