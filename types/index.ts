@@ -91,6 +91,7 @@ export enum AdminPage {
   CompanyApplication = 'companyApplication',
   UploadCompanyApplication = 'uploadCompanyApplication',
   ViewCompanyApplication = 'viewCompanyApplication',
+  CheckSupportingDocument = 'checkSupportingDocument',
   UploadEnrolments = 'uploadEnrolments',
   SearchCourseRuns = 'searchCourseRuns',
   ViewCourseRun = 'viewCourseRun',

@@ -70,7 +70,7 @@ import CourseSessionTimingView from '../components/admin/CourseSessionTimingView
 import SupportTicketsView from '../components/admin/SupportTicketsView';
 import SupportTicketDetailView from '../components/admin/SupportTicketDetailView';
 import MasterListView from '../components/admin/MasterListView';
-import { UploadCompanyApplicationView, ViewCompanyApplicationView } from '../components/admin/CompanyApplicationViews';
+import { UploadCompanyApplicationView, ViewCompanyApplicationView, CheckSupportingDocumentView } from '../components/admin/CompanyApplicationViews';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -161,6 +161,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.CompanyApplication]: 'COMPANY APPLICATION',
   [AdminPage.UploadCompanyApplication]: 'Upload Company Application',
   [AdminPage.ViewCompanyApplication]: 'View Company Application',
+  [AdminPage.CheckSupportingDocument]: 'Check Supporting Document',
   [AdminPage.UpcomingClasses]: 'Upcoming Classes',
   [AdminPage.ViewClassByDate]: 'View Class By Date',
   [AdminPage.OngoingClasses]: 'Ongoing Classes',
@@ -232,6 +233,7 @@ const AdminLayout: React.FC = () => {
     ],
     [AdminPage.CompanyApplication]: [
       { title: "Upload Company Application", description: "Import company-sponsored application records into the system.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.UploadCompanyApplication) },
+      { title: "Check Supporting Document", description: "Verify outstanding supporting documents before invoice emails are released.", icon: IconName.Shield, onClick: () => setAdminPage(AdminPage.CheckSupportingDocument) },
       { title: "View Company Application", description: "Review and manage company-sponsored application records.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewCompanyApplication) },
     ],
     [AdminPage.TpgCourseRun]: [
@@ -414,6 +416,8 @@ const AdminLayout: React.FC = () => {
         return <UploadCompanyApplicationView />;
       case AdminPage.ViewCompanyApplication:
         return <ViewCompanyApplicationView />;
+      case AdminPage.CheckSupportingDocument:
+        return <CheckSupportingDocumentView />;
       case AdminPage.UpdateDirectApplication:
         return <UpdateDirectApplicationView />;
       case AdminPage.CheckAttendance:

@@ -253,6 +253,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
 
             <NavSection title="COMPANY APPLICATION" icon={IconName.Building} collapsed={collapsed} isOpen={openSections.companyApplication} onToggle={() => toggleSection('companyApplication')}>
                 <NavItem page={AdminPage.UploadCompanyApplication} label="Upload Company Application" isSubItem />
+                <NavItem page={AdminPage.CheckSupportingDocument} label="Check Supporting Document" isSubItem />
                 <NavItem page={AdminPage.ViewCompanyApplication} label="View Company Application" isSubItem badge={caStuckCount} />
             </NavSection>
 
