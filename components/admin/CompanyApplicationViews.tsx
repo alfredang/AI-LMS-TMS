@@ -5,7 +5,6 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { ConfirmPopup } from './ConfirmPopup';
-import { getCompanyApplicationStage } from './companyApplicationStage';
 import SupportingDocsModal from './SupportingDocsModal';
 
 export const COMPANY_APPLICATION_COLUMNS = [
@@ -1287,13 +1286,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showPii, setShowPii] = useState(false);
-  // Operational columns (ENROL/CAL/INV/GRANT) are pipeline internals — hidden
-  // by default in favour of the composite Stage column. Admin can show them
-  // for debugging via the header toggle.
-  const [showOperational, setShowOperational] = useState(false);
-  // Tracks which row is currently mid-retry so we can show a spinner inline
-  // without blocking the rest of the table.
-  const [retryingRowId, setRetryingRowId] = useState<string | null>(null);
   const [isSyncingGrants, setIsSyncingGrants] = useState(false);
   // Prevents the auto-sync useEffect from re-firing as `rows` updates within
   // a single page mount. Reset per-mount; on full reload, the throttle in
@@ -1465,31 +1457,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
     }
     setInvoiceMessage(null);
     setConfirmGenerateInvoiceOpen(true);
-  };
-
-  // One-click retry for a failed row. Resets auto_enrol_status to 'pending'
-  // and re-queues the row through the auto-enrol worker. Preserves all
-  // existing context (enrolment_id, grant_id, invoice_id) — saves admins
-  // from the "delete + re-upload" workaround.
-  const retryRow = async (applicationId: string) => {
-    if (!applicationId) return;
-    setRetryingRowId(applicationId);
-    try {
-      const res = await fetch('/api/admin/ca-retry-row', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationId }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || 'Retry failed');
-      // Background processing kicked off; poll the row state via the existing reload.
-      void reloadRows();
-      window.setTimeout(() => void reloadRows(), 3000);
-    } catch (err) {
-      alert(`Retry failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setRetryingRowId(null);
-    }
   };
 
   const executeGenerateInvoice = async () => {
@@ -2232,8 +2199,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
           <table className="min-w-max w-full divide-y divide-gray-200 dark:divide-gray-600 text-[11px]">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                {/* Gap spans: checkbox + Stage + (optional) 4 operational columns. */}
-                <th colSpan={showOperational ? 6 : 2} className="bg-gray-200 dark:bg-gray-900" />
+                <th colSpan={5} className="bg-gray-200 dark:bg-gray-900" />
                 {COLUMN_GROUPS.map(group => (
                   <th
                     key={group.label}
@@ -2259,27 +2225,10 @@ export const ViewCompanyApplicationView: React.FC = () => {
                     className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 cursor-pointer"
                   />
                 </th>
-                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="Where this row is in the pipeline — derived from the operational fields">
-                  <span className="inline-flex items-center gap-1.5">
-                    Stage
-                    <button
-                      type="button"
-                      onClick={() => setShowOperational(v => !v)}
-                      title={showOperational ? 'Hide operational details (ENROL/CAL/INV/GRANT)' : 'Show operational details (ENROL/CAL/INV/GRANT)'}
-                      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                      {showOperational ? 'Hide details' : 'Show details'}
-                    </button>
-                  </span>
-                </th>
-                {showOperational && (
-                  <>
-                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="SSG Enrolment Done">Enrol</th>
-                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Added to Google Calendar">Cal</th>
-                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Invoice Generated">Inv</th>
-                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Grant status — click to mark a learner as ineligible (bill at full fee) when SSG won't issue any grant for them">Grant</th>
-                  </>
-                )}
+                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="SSG Enrolment Done">Enrol</th>
+                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Added to Google Calendar">Cal</th>
+                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Invoice Generated">Inv</th>
+                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Grant status — click to mark a learner as ineligible (bill at full fee) when SSG won't issue any grant for them">Grant</th>
                 {VISIBLE_COLUMNS.map((column) => {
                   const isPiiColumn = column === 'Trainee NRIC/FIN Number*' || column === 'Date of Birth* (DD-MM-YYYY)';
                   const label = COLUMN_DISPLAY_LABELS[column] ?? column.replace(/\*/g, '').trim();
@@ -2340,55 +2289,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       )}
                     </div>
                   </td>
-                  {/* Stage column — one composite label per row, optional
-                      Retry button when failed. The other stage's "next action"
-                      is reachable from the existing header buttons (Sync
-                      Grants / Generate Invoice / Send Invoice) and the Check
-                      Supporting Document page, so we only render an inline
-                      button for Retry here. */}
-                  {(() => {
-                    const info = getCompanyApplicationStage(row);
-                    const toneClass =
-                      info.tone === 'red' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 ring-1 ring-red-300/60' :
-                      info.tone === 'amber' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 ring-1 ring-amber-300/60' :
-                      info.tone === 'blue' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-300/60' :
-                      info.tone === 'emerald' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-300/60' :
-                      'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 ring-1 ring-gray-300/60';
-                    const applicationId = String(row.id || '');
-                    const isRetrying = retryingRowId === applicationId;
-                    return (
-                      <td className="px-2 py-1.5 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${toneClass}`}>
-                            {info.label}
-                          </span>
-                          {info.stage === 'failed' && (
-                            <button
-                              type="button"
-                              onClick={() => void retryRow(applicationId)}
-                              disabled={!applicationId || isRetrying}
-                              title={info.nextAction?.tooltip}
-                              className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                            >
-                              {isRetrying ? (
-                                <>
-                                  <div className="animate-spin rounded-full h-2.5 w-2.5 border-2 border-white border-t-transparent" />
-                                  Retrying…
-                                </>
-                              ) : (
-                                <>
-                                  <Icon name={IconName.Sync} className="w-3 h-3" />
-                                  Retry
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })()}
-                  {showOperational && (
-                  <>
                   <td className="px-2 py-1.5 text-center">
                     <input
                       type="checkbox"
@@ -2462,8 +2362,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       );
                     })()}
                   </td>
-                  </>
-                  )}
                   {VISIBLE_COLUMNS.map(column => {
                     if (column === 'Amt (BL)' || column === 'Amount' || column === 'TG Amt') {
                       const raw = (row[column] || '').trim();
