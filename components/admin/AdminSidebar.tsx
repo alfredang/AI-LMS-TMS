@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
 import { Icon, IconName } from '@components/ui/Icon';
@@ -105,6 +105,26 @@ const USEFUL_LINKS = [
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflow, collapsed = false }) => {
     const { adminPage, setAdminPage, setEditingCourseRun, setEditingCourse, setSelectedCourse, setCourseEditMode, trainingProviderProfile } = useLms();
 
+    // Count of company_application rows that need admin attention. Polled
+    // every 60s + on adminPage change so the badge reflects fresh state
+    // when admins return to the sidebar after a sync/retry elsewhere.
+    const [caStuckCount, setCaStuckCount] = useState<number>(0);
+    useEffect(() => {
+        let cancelled = false;
+        const fetchCount = async () => {
+            try {
+                const res = await fetch('/api/admin/ca-stuck-count');
+                const json = await res.json();
+                if (!cancelled) setCaStuckCount(Number(json.count) || 0);
+            } catch {
+                // Non-fatal — badge just stays at its last value.
+            }
+        };
+        void fetchCount();
+        const id = window.setInterval(fetchCount, 60_000);
+        return () => { cancelled = true; window.clearInterval(id); };
+    }, [adminPage]);
+
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({
         calendar: false,
         courseManagement: false,
@@ -136,7 +156,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const NavItem: React.FC<{ page: AdminPage; isSubItem?: boolean; nested?: boolean; label?: string; icon?: IconName }> = ({ page, isSubItem = false, nested = false, label, icon }) => {
+    const NavItem: React.FC<{ page: AdminPage; isSubItem?: boolean; nested?: boolean; label?: string; icon?: IconName; badge?: number }> = ({ page, isSubItem = false, nested = false, label, icon, badge }) => {
         if (collapsed && !isSubItem) {
             return (
                 <a
@@ -159,6 +179,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                     title={label || page}
                 >
                     {icon && <Icon name={icon} className="w-5 h-5" />}
+                    {typeof badge === 'number' && badge > 0 && (
+                        <span className="absolute -mt-4 ml-3 inline-flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-red-500 text-[9px] font-bold text-white">
+                            {badge > 99 ? '99+' : badge}
+                        </span>
+                    )}
                 </a>
             );
         }
@@ -189,7 +214,15 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                     }`}
             >
                 {icon && <Icon name={icon} className="w-4 h-4" />}
-                {label || page}
+                <span className="flex-1 truncate">{label || page}</span>
+                {typeof badge === 'number' && badge > 0 && (
+                    <span
+                        className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-500 text-[10px] font-bold text-white"
+                        title={`${badge} company application${badge === 1 ? '' : 's'} need attention`}
+                    >
+                        {badge > 99 ? '99+' : badge}
+                    </span>
+                )}
             </a>
         );
     };
@@ -220,7 +253,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
 
             <NavSection title="COMPANY APPLICATION" icon={IconName.Building} collapsed={collapsed} isOpen={openSections.companyApplication} onToggle={() => toggleSection('companyApplication')}>
                 <NavItem page={AdminPage.UploadCompanyApplication} label="Upload Company Application" isSubItem />
-                <NavItem page={AdminPage.ViewCompanyApplication} label="View Company Application" isSubItem />
+                <NavItem page={AdminPage.ViewCompanyApplication} label="View Company Application" isSubItem badge={caStuckCount} />
             </NavSection>
 
             <NavSection title="Enrolment" icon={IconName.Users} collapsed={collapsed} isOpen={openSections.enrolment} onToggle={() => toggleSection('enrolment')}>

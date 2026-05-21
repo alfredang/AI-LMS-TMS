@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import pool from './db';
-import { ensureCompanyApplicationsTable } from './companyApplicationsTable';
+import { ensureCompanyApplicationsTable, appendPipelineWarning } from './companyApplicationsTable';
 import { buildEnrolmentPayload } from './ssg/buildEnrolmentPayload';
 import { getSSGCredentialsService } from './ssg/services/credentials-service';
 import { searchEnrolment } from './ssg/services/enrolment-service';
@@ -385,8 +385,12 @@ function buildCompanyApplicationRecord(row: any, run: ResolvedRun, enrolmentId?:
  * Mirrors what DA does for its native enrolment, but writes back to
  * `company_application` (not `da_application`) for status preservation.
  */
-async function createNativeEnrolment(record: any): Promise<string | null> {
+async function createNativeEnrolment(
+  record: any,
+  options: { calendarSynced?: boolean } = {}
+): Promise<string | null> {
   if (!record.course_run_id || !record.trainee_id || !record.trainee_email) return null;
+  const calendarSynced = options.calendarSynced === true;
 
   try {
     // CA's course_run_id is the external SSG string (e.g. "1310712"). Resolve
@@ -438,19 +442,26 @@ async function createNativeEnrolment(record: any): Promise<string | null> {
       ? String(record.enrolment_id).trim()
       : null;
 
+    // calendar_added mirrors company_application.calendar_added so the generic
+    // sync-calendar action in enrolment-actions.ts (which calls
+    // addDaLearnerToCalendar — auto-creates events on miss) skips this row.
+    // Without this the admin's "Sync Calendar" button on Class Management
+    // would re-process CA learners through the DA path and create a duplicate
+    // recurring event whenever its matching logic disagreed with CA's.
     const inserted = await pool.query(
       `INSERT INTO enrollment (
           id, user_id, course_id, course_run_id, progress_percent, payment_status,
           assessment_status, enrolment_status, enrolment_date, email, nric,
-          enrolment_id, course_reference, created_at, updated_at
+          enrolment_id, course_reference, calendar_added, created_at, updated_at
        )
-       VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', 'Confirmed', CURRENT_DATE, $4, $5, $6, $7, NOW(), NOW())
+       VALUES (gen_random_uuid(), $1, $2, $3, 0, 'Unpaid', 'Pending', 'Confirmed', CURRENT_DATE, $4, $5, $6, $7, $8, NOW(), NOW())
        ON CONFLICT (user_id, course_run_id) DO UPDATE SET
           enrolment_status = 'Confirmed',
           enrolment_id = COALESCE(EXCLUDED.enrolment_id, enrollment.enrolment_id),
           email = COALESCE(EXCLUDED.email, enrollment.email),
           nric = COALESCE(EXCLUDED.nric, enrollment.nric),
           course_reference = COALESCE(EXCLUDED.course_reference, enrollment.course_reference),
+          calendar_added = enrollment.calendar_added OR EXCLUDED.calendar_added,
           updated_at = NOW()
        RETURNING id`,
       [
@@ -461,6 +472,7 @@ async function createNativeEnrolment(record: any): Promise<string | null> {
         record.trainee_id,
         ssgEnrolmentReference,
         record.course_reference_number || null,
+        calendarSynced,
       ]
     );
 
@@ -684,7 +696,15 @@ export async function processCompanyApplication(
         if (Number.isFinite(amount)) grantAmount = amount;
       }
 
-      await refreshGrantsForEnrolments([enrolmentReference]);
+      const refreshResults = await refreshGrantsForEnrolments([enrolmentReference]);
+      const failedRefresh = refreshResults.find(r => !r.success);
+      if (failedRefresh) {
+        await appendPipelineWarning(
+          appId,
+          'grant_upsert',
+          failedRefresh.error || 'refreshGrantsForEnrolments reported failure',
+        );
+      }
 
       const dbGrant = await findGrantSummary(enrolmentReference);
       grantId = dbGrant.grantId || grantId;
@@ -701,9 +721,11 @@ export async function processCompanyApplication(
       }
     } catch (err) {
       console.warn('[company auto-enrol] grant lookup failed:', err instanceof Error ? err.message : err);
+      await appendPipelineWarning(appId, 'grant_fetch', err);
     }
   }
 
+  let calendarSynced = false;
   try {
     const calendarResult = await addCaLearnerToCalendar(
       caRecord.trainee_email,
@@ -714,22 +736,26 @@ export async function processCompanyApplication(
 
     if (calendarResult.addedTo > 0) {
       await updateCompanyRow(appId, { calendar_added: true });
+      calendarSynced = true;
     }
   } catch (err) {
     console.warn('[company auto-enrol] calendar sync failed:', err instanceof Error ? err.message : err);
+    await appendPipelineWarning(appId, 'calendar_sync', err);
   }
 
   try {
     if (enrolmentReference) {
-      await createNativeEnrolment(caRecord);
+      await createNativeEnrolment(caRecord, { calendarSynced });
     }
   } catch (err) {
     console.warn('[company auto-enrol] native enrolment failed:', err instanceof Error ? err.message : err);
+    await appendPipelineWarning(appId, 'native_enrol', err);
   }
 
+  // auto_enrol_status stays 'pending' here. bulkProcessCompanyApplications
+  // flips it at the very end after the grant poll, invoice, and email steps.
+  // Enrolment failure already wrote status='failed' via markFailed() above.
   const finalStatus: AutoEnrolStatus = enrolmentError ? 'failed' : grantId ? 'grant_found' : 'enroled';
-
-  await updateCompanyRow(appId, { auto_enrol_status: finalStatus });
 
   return {
     id: appId,
@@ -768,34 +794,56 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
     );
   }
 
-  // Wide-net grant sweep — the per-row pipeline searches grants by
-  // enrolment.referenceNumber (narrow), which sometimes misses grants
-  // stakeholders pre-applied through the SSG portal. Sweeping by
-  // course.run.id (wide) catches every grant SSG has for the course run,
-  // regardless of how it was created. Same call as /api/admin/ca-sync-grants
-  // — kept inline here so the auto-pipeline doesn't depend on the user
-  // clicking a button.
-  try {
-    await sweepGrantsByCourseRunForApplications(uniqueIds);
-  } catch (err) {
-    console.warn('[bulkProcessCompanyApplications] wide-net grant sweep failed (non-fatal):', err instanceof Error ? err.message : err);
+  // Grant materialisation polling — SSG creates the grant asynchronously as a
+  // side-effect of POST /tpg/enrolments. The grant typically appears within
+  // seconds but can take 15+ minutes. Rather than skip rows whose grant hasn't
+  // appeared and force an admin to click Sync Grants later, re-run the
+  // wide-net sweep every 30s until every successfully-enroled row has its
+  // grant_id (or is marked grant_ineligible). No timeout: if SSG never
+  // returns the grant, an admin marks the learner grant_ineligible from the
+  // View page to break out of the loop for that row.
+  //
+  // Restart recovery: this loop is in-process. If the server restarts mid-poll
+  // (deploy, crash), affected rows stay at auto_enrol_status='pending' with no
+  // background process to resume them. Recovery is manual — admin clicks the
+  // "Sync Grants" button on the View Company Application page, which runs the
+  // same sweepGrantsByCourseRunForApplications logic against the same rows.
+  // Once grants land in ssg_grants, the final UPDATE at the end of this
+  // function flips auto_enrol_status to 'grant_found'. We accept this over a
+  // cron sweep to avoid masking real failures with self-healing.
+  const POLL_INTERVAL_MS = 30_000;
+  let pollIteration = 0;
+  while (true) {
+    try {
+      await sweepGrantsByCourseRunForApplications(uniqueIds);
+    } catch (err) {
+      console.warn('[bulkProcessCompanyApplications] grant sweep iteration failed (non-fatal):', err instanceof Error ? err.message : err);
+    }
+
+    const pendingRes = await pool.query(
+      `SELECT COUNT(*)::int AS pending_count
+         FROM public.company_application
+        WHERE id = ANY($1::uuid[])
+          AND auto_enrol_status = 'pending'
+          AND enrolment_id IS NOT NULL
+          AND COALESCE(grant_id, '') = ''
+          AND COALESCE(grant_ineligible, false) = false`,
+      [uniqueIds]
+    );
+    const pendingCount = pendingRes.rows[0]?.pending_count ?? 0;
+    if (pendingCount === 0) break;
+
+    pollIteration++;
+    console.log(`[bulkProcessCompanyApplications] grant poll iteration ${pollIteration}: ${pendingCount} row(s) still awaiting grant — sleeping ${POLL_INTERVAL_MS}ms`);
+    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
   }
 
-  // Best-effort auto-invoice. Safe to run even when grants haven't been
-  // applied yet: generateInvoicesForApplications skips any group where a
-  // learner has no positive ssg_grants row (skippedAwaitingGrants), so we
-  // can never produce a full-fee invoice here. The pre-applied case
-  // ("stakeholder applied grant before the Excel was uploaded") goes
-  // through cleanly — the wide-net sweep above lands the grant in
-  // ssg_grants, the guard passes, invoice is generated with the correct
-  // deductions. The normal case ("stakeholder applies after upload")
-  // skips here and waits for the admin to click Sync Grants + Generate
-  // Invoice on the View page.
-  let invoiceSweepGenerated = 0;
+  // Auto-invoice. Runs after the poll has confirmed every enroled row has
+  // a grant_id (or is marked grant_ineligible), so skippedAwaitingGrants
+  // should be 0. Idempotent — groups that already have invoice_id are skipped.
   try {
     const { generateInvoicesForApplications } = await import('./quickbooks/createCompanyApplicationInvoice');
     const summary = await generateInvoicesForApplications(uniqueIds);
-    invoiceSweepGenerated = Number(summary.generated) || 0;
     console.log(
       `[bulkProcessCompanyApplications] invoice sweep — generated ${summary.generated}, alreadyInvoiced ${summary.skippedAlreadyInvoiced}, notEnrolled ${summary.skippedNotEnrolled}, awaitingGrants ${summary.skippedAwaitingGrants}, failed ${summary.failed}`
     );
@@ -806,31 +854,28 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
     console.error('[bulkProcessCompanyApplications] invoice generation crashed (non-fatal):', err);
   }
 
-  // Auto-send invoice email if (a) the training_provider toggle is ON AND
-  // (b) the sweep above actually generated at least one invoice this run.
-  // The send function itself is idempotent and reports skippedNoInvoice for
-  // rows whose grant hasn't arrived yet — so when no invoices are generated,
-  // we skip the call entirely to avoid noisy "0 sent" log lines on every
-  // upload of rows still awaiting grants. Manual Send Invoice Email button
-  // remains the catch-up path for the post-upload grant case.
-  if (invoiceSweepGenerated > 0) {
-    try {
-      const toggleRes = await pool.query(
-        `SELECT COALESCE(ca_auto_send_invoice_email, false) AS enabled
-           FROM training_provider
-           LIMIT 1`
-      );
-      if (toggleRes.rows[0]?.enabled) {
-        const { sendCompanyApplicationInvoiceEmails } = await import('./quickbooks/sendCompanyApplicationInvoiceEmails');
-        const emailSummary = await sendCompanyApplicationInvoiceEmails(uniqueIds);
-        console.log(
-          `[bulkProcessCompanyApplications] auto-send — sent ${emailSummary.sent}, failed ${emailSummary.failed}, skippedAlreadySent ${emailSummary.skippedAlreadySent}, skippedMissingEmail ${emailSummary.skippedMissingEmail}, skippedNoInvoice ${emailSummary.skippedNoInvoice}`
-        );
-      }
-    } catch (err) {
-      console.warn('[bulkProcessCompanyApplications] auto-send email failed (non-fatal):', err instanceof Error ? err.message : err);
-    }
-  }
+  // Invoice email is NOT auto-sent here. Sending is gated on per-row
+  // supporting-document verification — admin uploads docs and confirms
+  // name/NRIC/employer/UEN match via SupportingDocsModal, then the verify
+  // endpoint (/api/admin/ca-verify-and-send) triggers the email for every
+  // row in the (employer, course-run) group where all rows are verified.
+
+  // Flip final per-row status. Rows still at 'pending' get classified by
+  // what actually landed in the DB. Rows already 'failed' (set by markFailed
+  // inside processCompanyApplication when enrolment itself crashed) are
+  // untouched by the WHERE clause.
+  await pool.query(
+    `UPDATE public.company_application
+        SET auto_enrol_status = CASE
+              WHEN enrolment_id IS NULL THEN 'failed'
+              WHEN COALESCE(grant_id, '') <> '' OR COALESCE(grant_ineligible, false) = true THEN 'grant_found'
+              ELSE 'enroled'
+            END,
+            updated_at = now()
+      WHERE id = ANY($1::uuid[])
+        AND auto_enrol_status = 'pending'`,
+    [uniqueIds]
+  );
 }
 
 /**
