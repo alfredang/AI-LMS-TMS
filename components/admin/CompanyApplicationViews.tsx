@@ -4,6 +4,8 @@ import { AdminPage } from '@app-types';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
+import { ConfirmPopup } from './ConfirmPopup';
+import { getCompanyApplicationStage } from './companyApplicationStage';
 import SupportingDocsModal from './SupportingDocsModal';
 
 export const COMPANY_APPLICATION_COLUMNS = [
@@ -187,7 +189,7 @@ const COLUMN_GROUPS: Array<{ label: string; columns: string[]; className: string
   },
 ];
 
-type CompanyApplicationRow = Record<string, string>;
+export type CompanyApplicationRow = Record<string, string>;
 
 const inputClasses = 'block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500';
 
@@ -201,6 +203,50 @@ const normalize = (value: unknown) =>
 // Show only the start date in MM/DD/YYYY format even when the source cell
 // contains a date range and/or weekday tag (e.g. "18/22 May 2026 (Mon/Fri)"
 // → "05/18/2026").
+// PDPA-friendly NRIC display: mask all but the last 4 characters. Singapore
+// NRICs are 9 chars (1 letter + 7 digits + 1 letter), so "S1234567A" → "*****567A".
+export function maskNric(raw: string): string {
+  const value = (raw || '').trim();
+  if (!value) return '';
+  if (value.length <= 4) return value;
+  return '*'.repeat(value.length - 4) + value.slice(-4);
+}
+
+// Day-month-year format for the Check Supporting Document group header where
+// MM/DD/YYYY was confusing admins. e.g. "05/18/2026" → "18 May 2026".
+export function formatCourseDateLong(raw: string): string {
+  const value = (raw || '').trim();
+  if (!value) return '';
+
+  const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const toLong = (dd: string, mmIdx: number, yyyy: string) =>
+    `${parseInt(dd, 10)} ${MONTH_NAMES[mmIdx]} ${yyyy}`;
+
+  const textual = value.match(/^(\d{1,2})(?:\s*[\/\-,]\s*\d{1,2})?\s+([A-Za-z]+)\s+(\d{4})/);
+  if (textual) {
+    const [, dd, monthName, yyyy] = textual;
+    const idx = MONTH_NAMES.findIndex(m => m.toLowerCase() === monthName.slice(0, 3).toLowerCase());
+    if (idx >= 0) return toLong(dd, idx, yyyy);
+  }
+
+  const dmy = value.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmy) {
+    const [, dd, mm, yyyy] = dmy;
+    const idx = parseInt(mm, 10) - 1;
+    if (idx >= 0 && idx < 12) return toLong(dd, idx, yyyy);
+  }
+
+  const ymd = value.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymd) {
+    const [, yyyy, mm, dd] = ymd;
+    const idx = parseInt(mm, 10) - 1;
+    if (idx >= 0 && idx < 12) return toLong(dd, idx, yyyy);
+  }
+
+  return value;
+}
+
 function formatStartDate(raw: string): string {
   const value = (raw || '').trim();
   if (!value) return '-';
@@ -290,19 +336,19 @@ const uploadRows = async (rows: CompanyApplicationRow[]): Promise<CompanyUploadR
   };
 };
 
-const fetchRows = async (): Promise<CompanyApplicationRow[]> => {
+export const fetchRows = async (): Promise<CompanyApplicationRow[]> => {
   const response = await fetch('/api/admin/fetch-company-applications');
   if (!response.ok) throw new Error(`Failed to load (${response.status})`);
   const data = await response.json();
   return Array.isArray(data.rows) ? data.rows : [];
 };
 
-const isCheckedValue = (value: unknown): boolean => {
+export const isCheckedValue = (value: unknown): boolean => {
   const normalized = String(value ?? '').trim().toLowerCase();
   return normalized === 'true' || normalized === 'yes' || normalized === '1';
 };
 
-const hasValue = (value: unknown): boolean => String(value ?? '').trim() !== '';
+export const hasValue = (value: unknown): boolean => String(value ?? '').trim() !== '';
 
 const statusCheckboxClass = (checked: boolean, color: 'green' | 'blue' | 'amber') => {
   const accent = color === 'green' ? 'accent-green-600' : color === 'blue' ? 'accent-blue-600' : 'accent-amber-600';
@@ -1136,9 +1182,7 @@ const DeleteConfirmModal: React.FC<{
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800/60">
                 {rows.map((r, i) => {
                   const nric = String(r['Trainee NRIC/FIN Number*'] || '').trim();
-                  const maskedNric = nric.length >= 4
-                    ? `${nric.charAt(0)}****${nric.slice(-3)}`
-                    : (nric || '-');
+                  const maskedNric = nric ? maskNric(nric) : '-';
                   return (
                     <tr key={r.id || i} className="hover:bg-red-50/40 dark:hover:bg-red-900/10 transition-colors">
                       <td
@@ -1243,6 +1287,13 @@ export const ViewCompanyApplicationView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showPii, setShowPii] = useState(false);
+  // Operational columns (ENROL/CAL/INV/GRANT) are pipeline internals — hidden
+  // by default in favour of the composite Stage column. Admin can show them
+  // for debugging via the header toggle.
+  const [showOperational, setShowOperational] = useState(false);
+  // Tracks which row is currently mid-retry so we can show a spinner inline
+  // without blocking the rest of the table.
+  const [retryingRowId, setRetryingRowId] = useState<string | null>(null);
   const [isSyncingGrants, setIsSyncingGrants] = useState(false);
   // Prevents the auto-sync useEffect from re-firing as `rows` updates within
   // a single page mount. Reset per-mount; on full reload, the throttle in
@@ -1279,9 +1330,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
       window.setTimeout(() => setToastMsg(null), 300);
     }, 5000);
   }, []);
-  // Supporting-docs verification modal. Opens for the currently-selected
-  // rows when admin clicks "Verify & Send" on the View page.
-  const [supportingDocsTargetIds, setSupportingDocsTargetIds] = useState<string[] | null>(null);
+  // Custom confirm popup for the "send invoice email" action — replaces the
+  // native window.confirm so the prompt matches the rest of the app's UI.
+  const [confirmSendInvoiceOpen, setConfirmSendInvoiceOpen] = useState(false);
+  // Confirm popup for the "generate invoice" action — same custom-modal
+  // treatment so all three header buttons share the same UX shape.
+  const [confirmGenerateInvoiceOpen, setConfirmGenerateInvoiceOpen] = useState(false);
 
   const getDocumentKey = (row: CompanyApplicationRow, kind: 'main' | 'grant') => `${row.id || ''}:${kind}`;
 
@@ -1404,11 +1458,42 @@ export const ViewCompanyApplicationView: React.FC = () => {
     }
   };
 
-  const generateInvoiceForSelected = async () => {
+  const generateInvoiceForSelected = () => {
     if (selectedIds.size === 0) {
       setInvoiceMessage('Select at least one row first.');
       return;
     }
+    setInvoiceMessage(null);
+    setConfirmGenerateInvoiceOpen(true);
+  };
+
+  // One-click retry for a failed row. Resets auto_enrol_status to 'pending'
+  // and re-queues the row through the auto-enrol worker. Preserves all
+  // existing context (enrolment_id, grant_id, invoice_id) — saves admins
+  // from the "delete + re-upload" workaround.
+  const retryRow = async (applicationId: string) => {
+    if (!applicationId) return;
+    setRetryingRowId(applicationId);
+    try {
+      const res = await fetch('/api/admin/ca-retry-row', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Retry failed');
+      // Background processing kicked off; poll the row state via the existing reload.
+      void reloadRows();
+      window.setTimeout(() => void reloadRows(), 3000);
+    } catch (err) {
+      alert(`Retry failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setRetryingRowId(null);
+    }
+  };
+
+  const executeGenerateInvoice = async () => {
+    setConfirmGenerateInvoiceOpen(false);
     setIsGeneratingInvoice(true);
     setInvoiceMessage(null);
     setInvoiceErrors([]);
@@ -1480,25 +1565,60 @@ export const ViewCompanyApplicationView: React.FC = () => {
       setEmailMessage('Select at least one row first.');
       return;
     }
-    // Gate on supporting-doc verification. If any selected row is not yet
-    // verified, open the SupportingDocsModal so admin completes verification
-    // first — the verify-and-send API then fires the email automatically
-    // when the group is fully verified. Only when every selected row is
-    // already verified do we send directly via the legacy endpoint.
-    const unverified = Array.from(selectedIds).filter(id => {
-      const row = rows.find(r => String(r.id) === String(id));
-      if (!row) return false;
-      const status = String(row['Supporting Doc Verification Status'] || '').trim().toLowerCase();
-      return status !== 'verified';
-    });
-    if (unverified.length > 0) {
-      setSupportingDocsTargetIds(unverified);
+    // Hard gate before opening the send confirm popup: every selected row
+    // must have a tax invoice, a grant invoice (if the learner is grant-
+    // eligible), and a verified supporting doc. Verification happens
+    // exclusively on the Check Supporting Document page now — surface the
+    // missing pieces in one clear message so the admin knows what to do.
+    const selectedRows = rows.filter(r => selectedIds.has(String(r.id || '')));
+    const missingInvoice: string[] = [];
+    const missingGrantInvoice: string[] = [];
+    const missingDocVerified: string[] = [];
+    for (const r of selectedRows) {
+      const learnerLabel = String(r['Trainee FULL Name as on government ID*'] || r.id || '').trim() || '(unnamed)';
+      const hasInvoice = hasValue(r['Invoice ID']) && hasValue(r['Invoice Doc Number']);
+      const hasInvoicePdf = hasValue(r['Invoice Drive Link']) || hasValue(r['Invoice Drive File ID']);
+      if (!hasInvoice || !hasInvoicePdf) {
+        missingInvoice.push(learnerLabel);
+      }
+      // Grant invoice only required when the learner has a grant AND is not
+      // marked grant-ineligible. Ineligible learners pay full fee — no
+      // supplemental WSG invoice expected.
+      const needsGrantInvoice = hasValue(r['Grant ID']) && !isCheckedValue(r['Grant Ineligible']);
+      if (needsGrantInvoice) {
+        const hasGrantInvoice = hasValue(r['Grant Invoice ID']);
+        const hasGrantInvoicePdf = hasValue(r['Grant Invoice Drive Link']) || hasValue(r['Grant Invoice Drive File ID']);
+        if (!hasGrantInvoice || !hasGrantInvoicePdf) missingGrantInvoice.push(learnerLabel);
+      }
+      const docVerified = String(r['Supporting Doc Verification Status'] || '').trim().toLowerCase() === 'verified';
+      if (!docVerified) missingDocVerified.push(learnerLabel);
+    }
+
+    const problems: string[] = [];
+    if (missingInvoice.length > 0) {
+      problems.push(
+        `${missingInvoice.length} row${missingInvoice.length === 1 ? '' : 's'} missing tax invoice — click Generate Invoice first.`
+      );
+    }
+    if (missingGrantInvoice.length > 0) {
+      problems.push(
+        `${missingGrantInvoice.length} row${missingGrantInvoice.length === 1 ? '' : 's'} missing grant invoice — click Generate Invoice (after Sync Grants if needed).`
+      );
+    }
+    if (missingDocVerified.length > 0) {
+      problems.push(
+        `${missingDocVerified.length} row${missingDocVerified.length === 1 ? '' : 's'} not yet verified — go to Check Supporting Document.`
+      );
+    }
+    if (problems.length > 0) {
+      setEmailMessage(`Can't send: ${problems.join(' · ')}`);
       return;
     }
-    if (!window.confirm(
-      'Send the consolidated tax invoice email to the EMPLOYER contact for the selected rows?\n\n' +
-      'Already-sent invoices will be skipped.'
-    )) return;
+    setConfirmSendInvoiceOpen(true);
+  };
+
+  const executeSendInvoiceEmail = async () => {
+    setConfirmSendInvoiceOpen(false);
     setIsSendingEmail(true);
     setEmailMessage(null);
     try {
@@ -1510,6 +1630,14 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Request failed (${res.status})`);
+      }
+      // Master toggle off → server returns toggleDisabled:true with all-zero
+      // counts. Surface that explicitly so admin doesn't think the rows were
+      // empty when actually the send was held back on purpose.
+      if (data.toggleDisabled) {
+        setEmailMessage('Held in test mode — master send toggle is OFF. No emails sent.');
+        void reloadRows();
+        return;
       }
       const parts: string[] = [];
       if (data.sent) parts.push(`${data.sent} invoice${data.sent === 1 ? '' : 's'} emailed`);
@@ -1915,7 +2043,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
               <button
                 onClick={() => void sendInvoiceEmailForSelected()}
                 disabled={isSendingEmail || selectedIds.size === 0}
-                title="Verify supporting documents and email the consolidated main tax invoice to the EMPLOYER contact for the selected rows. If any selected learner is unverified, the verification modal opens first; otherwise the email sends immediately. Already-sent invoices are skipped."
+                title="Email the consolidated main tax invoice to the EMPLOYER contact for the selected rows. All selected rows must already be verified on the Check Supporting Document page. Already-sent invoices are skipped."
                 className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 ring-1 ring-indigo-400/50 shadow-md shadow-indigo-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSendingEmail ? (
@@ -1925,8 +2053,8 @@ export const ViewCompanyApplicationView: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <Icon name={IconName.Shield} className="w-3.5 h-3.5 mr-1.5" />
-                    Verify &amp; Send
+                    <Icon name={IconName.Mail} className="w-3.5 h-3.5 mr-1.5" />
+                    Send Invoice
                   </>
                 )}
               </button>
@@ -1996,16 +2124,89 @@ export const ViewCompanyApplicationView: React.FC = () => {
             onLinked={onRescueLinked}
           />
         )}
-        {supportingDocsTargetIds && supportingDocsTargetIds.length > 0 && (
-          <SupportingDocsModal
-            applicationIds={supportingDocsTargetIds}
-            initialStep="verify"
-            onClose={() => {
-              setSupportingDocsTargetIds(null);
-              void reloadRows();
-            }}
-          />
+        {confirmSendInvoiceOpen && (
+          <ConfirmPopup
+            tone="primary"
+            icon={IconName.Mail}
+            title="Send tax invoice email?"
+            subtitle={`${selectedIds.size} selected row${selectedIds.size === 1 ? '' : 's'} · emails go to each EMPLOYER contact`}
+            confirmLabel="Send invoice email"
+            busyLabel="Sending…"
+            busy={isSendingEmail}
+            onConfirm={() => void executeSendInvoiceEmail()}
+            onCancel={() => setConfirmSendInvoiceOpen(false)}
+          >
+            <p>
+              One consolidated email is sent per unique invoice. Already-sent invoices are skipped automatically (idempotent).
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Tip: if the master &quot;send invoice emails&quot; toggle is OFF, the send is held — no email actually leaves.
+            </p>
+          </ConfirmPopup>
         )}
+        {confirmGenerateInvoiceOpen && (() => {
+          const selectedRows = rows.filter(r => selectedIds.has(String(r.id || '')));
+          const totalSelected = selectedRows.length;
+          const withInvoice = selectedRows.filter(r => hasValue(r['Invoice ID'])).length;
+          const withGrantInvoice = selectedRows.filter(r => hasValue(r['Grant Invoice ID'])).length;
+          const allInvoiced = totalSelected > 0 && withInvoice === totalSelected;
+          const groupCount = new Set(
+            selectedRows.map(r => {
+              const uen = String(r['Employer UEN*'] || '').trim();
+              const runId = String(r['Course Run ID'] || '').trim();
+              return `${uen}::${runId}`;
+            })
+          ).size;
+          return (
+            <ConfirmPopup
+              tone="warning"
+              icon={IconName.FileText}
+              title="Generate QuickBooks invoice?"
+              subtitle={`${totalSelected} selected row${totalSelected === 1 ? '' : 's'} · ${groupCount} (employer × course-run) group${groupCount === 1 ? '' : 's'}`}
+              confirmLabel="Generate invoice"
+              busyLabel="Generating…"
+              busy={isGeneratingInvoice}
+              disableConfirm={allInvoiced}
+              confirmDisabledHint={allInvoiced ? 'Nothing to generate — every selected row already has an invoice.' : undefined}
+              onConfirm={() => void executeGenerateInvoice()}
+              onCancel={() => setConfirmGenerateInvoiceOpen(false)}
+            >
+              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Pre-check on selected rows</p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600 dark:text-gray-300">Already has tax invoice (Invoice #)</span>
+                  <span className={`font-mono font-semibold ${withInvoice > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                    {withInvoice} / {totalSelected}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600 dark:text-gray-300">Already has grant invoice</span>
+                  <span className={`font-mono font-semibold ${withGrantInvoice > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                    {withGrantInvoice} / {totalSelected}
+                  </span>
+                </div>
+              </div>
+              {allInvoiced ? (
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200 dark:ring-amber-800/60 p-2.5 text-xs text-amber-700 dark:text-amber-300 inline-flex items-start gap-1.5">
+                  <Icon name={IconName.Warning} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <span>Every selected row already has an invoice. Nothing new will be generated.</span>
+                </div>
+              ) : withInvoice > 0 ? (
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200 dark:ring-amber-800/60 p-2.5 text-xs text-amber-700 dark:text-amber-300 inline-flex items-start gap-1.5">
+                  <Icon name={IconName.Warning} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <span>{withInvoice} of {totalSelected} selected row{withInvoice === 1 ? '' : 's'} already invoiced — those groups will be skipped (no duplicates).</span>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  A consolidated tax invoice will be created in QuickBooks for each (employer × course-run) group in your selection.
+                </p>
+              )}
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Tip: groups whose grants are still awaiting application get flagged and skipped — sync grants first if so.
+              </p>
+            </ConfirmPopup>
+          );
+        })()}
         {deleteConfirmOpen && (
           <DeleteConfirmModal
             rows={rows.filter(r => selectedIds.has(String(r.id || '')))}
@@ -2031,7 +2232,8 @@ export const ViewCompanyApplicationView: React.FC = () => {
           <table className="min-w-max w-full divide-y divide-gray-200 dark:divide-gray-600 text-[11px]">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                <th colSpan={5} className="bg-gray-200 dark:bg-gray-900" />
+                {/* Gap spans: checkbox + Stage + (optional) 4 operational columns. */}
+                <th colSpan={showOperational ? 6 : 2} className="bg-gray-200 dark:bg-gray-900" />
                 {COLUMN_GROUPS.map(group => (
                   <th
                     key={group.label}
@@ -2057,10 +2259,27 @@ export const ViewCompanyApplicationView: React.FC = () => {
                     className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 cursor-pointer"
                   />
                 </th>
-                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="SSG Enrolment Done">Enrol</th>
-                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Added to Google Calendar">Cal</th>
-                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Invoice Generated">Inv</th>
-                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Grant status — click to mark a learner as ineligible (bill at full fee) when SSG won't issue any grant for them">Grant</th>
+                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="Where this row is in the pipeline — derived from the operational fields">
+                  <span className="inline-flex items-center gap-1.5">
+                    Stage
+                    <button
+                      type="button"
+                      onClick={() => setShowOperational(v => !v)}
+                      title={showOperational ? 'Hide operational details (ENROL/CAL/INV/GRANT)' : 'Show operational details (ENROL/CAL/INV/GRANT)'}
+                      className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      {showOperational ? 'Hide details' : 'Show details'}
+                    </button>
+                  </span>
+                </th>
+                {showOperational && (
+                  <>
+                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="SSG Enrolment Done">Enrol</th>
+                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Added to Google Calendar">Cal</th>
+                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Invoice Generated">Inv</th>
+                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 uppercase" title="Grant status — click to mark a learner as ineligible (bill at full fee) when SSG won't issue any grant for them">Grant</th>
+                  </>
+                )}
                 {VISIBLE_COLUMNS.map((column) => {
                   const isPiiColumn = column === 'Trainee NRIC/FIN Number*' || column === 'Date of Birth* (DD-MM-YYYY)';
                   const label = COLUMN_DISPLAY_LABELS[column] ?? column.replace(/\*/g, '').trim();
@@ -2121,6 +2340,55 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       )}
                     </div>
                   </td>
+                  {/* Stage column — one composite label per row, optional
+                      Retry button when failed. The other stage's "next action"
+                      is reachable from the existing header buttons (Sync
+                      Grants / Generate Invoice / Send Invoice) and the Check
+                      Supporting Document page, so we only render an inline
+                      button for Retry here. */}
+                  {(() => {
+                    const info = getCompanyApplicationStage(row);
+                    const toneClass =
+                      info.tone === 'red' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 ring-1 ring-red-300/60' :
+                      info.tone === 'amber' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 ring-1 ring-amber-300/60' :
+                      info.tone === 'blue' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-300/60' :
+                      info.tone === 'emerald' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-300/60' :
+                      'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 ring-1 ring-gray-300/60';
+                    const applicationId = String(row.id || '');
+                    const isRetrying = retryingRowId === applicationId;
+                    return (
+                      <td className="px-2 py-1.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${toneClass}`}>
+                            {info.label}
+                          </span>
+                          {info.stage === 'failed' && (
+                            <button
+                              type="button"
+                              onClick={() => void retryRow(applicationId)}
+                              disabled={!applicationId || isRetrying}
+                              title={info.nextAction?.tooltip}
+                              className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                            >
+                              {isRetrying ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-2.5 w-2.5 border-2 border-white border-t-transparent" />
+                                  Retrying…
+                                </>
+                              ) : (
+                                <>
+                                  <Icon name={IconName.Sync} className="w-3 h-3" />
+                                  Retry
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })()}
+                  {showOperational && (
+                  <>
                   <td className="px-2 py-1.5 text-center">
                     <input
                       type="checkbox"
@@ -2194,6 +2462,8 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       );
                     })()}
                   </td>
+                  </>
+                  )}
                   {VISIBLE_COLUMNS.map(column => {
                     if (column === 'Amt (BL)' || column === 'Amount' || column === 'TG Amt') {
                       const raw = (row[column] || '').trim();
@@ -2243,7 +2513,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                     if (column === 'Trainee NRIC/FIN Number*') {
                       const raw = (row[column] || '').trim();
                       if (!raw) return <td key={column} className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">-</td>;
-                      const display = showPii ? raw : (raw.length >= 4 ? `${raw.charAt(0)}****${raw.slice(-3)}` : '****');
+                      const display = showPii ? raw : maskNric(raw);
                       return (
                         <td
                           key={column}
@@ -2470,3 +2740,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
     </div>
   );
 };
+
+// CheckSupportingDocumentView moved to './CheckSupportingDocumentView.tsx'.
+// Kept this re-export so external imports (AdminLayout) don't need to change.
+export { CheckSupportingDocumentView } from './CheckSupportingDocumentView';
+
+
