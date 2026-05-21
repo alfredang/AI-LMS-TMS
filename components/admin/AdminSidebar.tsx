@@ -252,6 +252,19 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
             </NavSection>
 
             <NavSection title="COMPANY APPLICATION" icon={IconName.Building} collapsed={collapsed} isOpen={openSections.companyApplication} onToggle={() => toggleSection('companyApplication')}>
+                <a
+                    href="#"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        setAdminPage(AdminPage.WorkflowGuides);
+                        onSelectWorkflow?.('company-application');
+                        if (onNavigate) onNavigate();
+                    }}
+                    className="flex items-center gap-2 rounded-md pl-8 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white transition-colors"
+                    title="How Company Application works — step by step"
+                >
+                    <span className="flex-1 truncate">Workflow Guide</span>
+                </a>
                 <NavItem page={AdminPage.UploadCompanyApplication} label="Upload Company Application" isSubItem />
                 <NavItem page={AdminPage.CheckSupportingDocument} label="Check Supporting Document" isSubItem />
                 <NavItem page={AdminPage.ViewCompanyApplication} label="View Company Application" isSubItem badge={caStuckCount} />

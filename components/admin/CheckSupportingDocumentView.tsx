@@ -50,7 +50,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
   const [targetIds, setTargetIds] = useState<string[] | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | RowEffectiveStatus>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'outstanding' | RowEffectiveStatus>('all');
 
   const reload = async () => {
     setLoading(true);
@@ -85,7 +85,14 @@ export const CheckSupportingDocumentView: React.FC = () => {
       else noDoc++;
     }
     const outstanding = mismatch + pending + noDoc;
-    return { mismatch, pending, noDoc, verified, total: outstanding, allRows: outstanding + verified };
+    return {
+      mismatch,
+      pending,
+      noDoc,
+      verified,
+      outstanding,
+      total: outstanding + verified,
+    };
   }, [rows]);
 
   // Apply search + status filter for the visible row set.
@@ -96,7 +103,11 @@ export const CheckSupportingDocumentView: React.FC = () => {
     return rows.filter(row => {
       if (statusFilter !== 'all') {
         const eff = getEffectiveStatus(row);
-        if (eff !== statusFilter) return false;
+        if (statusFilter === 'outstanding') {
+          if (eff === 'verified') return false;
+        } else if (eff !== statusFilter) {
+          return false;
+        }
       }
       if (!q) return true;
       const haystack = [
@@ -230,7 +241,8 @@ export const CheckSupportingDocumentView: React.FC = () => {
   const toggleGroup = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
   const filterPills: Array<{ value: typeof statusFilter; label: string; count: number; activeClass: string }> = [
-    { value: 'all', label: 'All', count: stats.allRows, activeClass: 'bg-blue-600 text-white' },
+    { value: 'all', label: 'Total', count: stats.total, activeClass: 'bg-gray-700 text-white' },
+    { value: 'outstanding', label: 'Outstanding', count: stats.outstanding, activeClass: 'bg-blue-600 text-white' },
     { value: 'verified', label: 'Verified', count: stats.verified, activeClass: 'bg-emerald-600 text-white' },
     { value: 'pending', label: 'Pending', count: stats.pending, activeClass: 'bg-amber-500 text-white' },
     { value: 'mismatch', label: 'Mismatch', count: stats.mismatch, activeClass: 'bg-red-600 text-white' },
@@ -254,11 +266,17 @@ export const CheckSupportingDocumentView: React.FC = () => {
       </div>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <StatTile
+          icon={IconName.FileText}
+          label="Total"
+          value={stats.total}
+          tone="gray"
+        />
         <StatTile
           icon={IconName.Users}
-          label="Total outstanding"
-          value={stats.total}
+          label="Outstanding"
+          value={stats.outstanding}
           tone="blue"
         />
         <StatTile
@@ -269,7 +287,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
         />
         <StatTile
           icon={IconName.Eye}
-          label="Pending review"
+          label="Pending"
           value={stats.pending}
           tone="amber"
         />
@@ -348,7 +366,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
             <span className="text-sm">Loading company applications…</span>
           </div>
         </Card>
-      ) : stats.total === 0 ? (
+      ) : stats.outstanding === 0 ? (
         <Card>
           <div className="p-12 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 ring-1 ring-emerald-200 dark:ring-emerald-800/60 mb-4">

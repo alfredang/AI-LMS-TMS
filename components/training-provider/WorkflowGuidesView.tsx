@@ -263,6 +263,36 @@ const WORKFLOWS: Workflow[] = [
     ],
   },
   {
+    id: 'company-application',
+    title: 'Company Application Workflow',
+    icon: '🏢',
+    color: 'border-violet-500 bg-violet-50 dark:bg-violet-900/10',
+    description: 'From Excel upload → auto-enrolment → doc verification → invoice email. Step-by-step, what you do.',
+    steps: [
+      { title: '1. Get Excel from Employer', detail: 'Send the employer the company application Excel template. When it comes back, glance at the required columns (NRIC, course, start date, UEN, consent fields) before uploading.', type: 'action' },
+      { title: '2. Upload the Excel', detail: 'Sidebar → COMPANY APPLICATION → Upload Company Application → drop the file. Duplicates are skipped automatically, so it\'s safe to re-upload if unsure.', type: 'action' },
+      { title: '3. Pipeline Runs (Enrolment → Grant → Calendar → Invoice)', detail: 'Hands-off. Per row, the pipeline runs end-to-end:\n• Matches the SSG course run\n• Submits enrolment (sponsorship = EMPLOYER) → saves Enrolment ID\n• Grant auto-created by SSG (because sponsorship = EMPLOYER) → polls and saves Grant ID + amount\n• Creates the LMS learner + enrollment\n• Adds the learner to the course run\'s Google Calendar sessions (silent, no email invite) ⚠️ calendar event must already exist\n• Once everyone in the (employer + course run) group is enrolled, QuickBooks generates ONE consolidated invoice → PDF saved to Drive, Invoice Doc Number stamped on every row\n\nProgress shows live in View Company Application. Invoice email is NOT sent yet — docs must be verified first.', type: 'logic' },
+      { title: '4. Upload + Verify Documents', detail: 'A popup appears right after upload to do it now, or come back via "Check Supporting Document" later.\n\nPer learner:\n• Upload the doc (e.g. NRIC scan) → saved to Drive\n• Confirm name / NRIC / employer / UEN match\n• Mark Verified or Mismatch (mismatch clears the file — re-upload required)', type: 'action' },
+      { title: '5. Invoice Email Auto-Sent', detail: 'Verify the LAST learner in a group → email goes out to the employer instantly. No button. Already-sent invoices are never re-sent.', type: 'email' },
+      { title: '6. Track in View Company Application', detail: 'Your dashboard. Each row shows Enrolment ID, Grant ID, Amount, Invoice Doc Number, Doc Verified, Email status. The red sidebar badge counts rows still needing attention.', type: 'success' },
+      { title: 'Heads-Up: Past Class (>30 Days)', detail: 'If the course ended >30 days ago, the invoice step is skipped — past-class billing is handled separately. Enrolment + grant lookup still run as usual.', type: 'warning' },
+    ],
+    endpoints: [
+      { method: 'POST', url: '/api/admin/upload-company-applications', description: 'Upload Excel rows and queue them for the auto-enrol pipeline' },
+      { method: 'POST', url: '/api/admin/ca-upload-supporting-doc', description: 'Upload a supporting document for a learner to Google Drive' },
+      { method: 'POST', url: '/api/admin/ca-verify-and-send', description: 'Mark a row verified/mismatch — auto-sends invoice email when the group is fully verified' },
+      { method: 'POST', url: '/api/admin/ca-generate-invoice', description: 'Generate the consolidated QuickBooks invoice for an employer + course-run group' },
+      { method: 'POST', url: '/api/admin/ca-sync-grants', description: 'Refresh grant IDs and amounts from SSG for outstanding rows' },
+    ],
+    emailTemplates: [
+      { name: 'Company Application Invoice Email', path: 'Templates → Company Application Invoice Email', description: 'Consolidated invoice email sent to the employer contact once all supporting docs are verified' },
+    ],
+    dbTables: [
+      { name: 'company_application', description: 'One row per (trainee × course run). Tracks enrolment ID, grant ID, invoice doc number, supporting doc Drive link & verification status, and the auto_enrol_status pipeline state.' },
+      { name: 'enrollment', description: 'Native LMS enrollment record created once SSG enrolment succeeds.' },
+    ],
+  },
+  {
     id: 'direct-application',
     title: 'Direct Application Workflow',
     icon: '📋',
