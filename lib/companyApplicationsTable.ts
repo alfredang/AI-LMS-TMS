@@ -48,7 +48,65 @@ const ORDERED_COLUMNS: Array<{ name: string; type: string }> = [
   { name: 'grant_invoice_doc_number', type: 'text' },
   { name: 'grant_invoice_drive_file_id', type: 'text' },
   { name: 'grant_invoice_drive_web_view_link', type: 'text' },
+  // Non-blocking step failures from the auto-enrol pipeline (grant fetch,
+  // calendar sync, native LMS enrolment, partial grant upsert). Each entry:
+  // { step, error, at }. The View page surfaces rows with non-empty
+  // warnings so admins can see partial failures even when auto_enrol_status
+  // isn't 'failed'. ca-stuck-count drives the sidebar badge off this.
+  { name: 'pipeline_warnings', type: "jsonb DEFAULT '[]'::jsonb" },
+  // Supporting-document verification — gates invoice email sending. Admin
+  // uploads a doc per learner (NRIC/payslip/CPF/etc.), reviews it side-by-
+  // side against the Excel row in the SupportingDocsModal, and confirms
+  // each field (trainee full name, NRIC, employer name, UEN) matches.
+  // Only after status='verified' does the invoice email auto-send.
+  // status values: NULL/pending (no doc yet) | verified (admin approved) |
+  // mismatch (admin flagged at least one field; doc must be re-uploaded).
+  { name: 'supporting_doc_drive_file_id', type: 'text' },
+  { name: 'supporting_doc_drive_web_view_link', type: 'text' },
+  { name: 'supporting_doc_uploaded_at', type: 'timestamptz' },
+  { name: 'supporting_doc_verification_status', type: 'text' },
+  { name: 'supporting_doc_verified_at', type: 'timestamptz' },
+  { name: 'supporting_doc_verified_by', type: 'text' },
 ];
+
+/**
+ * Append a non-blocking pipeline warning to a company_application row.
+ * Used by the auto-enrol pipeline to record per-step failures (grant fetch,
+ * calendar sync, native LMS enrolment, partial grant upsert) without
+ * flipping auto_enrol_status to 'failed' — the SSG enrolment itself may
+ * have succeeded but a downstream step needs admin attention.
+ *
+ * Safe to call with a missing rowId (no-op), and silently swallows DB
+ * errors so warning-write failures never cascade into the caller.
+ */
+export async function appendPipelineWarning(
+  rowId: string,
+  step: string,
+  error: unknown,
+): Promise<void> {
+  if (!rowId) return;
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'string'
+      ? error
+      : JSON.stringify(error);
+  const warning = {
+    step,
+    error: message.slice(0, 1000),
+    at: new Date().toISOString(),
+  };
+  try {
+    await pool.query(
+      `UPDATE public.company_application
+          SET pipeline_warnings = COALESCE(pipeline_warnings, '[]'::jsonb) || $2::jsonb,
+              updated_at        = now()
+        WHERE id = $1`,
+      [rowId, JSON.stringify(warning)],
+    );
+  } catch (e) {
+    console.error('[appendPipelineWarning] failed:', e);
+  }
+}
 
 export function ensureCompanyApplicationsTable(): Promise<void> {
   if (!ensurePromise) {
