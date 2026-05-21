@@ -22,6 +22,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
+import { ConfirmPopup } from './ConfirmPopup';
+import { maskNric } from './CompanyApplicationViews';
 
 interface LearnerRow {
   id: string;
@@ -37,7 +39,7 @@ interface LearnerRow {
 }
 
 type FieldKey = 'name' | 'nric' | 'employer' | 'uen';
-type FieldVerdict = '' | 'match' | 'mismatch';
+type FieldVerdict = '' | 'match' | 'mismatch' | 'na';
 type FieldState = Record<FieldKey, FieldVerdict>;
 
 const FIELD_LABELS: Record<FieldKey, string> = {
@@ -68,6 +70,8 @@ interface UnassignedFile {
   previewUrl: string;
   uploading?: boolean;
   aiProcessing?: boolean;  // AI vision call in flight
+  aiNoMatch?: boolean;     // AI ran but couldn't match to any learner — assign manually
+  aiNoMatchReason?: string; // Human-readable explanation for the no-match (e.g. "Couldn't read NRIC")
   error?: string | null;
 }
 
@@ -79,11 +83,58 @@ interface AiResult {
   allMatch: boolean;
 }
 
+type SendOutcome = 'sent' | 'held' | 'no-invoice' | 'unknown';
+
+// Response shapes for the API endpoints this modal hits. Centralising them
+// here so a typo in field access fails at compile time instead of silently
+// returning undefined at runtime when the backend contract drifts.
+interface FetchRowsResponse {
+  rows?: Array<Record<string, unknown>>;
+  success?: boolean;
+  error?: string;
+}
+interface UploadDocResponse {
+  success: boolean;
+  fileId?: string;
+  webViewLink?: string;
+  traineeFullName?: string;
+  error?: string;
+}
+interface DeleteDocResponse {
+  success: boolean;
+  driveDeleted?: boolean;
+  driveError?: string | null;
+  error?: string;
+}
+interface AiProcessResponse {
+  success: boolean;
+  matchedLearnerId?: string | null;
+  verdicts?: { name?: string; nric?: string; employer?: string; uen?: string } | null;
+  extracted?: { nric?: string | null; fullName?: string | null; employerName?: string | null; employerUen?: string | null };
+  confidence?: 'high' | 'medium' | 'low';
+  error?: string;
+}
+interface VerifyAndSendResponse {
+  success: boolean;
+  status?: 'verified' | 'mismatch';
+  groupSent?: boolean;
+  heldInTestMode?: boolean;
+  groupTotal?: number;
+  groupVerified?: number;
+  emailSummary?: { sent?: number; toggleDisabled?: boolean } | null;
+  emailError?: string;
+  error?: string;
+}
+
 const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompleted, verifiedBy, initialStep = 'ask' }) => {
   const [step, setStep] = useState<'ask' | 'verify'>(initialStep);
   const [rows, setRows] = useState<LearnerRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Tracks the latest verify-and-send API result so the footer can show
+  // accurate copy. Without this we'd render "invoice email released" even
+  // when the master toggle held the email back (heldInTestMode).
+  const [lastSendOutcome, setLastSendOutcome] = useState<SendOutcome>('unknown');
 
   const [unassignedFiles, setUnassignedFiles] = useState<UnassignedFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -106,11 +157,13 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
     try {
       const res = await fetch('/api/admin/fetch-company-applications');
       if (!res.ok) throw new Error(`fetch failed (${res.status})`);
-      const json = await res.json();
+      const json: FetchRowsResponse = await res.json();
+      // Backend keys are dynamic strings; safe-coerce each field through String()
+      // so the resulting LearnerRow object is always typed.
       const filtered: LearnerRow[] = (json.rows || [])
-        .filter((r: any) => idSet.has(String(r.id || '')))
-        .map((r: any) => ({
-          id: String(r.id || ''),
+        .filter(r => idSet.has(String(r['id'] || '')))
+        .map(r => ({
+          id: String(r['id'] || ''),
           traineeFullName: String(r['Trainee FULL Name as on government ID*'] || ''),
           traineeNric: String(r['Trainee NRIC/FIN Number*'] || ''),
           employerOrgName: String(r['Employer Organization Name*'] || ''),
@@ -148,6 +201,14 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
   // Forward-declared so addBulkFiles can fire AI extraction immediately on add.
   // The actual ref is filled in the AI-extract effect below.
   const aiExtractRef = useRef<((wrapped: UnassignedFile) => Promise<void>) | null>(null);
+
+  // Always-current ref over `rows` so async work inside runAiExtract sees
+  // the latest learner list (e.g. if a row was just verified in another tab,
+  // we shouldn't re-match a freshly-uploaded doc to it). Avoids the stale
+  // closure risk that would otherwise tie candidates to whatever rows was
+  // at useCallback-recompute time.
+  const rowsRef = useRef(rows);
+  useEffect(() => { rowsRef.current = rows; }, [rows]);
 
   const addBulkFiles = useCallback((files: FileList | File[] | null) => {
     if (!files) return;
@@ -188,8 +249,10 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
   // the strip so the admin can drag/assign manually.
   const runAiExtract = useCallback(async (uf: UnassignedFile) => {
     // Build the candidate roster of UNVERIFIED rows so AI doesn't try to
-    // re-assign docs to already-verified learners.
-    const candidates = rows
+    // re-assign docs to already-verified learners. Read from rowsRef so the
+    // candidate set is always the latest snapshot, not whatever it was when
+    // this useCallback was last recomputed.
+    const candidates = rowsRef.current
       .filter(r => r.verificationStatus.toLowerCase() !== 'verified')
       .map(r => ({
         id: r.id,
@@ -210,7 +273,7 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
         method: 'POST',
         body: form,
       });
-      const json = await res.json();
+      const json: AiProcessResponse = await res.json();
 
       if (!res.ok || !json.success) {
         // 400 with "ANTHROPIC_API_KEY not configured" → disable AI for the rest
@@ -218,30 +281,53 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
         if (res.status === 400 && typeof json.error === 'string' && json.error.includes('ANTHROPIC_API_KEY')) {
           setAiDisabled(true);
         }
-        setUnassignedFiles(prev => prev.map(f => f.id === uf.id ? { ...f, aiProcessing: false } : f));
+        // Mark as no-match so the admin sees an amber badge — same outcome
+        // from the admin's perspective (this file needs manual assignment).
+        setUnassignedFiles(prev => prev.map(f => f.id === uf.id ? { ...f, aiProcessing: false, aiNoMatch: true } : f));
         return;
       }
 
-      const matchedId: string | null = json.matchedLearnerId;
-      const verdictsRaw = json.verdicts as { name?: string; nric?: string; employer?: string; uen?: string } | null;
+      const matchedId = json.matchedLearnerId ?? null;
+      const verdictsRaw = json.verdicts ?? null;
 
       if (!matchedId || !verdictsRaw) {
-        // AI couldn't match this doc to any learner — leave in strip for manual assignment.
-        setUnassignedFiles(prev => prev.map(f => f.id === uf.id ? { ...f, aiProcessing: false } : f));
+        // AI couldn't match this doc to any learner — build a specific reason
+        // from what AI extracted so the admin sees WHY the auto-assign failed
+        // (couldn't read NRIC vs. NRIC didn't match this batch vs. probably
+        // wrong doc entirely).
+        const extracted = json.extracted || {};
+        const docNric = (extracted.nric || '').trim();
+        const docName = (extracted.fullName || '').trim();
+        const docEmployer = (extracted.employerName || '').trim();
+        let reason: string;
+        if (!docNric && !docName && !docEmployer) {
+          reason = 'AI could not extract any identity info — this file may not be a valid supporting document.';
+        } else if (!docNric) {
+          reason = 'AI could not read an NRIC from this document. Auto-match requires a legible NRIC/FIN.';
+        } else {
+          reason = `AI read NRIC "${docNric}" — no learner in this batch has that NRIC. Likely the wrong doc for this group.`;
+        }
+        setUnassignedFiles(prev => prev.map(f => f.id === uf.id
+          ? { ...f, aiProcessing: false, aiNoMatch: true, aiNoMatchReason: reason }
+          : f
+        ));
         return;
       }
 
-      // AI returns 'match' | 'mismatch' | 'unknown'. Map 'unknown' to empty so
-      // the admin still has to fill that field manually before Confirm enables.
+      // AI returns 'match' | 'mismatch' | 'unknown'. Map 'unknown' to 'na' —
+      // it usually means the doc doesn't show that field at all (very common
+      // for UEN on payslips, for example). Admin can override.
       const toVerdict = (v: string | undefined): FieldVerdict =>
-        v === 'match' ? 'match' : v === 'mismatch' ? 'mismatch' : '';
+        v === 'match' ? 'match' : v === 'mismatch' ? 'mismatch' : v === 'unknown' ? 'na' : '';
       const verdicts: FieldState = {
         name: toVerdict(verdictsRaw.name),
         nric: toVerdict(verdictsRaw.nric),
         employer: toVerdict(verdictsRaw.employer),
         uen: toVerdict(verdictsRaw.uen),
       };
-      const allMatch = verdicts.name === 'match' && verdicts.nric === 'match' && verdicts.employer === 'match' && verdicts.uen === 'match';
+      // Critical fields are trainee name + employer name. NRIC and UEN are
+      // sanity-check info — useful context for the admin, but not gating.
+      const allMatch = verdicts.name === 'match' && verdicts.employer === 'match';
       const confidence = (json.confidence === 'high' || json.confidence === 'medium' || json.confidence === 'low')
         ? json.confidence
         : 'low';
@@ -272,7 +358,7 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
         ? { ...f, aiProcessing: false, error: err instanceof Error ? err.message : 'AI processing failed' }
         : f));
     }
-  }, [rows, loadRows]);
+  }, [loadRows]);
 
   // Wire the ref so addBulkFiles can call runAiExtract without a stale closure.
   useEffect(() => {
@@ -285,19 +371,32 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
   const bulkApproveAiConfirmed = useCallback(async () => {
     const targets = rows.filter(r => {
       if (r.verificationStatus.toLowerCase() === 'verified') return false;
+      // Stale AI results survive doc deletion in this component's state.
+      // Without a doc to verify against, the AI verdict is meaningless —
+      // skip these rows so admin can't bulk-approve empty cards.
+      if (!r.supportingDocLink) return false;
       const ai = aiResults[r.id];
       return !!ai && ai.allMatch;
     });
     if (targets.length === 0) return;
     setBulkApproving(true);
     try {
-      await Promise.all(targets.map(r =>
+      const results: Array<VerifyAndSendResponse | null> = await Promise.all(targets.map(r =>
         fetch('/api/admin/ca-verify-and-send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ companyApplicationId: r.id, verdict: 'verified', verifiedBy }),
-        }).catch(() => null)
+        }).then(res => res.json() as Promise<VerifyAndSendResponse>).catch(() => null)
       ));
+      // Capture the outcome from the last successful response — that's the
+      // one most likely to reflect what happens for the final row in a
+      // group (which is when the email would actually fire).
+      const last = [...results].reverse().find(r => r && r.success);
+      if (last) {
+        if (last.heldInTestMode) setLastSendOutcome('held');
+        else if (last.groupSent) setLastSendOutcome('sent');
+        else setLastSendOutcome('no-invoice');
+      }
       void loadRows();
     } finally {
       setBulkApproving(false);
@@ -307,6 +406,7 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
   const aiConfirmedCount = useMemo(() => {
     return rows.filter(r => {
       if (r.verificationStatus.toLowerCase() === 'verified') return false;
+      if (!r.supportingDocLink) return false;
       const ai = aiResults[r.id];
       return !!ai && ai.allMatch;
     }).length;
@@ -324,7 +424,7 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
         method: 'POST',
         body: form,
       });
-      const json = await res.json();
+      const json: UploadDocResponse = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Upload failed');
       // Success — drop from strip, refresh rows so the learner card picks up
       // the new supportingDocLink.
@@ -381,20 +481,27 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
                 <EmptyState />
               ) : (
                 <>
-                  <BulkUploadZone
-                    unassignedFiles={unassignedFiles}
-                    selectedFileId={selectedFileId}
-                    onAddFiles={addBulkFiles}
-                    onSelectFile={setSelectedFileId}
-                    onRemoveFile={removeUnassignedFile}
-                    aiDisabled={aiDisabled}
-                  />
-                  {aiConfirmedCount > 0 && (
-                    <AiConfirmedBanner
-                      count={aiConfirmedCount}
-                      approving={bulkApproving}
-                      onApproveAll={bulkApproveAiConfirmed}
-                    />
+                  {/* Hide bulk upload + AI banner when there's nothing left to
+                      verify — admin opened the modal in "view" mode for an
+                      already-cleared row and shouldn't be invited to re-upload. */}
+                  {!allVerified && (
+                    <>
+                      <BulkUploadZone
+                        unassignedFiles={unassignedFiles}
+                        selectedFileId={selectedFileId}
+                        onAddFiles={addBulkFiles}
+                        onSelectFile={setSelectedFileId}
+                        onRemoveFile={removeUnassignedFile}
+                        aiDisabled={aiDisabled}
+                      />
+                      {aiConfirmedCount > 0 && (
+                        <AiConfirmedBanner
+                          count={aiConfirmedCount}
+                          approving={bulkApproving}
+                          onApproveAll={bulkApproveAiConfirmed}
+                        />
+                      )}
+                    </>
                   )}
                   {rows.map(row => (
                     <LearnerCard
@@ -402,6 +509,8 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
                       row={row}
                       verifiedBy={verifiedBy}
                       onChanged={loadRows}
+                      onSendResult={setLastSendOutcome}
+                      viewMode={allVerified}
                       selectedFileId={selectedFileId}
                       dragOverLearnerId={dragOverLearnerId}
                       onDragOver={setDragOverLearnerId}
@@ -415,7 +524,7 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
           )}
         </div>
 
-        <ModalFooter step={step} allVerified={allVerified} onClose={onClose} />
+        <ModalFooter step={step} allVerified={allVerified} sendOutcome={lastSendOutcome} onClose={onClose} />
       </div>
     </div>
   );
@@ -493,24 +602,60 @@ const ModalHeader: React.FC<{
 const ModalFooter: React.FC<{
   step: 'ask' | 'verify';
   allVerified: boolean;
+  sendOutcome: SendOutcome;
   onClose: () => void;
-}> = ({ step, allVerified, onClose }) => (
-  <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center justify-between gap-3">
-    <p className="text-xs text-gray-500 dark:text-gray-400 flex-1">
-      {step === 'verify' && allVerified ? (
+}> = ({ step, allVerified, sendOutcome, onClose }) => {
+  // When the group is fully verified, the API response from the last verdict
+  // tells us what actually happened to the invoice email. Footer copy mirrors
+  // that — claiming "released" while the master toggle is OFF was misleading.
+  const renderVerifiedMessage = () => {
+    if (sendOutcome === 'sent') {
+      return (
         <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
           <Icon name={IconName.CheckCircle} className="w-4 h-4" />
           Every learner verified — invoice email released to the employer.
         </span>
-      ) : step === 'verify' ? (
-        "Invoice emails stay on hold until every learner from the same employer and course is verified."
-      ) : ''}
-    </p>
-    <Button onClick={onClose} variant={allVerified ? 'primary' : 'secondary'}>
-      {allVerified ? 'Done' : 'Close'}
-    </Button>
-  </div>
-);
+      );
+    }
+    if (sendOutcome === 'held') {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-semibold">
+          <Icon name={IconName.Warning} className="w-4 h-4" />
+          Every learner verified — invoice email held (master send toggle is OFF).
+        </span>
+      );
+    }
+    if (sendOutcome === 'no-invoice') {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-semibold">
+          <Icon name={IconName.Warning} className="w-4 h-4" />
+          Every learner verified — invoice email not sent (no invoice generated yet for this group).
+        </span>
+      );
+    }
+    // Outcome unknown — most often when the group was already verified before
+    // this modal opened (no fresh verdict captured). Stay neutral.
+    return (
+      <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
+        <Icon name={IconName.CheckCircle} className="w-4 h-4" />
+        Every learner verified.
+      </span>
+    );
+  };
+
+  return (
+    <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center justify-between gap-3">
+      <p className="text-xs text-gray-500 dark:text-gray-400 flex-1">
+        {step === 'verify' && allVerified ? renderVerifiedMessage() : step === 'verify' ? (
+          "Invoice emails stay on hold until every learner from the same employer and course is verified."
+        ) : ''}
+      </p>
+      <Button onClick={onClose} variant={allVerified ? 'primary' : 'secondary'}>
+        {allVerified ? 'Done' : 'Close'}
+      </Button>
+    </div>
+  );
+};
 
 // ── Ask Step ───────────────────────────────────────────────────────────────
 
@@ -602,15 +747,22 @@ const LearnerCard: React.FC<{
   row: LearnerRow;
   verifiedBy?: string;
   onChanged: () => void;
+  onSendResult?: (outcome: SendOutcome) => void;
+  // When true, the card stays expanded even after the row is verified —
+  // used when the modal is opened in view mode (all rows already verified)
+  // so the admin sees the doc on open instead of just a collapsed pill.
+  viewMode?: boolean;
   selectedFileId?: string | null;
   dragOverLearnerId?: string | null;
   onDragOver?: (learnerId: string | null) => void;
   onAssignFile?: (fileId: string, learnerId: string) => void;
   aiResult?: AiResult;
-}> = ({ row, verifiedBy, onChanged, selectedFileId, dragOverLearnerId, onDragOver, onAssignFile, aiResult }) => {
+}> = ({ row, verifiedBy, onChanged, onSendResult, viewMode = false, selectedFileId, dragOverLearnerId, onDragOver, onAssignFile, aiResult }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [fields, setFields] = useState<FieldState>(aiResult?.verdicts || EMPTY_FIELDS);
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -638,13 +790,17 @@ const LearnerCard: React.FC<{
   const isClickAssignTarget = isDropTarget && !!selectedFileId;
 
   // Auto-collapse cards once they're verified so admins can focus on
-  // remaining learners. Click the card header to re-expand.
+  // remaining learners. Skip when viewMode is on — admin came to look at
+  // already-verified rows, so expanded-by-default is what they want.
   useEffect(() => {
-    if (isVerified) setCollapsed(true);
-  }, [isVerified]);
+    if (isVerified && !viewMode) setCollapsed(true);
+  }, [isVerified, viewMode]);
 
-  const allMatched = fields.name === 'match' && fields.nric === 'match' && fields.employer === 'match' && fields.uen === 'match';
-  const anyMismatch = fields.name === 'mismatch' || fields.nric === 'mismatch' || fields.employer === 'mismatch' || fields.uen === 'mismatch';
+  // Critical fields are trainee name + employer. NRIC and UEN remain on the
+  // card as sanity-check info but don't gate the verdict — admin only needs
+  // to confirm name/employer match to mark the row verified.
+  const allMatched = fields.name === 'match' && fields.employer === 'match';
+  const anyMismatch = fields.name === 'mismatch' || fields.employer === 'mismatch';
 
   const handleFile = async (file: File | null) => {
     if (!file) return;
@@ -658,7 +814,7 @@ const LearnerCard: React.FC<{
         method: 'POST',
         body: form,
       });
-      const json = await res.json();
+      const json: UploadDocResponse = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Upload failed');
       setFields(EMPTY_FIELDS);
       onChanged();
@@ -667,6 +823,27 @@ const LearnerCard: React.FC<{
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/ca-delete-supporting-doc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyApplicationId: row.id }),
+      });
+      const json: DeleteDocResponse = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Delete failed');
+      setFields(EMPTY_FIELDS);
+      setConfirmingDelete(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -679,8 +856,16 @@ const LearnerCard: React.FC<{
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyApplicationId: row.id, verdict, verifiedBy }),
       });
-      const json = await res.json();
+      const json: VerifyAndSendResponse = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Submit failed');
+      // Surface the email send outcome to the parent so the footer can show
+      // accurate copy (sent vs held by toggle vs no invoice yet). Mismatch
+      // verdicts never trigger a send, so skip the callback for those.
+      if (verdict === 'verified' && onSendResult) {
+        if (json.heldInTestMode) onSendResult('held');
+        else if (json.groupSent) onSendResult('sent');
+        else onSendResult('no-invoice');
+      }
       setFields(EMPTY_FIELDS);
       onChanged();
     } catch (err) {
@@ -702,31 +887,34 @@ const LearnerCard: React.FC<{
           ? 'ring-red-300 dark:ring-red-700/60'
           : 'ring-gray-200 dark:ring-gray-700/60';
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     if (!isDropTarget) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     if (dragOverLearnerId !== row.id) onDragOver?.(row.id);
-  };
-  const handleDragLeave = (e: React.DragEvent) => {
+  }, [isDropTarget, dragOverLearnerId, row.id, onDragOver]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     if (!isDropTarget) return;
     // Only clear when the cursor actually leaves the card, not when it
     // moves between children inside it (event.relatedTarget check).
     if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     if (dragOverLearnerId === row.id) onDragOver?.(null);
-  };
-  const handleDrop = (e: React.DragEvent) => {
+  }, [isDropTarget, dragOverLearnerId, row.id, onDragOver]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
     if (!isDropTarget) return;
     e.preventDefault();
     onDragOver?.(null);
     const fileId = e.dataTransfer.getData('text/x-unassigned-file-id');
     if (fileId && onAssignFile) onAssignFile(fileId, row.id);
-  };
-  const handleClickAssign = () => {
+  }, [isDropTarget, onDragOver, onAssignFile, row.id]);
+
+  const handleClickAssign = useCallback(() => {
     if (isClickAssignTarget && selectedFileId && onAssignFile) {
       onAssignFile(selectedFileId, row.id);
     }
-  };
+  }, [isClickAssignTarget, selectedFileId, onAssignFile, row.id]);
 
   return (
     <div
@@ -760,7 +948,7 @@ const LearnerCard: React.FC<{
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {aiResult && !isVerified && (
+          {aiResult && !isVerified && hasDoc && (
             <AiBadge result={aiResult} />
           )}
           <StatusPill status={status} />
@@ -773,6 +961,33 @@ const LearnerCard: React.FC<{
         </div>
       </button>
 
+      {!collapsed && isVerified && (
+        <div className="border-t dark:border-gray-700 p-4">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <div className="lg:col-span-3">
+              <SectionLabel>Verified document</SectionLabel>
+              {hasDoc ? (
+                <DocPreview fileId={row.supportingDocFileId} link={row.supportingDocLink} />
+              ) : (
+                <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-6 text-center text-xs text-gray-500 dark:text-gray-400">
+                  Document reference no longer available. Status remains verified.
+                </div>
+              )}
+            </div>
+            <div className="lg:col-span-2 space-y-3">
+              <div>
+                <SectionLabel>From Excel</SectionLabel>
+                <ExcelDataPanel row={row} />
+              </div>
+              <div className="rounded-lg p-3 bg-emerald-50 dark:bg-emerald-900/20 ring-1 ring-emerald-200 dark:ring-emerald-800/60 text-xs text-emerald-700 dark:text-emerald-300 inline-flex items-start gap-2">
+                <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <span>This row is locked. To make changes, delete the doc and re-upload from the other learners&apos; verify flow.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {!collapsed && !isVerified && (
         <div className="border-t dark:border-gray-700 p-4">
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -784,6 +999,7 @@ const LearnerCard: React.FC<{
                 <UploadDropzone
                   uploading={uploading}
                   onPick={() => fileInputRef.current?.click()}
+                  onDropFile={(file) => void handleFile(file)}
                 />
               )}
               <input
@@ -794,15 +1010,43 @@ const LearnerCard: React.FC<{
                 className="hidden"
               />
               {hasDoc && (
-                <button
-                  type="button"
-                  disabled={uploading}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="mt-2 text-xs px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={uploading || deleting}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    <Icon name={IconName.Upload} className="w-3.5 h-3.5" />
+                    {uploading ? 'Replacing…' : 'Replace document'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={uploading || deleting}
+                    onClick={() => setConfirmingDelete(true)}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 inline-flex items-center gap-1.5"
+                    title="Remove the uploaded doc from Drive and reset this row"
+                  >
+                    <Icon name={IconName.Delete} className="w-3.5 h-3.5" />
+                    Delete document
+                  </button>
+                </div>
+              )}
+              {confirmingDelete && (
+                <ConfirmPopup
+                  tone="danger"
+                  icon={IconName.Warning}
+                  confirmIcon={IconName.Delete}
+                  title="Remove this doc from Drive?"
+                  subtitle={row.traineeFullName}
+                  confirmLabel="Confirm delete"
+                  busyLabel="Deleting…"
+                  busy={deleting}
+                  onConfirm={handleDelete}
+                  onCancel={() => setConfirmingDelete(false)}
                 >
-                  <Icon name={IconName.Upload} className="w-3.5 h-3.5" />
-                  {uploading ? 'Replacing…' : 'Replace document'}
-                </button>
+                  The supporting document will be deleted from Drive and this row will reset so you can upload a new one. This cannot be undone.
+                </ConfirmPopup>
               )}
             </div>
 
@@ -814,7 +1058,11 @@ const LearnerCard: React.FC<{
 
               {hasDoc && (
                 <div>
-                  <SectionLabel>Confirm each field matches</SectionLabel>
+                  <SectionLabel>Confirm fields match</SectionLabel>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-2 -mt-1">
+                    Trainee name and employer are required to confirm verified.
+                    NRIC and UEN are sanity-check info — mark <strong>N/A</strong> if the document doesn&apos;t show them.
+                  </p>
                   <div className="space-y-2">
                     {(Object.keys(FIELD_LABELS) as FieldKey[]).map(key => (
                       <FieldVerdictPill
@@ -822,6 +1070,7 @@ const LearnerCard: React.FC<{
                         label={FIELD_LABELS[key]}
                         value={fields[key]}
                         onChange={v => setFieldVerdict(key, v)}
+                        required={key === 'name' || key === 'employer'}
                       />
                     ))}
                   </div>
@@ -831,17 +1080,17 @@ const LearnerCard: React.FC<{
                       type="button"
                       disabled={submitting || !allMatched}
                       onClick={() => submitVerdict('verified')}
-                      title={!allMatched ? 'Mark every field as match before confirming.' : 'Confirm all 4 fields match'}
+                      title={!allMatched ? 'Mark trainee name and employer name as match before confirming.' : 'Confirm trainee name and employer match'}
                       className="text-xs px-3 py-2 rounded-lg font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
                     >
                       <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5" />
-                      {submitting ? 'Saving…' : 'Confirm verified'}
+                      {submitting ? 'Saving…' : 'Verified documents'}
                     </button>
                     <button
                       type="button"
                       disabled={submitting || !anyMismatch}
                       onClick={() => submitVerdict('mismatch')}
-                      title={!anyMismatch ? 'Mark at least one field as mismatch to flag this row.' : 'Flag mismatch; doc will be cleared.'}
+                      title={!anyMismatch ? 'Mark trainee name or employer name as mismatch to flag this row.' : 'Flag mismatch; doc will be cleared.'}
                       className="text-xs px-3 py-2 rounded-lg font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
                     >
                       <Icon name={IconName.Warning} className="w-3.5 h-3.5" />
@@ -873,7 +1122,7 @@ const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 const ExcelDataPanel: React.FC<{ row: LearnerRow }> = ({ row }) => (
   <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-1.5 text-xs">
     <ExcelField label="Name" value={row.traineeFullName} />
-    <ExcelField label="NRIC / FIN" value={row.traineeNric} mono />
+    <ExcelField label="NRIC / FIN" value={maskNric(row.traineeNric)} mono />
     <ExcelField label="Employer" value={row.employerOrgName} />
     <ExcelField label="UEN" value={row.employerUen} mono />
   </div>
@@ -925,37 +1174,99 @@ const DocPreview: React.FC<{ fileId: string; link: string }> = ({ fileId, link }
   );
 };
 
-const UploadDropzone: React.FC<{ uploading: boolean; onPick: () => void }> = ({ uploading, onPick }) => (
-  <button
-    type="button"
-    onClick={onPick}
-    disabled={uploading}
-    className="w-full h-72 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/40 hover:border-blue-400 dark:hover:border-blue-600 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors flex flex-col items-center justify-center gap-2 disabled:opacity-50"
-  >
-    {uploading ? (
-      <>
-        <div className="animate-spin rounded-full h-7 w-7 border-2 border-gray-300 border-t-blue-500" />
-        <p className="text-sm text-gray-600 dark:text-gray-400">Uploading…</p>
-      </>
-    ) : (
-      <>
-        <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-          <Icon name={IconName.Upload} className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-        </div>
-        <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">Click to upload</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400">Image or PDF · max 20MB</p>
-      </>
-    )}
-  </button>
-);
+const UploadDropzone: React.FC<{
+  uploading: boolean;
+  onPick: () => void;
+  onDropFile?: (file: File) => void;
+}> = ({ uploading, onPick, onDropFile }) => {
+  const [isDragOver, setIsDragOver] = useState(false);
+  // Thumbnail drags from the bulk upload strip carry our custom mime — let
+  // those bubble to the parent learner card's drop handler. Only external
+  // file drops from the OS file picker land here.
+  const isExternalFileDrag = (e: React.DragEvent) =>
+    !Array.from(e.dataTransfer.types).includes('text/x-unassigned-file-id');
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (uploading || !isExternalFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
+  }, [uploading]);
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragOver(false);
+  }, []);
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    if (uploading || !isExternalFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    const isImage = file.type.startsWith('image/');
+    const isPdf = file.type === 'application/pdf';
+    if (!isImage && !isPdf) return;
+    onDropFile?.(file);
+  }, [uploading, onDropFile]);
+
+  return (
+    <div
+      role="button"
+      tabIndex={uploading ? -1 : 0}
+      aria-disabled={uploading}
+      onClick={() => { if (!uploading) onPick(); }}
+      onKeyDown={(e) => { if (!uploading && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onPick(); } }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`w-full h-72 rounded-lg border-2 border-dashed transition-colors flex flex-col items-center justify-center gap-2 select-none ${
+        uploading
+          ? 'opacity-50 cursor-not-allowed border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/40'
+          : isDragOver
+            ? 'cursor-copy border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+            : 'cursor-pointer border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800/40 hover:border-blue-400 dark:hover:border-blue-600 hover:bg-blue-50/30 dark:hover:bg-blue-900/10'
+      }`}
+    >
+      {uploading ? (
+        <>
+          <div className="animate-spin rounded-full h-7 w-7 border-2 border-gray-300 border-t-blue-500" />
+          <p className="text-sm text-gray-600 dark:text-gray-400">Uploading…</p>
+        </>
+      ) : (
+        <>
+          <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+            <Icon name={IconName.Upload} className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+          </div>
+          <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+            {isDragOver ? 'Drop to upload' : 'Click or drop a file to upload'}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Image or PDF · max 20MB</p>
+        </>
+      )}
+    </div>
+  );
+};
 
 const FieldVerdictPill: React.FC<{
   label: string;
   value: FieldVerdict;
   onChange: (v: FieldVerdict) => void;
-}> = ({ label, value, onChange }) => (
+  required?: boolean;
+}> = ({ label, value, onChange, required = false }) => (
   <div className="flex items-center justify-between gap-2 py-1">
-    <span className="text-xs text-gray-700 dark:text-gray-300 flex-1">{label}</span>
+    <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 inline-flex items-center gap-1">
+      {label}
+      {required ? (
+        <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+          Required
+        </span>
+      ) : (
+        <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+          Optional
+        </span>
+      )}
+    </span>
     <div className="inline-flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
       <button
         type="button"
@@ -982,6 +1293,19 @@ const FieldVerdictPill: React.FC<{
       >
         <Icon name={IconName.Close} className="w-3 h-3" />
         Mismatch
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(value === 'na' ? '' : 'na')}
+        className={`px-3 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors border-l border-gray-300 dark:border-gray-600 ${
+          value === 'na'
+            ? 'bg-gray-600 text-white'
+            : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+        }`}
+        title="Field is not shown on the document"
+      >
+        <Icon name={IconName.InfoCircle} className="w-3 h-3" />
+        N/A
       </button>
     </div>
   </div>
@@ -1115,9 +1439,26 @@ const BulkUploadZone: React.FC<{
         ) : (
           <div className="mt-3">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-                {unassignedFiles.length} file{unassignedFiles.length === 1 ? '' : 's'} queued
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                  {unassignedFiles.length} file{unassignedFiles.length === 1 ? '' : 's'} queued
+                </p>
+                {unassignedFiles.some(f => f.aiProcessing) && (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300">
+                    <span className="inline-block animate-spin rounded-full h-2.5 w-2.5 border-2 border-teal-600 dark:border-teal-400 border-t-transparent" />
+                    AI reading {unassignedFiles.filter(f => f.aiProcessing).length}
+                  </span>
+                )}
+                {unassignedFiles.some(f => f.aiNoMatch && !f.aiProcessing) && (
+                  <span
+                    className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 ring-1 ring-red-300/60"
+                    title="AI couldn't match these docs to any learner in this batch — likely wrong document or unreadable NRIC. Drag or click-assign manually, or remove."
+                  >
+                    <Icon name={IconName.Warning} className="w-3 h-3" />
+                    {unassignedFiles.filter(f => f.aiNoMatch && !f.aiProcessing).length} no AI match
+                  </span>
+                )}
+              </div>
               {selectedFileId && (
                 <button
                   type="button"
@@ -1144,6 +1485,33 @@ const BulkUploadZone: React.FC<{
                 ? '✓ File selected — click a learner card below to assign it.'
                 : 'Drag a thumbnail onto a learner card, or click a thumbnail then click a learner card.'}
             </p>
+            {(() => {
+              const noMatch = unassignedFiles.filter(f => f.aiNoMatch && !f.aiProcessing);
+              if (noMatch.length === 0) return null;
+              return (
+                <div className="mt-2 rounded-lg bg-red-50 dark:bg-red-900/20 ring-1 ring-red-200 dark:ring-red-800/60 p-2.5">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Icon name={IconName.Warning} className="w-3.5 h-3.5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                    <span className="text-[11px] font-semibold text-red-700 dark:text-red-300">
+                      {noMatch.length} file{noMatch.length === 1 ? '' : 's'} flagged by AI
+                    </span>
+                  </div>
+                  <ul className="space-y-1 ml-5">
+                    {noMatch.map(f => (
+                      <li key={f.id} className="text-[11px] text-red-700 dark:text-red-300 leading-snug">
+                        <span className="font-mono text-red-800 dark:text-red-200">{f.file.name}</span>
+                        {f.aiNoMatchReason && (
+                          <span className="block text-red-600 dark:text-red-400">{f.aiNoMatchReason}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-[10px] text-red-600 dark:text-red-400 mt-1.5 ml-5 italic">
+                    Drag the thumbnail onto the correct learner card to assign manually — or remove it if uploaded by mistake.
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -1158,8 +1526,9 @@ const ThumbnailTile: React.FC<{
   onRemove: () => void;
 }> = ({ file, selected, onSelect, onRemove }) => {
   const isImage = file.file.type.startsWith('image/');
+  const busy = !!file.uploading || !!file.aiProcessing;
   const handleDragStart = (e: React.DragEvent) => {
-    if (file.uploading) {
+    if (busy) {
       e.preventDefault();
       return;
     }
@@ -1169,7 +1538,7 @@ const ThumbnailTile: React.FC<{
 
   return (
     <div
-      draggable={!file.uploading}
+      draggable={!busy}
       onDragStart={handleDragStart}
       onClick={onSelect}
       className={`group relative w-24 h-24 rounded-lg border-2 overflow-hidden cursor-pointer transition-all ${
@@ -1177,9 +1546,19 @@ const ThumbnailTile: React.FC<{
           ? 'border-blue-500 ring-2 ring-blue-300 dark:ring-blue-700/60'
           : file.error
             ? 'border-red-400'
-            : 'border-gray-200 dark:border-gray-700 hover:border-blue-400'
-      } ${file.uploading ? 'opacity-50' : ''}`}
-      title={file.file.name}
+            : file.aiProcessing
+              ? 'border-teal-400 ring-2 ring-teal-300/60 dark:ring-teal-700/60'
+              : file.aiNoMatch
+                ? 'border-red-500 ring-2 ring-red-300/60 dark:ring-red-700/60'
+                : 'border-gray-200 dark:border-gray-700 hover:border-blue-400'
+      } ${busy ? 'opacity-60' : ''}`}
+      title={
+        file.aiProcessing
+          ? `${file.file.name} — AI processing…`
+          : file.aiNoMatch
+            ? `${file.file.name}\n\n${file.aiNoMatchReason || "AI couldn't match to any learner in this batch."}\n\nDrag onto the correct learner card to assign manually, or remove if uploaded by mistake.`
+            : file.file.name
+      }
     >
       {isImage ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -1192,12 +1571,26 @@ const ThumbnailTile: React.FC<{
       )}
 
       {file.uploading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
           <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
         </div>
       )}
 
-      {!file.uploading && (
+      {!file.uploading && file.aiProcessing && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-teal-900/50">
+          <div className="animate-spin rounded-full h-5 w-5 border-2 border-teal-200 border-t-transparent" />
+          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider text-teal-100">AI…</span>
+        </div>
+      )}
+
+      {!busy && file.aiNoMatch && (
+        <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-red-600/95 text-white flex items-center justify-center gap-1">
+          <Icon name={IconName.Warning} className="w-3 h-3 flex-shrink-0" />
+          <span className="text-[9px] font-bold uppercase tracking-wider truncate">No AI match</span>
+        </div>
+      )}
+
+      {!busy && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
@@ -1227,7 +1620,7 @@ const AiBadge: React.FC<{ result: AiResult }> = ({ result }) => {
     return (
       <span
         className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300"
-        title={`AI matched all 4 fields with ${result.confidence} confidence`}
+        title={`AI matched trainee name and employer with ${result.confidence} confidence`}
       >
         <Icon name={IconName.Shield} className="w-3 h-3" />
         AI Confirmed
@@ -1260,7 +1653,7 @@ const AiConfirmedBanner: React.FC<{
           {count} learner{count === 1 ? '' : 's'} AI-confirmed
         </p>
         <p className="text-xs text-teal-700 dark:text-teal-300">
-          AI matched all 4 fields. Approve in one click and skip individual review.
+          AI matched trainee name and employer. Approve in one click and skip individual review.
         </p>
       </div>
     </div>
