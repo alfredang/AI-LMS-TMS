@@ -33,6 +33,10 @@ export interface CaInvoiceEmailSummary {
   skippedNoInvoiceRows: Array<{ id: string; employer: string }>;
   failures: CaInvoiceEmailFailure[];
   totalGroups: number;
+  // True when the global toggle (training_provider.ca_auto_send_invoice_email)
+  // is OFF and the call was suppressed without contacting QuickBooks. Lets
+  // the caller surface a "held in test mode" message in the UI.
+  toggleDisabled?: boolean;
 }
 
 interface Group {
@@ -61,6 +65,30 @@ export async function sendCompanyApplicationInvoiceEmails(
 
   const uniqueIds = Array.from(new Set(applicationIds.filter(Boolean)));
   if (!uniqueIds.length) return summary;
+
+  // Master kill switch — when the toggle on the View page is OFF, suppress
+  // every send path: auto-pipeline, manual "Send Invoice Email", and the
+  // verify-and-send flow that fires when a group's docs are all confirmed.
+  // The caller still sees a structured summary so the UI can render
+  // "held in test mode" instead of pretending the email went out.
+  //
+  // Fails closed: if the toggle query itself errors, we treat it as OFF.
+  // Better to drop a real send than to silently email real employers when
+  // admin believes they're in test mode (the whole point of the toggle).
+  try {
+    const toggleRes = await pool.query(
+      `SELECT COALESCE(ca_auto_send_invoice_email, false) AS enabled
+         FROM training_provider
+        LIMIT 1`
+    );
+    const enabled = !!toggleRes.rows[0]?.enabled;
+    if (!enabled) {
+      return { ...summary, toggleDisabled: true };
+    }
+  } catch (err) {
+    console.error('[sendCompanyApplicationInvoiceEmails] toggle check failed — failing closed (no send):', err);
+    return { ...summary, toggleDisabled: true };
+  }
 
   const rowsRes = await pool.query(
     `SELECT id,

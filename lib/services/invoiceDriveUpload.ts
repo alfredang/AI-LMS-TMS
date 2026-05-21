@@ -52,6 +52,40 @@ export async function uploadInvoicePdfToDrive(params: {
   const folderId = await getInvoicesFolderId();
 
   const safeName = cleanFileName(params.fileName || `invoice_${Date.now()}.pdf`);
+
+  // Name-based dedup: before uploading, see if a non-trashed file with the
+  // same name already lives in the invoices folder. This handles the case
+  // where generateInvoicesForApplications self-heals a stale
+  // invoice_drive_file_id by re-uploading — without this check, we'd create
+  // a second physical PDF with the same name and admins would see two
+  // identical rows in Drive (one of the actual prod bugs reported). Drive
+  // happily allows duplicate filenames in the same folder; we have to dedup
+  // at the application layer.
+  //
+  // Escape single quotes per the Drive query language. Filename is mostly
+  // alphanumerics + `_-.` after cleanFileName so a stray apostrophe is
+  // unlikely, but defensive.
+  const escapedName = safeName.replace(/'/g, "\\'");
+  try {
+    const existing = await drive.files.list({
+      q: `name = '${escapedName}' and '${folderId}' in parents and trashed = false`,
+      fields: 'files(id, webViewLink)',
+      pageSize: 1,
+    });
+    const hit = existing.data.files?.[0];
+    if (hit?.id) {
+      return {
+        fileId: hit.id,
+        webViewLink: hit.webViewLink || `https://drive.google.com/file/d/${hit.id}/view`,
+      };
+    }
+  } catch (err) {
+    // Dedup is best-effort. If the lookup fails (network, permissions),
+    // fall through and create — risk of one duplicate is better than
+    // failing the whole pipeline because we couldn't list.
+    console.warn('[invoiceDriveUpload] name-dedup lookup failed, proceeding to create:', err instanceof Error ? err.message : err);
+  }
+
   const createResponse = await drive.files.create({
     requestBody: {
       name: safeName,
