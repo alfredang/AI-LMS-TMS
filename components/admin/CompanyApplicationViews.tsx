@@ -316,6 +316,26 @@ type CompanyUploadResult = {
   insertedIds: string[];
 };
 
+export interface RowValidationError {
+  rowNumber: number;
+  traineeName: string;
+  traineeNric: string;
+  courseTitle: string;
+  issues: string[];
+}
+
+// Custom error class so handleUpload can pluck the structured row-level
+// validation errors off the rejection and render them in a popup, instead
+// of just showing a single string in the red banner.
+export class UploadValidationError extends Error {
+  validationErrors: RowValidationError[];
+  constructor(message: string, validationErrors: RowValidationError[]) {
+    super(message);
+    this.name = 'UploadValidationError';
+    this.validationErrors = validationErrors;
+  }
+}
+
 const uploadRows = async (rows: CompanyApplicationRow[]): Promise<CompanyUploadResult> => {
   const response = await fetch('/api/admin/upload-company-applications', {
     method: 'POST',
@@ -324,6 +344,12 @@ const uploadRows = async (rows: CompanyApplicationRow[]): Promise<CompanyUploadR
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
+    if (Array.isArray(err?.validationErrors) && err.validationErrors.length > 0) {
+      throw new UploadValidationError(
+        err?.message || 'Excel file has validation issues.',
+        err.validationErrors as RowValidationError[],
+      );
+    }
     throw new Error(err?.message || `Upload failed (${response.status})`);
   }
   const data = await response.json();
@@ -598,6 +624,7 @@ export const UploadCompanyApplicationView: React.FC = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<RowValidationError[]>([]);
   const [uploadResult, setUploadResult] = useState<CompanyUploadResult | null>(null);
   const [backendStatus, setBackendStatus] = useState<'idle' | 'processing' | 'complete'>('idle');
   const [backendDoneCount, setBackendDoneCount] = useState(0);
@@ -737,6 +764,7 @@ export const UploadCompanyApplicationView: React.FC = () => {
     if (!file) return;
     setIsUploading(true);
     setError(null);
+    setValidationErrors([]);
     setUploadResult(null);
     setBackendStatus('idle');
     setBackendDoneCount(0);
@@ -747,7 +775,12 @@ export const UploadCompanyApplicationView: React.FC = () => {
       setUploadResult(result);
       pollBackendProcessing(result.insertedIds);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to parse company application file.');
+      if (err instanceof UploadValidationError) {
+        setError(err.message);
+        setValidationErrors(err.validationErrors);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to parse company application file.');
+      }
     } finally {
       setIsUploading(false);
     }
@@ -760,6 +793,7 @@ export const UploadCompanyApplicationView: React.FC = () => {
     }
     setFile(null);
     setError(null);
+    setValidationErrors([]);
     setUploadResult(null);
     setBackendStatus('idle');
     setBackendDoneCount(0);
@@ -933,6 +967,83 @@ export const UploadCompanyApplicationView: React.FC = () => {
           }}
         />
       )}
+
+      {validationErrors.length > 0 && (
+        <ValidationErrorsModal
+          errors={validationErrors}
+          fileName={file?.name}
+          onClose={() => setValidationErrors([])}
+        />
+      )}
+    </div>
+  );
+};
+
+interface ValidationErrorsModalProps {
+  errors: RowValidationError[];
+  fileName?: string;
+  onClose: () => void;
+}
+
+const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({ errors, fileName, onClose }) => {
+  const totalIssues = errors.reduce((sum, e) => sum + e.issues.length, 0);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
+        <div className="flex items-start justify-between gap-3 p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+              <Icon name={IconName.Warning} className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                Excel has {errors.length} row{errors.length === 1 ? '' : 's'} with issues
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                {totalIssues} issue{totalIssues === 1 ? '' : 's'} found{fileName ? ` in ${fileName}` : ''}. Nothing was imported — fix the Excel and re-upload.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center flex-shrink-0"
+            aria-label="Close"
+          >
+            <Icon name={IconName.Close} className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {errors.map((err) => (
+            <div
+              key={`${err.rowNumber}-${err.traineeNric}`}
+              className="border border-red-200 dark:border-red-900/40 rounded-xl p-4 bg-red-50/50 dark:bg-red-900/10"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 px-2 py-0.5 rounded-md">
+                  Row {err.rowNumber}
+                </span>
+                <span className="text-sm font-semibold text-gray-900 dark:text-white">{err.traineeName}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">·</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{err.traineeNric}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">·</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{err.courseTitle}</span>
+              </div>
+              <ul className="space-y-1.5">
+                {err.issues.map((issue, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-red-700 dark:text-red-300">
+                    <span className="text-red-500 dark:text-red-400 mt-0.5">•</span>
+                    <span>{issue}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+          <Button onClick={onClose}>Close & Fix Excel</Button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1302,6 +1413,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
   // "half-highlighted" block. Group key falls back to row id when a row
   // has no invoice yet (one-row group).
   const [hoveredGroupKey, setHoveredGroupKey] = useState<string | null>(null);
+  const [rowErrorPopup, setRowErrorPopup] = useState<CompanyApplicationRow | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -2259,18 +2371,21 @@ export const ViewCompanyApplicationView: React.FC = () => {
                         className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 cursor-pointer"
                       />
                       {isStuck && (
-                        <span
+                        <button
+                          type="button"
+                          onClick={() => setRowErrorPopup(row)}
                           title={
                             warnings.length > 0
-                              ? `Pipeline warnings:\n${warningTooltip}`
+                              ? `Click for details — pipeline warnings:\n${warningTooltip}`
                               : hasValue(row['Auto-Enrol Error'])
-                                ? `Auto-enrol failed:\n${row['Auto-Enrol Error']}`
-                                : 'Auto-enrol failed — open the row for details'
+                                ? `Click for details — auto-enrol failed:\n${row['Auto-Enrol Error']}`
+                                : 'Click for details'
                           }
-                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                          aria-label="Show auto-enrol error details"
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 cursor-pointer"
                         >
                           <Icon name={IconName.Warning} className="w-3 h-3" />
-                        </span>
+                        </button>
                       )}
                     </div>
                   </td>
@@ -2620,6 +2735,91 @@ export const ViewCompanyApplicationView: React.FC = () => {
         </div>
       </Card>
       )}
+
+      {rowErrorPopup && (
+        <RowErrorPopup row={rowErrorPopup} onClose={() => setRowErrorPopup(null)} />
+      )}
+    </div>
+  );
+};
+
+interface RowErrorPopupProps {
+  row: CompanyApplicationRow;
+  onClose: () => void;
+}
+
+const RowErrorPopup: React.FC<RowErrorPopupProps> = ({ row, onClose }) => {
+  const warnings = parseRowWarnings(row);
+  const autoEnrolError = String(row['Auto-Enrol Error'] || '').trim();
+  const traineeName = String(row['Trainee FULL Name as on government ID*'] || '').trim() || '(no name)';
+  const courseTitle = String(row['Course Title*'] || '').trim() || '(no course title)';
+  const employerOrg = String(row['Employer Organization Name*'] || '').trim();
+  const startDate = String(row['Course Start Date (DD-MM-YYYY)*'] || '').trim();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
+        <div className="flex items-start justify-between gap-3 p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+              <Icon name={IconName.Warning} className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Auto-enrol failed</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                {traineeName}
+                {employerOrg ? ` · ${employerOrg}` : ''}
+                {courseTitle ? ` · ${courseTitle}` : ''}
+                {startDate ? ` · ${startDate}` : ''}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center flex-shrink-0"
+            aria-label="Close"
+          >
+            <Icon name={IconName.Close} className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {autoEnrolError && (
+            <div className="border border-red-200 dark:border-red-900/40 rounded-xl p-4 bg-red-50/50 dark:bg-red-900/10">
+              <h3 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2">Enrolment error</h3>
+              <p className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap break-words">{autoEnrolError}</p>
+            </div>
+          )}
+          {warnings.length > 0 && (
+            <div className="border border-amber-200 dark:border-amber-900/40 rounded-xl p-4 bg-amber-50/50 dark:bg-amber-900/10">
+              <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2">
+                Pipeline warnings ({warnings.length})
+              </h3>
+              <ul className="space-y-2">
+                {warnings.map((w, i) => (
+                  <li key={i} className="text-sm text-amber-800 dark:text-amber-200">
+                    <span className="font-medium">[{w.step}]</span>{' '}
+                    <span className="whitespace-pre-wrap break-words">{w.error}</span>
+                    {w.at && (
+                      <span className="block text-xs text-amber-700/70 dark:text-amber-300/70 mt-0.5">
+                        {new Date(w.at).toLocaleString()}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {!autoEnrolError && warnings.length === 0 && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+              No specific error message was recorded. Check the server logs around the upload time for details.
+            </p>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+          <Button onClick={onClose}>Close</Button>
+        </div>
+      </div>
     </div>
   );
 };

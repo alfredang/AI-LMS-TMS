@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureCompanyApplicationsTable } from '../../../lib/companyApplicationsTable';
+import { validateCompanyApplicationRows } from '../../../lib/companyApplicationValidator';
 
 export const config = {
   api: {
@@ -65,6 +66,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     await ensureCompanyApplicationsTable();
+
+    // Pre-flight: reject the whole upload if any row has issues so the admin
+    // can fix the Excel and re-upload cleanly. The validator catches things
+    // that previously only surfaced after auto-enrol attempted SSG (e.g. a
+    // DOB entered as MM-DD-YYYY becoming "Invalid Date" in the payload, or a
+    // course run that doesn't exist in the LMS).
+    const validationErrors = await validateCompanyApplicationRows(rows);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        message: `${validationErrors.length} row${validationErrors.length === 1 ? ' has' : 's have'} issues — fix the Excel and re-upload.`,
+        validationErrors,
+      });
+    }
+
     const queuedIds: string[] = [];
     let inserted = 0;
     let updated = 0;

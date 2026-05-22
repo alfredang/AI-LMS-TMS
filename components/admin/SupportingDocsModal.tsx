@@ -292,20 +292,20 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
 
       if (!matchedId || !verdictsRaw) {
         // AI couldn't match this doc to any learner — build a specific reason
-        // from what AI extracted so the admin sees WHY the auto-assign failed
-        // (couldn't read NRIC vs. NRIC didn't match this batch vs. probably
-        // wrong doc entirely).
+        // from what AI extracted. Matching is on name + employer, so the reason
+        // explains which of those was missing or didn't line up with this batch.
         const extracted = json.extracted || {};
-        const docNric = (extracted.nric || '').trim();
         const docName = (extracted.fullName || '').trim();
         const docEmployer = (extracted.employerName || '').trim();
         let reason: string;
-        if (!docNric && !docName && !docEmployer) {
-          reason = 'AI could not extract any identity info — this file may not be a valid supporting document.';
-        } else if (!docNric) {
-          reason = 'AI could not read an NRIC from this document. Auto-match requires a legible NRIC/FIN.';
+        if (!docName && !docEmployer) {
+          reason = 'AI could not extract a name or employer from this document — may not be a valid supporting doc.';
+        } else if (!docName) {
+          reason = `AI read employer "${docEmployer}" but could not read a learner name. Needs both to auto-match.`;
+        } else if (!docEmployer) {
+          reason = `AI read name "${docName}" but could not read an employer. Needs both to auto-match.`;
         } else {
-          reason = `AI read NRIC "${docNric}" — no learner in this batch has that NRIC. Likely the wrong doc for this group.`;
+          reason = `AI read "${docName}" at "${docEmployer}" — no learner in this batch matches both. Likely the wrong doc for this group.`;
         }
         setUnassignedFiles(prev => prev.map(f => f.id === uf.id
           ? { ...f, aiProcessing: false, aiNoMatch: true, aiNoMatchReason: reason }
@@ -1407,7 +1407,7 @@ const BulkUploadZone: React.FC<{
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {aiDisabled
                   ? 'Pick all files at once, then drag or click each thumbnail onto its learner card below.'
-                  : 'Pick all files at once — AI reads each doc, matches by NRIC, and pre-fills the verification verdicts. Manual drag/click is the fallback for unmatched files.'}
+                  : 'Pick all files at once — AI reads each doc, matches by trainee name + employer, and pre-fills the verification verdicts. Manual drag/click is the fallback for unmatched files.'}
               </p>
             </div>
           </div>

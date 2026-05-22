@@ -14,7 +14,8 @@ export const config = {
  * POST /api/admin/ca-ai-process-supporting-doc
  *
  * Vision pass over a single supporting doc to (a) identify which learner
- * candidate it belongs to (by NRIC match) and (b) pre-fill match/mismatch
+ * candidate it belongs to (matched on full name + employer name, since
+ * payslips usually don't show NRIC) and (b) pre-fill match/mismatch
  * verdicts for the 4 fields the admin would otherwise tick manually.
  *
  * multipart/form-data:
@@ -78,22 +79,31 @@ Task 1 — Extract from the document:
         Return null if not visible.
 
 Task 2 — Match to a candidate:
-Find which candidate's NRIC matches the document's extracted NRIC.
-- Compare case-insensitively, ignoring spaces/dashes.
-- If exactly one candidate matches → return that candidate's id.
-- If none match or you cannot read the NRIC → return null.
+Match using EXACTLY TWO required keys: the person's full name AND the employer/company name.
+NRIC and UEN are additional context shown to the admin — they DO NOT gate the match.
+(Most documents are Singapore payslips, which typically do not show NRIC at all.)
+
+Rules:
+- Both name AND employer must clearly agree with the same candidate → return that candidate's id.
+- Compare case-insensitively. Ignore middle initials, name order (e.g. "John Tan" vs "Tan, John"),
+  and trivial company-suffix differences ("Pte Ltd" vs "Pte. Ltd." vs "Private Limited").
+- Do NOT reject a match because NRIC or UEN is missing or differs — those are reported as
+  per-field verdicts in Task 3 so the admin can spot inconsistencies, but they never veto.
+- If no candidate's name+employer both agree → return null.
 
 Task 3 — Per-field verdict (only if matchedLearnerId is non-null):
 For each of name/nric/employer/uen, return one of:
 - "match"     — extracted value clearly agrees with the candidate's value
                 (case-insensitive, ignore minor formatting / Pte Ltd vs Pte. Ltd.)
+                For NRIC: if the candidate's NRIC is masked (e.g. "*****822B") and the
+                document's NRIC ends with the same visible suffix, treat as "match".
 - "mismatch"  — extracted value clearly disagrees with the candidate's value
 - "unknown"   — you could not read this field from the document
 
 Task 4 — Confidence:
-- "high"   — clear text, all 4 fields readable, exact match
-- "medium" — some fields unclear or partial match
-- "low"    — document quality poor or NRIC barely legible
+- "high"   — name + employer both clearly readable and both agree
+- "medium" — name + employer agree but one is partially legible
+- "low"    — document quality poor or only one of name/employer is confidently readable
 
 Return ONLY valid JSON, no prose, in this exact shape:
 {
@@ -107,9 +117,31 @@ If matchedLearnerId is null, set verdicts to null.`;
 }
 
 function parseAiResponse(text: string): any {
-  // Claude sometimes wraps the JSON in ```json fences despite "ONLY valid JSON" — strip them.
-  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
-  return JSON.parse(cleaned);
+  // Claude sometimes wraps the JSON in ```json fences and/or appends a "Reasoning:" prose
+  // section despite "ONLY valid JSON". Try fenced block first, then fall back to the first
+  // balanced { ... } object in the response.
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    return JSON.parse(fenced[1].trim());
+  }
+  const start = text.indexOf('{');
+  if (start === -1) throw new Error('no JSON object found in response');
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return JSON.parse(text.slice(start, i + 1));
+    }
+  }
+  throw new Error('unbalanced JSON braces in response');
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
