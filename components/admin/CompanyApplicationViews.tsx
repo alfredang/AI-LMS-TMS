@@ -1294,6 +1294,14 @@ export const ViewCompanyApplicationView: React.FC = () => {
   const [grantSyncMessage, setGrantSyncMessage] = useState<string | null>(null);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const [invoiceMessage, setInvoiceMessage] = useState<string | null>(null);
+  // Tracks the hovered invoice group so all rows sharing an Invoice ID
+  // highlight together. CSS `hover:` only paints the <tr> the cursor is on,
+  // but the Invoice # / Tax Invoice cells use rowSpan and are DOM-attached
+  // to the FIRST row of their group — so without this, hovering any row
+  // except the first leaves the merged cells dark, producing a jagged
+  // "half-highlighted" block. Group key falls back to row id when a row
+  // has no invoice yet (one-row group).
+  const [hoveredGroupKey, setHoveredGroupKey] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -2224,13 +2232,21 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 const warningTooltip = warnings.length > 0
                   ? warnings.map(w => `[${w.step}] ${w.error}`).join('\n')
                   : '';
+                const groupKey = (row['Invoice ID'] || '').trim() || String(row.id || `idx-${index}`);
+                const isHovered = hoveredGroupKey === groupKey;
                 return (
                 <tr
                   key={`${row.id || index}-${index}`}
+                  onMouseEnter={() => setHoveredGroupKey(groupKey)}
+                  onMouseLeave={() => setHoveredGroupKey(prev => (prev === groupKey ? null : prev))}
                   className={
                     isStuck
-                      ? 'bg-red-50/60 hover:bg-red-100/70 dark:bg-red-900/15 dark:hover:bg-red-900/25'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-600'
+                      ? isHovered
+                        ? 'bg-red-100/70 dark:bg-red-900/25'
+                        : 'bg-red-50/60 dark:bg-red-900/15'
+                      : isHovered
+                        ? 'bg-gray-50 dark:bg-gray-600'
+                        : ''
                   }
                 >
                   <td className="px-2 py-1.5">
