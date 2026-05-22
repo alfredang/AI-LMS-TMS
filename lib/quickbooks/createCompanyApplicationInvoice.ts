@@ -11,8 +11,11 @@
  * already exist in QuickBooks — we throw rather than auto-create so the
  * employer's address / contact details aren't half-populated.
  *
- * Terms always "30 Days Term". BillEmail is the employer's contact email from
- * the Excel (not whatever's stored on the QBO customer record).
+ * Terms depend on prior QBO invoice history with this employer:
+ *   - returning customer (≥1 prior invoice) → 30 Days Term
+ *   - brand-new customer (no prior invoices) → 14 Days Term
+ * BillEmail is the employer's contact email from the Excel (not whatever's
+ * stored on the QBO customer record).
  *
  * QBO auto-assigns the DocNumber; we store whatever comes back.
  */
@@ -41,12 +44,15 @@ import {
 } from '../services/qboInvoiceService';
 
 // Term rule for the main tax invoice:
-//   - existing employer (any prior QBO invoice) → "30 Days Term" (DueDate = +30d)
-//   - brand-new employer (no prior invoices)    → "Due on receipt" (DueDate = TxnDate)
+//   - returning employer (any prior QBO invoice) → "30 Days Term" (DueDate = +30d)
+//   - brand-new employer (no prior invoices)     → "14 Days Term" (DueDate = +14d)
+// Both term names must exist as Sales Terms in QuickBooks (Lists → All Lists →
+// Terms). Invoice generation throws with a clear "Term not found" error if
+// either is missing.
 const CA_TERM_NAME_EXISTING = '30 Days Term';
-const CA_TERM_NAME_NEW = 'Due on receipt';
+const CA_TERM_NAME_NEW = '14 Days Term';
 const CA_DUE_DAYS_EXISTING = 30;
-const CA_DUE_DAYS_NEW = 0;
+const CA_DUE_DAYS_NEW = 14;
 
 function buildCaInvoicePdfFileName(docNumber: string | null | undefined, invoiceId: string): string {
   const raw = String(docNumber || invoiceId || '').trim() || 'invoice';
@@ -56,10 +62,10 @@ function buildCaInvoicePdfFileName(docNumber: string | null | undefined, invoice
 /**
  * Returns true if the QBO customer already has at least one invoice (any
  * status, any date). Used to pick the term + due-date rule:
- *   - has prior invoice → existing customer → 30 Days Term
- *   - no prior invoice  → brand-new customer → Due on receipt
- * Errors are treated as "has history" to avoid wrongly extending Due-on-
- * receipt terms to a customer we just couldn't probe.
+ *   - has prior invoice → returning customer → 30 Days Term
+ *   - no prior invoice  → brand-new customer  → 14 Days Term
+ * Errors are treated as "has history" so a transient QBO probe failure
+ * doesn't hand a returning customer the tighter 14-day window.
  */
 async function customerHasPriorQboInvoices(customerId: string): Promise<boolean> {
   const safe = String(customerId || '').replace(/'/g, "''").trim();
@@ -598,40 +604,64 @@ async function aggregateGrantsByScheme(enrolmentIds: string[]): Promise<SchemeAg
        status
      FROM public.ssg_grants
      WHERE LOWER(TRIM(enrollment_id)) = ANY($1::text[])
-       AND COALESCE(status, '') <> 'Cancelled'
-     ORDER BY enrollment_id, grant_id`,
+       AND COALESCE(status, '') <> 'Cancelled'`,
     [normalisedIds]
   );
 
+  // Bucket grants by enrolment_id so we can iterate in participant order
+  // below. The SQL no longer carries ORDER BY because the next loop imposes
+  // the order we actually want — the input enrolmentIds array, which mirrors
+  // the Excel upload order.
+  const grantsByEnrolment = new Map<string, typeof result.rows>();
+  for (const row of result.rows) {
+    const key = String(row.enrollment_id || '').toLowerCase().trim();
+    if (!grantsByEnrolment.has(key)) grantsByEnrolment.set(key, []);
+    grantsByEnrolment.get(key)!.push(row);
+  }
+
   const byScheme = new Map<string, SchemeAggregate>();
 
-  for (const row of result.rows) {
-    const amt = Number(row.amt);
-    if (!Number.isFinite(amt) || amt <= 0) continue;
+  // Walk participants in their input (Excel) order. For each, push their
+  // grants into the matching scheme aggregate. Result: grantRefs[N] in any
+  // scheme block belongs to participant N from the Participant Name list —
+  // a true 1↔1 mapping between the two numbered blocks on the invoice PDF.
+  // (Caveat: a learner explicitly marked grant_ineligible contributes nothing
+  // to any scheme, so the grant list packs up — there's no gap to preserve
+  // strict positional alignment in mixed-eligibility groups. The
+  // awaiting-grants guard upstream blocks mixed cases unless an admin has
+  // explicitly opted in.)
+  for (const enrolmentId of enrolmentIds) {
+    const key = enrolmentId.toLowerCase().trim();
+    const grants = grantsByEnrolment.get(key) || [];
 
-    const itemName = resolveGrantItemName({
-      fundingSchemeCode: row.funding_scheme_code,
-      fundingSchemeDescription: row.funding_scheme_description,
-    });
-    const schemeLabel = resolveSchemeLabel({
-      fundingSchemeCode: row.funding_scheme_code,
-      fundingSchemeDescription: row.funding_scheme_description,
-    });
+    for (const row of grants) {
+      const amt = Number(row.amt);
+      if (!Number.isFinite(amt) || amt <= 0) continue;
 
-    if (!byScheme.has(itemName)) {
-      byScheme.set(itemName, {
-        itemName,
-        schemeLabel,
-        totalAmount: 0,
-        qty: 0,
-        grantRefs: [],
+      const itemName = resolveGrantItemName({
+        fundingSchemeCode: row.funding_scheme_code,
+        fundingSchemeDescription: row.funding_scheme_description,
       });
-    }
+      const schemeLabel = resolveSchemeLabel({
+        fundingSchemeCode: row.funding_scheme_code,
+        fundingSchemeDescription: row.funding_scheme_description,
+      });
 
-    const agg = byScheme.get(itemName)!;
-    agg.qty++;
-    agg.totalAmount += amt;
-    agg.grantRefs.push(String(row.grant_id || '-'));
+      if (!byScheme.has(itemName)) {
+        byScheme.set(itemName, {
+          itemName,
+          schemeLabel,
+          totalAmount: 0,
+          qty: 0,
+          grantRefs: [],
+        });
+      }
+
+      const agg = byScheme.get(itemName)!;
+      agg.qty++;
+      agg.totalAmount += amt;
+      agg.grantRefs.push(String(row.grant_id || '-'));
+    }
   }
 
   return Array.from(byScheme.values());
@@ -650,16 +680,12 @@ function buildCourseLineDescription(input: CreateCaInvoiceInput): string {
     ? `${prefixWsq(input.courseTitle)} (${input.courseReferenceNumber})`
     : prefixWsq(input.courseTitle);
   parts.push(`Course Name: ${titleWithCode}`);
-  // Multi-line participant block. Earlier inline format ("Participant 1:
-  // NAME (NRIC: ...)") was a workaround for QBO's PDF renderer collapsing
-  // "Participant Name:" + "1. NAME" into one line. Reverting to the
-  // requested label-then-list layout — verify the QB template renders it
-  // correctly; if numbering gets swallowed again the workaround is to
-  // drop the colon or use a different label.
+  // Single-line-per-participant format: "1. NAME (XXXXX123A)". Replaces the
+  // previous two-line block (name on one line, NRIC: XXXXX123A on the next)
+  // so the invoice description stays compact for groups with many learners.
   parts.push('Participant Name:');
   input.learners.forEach((learner, i) => {
-    parts.push(`${i + 1}. ${learner.fullName || '-'}`);
-    parts.push(`NRIC: ${maskNric(learner.nric)}`);
+    parts.push(`${i + 1}. ${learner.fullName || '-'} (${maskNric(learner.nric)})`);
   });
 
   const dateRange = formatCourseDateRange(input.courseStartDate, input.courseEndDate);
@@ -672,13 +698,14 @@ function buildCourseLineDescription(input: CreateCaInvoiceInput): string {
 function buildGrantLineDescription(scheme: SchemeAggregate): string {
   const parts: string[] = [];
   parts.push(`Less: WSQ funding (${scheme.schemeLabel})`);
-  // One "Grant Ref#" line per grant — positionally aligned with the
-  // Participant list in buildCourseLineDescription (1st grant ref ↔
-  // participant 1, etc.) as long as all participants share the same
-  // scheme. Across-scheme groups list per scheme, so alignment within
-  // each scheme block still holds.
-  scheme.grantRefs.forEach((ref) => {
-    parts.push(`Grant Ref#: ${ref}`);
+  // Single "Grant Ref#:" header followed by a numbered list of refs.
+  // Positionally aligned with the Participant list in
+  // buildCourseLineDescription (grant 1 ↔ participant 1, etc.) as long as
+  // all participants share the same scheme. Across-scheme groups list per
+  // scheme, so alignment within each scheme block still holds.
+  parts.push('Grant Ref#:');
+  scheme.grantRefs.forEach((ref, i) => {
+    parts.push(`${i + 1}. ${ref}`);
   });
   return parts.join('\n');
 }
@@ -722,7 +749,7 @@ export async function createCompanyApplicationInvoice(
 
   // Pick the term based on whether this employer has any prior QBO invoice.
   //   - has history → 30 Days Term
-  //   - first-ever invoice for this customer → Due on receipt
+  //   - first-ever invoice for this customer → 14 Days Term
   const hasPriorInvoices = await customerHasPriorQboInvoices(customerRef);
   const termName = hasPriorInvoices ? CA_TERM_NAME_EXISTING : CA_TERM_NAME_NEW;
   const dueDays = hasPriorInvoices ? CA_DUE_DAYS_EXISTING : CA_DUE_DAYS_NEW;
@@ -954,7 +981,8 @@ export async function generateInvoicesForApplications(
        ON cr.course_run_id::text = ca.course_run_id::text
        OR cr.id::text = ca.course_run_id::text
      LEFT JOIN public.course c ON c.id = cr.course_id
-     WHERE ca.id = ANY($1::uuid[])`,
+     WHERE ca.id = ANY($1::uuid[])
+     ORDER BY ca.created_at, ca.id`,
     [applicationIds]
   );
 
