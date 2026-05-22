@@ -395,7 +395,11 @@ export const CheckSupportingDocumentView: React.FC = () => {
             if (emp.courseRuns.length === 1) {
               const cr = emp.courseRuns[0];
               const crCollapseKey = `cr:${cr.key}`;
-              const isCollapsed = !!collapsed[crCollapseKey];
+              // Default collapsed so the page opens as a compact list of
+              // employer/course groups; admin clicks to drill in.
+              const isCollapsed = collapsed[crCollapseKey] === undefined
+                ? true
+                : !!collapsed[crCollapseKey];
               const hasMismatch = cr.mismatchCount > 0;
               const allVerified = cr.rows.length > 0 && cr.verifiedCount === cr.rows.length;
               const borderClass = hasMismatch
@@ -548,7 +552,11 @@ export const CheckSupportingDocumentView: React.FC = () => {
             // course-run sub-cards so admin can see "all of X Company's work"
             // at a glance, then drill into each course.
             const empCollapseKey = `emp:${emp.key}`;
-            const isEmpCollapsed = !!collapsed[empCollapseKey];
+            // Default collapsed for the same reason as the single-course path
+            // above — compact list opens, admin drills in by clicking.
+            const isEmpCollapsed = collapsed[empCollapseKey] === undefined
+              ? true
+              : !!collapsed[empCollapseKey];
             const empHasMismatch = emp.mismatchCount > 0;
             const empAllVerified = emp.totalRows > 0 && emp.verifiedCount === emp.totalRows;
             const empBorder = empHasMismatch
@@ -612,11 +620,10 @@ export const CheckSupportingDocumentView: React.FC = () => {
                     <div className="border-t dark:border-gray-700 p-3 space-y-2 bg-gray-50/50 dark:bg-gray-900/30">
                       {emp.courseRuns.map(cr => {
                         const crCollapseKey = `cr:${cr.key}`;
-                        // Course-run defaults: single course-run for the employer → expanded;
-                        // multiple → collapsed (admin picks which to drill into).
-                        const defaultCollapsed = emp.courseRuns.length > 1;
+                        // Default collapsed across the board — opening the employer
+                        // shouldn't auto-expand every course-run underneath.
                         const isCrCollapsed = collapsed[crCollapseKey] === undefined
-                          ? defaultCollapsed
+                          ? true
                           : !!collapsed[crCollapseKey];
                         const crHasMismatch = cr.mismatchCount > 0;
                         const crAllVerified = cr.rows.length > 0 && cr.verifiedCount === cr.rows.length;
