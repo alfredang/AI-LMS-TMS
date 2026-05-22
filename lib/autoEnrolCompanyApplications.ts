@@ -45,6 +45,25 @@ interface ResolvedRun {
 
 const IV = Buffer.from('SSGAPIInitVector', 'utf8');
 const BATCH_SIZE = 5;
+const MAX_SSG_RETRY_ATTEMPTS = 3;
+const SSG_RETRY_BASE_DELAY_MS = 1000;
+
+// Treat SSG 5xx and underlying network errors as transient so a single blip
+// doesn't park a row at auto_enrol_status='failed' until a manual re-upload.
+// SSG 400s (validation, duplicate) are NOT transient — the duplicate-recovery
+// path in processCompanyApplication handles those at a higher layer.
+function isTransientSsgError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|network error/i.test(message)) {
+    return true;
+  }
+  const statusMatch = message.match(/returned (\d{3})/);
+  if (statusMatch) {
+    const status = Number(statusMatch[1]);
+    return status >= 500 && status < 600;
+  }
+  return false;
+}
 
 function normalizeDate(value: unknown): string | null {
   const raw = String(value || '').trim();
@@ -171,6 +190,25 @@ async function loadSsgContext(): Promise<SSGContext> {
 }
 
 async function ssgEncryptedPost(ctx: SSGContext, path: string, payload: unknown): Promise<any> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX_SSG_RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await ssgEncryptedPostOnce(ctx, path, payload);
+    } catch (err) {
+      lastErr = err;
+      if (attempt === MAX_SSG_RETRY_ATTEMPTS || !isTransientSsgError(err)) throw err;
+      const delayMs = SSG_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      console.warn(
+        `[CA SSG] transient ${path} failure attempt ${attempt}/${MAX_SSG_RETRY_ATTEMPTS}, retrying in ${delayMs}ms:`,
+        err instanceof Error ? err.message : err
+      );
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastErr;
+}
+
+async function ssgEncryptedPostOnce(ctx: SSGContext, path: string, payload: unknown): Promise<any> {
   const cipher = crypto.createCipheriv('aes-256-cbc', ctx.encKey, IV);
   let encrypted = cipher.update(JSON.stringify(payload), 'utf8', 'base64');
   encrypted += cipher.final('base64');
