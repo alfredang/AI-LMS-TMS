@@ -14,11 +14,14 @@ import { sendCompanyApplicationInvoiceEmails } from '../../../lib/quickbooks/sen
  * Grant invoices are NOT emailed — those are staff/internal records billed to
  * WSG, not the customer.
  *
- * Two call sites share the same underlying helper
- * (lib/quickbooks/sendCompanyApplicationInvoiceEmails.ts):
- *   - This endpoint — manual "Send Invoice Email" button on the View page.
- *   - bulkProcessCompanyApplications() — auto-send when the upload-page
- *     toggle (training_provider.ca_auto_send_invoice_email) is ON.
+ * Sole entrypoint for CA invoice emails: the "Send Invoice Email" button on
+ * View Company Application. There is no auto-send anywhere else in the CA
+ * flow — verification and invoice generation are decoupled from sending.
+ *
+ * Server-side gates (enforced inside the helper):
+ *   - training_provider.ca_auto_send_invoice_email = true
+ *   - row has invoice_id
+ *   - supporting_doc_verification_status = 'verified'
  *
  * Idempotent: rows are grouped by invoice_id, so a selection of 3 learners
  * sharing one consolidated invoice fires exactly one QBO email. All 3 rows

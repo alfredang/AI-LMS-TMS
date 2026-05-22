@@ -9,11 +9,10 @@ type Verdict = 'verified' | 'mismatch';
  *
  * Body: { companyApplicationId: uuid, verdict: 'verified' | 'mismatch', verifiedBy?: string }
  *
- * Marks the supporting-doc verification verdict on the row. When all rows in
- * the same (employer_uen, course_run_id) group are verified AND have an
- * invoice_id, triggers the invoice email send for the group via
- * sendCompanyApplicationInvoiceEmails (idempotent — already-sent invoices
- * are skipped).
+ * Marks the supporting-doc verification verdict on the row. Pure verification —
+ * never triggers the invoice email. Sending is now exclusively driven by the
+ * "Send Invoice Email" button on View Company Application (which gates on
+ * supporting_doc_verification_status = 'verified' + the master toggle).
  *
  * mismatch verdict: clears the Drive file reference so the admin is forced
  * to re-upload the correct document before re-attempting verification.
@@ -38,13 +37,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const rowRes = await pool.query(
-      `SELECT id, employer_uen, course_run_id
-         FROM public.company_application
-        WHERE id = $1`,
+      `SELECT id FROM public.company_application WHERE id = $1`,
       [companyApplicationId]
     );
-    const row = rowRes.rows[0];
-    if (!row) {
+    if (!rowRes.rows[0]) {
       return res.status(404).json({ success: false, error: 'Company application row not found' });
     }
 
@@ -60,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           WHERE id = $1`,
         [companyApplicationId, verifiedBy]
       );
-      return res.status(200).json({ success: true, status: 'mismatch', groupSent: false });
+      return res.status(200).json({ success: true, status: 'mismatch' });
     }
 
     await pool.query(
@@ -73,64 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [companyApplicationId, verifiedBy]
     );
 
-    // Check whether every row in the (employer_uen, course_run_id) group with
-    // an invoice is now verified. Group is the unit the invoice email is
-    // sent for, so partial verification of a group keeps the email gated.
-    const groupRes = await pool.query(
-      `SELECT id, supporting_doc_verification_status, invoice_id
-         FROM public.company_application
-        WHERE LOWER(TRIM(COALESCE(employer_uen, ''))) = LOWER(TRIM(COALESCE($1, '')))
-          AND LOWER(TRIM(COALESCE(course_run_id, ''))) = LOWER(TRIM(COALESCE($2, '')))`,
-      [row.employer_uen, row.course_run_id]
-    );
-    const groupRows = groupRes.rows;
-    const allVerified = groupRows.length > 0 && groupRows.every(
-      (r: any) => String(r.supporting_doc_verification_status || '').toLowerCase() === 'verified'
-    );
-    const anyHasInvoice = groupRows.some((r: any) => !!r.invoice_id);
-
-    if (!allVerified || !anyHasInvoice) {
-      return res.status(200).json({
-        success: true,
-        status: 'verified',
-        groupSent: false,
-        groupTotal: groupRows.length,
-        groupVerified: groupRows.filter(
-          (r: any) => String(r.supporting_doc_verification_status || '').toLowerCase() === 'verified'
-        ).length,
-      });
-    }
-
-    // All rows in the group are verified — trigger the invoice email. The
-    // sender is idempotent: skippedAlreadySent rows are no-ops, so calling
-    // this when only some invoices have been previously sent is safe.
-    const groupIds = groupRows.map((r: any) => String(r.id));
-    let emailSummary: any = null;
-    try {
-      const { sendCompanyApplicationInvoiceEmails } = await import('../../../lib/quickbooks/sendCompanyApplicationInvoiceEmails');
-      emailSummary = await sendCompanyApplicationInvoiceEmails(groupIds);
-    } catch (err) {
-      console.warn('[ca-verify-and-send] invoice email send failed:', err instanceof Error ? err.message : err);
-      return res.status(200).json({
-        success: true,
-        status: 'verified',
-        groupSent: false,
-        emailError: err instanceof Error ? err.message : String(err),
-      });
-    }
-
-    // groupSent is true only when the email actually fired. If the master
-    // toggle is OFF, the helper returns toggleDisabled and skips the send —
-    // surface that state so the UI can show "held in test mode" instead of
-    // a misleading "email released" success message.
-    const heldInTestMode = !!emailSummary?.toggleDisabled;
-    return res.status(200).json({
-      success: true,
-      status: 'verified',
-      groupSent: !heldInTestMode,
-      heldInTestMode,
-      emailSummary,
-    });
+    return res.status(200).json({ success: true, status: 'verified' });
   } catch (err: any) {
     console.error('ca-verify-and-send error:', err);
     return res.status(500).json({

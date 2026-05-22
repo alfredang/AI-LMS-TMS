@@ -9,9 +9,15 @@ import { qboSendInvoice } from '../services/qboInvoiceService';
  * invoices are billed to the sponsoring company. Grant invoices are NOT
  * emailed; those are internal records billed to WSG.
  *
- * Shared by:
- *   - pages/api/admin/ca-send-invoice-email.ts (manual button in View)
- *   - lib/autoEnrolCompanyApplications.ts      (auto-send when toggle is ON)
+ * Sole caller: pages/api/admin/ca-send-invoice-email.ts (manual "Send Invoice
+ * Email" button on View Company Application). No auto-send path exists —
+ * verification on Check Supporting Document and invoice generation are
+ * decoupled from sending.
+ *
+ * Server-side gates (defence in depth — UI also enforces these):
+ *   - master toggle (training_provider.ca_auto_send_invoice_email) must be ON
+ *   - row must have invoice_id
+ *   - row must have supporting_doc_verification_status = 'verified'
  *
  * Idempotent: rows already marked invoice_sent_at are skipped. Rows sharing
  * a consolidated invoice_id fire exactly one QBO email and all share the
@@ -31,6 +37,10 @@ export interface CaInvoiceEmailSummary {
   skippedMissingEmail: number;
   skippedNoInvoice: number;
   skippedNoInvoiceRows: Array<{ id: string; employer: string }>;
+  // Rows whose supporting doc isn't verified yet. Server-side mirror of the
+  // UI gate — surfaces when an API caller bypasses the View page block.
+  skippedNotVerified: number;
+  skippedNotVerifiedRows: Array<{ id: string; employer: string }>;
   failures: CaInvoiceEmailFailure[];
   totalGroups: number;
   // True when the global toggle (training_provider.ca_auto_send_invoice_email)
@@ -59,6 +69,8 @@ export async function sendCompanyApplicationInvoiceEmails(
     skippedMissingEmail: 0,
     skippedNoInvoice: 0,
     skippedNoInvoiceRows: [],
+    skippedNotVerified: 0,
+    skippedNotVerifiedRows: [],
     failures: [],
     totalGroups: 0,
   };
@@ -67,10 +79,9 @@ export async function sendCompanyApplicationInvoiceEmails(
   if (!uniqueIds.length) return summary;
 
   // Master kill switch — when the toggle on the View page is OFF, suppress
-  // every send path: auto-pipeline, manual "Send Invoice Email", and the
-  // verify-and-send flow that fires when a group's docs are all confirmed.
-  // The caller still sees a structured summary so the UI can render
-  // "held in test mode" instead of pretending the email went out.
+  // the manual "Send Invoice Email" send. The caller still sees a structured
+  // summary so the UI can render "held in test mode" instead of pretending
+  // the email went out.
   //
   // Fails closed: if the toggle query itself errors, we treat it as OFF.
   // Better to drop a real send than to silently email real employers when
@@ -97,7 +108,8 @@ export async function sendCompanyApplicationInvoiceEmails(
             invoice_sent_at,
             employer_org_name,
             employer_uen,
-            employer_contact_email
+            employer_contact_email,
+            supporting_doc_verification_status
        FROM public.company_application
       WHERE id = ANY($1::uuid[])`,
     [uniqueIds]
@@ -106,6 +118,18 @@ export async function sendCompanyApplicationInvoiceEmails(
   const groups = new Map<string, Group>();
 
   for (const row of rowsRes.rows) {
+    // Server-side verification gate. UI already blocks this case, but a direct
+    // API call (or future automation) must not bypass the rule that employers
+    // are only emailed once their docs are confirmed.
+    const verificationStatus = String(row.supporting_doc_verification_status || '').trim().toLowerCase();
+    if (verificationStatus !== 'verified') {
+      summary.skippedNotVerified++;
+      summary.skippedNotVerifiedRows.push({
+        id: String(row.id),
+        employer: String(row.employer_org_name || '').trim(),
+      });
+      continue;
+    }
     const invoiceId = String(row.invoice_id || '').trim();
     if (!invoiceId) {
       summary.skippedNoInvoice++;
