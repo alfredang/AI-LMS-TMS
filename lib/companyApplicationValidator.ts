@@ -27,7 +27,6 @@ const REQUIRED_FIELDS: Array<{ column: string; label: string }> = [
   { column: 'Date of Birth* (DD-MM-YYYY)', label: 'Date of Birth' },
   { column: 'Trainee Company email Address*', label: 'Trainee Email' },
   { column: 'Trainee Mobile Phone Number*', label: 'Trainee Mobile Phone' },
-  { column: 'Trainee Highest Qualification*', label: 'Trainee Highest Qualification' },
   { column: 'Employer Organization Name*', label: 'Employer Organization Name' },
   { column: 'Employer UEN*', label: 'Employer UEN' },
   { column: 'Employer Contact Name*', label: 'Employer Contact Name' },
