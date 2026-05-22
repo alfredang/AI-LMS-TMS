@@ -579,6 +579,32 @@ interface SchemeAggregate {
   grantRefs: string[];
 }
 
+async function fetchLearnerGrantTotals(
+  enrolmentIds: string[]
+): Promise<Map<string, number>> {
+  const totals = new Map<string, number>();
+  if (enrolmentIds.length === 0) return totals;
+
+  const normalisedIds = enrolmentIds.map(id => id.toLowerCase().trim());
+  const result = await pool.query(
+    `SELECT
+       LOWER(TRIM(enrollment_id)) AS enrolment_key,
+       SUM(CASE
+         WHEN COALESCE(approved_grant_amount, 0) > 0 THEN approved_grant_amount
+         ELSE COALESCE(estimated_grant_amount, 0)
+       END)::float AS total_amt
+     FROM public.ssg_grants
+     WHERE LOWER(TRIM(enrollment_id)) = ANY($1::text[])
+       AND COALESCE(status, '') <> 'Cancelled'
+     GROUP BY LOWER(TRIM(enrollment_id))`,
+    [normalisedIds]
+  );
+  for (const row of result.rows) {
+    totals.set(String(row.enrolment_key), Number(row.total_amt) || 0);
+  }
+  return totals;
+}
+
 async function aggregateGrantsByScheme(enrolmentIds: string[]): Promise<SchemeAggregate[]> {
   if (enrolmentIds.length === 0) return [];
 
@@ -610,8 +636,10 @@ async function aggregateGrantsByScheme(enrolmentIds: string[]): Promise<SchemeAg
 
   // Bucket grants by enrolment_id so we can iterate in participant order
   // below. The SQL no longer carries ORDER BY because the next loop imposes
-  // the order we actually want — the input enrolmentIds array, which mirrors
-  // the Excel upload order.
+  // the order we actually want — the input enrolmentIds array. Caller
+  // (createCompanyApplicationInvoice) pre-sorts that array by total grant
+  // funding DESC with upload order as tiebreaker, so the grantRefs we emit
+  // here naturally line up with the reordered Participant Name list.
   const grantsByEnrolment = new Map<string, typeof result.rows>();
   for (const row of result.rows) {
     const key = String(row.enrollment_id || '').toLowerCase().trim();
@@ -738,6 +766,27 @@ export async function createCompanyApplicationInvoice(
       );
     }
   }
+
+  // Reorder participants so learners receiving more grant funding appear
+  // first on the invoice (1. = top-funded, then descending). Tiebreaker
+  // preserves the original upload order so two learners with identical
+  // totals stay in their company_application created_at sequence. Doing
+  // this BEFORE aggregateGrantsByScheme means the Grant Ref# list stays
+  // positionally aligned with the new Participant Name list (since
+  // aggregateGrantsByScheme walks enrolmentIds in the order it receives).
+  const learnerGrantTotals = await fetchLearnerGrantTotals(
+    input.learners.map(l => l.enrolmentId)
+  );
+  const learnersWithOrder = input.learners.map((learner, originalIdx) => ({
+    learner,
+    originalIdx,
+    grantTotal: learnerGrantTotals.get(learner.enrolmentId.toLowerCase().trim()) ?? 0,
+  }));
+  learnersWithOrder.sort((a, b) => {
+    if (b.grantTotal !== a.grantTotal) return b.grantTotal - a.grantTotal;
+    return a.originalIdx - b.originalIdx;
+  });
+  input.learners = learnersWithOrder.map(x => x.learner);
 
   const enrolmentIds = input.learners.map(l => l.enrolmentId);
   const schemes = await aggregateGrantsByScheme(enrolmentIds);
