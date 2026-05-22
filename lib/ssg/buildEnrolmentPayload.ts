@@ -37,11 +37,17 @@ export function buildEnrolmentPayload(
     enrolmentDate: today,
   };
 
-  if (app.trainee_phone) {
+  // SSG rejects phone numbers containing spaces or punctuation (e.g. the
+  // "9745 5225" format that spreadsheet uploads commonly use). Strip
+  // non-digits at the payload boundary so a stray formatting space in the
+  // source data can't fail enrolment. Mirrors the employer_contact_phone
+  // normalization in lib/autoEnrolCompanyApplications.ts.
+  const normalizedPhone = String(app.trainee_phone || '').replace(/\D/g, '');
+  if (normalizedPhone) {
     trainee.contactNumber = {
       countryCode: String(app.trainee_phone_country_code || '65'),
       areaCode: '',
-      phoneNumber: String(app.trainee_phone),
+      phoneNumber: normalizedPhone,
     };
   }
 

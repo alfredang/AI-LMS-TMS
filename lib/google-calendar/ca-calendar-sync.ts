@@ -1,6 +1,8 @@
 import { google } from 'googleapis';
 import pool from '../db';
 import { getGoogleCredentials } from '../google-auth/googleAuth';
+import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
+import * as crypto from 'crypto';
 
 function stripPrefixes(title: string): string {
   if (!title) return '';
@@ -12,6 +14,53 @@ function stripPrefixes(title: string): string {
     .replace(/[^a-z0-9]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+// Words ignored when comparing titles by token overlap. "wsq/external/virtual/
+// hybrid/elearning" appear mid-string in some trainer-edited event titles
+// (e.g. "[EXTERNAL] WSQ - ...") and would otherwise inflate the shared-token
+// count for unrelated courses. Generic English connectors do the same.
+const TITLE_STOPWORDS = new Set([
+  'with', 'and', 'the', 'of', 'for', 'a', 'an', 'on', 'in', 'to', 'by', 'or',
+  'wsq', 'external', 'virtual', 'hybrid', 'elearning',
+]);
+
+function tokenizeTitle(normalized: string): string[] {
+  return normalized.split(' ').filter(t => t.length > 1 && !TITLE_STOPWORDS.has(t));
+}
+
+/**
+ * Returns true when two course titles probably refer to the same course.
+ * Tries strict substring containment first (the original behaviour) then
+ * falls back to a token-overlap heuristic so a trainer-renamed calendar
+ * event still matches the spreadsheet title.
+ *
+ * Example that needed this: spreadsheet says "Agentic AI Applications with
+ * Claude Code", calendar event says "[EXTERNAL] WSQ - Agentic AI with Claude
+ * Code" — same course, "Applications" dropped. Strict containment fails;
+ * token overlap finds 4 shared distinctive tokens (agentic, ai, claude, code)
+ * and matches.
+ *
+ * Conservative thresholds (≥3 shared tokens AND ≥60% of the smaller tokenset)
+ * stop unrelated courses with one or two words in common from false-matching.
+ * Caller still enforces date equality.
+ */
+function titlesProbablyMatch(courseTitle: string, eventTitle: string): boolean {
+  const normCourse = stripPrefixes(courseTitle);
+  const normEvent = stripPrefixes(eventTitle);
+  if (!normCourse || !normEvent) return false;
+  if (normCourse.includes(normEvent) || normEvent.includes(normCourse)) return true;
+
+  const tokCourse = new Set(tokenizeTitle(normCourse));
+  const tokEvent = new Set(tokenizeTitle(normEvent));
+  if (tokCourse.size === 0 || tokEvent.size === 0) return false;
+
+  let shared = 0;
+  tokCourse.forEach(t => { if (tokEvent.has(t)) shared++; });
+
+  const minSize = Math.min(tokCourse.size, tokEvent.size);
+  const required = Math.max(3, Math.floor(minSize * 0.6));
+  return shared >= required;
 }
 
 const recentCreatedEventsCache = new Map<string, any>();
@@ -110,6 +159,9 @@ export async function addCaLearnerToCalendar(
       [courseRunUuid]
     );
     const resolvedUuid = runMetaRes.rows[0]?.resolved_uuid || courseRunUuid;
+    const ssgRunId = runMetaRes.rows[0]?.course_run_id || '';
+    const courseCode = runMetaRes.rows[0]?.course_code || '';
+    const resolvedCourseTitle = courseTitle || runMetaRes.rows[0]?.db_course_title || '';
 
     const sessionRes = await pool.query(
       `SELECT start_date::text as start_date, start_time, end_time
@@ -178,7 +230,6 @@ export async function addCaLearnerToCalendar(
       ...Array.from(recentCreatedEventsCache.values()),
     ];
 
-    const strippedCourseTitle = stripPrefixes(courseTitle).toLowerCase();
     const learnerEmailLower = learnerEmail.trim().toLowerCase();
 
     const missingDates: { date: string; dayNumber: number }[] = [];
@@ -197,12 +248,7 @@ export async function addCaLearnerToCalendar(
       const dayNumber = i + 1;
 
       const dateAndTitleMatches = allEvents.filter(evt => {
-        const evtTitleNormalized = stripPrefixes(evt.summary || '');
-        const titleMatch =
-          evtTitleNormalized.includes(strippedCourseTitle) ||
-          strippedCourseTitle.includes(evtTitleNormalized);
-        if (!titleMatch) return false;
-
+        if (!titlesProbablyMatch(courseTitle, evt.summary || '')) return false;
         const evtDate = evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '';
         return evtDate === targetDate;
       });
@@ -284,13 +330,182 @@ export async function addCaLearnerToCalendar(
       }
     }
 
-    if (missingDates.length > 0) {
-      // CA pipeline only attaches learners to events the trainer/admin already
-      // set up — it must not auto-create. Earlier behaviour created a fresh
-      // event when matching missed, which produced a duplicate class on the
-      // calendar instead of adding the learner to the existing one.
+    // Auto-create events ONLY when zero matches landed across every session
+    // date. Mirrors da-calendar-sync.ts: if any date matched but others didn't,
+    // it's almost always a title/date matching glitch on an existing recurring
+    // series — creating new events would duplicate it. Only-when-empty
+    // preserves the "brand new course → auto-populate calendar" workflow that
+    // CA admins expect when uploading the very first batch for a course.
+    if (missingDates.length > 0 && result.addedTo === 0) {
+      console.log(`ℹ️ [ca-calendar-sync] No existing events found for "${courseTitle}" — creating ${missingDates.length} event(s)...`);
+
+      const firstMissing = missingDates[0];
+      const lockString = `cal-create-${courseRunUuid}-${firstMissing.date}`;
+      const lockId = parseInt(crypto.createHash('sha256').update(lockString).digest('hex').slice(0, 15), 16);
+
+      // Hold the lock on a dedicated client so acquire + release run on the
+      // same Postgres session. pool.query() checks out a connection per call
+      // and pg_advisory_lock is session-scoped — without a dedicated client
+      // the unlock would silently no-op on a different connection (leaving
+      // the lock held until the connection is closed) AND a subsequent
+      // pool.query lock call on the original session would just increment
+      // the counter instead of blocking, defeating the lock entirely.
+      const lockClient = await pool.connect();
+      let lockAcquired = false;
+      try {
+        await lockClient.query('SELECT pg_advisory_lock($1)', [lockId]);
+        lockAcquired = true;
+        // Race-recovery check: the upload pipeline processes 5 rows in
+        // parallel via Promise.all, and all 5 may have computed
+        // missingDates BEFORE entering this lock (with zero matches each).
+        // Without re-checking after acquiring the lock, every caller would
+        // proceed to .events.insert and we'd get 5 duplicate events for the
+        // same course+date. The advisory lock guarantees we run serially,
+        // but doesn't stop us from doing the same wrong thing five times.
+        // Inspecting recentCreatedEventsCache catches anything a prior
+        // lock-holder just inserted, so we attach instead of duplicating.
+        const cachedMatch = Array.from(recentCreatedEventsCache.values()).find(evt => {
+          if (!titlesProbablyMatch(courseTitle, evt.summary || '')) return false;
+          const evtDate = evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '';
+          return evtDate === firstMissing.date;
+        });
+
+        if (cachedMatch?.id) {
+          console.log(`ℹ️ [ca-calendar-sync] Lock-race recovery: attaching ${learnerEmail} to event ${cachedMatch.id} created by a concurrent caller`);
+          try {
+            const fresh = await calendar.events.get({ calendarId, eventId: cachedMatch.id });
+            const existingAttendees = fresh.data.attendees || [];
+            const already = existingAttendees.some((a: any) => (a.email || '').toLowerCase() === learnerEmailLower);
+            if (!already) {
+              await calendar.events.patch({
+                calendarId,
+                eventId: cachedMatch.id,
+                requestBody: {
+                  attendees: [
+                    ...existingAttendees,
+                    { email: learnerEmail, responseStatus: 'needsAction' },
+                  ],
+                  guestsCanInviteOthers: false,
+                  guestsCanSeeOtherGuests: false,
+                },
+                sendUpdates: 'none',
+              });
+              // Refresh cache entry so the next concurrent caller sees the
+              // updated attendee list (and short-circuits on `already=true`).
+              recentCreatedEventsCache.set(cachedMatch.id, {
+                ...fresh.data,
+                attendees: [...existingAttendees, { email: learnerEmail, responseStatus: 'needsAction' }],
+              });
+            }
+            result.addedTo += missingDates.length;
+          } catch (raceAttachErr) {
+            console.error(`❌ [ca-calendar-sync] Race-recovery attach failed for ${learnerEmail} on ${cachedMatch.id}:`, raceAttachErr);
+          }
+          return result;
+        }
+
+        const cleanTitle = resolvedCourseTitle
+          .replace(/^\s*Day\s*\d+[\s-:]*/gi, '')
+          .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID|E-LEARNING)\]?[\s-]*/gi, '')
+          .replace(/^[\s-:]+|[\s-:]+$/g, '')
+          .trim();
+
+        const baseTitle = `WSQ - ${cleanTitle}`;
+        const isVirtual = /virtual|online|e-learning/i.test(resolvedCourseTitle);
+        const tpInfo = await getTrainingPartnerIdentifiers();
+        const physicalAddress = tpInfo.companyAddress || 'Office';
+        const location = isVirtual ? 'Virtual / Online' : physicalAddress;
+        const description = `Course Title: ${resolvedCourseTitle}\nCourse Code: ${courseCode || 'N/A'}\nCourse Run ID: ${ssgRunId || 'N/A'}\n\n*Auto-generated by LMS (Company Application)*`;
+
+        // Default 09:30–18:30, matching da-calendar-sync.ts.
+        const startDateTime = `${firstMissing.date}T09:30:00`;
+        const endDateTime = `${firstMissing.date}T18:30:00`;
+
+        if (missingDates.length === 1) {
+          const newTitle = sortedDates.length > 1 ? `Day ${firstMissing.dayNumber} - ${baseTitle}` : baseTitle;
+          const newEvent = await calendar.events.insert({
+            calendarId,
+            requestBody: {
+              summary: newTitle,
+              description,
+              location,
+              start: { dateTime: startDateTime, timeZone: 'Asia/Singapore' },
+              end: { dateTime: endDateTime, timeZone: 'Asia/Singapore' },
+              attendees: [{ email: learnerEmail, responseStatus: 'needsAction' }],
+              guestsCanInviteOthers: false,
+              guestsCanSeeOtherGuests: false,
+            },
+            sendUpdates: 'none',
+          });
+          if (newEvent.data.id) {
+            recentCreatedEventsCache.set(newEvent.data.id, newEvent.data);
+            result.addedTo++;
+          }
+        } else {
+          // Multi-day course — create a recurring series anchored on the first
+          // missing date with RDATEs for the rest. Then patch instance titles
+          // to "Day N - ...".
+          const rdates = missingDates.slice(1).map(m => m.date.replace(/-/g, '') + 'T093000');
+          const recurrence = [`RDATE;TZID=Asia/Singapore:${rdates.join(',')}`];
+
+          const newEvent = await calendar.events.insert({
+            calendarId,
+            requestBody: {
+              summary: baseTitle,
+              description,
+              location,
+              start: { dateTime: startDateTime, timeZone: 'Asia/Singapore' },
+              end: { dateTime: endDateTime, timeZone: 'Asia/Singapore' },
+              recurrence,
+              attendees: [{ email: learnerEmail, responseStatus: 'needsAction' }],
+              guestsCanInviteOthers: false,
+              guestsCanSeeOtherGuests: false,
+            },
+            sendUpdates: 'none',
+          });
+
+          if (newEvent.data.id) {
+            recentCreatedEventsCache.set(newEvent.data.id, newEvent.data);
+            result.addedTo += missingDates.length;
+
+            // Brief wait so Google has materialised the instances before patching.
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const instancesRes = await calendar.events.instances({
+              calendarId,
+              eventId: newEvent.data.id,
+            });
+            const instances = instancesRes.data.items || [];
+            for (const instance of instances) {
+              const instDate = instance.start?.dateTime?.slice(0, 10) || instance.start?.date || '';
+              const missingObj = missingDates.find(m => m.date === instDate);
+              if (missingObj && instance.id) {
+                const dayTitle = `Day ${missingObj.dayNumber} - ${baseTitle}`;
+                await calendar.events.patch({
+                  calendarId,
+                  eventId: instance.id,
+                  requestBody: { summary: dayTitle },
+                  sendUpdates: 'none',
+                });
+              }
+            }
+          }
+        }
+      } catch (createErr) {
+        console.error(`❌ [ca-calendar-sync] Failed to create event for "${courseTitle}":`, createErr);
+      } finally {
+        if (lockAcquired) {
+          await lockClient.query('SELECT pg_advisory_unlock($1)', [lockId]).catch(unlockErr => {
+            console.warn(`[ca-calendar-sync] advisory_unlock failed:`, unlockErr instanceof Error ? unlockErr.message : unlockErr);
+          });
+        }
+        lockClient.release();
+      }
+    } else if (missingDates.length > 0) {
+      // Partial match — some dates patched, others not. Skip auto-create to
+      // avoid duplicating an existing recurring series.
       console.warn(
-        `⚠️  [ca-calendar-sync] ${learnerEmail}: ${missingDates.length} date(s) had no matching event for "${courseTitle}" — skipping (no auto-create). Dates: ${missingDates.map(m => m.date).join(', ')}`
+        `⚠️ [ca-calendar-sync] ${learnerEmail}: ${missingDates.length} date(s) unmatched for "${courseTitle}" but ${result.addedTo} other date(s) DID match — skipping auto-create to avoid duplicate event. Unmatched: ${missingDates.map(m => m.date).join(', ')}`
       );
     }
 
