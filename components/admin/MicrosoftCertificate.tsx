@@ -1,75 +1,26 @@
 /**
- * Microsoft Certificate — achievement code finder & generator.
+ * Microsoft Certificate — Microsoft MCT Title Plan course finder.
  *
  * Migrated from the standalone `microsoftredeemcode` Flask/Playwright app
  * into the LMS Admin > Certificate section. Lets an admin:
  *   - search the Microsoft MCT Title Plan,
- *   - open the Singapore-tracked course page,
- *   - generate Microsoft Learn achievement codes (Playwright automation
- *     runs server-side; codes are recorded in microsoft_redeem_code).
+ *   - open the Singapore-tracked course page.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useLms } from '@contexts/LmsContext';
 import { microsoftCourses, type MicrosoftCourse } from '@/lib/microsoft-redeem/courses';
 import { singaporeUrl } from '@/lib/microsoft-redeem/constants';
 
 const MAX_VISIBLE = 50;
 const DEBOUNCE_MS = 120;
 
-interface GeneratedCode {
-  code: string;
-  url: string;
-}
-
-type StatusLevel = 'info' | 'ok' | 'err';
-
 // -----------------------------------------------------------------------------
 // Small helpers
 // -----------------------------------------------------------------------------
 
-async function copyToClipboard(value: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(value);
-    return true;
-  } catch {
-    window.prompt('Copy:', value);
-    return false;
-  }
-}
-
 function tokenize(query: string): string[] {
   return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
 }
-
-// -----------------------------------------------------------------------------
-// Copy button
-// -----------------------------------------------------------------------------
-
-const CopyButton: React.FC<{ value: string; label: string; className?: string }> = ({
-  value,
-  label,
-  className = '',
-}) => {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={async () => {
-        await copyToClipboard(value);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1300);
-      }}
-      className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
-        copied
-          ? 'border-green-400 text-green-600 dark:text-green-400'
-          : 'border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-slate-500'
-      } ${className}`}
-    >
-      {copied ? 'Copied!' : label}
-    </button>
-  );
-};
 
 // -----------------------------------------------------------------------------
 // Course card
@@ -78,63 +29,7 @@ const CopyButton: React.FC<{ value: string; label: string; className?: string }>
 const CourseCard: React.FC<{
   course: MicrosoftCourse;
 }> = ({ course }) => {
-  const { currentUser } = useLms();
-  const [students, setStudents] = useState(1);
-  const [generating, setGenerating] = useState(false);
-  const [status, setStatus] = useState<{ text: string; level: StatusLevel } | null>(null);
-  const [codes, setCodes] = useState<GeneratedCode[]>([]);
-
   const sgUrl = singaporeUrl(course.baseUrl);
-
-  const clampStudents = (n: number) => Math.max(1, Math.min(1000, Math.floor(n) || 1));
-
-  const handleGenerate = async () => {
-    setGenerating(true);
-    setCodes([]);
-    setStatus({
-      text: `Requesting an achievement code for ${students} student${
-        students === 1 ? '' : 's'
-      }… this can take up to a minute.`,
-      level: 'info',
-    });
-
-    try {
-      const res = await fetch('/api/admin/microsoft-redeem/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          courseNumber: course.courseNumber,
-          count: 1,
-          students,
-          userId: currentUser?.id,
-        }),
-      });
-      const data = await res.json();
-
-      if (data.results?.length) {
-        setCodes(data.results);
-      } else if (data.codes?.length) {
-        setCodes(data.codes.map((c: string) => ({ code: c, url: '' })));
-      }
-
-      if (data.ok) {
-        setStatus({
-          text: `Code generated for ${students} student${
-            students === 1 ? '' : 's'
-          }. Saved to history.`,
-          level: 'ok',
-        });
-      } else {
-        const msg =
-          (data.errors && data.errors.join(' · ')) || data.error || 'Unknown error';
-        setStatus({ text: msg, level: 'err' });
-      }
-    } catch (err: any) {
-      setStatus({ text: `Request failed: ${err?.message || err}`, level: 'err' });
-    } finally {
-      setGenerating(false);
-    }
-  };
 
   return (
     <article className="p-5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm transition-colors">
@@ -185,118 +80,7 @@ const CourseCard: React.FC<{
             />
           </svg>
         </a>
-        <CopyButton value={sgUrl} label="Copy link" className="px-4 py-2 text-sm" />
       </div>
-
-      <div className="flex flex-wrap items-end gap-3 mt-4 pt-4 border-t border-dashed border-gray-200 dark:border-slate-700">
-        <div className="flex-1 min-w-[200px]">
-          <label className="block text-[10.5px] font-medium tracking-widest uppercase text-gray-400 dark:text-gray-500 mb-1.5">
-            Students redeeming this code
-          </label>
-          <div className="inline-flex items-center rounded-md border border-gray-300 dark:border-slate-600 overflow-hidden">
-            <button
-              type="button"
-              aria-label="Decrease"
-              disabled={students <= 1}
-              onClick={() => setStudents((s) => clampStudents(s - 1))}
-              className="w-9 h-9 text-lg font-semibold text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-35 disabled:cursor-not-allowed"
-            >
-              –
-            </button>
-            <input
-              type="number"
-              min={1}
-              max={1000}
-              value={students}
-              onChange={(e) => setStudents(clampStudents(Number(e.target.value)))}
-              className="w-16 h-9 text-center font-mono font-semibold bg-transparent border-x border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            />
-            <button
-              type="button"
-              aria-label="Increase"
-              disabled={students >= 1000}
-              onClick={() => setStudents((s) => clampStudents(s + 1))}
-              className="w-9 h-9 text-lg font-semibold text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-35 disabled:cursor-not-allowed"
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={generating}
-          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-md bg-purple-600 hover:bg-purple-700 disabled:opacity-55 disabled:cursor-not-allowed text-white transition-colors"
-        >
-          {generating ? (
-            <>
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  fill="none"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
-              Generating…
-            </>
-          ) : (
-            'Generate achievement code'
-          )}
-        </button>
-      </div>
-
-      {status && (
-        <p
-          className={`mt-3 text-sm ${
-            status.level === 'err'
-              ? 'text-red-600 dark:text-red-400'
-              : status.level === 'ok'
-                ? 'text-green-600 dark:text-green-400'
-                : 'text-gray-500 dark:text-gray-400'
-          }`}
-        >
-          {status.text}
-        </p>
-      )}
-
-      {codes.length > 0 && (
-        <ul className="mt-3 grid gap-1.5">
-          {codes.map((c, i) => (
-            <li
-              key={i}
-              className="flex flex-wrap items-center gap-2.5 px-3 py-2.5 rounded-md bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/25"
-            >
-              <span className="font-mono font-semibold tracking-wide px-2 py-0.5 rounded bg-green-100 dark:bg-green-500/20 text-green-800 dark:text-green-200">
-                {c.code}
-              </span>
-              <CopyButton value={c.code} label="Copy code" />
-              {c.url && (
-                <>
-                  <a
-                    href={c.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 min-w-0 truncate text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    {c.url}
-                  </a>
-                  <CopyButton value={c.url} label="Copy URL" />
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
     </article>
   );
 };
@@ -337,8 +121,8 @@ export const MicrosoftCertificateView: React.FC = () => {
           Microsoft Certificate
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Search the Microsoft MCT Title Plan, open the Singapore-tracked course
-          page, and generate Microsoft Learn achievement codes.
+          Search the Microsoft MCT Title Plan and open the Singapore-tracked
+          course page.
         </p>
       </div>
 
@@ -409,8 +193,7 @@ export const MicrosoftCertificateView: React.FC = () => {
       </div>
 
       <p className="mt-8 text-center text-xs text-gray-400 dark:text-gray-500">
-        Generated codes are recorded for record-keeping · Singapore partner
-        campaign ocid=5238477
+        Singapore partner campaign ocid=5238477
       </p>
     </div>
   );
