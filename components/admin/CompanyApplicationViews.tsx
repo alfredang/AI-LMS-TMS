@@ -1755,42 +1755,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
     void syncGrants();
   }, [rows]);
 
-  useEffect(() => {
-    // Keep polling while ANY row is still progressing through the pipeline:
-    //   - status pending / no enrolment yet → still enrolling
-    //   - enrolled + grant_id present but no main invoice yet → invoice in flight
-    //   - main invoice present but grant invoice missing (and learner is
-    //     grant-eligible) → grant invoice in flight
-    // A row that errored stops the polling for itself (won't progress).
-    // Capped at MAX_POLL_ATTEMPTS so a genuinely-stuck row can't poll forever.
-    const hasProcessingRows = rows.some(row => {
-      const status = String(row['Auto-Enrol Status'] || '').trim().toLowerCase();
-      const hasError = hasValue(row['Auto-Enrol Error']);
-      if (hasError) return false;
-      if (status === 'pending') return true;
-      if (!hasValue(row['Enrolment ID'])) return true;
-
-      const hasMainInvoice = hasValue(row['Invoice ID']);
-      const hasGrantId = hasValue(row['Grant ID']);
-      const hasGrantInvoice = hasValue(row['Grant Invoice ID']);
-      const isIneligible = isCheckedValue(row['Grant Ineligible']);
-
-      // Waiting for main invoice (grant arrived, invoice not yet generated)
-      if (hasGrantId && !hasMainInvoice) return true;
-      // Waiting for grant invoice (main done, grant invoice pending, learner is eligible)
-      if (hasMainInvoice && hasGrantId && !hasGrantInvoice && !isIneligible) return true;
-      return false;
-    });
-    if (!hasProcessingRows) return undefined;
-
-    // No attempt cap — the backend grant poll has no timeout, so the view
-    // page keeps reloading every 5s until every row has flipped out of
-    // 'pending'. Interval is cleared by the effect cleanup when rows change.
-    const timer = window.setInterval(() => {
-      void reloadRows();
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, [rows]);
+  // Auto-refresh polling removed — was reloading rows every 5s while any row
+  // was in-progress, which the admin found disruptive. Refresh is now manual
+  // via the Refresh button (or Retry Selected, which reloads on completion).
 
   const stuckRowCount = useMemo(
     () => rows.filter(r => r._stuck === '1').length,
@@ -2280,7 +2247,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
                           title={
                             warnings.length > 0
                               ? `Pipeline warnings:\n${warningTooltip}`
-                              : 'Auto-enrol failed — see Auto-Enrol Error column'
+                              : hasValue(row['Auto-Enrol Error'])
+                                ? `Auto-enrol failed:\n${row['Auto-Enrol Error']}`
+                                : 'Auto-enrol failed — open the row for details'
                           }
                           className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
                         >
