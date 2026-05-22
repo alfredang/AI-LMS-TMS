@@ -570,8 +570,8 @@ const CaEmailToggleBanner: React.FC = () => {
             </p>
             <p className={`text-xs mt-0.5 ${emailToggleOn ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
               {emailToggleOn
-                ? 'After invoice generation, the consolidated tax invoice will be emailed to the employer contact.'
-                : 'Invoices will still be generated and saved to Drive — emails are NOT sent. Safe for testing.'}
+                ? 'Send Invoice Email button on View Company Application is armed. Sending still requires all supporting docs verified.'
+                : 'Send Invoice Email button on View Company Application is held in test mode — clicks generate nothing. Safe for dry runs.'}
             </p>
           </div>
         </div>
@@ -1448,6 +1448,10 @@ export const ViewCompanyApplicationView: React.FC = () => {
   // Confirm popup for the "generate invoice" action — same custom-modal
   // treatment so all three header buttons share the same UX shape.
   const [confirmGenerateInvoiceOpen, setConfirmGenerateInvoiceOpen] = useState(false);
+  // List of pre-check problems blocking a Send Invoice Email attempt. Surfaced
+  // as a popup instead of a cramped inline message so admins can read each
+  // reason on its own line.
+  const [sendBlockedReasons, setSendBlockedReasons] = useState<string[] | null>(null);
 
   const getDocumentKey = (row: CompanyApplicationRow, kind: 'main' | 'grant') => `${row.id || ''}:${kind}`;
 
@@ -1513,10 +1517,39 @@ export const ViewCompanyApplicationView: React.FC = () => {
     }
   }, [rows, brokenDocumentKeys]);
 
-  const toggleRowSelected = (id: string) => {
+  // Group key for "select all from the same upload". Same employer + same
+  // course run = same Excel upload in practice — that's also the tuple every
+  // invoice rolls up by. Recurring companies that come back later for a
+  // different course or run get a different key automatically, so they stay
+  // independent. Empty UEN/run falls back to single-row toggle.
+  const groupKeyForRow = (row: CompanyApplicationRow): string | null => {
+    const uen = String(row['Employer UEN*'] || '').trim().toLowerCase();
+    const runId = String(row['Course Run ID'] || '').trim().toLowerCase();
+    return uen && runId ? `${uen}::${runId}` : null;
+  };
+
+  const toggleRowSelected = (id: string, opts?: { singleRow?: boolean }) => {
+    const target = rows.find(r => String(r.id || '') === id);
+    const groupKey = target && !opts?.singleRow ? groupKeyForRow(target) : null;
+
+    const idsToToggle: string[] = groupKey
+      ? rows
+          .filter(r => groupKeyForRow(r) === groupKey)
+          .map(r => String(r.id || ''))
+          .filter(Boolean)
+      : [id];
+
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      const wasSelected = prev.has(id);
+      // Mirror the clicked row's transition across the whole group: if the
+      // clicked row was checked, uncheck everything in the group; otherwise
+      // check everything. Keeps the click target's state authoritative.
+      if (wasSelected) {
+        idsToToggle.forEach(g => next.delete(g));
+      } else {
+        idsToToggle.forEach(g => next.add(g));
+      }
       return next;
     });
   };
@@ -1606,23 +1639,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
       if (awaitingGrants) parts.push(`${awaitingGrants} group${awaitingGrants === 1 ? '' : 's'} awaiting grants — click "Sync Grants" after stakeholders apply in the SSG portal`);
       if (failed) parts.push(`${failed} failed`);
 
-      // Surface auto-send result so admins know whether the email actually
-      // fired. Only present when the training_provider toggle is ON; null
-      // otherwise. Failures are best-effort — invoices are still generated.
-      if (data.emailSummary) {
-        const sent = Number(data.emailSummary.sent) || 0;
-        const emailFailed = Number(data.emailSummary.failed) || 0;
-        const skippedAlready = Number(data.emailSummary.skippedAlreadySent) || 0;
-        const skippedMissing = Number(data.emailSummary.skippedMissingEmail) || 0;
-        if (sent) parts.push(`${sent} email${sent === 1 ? '' : 's'} auto-sent to employer`);
-        if (skippedAlready) parts.push(`${skippedAlready} email${skippedAlready === 1 ? '' : 's'} already sent — skipped`);
-        if (skippedMissing) parts.push(`${skippedMissing} skipped (missing employer email)`);
-        if (emailFailed) parts.push(`${emailFailed} email${emailFailed === 1 ? '' : 's'} failed to send`);
-      }
-      if (data.emailError) {
-        parts.push(`auto-send error: ${data.emailError}`);
-      }
-
       // Treat the all-already-invoiced case as an explicit block: nothing
       // happened because every selected group already has an invoice.
       if (generated === 0 && failed === 0 && alreadyInvoiced > 0 && notEnrolled === 0 && awaitingGrants === 0) {
@@ -1698,7 +1714,8 @@ export const ViewCompanyApplicationView: React.FC = () => {
       );
     }
     if (problems.length > 0) {
-      setEmailMessage(`Can't send: ${problems.join(' · ')}`);
+      setEmailMessage(null);
+      setSendBlockedReasons(problems);
       return;
     }
     setConfirmSendInvoiceOpen(true);
@@ -1731,6 +1748,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
       if (data.skippedAlreadySent) parts.push(`${data.skippedAlreadySent} already sent — skipped`);
       if (data.skippedMissingEmail) parts.push(`${data.skippedMissingEmail} missing employer email`);
       if (data.skippedNoInvoice) parts.push(`${data.skippedNoInvoice} row${data.skippedNoInvoice === 1 ? '' : 's'} not yet invoiced`);
+      if (data.skippedNotVerified) parts.push(`${data.skippedNotVerified} row${data.skippedNotVerified === 1 ? '' : 's'} not yet verified`);
       if (data.failed) parts.push(`${data.failed} failed`);
       const firstFailure = data.failures?.[0]?.error;
       setEmailMessage(
@@ -2178,6 +2196,28 @@ export const ViewCompanyApplicationView: React.FC = () => {
             onLinked={onRescueLinked}
           />
         )}
+        {sendBlockedReasons && (
+          <ConfirmPopup
+            tone="warning"
+            icon={IconName.Warning}
+            title="Can't send invoice email yet"
+            subtitle={`${sendBlockedReasons.length} blocker${sendBlockedReasons.length === 1 ? '' : 's'} on the selected rows`}
+            confirmLabel="Got it"
+            confirmIcon={IconName.CheckCircle}
+            hideCancel
+            onConfirm={() => setSendBlockedReasons(null)}
+            onCancel={() => setSendBlockedReasons(null)}
+          >
+            <ul className="space-y-2 text-sm">
+              {sendBlockedReasons.map((reason, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <Icon name={IconName.Warning} className="w-4 h-4 mt-0.5 flex-shrink-0 text-orange-500 dark:text-orange-400" />
+                  <span className="text-gray-700 dark:text-gray-200">{reason}</span>
+                </li>
+              ))}
+            </ul>
+          </ConfirmPopup>
+        )}
         {confirmSendInvoiceOpen && (
           <ConfirmPopup
             tone="primary"
@@ -2366,8 +2406,18 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       <input
                         type="checkbox"
                         checked={selectedIds.has(String(row.id || ''))}
+                        onClick={(e) => {
+                          // Hold Alt to toggle just this row instead of the
+                          // whole (employer × course-run) group. Escape hatch
+                          // for "send to 10 of these 11 trainees".
+                          if (e.altKey) {
+                            e.preventDefault();
+                            toggleRowSelected(String(row.id || ''), { singleRow: true });
+                          }
+                        }}
                         onChange={() => toggleRowSelected(String(row.id || ''))}
                         disabled={!row.id}
+                        title="Click to select all rows from the same employer × course run · Alt-click to select just this row"
                         className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 cursor-pointer"
                       />
                       {isStuck && (
