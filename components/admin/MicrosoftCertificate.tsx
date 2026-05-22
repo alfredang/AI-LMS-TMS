@@ -77,8 +77,7 @@ const CopyButton: React.FC<{ value: string; label: string; className?: string }>
 
 const CourseCard: React.FC<{
   course: MicrosoftCourse;
-  onCheckSignedIn: () => Promise<boolean>;
-}> = ({ course, onCheckSignedIn }) => {
+}> = ({ course }) => {
   const { currentUser } = useLms();
   const [students, setStudents] = useState(1);
   const [generating, setGenerating] = useState(false);
@@ -92,18 +91,6 @@ const CourseCard: React.FC<{
   const handleGenerate = async () => {
     setGenerating(true);
     setCodes([]);
-    setStatus({ text: 'Checking Microsoft Learn sign-in…', level: 'info' });
-
-    const ready = await onCheckSignedIn();
-    if (!ready) {
-      setStatus({
-        text: 'Not signed in to Microsoft Learn. Use the "Sign in to Microsoft" button at the top first.',
-        level: 'err',
-      });
-      setGenerating(false);
-      return;
-    }
-
     setStatus({
       text: `Requesting an achievement code for ${students} student${
         students === 1 ? '' : 's'
@@ -321,24 +308,7 @@ const CourseCard: React.FC<{
 export const MicrosoftCertificateView: React.FC = () => {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [signedIn, setSignedIn] = useState(false);
-  const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
-  const [loggingIn, setLoggingIn] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Initial sign-in status check.
-  useEffect(() => {
-    fetch('/api/admin/microsoft-redeem/status')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.ok) {
-          setSignedIn(!!d.signedIn);
-          setSignedInEmail(d.email ?? null);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   // Debounced search.
   useEffect(() => {
@@ -360,43 +330,6 @@ export const MicrosoftCertificateView: React.FC = () => {
 
   const visible = matches.slice(0, MAX_VISIBLE);
 
-  // Check (without signing in) whether a Microsoft Learn session is stored.
-  const checkSignedIn = async (): Promise<boolean> => {
-    try {
-      const res = await fetch('/api/admin/microsoft-redeem/status');
-      const data = await res.json();
-      const ok = !!(data.ok && data.signedIn);
-      setSignedIn(ok);
-      setSignedInEmail(ok ? (data.email ?? null) : null);
-      return ok;
-    } catch {
-      return false;
-    }
-  };
-
-  // Open the interactive Microsoft sign-in window and wait for it to finish.
-  const handleSignIn = async () => {
-    setLoggingIn(true);
-    setAuthError(null);
-    try {
-      const res = await fetch('/api/admin/microsoft-redeem/login', {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setSignedIn(true);
-        setSignedInEmail(data.email ?? null);
-        setAuthError(null);
-      } else {
-        setAuthError(data.error || 'Sign-in failed');
-      }
-    } catch (err: any) {
-      setAuthError(err?.message || 'Sign-in failed');
-    } finally {
-      setLoggingIn(false);
-    }
-  };
-
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-5">
@@ -408,46 +341,6 @@ export const MicrosoftCertificateView: React.FC = () => {
           page, and generate Microsoft Learn achievement codes.
         </p>
       </div>
-
-      {/* Auth bar */}
-      <div className="flex items-center gap-3 mb-4 px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-        <span
-          className={`w-2.5 h-2.5 rounded-full flex-none ${
-            signedIn ? 'bg-green-500' : 'bg-amber-500'
-          }`}
-        />
-        <span className="text-sm text-gray-600 dark:text-gray-300">
-          {signedIn
-            ? `Signed in to Microsoft Learn${signedInEmail ? ` as ${signedInEmail}` : ''}`
-            : 'Not signed in to Microsoft Learn'}
-        </span>
-        <button
-          type="button"
-          onClick={handleSignIn}
-          disabled={loggingIn}
-          className="ml-auto px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:border-gray-400 dark:hover:border-slate-500 disabled:opacity-55 disabled:cursor-not-allowed"
-        >
-          {loggingIn
-            ? 'Waiting for sign-in…'
-            : signedIn
-              ? 'Re-sign in'
-              : 'Sign in to Microsoft'}
-        </button>
-      </div>
-
-      {loggingIn && (
-        <div className="mb-4 p-3 rounded-md text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-          A Microsoft sign-in window has opened on the server desktop. Complete
-          the sign-in there (email, passkey/password, MFA) — this page will
-          update automatically once it finishes.
-        </div>
-      )}
-
-      {authError && (
-        <div className="mb-4 p-3 rounded-md text-sm bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800">
-          {authError}
-        </div>
-      )}
 
       {/* Search */}
       <div className="relative mb-3">
@@ -504,11 +397,7 @@ export const MicrosoftCertificateView: React.FC = () => {
         ) : (
           <>
             {visible.map((c) => (
-              <CourseCard
-                key={c.courseNumber}
-                course={c}
-                onCheckSignedIn={checkSignedIn}
-              />
+              <CourseCard key={c.courseNumber} course={c} />
             ))}
             {matches.length > MAX_VISIBLE && (
               <div className="py-6 px-6 text-center rounded-lg border border-dashed border-gray-300 dark:border-slate-700 text-gray-400 dark:text-gray-500 text-sm">
