@@ -260,7 +260,7 @@ export const CheckSupportingDocumentView: React.FC = () => {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-3xl">
             Outstanding supporting documents block invoice emails to employers. Verify each learner&apos;s
             doc against name, NRIC, employer and UEN — once an employer&apos;s entire batch is cleared,
-            the consolidated tax invoice is released automatically.
+            release the consolidated tax invoice from View Company Application.
           </p>
         </div>
       </div>

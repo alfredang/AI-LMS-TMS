@@ -892,11 +892,11 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
     console.error('[bulkProcessCompanyApplications] invoice generation crashed (non-fatal):', err);
   }
 
-  // Invoice email is NOT auto-sent here. Sending is gated on per-row
-  // supporting-document verification — admin uploads docs and confirms
-  // name/NRIC/employer/UEN match via SupportingDocsModal, then the verify
-  // endpoint (/api/admin/ca-verify-and-send) triggers the email for every
-  // row in the (employer, course-run) group where all rows are verified.
+  // Invoice email is NOT auto-sent here. After this pipeline finishes,
+  // admin verifies supporting documents on Check Supporting Document, then
+  // clicks "Send Invoice Email" on View Company Application to release the
+  // consolidated tax invoice to the employer. Verification, invoice
+  // generation, and email sending are fully decoupled.
 
   // Flip final per-row status. Rows still at 'pending' get classified by
   // what actually landed in the DB. Rows already 'failed' (set by markFailed

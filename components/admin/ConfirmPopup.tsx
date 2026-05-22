@@ -96,6 +96,8 @@ export interface ConfirmPopupProps {
   disableConfirm?: boolean;
   /** Tooltip on the confirm button when disabled, to explain why. */
   confirmDisabledHint?: string;
+  /** Hide the Cancel button — turns the popup into a single-action acknowledgement. */
+  hideCancel?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -112,6 +114,7 @@ export const ConfirmPopup: React.FC<ConfirmPopupProps> = ({
   busy = false,
   disableConfirm = false,
   confirmDisabledHint,
+  hideCancel = false,
   onConfirm,
   onCancel,
 }) => {
@@ -144,14 +147,16 @@ export const ConfirmPopup: React.FC<ConfirmPopupProps> = ({
           </div>
         )}
         <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-700 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onCancel}
-            className="text-xs font-medium px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 hover:bg-white dark:hover:bg-gray-700 disabled:opacity-50"
-          >
-            Cancel
-          </button>
+          {!hideCancel && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onCancel}
+              className="text-xs font-medium px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 hover:bg-white dark:hover:bg-gray-700 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          )}
           <button
             type="button"
             disabled={busy || disableConfirm}

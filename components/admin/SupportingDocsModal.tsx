@@ -14,10 +14,10 @@
  *   employer / UEN must be confirmed individually. Strict block: any ✗
  *   marks the row as mismatch and clears the doc, forcing a re-upload.
  *
- * The invoice is generated per (employer × course-run) group, so the email
- * is also per group. Once every row in a group flips to 'verified', the
- * verify-and-send endpoint fires the consolidated invoice email for that
- * group. Idempotent — already-sent invoices stay sent.
+ * Verification only — this modal never sends invoice emails. Once every row
+ * is marked verified, admin returns to View Company Application and uses the
+ * "Send Invoice Email" button (which is gated on verification + the master
+ * toggle) to release the consolidated tax invoice to the employer.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
@@ -83,8 +83,6 @@ interface AiResult {
   allMatch: boolean;
 }
 
-type SendOutcome = 'sent' | 'held' | 'no-invoice' | 'unknown';
-
 // Response shapes for the API endpoints this modal hits. Centralising them
 // here so a typo in field access fails at compile time instead of silently
 // returning undefined at runtime when the backend contract drifts.
@@ -117,12 +115,6 @@ interface AiProcessResponse {
 interface VerifyAndSendResponse {
   success: boolean;
   status?: 'verified' | 'mismatch';
-  groupSent?: boolean;
-  heldInTestMode?: boolean;
-  groupTotal?: number;
-  groupVerified?: number;
-  emailSummary?: { sent?: number; toggleDisabled?: boolean } | null;
-  emailError?: string;
   error?: string;
 }
 
@@ -131,10 +123,6 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
   const [rows, setRows] = useState<LearnerRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Tracks the latest verify-and-send API result so the footer can show
-  // accurate copy. Without this we'd render "invoice email released" even
-  // when the master toggle held the email back (heldInTestMode).
-  const [lastSendOutcome, setLastSendOutcome] = useState<SendOutcome>('unknown');
 
   const [unassignedFiles, setUnassignedFiles] = useState<UnassignedFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -381,22 +369,13 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
     if (targets.length === 0) return;
     setBulkApproving(true);
     try {
-      const results: Array<VerifyAndSendResponse | null> = await Promise.all(targets.map(r =>
+      await Promise.all(targets.map(r =>
         fetch('/api/admin/ca-verify-and-send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ companyApplicationId: r.id, verdict: 'verified', verifiedBy }),
         }).then(res => res.json() as Promise<VerifyAndSendResponse>).catch(() => null)
       ));
-      // Capture the outcome from the last successful response — that's the
-      // one most likely to reflect what happens for the final row in a
-      // group (which is when the email would actually fire).
-      const last = [...results].reverse().find(r => r && r.success);
-      if (last) {
-        if (last.heldInTestMode) setLastSendOutcome('held');
-        else if (last.groupSent) setLastSendOutcome('sent');
-        else setLastSendOutcome('no-invoice');
-      }
       void loadRows();
     } finally {
       setBulkApproving(false);
@@ -509,7 +488,6 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
                       row={row}
                       verifiedBy={verifiedBy}
                       onChanged={loadRows}
-                      onSendResult={setLastSendOutcome}
                       viewMode={allVerified}
                       selectedFileId={selectedFileId}
                       dragOverLearnerId={dragOverLearnerId}
@@ -524,7 +502,7 @@ const SupportingDocsModal: React.FC<Props> = ({ applicationIds, onClose, onCompl
           )}
         </div>
 
-        <ModalFooter step={step} allVerified={allVerified} sendOutcome={lastSendOutcome} onClose={onClose} />
+        <ModalFooter step={step} allVerified={allVerified} onClose={onClose} />
       </div>
     </div>
   );
@@ -567,7 +545,7 @@ const ModalHeader: React.FC<{
           </h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {step === 'ask'
-              ? 'All learners are enrolled. Invoices are ready. Confirm docs before emailing.'
+              ? 'All learners are enrolled. Invoices are ready. Confirm docs, then send from View Company Application.'
               : totalCount > 0
                 ? `${verifiedCount} of ${totalCount} learner${totalCount === 1 ? '' : 's'} verified`
                 : 'Loading…'}
@@ -602,52 +580,20 @@ const ModalHeader: React.FC<{
 const ModalFooter: React.FC<{
   step: 'ask' | 'verify';
   allVerified: boolean;
-  sendOutcome: SendOutcome;
   onClose: () => void;
-}> = ({ step, allVerified, sendOutcome, onClose }) => {
-  // When the group is fully verified, the API response from the last verdict
-  // tells us what actually happened to the invoice email. Footer copy mirrors
-  // that — claiming "released" while the master toggle is OFF was misleading.
-  const renderVerifiedMessage = () => {
-    if (sendOutcome === 'sent') {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
-          <Icon name={IconName.CheckCircle} className="w-4 h-4" />
-          Every learner verified — invoice email released to the employer.
-        </span>
-      );
-    }
-    if (sendOutcome === 'held') {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-semibold">
-          <Icon name={IconName.Warning} className="w-4 h-4" />
-          Every learner verified — invoice email held (master send toggle is OFF).
-        </span>
-      );
-    }
-    if (sendOutcome === 'no-invoice') {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-semibold">
-          <Icon name={IconName.Warning} className="w-4 h-4" />
-          Every learner verified — invoice email not sent (no invoice generated yet for this group).
-        </span>
-      );
-    }
-    // Outcome unknown — most often when the group was already verified before
-    // this modal opened (no fresh verdict captured). Stay neutral.
-    return (
-      <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
-        <Icon name={IconName.CheckCircle} className="w-4 h-4" />
-        Every learner verified.
-      </span>
-    );
-  };
+}> = ({ step, allVerified, onClose }) => {
+  const renderVerifiedMessage = () => (
+    <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold">
+      <Icon name={IconName.CheckCircle} className="w-4 h-4" />
+      Every learner verified — go to View Company Application to send the invoice email.
+    </span>
+  );
 
   return (
     <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center justify-between gap-3">
       <p className="text-xs text-gray-500 dark:text-gray-400 flex-1">
         {step === 'verify' && allVerified ? renderVerifiedMessage() : step === 'verify' ? (
-          "Invoice emails stay on hold until every learner from the same employer and course is verified."
+          "Verify every learner here, then send invoice emails from View Company Application."
         ) : ''}
       </p>
       <Button onClick={onClose} variant={allVerified ? 'primary' : 'secondary'}>
@@ -671,7 +617,7 @@ const AskStep: React.FC<{ onYes: () => void; onNo: () => void }> = ({ onYes, onN
       <p className="text-sm text-gray-600 dark:text-gray-300 mt-3 leading-relaxed">
         Screenshots, CPF statements, payslips, or bank statements for each learner.
         Each doc must match the Excel data — <strong className="text-gray-800 dark:text-gray-100">trainee name, NRIC, employer name, UEN</strong> —
-        before the invoice email is released to the employer.
+        before the invoice email can be released to the employer from View Company Application.
       </p>
 
       <div className="mt-7 flex items-center justify-center gap-2 text-xs">
@@ -679,7 +625,7 @@ const AskStep: React.FC<{ onYes: () => void; onNo: () => void }> = ({ onYes, onN
         <FlowArrow />
         <FlowChip step={2} icon={IconName.CheckCircle} label="Verify each field" />
         <FlowArrow />
-        <FlowChip step={3} icon={IconName.Mail} label="Email sends" />
+        <FlowChip step={3} icon={IconName.Mail} label="Send from View page" />
       </div>
 
       <div className="flex justify-center gap-3 mt-8">
@@ -747,7 +693,6 @@ const LearnerCard: React.FC<{
   row: LearnerRow;
   verifiedBy?: string;
   onChanged: () => void;
-  onSendResult?: (outcome: SendOutcome) => void;
   // When true, the card stays expanded even after the row is verified —
   // used when the modal is opened in view mode (all rows already verified)
   // so the admin sees the doc on open instead of just a collapsed pill.
@@ -757,7 +702,7 @@ const LearnerCard: React.FC<{
   onDragOver?: (learnerId: string | null) => void;
   onAssignFile?: (fileId: string, learnerId: string) => void;
   aiResult?: AiResult;
-}> = ({ row, verifiedBy, onChanged, onSendResult, viewMode = false, selectedFileId, dragOverLearnerId, onDragOver, onAssignFile, aiResult }) => {
+}> = ({ row, verifiedBy, onChanged, viewMode = false, selectedFileId, dragOverLearnerId, onDragOver, onAssignFile, aiResult }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -858,14 +803,6 @@ const LearnerCard: React.FC<{
       });
       const json: VerifyAndSendResponse = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Submit failed');
-      // Surface the email send outcome to the parent so the footer can show
-      // accurate copy (sent vs held by toggle vs no invoice yet). Mismatch
-      // verdicts never trigger a send, so skip the callback for those.
-      if (verdict === 'verified' && onSendResult) {
-        if (json.heldInTestMode) onSendResult('held');
-        else if (json.groupSent) onSendResult('sent');
-        else onSendResult('no-invoice');
-      }
       setFields(EMPTY_FIELDS);
       onChanged();
     } catch (err) {
