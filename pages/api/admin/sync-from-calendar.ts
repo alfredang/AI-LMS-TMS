@@ -151,10 +151,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { date, mode = 'preview' } = req.body || {};
+  const {
+    date,
+    mode = 'preview',
+    overrideMismatchedTrainers = false,
+    confirmCancellations = [],
+  } = req.body || {};
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return res.status(400).json({ success: false, error: 'date (YYYY-MM-DD) is required' });
   }
+  const confirmCancelSet = new Set<string>(
+    Array.isArray(confirmCancellations) ? confirmCancellations.map((s: any) => String(s)) : []
+  );
 
   try {
     // 1. Fetch Google Calendar events for the date
@@ -308,14 +316,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (scored[0].score > scored[1].score) {
             // Clear winner — the one with attendance/enrollment
             finalRun = scored[0].run;
-            // In apply mode, cancel the losers
+            // In apply mode, cancel the losers — but NEVER auto-cancel a Confirmed
+            // class or a class with enrollments, and require explicit admin
+            // confirmation (confirmCancellations[] contains the CR uuid).
             if (mode === 'apply') {
               for (let si = 1; si < scored.length; si++) {
                 const loserId = String(scored[si].run.id || scored[si].run.courseRunId || '');
-                const loserCr = await pool.query('SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1', [loserId]);
-                if (loserCr.rows[0]) {
-                  await pool.query(`UPDATE course_run SET class_status = 'Cancelled', updated_at = NOW() WHERE id = $1`, [loserCr.rows[0].id]);
-                }
+                const loserCr = await pool.query(
+                  `SELECT cr.id, cr.class_status,
+                          (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id) AS enr_count
+                     FROM course_run cr WHERE cr.course_run_id = $1 LIMIT 1`,
+                  [loserId]
+                );
+                const lr = loserCr.rows[0];
+                if (!lr) continue;
+                const isConfirmed = lr.class_status === 'Confirmed';
+                const hasEnrollments = parseInt(lr.enr_count, 10) > 0;
+                if (isConfirmed || hasEnrollments) continue;
+                if (!confirmCancelSet.has(String(lr.id))) continue;
+                await pool.query(
+                  `UPDATE course_run SET class_status = 'Cancelled', updated_at = NOW() WHERE id = $1`,
+                  [lr.id]
+                );
               }
             }
           } else {
@@ -412,16 +434,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             status = 'upserted';
           }
 
-          // Sync all trainers from calendar (new CR or mismatch → override)
-          if (calTrainers.length > 0 && (status === 'upserted' || status === 'trainer_mismatch')) {
+          // Sync trainers from calendar — SAFE defaults:
+          //   * If local trainer exists AND is on the calendar invite, keep them as primary.
+          //   * Otherwise pick the calendar trainer deterministically (sorted by email).
+          //   * 'trainer_mismatch' → do NOT override unless overrideMismatchedTrainers=true.
+          //   * Only delete stale junction rows when overrideMismatchedTrainers=true.
+          const allowOverride = overrideMismatchedTrainers === true;
+          const shouldSyncTrainers =
+            calTrainers.length > 0 &&
+            (status === 'upserted' || (status === 'trainer_mismatch' && allowOverride));
+
+          if (shouldSyncTrainers) {
             const crAfter = await pool.query(
               'SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1',
               [courseRunId]
             );
             const uuid = crAfter.rows[0]?.id;
             if (uuid) {
-              // Write all calendar trainers to junction table
-              for (const ct of calTrainers) {
+              // Deterministic order: local trainer first (if on invite), then by email.
+              const sorted = [...calTrainers].sort((a, b) => a.email.localeCompare(b.email));
+              const localEmail = localTrainer?.email.toLowerCase();
+              const localOnInvite = localEmail
+                ? sorted.find(ct => ct.email.toLowerCase() === localEmail)
+                : null;
+              const orderedTrainers = localOnInvite
+                ? [localOnInvite, ...sorted.filter(ct => ct.email.toLowerCase() !== localEmail)]
+                : sorted;
+
+              // Upsert all calendar trainers into junction
+              for (const ct of orderedTrainers) {
                 await pool.query(`
                   INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
                   VALUES ($1, $2, $3, $4)
@@ -430,8 +471,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 `, [uuid, ct.id, ct.name, ct.email]);
               }
 
-              // Scalar columns — first trainer (legacy single-trainer column)
-              const primary = calTrainers[0];
+              // Clean up stale junction rows only when admin explicitly opted into override.
+              if (allowOverride) {
+                const keepEmails = orderedTrainers.map(ct => ct.email.toLowerCase());
+                await pool.query(
+                  `DELETE FROM course_run_trainer
+                    WHERE course_run_id = $1
+                      AND LOWER(trainer_email) <> ALL($2::text[])`,
+                  [uuid, keepEmails]
+                );
+              }
+
+              // Scalar columns: prefer preserved local trainer, else deterministic primary.
+              const primary = orderedTrainers[0];
               await pool.query(`
                 UPDATE course_run
                 SET assigned_trainer_name = $1, assigned_trainer_email = $2, assigned_trainer_id = $3, updated_at = NOW()
@@ -440,6 +492,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
               status = 'trainer_synced';
             }
+          } else if (status === 'trainer_mismatch' && !allowOverride) {
+            // Surface as alert; do NOT touch trainer columns.
+            alert = (alert ? alert + ' — ' : '') +
+              'trainer override skipped (set overrideMismatchedTrainers=true to apply)';
           }
 
         } catch (applyErr: any) {
@@ -474,36 +530,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // These are candidates for cancellation.
     const matchedCourseRunIds = new Set(results.map(r => r.courseRunId).filter(Boolean));
     const localOnDate = await pool.query(
-      `SELECT DISTINCT cr.id AS uuid, cr.course_run_id, c.title AS course_title, c.course_type, cr.class_status
+      `SELECT DISTINCT cr.id AS uuid, cr.course_run_id, c.title AS course_title, c.course_type, cr.class_status,
+              (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id) AS enr_count
        FROM course_run cr
        JOIN course c ON c.id = cr.course_id
        JOIN course_session cs ON cs.course_run_id = cr.id
        WHERE cs.deleted = false
          AND cs.start_date = $1
-         AND cr.class_status != 'Cancelled'
+         AND cr.class_status NOT IN ('Cancelled', 'Confirmed')
          AND c.course_type IN ('WSQ', 'IBF')
        ORDER BY c.title`,
       [date.replace(/-/g, '')]
     );
 
-    const notInCalendar: Array<{ courseRunUuid: string; courseRunId: string; courseTitle: string; classStatus: string }> = [];
+    const notInCalendar: Array<{
+      courseRunUuid: string;
+      courseRunId: string;
+      courseTitle: string;
+      classStatus: string;
+      enrollmentCount: number;
+      cancelled: boolean;
+      skipReason?: string;
+    }> = [];
     for (const row of localOnDate.rows) {
-      if (!matchedCourseRunIds.has(row.course_run_id)) {
-        notInCalendar.push({
-          courseRunUuid: row.uuid,
-          courseRunId: row.course_run_id,
-          courseTitle: row.course_title,
-          classStatus: row.class_status,
-        });
+      if (matchedCourseRunIds.has(row.course_run_id)) continue;
+      const enrCount = parseInt(row.enr_count, 10) || 0;
+      let cancelled = false;
+      let skipReason: string | undefined;
 
-        // In apply mode, cancel these course runs
-        if (mode === 'apply') {
+      if (mode === 'apply') {
+        if (enrCount > 0) {
+          skipReason = `has ${enrCount} enrollment(s)`;
+        } else if (!confirmCancelSet.has(String(row.uuid))) {
+          skipReason = 'not explicitly confirmed for cancellation';
+        } else {
           await pool.query(
             `UPDATE course_run SET class_status = 'Cancelled', updated_at = NOW() WHERE id = $1`,
             [row.uuid]
           );
+          cancelled = true;
         }
       }
+
+      notInCalendar.push({
+        courseRunUuid: row.uuid,
+        courseRunId: row.course_run_id,
+        courseTitle: row.course_title,
+        classStatus: row.class_status,
+        enrollmentCount: enrCount,
+        cancelled,
+        skipReason,
+      });
     }
 
     return res.status(200).json({

@@ -581,6 +581,8 @@ const ViewClassByDateView: React.FC = () => {
   const [syncCalendarLoading, setSyncCalendarLoading] = useState<boolean>(false);
   const [syncCalendarMeta, setSyncCalendarMeta] = useState<{ total: number; wsq: number } | null>(null);
   const [syncNotInCalendar, setSyncNotInCalendar] = useState<any[] | null>(null);
+  const [overrideMismatchedTrainers, setOverrideMismatchedTrainers] = useState<boolean>(false);
+  const [confirmCancelUuids, setConfirmCancelUuids] = useState<Set<string>>(new Set());
   // Bump this to force the month fetch effect to re-run (e.g. after Apply completes)
   const [refetchKey, setRefetchKey] = useState<number>(0);
 
@@ -726,7 +728,12 @@ const ViewClassByDateView: React.FC = () => {
       const res = await fetch(getApiUrl('/api/admin/sync-from-calendar'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: selectedDate, mode: 'apply' }),
+        body: JSON.stringify({
+          date: selectedDate,
+          mode: 'apply',
+          overrideMismatchedTrainers,
+          confirmCancellations: Array.from(confirmCancelUuids),
+        }),
       });
       const json = await res.json();
       if (json.success) {
@@ -745,7 +752,7 @@ const ViewClassByDateView: React.FC = () => {
     } finally {
       setSyncCalendarLoading(false);
     }
-  }, [selectedDate]);
+  }, [selectedDate, overrideMismatchedTrainers, confirmCancelUuids]);
 
   const handleOpenEditor = useCallback((event: CalendarEvent) => {
     // Mirror the shape used by UpcomingClassesTable/ClassDetailView — setEditingCourseRun accepts any
@@ -965,7 +972,7 @@ const ViewClassByDateView: React.FC = () => {
                   {syncCalendarMeta && ` • ${syncCalendarMeta.total} calendar events, ${syncCalendarMeta.wsq} WSQ/IBF`}
                 </p>
               </div>
-              <button onClick={() => { setSyncCalendarOpen(false); setSyncCalendarResults(null); setSyncCalendarMeta(null); setSyncNotInCalendar(null); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">✕</button>
+              <button onClick={() => { setSyncCalendarOpen(false); setSyncCalendarResults(null); setSyncCalendarMeta(null); setSyncNotInCalendar(null); setConfirmCancelUuids(new Set()); setOverrideMismatchedTrainers(false); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">✕</button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -1070,42 +1077,74 @@ const ViewClassByDateView: React.FC = () => {
                 </div>
               )}
 
-              {/* Not in Calendar section */}
+              {/* Not in Calendar section — admin must explicitly tick each item to cancel.
+                  Confirmed classes and those with enrollments are now filtered out server-side. */}
               {syncNotInCalendar && syncNotInCalendar.length > 0 && !syncCalendarLoading && (
                 <div className="mt-4">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="flex-1 border-t border-dashed border-red-300 dark:border-red-700" />
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-red-400 dark:text-red-500">Not in Calendar — will be cancelled</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-red-400 dark:text-red-500">Not in Calendar — tick to cancel</span>
                     <div className="flex-1 border-t border-dashed border-red-300 dark:border-red-700" />
                   </div>
                   <div className="space-y-2">
-                    {syncNotInCalendar.map((item: any, i: number) => (
-                      <div key={i} className="rounded-lg border border-red-200 dark:border-red-800 px-4 py-3">
-                        <div className="flex items-start justify-between gap-3">
+                    {syncNotInCalendar.map((item: any, i: number) => {
+                      const checked = confirmCancelUuids.has(item.courseRunUuid);
+                      const blocked = (item.enrollmentCount ?? 0) > 0;
+                      return (
+                        <label key={i} className={`flex items-start gap-3 rounded-lg border border-red-200 dark:border-red-800 px-4 py-3 ${blocked ? 'opacity-60' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={blocked}
+                            checked={checked}
+                            onChange={(e) => {
+                              setConfirmCancelUuids(prev => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(item.courseRunUuid);
+                                else next.delete(item.courseRunUuid);
+                                return next;
+                              });
+                            }}
+                            className="mt-1"
+                          />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium dark:text-white truncate">{item.courseTitle}</p>
                             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
                               <span>CR: {item.courseRunId}</span>
                               <span>Current status: {item.classStatus}</span>
+                              {typeof item.enrollmentCount === 'number' && (
+                                <span>Enrollments: {item.enrollmentCount}</span>
+                              )}
                             </div>
+                            {blocked && (
+                              <p className="text-[11px] mt-1 text-amber-600 dark:text-amber-400">
+                                Has enrollments — cannot auto-cancel. Cancel manually if needed.
+                              </p>
+                            )}
                           </div>
-                          <span className="flex-shrink-0 px-2 py-0.5 text-[11px] font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">
-                            Will Cancel
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               )}
             </div>
 
             {syncCalendarResults && !syncCalendarLoading && (
-              <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {syncCalendarResults.filter((r: any) => r.status === 'new_cr' || r.status === 'trainer_mismatch').length} sync action(s)
-                  {syncNotInCalendar && syncNotInCalendar.length > 0 && ` • ${syncNotInCalendar.length} to cancel`}
-                </p>
+              <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700 gap-4 flex-wrap">
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {syncCalendarResults.filter((r: any) => r.status === 'new_cr' || r.status === 'trainer_mismatch').length} sync action(s)
+                    {confirmCancelUuids.size > 0 && ` • ${confirmCancelUuids.size} to cancel`}
+                  </p>
+                  <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={overrideMismatchedTrainers}
+                      onChange={(e) => setOverrideMismatchedTrainers(e.target.checked)}
+                    />
+                    Override local trainer on mismatch (use with care — replaces manual assignments)
+                  </label>
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={handleSyncCalendarPreview}
