@@ -692,7 +692,14 @@ async function aggregateGrantsByScheme(enrolmentIds: string[]): Promise<SchemeAg
     }
   }
 
-  return Array.from(byScheme.values());
+  // Baseline must always render first on the invoice, then any other schemes
+  // (ETSS/MCES/IBF STS). Map-insertion order is whichever scheme the first
+  // participant happened to have first, which is not stable — sort explicitly.
+  return Array.from(byScheme.values()).sort((a, b) => {
+    const aBaseline = a.itemName === 'WSQ funding (Baseline)' ? 0 : 1;
+    const bBaseline = b.itemName === 'WSQ funding (Baseline)' ? 0 : 1;
+    return aBaseline - bBaseline;
+  });
 }
 
 function prefixWsq(title: string): string {
