@@ -129,7 +129,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 FROM ssg_grants
                 GROUP BY LOWER(TRIM(enrollment_id))
             ) sg ON sg.enrolment_key = LOWER(TRIM(da.enrolment_id))
-            WHERE COALESCE(cr.start_date, da.course_start_date) >= CURRENT_DATE
+            WHERE COALESCE(cr.end_date, da.course_end_date) >= CURRENT_DATE - INTERVAL '30 days'
+               OR COALESCE(cr.end_date, da.course_end_date) IS NULL
             ORDER BY COALESCE(cr.start_date, da.course_start_date) ASC NULLS LAST
         `);
 
