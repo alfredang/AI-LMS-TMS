@@ -542,7 +542,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const currentPageRef = useRef(currentPage);
     currentPageRef.current = currentPage;
-    const itemsPerPage = 100;
+    const itemsPerPage = 20;
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isCancelling, setIsCancelling] = useState(false);

@@ -1422,6 +1422,10 @@ export const ViewCompanyApplicationView: React.FC = () => {
   const [invoiceErrors, setInvoiceErrors] = useState<InvoiceError[]>([]);
   const [rescueTarget, setRescueTarget] = useState<RescueTarget | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  // Target page size — actual page may be larger if an invoice group of >20
+  // learners would otherwise be split across pages. See pageBoundaries below.
+  const itemsPerPage = 20;
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
   const [brokenDocumentKeys, setBrokenDocumentKeys] = useState<Set<string>>(new Set());
@@ -1914,21 +1918,67 @@ export const ViewCompanyApplicationView: React.FC = () => {
     });
   }, [rows, searchQuery, showStuckOnly]);
 
-  // For each row, compute whether its Invoice # / Tax Invoice cells should
-  // render with rowSpan (first row in a consolidated group) or be skipped
-  // entirely (merged into the row above it).
-  const invoiceGroupMeta = useMemo(() => {
-    const meta: Array<{ isFirst: boolean; size: number }> = [];
+  React.useEffect(() => { setCurrentPage(1); }, [searchQuery, showStuckOnly]);
+
+  // Group-aware page boundaries: target ~itemsPerPage rows per page, but
+  // never split an invoice group (rows sharing an Invoice ID) across pages,
+  // because the Invoice # / Tax Invoice cells use rowSpan and would render
+  // incorrectly if the group were broken. A single group larger than the
+  // target gets its own page.
+  const pageBoundaries = useMemo(() => {
+    const pages: Array<{ start: number; end: number }> = [];
+    if (filteredRows.length === 0) return pages;
+    let pageStart = 0;
     let i = 0;
     while (i < filteredRows.length) {
       const inv = (filteredRows[i]['Invoice ID'] || '').trim();
+      let groupEnd = i + 1;
+      if (inv) {
+        while (groupEnd < filteredRows.length && (filteredRows[groupEnd]['Invoice ID'] || '').trim() === inv) {
+          groupEnd++;
+        }
+      }
+      const currentPageSize = i - pageStart;
+      const groupSize = groupEnd - i;
+      if (currentPageSize > 0 && currentPageSize + groupSize > itemsPerPage) {
+        pages.push({ start: pageStart, end: i });
+        pageStart = i;
+      }
+      i = groupEnd;
+    }
+    if (pageStart < filteredRows.length) {
+      pages.push({ start: pageStart, end: filteredRows.length });
+    }
+    return pages;
+  }, [filteredRows]);
+
+  const totalPages = Math.max(1, pageBoundaries.length);
+  const safePage = Math.min(currentPage, totalPages);
+  const currentBoundary = pageBoundaries[safePage - 1] || { start: 0, end: 0 };
+  const startIndex = currentBoundary.start;
+  const endIndex = currentBoundary.end;
+  const paginatedRows = useMemo(
+    () => filteredRows.slice(startIndex, endIndex),
+    [filteredRows, startIndex, endIndex],
+  );
+
+  // For each row on the current page, compute whether its Invoice # / Tax
+  // Invoice cells should render with rowSpan (first row in a consolidated
+  // group) or be skipped entirely (merged into the row above it). Computed
+  // per-page so rowSpan indexes match what's actually rendered — an invoice
+  // group that crosses a page boundary will be visually split.
+  const invoiceGroupMeta = useMemo(() => {
+    const meta: Array<{ isFirst: boolean; size: number }> = [];
+    let i = 0;
+    while (i < paginatedRows.length) {
+      const inv = (paginatedRows[i]['Invoice ID'] || '').trim();
       if (!inv) {
         meta.push({ isFirst: true, size: 1 });
         i++;
         continue;
       }
       let j = i + 1;
-      while (j < filteredRows.length && (filteredRows[j]['Invoice ID'] || '').trim() === inv) {
+      while (j < paginatedRows.length && (paginatedRows[j]['Invoice ID'] || '').trim() === inv) {
         j++;
       }
       const size = j - i;
@@ -1938,7 +1988,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
       i = j;
     }
     return meta;
-  }, [filteredRows]);
+  }, [paginatedRows]);
 
   const enroledCount = rows.filter(row => hasValue(row['Enrolment ID'])).length;
   const calendarAddedCount = rows.filter(row => isCheckedValue(row['Calendar Added'])).length;
@@ -2056,7 +2106,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
             </div>
             <div>
               <h3 className="text-xl font-bold dark:text-white">Company Applications</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Showing {filteredRows.length === 0 ? 0 : 1}-{filteredRows.length} of {filteredRows.length} applications</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Showing {filteredRows.length === 0 ? 0 : startIndex + 1}-{endIndex} of {filteredRows.length} applications</p>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
@@ -2341,10 +2391,10 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 <th className="px-2 py-2 w-8">
                   <input
                     type="checkbox"
-                    checked={filteredRows.length > 0 && filteredRows.every(r => selectedIds.has(String(r.id || '')))}
+                    checked={paginatedRows.length > 0 && paginatedRows.every(r => selectedIds.has(String(r.id || '')))}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setSelectedIds(new Set(filteredRows.map(r => String(r.id || '')).filter(Boolean)));
+                        setSelectedIds(new Set(paginatedRows.map(r => String(r.id || '')).filter(Boolean)));
                       } else {
                         setSelectedIds(new Set());
                       }
@@ -2377,7 +2427,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
-              {filteredRows.length > 0 ? filteredRows.map((row, index) => {
+              {paginatedRows.length > 0 ? paginatedRows.map((row, index) => {
                 const groupMeta = invoiceGroupMeta[index] || { isFirst: true, size: 1 };
                 const isStuck = row._stuck === '1';
                 const warnings = isStuck ? parseRowWarnings(row) : [];
@@ -2783,6 +2833,37 @@ export const ViewCompanyApplicationView: React.FC = () => {
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div className="p-4 border-t flex items-center justify-between dark:border-gray-700">
+            <div className="text-sm text-gray-500 dark:text-gray-400">Page {safePage} of {totalPages}</div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600"
+              >Previous</button>
+              {(() => {
+                const pages: (number | string)[] = [];
+                if (totalPages <= 5) { for (let i = 1; i <= totalPages; i++) pages.push(i); }
+                else if (safePage <= 3) { for (let i = 1; i <= 4; i++) pages.push(i); pages.push('...'); pages.push(totalPages); }
+                else if (safePage >= totalPages - 2) { pages.push(1); pages.push('...'); for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i); }
+                else { pages.push(1); pages.push('...'); pages.push(safePage - 1); pages.push(safePage); pages.push(safePage + 1); pages.push('...'); pages.push(totalPages); }
+                return pages.map((page, idx) => typeof page === 'number' ? (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 text-sm border rounded ${safePage === page ? 'bg-blue-500 text-white border-blue-500' : 'hover:bg-gray-100 dark:hover:bg-gray-700 dark:border-gray-600'}`}
+                  >{page}</button>
+                ) : <span key={idx} className="px-2 text-gray-400">...</span>);
+              })()}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-600"
+              >Next</button>
+            </div>
+          </div>
+        )}
       </Card>
       )}
 
