@@ -41,10 +41,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python packages used by scripts/*.py (docxtpl, requests, playwright, etc.)
+# Install Python packages used by scripts/*.py (docxtpl, requests, playwright, etc.).
+# --prefer-binary tells pip to pick a wheel over an sdist whenever both
+# exist, so a transient missing wheel for the *latest* version doesn't
+# silently fall back to a source build that would fail on this slim image
+# without the C toolchain.
 COPY scripts/requirements.txt /tmp/requirements.txt
 RUN python3 -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt \
+    && /opt/venv/bin/pip install --no-cache-dir --prefer-binary -r /tmp/requirements.txt \
     && rm /tmp/requirements.txt
 ENV PATH="/opt/venv/bin:$PATH"
 
