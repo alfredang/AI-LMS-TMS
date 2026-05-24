@@ -53,7 +53,7 @@ function safeText(v: unknown): string {
 function maskNric(nric: string | null | undefined): string {
   const s = String(nric || '').trim();
   if (!s || s === '—') return '—';
-  return s.length > 4 ? '****' + s.slice(-4) : s;
+  return s.length > 4 ? 'XXXXX' + s.slice(-4) : s;
 }
 
 function formatDate(d: string | Date | null | undefined): string {
