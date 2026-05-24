@@ -281,7 +281,7 @@ const WORKFLOWS: Workflow[] = [
       { method: 'POST', url: '/api/admin/ca-upload-supporting-doc', description: 'Upload a supporting document for a learner to Google Drive' },
       { method: 'POST', url: '/api/admin/ca-verify-and-send', description: 'Mark a row verified/mismatch — auto-sends invoice email when the group is fully verified' },
       { method: 'POST', url: '/api/admin/ca-generate-invoice', description: 'Generate the consolidated QuickBooks invoice for an employer + course-run group' },
-      { method: 'POST', url: '/api/admin/ca-sync-grants', description: 'Refresh grant IDs and amounts from SSG for outstanding rows' },
+      { method: 'POST', url: '/api/admin/ca-run-pipeline', description: 'Run the full pipeline (SSG enrol → grant lookup + course-run sweep → Google Calendar add) for the given applicationIds' },
     ],
     emailTemplates: [
       { name: 'Company Application Invoice Email', path: 'Templates → Company Application Invoice Email', description: 'Consolidated invoice email sent to the employer contact once all supporting docs are verified' },

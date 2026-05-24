@@ -1368,11 +1368,6 @@ const DeleteConfirmModal: React.FC<{
   );
 };
 
-// Auto-sync throttle so rapid navigation back to the View page doesn't burn
-// SSG API quota. 2 minutes balances "fresh enough" with "not spammy".
-const AUTO_SYNC_GRANTS_THROTTLE_MS = 2 * 60 * 1000;
-const AUTO_SYNC_GRANTS_STORAGE_KEY = 'ca-last-auto-sync-grants-at';
-
 interface PipelineWarning {
   step: string;
   error: string;
@@ -1397,12 +1392,19 @@ export const ViewCompanyApplicationView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showPii, setShowPii] = useState(false);
-  const [isSyncingGrants, setIsSyncingGrants] = useState(false);
-  // Prevents the auto-sync useEffect from re-firing as `rows` updates within
-  // a single page mount. Reset per-mount; on full reload, the throttle in
-  // localStorage takes over.
-  const didAutoSyncOnMountRef = useRef(false);
-  const [grantSyncMessage, setGrantSyncMessage] = useState<string | null>(null);
+  const [isRunningPipeline, setIsRunningPipeline] = useState(false);
+  const [pipelineMessage, setPipelineMessage] = useState<string | null>(null);
+  // Popup used by Auto-Process for both the "nothing to do" guard and any
+  // API/network error. Inline messages were easy to miss next to the four
+  // action buttons; admins asked for a blocking popup so they actually see
+  // when nothing ran (either because every selected row was already
+  // finished, or because the pipeline crashed).
+  const [autoProcessPopup, setAutoProcessPopup] = useState<{
+    tone: 'warning' | 'danger';
+    title: string;
+    subtitle?: string;
+    message: string;
+  } | null>(null);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const [invoiceMessage, setInvoiceMessage] = useState<string | null>(null);
   // Tracks the hovered invoice group so all rows sharing an Invoice ID
@@ -1797,101 +1799,84 @@ export const ViewCompanyApplicationView: React.FC = () => {
     }
   };
 
-  // Sweep SSG grants by courseRunId for every current/future company_application
-  // row, upsert into ssg_grants, and backfill ca.grant_id. This is the catch-up
-  // mechanism for grants stakeholders apply manually in the SSG portal — SSG
-  // has no grant application API as of 2026-05, so this button is how those
-  // grants reach the LMS.
-  const syncGrants = async () => {
-    setIsSyncingGrants(true);
-    setGrantSyncMessage(null);
-    // Snapshot which of admin's rows already had a grant_id BEFORE the sync.
-    // Diff against the post-sync rows to report only the newly-linked ones —
-    // the SSG endpoint also caches grants for unrelated learners in the same
-    // course runs but the admin shouldn't be told about those.
-    // A row is "linked" if EITHER the Baseline grant or the MCES/SME/Other
-    // grant is present — some learners only qualify for one of them.
-    const hasAnyGrant = (r: CompanyApplicationRow) =>
-      hasValue(r['Grant ID (BL)']) || hasValue(r['Grant ID']);
-    const idsWithGrantBefore = new Set(
-      rows.filter(hasAnyGrant).map(r => String(r.id))
-    );
+  // Run the full CA pipeline (SSG enrol → grant lookup + course-run sweep →
+  // Google Calendar add) for the selected rows. Replaces the separate
+  // Sync Grants / Sync Calendar buttons — every stage is idempotent, so
+  // re-running over already-processed rows just re-confirms them. Invoice
+  // generation stays on its own button because admins want explicit
+  // control over when QB invoices fire.
+  const runPipeline = async () => {
+    if (selectedIds.size === 0) return;
+
+    // "Fully done" = SSG enroled AND grant settled (granted or explicitly
+    // ineligible) AND calendar added. Re-running Auto-Process on rows that
+    // already pass all three stages is a no-op at the lib level but burns
+    // SSG/Google API quota and produces a confusing "0 enroled, 0 with
+    // grant" summary that looks like a failure. Filter on the frontend so
+    // the call only ships rows that still need work; if everything passes,
+    // surface a blocking popup instead of silently doing nothing.
+    const selectedRows = rows.filter(r => selectedIds.has(String(r.id || '')));
+    const isFullyDone = (r: CompanyApplicationRow) => {
+      const enroled = hasValue(r['Enrolment ID']);
+      const grantSettled =
+        hasValue(r['Grant ID']) ||
+        hasValue(r['Grant ID (BL)']) ||
+        isCheckedValue(r['Grant Ineligible']);
+      const calAdded = isCheckedValue(r['Calendar Added']);
+      return enroled && grantSettled && calAdded;
+    };
+    const pendingRows = selectedRows.filter(r => !isFullyDone(r));
+
+    if (pendingRows.length === 0) {
+      setAutoProcessPopup({
+        tone: 'warning',
+        title: 'Nothing to auto-process',
+        subtitle: `${selectedRows.length} selected row${selectedRows.length === 1 ? '' : 's'} already finished`,
+        message: `Every selected row is already enroled with SSG, has a grant ID (or is marked grant-ineligible), and is on the Google Calendar. Auto-Process can't run again because there's nothing left to do for these rows. Pick rows whose Enrol / Grant / Cal tick is still missing.`,
+      });
+      return;
+    }
+
+    setIsRunningPipeline(true);
+    setPipelineMessage(null);
     try {
-      const res = await fetch('/api/admin/ca-sync-grants', { method: 'POST' });
+      const res = await fetch('/api/admin/ca-run-pipeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationIds: pendingRows.map(r => String(r.id || '')) }),
+      });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Request failed (${res.status})`);
       }
-      const errors = Array.isArray(data.errors) ? data.errors.length : 0;
-
-      const fetched = await fetchRows();
-      setRows(fetched);
-
-      const newlyLinked = fetched.filter(r =>
-        hasAnyGrant(r) && !idsWithGrantBefore.has(String(r.id))
-      ).length;
-      const linkedNow = fetched.filter(hasAnyGrant).length;
-
-      const parts: string[] = [];
-      if (newlyLinked > 0) {
-        parts.push(`${newlyLinked} new grant${newlyLinked === 1 ? '' : 's'} linked`);
-      }
-      parts.push(`${linkedNow} of ${fetched.length} application${fetched.length === 1 ? '' : 's'} now have grant IDs`);
-      if (errors > 0) parts.push(`${errors} sync error${errors === 1 ? '' : 's'}`);
-      setGrantSyncMessage(parts.join(' · '));
+      await reloadRows();
+      const processed = Number(data.processed || 0);
+      const enroled = Number(data.enroled || 0);
+      const granted = Number(data.granted || 0);
+      const failed = Number(data.failed || 0);
+      const skipped = selectedRows.length - pendingRows.length;
+      const parts: string[] = [`${processed} row${processed === 1 ? '' : 's'} processed`];
+      parts.push(`${enroled} enroled`);
+      parts.push(`${granted} with grant`);
+      if (skipped > 0) parts.push(`${skipped} already-done row${skipped === 1 ? '' : 's'} skipped`);
+      if (failed > 0) parts.push(`${failed} failed — check row error popups`);
+      setPipelineMessage(parts.join(' · '));
     } catch (err) {
-      console.error('Sync grants failed:', err);
-      setGrantSyncMessage(err instanceof Error ? err.message : 'Sync grants failed.');
+      console.error('Auto-Process failed:', err);
+      setAutoProcessPopup({
+        tone: 'danger',
+        title: 'Auto-Process failed',
+        subtitle: `${pendingRows.length} row${pendingRows.length === 1 ? '' : 's'} were not processed`,
+        message: err instanceof Error ? err.message : 'Unknown error — check the server console for details.',
+      });
     } finally {
-      setIsSyncingGrants(false);
+      setIsRunningPipeline(false);
     }
   };
 
   useEffect(() => {
     void reloadRows();
   }, []);
-
-  // Auto-sync grants when the admin lands on this page so they don't have to
-  // click Sync Grants manually after filing on TPGateway. Triple-guarded so
-  // we don't spam SSG:
-  //   1. Ref ensures we only run once per page mount (no re-fire as rows update)
-  //   2. localStorage throttle blocks within 2 minutes of any prior auto-sync
-  //   3. Skip entirely if no row is actually waiting for a grant
-  // The manual "Sync Grants" button remains as a force-refresh option.
-  useEffect(() => {
-    if (didAutoSyncOnMountRef.current) return;
-    if (rows.length === 0) return; // wait for first row load
-
-    const hasPendingGrants = rows.some(row => {
-      if (hasValue(row['Auto-Enrol Error'])) return false;
-      if (isCheckedValue(row['Grant Ineligible'])) return false;
-      return hasValue(row['Enrolment ID']) && !hasValue(row['Grant ID']);
-    });
-    if (!hasPendingGrants) {
-      didAutoSyncOnMountRef.current = true;
-      return;
-    }
-
-    try {
-      const lastAt = Number(window.localStorage.getItem(AUTO_SYNC_GRANTS_STORAGE_KEY) || '0');
-      if (Date.now() - lastAt < AUTO_SYNC_GRANTS_THROTTLE_MS) {
-        didAutoSyncOnMountRef.current = true;
-        return;
-      }
-    } catch {
-      // localStorage disabled — proceed anyway (in-session ref still gates re-fires)
-    }
-
-    didAutoSyncOnMountRef.current = true;
-    try {
-      window.localStorage.setItem(AUTO_SYNC_GRANTS_STORAGE_KEY, String(Date.now()));
-    } catch {
-      // non-fatal
-    }
-
-    // Fire-and-forget — syncGrants owns its own state/message reporting.
-    void syncGrants();
-  }, [rows]);
 
   // Auto-refresh polling removed — was reloading rows every 5s while any row
   // was in-progress, which the admin found disruptive. Refresh is now manual
@@ -2077,20 +2062,20 @@ export const ViewCompanyApplicationView: React.FC = () => {
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-2 flex-wrap">
               <button
-                onClick={() => void syncGrants()}
-                disabled={isSyncingGrants}
-                title="Pull grants from SSG for every current/future course run. Use after stakeholders apply grants in the SSG portal."
+                onClick={() => void runPipeline()}
+                disabled={isRunningPipeline || selectedIds.size === 0}
+                title="Auto-process the selected rows: SSG enrolment (if missing) → grant lookup + course-run sweep → Google Calendar add. Idempotent — already-done stages just re-confirm. Invoice stays on its own button."
                 className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-purple-600 hover:bg-purple-700 shadow-sm shadow-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isSyncingGrants ? (
+                {isRunningPipeline ? (
                   <>
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />
-                    Syncing...
+                    Processing...
                   </>
                 ) : (
                   <>
                     <Icon name={IconName.Sync} className="w-3.5 h-3.5 mr-1.5" />
-                    Sync Grants
+                    Auto-Process
                   </>
                 )}
               </button>
@@ -2149,8 +2134,8 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 )}
               </button>
             </div>
-            {grantSyncMessage && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md text-right">{grantSyncMessage}</p>
+            {pipelineMessage && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md text-right">{pipelineMessage}</p>
             )}
             {emailMessage && (
               <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md text-right">{emailMessage}</p>
@@ -2195,6 +2180,21 @@ export const ViewCompanyApplicationView: React.FC = () => {
             onClose={() => setRescueTarget(null)}
             onLinked={onRescueLinked}
           />
+        )}
+        {autoProcessPopup && (
+          <ConfirmPopup
+            tone={autoProcessPopup.tone}
+            icon={autoProcessPopup.tone === 'danger' ? IconName.Warning : IconName.CheckCircle}
+            title={autoProcessPopup.title}
+            subtitle={autoProcessPopup.subtitle}
+            confirmLabel="Got it"
+            confirmIcon={IconName.CheckCircle}
+            hideCancel
+            onConfirm={() => setAutoProcessPopup(null)}
+            onCancel={() => setAutoProcessPopup(null)}
+          >
+            <p className="text-sm text-gray-700 dark:text-gray-200">{autoProcessPopup.message}</p>
+          </ConfirmPopup>
         )}
         {sendBlockedReasons && (
           <ConfirmPopup

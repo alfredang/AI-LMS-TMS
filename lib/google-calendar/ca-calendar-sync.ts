@@ -69,6 +69,7 @@ function formatDbDate(dateVal: string | Date): string {
   if (!dateVal) return '';
 
   if (dateVal instanceof Date) {
+    if (Number.isNaN(dateVal.getTime())) return '';
     const sgtStr = dateVal.toLocaleString('en-US', { timeZone: 'Asia/Singapore' });
     const localSgt = new Date(sgtStr);
     const year = localSgt.getFullYear();
@@ -81,7 +82,13 @@ function formatDbDate(dateVal: string | Date): string {
   if (/^\d{8}$/.test(clean)) {
     return `${clean.slice(0, 4)}-${clean.slice(4, 6)}-${clean.slice(6, 8)}`;
   }
-  return clean.slice(0, 10);
+  // Only accept YYYY-MM-DD-ish strings. Free-form text like "30/05/2026" or
+  // "May 30, 2026" used to be returned as-is via slice(0, 10), which then
+  // crashed downstream with `new Date(badStr + 'T00:00:00Z') → Invalid Date
+  // → toISOString() throws`. Returning '' here lets the .filter(Boolean) on
+  // datesToSync drop the bad value instead.
+  const ymdMatch = clean.match(/^(\d{4}-\d{2}-\d{2})/);
+  return ymdMatch ? ymdMatch[1] : '';
 }
 
 /**
@@ -275,48 +282,42 @@ export async function addCaLearnerToCalendar(
       }
     }
 
-    // Patch each unique recurring master once — propagates to every occurrence.
-    for (const masterId of recurringMasterIds) {
+    // Serialize patches against the same Google Calendar event across the
+    // whole batch. The upload pipeline processes 5 rows in parallel via
+    // Promise.all, and without this every parallel caller would do
+    // events.get → events.patch with no coordination. That produced two
+    // production failure modes:
+    //   1. Lost update: caller A reads attendees=[X], caller B reads
+    //      attendees=[X], both compute their own new list, both patch — the
+    //      second write clobbers the first. Both report success but the
+    //      first learner is silently dropped from the calendar.
+    //   2. 412 etag conflict / 429 rate-limit on the patch — caught and
+    //      logged below, but result.addedTo never increments so the row
+    //      sticks at calendar_added=false with no admin recovery path.
+    // The advisory lock is keyed per Google event id (sha256 → 60-bit int)
+    // so different events don't block each other. Inside the lock we
+    // re-fetch attendees to read the latest committed state instead of
+    // trusting the pre-lock snapshot.
+    const patchAttendeeUnderLock = async (eventId: string) => {
+      const lockKey = `ca-cal-evt-${eventId}`;
+      const lockId = parseInt(crypto.createHash('sha256').update(lockKey).digest('hex').slice(0, 15), 16);
+      const lockClient = await pool.connect();
+      let locked = false;
       try {
-        const masterRes = await calendar.events.get({ calendarId, eventId: masterId });
-        const masterAttendees = masterRes.data.attendees || [];
-        if (masterAttendees.some((a: any) => (a.email || '').toLowerCase() === learnerEmailLower)) {
+        await lockClient.query('SELECT pg_advisory_lock($1)', [lockId]);
+        locked = true;
+        const fresh = await calendar.events.get({ calendarId, eventId });
+        const attendees = fresh.data.attendees || [];
+        if (attendees.some((a: any) => (a.email || '').toLowerCase() === learnerEmailLower)) {
           result.addedTo++;
-          continue;
-        }
-        await calendar.events.patch({
-          calendarId,
-          eventId: masterId,
-          requestBody: {
-            attendees: [
-              ...masterAttendees,
-              { email: learnerEmail, responseStatus: 'needsAction' },
-            ],
-            guestsCanInviteOthers: false,
-            guestsCanSeeOtherGuests: false,
-          },
-          sendUpdates: 'none',
-        });
-        result.addedTo++;
-      } catch (patchErr) {
-        console.error(`❌ [ca-calendar-sync] Master patch failed for ${learnerEmail} (event ${masterId}):`, patchErr);
-      }
-    }
-
-    // Patch each unique standalone event once.
-    for (const [eventId, evt] of standaloneEvents) {
-      try {
-        const existingAttendees = evt.attendees || [];
-        if (existingAttendees.some((a: any) => (a.email || '').toLowerCase() === learnerEmailLower)) {
-          result.addedTo++;
-          continue;
+          return;
         }
         await calendar.events.patch({
           calendarId,
           eventId,
           requestBody: {
             attendees: [
-              ...existingAttendees,
+              ...attendees,
               { email: learnerEmail, responseStatus: 'needsAction' },
             ],
             guestsCanInviteOthers: false,
@@ -326,8 +327,25 @@ export async function addCaLearnerToCalendar(
         });
         result.addedTo++;
       } catch (patchErr) {
-        console.error(`❌ [ca-calendar-sync] Standalone patch failed for ${learnerEmail} (event ${eventId}):`, patchErr);
+        console.error(`❌ [ca-calendar-sync] Patch failed for ${learnerEmail} (event ${eventId}):`, patchErr);
+      } finally {
+        if (locked) {
+          await lockClient.query('SELECT pg_advisory_unlock($1)', [lockId]).catch(unlockErr => {
+            console.warn(`[ca-calendar-sync] advisory_unlock failed:`, unlockErr instanceof Error ? unlockErr.message : unlockErr);
+          });
+        }
+        lockClient.release();
       }
+    };
+
+    // Patch each unique recurring master once — propagates to every occurrence.
+    for (const masterId of recurringMasterIds) {
+      await patchAttendeeUnderLock(masterId);
+    }
+
+    // Patch each unique standalone event once.
+    for (const eventId of standaloneEvents.keys()) {
+      await patchAttendeeUnderLock(eventId);
     }
 
     // Auto-create events ONLY when zero matches landed across every session

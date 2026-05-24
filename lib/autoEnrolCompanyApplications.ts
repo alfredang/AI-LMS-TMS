@@ -927,7 +927,7 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
  * runs the same sweep without an HTTP hop. Failures are logged and swallowed
  * by the caller.
  */
-async function sweepGrantsByCourseRunForApplications(applicationIds: string[]): Promise<void> {
+export async function sweepGrantsByCourseRunForApplications(applicationIds: string[]): Promise<void> {
   const ids = Array.from(new Set(applicationIds.filter(Boolean)));
   if (ids.length === 0) return;
 
