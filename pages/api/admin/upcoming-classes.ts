@@ -693,7 +693,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const hasLegacyLocalTrainer = !!effectiveLegacyTrainer;
       const hasTpgTrainer = !!effectiveTpgTrainer;
       const hasLearners = Number(row.num_of_trainee) > 0;
-      const derivedStatus = (row.class_status === 'Cancelled' || row.class_status === 'Unconfirmed')
+      const derivedStatus = (row.class_status === 'Cancelled' || row.class_status === 'Unconfirmed' || row.class_status === 'Confirmed')
         ? row.class_status
         : ((hasLocalTrainer || hasLegacyLocalTrainer || hasTpgTrainer) && hasLearners ? 'Confirmed' : 'Pending');
 
