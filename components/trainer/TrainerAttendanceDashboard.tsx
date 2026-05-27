@@ -1735,6 +1735,20 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             </button>
             )}
             <button
+              onClick={() => {
+                setManualAttendance(prev => prev.map(r => ({ ...r, isPresent: true, reasonOfAbsence: '' })));
+                setExtraAttendees(prev => prev.map(r => ({ ...r, isPresent: true, reasonOfAbsence: '' })));
+              }}
+              disabled={!selectedManualSession || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance || (manualAttendance.length === 0 && extraAttendees.length === 0)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Mark all learners as present"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              All Present
+            </button>
+            <button
               onClick={() => { setShowAddLearnerModal(true); setAddLearnerError(null); setAddLearnerForm({ fullName: '', email: '', nric: '' }); }}
               disabled={!selectedManualSession || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded text-xs font-medium hover:bg-primary-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
