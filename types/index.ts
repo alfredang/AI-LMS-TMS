@@ -194,6 +194,7 @@ export enum TrainerPage {
   VideoCreationTools = 'videoCreationTools',
   SustainabilityTools = 'sustainabilityTools',
   NetworkingTools = 'networkingTools',
+  K8sTools = 'k8sTools',
   BlockchainTools = 'blockchainTools',
   QuantumTools = 'quantumTools',
   VirtualTools = 'virtualTools',

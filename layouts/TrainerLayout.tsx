@@ -28,6 +28,7 @@ import DoeToolsPage from '../components/trainer/DoeToolsPage';
 import SpcToolsPage from '../components/trainer/SpcToolsPage';
 import SustainabilityToolsPage from '../components/trainer/SustainabilityToolsPage';
 import NetworkingToolsPage from '../components/trainer/NetworkingToolsPage';
+import K8sToolsPage from '../components/trainer/K8sToolsPage';
 import BlockchainToolsPage from '../components/trainer/BlockchainToolsPage';
 import QuantumToolsPage from '../components/trainer/QuantumToolsPage';
 import LessonDeliveryGuidePage from '../components/trainer/LessonDeliveryGuidePage';
@@ -91,6 +92,8 @@ const TrainerLayout: React.FC = () => {
         return <SustainabilityToolsPage />;
       case TrainerPage.NetworkingTools:
         return <NetworkingToolsPage />;
+      case TrainerPage.K8sTools:
+        return <K8sToolsPage />;
       case TrainerPage.BlockchainTools:
         return <BlockchainToolsPage />;
       case TrainerPage.QuantumTools:
