@@ -2786,6 +2786,9 @@ export const CourseDetail: React.FC = () => {
                                                 // effectiveDetail.courseRunUuid is the UUID, selectedCourse.courseRunId is also UUID from trainer-search
                                                 const runUuid = effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '';
                                                 setPendingAttendanceCourseRunId(String(runUuid));
+                                                if (typeof window !== 'undefined' && selectedCourse) {
+                                                    try { sessionStorage.setItem('attendanceSourceCourse', JSON.stringify(selectedCourse)); } catch {}
+                                                }
                                                 setSelectedCourse(null);
                                                 setTrainerPage(TrainerPage.EAttendance);
                                             }}

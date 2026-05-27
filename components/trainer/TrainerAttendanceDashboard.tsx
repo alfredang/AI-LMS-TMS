@@ -99,7 +99,22 @@ const SectionHeader: React.FC<{ title: string; count?: number; right?: React.Rea
 
 const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
   const router = useRouter();
-  const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId } = useLms();
+  const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId, setSelectedCourse } = useLms();
+  const [sourceCourse, setSourceCourse] = useState<any | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = sessionStorage.getItem('attendanceSourceCourse');
+      if (raw) setSourceCourse(JSON.parse(raw));
+    } catch {}
+  }, []);
+  const handleBackToClass = () => {
+    if (!sourceCourse) return;
+    if (typeof window !== 'undefined') {
+      try { sessionStorage.removeItem('attendanceSourceCourse'); } catch {}
+    }
+    setSelectedCourse(sourceCourse);
+  };
   const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false, true);
 
   // Admin-mode course run lookup
@@ -1067,11 +1082,26 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     <div className="space-y-5">
 
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-on-surface">E-Attendance</h1>
-        <p className="text-sm text-on-surface-secondary mt-0.5">
-          {isAdminMode ? 'Enter a Course Run ID to look up attendance.' : 'Select an assigned class to manage sessions and view enrolments.'}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-on-surface">E-Attendance</h1>
+          <p className="text-sm text-on-surface-secondary mt-0.5">
+            {isAdminMode ? 'Enter a Course Run ID to look up attendance.' : 'Select an assigned class to manage sessions and view enrolments.'}
+          </p>
+        </div>
+        {sourceCourse && !isAdminMode && (
+          <button
+            type="button"
+            onClick={handleBackToClass}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-default bg-surface hover:bg-surface-elevated text-on-surface transition-colors flex-shrink-0"
+            title={`Back to ${sourceCourse?.title || 'class'}`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Class
+          </button>
+        )}
       </div>
 
       {/* ── Class & Session Selection ── */}
