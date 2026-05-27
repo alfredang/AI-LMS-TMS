@@ -162,3 +162,6 @@ n8nworkflows.md/
 .playwright-cli/
 .playwright-mcp/
 .version
+
+# Tenant-specific seed data (contains plaintext credentials)
+database/seeds/tertiary-software-credentials.sql

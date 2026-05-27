@@ -70,6 +70,7 @@ import CourseSessionTimingView from '../components/admin/CourseSessionTimingView
 import SupportTicketsView from '../components/admin/SupportTicketsView';
 import SupportTicketDetailView from '../components/admin/SupportTicketDetailView';
 import MasterListView from '../components/admin/MasterListView';
+import SoftwareCredentialsView from '../components/admin/SoftwareCredentialsView';
 import { UploadCompanyApplicationView, ViewCompanyApplicationView, CheckSupportingDocumentView } from '../components/admin/CompanyApplicationViews';
 
 // Management Dashboard Component
@@ -217,6 +218,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.AddSessions]: 'Add Sessions',
   [AdminPage.CourseSessionTiming]: 'Course Session Timing',
   [AdminPage.SupportTickets]: 'Support Tickets',
+  [AdminPage.SoftwareCredentials]: 'Software Credentials',
   [AdminPage.SupportTicketDetail]: 'Ticket Detail',
 };
 
@@ -486,6 +488,8 @@ const AdminLayout: React.FC = () => {
         return <SupportTicketDetailView />;
       case AdminPage.MasterList:
         return <MasterListView />;
+      case AdminPage.SoftwareCredentials:
+        return <SoftwareCredentialsView />;
       default:
         return <AdminDashboard />;
     }

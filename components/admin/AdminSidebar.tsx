@@ -384,6 +384,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 </SubSection>
             </NavSection>
 
+            <NavItem page={AdminPage.SoftwareCredentials} label="Software Credentials" icon={IconName.Shield} />
+
             <NavSection title="Reference Links" icon={IconName.Link} collapsed={collapsed} isOpen={openSections.referenceLinks} onToggle={() => toggleSection('referenceLinks')}>
                 {REFERENCE_LINKS.map(({ key, label }) => {
                     const url = (trainingProviderProfile?.integrations as any)?.[key];
