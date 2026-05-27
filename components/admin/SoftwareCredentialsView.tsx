@@ -181,9 +181,9 @@ const SoftwareCredentialsView: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-2 py-1 text-gray-700 dark:text-gray-200 whitespace-nowrap font-mono">
+                    <td className="px-2 py-1 text-gray-700 dark:text-gray-200 font-mono">
                       <div className="flex items-center gap-1">
-                        <span>{shown ? row.password : '••••••'}</span>
+                        <span className="truncate max-w-[7rem]" title={shown ? row.password : ''}>{shown ? row.password : '••••'}</span>
                         <button onClick={() => setRevealed(r => ({ ...r, [row.id]: !r[row.id] }))} title={shown ? 'Hide' : 'Show'} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex-shrink-0">
                           <Icon name={shown ? IconName.EyeOff : IconName.Eye} className="w-3 h-3" />
                         </button>
