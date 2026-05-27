@@ -147,64 +147,64 @@ const SoftwareCredentialsView: React.FC = () => {
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-xs">
             <thead className="bg-gray-50 dark:bg-slate-700">
-              <tr className="text-left text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                <th className="px-3 py-2">License</th>
-                <th className="px-3 py-2">Software</th>
-                <th className="px-3 py-2">Login</th>
-                <th className="px-3 py-2">Password</th>
-                <th className="px-3 py-2">Type</th>
-                <th className="px-3 py-2">URL</th>
-                <th className="px-3 py-2 text-right">Actions</th>
+              <tr className="text-left text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <th className="px-2 py-1.5">License</th>
+                <th className="px-2 py-1.5">Software</th>
+                <th className="px-2 py-1.5">Login</th>
+                <th className="px-2 py-1.5">Password</th>
+                <th className="px-2 py-1.5">Type</th>
+                <th className="px-2 py-1.5">URL</th>
+                <th className="px-2 py-1.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {loading ? (
-                <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-500">Loading…</td></tr>
+                <tr><td colSpan={7} className="px-2 py-4 text-center text-gray-500">Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-500">No credentials</td></tr>
+                <tr><td colSpan={7} className="px-2 py-4 text-center text-gray-500">No credentials</td></tr>
               ) : filtered.map(row => {
                 const shown = !!revealed[row.id];
                 return (
                   <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
-                    <td className="px-3 py-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">{row.license}</td>
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{row.software}</td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-200 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span>{row.login}</span>
+                    <td className="px-2 py-1 font-medium text-gray-900 dark:text-white whitespace-nowrap">{row.license}</td>
+                    <td className="px-2 py-1 text-gray-600 dark:text-gray-300 max-w-[12rem] truncate" title={row.software}>{row.software}</td>
+                    <td className="px-2 py-1 text-gray-700 dark:text-gray-200 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        <span className="truncate max-w-[14rem]" title={row.login}>{row.login}</span>
                         {row.login && (
-                          <button onClick={() => copy(row.login)} title="Copy login" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                            <CopyIcon className="w-3.5 h-3.5" />
+                          <button onClick={() => copy(row.login)} title="Copy login" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex-shrink-0">
+                            <CopyIcon className="w-3 h-3" />
                           </button>
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-200 whitespace-nowrap font-mono">
-                      <div className="flex items-center gap-2">
-                        <span>{shown ? row.password : '••••••••'}</span>
-                        <button onClick={() => setRevealed(r => ({ ...r, [row.id]: !r[row.id] }))} title={shown ? 'Hide' : 'Show'} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                          <Icon name={shown ? IconName.EyeOff : IconName.Eye} className="w-3.5 h-3.5" />
+                    <td className="px-2 py-1 text-gray-700 dark:text-gray-200 whitespace-nowrap font-mono">
+                      <div className="flex items-center gap-1">
+                        <span>{shown ? row.password : '••••••'}</span>
+                        <button onClick={() => setRevealed(r => ({ ...r, [row.id]: !r[row.id] }))} title={shown ? 'Hide' : 'Show'} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex-shrink-0">
+                          <Icon name={shown ? IconName.EyeOff : IconName.Eye} className="w-3 h-3" />
                         </button>
                         {row.password && (
-                          <button onClick={() => copy(row.password)} title="Copy password" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                            <CopyIcon className="w-3.5 h-3.5" />
+                          <button onClick={() => copy(row.password)} title="Copy password" className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex-shrink-0">
+                            <CopyIcon className="w-3 h-3" />
                           </button>
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-300 whitespace-nowrap">{row.licence_type}</td>
-                    <td className="px-3 py-2 text-blue-600 dark:text-blue-400 truncate max-w-xs">
+                    <td className="px-2 py-1 text-gray-600 dark:text-gray-300 whitespace-nowrap">{row.licence_type}</td>
+                    <td className="px-2 py-1 text-blue-600 dark:text-blue-400 max-w-[14rem] truncate">
                       {row.url && row.url.toLowerCase() !== 'na' ? (
-                        <a href={row.url.startsWith('http') ? row.url : `https://${row.url}`} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        <a href={row.url.startsWith('http') ? row.url : `https://${row.url}`} target="_blank" rel="noopener noreferrer" className="hover:underline" title={row.url}>
                           {row.url}
                         </a>
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <td className="px-2 py-1 text-right whitespace-nowrap">
                       <button onClick={() => setEditing({
                         id: row.id,
                         license: row.license,
@@ -214,11 +214,11 @@ const SoftwareCredentialsView: React.FC = () => {
                         licence_type: row.licence_type,
                         url: row.url,
                         notes: row.notes,
-                      })} className="text-gray-500 hover:text-blue-600 mr-3" title="Edit">
-                        <Icon name={IconName.Create} className="w-4 h-4" />
+                      })} className="text-gray-500 hover:text-blue-600 mr-2" title="Edit">
+                        <Icon name={IconName.Create} className="w-3.5 h-3.5" />
                       </button>
                       <button onClick={() => remove(row.id)} className="text-gray-500 hover:text-red-600" title="Delete">
-                        <Icon name={IconName.Delete} className="w-4 h-4" />
+                        <Icon name={IconName.Delete} className="w-3.5 h-3.5" />
                       </button>
                     </td>
                   </tr>
