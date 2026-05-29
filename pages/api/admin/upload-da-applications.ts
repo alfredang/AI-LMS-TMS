@@ -110,45 +110,50 @@ function parseDate(value: any): string | null {
     return null;
 }
 
+// Normalize a header label so matching is tolerant of casing, leading/trailing
+// whitespace, and collapsed internal spaces (e.g. "Application ID " or "application  id").
+const normalizeHeader = (label: string): string => label.trim().toLowerCase().replace(/\s+/g, ' ');
+
+// Pre-build a normalized lookup: normalized Excel header -> db column.
+const normalizedColumnMapping: Record<string, string> = Object.entries(columnMapping).reduce(
+    (acc, [excelKey, dbKey]) => {
+        acc[normalizeHeader(excelKey)] = dbKey;
+        return acc;
+    },
+    {} as Record<string, string>
+);
+
+const NUMERIC_FIELDS = ['payable_fee', 'full_course_fee', 'gst', 'skillsfuture_subsidy', 'skillsfuture_credit'];
+
 // Transform Excel row to database format
 function transformRow(excelRow: Record<string, any>): Record<string, any> {
     const dbRow: Record<string, any> = {};
 
-    for (const [excelKey, dbKey] of Object.entries(columnMapping)) {
-        if (excelRow[excelKey] !== undefined && excelRow[excelKey] !== '') {
-            let value = excelRow[excelKey];
+    for (const [excelKey, rawValue] of Object.entries(excelRow)) {
+        if (rawValue === undefined || rawValue === '') continue;
 
-            // Handle date fields
-            if (dbKey.includes('date')) {
-                value = parseDate(value);
-            }
+        // Match the header (normalized) against the column mapping. Also accept a
+        // snake_case key in case the data was already transformed upstream.
+        const dbKey = normalizedColumnMapping[normalizeHeader(excelKey)]
+            ?? (Object.values(columnMapping).includes(excelKey.toLowerCase().replace(/\s+/g, '_'))
+                ? excelKey.toLowerCase().replace(/\s+/g, '_')
+                : undefined);
+        if (!dbKey || dbRow[dbKey] !== undefined) continue;
 
-            // Handle numeric fields
-            if (['payable_fee', 'full_course_fee', 'gst', 'skillsfuture_subsidy', 'skillsfuture_credit'].includes(dbKey) && value) {
-                value = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
-            }
+        let value: any = rawValue;
 
-            if (value !== null && value !== undefined) {
-                dbRow[dbKey] = value;
-            }
+        // Handle date fields
+        if (dbKey.includes('date')) {
+            value = parseDate(value);
         }
-    }
 
-    // Also check for snake_case keys (in case data is already transformed)
-    for (const key of Object.keys(excelRow)) {
-        const snakeKey = key.toLowerCase().replace(/\s+/g, '_');
-        if (Object.values(columnMapping).includes(snakeKey) && !dbRow[snakeKey]) {
-            let value = excelRow[key];
+        // Handle numeric fields
+        if (NUMERIC_FIELDS.includes(dbKey) && value) {
+            value = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
+        }
 
-            // Apply same transformations as above
-            if (snakeKey.includes('date')) {
-                value = parseDate(value);
-            }
-            if (['payable_fee', 'full_course_fee', 'gst', 'skillsfuture_subsidy', 'skillsfuture_credit'].includes(snakeKey) && value) {
-                value = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
-            }
-
-            dbRow[snakeKey] = value;
+        if (value !== null && value !== undefined) {
+            dbRow[dbKey] = value;
         }
     }
 
