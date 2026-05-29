@@ -192,7 +192,15 @@ export const UploadDirectApplicationView: React.FC = () => {
                         row => Array.isArray(row) && row.some(cell => HEADER_SIGNALS.includes(norm(cell)))
                     );
                     if (headerRowIndex === -1) {
-                        throw new Error('Could not find a header row containing "Application ID".\n\nMake sure you are uploading the Direct Applications export and that its column headers are present.');
+                        const firstRowCells = (rawRows[0] || [])
+                            .map(c => String(c ?? '').trim())
+                            .filter(Boolean);
+                        const seen = firstRowCells.length
+                            ? `\n\nColumns found in the first row:\n${firstRowCells.join(' | ')}`
+                            : '';
+                        throw new Error(
+                            `Could not find a header row containing "Application ID", "Trainee ID", "Trainee Name", or "Course Run ID".${seen}\n\nMake sure you are uploading the Direct Applications export with its column headers present.`
+                        );
                     }
                     if (headerRowIndex > 0) {
                         console.warn(`Header row detected at line ${headerRowIndex + 1}; skipping ${headerRowIndex} preamble row(s).`);
@@ -537,13 +545,13 @@ export const UploadDirectApplicationView: React.FC = () => {
                 </label>
             </div>
             {error && (
-                <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
                     <div className="flex-shrink-0 w-10 h-10 bg-white border border-red-200 rounded-full flex items-center justify-center"><Icon name={IconName.Close} className="w-5 h-5 text-red-500" /></div>
                     <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-gray-900">Something went wrong!</h4>
-                        <p className="text-sm text-gray-600 mt-1 whitespace-pre-line">{error}</p>
+                        <h4 className="font-semibold text-gray-900 dark:text-red-100">Something went wrong!</h4>
+                        <p className="text-sm text-gray-600 dark:text-red-200/90 mt-1 whitespace-pre-line">{error}</p>
                     </div>
-                    <button onClick={() => setError(null)} className="flex-shrink-0 text-gray-400 hover:text-gray-600"><Icon name={IconName.Close} className="w-5 h-5" /></button>
+                    <button onClick={() => setError(null)} className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:text-red-300 dark:hover:text-red-100"><Icon name={IconName.Close} className="w-5 h-5" /></button>
                 </div>
             )}
             <div className="flex justify-end items-center mt-6">
@@ -1793,10 +1801,10 @@ export const UpdateDirectApplicationView: React.FC = () => {
                 </label>
             </div>
             {error && (
-                <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                <div className="mt-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
                     <div className="flex-shrink-0 w-10 h-10 bg-white border border-red-200 rounded-full flex items-center justify-center"><Icon name={IconName.Close} className="w-5 h-5 text-red-500" /></div>
-                    <div className="flex-1"><h4 className="font-semibold text-gray-900">Something went wrong!</h4><p className="text-sm text-gray-600 mt-1 whitespace-pre-line">{error}</p></div>
-                    <button onClick={() => setError(null)} className="text-gray-400 hover:text-gray-600"><Icon name={IconName.Close} className="w-5 h-5" /></button>
+                    <div className="flex-1"><h4 className="font-semibold text-gray-900 dark:text-red-100">Something went wrong!</h4><p className="text-sm text-gray-600 dark:text-red-200/90 mt-1 whitespace-pre-line">{error}</p></div>
+                    <button onClick={() => setError(null)} className="text-gray-400 hover:text-gray-600 dark:text-red-300 dark:hover:text-red-100"><Icon name={IconName.Close} className="w-5 h-5" /></button>
                 </div>
             )}
             <div className="flex justify-end mt-6">
