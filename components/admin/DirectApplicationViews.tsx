@@ -180,10 +180,37 @@ export const UploadDirectApplicationView: React.FC = () => {
                     const workbook = XLSX.read(data, { type: 'array' });
                     if (!workbook.SheetNames.length) throw new Error('Excel file has no sheets.');
                     const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
+                    const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '', raw: false });
                     if (!rawRows.length) throw new Error('Excel file is empty.\n\nThe first sheet contains no data.');
-                    if (rawRows.length === 1) throw new Error('Only headers found, no data rows.\n\nSolution: Open the file in Excel, ensure data is visible, save it, and upload again.');
-                    resolve(XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false }));
+
+                    // Locate the real header row instead of assuming it is row 1.
+                    // Some exports prepend a title/blank row, which would otherwise make every
+                    // column key come through as "__EMPTY" and fail with "Missing Application ID".
+                    const norm = (v: any) => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+                    const HEADER_SIGNALS = ['application id', 'trainee id', 'trainee name', 'course run id'];
+                    const headerRowIndex = rawRows.findIndex(
+                        row => Array.isArray(row) && row.some(cell => HEADER_SIGNALS.includes(norm(cell)))
+                    );
+                    if (headerRowIndex === -1) {
+                        throw new Error('Could not find a header row containing "Application ID".\n\nMake sure you are uploading the Direct Applications export and that its column headers are present.');
+                    }
+                    if (headerRowIndex > 0) {
+                        console.warn(`Header row detected at line ${headerRowIndex + 1}; skipping ${headerRowIndex} preamble row(s).`);
+                    }
+
+                    const headers = rawRows[headerRowIndex].map(h => String(h ?? '').trim());
+                    const dataRows = rawRows.slice(headerRowIndex + 1);
+                    if (!dataRows.length) throw new Error('Only headers found, no data rows.\n\nSolution: Open the file in Excel, ensure data is visible, save it, and upload again.');
+
+                    const objects = dataRows
+                        .map(row => {
+                            const obj: Record<string, any> = {};
+                            headers.forEach((h, idx) => { if (h) obj[h] = row[idx] ?? ''; });
+                            return obj;
+                        })
+                        .filter(obj => Object.values(obj).some(v => String(v ?? '').trim() !== ''));
+
+                    resolve(objects);
                 } catch (err) { reject(err); }
             };
             reader.onerror = () => reject(new Error('Failed to read the file. Please try again.'));
