@@ -92,6 +92,13 @@ export function getCourseImageUrl(imageUrl?: string, courseId?: string): string 
 
   // If it's already a full URL (http/https), use it as-is
   if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    // tertiarycourses.com.sg Magento cache paths return HTTP 500; rewrite to original.
+    if (imageUrl.includes('tertiarycourses.com.sg/media/catalog/product/cache/')) {
+      return imageUrl.replace(
+        /\/media\/catalog\/product\/cache\/[^/]+\/image\/[^/]+\/[a-f0-9]{32}\//,
+        '/media/catalog/product/'
+      );
+    }
     return imageUrl;
   }
 
