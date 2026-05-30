@@ -1720,6 +1720,20 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             {(loadingManualSessions || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance) && (
               <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary" />
             )}
+            {(() => {
+              const allRows = [...manualAttendance, ...extraAttendees];
+              const total = allRows.length;
+              if (total === 0) return null;
+              const present = allRows.filter(r => r.isPresent).length;
+              const absent = total - present;
+              return (
+                <div className="flex items-center gap-2 text-xs ml-2">
+                  <span className="px-2 py-0.5 rounded bg-green-500/15 text-green-400 font-medium">Present: {present}</span>
+                  <span className="px-2 py-0.5 rounded bg-red-500/15 text-red-400 font-medium">Absent: {absent}</span>
+                  <span className="px-2 py-0.5 rounded bg-gray-500/15 text-muted font-medium">Total: {total}</span>
+                </div>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-2">
             {extraAttendees.length > 0 && (
