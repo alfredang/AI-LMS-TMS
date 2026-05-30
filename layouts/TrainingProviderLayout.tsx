@@ -17,6 +17,8 @@ import ApiEndpointsView from '../components/training-provider/ApiEndpointsView';
 import DocumentsView from '../components/training-provider/DocumentsView';
 import PrivacyPolicyView from '../components/training-provider/PrivacyPolicyView';
 import AcceptableUsePolicyView from '../components/training-provider/AcceptableUsePolicyView';
+import FeedbackFormBuilder from '../components/admin/FeedbackFormBuilder';
+import FeedbackFormResponsesView from '../components/admin/FeedbackFormResponsesView';
 import OtpEmailTemplateView from '../components/training-provider/OtpEmailTemplateView';
 import CertificateEmailTemplateView from '../components/training-provider/CertificateEmailTemplateView';
 import FeedbackEmailTemplateView from '../components/training-provider/FeedbackEmailTemplateView';
@@ -124,6 +126,10 @@ const TrainingProviderLayout: React.FC = () => {
         return <WebhooksView />;
       case View.SsgApiSummary:
         return <SsgApiSummaryView />;
+      case View.FeedbackForm:
+        return <FeedbackFormBuilder />;
+      case View.FeedbackFormResponses:
+        return <FeedbackFormResponsesView />;
       default:
         return <TrainingProviderDashboard />;
     }

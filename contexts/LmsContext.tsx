@@ -8,7 +8,7 @@ import { resetTutorChat } from '@lib/services/geminiService';
 import { initializeColorScheme } from '@utils/colorUtils';
 
 // Function to fetch training provider info for all users
-const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; showCertificateDelivery?: boolean; certificateDeliveryLabel?: string; certificateDeliveryLink?: string; referenceLinks?: any; virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' }> => {
+const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; showCertificateDelivery?: boolean; certificateDeliveryLabel?: string; certificateDeliveryLink?: string; feedbackFormEnabled?: boolean; feedbackFormExternalLink?: string; referenceLinks?: any; virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' }> => {
   try {
     // If userId is provided, fetch specific organization info
     const url = userId 
@@ -47,6 +47,8 @@ const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: strin
       showCertificateDelivery: result.data.showCertificateDelivery ?? false,
       certificateDeliveryLabel: result.data.certificateDeliveryLabel || 'TP Course Evaluation',
       certificateDeliveryLink: result.data.certificateDeliveryLink || 'https://goo.gl/R2eumq',
+      feedbackFormEnabled: result.data.feedbackFormEnabled ?? false,
+      feedbackFormExternalLink: result.data.feedbackFormExternalLink || '',
       referenceLinks: result.data.referenceLinks,
       virtualMeetingProvider: result.data.virtualMeetingProvider || 'google_meet',
     };
@@ -492,6 +494,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               showCertificateDelivery: providerInfo.showCertificateDelivery,
               certificateDeliveryLabel: providerInfo.certificateDeliveryLabel,
               certificateDeliveryLink: providerInfo.certificateDeliveryLink,
+              feedbackFormEnabled: providerInfo.feedbackFormEnabled,
+              feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
               integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
             } as TrainingProviderProfile);
           } catch (error) {
@@ -886,6 +890,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             showCertificateDelivery: providerInfo.showCertificateDelivery,
             certificateDeliveryLabel: providerInfo.certificateDeliveryLabel,
             certificateDeliveryLink: providerInfo.certificateDeliveryLink,
+            feedbackFormEnabled: providerInfo.feedbackFormEnabled,
+            feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
             integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
           } as TrainingProviderProfile);
           console.log('✅ LmsContext: Training provider info loaded after login');
@@ -937,6 +943,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               showCertificateDelivery: providerInfo.showCertificateDelivery,
               certificateDeliveryLabel: providerInfo.certificateDeliveryLabel,
               certificateDeliveryLink: providerInfo.certificateDeliveryLink,
+              feedbackFormEnabled: providerInfo.feedbackFormEnabled,
+              feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
               integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
             } as TrainingProviderProfile);
             console.log('✅ LmsContext: Training provider info loaded after login');

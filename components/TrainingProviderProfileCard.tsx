@@ -354,6 +354,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoAddLearnerToCalendar: "Auto Add Learner to Calendar for Direct Applications",
         showLessonPlanLearnerView: "Show Lesson Plan on Learner View",
         showCertificateDelivery: "Show Certificate Delivery on Course Page (in addition to TRAQOM Survey)",
+        feedbackFormEnabled: "Show Customizable Feedback Form on Course Page (in addition to TRAQOM Survey)",
     };
 
     useEffect(() => {
@@ -587,6 +588,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
         autoAddLearnerToCalendar: 'auto_add_learner_to_calendar',
         showLessonPlanLearnerView: 'show_lesson_plan_learner_view',
         showCertificateDelivery: 'show_certificate_delivery',
+        feedbackFormEnabled: 'feedback_form_enabled',
     };
 
     const handleToggleChange = (section: 'adminSettings' | 'securitySettings' | 'integrations' | 'gamingSettings' | 'fundingSettings', key: string) => {
@@ -608,6 +610,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                 const contextKeys: Record<string, string> = {
                     showCertificateDelivery: 'showCertificateDelivery',
                     showLessonPlanLearnerView: 'showLessonPlanLearnerView',
+                    feedbackFormEnabled: 'feedbackFormEnabled',
                 };
                 if (contextKeys[key]) {
                     updateTrainingProviderProfile({ [contextKeys[key]]: newValue } as any);
@@ -892,6 +895,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     certificateDeliveryLink: formData.adminSettings?.certificateDeliveryLink,
                     showCertificateDelivery: formData.adminSettings?.showCertificateDelivery,
                     showLessonPlanLearnerView: formData.adminSettings?.showLessonPlanLearnerView,
+                    feedbackFormEnabled: formData.adminSettings?.feedbackFormEnabled,
+                    feedbackFormExternalLink: formData.adminSettings?.feedbackFormExternalLink,
                 });
 
                 // Update the current user profile so the profile dropdown shows the same image
@@ -2220,6 +2225,35 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         ) : (
                             <p className="text-sm text-on-surface break-all">
                                 {formData.adminSettings.certificateDeliveryLink ?? 'https://goo.gl/R2eumq'}
+                            </p>
+                        )}
+                    </div>
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            Feedback Form External Link (optional)
+                        </label>
+                        <p className="text-xs text-on-surface-secondary mb-2 font-normal">
+                            If set, the Feedback Form card's QR points to this external URL. Leave blank to use the built-in form at <code>/feedback/&lt;course_run_id&gt;</code>.
+                        </p>
+                        {isEditing ? (
+                            <input
+                                type="text"
+                                value={formData.adminSettings.feedbackFormExternalLink ?? ''}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        adminSettings: {
+                                            ...prev.adminSettings,
+                                            feedbackFormExternalLink: e.target.value,
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="https://..."
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface break-all">
+                                {formData.adminSettings.feedbackFormExternalLink || '(uses built-in form)'}
                             </p>
                         )}
                     </div>

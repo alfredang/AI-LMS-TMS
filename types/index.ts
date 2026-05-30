@@ -33,7 +33,9 @@ export enum View {
   BillingHistory = 'billingHistory',
   CertificateHistory = 'certificateHistory',
   SsgApiSummary = 'ssgApiSummary',
-  WorkflowGuides = 'workflowGuides'
+  WorkflowGuides = 'workflowGuides',
+  FeedbackForm = 'feedbackForm',
+  FeedbackFormResponses = 'feedbackFormResponses'
 }
 
 export enum UserRole {
@@ -140,6 +142,43 @@ export enum AdminPage {
   SupportTickets = 'supportTickets',
   SupportTicketDetail = 'supportTicketDetail',
   MasterList = 'masterList',
+  FeedbackForm = 'feedbackForm',
+  FeedbackFormResponses = 'feedbackFormResponses',
+}
+
+export interface FeedbackFormField {
+  id: string;
+  label: string;
+  type: 'text' | 'email' | 'date' | 'textarea' | 'select' | 'rating1to5';
+  required?: boolean;
+  options?: string[];
+  autofill?: 'course_title' | 'course_code' | 'start_date' | 'end_date' | null;
+  readonly?: boolean;
+}
+
+export interface FeedbackFormSection {
+  id: string;
+  title: string;
+  fields: FeedbackFormField[];
+}
+
+export interface FeedbackFormTemplate {
+  id?: string;
+  training_provider_id?: string;
+  title: string;
+  sections: FeedbackFormSection[];
+  is_active?: boolean;
+}
+
+export interface FeedbackFormResponse {
+  id?: string;
+  template_id?: string;
+  course_run_id?: string;
+  user_id?: string;
+  learner_email?: string;
+  learner_name?: string;
+  answers: Record<string, string | number>;
+  submitted_at?: string;
 }
 
 export enum DeveloperPage {
@@ -386,6 +425,8 @@ export interface TrainingProviderProfile {
   showCertificateDelivery?: boolean;
   certificateDeliveryLabel?: string;
   certificateDeliveryLink?: string;
+  feedbackFormEnabled?: boolean;
+  feedbackFormExternalLink?: string;
 }
 
 export interface CurrentUserProfile {

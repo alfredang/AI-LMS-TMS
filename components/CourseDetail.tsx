@@ -2617,7 +2617,19 @@ export const CourseDetail: React.FC = () => {
 
     const traqomSurveyLink = 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr';
     const traqomQrCodeUrl = '/qr_codes/traqom_survey_qr_code.png';
-    const certDeliveryLink = trainingProviderProfile?.certificateDeliveryLink || 'https://goo.gl/R2eumq';
+    // Certificate Delivery card now points to the customizable feedback form.
+    // Admin can override the URL via training_provider.feedback_form_external_link.
+    // Use whichever class identifier is available: real UUID, the TGS-* code, or course code.
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const feedbackRouteId = selectedCourse?.courseRunUuid
+        || selectedCourse?.courseRunId
+        || convertedCourse?.courseCode
+        || '';
+    const builtInFeedbackUrl = feedbackRouteId ? `${origin}/feedback/${encodeURIComponent(feedbackRouteId)}` : '';
+    const certDeliveryLink = trainingProviderProfile?.feedbackFormExternalLink
+        || builtInFeedbackUrl
+        || trainingProviderProfile?.certificateDeliveryLink
+        || 'https://goo.gl/R2eumq';
     const certDeliveryQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(certDeliveryLink)}`;
 
     const attendanceLink = convertedCourse.daId ? `https://www.myskillsfuture.gov.sg/api/take-attendance/${convertedCourse.daId}` : null;
@@ -3212,7 +3224,10 @@ export const CourseDetail: React.FC = () => {
                                             onClick={() => setIsTraqomOpen(!isTraqomOpen)}
                                             aria-expanded={isTraqomOpen}
                                         >
-                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{trainingProviderProfile?.showCertificateDelivery ? `${trainingProviderProfile?.certificateDeliveryLabel || 'Certificate of Achievement'} & TRAQOM Survey` : 'TRAQOM Survey'}</h3>
+                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{[
+                                                trainingProviderProfile?.showCertificateDelivery ? 'Course Feedback' : null,
+                                                'TRAQOM Survey',
+                                            ].filter(Boolean).join(' & ')}</h3>
                                             <Icon name={IconName.ChevronDown} className={`w-6 h-6 text-blue-600 flex-shrink-0 transition-transform ${isTraqomOpen ? 'rotate-180' : ''}`} />
                                         </button>
                                         {isTraqomOpen && (
@@ -3222,19 +3237,19 @@ export const CourseDetail: React.FC = () => {
                                                     {trainingProviderProfile?.showCertificateDelivery && (
                                                     <div className="flex flex-col rounded-xl border border-default overflow-hidden">
                                                         <div className="bg-blue-600 px-4 py-2.5 flex items-center justify-center gap-2">
-                                                            <Icon name={IconName.FileText} className="w-4 h-4 text-white flex-shrink-0" />
-                                                            <span className="text-sm font-semibold text-white">{trainingProviderProfile?.certificateDeliveryLabel || 'Certificate of Achievement'}</span>
+                                                            <Icon name={IconName.ClipboardCheck} className="w-4 h-4 text-white flex-shrink-0" />
+                                                            <span className="text-sm font-semibold text-white">Course Feedback</span>
                                                         </div>
                                                         <div className="flex flex-col items-center p-5 bg-surface flex-1 justify-between gap-3">
                                                             <div className="flex flex-col items-center gap-3 w-full">
                                                                 <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
                                                                     <img
                                                                         src={certDeliveryQrCodeUrl}
-                                                                        alt="Certificate Delivery QR Code"
+                                                                        alt="Course Feedback QR Code"
                                                                         className="w-36 h-36 object-contain"
                                                                     />
                                                                 </div>
-                                                                <p className="text-sm text-on-surface-secondary text-center">Scan to receive your certificate</p>
+                                                                <p className="text-sm text-on-surface-secondary text-center">Scan to share your feedback</p>
                                                             </div>
                                                             <div className="w-full flex flex-col gap-2">
                                                                 <p className="text-xs text-on-surface-secondary break-all px-1">{certDeliveryLink}</p>
@@ -3303,6 +3318,7 @@ export const CourseDetail: React.FC = () => {
                                                             </div>
                                                         </div>
                                                     </div>
+
                                                 </div>
                                             </div>
                                         )}

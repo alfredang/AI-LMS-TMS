@@ -24,6 +24,12 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const [usefulLinksOpen, setUsefulLinksOpen] = useState(false);
     const [cronJobsOpen, setCronJobsOpen] = useState(cronJobsViews.includes(currentView));
     const [loggingOpen, setLoggingOpen] = useState(false);
+    const feedbackFormViews = [View.FeedbackForm, View.FeedbackFormResponses];
+    const [feedbackFormOpen, setFeedbackFormOpen] = useState(feedbackFormViews.includes(currentView));
+    const feedbackFormItems = [
+        { view: View.FeedbackForm, label: 'Form Builder', icon: IconName.Edit },
+        { view: View.FeedbackFormResponses, label: 'Responses', icon: IconName.ClipboardCheck },
+    ];
 
     const navItemsTop = [
         { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
@@ -177,6 +183,34 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                     {!collapsed && <span className="truncate">{item.label}</span>}
                 </a>
             ))}
+
+            {/* Feedback Form - Collapsible */}
+            <div>
+                <button
+                    onClick={() => setFeedbackFormOpen(!feedbackFormOpen)}
+                    title={collapsed ? 'Feedback Form' : undefined}
+                    className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${feedbackFormViews.includes(activeView) ? activeClass : inactiveClass}`}
+                >
+                    <Icon name={IconName.Chat} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${feedbackFormViews.includes(activeView) ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    {!collapsed && <span className="truncate flex-1 text-left">Feedback Form</span>}
+                    {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${feedbackFormOpen ? 'rotate-180' : ''}`} />}
+                </button>
+                {!collapsed && feedbackFormOpen && (
+                    <div className="ml-4 mt-1 space-y-1">
+                        {feedbackFormItems.map((item) => (
+                            <a
+                                key={item.view}
+                                href="#"
+                                onClick={(e) => { e.preventDefault(); handleClick(item.view); }}
+                                className={linkClass(item.view)}
+                            >
+                                <Icon name={item.icon} className="w-4 h-4" />
+                                <span>{item.label}</span>
+                            </a>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {/* Cron Jobs - Collapsible */}
             <div>

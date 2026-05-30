@@ -770,6 +770,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { name: 'es_threshold', value: String(profileData.adminSettings?.esThreshold ?? 40) },
         { name: 'certificate_delivery_label', value: (profileData.adminSettings?.certificateDeliveryLabel || 'TP Course Evaluation') },
         { name: 'certificate_delivery_link', value: (profileData.adminSettings?.certificateDeliveryLink || 'https://goo.gl/R2eumq') },
+        { name: 'feedback_form_external_link', value: (profileData.adminSettings?.feedbackFormExternalLink || '') },
       ]);
 
       try {
