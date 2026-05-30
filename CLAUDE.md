@@ -25,7 +25,7 @@ Same codebase deployed for multiple tenants on **Coolify** (self-hosted, not Ver
 ## Commands
 
 ```bash
-npm run dev          # Next.js 16, Turbopack
+npm run dev          # Next.js 16, Turbopack — ALWAYS start localhost on port 3003 (override the default 3000), e.g. `npx next dev -p 3003` with the same env vars as the dev script
 npm run build        # Production — explicitly --webpack
 npm run lint
 npm run type-check   # see caveat
