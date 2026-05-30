@@ -3212,7 +3212,7 @@ export const CourseDetail: React.FC = () => {
                                             onClick={() => setIsTraqomOpen(!isTraqomOpen)}
                                             aria-expanded={isTraqomOpen}
                                         >
-                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{trainingProviderProfile?.showCertificateDelivery ? `${trainingProviderProfile?.certificateDeliveryLabel || 'TP Course Evaluation'} & TRAQOM Survey` : 'TRAQOM Survey'}</h3>
+                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{trainingProviderProfile?.showCertificateDelivery ? `${trainingProviderProfile?.certificateDeliveryLabel || 'Certificate of Achievement'} & TRAQOM Survey` : 'TRAQOM Survey'}</h3>
                                             <Icon name={IconName.ChevronDown} className={`w-6 h-6 text-blue-600 flex-shrink-0 transition-transform ${isTraqomOpen ? 'rotate-180' : ''}`} />
                                         </button>
                                         {isTraqomOpen && (
@@ -3221,9 +3221,9 @@ export const CourseDetail: React.FC = () => {
                                                                     {/* Certificate Delivery Card */}
                                                     {trainingProviderProfile?.showCertificateDelivery && (
                                                     <div className="flex flex-col rounded-xl border border-default overflow-hidden">
-                                                        <div className="bg-blue-600 px-4 py-2.5 flex items-center gap-2">
+                                                        <div className="bg-blue-600 px-4 py-2.5 flex items-center justify-center gap-2">
                                                             <Icon name={IconName.FileText} className="w-4 h-4 text-white flex-shrink-0" />
-                                                            <span className="text-sm font-semibold text-white">{trainingProviderProfile?.certificateDeliveryLabel || 'TP Course Evaluation'}</span>
+                                                            <span className="text-sm font-semibold text-white">{trainingProviderProfile?.certificateDeliveryLabel || 'Certificate of Achievement'}</span>
                                                         </div>
                                                         <div className="flex flex-col items-center p-5 bg-surface flex-1 justify-between gap-3">
                                                             <div className="flex flex-col items-center gap-3 w-full">
@@ -3264,7 +3264,7 @@ export const CourseDetail: React.FC = () => {
 
                                                     {/* TRAQOM Survey Card */}
                                                     <div className="flex flex-col rounded-xl border border-default overflow-hidden">
-                                                        <div className="bg-teal-600 px-4 py-2.5 flex items-center gap-2">
+                                                        <div className="bg-teal-600 px-4 py-2.5 flex items-center justify-center gap-2">
                                                             <Icon name={IconName.Edit} className="w-4 h-4 text-white flex-shrink-0" />
                                                             <span className="text-sm font-semibold text-white">TRAQOM Survey</span>
                                                         </div>
