@@ -1048,6 +1048,14 @@ const ManagementCourseList: React.FC = () => {
                         >
                             Next →
                         </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(totalPages)}
+                            disabled={currentPage === totalPages}
+                        >
+                            Last »
+                        </Button>
                     </div>
                 </div>
             )}
