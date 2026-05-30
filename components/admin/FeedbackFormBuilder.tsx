@@ -36,14 +36,16 @@ const PreviewField: React.FC<{ field: FeedbackFormField }> = ({ field }) => {
         {field.label}{field.required && <span className="text-red-500"> *</span>}
       </label>
       {field.type === 'rating1to5' ? (
-        <div className="flex flex-wrap items-center gap-10 sm:gap-14 mt-3">
-          {[1, 2, 3, 4, 5].map(n => (
-            <div key={n} className="flex flex-col items-center gap-1.5">
-              <StarIcon className="w-11 h-11 text-gray-300" />
-              <span className="text-xs font-medium text-gray-500">{n}</span>
-            </div>
-          ))}
-          <span className="text-xs text-gray-500 ml-2">1 = Poor, 5 = Best</span>
+        <div className="mt-3">
+          <div className="flex flex-nowrap items-center justify-between sm:justify-start sm:gap-12">
+            {[1, 2, 3, 4, 5].map(n => (
+              <div key={n} className="flex flex-col items-center gap-1 flex-shrink-0">
+                <StarIcon className="w-9 h-9 sm:w-11 sm:h-11 text-gray-300" />
+                <span className="text-xs font-medium text-gray-500">{n}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">1 = Poor, 5 = Best</p>
         </div>
       ) : field.type === 'textarea' ? (
         <textarea className={base} rows={3} disabled placeholder={placeholder} />

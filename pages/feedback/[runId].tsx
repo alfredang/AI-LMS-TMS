@@ -191,24 +191,26 @@ const FieldInput: React.FC<{
     return (
       <div>
         {labelEl}
-        <div className="flex flex-wrap items-center gap-10 sm:gap-14 mt-3">
-          {[1, 2, 3, 4, 5].map(n => {
-            const current = Number(value);
-            const filled = current >= n;
-            return (
-              <button
-                key={n}
-                type="button"
-                onClick={() => onChange(n)}
-                className="flex flex-col items-center gap-1.5 group focus:outline-none"
-                aria-label={`Rate ${n} out of 5`}
-              >
-                <StarIcon className={`w-11 h-11 transition-colors ${filled ? 'text-yellow-400' : 'text-gray-300 group-hover:text-yellow-300'}`} filled={filled} />
-                <span className={`text-xs font-medium ${current === n ? 'text-yellow-500' : 'text-gray-500'}`}>{n}</span>
-              </button>
-            );
-          })}
-          <span className="text-xs text-gray-500 ml-2">1 = Poor, 5 = Best</span>
+        <div className="mt-3">
+          <div className="flex flex-nowrap items-center justify-between sm:justify-start sm:gap-12">
+            {[1, 2, 3, 4, 5].map(n => {
+              const current = Number(value);
+              const filled = current >= n;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => onChange(n)}
+                  className="flex flex-col items-center gap-1 group focus:outline-none flex-shrink-0"
+                  aria-label={`Rate ${n} out of 5`}
+                >
+                  <StarIcon className={`w-9 h-9 sm:w-11 sm:h-11 transition-colors ${filled ? 'text-yellow-400' : 'text-gray-300 group-hover:text-yellow-300'}`} filled={filled} />
+                  <span className={`text-xs font-medium ${current === n ? 'text-yellow-500' : 'text-gray-500'}`}>{n}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">1 = Poor, 5 = Best</p>
         </div>
       </div>
     );
