@@ -335,25 +335,49 @@ export const FeedbackFormResponsesView: React.FC = () => {
               <div className="border-t pt-3 border-gray-200 dark:border-gray-700">
                 <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Answers</p>
                 <div className="space-y-2">
-                  {Object.entries(editDraft.answers).map(([k, v]) => (
-                    <div key={k} className="grid grid-cols-3 gap-2 items-center">
-                      <label className="text-xs text-gray-500 col-span-1 truncate" title={k}>{k}</label>
-                      <input
-                        className="col-span-2 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm"
-                        value={String(v ?? '')}
-                        onChange={e => {
-                          const next = e.target.value;
-                          setEditDraft(d => ({
-                            ...d,
-                            answers: {
-                              ...d.answers,
-                              [k]: typeof v === 'number' && next !== '' && !isNaN(Number(next)) ? Number(next) : next,
-                            },
-                          }));
-                        }}
-                      />
-                    </div>
-                  ))}
+                  {(() => {
+                    const PREFERRED_ORDER = [
+                      'course_title', 'course_code', 'learner_name', 'start_date', 'end_date',
+                      'rate_learning_objectives', 'rate_trainer_knowledge', 'rate_training_environment',
+                    ];
+                    const keys = Object.keys(editDraft.answers);
+                    const ordered = [
+                      ...PREFERRED_ORDER.filter(k => keys.includes(k)),
+                      ...keys.filter(k => !PREFERRED_ORDER.includes(k) && k !== 'message'),
+                      ...(keys.includes('message') ? ['message'] : []),
+                    ];
+                    return ordered.map(k => {
+                      const v = editDraft.answers[k];
+                      const isMessage = k === 'message';
+                      const onChange = (next: string) =>
+                        setEditDraft(d => ({
+                          ...d,
+                          answers: {
+                            ...d.answers,
+                            [k]: typeof v === 'number' && next !== '' && !isNaN(Number(next)) ? Number(next) : next,
+                          },
+                        }));
+                      return (
+                        <div key={k} className={`grid grid-cols-3 gap-2 ${isMessage ? 'items-start' : 'items-center'}`}>
+                          <label className="text-xs text-gray-500 col-span-1 truncate pt-2" title={k}>{k}</label>
+                          {isMessage ? (
+                            <textarea
+                              rows={4}
+                              className="col-span-2 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm"
+                              value={String(v ?? '')}
+                              onChange={e => onChange(e.target.value)}
+                            />
+                          ) : (
+                            <input
+                              className="col-span-2 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm"
+                              value={String(v ?? '')}
+                              onChange={e => onChange(e.target.value)}
+                            />
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             </div>
