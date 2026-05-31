@@ -301,6 +301,9 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isR2IntegrationOpen, setIsR2IntegrationOpen] = useState(false);
     const [isSmtpIntegrationOpen, setIsSmtpIntegrationOpen] = useState(false);
     const [isSmtpHowToOpen, setIsSmtpHowToOpen] = useState(false);
+    const [isGmailHowToOpen, setIsGmailHowToOpen] = useState(false);
+    const [isR2HowToOpen, setIsR2HowToOpen] = useState(false);
+    const [isZoomHowToOpen, setIsZoomHowToOpen] = useState(false);
     const [smtpTestRecipient, setSmtpTestRecipient] = useState('');
     const [smtpTestStatus, setSmtpTestStatus] = useState<{ kind: 'idle' | 'sending' | 'ok' | 'error'; message?: string }>({ kind: 'idle' });
     const [gmailTestRecipient, setGmailTestRecipient] = useState('');
@@ -1496,6 +1499,79 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                             <div className="space-y-3">
                                 <h4 className="text-sm font-bold text-on-surface pl-3">Gmail</h4>
                                 <div className="p-3 bg-surface rounded-md border border-default ml-4">
+                                    {/* How to set up Gmail OAuth */}
+                                    <div className="rounded-md border border-default mb-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsGmailHowToOpen(prev => !prev)}
+                                            className="w-full flex items-center justify-between px-3 py-2 text-sm text-on-surface hover:bg-surface-elevated rounded-md"
+                                        >
+                                            <span className="font-medium">How to set up Gmail OAuth</span>
+                                            <span className="text-on-surface-secondary text-xs">{isGmailHowToOpen ? '▲' : '▼'}</span>
+                                        </button>
+                                        {isGmailHowToOpen && (
+                                            <div className="px-4 pb-3 pt-1 text-xs text-on-surface-secondary space-y-3">
+                                                <p>Gmail OAuth lets the LMS send mail (OTP, notifications, support replies) as your company mailbox without storing the password. You need a Google Cloud project, OAuth client credentials, and a refresh token bound to the sending Gmail / Workspace account.</p>
+
+                                                <div>
+                                                    <div className="font-semibold text-on-surface mb-1">1. Create a Google Cloud project</div>
+                                                    <ol className="list-decimal ml-5 space-y-1">
+                                                        <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">console.cloud.google.com</a> and create (or pick) a project.</li>
+                                                        <li>Open <strong>APIs &amp; Services → Library</strong> and enable <strong>Gmail API</strong>. If you also use Google Drive / Slides / Calendar features, enable those too.</li>
+                                                    </ol>
+                                                </div>
+
+                                                <div>
+                                                    <div className="font-semibold text-on-surface mb-1">2. Configure the OAuth consent screen</div>
+                                                    <ol className="list-decimal ml-5 space-y-1">
+                                                        <li>Open <strong>APIs &amp; Services → OAuth consent screen</strong>.</li>
+                                                        <li>User type: <strong>Internal</strong> (Workspace, recommended) or <strong>External</strong> (personal Gmail or no Workspace). External apps stay in Testing mode unless you submit for verification.</li>
+                                                        <li>Fill app name, support email, developer email. Add the scopes you need: <code className="text-on-surface">https://www.googleapis.com/auth/gmail.send</code> (plus Drive / Slides / Calendar scopes if you use those features).</li>
+                                                        <li>If External + Testing mode: under <strong>Test users</strong>, add the Gmail account you want to send from (e.g. <code className="text-on-surface">sales@tertiarycourses.com.sg</code>).</li>
+                                                    </ol>
+                                                </div>
+
+                                                <div>
+                                                    <div className="font-semibold text-on-surface mb-1">3. Create OAuth client credentials</div>
+                                                    <ol className="list-decimal ml-5 space-y-1">
+                                                        <li>Open <strong>APIs &amp; Services → Credentials → Create credentials → OAuth client ID</strong>.</li>
+                                                        <li>Application type: <strong>Web application</strong>.</li>
+                                                        <li>Add Authorised redirect URI: <code className="text-on-surface">https://developers.google.com/oauthplayground</code> (used in the next step to mint the refresh token).</li>
+                                                        <li>Click Create. Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> shown — paste them into <em>Google Client ID</em> and <em>Google Client Secret</em> below.</li>
+                                                    </ol>
+                                                </div>
+
+                                                <div>
+                                                    <div className="font-semibold text-on-surface mb-1">4. Get the Refresh Token via OAuth Playground</div>
+                                                    <ol className="list-decimal ml-5 space-y-1">
+                                                        <li>Open <a href="https://developers.google.com/oauthplayground/" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">developers.google.com/oauthplayground</a> in an Incognito window.</li>
+                                                        <li>Click the gear icon (top-right) → check <strong>Use your own OAuth credentials</strong>. Paste the Client ID and Client Secret from step 3. Close the panel.</li>
+                                                        <li>In the left list, scroll to <strong>Gmail API v1</strong> and check <code className="text-on-surface">https://www.googleapis.com/auth/gmail.send</code>. Also add <code className="text-on-surface">https://www.googleapis.com/auth/drive</code>, <code className="text-on-surface">/auth/presentations</code>, <code className="text-on-surface">/auth/calendar</code> if you use those features.</li>
+                                                        <li>Click <strong>Authorize APIs</strong> → sign in with the <strong>sending Gmail account</strong> (e.g. <code className="text-on-surface">sales@tertiarycourses.com.sg</code>) → approve.</li>
+                                                        <li>On step 2, click <strong>Exchange authorization code for tokens</strong>. Copy the <strong>Refresh token</strong> shown — paste it into <em>Google Refresh Token</em> below.</li>
+                                                    </ol>
+                                                </div>
+
+                                                <div>
+                                                    <div className="font-semibold text-on-surface mb-1">5. Save &amp; Send Test</div>
+                                                    <ol className="list-decimal ml-5 space-y-1">
+                                                        <li><strong>Email User</strong> = the full sending address (e.g. <code className="text-on-surface">sales@tertiarycourses.com.sg</code>) — must match the account you authorised in step 4.</li>
+                                                        <li>Click <strong>Save Changes</strong>, then click <strong>Send Test</strong> below to verify.</li>
+                                                    </ol>
+                                                </div>
+
+                                                <div className="pt-2 border-t border-default">
+                                                    <div className="font-semibold text-on-surface mb-1">Common issues</div>
+                                                    <ul className="list-disc ml-5 space-y-1">
+                                                        <li><code className="text-on-surface">invalid_grant</code> on send → refresh token expired (External Testing apps expire tokens every 7 days). Re-run step 4 to mint a new refresh token. Either publish the consent screen or move to Internal to avoid this.</li>
+                                                        <li><code className="text-on-surface">access_denied</code> in Playground → the account isn&apos;t on the Test users list or doesn&apos;t belong to the Workspace org.</li>
+                                                        <li>Mail sent but not arriving → check the <strong>Sent</strong> folder of the authorised Gmail account. Gmail rewrites <em>From</em> to that account regardless of what the API specifies.</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <h4 className="text-sm font-bold text-on-surface mb-3">Email Configuration (Google OAuth2)</h4>
                                     <div className="space-y-3">
                                     {[
@@ -1806,7 +1882,81 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     <div>
                     {renderIntegrationPanelHeader('Zoom', isZoomIntegrationOpen, () => setIsZoomIntegrationOpen(prev => !prev))}
                     {isZoomIntegrationOpen && (
-                    <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                    <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default space-y-3">
+                        {/* How to set up Zoom OAuth */}
+                        <div className="rounded-md border border-default">
+                            <button
+                                type="button"
+                                onClick={() => setIsZoomHowToOpen(prev => !prev)}
+                                className="w-full flex items-center justify-between px-3 py-2 text-sm text-on-surface hover:bg-surface-elevated rounded-md"
+                            >
+                                <span className="font-medium">How to set up Zoom OAuth</span>
+                                <span className="text-on-surface-secondary text-xs">{isZoomHowToOpen ? '▲' : '▼'}</span>
+                            </button>
+                            {isZoomHowToOpen && (
+                                <div className="px-4 pb-3 pt-1 text-xs text-on-surface-secondary space-y-3">
+                                    <p>Zoom OAuth lets the LMS create class meetings on demand under your Zoom account. You build a User-managed OAuth app in the Zoom Marketplace, paste its Client ID / Secret here, then connect an admin user — Zoom returns a refresh token the LMS stores.</p>
+
+                                    <div>
+                                        <div className="font-semibold text-on-surface mb-1">1. Create the OAuth app in Zoom Marketplace</div>
+                                        <ol className="list-decimal ml-5 space-y-1">
+                                            <li>Sign in to <a href="https://marketplace.zoom.us/" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">marketplace.zoom.us</a> with the Zoom account that owns the meetings.</li>
+                                            <li>Click <strong>Develop → Build App</strong> and choose <strong>OAuth → User-managed app</strong>. Account-level apps require admin approval and are heavier; user-managed is the right pick for a single tenant.</li>
+                                            <li>App name: e.g. <code className="text-on-surface">LMS-TMS Zoom Integration</code>. Choose <strong>Intend to publish: No</strong> (internal use).</li>
+                                        </ol>
+                                    </div>
+
+                                    <div>
+                                        <div className="font-semibold text-on-surface mb-1">2. Fill App Credentials</div>
+                                        <ol className="list-decimal ml-5 space-y-1">
+                                            <li>In the app&apos;s <strong>App Credentials</strong> tab, copy <strong>Client ID</strong> and <strong>Client Secret</strong> — paste them into the fields below.</li>
+                                            <li>Under <strong>Redirect URL for OAuth</strong> and <strong>Add allow lists</strong>, add:
+                                                <ul className="list-disc ml-5 mt-1 space-y-1">
+                                                    <li><code className="text-on-surface break-all">{(typeof window !== 'undefined' ? window.location.origin : 'https://your-lms-domain.com')}/api/integrations/zoom/oauth-callback</code></li>
+                                                </ul>
+                                                Add both your local dev URL (<code className="text-on-surface">http://localhost:3003/...</code>) and the live URL if you connect from both.
+                                            </li>
+                                        </ol>
+                                    </div>
+
+                                    <div>
+                                        <div className="font-semibold text-on-surface mb-1">3. Information &amp; Scopes</div>
+                                        <ol className="list-decimal ml-5 space-y-1">
+                                            <li>Fill the <strong>Information</strong> tab (short / long description, contact email, company name) — Zoom requires these even for unpublished apps.</li>
+                                            <li>Open the <strong>Scopes</strong> tab and add at minimum:
+                                                <ul className="list-disc ml-5 mt-1 space-y-1">
+                                                    <li><code className="text-on-surface">meeting:write:meeting</code> — create meetings</li>
+                                                    <li><code className="text-on-surface">meeting:read:meeting</code> — read meeting details</li>
+                                                    <li><code className="text-on-surface">user:read:user</code> — show which Zoom account is connected</li>
+                                                </ul>
+                                            </li>
+                                            <li>Leave <strong>Activation</strong> for the next step.</li>
+                                        </ol>
+                                    </div>
+
+                                    <div>
+                                        <div className="font-semibold text-on-surface mb-1">4. Save &amp; Connect</div>
+                                        <ol className="list-decimal ml-5 space-y-1">
+                                            <li>Set <strong>Virtual meeting provider</strong> above to <strong>Zoom</strong>.</li>
+                                            <li>Paste Client ID and Client Secret below, then click <strong>Save Changes</strong>.</li>
+                                            <li>Click <strong>Connect Zoom</strong>. A Zoom consent popup opens — sign in as the Zoom user whose account should host the meetings, then click <strong>Allow</strong>. The LMS stores the refresh token.</li>
+                                            <li>Try creating a class meeting in the LMS to confirm. The connected Zoom user appears as the meeting host.</li>
+                                        </ol>
+                                    </div>
+
+                                    <div className="pt-2 border-t border-default">
+                                        <div className="font-semibold text-on-surface mb-1">Common issues</div>
+                                        <ul className="list-disc ml-5 space-y-1">
+                                            <li><code className="text-on-surface">redirect_uri_mismatch</code> on Connect → the LMS callback URL isn&apos;t in the app&apos;s Redirect URL / allow list. Copy the exact URL from the error (including protocol) and add it to the Zoom app.</li>
+                                            <li><code className="text-on-surface">invalid_client</code> → Client Secret was regenerated in Marketplace but not re-pasted here. Re-copy and Save.</li>
+                                            <li><code className="text-on-surface">scope_missing</code> on meeting creation → add the missing scope in Marketplace, then re-Connect (re-consent) to refresh the token.</li>
+                                            <li>To disconnect, revoke at <a href="https://marketplace.zoom.us/user/installed" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">marketplace.zoom.us/user/installed</a> and clear Client ID / Secret here.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="p-3 bg-surface rounded-md border border-default">
                             <div className="space-y-3">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2019,7 +2169,81 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     <div>
                     {renderIntegrationPanelHeader('Cloudflare R2', isR2IntegrationOpen, () => setIsR2IntegrationOpen(prev => !prev))}
                     {isR2IntegrationOpen && (
-                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default space-y-3">
+                                {/* How to set up Cloudflare R2 */}
+                                <div className="rounded-md border border-default">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsR2HowToOpen(prev => !prev)}
+                                        className="w-full flex items-center justify-between px-3 py-2 text-sm text-on-surface hover:bg-surface-elevated rounded-md"
+                                    >
+                                        <span className="font-medium">How to set up Cloudflare R2</span>
+                                        <span className="text-on-surface-secondary text-xs">{isR2HowToOpen ? '▲' : '▼'}</span>
+                                    </button>
+                                    {isR2HowToOpen && (
+                                        <div className="px-4 pb-3 pt-1 text-xs text-on-surface-secondary space-y-3">
+                                            <p>Cloudflare R2 is S3-compatible object storage with no egress fees. The LMS uses it to store AI-generated course banner images and serves them from a public R2 URL (or a custom domain). You need a Cloudflare account, a bucket, an R2 API token, and a public access route.</p>
+
+                                            <div>
+                                                <div className="font-semibold text-on-surface mb-1">1. Enable R2 and create a bucket</div>
+                                                <ol className="list-decimal ml-5 space-y-1">
+                                                    <li>Sign in to <a href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">dash.cloudflare.com</a>.</li>
+                                                    <li>In the left sidebar, click <strong>R2 Object Storage</strong>. If it&apos;s your first time, accept the R2 terms (a payment method is required even on the free tier).</li>
+                                                    <li>Click <strong>Create bucket</strong>. Name it something like <code className="text-on-surface">tertiary-lms-tms-images</code>. Pick a location hint near your users (e.g. <strong>APAC</strong> for Singapore). Click Create.</li>
+                                                </ol>
+                                            </div>
+
+                                            <div>
+                                                <div className="font-semibold text-on-surface mb-1">2. Make the bucket publicly readable</div>
+                                                <p>The LMS writes objects via the S3 API but learners load them via a public HTTPS URL. Pick one of:</p>
+                                                <ul className="list-disc ml-5 space-y-1 mt-1">
+                                                    <li><strong>r2.dev URL (easiest):</strong> open the bucket → <strong>Settings</strong> tab → under <strong>Public Access</strong> → <strong>R2.dev subdomain</strong> → click <strong>Allow Access</strong>. Cloudflare shows a URL like <code className="text-on-surface break-all">https://pub-abcdef123.r2.dev</code>. Copy it — that&apos;s your <em>Public URL</em>.</li>
+                                                    <li><strong>Custom domain (recommended for production):</strong> in the same Settings tab → <strong>Custom Domains → Connect Domain</strong>. Add e.g. <code className="text-on-surface">images.yourcompany.com</code>. Cloudflare auto-creates the DNS record if the domain is on Cloudflare DNS. The Public URL is then <code className="text-on-surface">https://images.yourcompany.com</code>.</li>
+                                                </ul>
+                                            </div>
+
+                                            <div>
+                                                <div className="font-semibold text-on-surface mb-1">3. Create the R2 API token</div>
+                                                <ol className="list-decimal ml-5 space-y-1">
+                                                    <li>In the R2 sidebar, click <strong>Manage R2 API Tokens</strong>.</li>
+                                                    <li>Click <strong>Create API token</strong>. Name it <code className="text-on-surface">LMS-TMS Image Uploader</code>.</li>
+                                                    <li>Permissions: <strong>Object Read &amp; Write</strong>. Specify bucket: pick the bucket you created (least-privilege).</li>
+                                                    <li>TTL: leave at <strong>Forever</strong> unless you rotate regularly.</li>
+                                                    <li>Click <strong>Create API Token</strong>. Cloudflare shows three values — copy all three before closing the page:
+                                                        <ul className="list-disc ml-5 mt-1 space-y-1">
+                                                            <li><strong>Access Key ID</strong> → paste into <em>Access Key ID</em></li>
+                                                            <li><strong>Secret Access Key</strong> → paste into <em>Secret Access Key</em></li>
+                                                            <li><strong>Endpoint for S3 clients</strong> (looks like <code className="text-on-surface break-all">https://&lt;account-id&gt;.r2.cloudflarestorage.com</code>) → paste into <em>S3 API Endpoint</em></li>
+                                                        </ul>
+                                                    </li>
+                                                </ol>
+                                            </div>
+
+                                            <div>
+                                                <div className="font-semibold text-on-surface mb-1">4. Fill the fields below</div>
+                                                <ul className="list-disc ml-5 space-y-1">
+                                                    <li><strong>S3 API Endpoint</strong> — from step 3.</li>
+                                                    <li><strong>Access Key ID</strong> — from step 3.</li>
+                                                    <li><strong>Secret Access Key</strong> — from step 3.</li>
+                                                    <li><strong>Bucket Name</strong> — exact name from step 1 (e.g. <code className="text-on-surface">tertiary-lms-tms-images</code>).</li>
+                                                    <li><strong>Public URL</strong> — the r2.dev subdomain OR your custom domain from step 2. No trailing slash; the LMS appends the object key.</li>
+                                                </ul>
+                                                <p className="mt-2">Click <strong>Save Changes</strong>. Then go to <strong>Admin → Course Management → Course Image Generator</strong> and run one image to confirm; the resulting URL should be on your Public URL host.</p>
+                                            </div>
+
+                                            <div className="pt-2 border-t border-default">
+                                                <div className="font-semibold text-on-surface mb-1">Common issues</div>
+                                                <ul className="list-disc ml-5 space-y-1">
+                                                    <li><code className="text-on-surface">Access Denied</code> on upload → token doesn&apos;t cover the bucket, or bucket name is mistyped. Tokens are scoped, so re-check step 3 permissions.</li>
+                                                    <li>Image uploads succeed but URL returns 404 → public access was never enabled (step 2). Until you toggle r2.dev or add a custom domain, the bucket is private.</li>
+                                                    <li>CORS errors when displaying the image → in the bucket Settings tab, add a CORS rule allowing <code className="text-on-surface">GET</code> from your LMS origin (or <code className="text-on-surface">*</code> for non-credentialed reads).</li>
+                                                    <li>Wrong endpoint format → it must be <code className="text-on-surface">https://&lt;account-id&gt;.r2.cloudflarestorage.com</code> (no bucket path; the SDK adds it).</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div className="p-3 bg-surface rounded-md border border-default">
                                     <p className="text-xs text-on-surface-secondary mb-3">
                                         Object storage for generated course banner images. Used by Admin → Course Management → Course Image Generator and the &quot;Generate with AI&quot; button in the Course Editor.
