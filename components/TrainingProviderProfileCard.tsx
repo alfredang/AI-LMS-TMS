@@ -296,7 +296,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isGoogleIntegrationOpen, setIsGoogleIntegrationOpen] = useState(false);
     const [isZoomIntegrationOpen, setIsZoomIntegrationOpen] = useState(false);
     const [isOpenClawIntegrationOpen, setIsOpenClawIntegrationOpen] = useState(false);
-    const [isMagentoIntegrationOpen, setIsMagentoIntegrationOpen] = useState(false);
+    const [isTertiaryCoursesSgIntegrationOpen, setIsTertiaryCoursesSgIntegrationOpen] = useState(false);
     const [isN8nIntegrationOpen, setIsN8nIntegrationOpen] = useState(false);
     const [isR2IntegrationOpen, setIsR2IntegrationOpen] = useState(false);
     const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
@@ -1889,35 +1889,57 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     )}
                     </div>
 
-                            {/* Magento Configuration */}
+                            {/* Tertiary Courses SG Configuration */}
                     <div>
-                    {renderIntegrationPanelHeader('Magento', isMagentoIntegrationOpen, () => setIsMagentoIntegrationOpen(prev => !prev))}
-                    {isMagentoIntegrationOpen && (
-                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                    {renderIntegrationPanelHeader('Tertiary Courses SG', isTertiaryCoursesSgIntegrationOpen, () => setIsTertiaryCoursesSgIntegrationOpen(prev => !prev))}
+                    {isTertiaryCoursesSgIntegrationOpen && (
+                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default space-y-4">
                                 <div className="p-3 bg-surface rounded-md border border-default">
-                                    <div>
-                                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">Magento Backend URL</label>
-                                        {isEditing ? (
-                                            <input
-                                                type="text"
-                                                value={(formData.integrations as any).magentoBackendUrl || ''}
-                                                onChange={(e) =>
-                                                    setFormData((prev) => ({
-                                                        ...prev,
-                                                        integrations: {
-                                                            ...prev.integrations,
-                                                            magentoBackendUrl: e.target.value,
-                                                        },
-                                                    }))
-                                                }
-                                                className={inputClasses}
-                                                placeholder="e.g. https://magento.example.com/admin"
-                                            />
-                                        ) : (
-                                            <p className="text-sm text-on-surface truncate">
-                                                {(formData.integrations as any).magentoBackendUrl || 'Not Set'}
-                                            </p>
-                                        )}
+                                    <h4 className="text-sm font-semibold text-on-surface mb-2">Course Schedule API</h4>
+                                    <p className="text-xs text-on-surface-secondary mb-3">
+                                        WSQ course schedules pulled from the Tertiary Courses storefront. Used by Admin → TPG Management → WSQ Schedule Sync. The TMS appends the path <code className="font-mono">/courses/api_schedule</code> automatically.
+                                    </p>
+                                    <div className="space-y-3">
+                                        {[
+                                            { key: 'tertiaryCoursesSgUrl' as const, label: 'Storefront Base URL', placeholder: 'https://www.tertiarycourses.com.sg (prod) or http://localhost:8080 (dev)', isSecret: false },
+                                            { key: 'tertiaryCoursesSgApiKey' as const, label: 'X-API-Key', placeholder: '', isSecret: true },
+                                        ].map(({ key, label, placeholder, isSecret }) => {
+                                            const value = (formData.integrations as any)[key] || '';
+                                            return (
+                                                <div key={key}>
+                                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                                    {isEditing ? (
+                                                        <input
+                                                            type={isSecret ? 'password' : 'text'}
+                                                            value={value}
+                                                            onChange={(e) =>
+                                                                setFormData((prev) => ({
+                                                                    ...prev,
+                                                                    integrations: {
+                                                                        ...prev.integrations,
+                                                                        [key]: e.target.value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                            className={inputClasses}
+                                                            placeholder={placeholder}
+                                                            autoComplete="off"
+                                                        />
+                                                    ) : (
+                                                        <p className="text-sm text-on-surface truncate">
+                                                            {isSecret
+                                                                ? (value ? '••••••••' : 'Not Set')
+                                                                : (value || 'Not Set')}
+                                                        </p>
+                                                    )}
+                                                    {key === 'tertiaryCoursesSgUrl' && (formData.integrations as any).tertiaryCoursesSgUrl && (
+                                                        <p className="text-xs text-on-surface-secondary mt-1 font-mono break-all">
+                                                            GET {String((formData.integrations as any).tertiaryCoursesSgUrl).replace(/\/+$/, '')}/courses/api_schedule
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>

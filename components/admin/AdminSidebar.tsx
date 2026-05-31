@@ -99,7 +99,7 @@ const REFERENCE_LINKS = [
 ];
 
 const USEFUL_LINKS = [
-    { key: 'magentoBackendUrl', label: 'Magento Backend' },
+    { key: 'tertiaryCoursesSgUrl', label: 'Tertiary Courses SG' },
 ];
 
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflow, collapsed = false }) => {
@@ -284,6 +284,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                     <NavItem page={AdminPage.EditCourseRun} label="Edit Course Run" isSubItem />
                     <NavItem page={AdminPage.UploadCourseRuns} label="Upload Course Runs" isSubItem />
                     <NavItem page={AdminPage.DeleteCourseRun} label="Delete Course Run" isSubItem />
+                    <NavItem page={AdminPage.WsqScheduleSync} label="WSQ Schedule Sync" isSubItem />
                 </SubSection>
 
                 <SubSection title="Session" isOpen={openSections.tpgSession} onToggle={() => toggleSection('tpgSession')}>

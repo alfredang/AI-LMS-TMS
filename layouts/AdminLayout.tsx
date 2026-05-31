@@ -71,6 +71,7 @@ import CourseSessionTimingView from '../components/admin/CourseSessionTimingView
 import SupportTicketsView from '../components/admin/SupportTicketsView';
 import SupportTicketDetailView from '../components/admin/SupportTicketDetailView';
 import MasterListView from '../components/admin/MasterListView';
+import WsqScheduleSyncView from '../components/admin/WsqScheduleSyncView';
 import SoftwareCredentialsView from '../components/admin/SoftwareCredentialsView';
 import { UploadCompanyApplicationView, ViewCompanyApplicationView, CheckSupportingDocumentView } from '../components/admin/CompanyApplicationViews';
 
@@ -492,6 +493,8 @@ const AdminLayout: React.FC = () => {
         return <SupportTicketDetailView />;
       case AdminPage.MasterList:
         return <MasterListView />;
+      case AdminPage.WsqScheduleSync:
+        return <WsqScheduleSyncView />;
       case AdminPage.SoftwareCredentials:
         return <SoftwareCredentialsView />;
       default:

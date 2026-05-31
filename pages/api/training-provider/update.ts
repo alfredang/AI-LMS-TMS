@@ -712,9 +712,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Finance automation webhooks (JSON map). Keys match FINANCE_AUTOMATION_ACTIONS webhookEnvKey values.
         { name: 'n8n_finance_webhooks_json', value: profileData.integrations?.n8nFinanceWebhooksJson || null },
       ]);
-      // Magento
+      // Tertiary Courses SG (Magento storefront)
+      try {
+        await pool.query(`ALTER TABLE training_provider
+          ADD COLUMN IF NOT EXISTS tertiary_courses_sg_url text,
+          ADD COLUMN IF NOT EXISTS tertiary_courses_sg_api_key text`);
+        // One-shot rename: copy legacy magento_backend_url into new column if empty
+        await pool.query(`UPDATE training_provider
+          SET tertiary_courses_sg_url = magento_backend_url
+          WHERE tertiary_courses_sg_url IS NULL AND magento_backend_url IS NOT NULL`);
+      } catch (e) {
+        console.error('Failed to migrate Tertiary Courses SG columns:', e);
+      }
       await autoCreateAndUpdate([
-        { name: 'magento_backend_url', value: profileData.integrations?.magentoBackendUrl || null },
+        { name: 'tertiary_courses_sg_url', value: profileData.integrations?.tertiaryCoursesSgUrl || null },
+        { name: 'tertiary_courses_sg_api_key', value: profileData.integrations?.tertiaryCoursesSgApiKey || null },
       ]);
       // Cloudflare R2 (used by Course Image Generator)
       await autoCreateAndUpdate([

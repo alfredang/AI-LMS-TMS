@@ -145,6 +145,7 @@ export enum AdminPage {
   MasterList = 'masterList',
   FeedbackForm = 'feedbackForm',
   FeedbackFormResponses = 'feedbackFormResponses',
+  WsqScheduleSync = 'wsqScheduleSync',
 }
 
 export interface FeedbackFormField {
