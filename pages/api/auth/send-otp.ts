@@ -3,6 +3,7 @@ import { cors } from '../../../lib/cors';
 import pool from '../../../lib/db';
 import { google } from 'googleapis';
 import { isSmtpEnabled, sendViaSmtp, getSmtpConfig } from '../../../lib/smtp';
+import { sendViaGmailOAuth } from '../../../lib/gmailOauthSend';
 
 interface SendOtpResponse {
   success: boolean;
@@ -113,10 +114,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     // deployment that hasn't explicitly opted in.
     const smtpOn = await isSmtpEnabled();
 
-    if (!smtpOn && (!email_user || !google_client_id || !google_client_secret || !google_refresh_token)) {
-      console.error('❌ Gmail OAuth not configured in Company Settings');
+    // Only block early if BOTH transports are unusable. SMTP-creds-saved-but-toggle-off
+    // is still a valid fallback path if Gmail OAuth fails, so we let the request through.
+    const gmailReady = !!(email_user && google_client_id && google_client_secret && google_refresh_token);
+    const smtpCfgEarly = await getSmtpConfig();
+    const smtpReady = !!(smtpCfgEarly && smtpCfgEarly.host && smtpCfgEarly.user && smtpCfgEarly.password);
+    if (!gmailReady && !smtpReady) {
+      console.error('❌ No email transport configured (Gmail OAuth missing AND SMTP missing)');
       console.error(`  email_user: ${email_user ? 'set' : 'MISSING'}, google_client_id: ${google_client_id ? 'set' : 'MISSING'}, google_client_secret: ${google_client_secret ? 'set' : 'MISSING'}, google_refresh_token: ${google_refresh_token ? 'set' : 'MISSING'}`);
-      return res.status(500).json({ success: false, error: 'Email not configured. Please configure Gmail OAuth in Company Settings, or enable SMTP under Integrations.' });
+      return res.status(500).json({ success: false, error: 'Email not configured. Configure Gmail OAuth and/or SMTP in Company Settings → Integration.' });
     }
 
     // Return success immediately — OTP is stored, email config is valid.
@@ -168,8 +174,9 @@ Warm regards
           </div>
         `;
 
-      // SMTP branch — only when explicitly enabled. Skips Gmail OAuth entirely.
+      // SMTP branch — primary when toggle is ON. On failure, fall back to Gmail OAuth.
       if (smtpOn) {
+        let smtpErrMsg = '';
         try {
           const smtpCfg = await getSmtpConfig();
           const fromHeader = smtpCfg?.from
@@ -185,14 +192,63 @@ Warm regards
           });
           if (result.ok) {
             console.log(`✅ OTP email sent successfully to ${email} via SMTP (messageId: ${result.messageId})`);
-          } else {
-            console.error(`❌ SMTP OTP send failed for ${email}:`, result.error);
+            return;
           }
+          smtpErrMsg = result.error || 'unknown SMTP error';
+          console.error(`❌ SMTP OTP send failed for ${email}:`, smtpErrMsg);
         } catch (smtpErr: any) {
-          console.error('❌ SMTP OTP send threw:', smtpErr?.message || smtpErr);
+          smtpErrMsg = smtpErr?.message || String(smtpErr);
+          console.error('❌ SMTP OTP send threw:', smtpErrMsg);
+        }
+        // Fallback: try Gmail OAuth using the Company Setting credentials.
+        console.warn(`⚠️ Falling back to Gmail OAuth after SMTP failure for ${email}`);
+        const fb = await sendViaGmailOAuth({
+          to: email,
+          subject: subjectForSend,
+          text: bodyTextForSend,
+          html: htmlBodyForSend,
+          replyTo: replyToEmail || undefined,
+        });
+        if (fb.ok) {
+          console.log(`✅ OTP email sent to ${email} via Gmail OAuth fallback (messageId: ${fb.messageId})`);
+        } else {
+          console.error(`❌ Both SMTP and Gmail OAuth fallback failed for ${email}. SMTP: ${smtpErrMsg} | Gmail: ${fb.error}`);
         }
         return;
       }
+
+      // Inline SMTP fallback used when Gmail OAuth fails (token refresh or all
+      // 3 send attempts). Uses whatever SMTP creds are saved in Company Setting,
+      // even if the master toggle is OFF — so an admin can pre-populate SMTP
+      // as a safety net for Gmail outages without flipping the toggle.
+      const tryGmailFailureFallbackToSmtp = async (gmailErr: string) => {
+        console.warn(`⚠️ Falling back to SMTP (Company Setting) after Gmail OAuth failure for ${email}: ${gmailErr}`);
+        try {
+          const smtpCfg = await getSmtpConfig();
+          if (!smtpCfg || !smtpCfg.host || !smtpCfg.user || !smtpCfg.password) {
+            console.error(`❌ SMTP fallback unavailable (no SMTP creds saved in Company Setting). Gmail error: ${gmailErr}`);
+            return;
+          }
+          const fromHeader = smtpCfg.from
+            ? `${companyShortName} <${smtpCfg.from}>`
+            : `${companyShortName} <${smtpCfg.user}>`;
+          const result = await sendViaSmtp({
+            to: email,
+            subject: subjectForSend,
+            text: bodyTextForSend,
+            html: htmlBodyForSend,
+            from: fromHeader,
+            replyTo: replyToEmail || undefined,
+          });
+          if (result.ok) {
+            console.log(`✅ OTP email sent to ${email} via SMTP fallback (messageId: ${result.messageId})`);
+          } else {
+            console.error(`❌ Both Gmail OAuth and SMTP fallback failed for ${email}. Gmail: ${gmailErr} | SMTP: ${result.error}`);
+          }
+        } catch (e: any) {
+          console.error(`❌ SMTP fallback threw for ${email}:`, e?.message || e);
+        }
+      };
 
       try {
         // Reuse cached OAuth2 client (avoids redundant token refresh on every request)
@@ -222,6 +278,7 @@ Warm regards
         }
         if (!tokenReady) {
           console.error('❌ Failed to refresh Gmail OAuth access token after 3 attempts');
+          await tryGmailFailureFallbackToSmtp('token refresh failed after 3 attempts');
           return;
         }
 
@@ -290,6 +347,7 @@ Warm regards
           .replace(/=+$/, '');
 
         // Send with retry — Gmail API can transiently fail on first attempt after cold start
+        let lastGmailErr = 'unknown';
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
             await gmail.users.messages.send({
@@ -299,7 +357,8 @@ Warm regards
             console.log(`✅ OTP email sent successfully to ${email} via Gmail OAuth (attempt ${attempt})`);
             return;
           } catch (sendError: any) {
-            console.error(`❌ Gmail send attempt ${attempt} failed:`, sendError?.message);
+            lastGmailErr = sendError?.message || String(sendError);
+            console.error(`❌ Gmail send attempt ${attempt} failed:`, lastGmailErr);
             if (attempt < 3) {
               // Exponential backoff: 1s, then 2s
               await new Promise(r => setTimeout(r, attempt * 1000));
@@ -319,8 +378,10 @@ Warm regards
             }
           }
         }
+        await tryGmailFailureFallbackToSmtp(lastGmailErr);
       } catch (bgError: any) {
         console.error('❌ Background OTP email error:', bgError?.message || bgError);
+        await tryGmailFailureFallbackToSmtp(`background error: ${bgError?.message || bgError}`);
       }
     })();
 

@@ -7,9 +7,11 @@ import pool from './db';
 //   smtp_enabled (boolean, default false), smtp_host, smtp_port,
 //   smtp_secure ('tls'|'ssl'), smtp_auth, smtp_user, smtp_password, smtp_from
 //
-// Default behavior is unchanged: smtp_enabled = false ⇒ Gmail OAuth path runs.
+// Default behavior: smtp_enabled = false ⇒ Gmail OAuth path runs (from DB).
 // Only when an admin flips the toggle in Company Settings → Integration → SMTP
 // AND fills host/user/password does isSmtpEnabled() return true.
+//
+// No reliance on Coolify SMTP_* env vars — values live in DB only.
 
 export interface SmtpConfig {
   enabled: boolean;
@@ -49,30 +51,19 @@ async function loadConfig(): Promise<SmtpConfig | null> {
     row = null;
   }
 
-  // Legacy env-var fallback retained ONLY for the Coolify cutover window.
-  // REMOVE after SMTP_* env vars are deleted from Coolify.
-  const envHost = process.env.SMTP_HOST || '';
-  const envUser = process.env.SMTP_USER || '';
-  const envPass = process.env.SMTP_PASS || '';
+  const host = row?.smtp_host || '';
+  const user = row?.smtp_user || '';
+  const password = row?.smtp_password || '';
 
-  const dbHost = row?.smtp_host || '';
-  const dbUser = row?.smtp_user || '';
-  const dbPass = row?.smtp_password || '';
-
-  const host = dbHost || envHost;
-  const user = dbUser || envUser;
-  const password = dbPass || envPass;
-
-  // Port: DB wins, then env, then sensible default per secure mode.
   const secureRaw = (row?.smtp_secure || '').toLowerCase();
   const secure: 'tls' | 'ssl' = secureRaw === 'ssl' ? 'ssl' : 'tls';
-  const rawPort = row?.smtp_port ?? process.env.SMTP_PORT;
+  const rawPort = row?.smtp_port;
   const parsedPort = rawPort ? parseInt(String(rawPort), 10) : NaN;
   const port = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : (secure === 'ssl' ? 465 : 587);
 
   const auth: 'login' | 'plain' = (row?.smtp_auth || '').toLowerCase() === 'plain' ? 'plain' : 'login';
 
-  const from = row?.smtp_from || process.env.SMTP_FROM || user;
+  const from = row?.smtp_from || user;
 
   // The master toggle: DB-driven. If the DB row has no smtp_enabled, treat as
   // disabled — current Gmail OAuth path continues to run, untouched.

@@ -2016,33 +2016,101 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         Default is <strong>Gmail OAuth</strong> for all emails and OTP. Flip the toggle below to route ALL emails and OTP through SMTP instead. Only one is used at a time.
                                     </p>
 
-                                    {/* How to get the Gmail App Password */}
+                                    {/* How to set up SMTP for various providers */}
                                     <div className="rounded-md border border-default">
                                         <button
                                             type="button"
                                             onClick={() => setIsSmtpHowToOpen(prev => !prev)}
                                             className="w-full flex items-center justify-between px-3 py-2 text-sm text-on-surface hover:bg-surface-elevated rounded-md"
                                         >
-                                            <span className="font-medium">How to get the Gmail App Password</span>
+                                            <span className="font-medium">How to set up SMTP (Gmail, Outlook, Microsoft 365, Yahoo)</span>
                                             <span className="text-on-surface-secondary text-xs">{isSmtpHowToOpen ? '▲' : '▼'}</span>
                                         </button>
                                         {isSmtpHowToOpen && (
-                                            <div className="px-4 pb-3 pt-1 text-xs text-on-surface-secondary space-y-2">
-                                                <p>For <code className="text-on-surface">smtp.gmail.com</code> with a Gmail or Google Workspace account, the Password field expects a 16-character <strong>App Password</strong>, not the account login password.</p>
-                                                <ol className="list-decimal ml-5 space-y-1.5">
-                                                    <li>Sign in to the Gmail account you want to send from (e.g. <code className="text-on-surface">sales@tertiarycourses.com.sg</code>).</li>
-                                                    <li>Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">https://myaccount.google.com/apppasswords</a>.</li>
-                                                    <li>
-                                                        If the page says it&apos;s not available:
-                                                        <ul className="list-disc ml-5 mt-1 space-y-1">
-                                                            <li>First enable <a href="https://myaccount.google.com/signinoptions/two-step-verification" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">2-Step Verification</a>.</li>
-                                                            <li>For Workspace accounts, the Workspace admin must allow App passwords under <strong>Admin Console → Security → Access and data control → Less secure apps</strong> (or under the 2-Step Verification settings). Without that, the App passwords page won&apos;t appear.</li>
-                                                        </ul>
-                                                    </li>
-                                                    <li>On the App passwords page, enter a name (e.g. <code className="text-on-surface">LMS-TMS SMTP</code>) and click <strong>Create</strong>.</li>
-                                                    <li>Google shows a 16-char password with spaces, e.g. <code className="text-on-surface">abcd efgh ijkl mnop</code>. Copy it <strong>without the spaces</strong> → <code className="text-on-surface">abcdefghijklmnop</code>.</li>
-                                                    <li>Paste it into the Password field below, click <strong>Save Changes</strong>, then click <strong>Send Test</strong> to confirm.</li>
-                                                </ol>
+                                            <div className="px-4 pb-4 pt-1 text-xs text-on-surface-secondary space-y-4">
+                                                {/* Quick reference table */}
+                                                <div>
+                                                    <div className="font-semibold text-on-surface mb-1">Quick reference</div>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="text-xs w-full border-collapse">
+                                                            <thead className="text-on-surface">
+                                                                <tr className="border-b border-default">
+                                                                    <th className="text-left py-1 pr-3">Provider</th>
+                                                                    <th className="text-left py-1 pr-3">Host</th>
+                                                                    <th className="text-left py-1 pr-3">Port</th>
+                                                                    <th className="text-left py-1 pr-3">SSL/TLS</th>
+                                                                    <th className="text-left py-1">Password</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <tr className="border-b border-default"><td className="py-1 pr-3">Gmail / Workspace</td><td className="py-1 pr-3"><code className="text-on-surface">smtp.gmail.com</code></td><td className="py-1 pr-3">587</td><td className="py-1 pr-3">TLS</td><td className="py-1">App Password</td></tr>
+                                                                <tr className="border-b border-default"><td className="py-1 pr-3">Outlook / Hotmail / Live (personal)</td><td className="py-1 pr-3"><code className="text-on-surface">smtp-mail.outlook.com</code></td><td className="py-1 pr-3">587</td><td className="py-1 pr-3">TLS</td><td className="py-1">App Password</td></tr>
+                                                                <tr className="border-b border-default"><td className="py-1 pr-3">Microsoft 365 / Exchange Online</td><td className="py-1 pr-3"><code className="text-on-surface">smtp.office365.com</code></td><td className="py-1 pr-3">587</td><td className="py-1 pr-3">TLS</td><td className="py-1">Mailbox or App Password (tenant-dependent)</td></tr>
+                                                                <tr><td className="py-1 pr-3">Yahoo Mail</td><td className="py-1 pr-3"><code className="text-on-surface">smtp.mail.yahoo.com</code></td><td className="py-1 pr-3">465 / 587</td><td className="py-1 pr-3">SSL / TLS</td><td className="py-1">App Password</td></tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+
+                                                {/* Gmail */}
+                                                <div>
+                                                    <div className="font-semibold text-on-surface mb-1">Gmail / Google Workspace</div>
+                                                    <p>Password = 16-character <strong>App Password</strong>, not the account login password.</p>
+                                                    <ol className="list-decimal ml-5 space-y-1 mt-1">
+                                                        <li>Sign in to the Gmail account you want to send from.</li>
+                                                        <li>Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">myaccount.google.com/apppasswords</a>.</li>
+                                                        <li>If the page says it&apos;s not available: first enable <a href="https://myaccount.google.com/signinoptions/two-step-verification" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">2-Step Verification</a>. For Workspace, the admin must allow App passwords under <strong>Admin Console → Security → Access and data control → Less secure apps</strong>.</li>
+                                                        <li>Enter a name (e.g. <code className="text-on-surface">LMS-TMS SMTP</code>) and click <strong>Create</strong>.</li>
+                                                        <li>Copy the 16-char password <strong>without the spaces</strong> (e.g. <code className="text-on-surface">abcd efgh ijkl mnop</code> → <code className="text-on-surface">abcdefghijklmnop</code>).</li>
+                                                        <li>Paste into Password, Save, Send Test.</li>
+                                                    </ol>
+                                                </div>
+
+                                                {/* Personal Outlook */}
+                                                <div>
+                                                    <div className="font-semibold text-on-surface mb-1">Personal Outlook / Hotmail / Live</div>
+                                                    <p>Microsoft retired basic auth for personal accounts — you need an App Password.</p>
+                                                    <ol className="list-decimal ml-5 space-y-1 mt-1">
+                                                        <li>Sign in to <a href="https://account.microsoft.com/security" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">account.microsoft.com/security</a>.</li>
+                                                        <li>Under <strong>Advanced security options</strong>, make sure <strong>Two-step verification</strong> is ON. If off, enable it first.</li>
+                                                        <li>Under <strong>App passwords</strong>, click <strong>Create a new app password</strong>.</li>
+                                                        <li>Copy the 16-character password (no spaces).</li>
+                                                        <li>Username = full email (e.g. <code className="text-on-surface">you@outlook.com</code>). Paste password, Save, Send Test.</li>
+                                                    </ol>
+                                                </div>
+
+                                                {/* Microsoft 365 */}
+                                                <div>
+                                                    <div className="font-semibold text-on-surface mb-1">Microsoft 365 / Exchange Online (company mailbox)</div>
+                                                    <p>Microsoft has progressively disabled SMTP AUTH on Exchange Online. Three cases:</p>
+                                                    <ul className="list-disc ml-5 space-y-1 mt-1">
+                                                        <li><strong>SMTP AUTH enabled on your mailbox:</strong> use full email as Username and the regular mailbox password.</li>
+                                                        <li><strong>Tenant requires App Password (MFA on):</strong> go to <a href="https://mysignins.microsoft.com/security-info" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">mysignins.microsoft.com/security-info</a> and add an <strong>App password</strong> method (only if the admin allows it).</li>
+                                                        <li><strong>Tenant disabled SMTP AUTH entirely:</strong> admin must re-enable it. Per-mailbox: <strong>Microsoft 365 admin center → Users → Active users → pick user → Mail → Manage email apps → Authenticated SMTP</strong>. PowerShell: <code className="text-on-surface">Set-CASMailbox -Identity user@company.com -SmtpClientAuthenticationDisabled $false</code>. If admin refuses, use a transactional provider (SES, SendGrid, Postmark, Mailgun) instead.</li>
+                                                    </ul>
+                                                </div>
+
+                                                {/* Yahoo */}
+                                                <div>
+                                                    <div className="font-semibold text-on-surface mb-1">Yahoo Mail</div>
+                                                    <ol className="list-decimal ml-5 space-y-1">
+                                                        <li>Sign in to Yahoo Account Security: <a href="https://login.yahoo.com/account/security" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">login.yahoo.com/account/security</a>.</li>
+                                                        <li>Enable 2-step verification if not already on.</li>
+                                                        <li>Click <strong>Generate app password</strong> (or <strong>Manage app passwords</strong>), name it, and copy the password.</li>
+                                                        <li>Username = full Yahoo email. Paste password, Save, Send Test.</li>
+                                                    </ol>
+                                                </div>
+
+                                                {/* Notes */}
+                                                <div className="pt-2 border-t border-default">
+                                                    <div className="font-semibold text-on-surface mb-1">Notes & daily limits</div>
+                                                    <ul className="list-disc ml-5 space-y-1">
+                                                        <li>Gmail free: ~500 mails/day. Workspace: ~2,000/day per user.</li>
+                                                        <li>Outlook personal: ~300/day. Microsoft 365: ~10,000/day per user.</li>
+                                                        <li>Yahoo: ~500/day.</li>
+                                                        <li>The From address must be allowed by the provider — Gmail and Outlook usually rewrite it to the authenticated account.</li>
+                                                    </ul>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -2118,17 +2186,17 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         {[
                                             { key: 'smtpHost' as const, label: 'Host', placeholder: 'e.g. smtp.gmail.com', isSecret: false, type: 'text' as const },
                                             { key: 'smtpPort' as const, label: 'Port', placeholder: 'e.g. 587', isSecret: false, type: 'text' as const },
-                                            { key: 'smtpSecure' as const, label: 'SSL/TLS', placeholder: 'tls', isSecret: false, type: 'select' as const, options: [
-                                                { value: 'tls', label: 'TLS — STARTTLS, port 587 (recommended)' },
-                                                { value: 'ssl', label: 'SSL — implicit TLS, port 465' },
+                                            { key: 'smtpSecure' as const, label: 'SSL/TLS (secure)', placeholder: 'tls', isSecret: false, type: 'select' as const, options: [
+                                                { value: 'tls', label: 'TLS — STARTTLS, port 587 · secure=false (recommended)' },
+                                                { value: 'ssl', label: 'SSL — implicit TLS, port 465 · secure=true' },
                                             ]},
                                             { key: 'smtpAuth' as const, label: 'Auth', placeholder: 'login', isSecret: false, type: 'select' as const, options: [
                                                 { value: 'login', label: 'LOGIN (recommended)' },
                                                 { value: 'plain', label: 'PLAIN' },
                                             ]},
-                                            { key: 'smtpUser' as const, label: 'Username', placeholder: 'e.g. sales@example.com', isSecret: false, type: 'text' as const },
-                                            { key: 'smtpPassword' as const, label: 'Password', placeholder: 'enter SMTP password', isSecret: true, type: 'text' as const },
-                                            { key: 'smtpFrom' as const, label: 'From (optional)', placeholder: 'defaults to Username if blank', isSecret: false, type: 'text' as const },
+                                            { key: 'smtpUser' as const, label: 'Username (login email)', placeholder: 'e.g. sales@example.com', isSecret: false, type: 'text' as const },
+                                            { key: 'smtpPassword' as const, label: 'Password', placeholder: 'enter SMTP password / app password', isSecret: true, type: 'text' as const },
+                                            { key: 'smtpFrom' as const, label: 'From — sender email shown to recipients (optional)', placeholder: 'e.g. noreply@yourcompany.com — leave blank to use Username', isSecret: false, type: 'text' as const },
                                         ].map(({ key, label, placeholder, isSecret, type, options }) => {
                                             const value = (formData.integrations as any)[key] || '';
                                             return (
