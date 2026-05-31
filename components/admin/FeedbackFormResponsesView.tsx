@@ -25,6 +25,8 @@ export const FeedbackFormResponsesView: React.FC = () => {
   const [editing, setEditing] = useState<ResponseRow | null>(null);
   const [editDraft, setEditDraft] = useState<{ learner_name: string; learner_email: string; answers: Record<string, any> }>({ learner_name: '', learner_email: '', answers: {} });
   const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 30;
 
   const load = async () => {
     setLoading(true);
@@ -64,16 +66,25 @@ export const FeedbackFormResponsesView: React.FC = () => {
     });
   }, [rows, search]);
 
-  const allChecked = filtered.length > 0 && filtered.every(r => selected.has(r.id));
+  useEffect(() => { setPage(1); }, [search, from, to]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage]
+  );
+
+  const allChecked = paginated.length > 0 && paginated.every(r => selected.has(r.id));
   const toggleAll = () => {
     setSelected(prev => {
       if (allChecked) {
         const next = new Set(prev);
-        filtered.forEach(r => next.delete(r.id));
+        paginated.forEach(r => next.delete(r.id));
         return next;
       }
       const next = new Set(prev);
-      filtered.forEach(r => next.add(r.id));
+      paginated.forEach(r => next.add(r.id));
       return next;
     });
   };
@@ -254,7 +265,7 @@ export const FeedbackFormResponsesView: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(r => {
+                {paginated.map(r => {
                   const checked = selected.has(r.id);
                   return (
                     <tr key={r.id} className={`border-t border-gray-200 dark:border-gray-700 align-top ${checked ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
@@ -318,6 +329,38 @@ export const FeedbackFormResponsesView: React.FC = () => {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {!loading && filtered.length > 0 && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 dark:border-gray-700 text-sm">
+            <span className="text-gray-600 dark:text-gray-300">
+              Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(1)}
+                disabled={safePage === 1}
+                className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded disabled:opacity-40"
+              >« First</button>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded disabled:opacity-40"
+              >‹ Prev</button>
+              <span className="text-gray-600 dark:text-gray-300">
+                Page {safePage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded disabled:opacity-40"
+              >Next ›</button>
+              <button
+                onClick={() => setPage(totalPages)}
+                disabled={safePage === totalPages}
+                className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded disabled:opacity-40"
+              >Last »</button>
+            </div>
           </div>
         )}
       </Card>
