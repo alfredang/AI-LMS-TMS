@@ -5,7 +5,6 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
 import Spinner from './ui/Spinner';
-import { generateCourseImage } from '@lib/services/geminiService';
 import { getCourseImageUrl } from '@utils/imageUtils';
 import { getApiUrl } from '@/lib/urlHelpers';
 import QuizEditorModal, { QuizQuestion } from './QuizEditorModal';
@@ -925,14 +924,27 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     };
 
     const handleRegenerateImage = async () => {
-        setIsGeneratingImage(true);
-        const newImageUrl = await generateCourseImage(course.title, course.learningOutcomes || 'General learning topics');
-        if (newImageUrl) {
-            setCourse({ ...course, imageUrl: newImageUrl });
-        } else {
-            alert("Failed to generate a new image. Please try again.");
+        if (!course.title?.trim()) {
+            alert('Please enter a Course Title before generating an image.');
+            return;
         }
-        setIsGeneratingImage(false);
+        setIsGeneratingImage(true);
+        try {
+            const response = await fetch('/api/admin/course-images/regenerate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseId: course.id, title: course.title }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to generate image');
+            }
+            setCourse(prev => ({ ...prev, imageUrl: data.url }));
+        } catch (err) {
+            alert(`Failed to generate a new image: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setIsGeneratingImage(false);
+        }
     };
 
     // File type validation functions
