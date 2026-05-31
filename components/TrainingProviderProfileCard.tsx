@@ -303,6 +303,8 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isSmtpHowToOpen, setIsSmtpHowToOpen] = useState(false);
     const [smtpTestRecipient, setSmtpTestRecipient] = useState('');
     const [smtpTestStatus, setSmtpTestStatus] = useState<{ kind: 'idle' | 'sending' | 'ok' | 'error'; message?: string }>({ kind: 'idle' });
+    const [gmailTestRecipient, setGmailTestRecipient] = useState('');
+    const [gmailTestStatus, setGmailTestStatus] = useState<{ kind: 'idle' | 'sending' | 'ok' | 'error'; message?: string }>({ kind: 'idle' });
     const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
     const [isPayrollOpen, setIsPayrollOpen] = useState(false);
     const [isSecurityOpen, setIsSecurityOpen] = useState(false);
@@ -1560,6 +1562,69 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             )}
                                         </div>
                                     ))}
+                                    </div>
+
+                                    {/* Send Test row — verifies the Gmail OAuth credentials.
+                                        In edit mode it uses the in-progress form values (test
+                                        before saving); in view mode it uses the saved DB values. */}
+                                    <div className="pt-3 mt-4 border-t border-default">
+                                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">Send a test email (verifies Gmail OAuth)</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="email"
+                                                value={gmailTestRecipient}
+                                                onChange={(e) => setGmailTestRecipient(e.target.value)}
+                                                placeholder="test recipient (e.g. you@example.com)"
+                                                className={inputClasses}
+                                                autoComplete="off"
+                                            />
+                                            <button
+                                                type="button"
+                                                disabled={gmailTestStatus.kind === 'sending'}
+                                                onClick={async () => {
+                                                    setGmailTestStatus({ kind: 'sending' });
+                                                    try {
+                                                        const body: any = { recipient: gmailTestRecipient };
+                                                        if (isEditing) {
+                                                            const integ = formData.integrations as any;
+                                                            body.config = {
+                                                                emailUser: integ.emailUser || '',
+                                                                googleClientId: integ.googleClientId || '',
+                                                                googleClientSecret: integ.googleClientSecret || '',
+                                                                googleRefreshToken: integ.googleRefreshToken || '',
+                                                            };
+                                                        }
+                                                        const resp = await fetch('/api/integrations/gmail/test', {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify(body),
+                                                        });
+                                                        const data = await resp.json();
+                                                        if (data.ok) {
+                                                            setGmailTestStatus({ kind: 'ok', message: `Sent (messageId: ${data.messageId || 'n/a'})` });
+                                                        } else {
+                                                            setGmailTestStatus({ kind: 'error', message: data.error || 'Send failed' });
+                                                        }
+                                                    } catch (err: any) {
+                                                        setGmailTestStatus({ kind: 'error', message: err?.message || String(err) });
+                                                    }
+                                                }}
+                                                className="px-4 py-2 text-sm rounded border border-default bg-surface hover:bg-surface-elevated whitespace-nowrap disabled:opacity-50"
+                                            >
+                                                {gmailTestStatus.kind === 'sending' ? 'Sending…' : 'Send Test'}
+                                            </button>
+                                        </div>
+                                        {gmailTestStatus.kind === 'ok' && (
+                                            <p className="text-xs text-green-600 mt-2">{gmailTestStatus.message}</p>
+                                        )}
+                                        {gmailTestStatus.kind === 'error' && (
+                                            <p className="text-xs text-red-600 mt-2">{gmailTestStatus.message}</p>
+                                        )}
+                                        <p className="text-xs text-on-surface-secondary mt-2">
+                                            {isEditing
+                                                ? 'Test uses the values above (you don’t need to save first).'
+                                                : 'Test uses the Gmail OAuth credentials saved on the server.'}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
