@@ -23,9 +23,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  if (!isR2Configured()) {
+  if (!(await isR2Configured())) {
     return res.status(500).json({
-      error: 'R2 not configured. Set R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_URL in .env.local',
+      error: 'R2 not configured. Set credentials under Company Settings → Integrations → R2.',
     });
   }
 

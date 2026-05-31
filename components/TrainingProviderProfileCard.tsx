@@ -298,6 +298,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isOpenClawIntegrationOpen, setIsOpenClawIntegrationOpen] = useState(false);
     const [isMagentoIntegrationOpen, setIsMagentoIntegrationOpen] = useState(false);
     const [isN8nIntegrationOpen, setIsN8nIntegrationOpen] = useState(false);
+    const [isR2IntegrationOpen, setIsR2IntegrationOpen] = useState(false);
     const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
     const [isPayrollOpen, setIsPayrollOpen] = useState(false);
     const [isSecurityOpen, setIsSecurityOpen] = useState(false);
@@ -1917,6 +1918,60 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 {(formData.integrations as any).magentoBackendUrl || 'Not Set'}
                                             </p>
                                         )}
+                                    </div>
+                                </div>
+                            </div>
+                    )}
+                    </div>
+
+                            {/* Cloudflare R2 Configuration */}
+                    <div>
+                    {renderIntegrationPanelHeader('Cloudflare R2', isR2IntegrationOpen, () => setIsR2IntegrationOpen(prev => !prev))}
+                    {isR2IntegrationOpen && (
+                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                                <div className="p-3 bg-surface rounded-md border border-default">
+                                    <p className="text-xs text-on-surface-secondary mb-3">
+                                        Object storage for generated course banner images. Used by Admin → Course Management → Course Image Generator and the &quot;Generate with AI&quot; button in the Course Editor.
+                                    </p>
+                                    <div className="space-y-3">
+                                        {[
+                                            { key: 'r2Endpoint' as const, label: 'S3 API Endpoint', placeholder: 'https://<account-id>.r2.cloudflarestorage.com', isSecret: false },
+                                            { key: 'r2AccessKeyId' as const, label: 'Access Key ID', placeholder: '', isSecret: true },
+                                            { key: 'r2SecretAccessKey' as const, label: 'Secret Access Key', placeholder: '', isSecret: true },
+                                            { key: 'r2Bucket' as const, label: 'Bucket Name', placeholder: 'e.g. tertiary-lms-tms-images', isSecret: false },
+                                            { key: 'r2PublicUrl' as const, label: 'Public URL', placeholder: 'https://pub-xxx.r2.dev or your custom domain', isSecret: false },
+                                        ].map(({ key, label, placeholder, isSecret }) => {
+                                            const value = (formData.integrations as any)[key] || '';
+                                            return (
+                                                <div key={key}>
+                                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                                    {isEditing ? (
+                                                        <input
+                                                            type={isSecret ? 'password' : 'text'}
+                                                            value={value}
+                                                            onChange={(e) =>
+                                                                setFormData((prev) => ({
+                                                                    ...prev,
+                                                                    integrations: {
+                                                                        ...prev.integrations,
+                                                                        [key]: e.target.value,
+                                                                    },
+                                                                }))
+                                                            }
+                                                            className={inputClasses}
+                                                            placeholder={placeholder}
+                                                            autoComplete="off"
+                                                        />
+                                                    ) : (
+                                                        <p className="text-sm text-on-surface truncate">
+                                                            {isSecret
+                                                                ? (value ? '••••••••' : 'Not Set')
+                                                                : (value || 'Not Set')}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>

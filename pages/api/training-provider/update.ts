@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
+import { invalidateR2ConfigCache } from '../../../lib/r2';
 import {
   TRAINING_PROVIDER_FOLDER_BY_FIELD,
   trainingProviderSkipTimestampForFolder,
@@ -715,6 +716,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await autoCreateAndUpdate([
         { name: 'magento_backend_url', value: profileData.integrations?.magentoBackendUrl || null },
       ]);
+      // Cloudflare R2 (used by Course Image Generator)
+      await autoCreateAndUpdate([
+        { name: 'r2_endpoint', value: profileData.integrations?.r2Endpoint || null },
+        { name: 'r2_access_key_id', value: profileData.integrations?.r2AccessKeyId || null },
+        { name: 'r2_secret_access_key', value: profileData.integrations?.r2SecretAccessKey || null },
+        { name: 'r2_bucket', value: profileData.integrations?.r2Bucket || null },
+        { name: 'r2_public_url', value: profileData.integrations?.r2PublicUrl || null },
+      ]);
+      // Flush in-process R2 client cache so the next upload picks up the
+      // new credentials immediately (otherwise admin would wait for the
+      // 60s TTL before changes take effect).
+      invalidateR2ConfigCache();
       // Google Drive extras
       await autoCreateAndUpdate([
         { name: 'trainer_profile_image_url', value: profileData.integrations?.trainerProfileImageUrl || null },

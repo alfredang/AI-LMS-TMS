@@ -647,6 +647,14 @@ async function getTrainingProviderProfile(userId: string) {
     const r = await pool.query(`SELECT magento_backend_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
+  // Cloudflare R2
+  try {
+    const r = await pool.query(
+      `SELECT r2_endpoint, r2_access_key_id, r2_secret_access_key, r2_bucket, r2_public_url FROM training_provider WHERE id = $1`,
+      [profileData.provider_id]
+    );
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
   // Google Drive extras
   try {
     const r = await pool.query(`SELECT trainer_profile_image_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
@@ -763,6 +771,11 @@ async function getTrainingProviderProfile(userId: string) {
       n8nHost2Url: refLinks.n8n_host2_url || '',
       n8nFinanceWebhooksJson: refLinks.n8n_finance_webhooks_json || '',
       magentoBackendUrl: refLinks.magento_backend_url || '',
+      r2Endpoint: refLinks.r2_endpoint || '',
+      r2AccessKeyId: refLinks.r2_access_key_id || '',
+      r2SecretAccessKey: refLinks.r2_secret_access_key || '',
+      r2Bucket: refLinks.r2_bucket || '',
+      r2PublicUrl: refLinks.r2_public_url || '',
       openClawMode: refLinks.openclaw_mode || 'live',
       openClawGatewayUrl: refLinks.openclaw_gateway_url || '',
       openClawLocalGatewayUrl: refLinks.openclaw_local_gateway_url || '',

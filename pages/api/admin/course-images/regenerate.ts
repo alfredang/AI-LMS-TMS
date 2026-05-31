@@ -17,8 +17,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-  if (!isR2Configured()) {
-    return res.status(500).json({ error: 'R2 not configured' });
+  if (!(await isR2Configured())) {
+    return res.status(500).json({
+      error: 'R2 not configured. Set credentials under Company Settings → Integrations → R2.',
+    });
   }
 
   const { courseId, title } = req.body as { courseId?: string; title?: string };
