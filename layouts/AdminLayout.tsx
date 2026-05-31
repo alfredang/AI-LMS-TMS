@@ -20,6 +20,7 @@ import { Card } from '../components/ui/Card';
 import AdminSidebar from '../components/admin/AdminSidebar';
 import ViewTrainers from '../components/admin/ViewTrainers';
 import FundingValidityView from '../components/admin/FundingValidityView';
+import CourseImageGeneratorView from '../components/admin/CourseImageGeneratorView';
 import ViewLearners from '../components/admin/ViewLearners';
 import OngoingClasses from '../components/admin/OngoingClasses';
 import CompletedClasses from '../components/admin/CompletedClasses';
@@ -156,6 +157,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.TpgAssessment]: 'Assessment',
   [AdminPage.TpgClaims]: 'Claims',
   [AdminPage.ViewCourses]: 'View Courses',
+  [AdminPage.CourseImageGenerator]: 'Course Image Generator',
   [AdminPage.ViewTrainers]: 'View Trainers',
   [AdminPage.FundingValidity]: 'Funding Validity',
   [AdminPage.ViewLearners]: 'View Learners',
@@ -328,6 +330,8 @@ const AdminLayout: React.FC = () => {
         return <AdminSubDashboard title={PAGE_LABELS[adminPage] || formatAdminPageTitle(adminPage)} links={tpgSubDashboards[adminPage] || []} />;
       case AdminPage.ViewCourses:
         return <CourseList />;
+      case AdminPage.CourseImageGenerator:
+        return <CourseImageGeneratorView />;
       case AdminPage.ViewTrainers:
         return <ViewTrainers />;
       case AdminPage.FundingValidity:

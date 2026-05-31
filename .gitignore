@@ -130,6 +130,8 @@ public/uploads/training_provider/ssg_app1_private_key/*
 public/uploads/training_provider/service_account/*
 # Claims import uploads (and any other runtime uploads)
 public/uploads/claims/*
+# Generated course banner PNGs (uploaded to R2 from there)
+public/uploads/course-banners/*
 public/uploads/**/*.pdf
 public/uploads/**/*.xlsx
 public/uploads/**/*.xls

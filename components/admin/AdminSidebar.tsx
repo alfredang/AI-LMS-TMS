@@ -324,6 +324,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
 
             <NavSection title="Course Management" icon={IconName.Courses} collapsed={collapsed} isOpen={openSections.courseManagement} onToggle={() => toggleSection('courseManagement')}>
                 <NavItem page={AdminPage.ViewCourses} label="View Courses" isSubItem />
+                <NavItem page={AdminPage.CourseImageGenerator} label="Course Image Generator" isSubItem />
                 <NavItem page={AdminPage.ViewTrainers} label="View Trainers" isSubItem />
                 <NavItem page={AdminPage.FundingValidity} label="Funding Validity" isSubItem />
             </NavSection>

@@ -63,6 +63,7 @@ export enum AdminPage {
   TpgClaims = 'tpgClaims',
   FundingValidity = 'fundingValidity',
   ViewCourses = 'viewCourses',
+  CourseImageGenerator = 'courseImageGenerator',
   ViewTrainers = 'viewTrainers',
   ViewLearners = 'viewLearners',
   UpcomingClasses = 'upcomingClasses',
