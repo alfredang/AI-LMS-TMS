@@ -116,7 +116,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ENCRYPTION_KEY: !!process.env.ENCRYPTION_KEY,
     SSG_ENCRYPTION_KEY: !!process.env.SSG_ENCRYPTION_KEY,
     CERT_1_ENCRYPTION_KEY: !!process.env.CERT_1_ENCRYPTION_KEY,
-    TRAINING_PARTNER_UEN: !!process.env.TRAINING_PARTNER_UEN,
   };
 
   return res.status(200).json(result);

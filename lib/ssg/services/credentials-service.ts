@@ -112,7 +112,7 @@ export class SSGCredentialsService {
       // For App 4 (OAuth), return OAuth credentials
       if (selectedApp === 'app4') {
         return {
-          uen: row.uen || process.env.TRAINING_PARTNER_UEN,
+          uen: row.uen,
           encryptionKey: '',
           certificatePath: '',
           privateKeyPath: '',
@@ -141,7 +141,7 @@ export class SSGCredentialsService {
       };
       
       const credentials: SSGCredentials = {
-        uen: row.uen || process.env.TRAINING_PARTNER_UEN,
+        uen: row.uen,
         encryptionKey: encKey || process.env.CERT_1_ENCRYPTION_KEY || process.env.SSG_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY || '',
         certificatePath: convertToAbsolutePath(certFile),
         privateKeyPath: convertToAbsolutePath(keyFile),

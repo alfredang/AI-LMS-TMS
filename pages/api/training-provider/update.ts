@@ -7,6 +7,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { invalidateR2ConfigCache } from '../../../lib/r2';
 import { invalidateSmtpConfigCache } from '../../../lib/smtp';
 import { invalidateGoogleDriveFolderCache } from '../../../lib/googleDriveFolder';
+import { invalidateN8nWebhookTimeoutCache } from '../../../lib/services/n8nWebhookService';
 import {
   TRAINING_PROVIDER_FOLDER_BY_FIELD,
   trainingProviderSkipTimestampForFolder,
@@ -713,7 +714,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { name: 'n8n_host2_url', value: profileData.integrations?.n8nHost2Url || null },
         // Finance automation webhooks (JSON map). Keys match FINANCE_AUTOMATION_ACTIONS webhookEnvKey values.
         { name: 'n8n_finance_webhooks_json', value: profileData.integrations?.n8nFinanceWebhooksJson || null },
+        // Webhook timeout (milliseconds). Replaces N8N_WEBHOOK_TIMEOUT_MS env.
+        { name: 'n8n_webhook_timeout_ms', value: profileData.integrations?.n8nWebhookTimeoutMs || null },
       ]);
+      invalidateN8nWebhookTimeoutCache();
       // Tertiary Courses SG (Magento storefront)
       try {
         await pool.query(`ALTER TABLE training_provider

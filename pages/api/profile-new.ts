@@ -637,7 +637,7 @@ async function getTrainingProviderProfile(userId: string) {
   // n8n
   try {
     const r = await pool.query(
-      `SELECT n8n_host1_url, n8n_host2_url, n8n_finance_webhooks_json FROM training_provider WHERE id = $1`,
+      `SELECT n8n_host1_url, n8n_host2_url, n8n_finance_webhooks_json, n8n_webhook_timeout_ms FROM training_provider WHERE id = $1`,
       [profileData.provider_id]
     );
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
@@ -782,6 +782,7 @@ async function getTrainingProviderProfile(userId: string) {
       n8nHost1Url: refLinks.n8n_host1_url || '',
       n8nHost2Url: refLinks.n8n_host2_url || '',
       n8nFinanceWebhooksJson: refLinks.n8n_finance_webhooks_json || '',
+      n8nWebhookTimeoutMs: refLinks.n8n_webhook_timeout_ms || '',
       tertiaryCoursesSgUrl: refLinks.tertiary_courses_sg_url || refLinks.magento_backend_url || '',
       tertiaryCoursesSgApiKey: refLinks.tertiary_courses_sg_api_key || '',
       r2Endpoint: refLinks.r2_endpoint || '',

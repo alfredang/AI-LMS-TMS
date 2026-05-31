@@ -2701,9 +2701,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 <div className="p-3 bg-surface rounded-md border border-default">
                                     <div className="space-y-3">
                                         {[
-                                            { key: 'n8nHost1Url' as const, label: 'Host 1 URL', placeholder: 'e.g. https://n8n-host1.example.com' },
-                                            { key: 'n8nHost2Url' as const, label: 'Host 2 URL', placeholder: 'e.g. https://n8n-host2.example.com' },
-                                        ].map(({ key, label, placeholder }) => (
+                                            { key: 'n8nHost1Url' as const, label: 'Host 1 URL', placeholder: 'e.g. https://n8n-host1.example.com', helpText: '' },
+                                            { key: 'n8nHost2Url' as const, label: 'Host 2 URL', placeholder: 'e.g. https://n8n-host2.example.com', helpText: '' },
+                                            { key: 'n8nWebhookTimeoutMs' as const, label: 'Webhook Timeout (ms)', placeholder: 'e.g. 600000 (10 min, default)', helpText: 'Used for Finance automation webhooks. Defaults to 600000 (10 min). Clamped to 5000–1800000. Replaces N8N_WEBHOOK_TIMEOUT_MS env var.' },
+                                        ].map(({ key, label, placeholder, helpText }) => (
                                             <div key={key}>
                                                 <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
                                                 {isEditing ? (
@@ -2727,6 +2728,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                         {(formData.integrations as any)[key] || 'Not Set'}
                                                     </p>
                                                 )}
+                                                {helpText && <p className="text-[10px] text-on-surface-secondary mt-1">{helpText}</p>}
                                             </div>
                                         ))}
                                     </div>
