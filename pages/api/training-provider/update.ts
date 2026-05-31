@@ -5,6 +5,7 @@ import path from 'path';
 import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { invalidateR2ConfigCache } from '../../../lib/r2';
+import { invalidateSmtpConfigCache } from '../../../lib/smtp';
 import {
   TRAINING_PROVIDER_FOLDER_BY_FIELD,
   trainingProviderSkipTimestampForFolder,
@@ -740,6 +741,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // new credentials immediately (otherwise admin would wait for the
       // 60s TTL before changes take effect).
       invalidateR2ConfigCache();
+      // SMTP integration. smtp_enabled is a boolean (separate ALTER); the
+      // rest are text and go through autoCreateAndUpdate. Default smtp_enabled
+      // is false so existing Gmail OAuth path stays the default.
+      try {
+        await pool.query(`
+          ALTER TABLE training_provider
+            ADD COLUMN IF NOT EXISTS smtp_enabled boolean DEFAULT false NOT NULL
+        `);
+        await pool.query(
+          `UPDATE training_provider SET smtp_enabled = $1 WHERE id = $2`,
+          [profileData.integrations?.smtpEnabled === true, trainingProviderId]
+        );
+      } catch (e) {
+        console.error('Failed to save smtp_enabled:', e);
+      }
+      await autoCreateAndUpdate([
+        { name: 'smtp_host', value: profileData.integrations?.smtpHost || null },
+        { name: 'smtp_port', value: profileData.integrations?.smtpPort ? String(profileData.integrations.smtpPort) : null },
+        { name: 'smtp_secure', value: profileData.integrations?.smtpSecure || null },
+        { name: 'smtp_auth', value: profileData.integrations?.smtpAuth || null },
+        { name: 'smtp_user', value: profileData.integrations?.smtpUser || null },
+        { name: 'smtp_password', value: profileData.integrations?.smtpPassword || null },
+        { name: 'smtp_from', value: profileData.integrations?.smtpFrom || null },
+      ]);
+      invalidateSmtpConfigCache();
       // Google Drive extras
       await autoCreateAndUpdate([
         { name: 'trainer_profile_image_url', value: profileData.integrations?.trainerProfileImageUrl || null },

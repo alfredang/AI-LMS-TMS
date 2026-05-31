@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { cors } from '../../../lib/cors';
 import pool from '../../../lib/db';
 import { google } from 'googleapis';
+import { isSmtpEnabled, sendViaSmtp, getSmtpConfig } from '../../../lib/smtp';
 
 interface SendOtpResponse {
   success: boolean;
@@ -107,10 +108,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     const replyToEmail = supportEmail || company_email || email_user;
     console.log('📧 OTP reply-to:', replyToEmail, '(support_email:', supportEmail, ', company_email:', company_email, ')');
 
-    if (!email_user || !google_client_id || !google_client_secret || !google_refresh_token) {
+    // SMTP toggle takes precedence when enabled in Company Settings → Integration → SMTP.
+    // Default is OFF, so the existing Gmail OAuth flow below runs unchanged for every
+    // deployment that hasn't explicitly opted in.
+    const smtpOn = await isSmtpEnabled();
+
+    if (!smtpOn && (!email_user || !google_client_id || !google_client_secret || !google_refresh_token)) {
       console.error('❌ Gmail OAuth not configured in Company Settings');
       console.error(`  email_user: ${email_user ? 'set' : 'MISSING'}, google_client_id: ${google_client_id ? 'set' : 'MISSING'}, google_client_secret: ${google_client_secret ? 'set' : 'MISSING'}, google_refresh_token: ${google_refresh_token ? 'set' : 'MISSING'}`);
-      return res.status(500).json({ success: false, error: 'Email not configured. Please configure Gmail OAuth in Company Settings.' });
+      return res.status(500).json({ success: false, error: 'Email not configured. Please configure Gmail OAuth in Company Settings, or enable SMTP under Integrations.' });
     }
 
     // Return success immediately — OTP is stored, email config is valid.
@@ -125,6 +131,69 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     // --- Fire-and-forget: send the OTP email asynchronously ---
     // Safe because we run on Coolify (persistent Node.js process), not serverless.
     (async () => {
+      // Shared template prep (used by both SMTP and Gmail OAuth branches).
+      const companyShortName = tp.company_shortname || company_name || 'Training Provider';
+      const siteUrl = (process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '') + '/';
+      const replaceVars = (template: string) =>
+        template
+          .replace(/\{OTP\}/g, otp)
+          .replace(/\{COMPANY_SHORT_NAME\}/g, companyShortName)
+          .replace(/\{COMPANY_NAME\}/g, companyShortName)
+          .replace(/\{SITE_URL\}/g, siteUrl)
+          .replace(/\{EXPIRY_MINUTES\}/g, String(expiryMinutes))
+          .replace(/\{USER_EMAIL\}/g, email);
+      const defaultSubjectTpl = '{COMPANY_SHORT_NAME} LMS - Verification Code';
+      const defaultBodyTpl = `Hi,
+
+Your OTP is {OTP}.
+
+Please use this to login to your account on the {COMPANY_SHORT_NAME} AI LMS TMS {SITE_URL} within {EXPIRY_MINUTES} minutes.
+
+If your OTP does not work, please request for a new OTP on the login page.
+
+If you did not make this request, you may ignore this email. Do not share this OTP with anyone. This is strictly confidential and to be used by you only.
+
+Warm regards
+{COMPANY_SHORT_NAME}`;
+      const subjectForSend = replaceVars(tp.otp_email_subject || defaultSubjectTpl);
+      const bodyTextForSend = replaceVars(tp.otp_email_body || defaultBodyTpl);
+      const htmlBodyForSend = `
+          <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
+            ${bodyTextForSend.split('\n').map(line => {
+              if (!line.trim()) return '<br style="line-height: 0.5;">';
+              const highlighted = line.replace(new RegExp(otp, 'g'), `<strong style="font-size: 18px; letter-spacing: 2px;">${otp}</strong>`);
+              const withLinks = highlighted.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1">$1</a>');
+              return `<p style="margin: 0 0 4px 0;">${withLinks}</p>`;
+            }).join('\n')}
+          </div>
+        `;
+
+      // SMTP branch — only when explicitly enabled. Skips Gmail OAuth entirely.
+      if (smtpOn) {
+        try {
+          const smtpCfg = await getSmtpConfig();
+          const fromHeader = smtpCfg?.from
+            ? `${companyShortName} <${smtpCfg.from}>`
+            : `${companyShortName} <${smtpCfg?.user || ''}>`;
+          const result = await sendViaSmtp({
+            to: email,
+            subject: subjectForSend,
+            text: bodyTextForSend,
+            html: htmlBodyForSend,
+            from: fromHeader,
+            replyTo: replyToEmail || undefined,
+          });
+          if (result.ok) {
+            console.log(`✅ OTP email sent successfully to ${email} via SMTP (messageId: ${result.messageId})`);
+          } else {
+            console.error(`❌ SMTP OTP send failed for ${email}:`, result.error);
+          }
+        } catch (smtpErr: any) {
+          console.error('❌ SMTP OTP send threw:', smtpErr?.message || smtpErr);
+        }
+        return;
+      }
+
       try {
         // Reuse cached OAuth2 client (avoids redundant token refresh on every request)
         let oauth2Client = getOrCreateOAuth2Client(google_client_id, google_client_secret, google_refresh_token);

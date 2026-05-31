@@ -655,6 +655,14 @@ async function getTrainingProviderProfile(userId: string) {
     );
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
+  // SMTP
+  try {
+    const r = await pool.query(
+      `SELECT smtp_enabled, smtp_host, smtp_port, smtp_secure, smtp_auth, smtp_user, smtp_password, smtp_from FROM training_provider WHERE id = $1`,
+      [profileData.provider_id]
+    );
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
   // Google Drive extras
   try {
     const r = await pool.query(`SELECT trainer_profile_image_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
@@ -777,6 +785,14 @@ async function getTrainingProviderProfile(userId: string) {
       r2SecretAccessKey: refLinks.r2_secret_access_key || '',
       r2Bucket: refLinks.r2_bucket || '',
       r2PublicUrl: refLinks.r2_public_url || '',
+      smtpEnabled: refLinks.smtp_enabled === true,
+      smtpHost: refLinks.smtp_host || '',
+      smtpPort: refLinks.smtp_port ? String(refLinks.smtp_port) : '',
+      smtpSecure: refLinks.smtp_secure || 'tls',
+      smtpAuth: refLinks.smtp_auth || 'login',
+      smtpUser: refLinks.smtp_user || '',
+      smtpPassword: refLinks.smtp_password || '',
+      smtpFrom: refLinks.smtp_from || '',
       openClawMode: refLinks.openclaw_mode || 'live',
       openClawGatewayUrl: refLinks.openclaw_gateway_url || '',
       openClawLocalGatewayUrl: refLinks.openclaw_local_gateway_url || '',

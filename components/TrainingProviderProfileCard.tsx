@@ -299,6 +299,10 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isTertiaryCoursesSgIntegrationOpen, setIsTertiaryCoursesSgIntegrationOpen] = useState(false);
     const [isN8nIntegrationOpen, setIsN8nIntegrationOpen] = useState(false);
     const [isR2IntegrationOpen, setIsR2IntegrationOpen] = useState(false);
+    const [isSmtpIntegrationOpen, setIsSmtpIntegrationOpen] = useState(false);
+    const [isSmtpHowToOpen, setIsSmtpHowToOpen] = useState(false);
+    const [smtpTestRecipient, setSmtpTestRecipient] = useState('');
+    const [smtpTestStatus, setSmtpTestStatus] = useState<{ kind: 'idle' | 'sending' | 'ok' | 'error'; message?: string }>({ kind: 'idle' });
     const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
     const [isPayrollOpen, setIsPayrollOpen] = useState(false);
     const [isSecurityOpen, setIsSecurityOpen] = useState(false);
@@ -1994,6 +1998,257 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 </div>
                                             );
                                         })}
+                                    </div>
+                                </div>
+                            </div>
+                    )}
+                    </div>
+
+                            {/* SMTP Configuration — alternative to Gmail OAuth.
+                                When the toggle below is OFF (default), all emails and OTP
+                                continue to go through Gmail OAuth, unchanged. */}
+                    <div>
+                    {renderIntegrationPanelHeader('SMTP Setting', isSmtpIntegrationOpen, () => setIsSmtpIntegrationOpen(prev => !prev))}
+                    {isSmtpIntegrationOpen && (
+                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                                <div className="p-3 bg-surface rounded-md border border-default space-y-4">
+                                    <p className="text-xs text-on-surface-secondary">
+                                        Default is <strong>Gmail OAuth</strong> for all emails and OTP. Flip the toggle below to route ALL emails and OTP through SMTP instead. Only one is used at a time.
+                                    </p>
+
+                                    {/* How to get the Gmail App Password */}
+                                    <div className="rounded-md border border-default">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsSmtpHowToOpen(prev => !prev)}
+                                            className="w-full flex items-center justify-between px-3 py-2 text-sm text-on-surface hover:bg-surface-elevated rounded-md"
+                                        >
+                                            <span className="font-medium">How to get the Gmail App Password</span>
+                                            <span className="text-on-surface-secondary text-xs">{isSmtpHowToOpen ? '▲' : '▼'}</span>
+                                        </button>
+                                        {isSmtpHowToOpen && (
+                                            <div className="px-4 pb-3 pt-1 text-xs text-on-surface-secondary space-y-2">
+                                                <p>For <code className="text-on-surface">smtp.gmail.com</code> with a Gmail or Google Workspace account, the Password field expects a 16-character <strong>App Password</strong>, not the account login password.</p>
+                                                <ol className="list-decimal ml-5 space-y-1.5">
+                                                    <li>Sign in to the Gmail account you want to send from (e.g. <code className="text-on-surface">sales@tertiarycourses.com.sg</code>).</li>
+                                                    <li>Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">https://myaccount.google.com/apppasswords</a>.</li>
+                                                    <li>
+                                                        If the page says it&apos;s not available:
+                                                        <ul className="list-disc ml-5 mt-1 space-y-1">
+                                                            <li>First enable <a href="https://myaccount.google.com/signinoptions/two-step-verification" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">2-Step Verification</a>.</li>
+                                                            <li>For Workspace accounts, the Workspace admin must allow App passwords under <strong>Admin Console → Security → Access and data control → Less secure apps</strong> (or under the 2-Step Verification settings). Without that, the App passwords page won&apos;t appear.</li>
+                                                        </ul>
+                                                    </li>
+                                                    <li>On the App passwords page, enter a name (e.g. <code className="text-on-surface">LMS-TMS SMTP</code>) and click <strong>Create</strong>.</li>
+                                                    <li>Google shows a 16-char password with spaces, e.g. <code className="text-on-surface">abcd efgh ijkl mnop</code>. Copy it <strong>without the spaces</strong> → <code className="text-on-surface">abcdefghijklmnop</code>.</li>
+                                                    <li>Paste it into the Password field below, click <strong>Save Changes</strong>, then click <strong>Send Test</strong> to confirm.</li>
+                                                </ol>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Master toggle */}
+                                    <div className="flex items-center justify-between p-3 bg-surface-elevated rounded-md border border-default">
+                                        <div>
+                                            <div className="text-sm font-semibold text-on-surface">Use SMTP instead of Gmail OAuth</div>
+                                            <div className="text-xs text-on-surface-secondary mt-0.5">
+                                                {(formData.integrations as any).smtpEnabled
+                                                    ? 'Active — all emails and OTP go through SMTP.'
+                                                    : 'Inactive — Gmail OAuth handles all emails and OTP (default).'}
+                                            </div>
+                                        </div>
+                                        {isEditing ? (
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    className="sr-only peer"
+                                                    checked={!!(formData.integrations as any).smtpEnabled}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                smtpEnabled: e.target.checked,
+                                                            } as any,
+                                                        }))
+                                                    }
+                                                />
+                                                <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            </label>
+                                        ) : (
+                                            <span className={`text-xs font-semibold px-2 py-1 rounded ${(formData.integrations as any).smtpEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                                                {(formData.integrations as any).smtpEnabled ? 'ON' : 'OFF'}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Quick-fill presets (edit mode only) */}
+                                    {isEditing && (
+                                        <div className="flex flex-wrap gap-2 items-center">
+                                            <span className="text-xs text-on-surface-secondary mr-1">Quick-fill:</span>
+                                            {[
+                                                { label: 'Gmail / Workspace', host: 'smtp.gmail.com', port: '587', secure: 'tls' },
+                                                { label: 'Outlook 365', host: 'smtp.office365.com', port: '587', secure: 'tls' },
+                                                { label: 'Custom · TLS 587', host: '', port: '587', secure: 'tls' },
+                                                { label: 'Custom · SSL 465', host: '', port: '465', secure: 'ssl' },
+                                            ].map((preset) => (
+                                                <button
+                                                    key={preset.label}
+                                                    type="button"
+                                                    className="px-3 py-1 text-xs rounded border border-default bg-surface hover:bg-surface-elevated"
+                                                    onClick={() =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                smtpHost: preset.host || (prev.integrations as any).smtpHost || '',
+                                                                smtpPort: preset.port,
+                                                                smtpSecure: preset.secure,
+                                                            } as any,
+                                                        }))
+                                                    }
+                                                >
+                                                    {preset.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {[
+                                            { key: 'smtpHost' as const, label: 'Host', placeholder: 'e.g. smtp.gmail.com', isSecret: false, type: 'text' as const },
+                                            { key: 'smtpPort' as const, label: 'Port', placeholder: 'e.g. 587', isSecret: false, type: 'text' as const },
+                                            { key: 'smtpSecure' as const, label: 'SSL/TLS', placeholder: 'tls', isSecret: false, type: 'select' as const, options: [
+                                                { value: 'tls', label: 'TLS — STARTTLS, port 587 (recommended)' },
+                                                { value: 'ssl', label: 'SSL — implicit TLS, port 465' },
+                                            ]},
+                                            { key: 'smtpAuth' as const, label: 'Auth', placeholder: 'login', isSecret: false, type: 'select' as const, options: [
+                                                { value: 'login', label: 'LOGIN (recommended)' },
+                                                { value: 'plain', label: 'PLAIN' },
+                                            ]},
+                                            { key: 'smtpUser' as const, label: 'Username', placeholder: 'e.g. sales@example.com', isSecret: false, type: 'text' as const },
+                                            { key: 'smtpPassword' as const, label: 'Password', placeholder: 'enter SMTP password', isSecret: true, type: 'text' as const },
+                                            { key: 'smtpFrom' as const, label: 'From (optional)', placeholder: 'defaults to Username if blank', isSecret: false, type: 'text' as const },
+                                        ].map(({ key, label, placeholder, isSecret, type, options }) => {
+                                            const value = (formData.integrations as any)[key] || '';
+                                            return (
+                                                <div key={key} className={key === 'smtpFrom' ? 'md:col-span-2' : ''}>
+                                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                                    {isEditing ? (
+                                                        type === 'select' ? (
+                                                            <select
+                                                                value={value}
+                                                                onChange={(e) =>
+                                                                    setFormData((prev) => ({
+                                                                        ...prev,
+                                                                        integrations: {
+                                                                            ...prev.integrations,
+                                                                            [key]: e.target.value,
+                                                                        },
+                                                                    }))
+                                                                }
+                                                                className={inputClasses}
+                                                            >
+                                                                {(options || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                                            </select>
+                                                        ) : (
+                                                            <input
+                                                                type={isSecret ? 'password' : 'text'}
+                                                                value={value}
+                                                                onChange={(e) =>
+                                                                    setFormData((prev) => ({
+                                                                        ...prev,
+                                                                        integrations: {
+                                                                            ...prev.integrations,
+                                                                            [key]: e.target.value,
+                                                                        },
+                                                                    }))
+                                                                }
+                                                                className={inputClasses}
+                                                                placeholder={placeholder}
+                                                                autoComplete="off"
+                                                            />
+                                                        )
+                                                    ) : (
+                                                        <p className="text-sm text-on-surface truncate">
+                                                            {isSecret
+                                                                ? (value ? '••••••••' : 'Not Set')
+                                                                : (value || 'Not Set')}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Send Test row — always visible. The test endpoint ignores
+                                        the master toggle, so this works whether SMTP is OFF or ON.
+                                        In edit mode it uses the form values (test before saving);
+                                        in view mode it falls back to the saved DB config. */}
+                                    <div className="pt-3 border-t border-default">
+                                        <label className="block text-sm font-medium text-on-surface-secondary mb-1">Send a test email</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="email"
+                                                value={smtpTestRecipient}
+                                                onChange={(e) => setSmtpTestRecipient(e.target.value)}
+                                                placeholder="test recipient (e.g. you@example.com)"
+                                                className={inputClasses}
+                                                autoComplete="off"
+                                            />
+                                            <button
+                                                type="button"
+                                                disabled={smtpTestStatus.kind === 'sending'}
+                                                onClick={async () => {
+                                                    setSmtpTestStatus({ kind: 'sending' });
+                                                    try {
+                                                        // In edit mode → use in-progress form values so admin can test
+                                                        // unsaved changes. In view mode → send no config and let the
+                                                        // server fall back to whatever is saved in the DB.
+                                                        const body: any = { recipient: smtpTestRecipient };
+                                                        if (isEditing) {
+                                                            const integ = formData.integrations as any;
+                                                            body.config = {
+                                                                host: integ.smtpHost || '',
+                                                                port: integ.smtpPort || '',
+                                                                secure: integ.smtpSecure || 'tls',
+                                                                auth: integ.smtpAuth || 'login',
+                                                                user: integ.smtpUser || '',
+                                                                password: integ.smtpPassword || '',
+                                                                from: integ.smtpFrom || '',
+                                                            };
+                                                        }
+                                                        const resp = await fetch('/api/integrations/smtp/test', {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify(body),
+                                                        });
+                                                        const data = await resp.json();
+                                                        if (data.ok) {
+                                                            setSmtpTestStatus({ kind: 'ok', message: `Sent (messageId: ${data.messageId || 'n/a'})` });
+                                                        } else {
+                                                            setSmtpTestStatus({ kind: 'error', message: data.error || 'Send failed' });
+                                                        }
+                                                    } catch (err: any) {
+                                                        setSmtpTestStatus({ kind: 'error', message: err?.message || String(err) });
+                                                    }
+                                                }}
+                                                className="px-4 py-2 text-sm rounded border border-default bg-surface hover:bg-surface-elevated whitespace-nowrap disabled:opacity-50"
+                                            >
+                                                {smtpTestStatus.kind === 'sending' ? 'Sending…' : 'Send Test'}
+                                            </button>
+                                        </div>
+                                        {smtpTestStatus.kind === 'ok' && (
+                                            <p className="text-xs text-green-600 mt-2">{smtpTestStatus.message}</p>
+                                        )}
+                                        {smtpTestStatus.kind === 'error' && (
+                                            <p className="text-xs text-red-600 mt-2">{smtpTestStatus.message}</p>
+                                        )}
+                                        <p className="text-xs text-on-surface-secondary mt-2">
+                                            {isEditing
+                                                ? 'Test uses the values above (you don’t need to save first). The master toggle is ignored.'
+                                                : 'Test uses the credentials saved on the server. The master toggle is ignored, so this works even when SMTP is OFF.'}
+                                        </p>
                                     </div>
                                 </div>
                             </div>

@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
+import { isSmtpEnabled, sendViaSmtp } from '../smtp';
 
 // Email configuration - using environment variables
 // For production, configure these in .env:
@@ -57,6 +58,22 @@ class EmailService {
 
   async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; error?: string; messageId?: string }> {
     try {
+      // Route through DB-backed SMTP when the admin has explicitly enabled it
+      // in Company Settings → Integration → SMTP. Default is OFF, so the
+      // legacy env-var path below remains the runtime default until an admin
+      // opts in. This file is rarely the OTP sender — Gmail OAuth for OTP
+      // lives in pages/api/auth/send-otp.ts — so the practical impact is on
+      // notifications and other miscellaneous mail callers.
+      if (await isSmtpEnabled()) {
+        const result = await sendViaSmtp({
+          to: options.to,
+          subject: options.subject,
+          text: options.text,
+          html: options.html,
+        });
+        return { success: result.ok, messageId: result.messageId, error: result.error };
+      }
+
       const config = this.getConfig();
       const fromAddress = process.env.SMTP_FROM || config.auth.user || 'noreply@lms-tms.com';
 
