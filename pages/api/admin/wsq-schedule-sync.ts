@@ -70,14 +70,24 @@ async function fetchMagento(baseUrl: string, apiKey: string, forceRefresh: boole
     cache: 'no-store',
   });
   if (!resp.ok) {
-    let body: any = null;
-    try { body = await resp.json(); } catch { body = await resp.text(); }
-    const err: any = new Error(`Magento API ${resp.status}`);
+    const raw = await resp.text();
+    let body: any = raw;
+    try { body = JSON.parse(raw); } catch { /* keep raw text */ }
+    const err: any = new Error(`Magento API ${resp.status}: ${typeof body === 'string' ? body.slice(0, 200) : (body?.error || JSON.stringify(body).slice(0, 200))}`);
     err.status = resp.status;
     err.body = body;
     throw err;
   }
-  const data = (await resp.json()) as MagentoResponse;
+  const raw = await resp.text();
+  let data: MagentoResponse;
+  try {
+    data = JSON.parse(raw) as MagentoResponse;
+  } catch (e: any) {
+    const err: any = new Error(`Magento returned non-JSON (${raw.slice(0, 120)}…)`);
+    err.status = 502;
+    err.body = raw.slice(0, 1000);
+    throw err;
+  }
   cache = { at: Date.now(), data };
   return data;
 }
