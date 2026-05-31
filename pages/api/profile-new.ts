@@ -665,7 +665,7 @@ async function getTrainingProviderProfile(userId: string) {
   } catch (e) { /* columns don't exist */ }
   // Google Drive extras
   try {
-    const r = await pool.query(`SELECT trainer_profile_image_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    const r = await pool.query(`SELECT trainer_profile_image_url, google_drive_folder_id FROM training_provider WHERE id = $1`, [profileData.provider_id]);
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
   // OpenClaw / Orion
@@ -681,11 +681,12 @@ async function getTrainingProviderProfile(userId: string) {
   let virtualMeetingProvider: 'google_meet' | 'zoom' | 'teams' = 'google_meet';
   let zoomClientId = '';
   let zoomClientSecret = '';
+  let zoomRedirectUri = '';
   let zoomConnected = false;
   let zoomUserEmail = '';
   try {
     const r = await pool.query(
-      `SELECT virtual_meeting_provider, zoom_oauth_client_id, zoom_oauth_client_secret, zoom_oauth_refresh_token, zoom_user_email
+      `SELECT virtual_meeting_provider, zoom_oauth_client_id, zoom_oauth_client_secret, zoom_oauth_redirect_uri, zoom_oauth_refresh_token, zoom_user_email
        FROM training_provider WHERE id = $1`,
       [profileData.provider_id]
     );
@@ -693,6 +694,7 @@ async function getTrainingProviderProfile(userId: string) {
     if (v === 'zoom' || v === 'teams') virtualMeetingProvider = v;
     zoomClientId = r.rows[0]?.zoom_oauth_client_id || '';
     zoomClientSecret = r.rows[0]?.zoom_oauth_client_secret || '';
+    zoomRedirectUri = r.rows[0]?.zoom_oauth_redirect_uri || '';
     zoomConnected = !!r.rows[0]?.zoom_oauth_refresh_token;
     zoomUserEmail = r.rows[0]?.zoom_user_email || '';
   } catch (e) { /* column doesn't exist yet */ }
@@ -766,9 +768,11 @@ async function getTrainingProviderProfile(userId: string) {
       virtualMeetingProvider,
       zoomClientId,
       zoomClientSecret,
+      zoomRedirectUri,
       zoomConnected,
       zoomUserEmail,
       trainerProfileImageUrl: refLinks.trainer_profile_image_url || '',
+      googleDriveFolderId: refLinks.google_drive_folder_id || '',
       certificateFolderUrl: profileData.certificate_folder_url || '',
       masterListUrl: refLinks.master_list_url || '',
       tertiaryTmsUrl: refLinks.tertiary_tms_url || '',

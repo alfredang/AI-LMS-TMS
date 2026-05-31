@@ -12,9 +12,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     await ensureZoomColumns();
     const credentials = await getZoomCredentials();
-    const redirectUri = getZoomRedirectUri();
+    const redirectUri = await getZoomRedirectUri();
     if (!redirectUri.startsWith('http')) {
-      return res.status(400).json({ error: 'Set NEXT_PUBLIC_BASE_URL or ZOOM_REDIRECT_URI before connecting Zoom.' });
+      return res.status(400).json({ error: 'Set Redirect URI in Company Setting → Zoom (or NEXT_PUBLIC_BASE_URL) before connecting Zoom.' });
     }
 
     const state = `zoom_${Date.now()}`;

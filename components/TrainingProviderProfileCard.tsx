@@ -1788,6 +1788,33 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                 <div className="p-3 bg-surface rounded-md border border-default ml-4">
                                     <div className="space-y-3">
                                         <div>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Drive Root Folder ID</label>
+                                            {isEditing ? (
+                                                <input
+                                                    type="text"
+                                                    value={(formData.integrations as any).googleDriveFolderId || ''}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                googleDriveFolderId: e.target.value,
+                                                            } as any,
+                                                        }))
+                                                    }
+                                                    className={inputClasses}
+                                                    placeholder="e.g. 1Rt6x1TQn1QAE-lYWRCnhNOmeUNhDQ0tR"
+                                                />
+                                            ) : (
+                                                <p className="text-sm text-on-surface truncate">
+                                                    {(formData.integrations as any).googleDriveFolderId || 'Not Set'}
+                                                </p>
+                                            )}
+                                            <p className="text-[10px] text-on-surface-secondary mt-1">
+                                                Parent folder ID for trainer photos, class summary records, assessment uploads, and automated folder cleanup. Get it from the Drive folder URL: <code className="font-mono">drive.google.com/drive/folders/&lt;ID&gt;</code>. Replaces the legacy <code className="font-mono">GOOGLE_DRIVE_FOLDER_ID</code> env var.
+                                            </p>
+                                        </div>
+                                        <div>
                                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainre Profile Image Folder</label>
                                             {isEditing ? (
                                                 <input
@@ -2005,6 +2032,60 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Redirect URI — must match what is listed in the Zoom Marketplace app's
+                                    Redirect URL allow list. Defaults to <origin>/api/integrations/zoom/oauth/callback
+                                    if left blank. */}
+                                {(() => {
+                                    const savedOverride = (formData.integrations as any).zoomRedirectUri || '';
+                                    const computedDefault = typeof window !== 'undefined'
+                                        ? `${window.location.origin.replace(/\/$/, '')}/api/integrations/zoom/oauth/callback`
+                                        : '<your-site-origin>/api/integrations/zoom/oauth/callback';
+                                    const effective = savedOverride || computedDefault;
+                                    return (
+                                        <div>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Redirect URI (override, optional)</label>
+                                            {isEditing ? (
+                                                <input
+                                                    type="text"
+                                                    value={savedOverride}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                zoomRedirectUri: e.target.value,
+                                                            } as any,
+                                                        }))
+                                                    }
+                                                    className={inputClasses}
+                                                    placeholder={`leave blank to use ${computedDefault}`}
+                                                />
+                                            ) : (
+                                                <p className="text-sm text-on-surface truncate">{savedOverride || `(default: ${computedDefault})`}</p>
+                                            )}
+                                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                                <span className="text-on-surface-secondary">Effective Redirect URI:</span>
+                                                <code className="font-mono text-on-surface break-all">{effective}</code>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                                            navigator.clipboard.writeText(effective);
+                                                        }
+                                                    }}
+                                                    className="px-2 py-0.5 text-xs rounded border border-default bg-surface hover:bg-surface-elevated"
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+                                            <p className="text-[10px] text-on-surface-secondary mt-1">
+                                                Paste the <strong>Effective Redirect URI</strong> exactly (including protocol and path) into the Zoom Marketplace app&apos;s <strong>Redirect URL for OAuth</strong> + <strong>Add allow lists</strong>. Replaces the legacy <code className="font-mono">ZOOM_REDIRECT_URI</code> env var.
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
+
                                 <div className="flex flex-wrap items-center gap-2">
                                     <span className={`text-xs font-semibold px-2 py-1 rounded ${zoomStatus.connected ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}`}>
                                         {zoomStatus.connected ? `Connected${zoomStatus.userEmail ? `: ${zoomStatus.userEmail}` : ''}` : 'Not connected'}

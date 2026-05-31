@@ -58,7 +58,19 @@ export async function ensureZoomColumns(): Promise<void> {
   `);
 }
 
-export function getZoomRedirectUri(): string {
+// Resolution order: DB (Company Setting → Zoom) → env var → computed from
+// NEXT_PUBLIC_BASE_URL. Whatever this returns must exactly match an entry
+// in the Zoom Marketplace app's Redirect URL allow list.
+export async function getZoomRedirectUri(): Promise<string> {
+  try {
+    const r = await pool.query(
+      `SELECT zoom_oauth_redirect_uri FROM training_provider ORDER BY created_at DESC NULLS LAST LIMIT 1`
+    );
+    const dbValue = (r.rows[0]?.zoom_oauth_redirect_uri || '').trim();
+    if (dbValue) return dbValue;
+  } catch {
+    // Column may not exist yet — fall through.
+  }
   if (process.env.ZOOM_REDIRECT_URI) return process.env.ZOOM_REDIRECT_URI;
   const baseUrl = (
     process.env.NEXT_PUBLIC_BASE_URL ||
@@ -125,9 +137,9 @@ async function saveZoomToken(
 
 export async function exchangeZoomAuthorizationCode(code: string): Promise<any> {
   const credentials = await getZoomCredentials();
-  const redirectUri = getZoomRedirectUri();
+  const redirectUri = await getZoomRedirectUri();
   if (!redirectUri.startsWith('http')) {
-    throw new Error('Zoom redirect URI could not be resolved. Set NEXT_PUBLIC_BASE_URL or ZOOM_REDIRECT_URI.');
+    throw new Error('Zoom redirect URI could not be resolved. Set it in Company Setting → Zoom or via NEXT_PUBLIC_BASE_URL / ZOOM_REDIRECT_URI.');
   }
 
   const response = await fetch(ZOOM_TOKEN_URL, {

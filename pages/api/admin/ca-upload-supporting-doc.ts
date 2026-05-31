@@ -79,9 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const DEFAULT_CA_DOCS_FOLDER_ID = '1DQbQA9HWbzk7NXgwO8ud1yrqTeu48yyN';
     const rootFolderId = (
       process.env.CA_SUPPORTING_DOCS_FOLDER_ID ||
-      DEFAULT_CA_DOCS_FOLDER_ID ||
-      process.env.GOOGLE_DRIVE_FOLDER_ID ||
-      ''
+      DEFAULT_CA_DOCS_FOLDER_ID
     ).trim();
     if (!rootFolderId) {
       return res.status(500).json({

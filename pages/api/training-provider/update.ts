@@ -6,6 +6,7 @@ import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { invalidateR2ConfigCache } from '../../../lib/r2';
 import { invalidateSmtpConfigCache } from '../../../lib/smtp';
+import { invalidateGoogleDriveFolderCache } from '../../../lib/googleDriveFolder';
 import {
   TRAINING_PROVIDER_FOLDER_BY_FIELD,
   trainingProviderSkipTimestampForFolder,
@@ -769,7 +770,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Google Drive extras
       await autoCreateAndUpdate([
         { name: 'trainer_profile_image_url', value: profileData.integrations?.trainerProfileImageUrl || null },
+        { name: 'google_drive_folder_id', value: profileData.integrations?.googleDriveFolderId || null },
       ]);
+      invalidateGoogleDriveFolderCache();
       // OpenClaw / Orion
       await autoCreateAndUpdate([
         { name: 'openclaw_mode', value: profileData.integrations?.openClawMode || 'live' },
@@ -794,18 +797,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ALTER TABLE training_provider
             ADD COLUMN IF NOT EXISTS virtual_meeting_provider text DEFAULT 'google_meet',
             ADD COLUMN IF NOT EXISTS zoom_oauth_client_id text,
-            ADD COLUMN IF NOT EXISTS zoom_oauth_client_secret text
+            ADD COLUMN IF NOT EXISTS zoom_oauth_client_secret text,
+            ADD COLUMN IF NOT EXISTS zoom_oauth_redirect_uri text
         `);
         await pool.query(
           `UPDATE training_provider
            SET virtual_meeting_provider = $1,
                zoom_oauth_client_id = $2,
-               zoom_oauth_client_secret = $3
-           WHERE id = $4`,
+               zoom_oauth_client_secret = $3,
+               zoom_oauth_redirect_uri = $4
+           WHERE id = $5`,
           [
             virtualMeetingProvider,
             profileData.integrations?.zoomClientId || null,
             profileData.integrations?.zoomClientSecret || null,
+            profileData.integrations?.zoomRedirectUri || null,
             trainingProviderId
           ]
         );

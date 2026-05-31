@@ -4,6 +4,7 @@ import fs from 'fs';
 import { drive_v3 } from 'googleapis';
 import { cors } from '../../../lib/cors';
 import pool from '../../../lib/db';
+import { getGoogleDriveFolderId } from '../../../lib/googleDriveFolder';
 import {
     getDriveClient,
     findSubfolder,
@@ -77,9 +78,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ success: false, error: 'Method not allowed' });
     }
 
-    const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    const parentFolderId = await getGoogleDriveFolderId();
     if (!parentFolderId) {
-        return res.status(500).json({ success: false, error: 'GOOGLE_DRIVE_FOLDER_ID not configured' });
+        return res.status(500).json({ success: false, error: 'Google Drive Root Folder ID is not configured. Set it in Company Setting → Integration → Google.' });
     }
 
     try {

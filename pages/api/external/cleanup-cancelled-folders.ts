@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { getGoogleDriveFolderId } from '../../../lib/googleDriveFolder';
 import {
     getDriveClient,
     findSubfolder,
@@ -36,8 +37,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const drive = await getDriveClient();
-        const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-        if (!rootFolderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID is not configured');
+        const rootFolderId = await getGoogleDriveFolderId();
+        if (!rootFolderId) throw new Error('Google Drive Root Folder ID is not configured. Set it in Company Setting → Integration → Google.');
 
         let deletedCount = 0;
         let notEmptyCount = 0;

@@ -6,6 +6,7 @@ import {
     findCourseFolderByTgsRef,
     buildStartDatePrefix,
 } from '../lib/google-drive/drive-helpers';
+import { getGoogleDriveFolderId } from '../lib/googleDriveFolder';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
@@ -35,8 +36,8 @@ async function run() {
         }
 
         const drive = await getDriveClient();
-        const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-        if (!rootFolderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID is not configured');
+        const rootFolderId = await getGoogleDriveFolderId();
+        if (!rootFolderId) throw new Error('Google Drive Root Folder ID is not configured. Set it in Company Setting → Integration → Google.');
 
         let deletedCount = 0;
         let notEmptyCount = 0;
