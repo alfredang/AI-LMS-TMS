@@ -2100,6 +2100,33 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     );
                                 })()}
 
+                                {/* OAuth Scopes (override, optional) */}
+                                <div>
+                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">OAuth Scopes (space-separated, optional)</label>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={(formData.integrations as any).zoomScopes || ''}
+                                            onChange={(e) =>
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    integrations: {
+                                                        ...prev.integrations,
+                                                        zoomScopes: e.target.value,
+                                                    } as any,
+                                                }))
+                                            }
+                                            className={inputClasses}
+                                            placeholder="leave blank to use default: user:read:user meeting:write:meeting"
+                                        />
+                                    ) : (
+                                        <p className="text-sm text-on-surface truncate">{(formData.integrations as any).zoomScopes || '(default: user:read:user meeting:write:meeting)'}</p>
+                                    )}
+                                    <p className="text-[10px] text-on-surface-secondary mt-1">
+                                        Must match the scopes enabled in the Zoom Marketplace app&apos;s <strong>Scopes</strong> tab. After changing scopes, re-click <strong>Connect Zoom</strong> to consent again and refresh the token. Replaces the legacy <code className="font-mono">ZOOM_SCOPES</code> env var.
+                                    </p>
+                                </div>
+
                                 <div className="flex flex-wrap items-center gap-2">
                                     <span className={`text-xs font-semibold px-2 py-1 rounded ${zoomStatus.connected ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'}`}>
                                         {zoomStatus.connected ? `Connected${zoomStatus.userEmail ? `: ${zoomStatus.userEmail}` : ''}` : 'Not connected'}

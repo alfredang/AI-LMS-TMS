@@ -364,8 +364,8 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                 return dob;
             };
 
-            const trainingPartnerUen = (trainingProviderProfile?.uen || process.env.NEXT_PUBLIC_TRAINING_PARTNER_UEN || '').trim();
-            const trainingPartnerCode = trainingPartnerUen ? `${trainingPartnerUen}-01` : (process.env.NEXT_PUBLIC_TRAINING_PARTNER_CODE || '').trim();
+            const trainingPartnerUen = (trainingProviderProfile?.uen || '').trim();
+            const trainingPartnerCode = trainingPartnerUen ? `${trainingPartnerUen}-01` : '';
 
             const allItems: any[] = [];
 

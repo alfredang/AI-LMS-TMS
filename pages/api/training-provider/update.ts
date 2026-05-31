@@ -808,20 +808,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ADD COLUMN IF NOT EXISTS virtual_meeting_provider text DEFAULT 'google_meet',
             ADD COLUMN IF NOT EXISTS zoom_oauth_client_id text,
             ADD COLUMN IF NOT EXISTS zoom_oauth_client_secret text,
-            ADD COLUMN IF NOT EXISTS zoom_oauth_redirect_uri text
+            ADD COLUMN IF NOT EXISTS zoom_oauth_redirect_uri text,
+            ADD COLUMN IF NOT EXISTS zoom_oauth_scopes text
         `);
         await pool.query(
           `UPDATE training_provider
            SET virtual_meeting_provider = $1,
                zoom_oauth_client_id = $2,
                zoom_oauth_client_secret = $3,
-               zoom_oauth_redirect_uri = $4
-           WHERE id = $5`,
+               zoom_oauth_redirect_uri = $4,
+               zoom_oauth_scopes = $5
+           WHERE id = $6`,
           [
             virtualMeetingProvider,
             profileData.integrations?.zoomClientId || null,
             profileData.integrations?.zoomClientSecret || null,
             profileData.integrations?.zoomRedirectUri || null,
+            profileData.integrations?.zoomScopes || null,
             trainingProviderId
           ]
         );

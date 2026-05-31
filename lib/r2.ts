@@ -6,8 +6,7 @@ import pool from './db';
 // Schema columns (added on demand by training-provider/update.ts):
 //   r2_endpoint, r2_access_key_id, r2_secret_access_key, r2_bucket, r2_public_url
 //
-// process.env.R2_* still works as a fallback so local dev can use either
-// .env.local or the DB-backed Company Settings UI.
+// Single source of truth: the DB. No env-var fallback.
 
 interface R2Config {
   endpoint: string;
@@ -49,11 +48,11 @@ async function loadConfig(): Promise<R2Config | null> {
   }
 
   const merged: R2Config = {
-    endpoint: dbValues.endpoint || process.env.R2_ENDPOINT || '',
-    accessKeyId: dbValues.accessKeyId || process.env.R2_ACCESS_KEY_ID || '',
-    secretAccessKey: dbValues.secretAccessKey || process.env.R2_SECRET_ACCESS_KEY || '',
-    bucket: dbValues.bucket || process.env.R2_BUCKET || '',
-    publicUrl: dbValues.publicUrl || process.env.R2_PUBLIC_URL || '',
+    endpoint: dbValues.endpoint || '',
+    accessKeyId: dbValues.accessKeyId || '',
+    secretAccessKey: dbValues.secretAccessKey || '',
+    bucket: dbValues.bucket || '',
+    publicUrl: dbValues.publicUrl || '',
   };
 
   const complete = !!(merged.endpoint && merged.accessKeyId && merged.secretAccessKey && merged.bucket && merged.publicUrl);
@@ -70,7 +69,7 @@ export async function isR2Configured(): Promise<boolean> {
 async function getClient(): Promise<{ client: S3Client; config: R2Config }> {
   const config = await loadConfig();
   if (!config) {
-    throw new Error('R2 is not configured. Set credentials under Company Settings → Integrations → R2 (or in environment variables R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_URL).');
+    throw new Error('R2 is not configured. Set credentials under Company Settings → Integrations → Cloudflare R2.');
   }
   if (cachedClient && cachedClient.config.endpoint === config.endpoint && cachedClient.config.accessKeyId === config.accessKeyId) {
     return cachedClient;

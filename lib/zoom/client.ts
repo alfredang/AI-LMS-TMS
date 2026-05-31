@@ -58,6 +58,25 @@ export async function ensureZoomColumns(): Promise<void> {
   `);
 }
 
+// Default OAuth scopes the LMS needs to create/list meetings under the
+// connected Zoom user. Admins can extend this via Company Setting → Zoom.
+const DEFAULT_ZOOM_SCOPES = 'user:read:user meeting:write:meeting';
+
+// Resolution order: DB column zoom_oauth_scopes (Company Setting → Zoom)
+// → DEFAULT_ZOOM_SCOPES. Stored as a space-separated string.
+export async function getZoomScopes(): Promise<string> {
+  try {
+    const r = await pool.query(
+      `SELECT zoom_oauth_scopes FROM training_provider ORDER BY created_at DESC NULLS LAST LIMIT 1`
+    );
+    const dbValue = (r.rows[0]?.zoom_oauth_scopes || '').trim();
+    if (dbValue) return dbValue;
+  } catch {
+    // Column may not exist yet — fall through to default.
+  }
+  return DEFAULT_ZOOM_SCOPES;
+}
+
 // Resolution order: DB column zoom_oauth_redirect_uri (Company Setting → Zoom)
 // → computed from NEXT_PUBLIC_BASE_URL. Whatever this returns must exactly
 // match an entry in the Zoom Marketplace app's Redirect URL allow list.

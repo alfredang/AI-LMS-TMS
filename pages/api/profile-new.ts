@@ -687,11 +687,12 @@ async function getTrainingProviderProfile(userId: string) {
   let zoomClientId = '';
   let zoomClientSecret = '';
   let zoomRedirectUri = '';
+  let zoomScopes = '';
   let zoomConnected = false;
   let zoomUserEmail = '';
   try {
     const r = await pool.query(
-      `SELECT virtual_meeting_provider, zoom_oauth_client_id, zoom_oauth_client_secret, zoom_oauth_redirect_uri, zoom_oauth_refresh_token, zoom_user_email
+      `SELECT virtual_meeting_provider, zoom_oauth_client_id, zoom_oauth_client_secret, zoom_oauth_redirect_uri, zoom_oauth_scopes, zoom_oauth_refresh_token, zoom_user_email
        FROM training_provider WHERE id = $1`,
       [profileData.provider_id]
     );
@@ -700,6 +701,7 @@ async function getTrainingProviderProfile(userId: string) {
     zoomClientId = r.rows[0]?.zoom_oauth_client_id || '';
     zoomClientSecret = r.rows[0]?.zoom_oauth_client_secret || '';
     zoomRedirectUri = r.rows[0]?.zoom_oauth_redirect_uri || '';
+    zoomScopes = r.rows[0]?.zoom_oauth_scopes || '';
     zoomConnected = !!r.rows[0]?.zoom_oauth_refresh_token;
     zoomUserEmail = r.rows[0]?.zoom_user_email || '';
   } catch (e) { /* column doesn't exist yet */ }
@@ -774,6 +776,7 @@ async function getTrainingProviderProfile(userId: string) {
       zoomClientId,
       zoomClientSecret,
       zoomRedirectUri,
+      zoomScopes,
       zoomConnected,
       zoomUserEmail,
       trainerProfileImageUrl: refLinks.trainer_profile_image_url || '',

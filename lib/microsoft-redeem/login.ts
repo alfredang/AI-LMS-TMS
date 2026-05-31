@@ -11,9 +11,6 @@
  * `storageState` is persisted to the `microsoft_redeem_session` table for
  * the code generator to reuse.
  *
- * MS_EMAIL, if set, is only used to pre-fill the email field as a
- * convenience — the admin still completes the rest in the window.
- *
  * NOTE: this requires a desktop/display on the host. It works for local
  * `npm run dev`; a headless Coolify container has no display and cannot
  * open the window.
@@ -74,7 +71,7 @@ async function waitForAuthCookies(
  * window times out.
  */
 export async function runMicrosoftLogin(): Promise<LoginResult> {
-  const email = (process.env.MS_EMAIL || '').trim();
+  const email = '';
 
   let browser: Browser | null = null;
   try {
