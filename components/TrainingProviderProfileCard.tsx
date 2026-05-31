@@ -1986,13 +1986,25 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
 
                         <div className="p-3 bg-surface rounded-md border border-default">
                             <div className="space-y-3">
+                                {(() => {
+                                    // Reveal first 4 and last 4 chars of a credential, mask the middle.
+                                    // Strings of 8 chars or fewer collapse to all-dots (no edges leaked).
+                                    const maskCred = (val: string): string => {
+                                        if (!val) return '';
+                                        const s = String(val);
+                                        if (s.length <= 8) return '•'.repeat(s.length);
+                                        return `${s.slice(0, 4)}${'•'.repeat(Math.min(8, s.length - 8))}${s.slice(-4)}`;
+                                    };
+                                    const clientId = (formData.integrations as any).zoomClientId || '';
+                                    const clientSecret = (formData.integrations as any).zoomClientSecret || '';
+                                    return (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div>
                                         <label className="block text-sm font-medium text-on-surface-secondary mb-1">Zoom OAuth App Client ID</label>
                                         {isEditing ? (
                                             <input
                                                 type="text"
-                                                value={(formData.integrations as any).zoomClientId || ''}
+                                                value={clientId}
                                                 onChange={(e) =>
                                                     setFormData((prev) => ({
                                                         ...prev,
@@ -2006,7 +2018,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 placeholder="Zoom OAuth app client ID"
                                             />
                                         ) : (
-                                            <p className="text-sm text-on-surface truncate">{(formData.integrations as any).zoomClientId || 'Not Set'}</p>
+                                            <p className="text-sm text-on-surface font-mono truncate">{clientId ? maskCred(clientId) : 'Not Set'}</p>
                                         )}
                                     </div>
                                     <div>
@@ -2014,7 +2026,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         {isEditing ? (
                                             <input
                                                 type="password"
-                                                value={(formData.integrations as any).zoomClientSecret || ''}
+                                                value={clientSecret}
                                                 onChange={(e) =>
                                                     setFormData((prev) => ({
                                                         ...prev,
@@ -2028,10 +2040,12 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 placeholder="Zoom OAuth app client secret"
                                             />
                                         ) : (
-                                            <p className="text-sm text-on-surface">{(formData.integrations as any).zoomClientSecret ? 'Configured' : 'Not Set'}</p>
+                                            <p className="text-sm text-on-surface font-mono truncate">{clientSecret ? maskCred(clientSecret) : 'Not Set'}</p>
                                         )}
                                     </div>
                                 </div>
+                                    );
+                                })()}
 
                                 {/* Redirect URI — must match what is listed in the Zoom Marketplace app's
                                     Redirect URL allow list. Defaults to <origin>/api/integrations/zoom/oauth/callback

@@ -58,9 +58,9 @@ export async function ensureZoomColumns(): Promise<void> {
   `);
 }
 
-// Resolution order: DB (Company Setting → Zoom) → env var → computed from
-// NEXT_PUBLIC_BASE_URL. Whatever this returns must exactly match an entry
-// in the Zoom Marketplace app's Redirect URL allow list.
+// Resolution order: DB column zoom_oauth_redirect_uri (Company Setting → Zoom)
+// → computed from NEXT_PUBLIC_BASE_URL. Whatever this returns must exactly
+// match an entry in the Zoom Marketplace app's Redirect URL allow list.
 export async function getZoomRedirectUri(): Promise<string> {
   try {
     const r = await pool.query(
@@ -69,9 +69,8 @@ export async function getZoomRedirectUri(): Promise<string> {
     const dbValue = (r.rows[0]?.zoom_oauth_redirect_uri || '').trim();
     if (dbValue) return dbValue;
   } catch {
-    // Column may not exist yet — fall through.
+    // Column may not exist yet — fall through to computed default.
   }
-  if (process.env.ZOOM_REDIRECT_URI) return process.env.ZOOM_REDIRECT_URI;
   const baseUrl = (
     process.env.NEXT_PUBLIC_BASE_URL ||
     process.env.NEXTAUTH_URL ||
@@ -100,18 +99,18 @@ export async function getZoomCredentials(): Promise<ZoomCredentials> {
   const row = result.rows[0];
   if (!row) throw new Error('No training provider settings found.');
 
-  const clientId = row.zoom_oauth_client_id || process.env.ZOOM_CLIENT_ID;
-  const clientSecret = row.zoom_oauth_client_secret || process.env.ZOOM_CLIENT_SECRET;
+  const clientId = row.zoom_oauth_client_id;
+  const clientSecret = row.zoom_oauth_client_secret;
 
   if (!clientId || !clientSecret) {
-    throw new Error('Zoom OAuth client ID and client secret are not configured.');
+    throw new Error('Zoom OAuth client ID and client secret are not configured in Company Setting → Integration → Zoom.');
   }
 
   return {
     trainingProviderId: row.id,
     clientId,
     clientSecret,
-    refreshToken: row.zoom_oauth_refresh_token || process.env.ZOOM_REFRESH_TOKEN || null,
+    refreshToken: row.zoom_oauth_refresh_token || null,
     accessToken: row.zoom_oauth_access_token || null,
     tokenExpiresAt: row.zoom_oauth_token_expires_at ? new Date(row.zoom_oauth_token_expires_at) : null,
   };
@@ -139,7 +138,7 @@ export async function exchangeZoomAuthorizationCode(code: string): Promise<any> 
   const credentials = await getZoomCredentials();
   const redirectUri = await getZoomRedirectUri();
   if (!redirectUri.startsWith('http')) {
-    throw new Error('Zoom redirect URI could not be resolved. Set it in Company Setting → Zoom or via NEXT_PUBLIC_BASE_URL / ZOOM_REDIRECT_URI.');
+    throw new Error('Zoom redirect URI could not be resolved. Set it in Company Setting → Zoom (or ensure NEXT_PUBLIC_BASE_URL is set).');
   }
 
   const response = await fetch(ZOOM_TOKEN_URL, {

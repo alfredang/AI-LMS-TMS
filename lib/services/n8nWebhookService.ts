@@ -27,10 +27,10 @@ async function getTimeoutMs(): Promise<number> {
     );
     dbValue = String(r.rows[0]?.n8n_webhook_timeout_ms || '').trim();
   } catch {
-    // Column may not exist yet — fall through to env / default.
+    // Column may not exist yet — fall through to default.
   }
 
-  const raw = dbValue || process.env.N8N_WEBHOOK_TIMEOUT_MS || '';
+  const raw = dbValue;
   const parsed = raw ? Number(raw) : NaN;
   const ms = Number.isFinite(parsed) ? parsed : DEFAULT_TIMEOUT_MS;
   // clamp between 5s and 30m

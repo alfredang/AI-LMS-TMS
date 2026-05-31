@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const credentials = await getZoomCredentials();
     const redirectUri = await getZoomRedirectUri();
     if (!redirectUri.startsWith('http')) {
-      return res.status(400).json({ error: 'Set Redirect URI in Company Setting → Zoom (or NEXT_PUBLIC_BASE_URL) before connecting Zoom.' });
+      return res.status(400).json({ error: 'Redirect URI could not be resolved. Set it in Company Setting → Zoom (or ensure NEXT_PUBLIC_BASE_URL is set) before connecting.' });
     }
 
     const state = `zoom_${Date.now()}`;
