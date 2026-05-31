@@ -30,17 +30,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (typeof course_run_id === 'string' && course_run_id.length > 0) {
       const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       // Try matching against course_run.id (UUID), course_run.course_run_id (TGS code), or fall back to course.course_code
+      const trainerSubq = `(
+        SELECT string_agg(DISTINCT crt.trainer_name, ', ' ORDER BY crt.trainer_name)
+        FROM course_run_trainer crt
+        WHERE crt.course_run_id = cr.id
+      ) AS trainer_name`;
       const r = uuidRe.test(course_run_id)
         ? await pool.query(
             `SELECT cr.id AS course_run_id, cr.course_run_id AS course_run_code, cr.start_date, cr.end_date,
-                    c.title AS course_title, c.course_code
+                    c.title AS course_title, c.course_code, ${trainerSubq}
              FROM course_run cr JOIN course c ON c.id = cr.course_id
              WHERE cr.id = $1 LIMIT 1`,
             [course_run_id]
           )
         : await pool.query(
             `SELECT cr.id AS course_run_id, cr.course_run_id AS course_run_code, cr.start_date, cr.end_date,
-                    c.title AS course_title, c.course_code
+                    c.title AS course_title, c.course_code, ${trainerSubq}
              FROM course_run cr JOIN course c ON c.id = cr.course_id
              WHERE cr.course_run_id = $1 OR c.course_code = $1
              ORDER BY cr.start_date DESC NULLS LAST LIMIT 1`,

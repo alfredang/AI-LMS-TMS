@@ -10,6 +10,7 @@ interface RunContext {
   course_code: string;
   start_date: string | null;
   end_date: string | null;
+  trainer_name: string | null;
 }
 
 interface TemplatePayload {
@@ -150,12 +151,26 @@ export default function FeedbackFormPage() {
             <div key={section.id} className="space-y-4">
               <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 border-b pb-1">{section.title}</h2>
               {section.fields.map(field => (
-                <FieldInput
-                  key={field.id}
-                  field={field}
-                  value={values[field.id] ?? ''}
-                  onChange={v => onChange(field.id, v)}
-                />
+                <React.Fragment key={field.id}>
+                  <FieldInput
+                    field={field}
+                    value={values[field.id] ?? ''}
+                    onChange={v => onChange(field.id, v)}
+                  />
+                  {field.autofill === 'course_code' && tmpl.run_context?.trainer_name && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Trainer Name
+                      </label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={tmpl.run_context.trainer_name}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white bg-gray-100"
+                      />
+                    </div>
+                  )}
+                </React.Fragment>
               ))}
             </div>
           ))}

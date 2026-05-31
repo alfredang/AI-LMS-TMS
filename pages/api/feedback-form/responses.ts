@@ -31,7 +31,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     SELECT r.id, r.template_id, r.course_run_id, r.user_id,
            r.learner_email, r.learner_name, r.answers, r.submitted_at,
            cr.course_run_id AS course_run_code, cr.start_date, cr.end_date,
-           c.title AS course_title, c.course_code
+           c.title AS course_title, c.course_code,
+           (
+             SELECT string_agg(DISTINCT crt.trainer_name, ', ' ORDER BY crt.trainer_name)
+             FROM course_run_trainer crt
+             WHERE crt.course_run_id = cr.id
+           ) AS trainer_name
     FROM feedback_form_response r
     LEFT JOIN course_run cr ON cr.id = r.course_run_id
     LEFT JOIN course c ON c.id = cr.course_id

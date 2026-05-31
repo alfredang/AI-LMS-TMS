@@ -6,6 +6,7 @@ interface ResponseRow {
   course_run_code?: string;
   course_title?: string;
   course_code?: string;
+  trainer_name?: string;
   learner_name?: string;
   learner_email?: string;
   answers: Record<string, string | number>;
@@ -55,7 +56,7 @@ export const FeedbackFormResponsesView: React.FC = () => {
     if (!q) return rows;
     return rows.filter(r => {
       const hay = [
-        r.course_title, r.course_code, r.course_run_code,
+        r.course_title, r.course_code, r.course_run_code, r.trainer_name,
         r.learner_name, r.learner_email,
         r.answers?.learner_name, r.answers?.message,
       ].map(v => String(v ?? '').toLowerCase()).join(' ');
@@ -145,15 +146,16 @@ export const FeedbackFormResponsesView: React.FC = () => {
     }
   };
 
-  const COLUMNS: Array<{ key: string; label: string; get: (r: ResponseRow) => any }> = [
+  const COLUMNS: Array<{ key: string; label: string; get: (r: ResponseRow) => any; cellClass?: string }> = [
     { key: 'course_title', label: 'Course Title', get: r => r.course_title },
     { key: 'course_code', label: 'Course Code', get: r => r.course_code },
     { key: 'course_run_code', label: 'Run ID', get: r => r.course_run_code },
+    { key: 'trainer_name', label: 'Trainer Name', get: r => r.trainer_name },
     { key: 'learner_name', label: 'Learner Name', get: r => r.learner_name || r.answers?.learner_name },
     { key: 'training_outcome', label: 'Training Outcome', get: r => r.answers?.rate_learning_objectives },
     { key: 'trainer_quality', label: 'Trainer Quality', get: r => r.answers?.rate_trainer_knowledge },
     { key: 'environment', label: 'Environment', get: r => r.answers?.rate_training_environment },
-    { key: 'message', label: 'Message', get: r => r.answers?.message },
+    { key: 'message', label: 'Message', get: r => r.answers?.message, cellClass: 'max-w-[200px] truncate' },
     { key: 'submitted_at', label: 'Submitted On', get: r => new Date(r.submitted_at).toLocaleString() },
   ];
 
@@ -259,9 +261,18 @@ export const FeedbackFormResponsesView: React.FC = () => {
                       <td className="px-3 py-2">
                         <input type="checkbox" checked={checked} onChange={() => toggleOne(r.id)} aria-label="Select row" />
                       </td>
-                      {COLUMNS.map(c => (
-                        <td key={c.key} className="px-3 py-2 whitespace-nowrap">{String(c.get(r) ?? '')}</td>
-                      ))}
+                      {COLUMNS.map(c => {
+                        const val = String(c.get(r) ?? '');
+                        return (
+                          <td
+                            key={c.key}
+                            className={`px-3 py-2 ${c.cellClass ?? 'whitespace-nowrap'}`}
+                            title={c.cellClass ? val : undefined}
+                          >
+                            {val}
+                          </td>
+                        );
+                      })}
                       <td className="px-3 py-2 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <button
