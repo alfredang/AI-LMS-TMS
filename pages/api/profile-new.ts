@@ -668,6 +668,11 @@ async function getTrainingProviderProfile(userId: string) {
     const r = await pool.query(`SELECT trainer_profile_image_url, google_drive_folder_id FROM training_provider WHERE id = $1`, [profileData.provider_id]);
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
+  // QuickBooks
+  try {
+    const r = await pool.query(`SELECT qbo_oauth_redirect_uri FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* column doesn't exist */ }
   // OpenClaw / Orion
   try {
     const r = await pool.query(
@@ -773,6 +778,7 @@ async function getTrainingProviderProfile(userId: string) {
       zoomUserEmail,
       trainerProfileImageUrl: refLinks.trainer_profile_image_url || '',
       googleDriveFolderId: refLinks.google_drive_folder_id || '',
+      qboRedirectUri: refLinks.qbo_oauth_redirect_uri || '',
       certificateFolderUrl: profileData.certificate_folder_url || '',
       masterListUrl: refLinks.master_list_url || '',
       tertiaryTmsUrl: refLinks.tertiary_tms_url || '',

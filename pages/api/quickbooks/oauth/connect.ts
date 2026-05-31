@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../../lib/db';
+import { getQboRedirectUri } from '../../../../lib/quickbooks/qboRedirect';
 
 /**
  * GET /api/quickbooks/oauth/connect?app=app1
@@ -28,8 +29,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'QuickBooks Client ID not configured.' });
   }
 
-  // Must match the redirect URI registered in Intuit Developer portal
-  const redirectUri = process.env.QBO_REDIRECT_URI || `${(process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '')}/api/quickbooks/oauth/callback`;
+  // Must match the redirect URI registered in Intuit Developer portal.
+  // Resolved from Company Setting → QuickBooks (DB), env, or computed default.
+  const redirectUri = await getQboRedirectUri();
 
   const state = `${app}_${Date.now()}`;
 

@@ -8,6 +8,7 @@ import { invalidateR2ConfigCache } from '../../../lib/r2';
 import { invalidateSmtpConfigCache } from '../../../lib/smtp';
 import { invalidateGoogleDriveFolderCache } from '../../../lib/googleDriveFolder';
 import { invalidateN8nWebhookTimeoutCache } from '../../../lib/services/n8nWebhookService';
+import { invalidateQboRedirectCache } from '../../../lib/quickbooks/qboRedirect';
 import {
   TRAINING_PROVIDER_FOLDER_BY_FIELD,
   trainingProviderSkipTimestampForFolder,
@@ -777,6 +778,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { name: 'google_drive_folder_id', value: profileData.integrations?.googleDriveFolderId || null },
       ]);
       invalidateGoogleDriveFolderCache();
+      // QuickBooks OAuth redirect URI override (replaces QBO_REDIRECT_URI env).
+      await autoCreateAndUpdate([
+        { name: 'qbo_oauth_redirect_uri', value: profileData.integrations?.qboRedirectUri || null },
+      ]);
+      invalidateQboRedirectCache();
       // OpenClaw / Orion
       await autoCreateAndUpdate([
         { name: 'openclaw_mode', value: profileData.integrations?.openClawMode || 'live' },

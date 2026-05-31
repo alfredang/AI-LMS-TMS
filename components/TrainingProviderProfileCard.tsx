@@ -3684,6 +3684,61 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             );
                                         })}
                                     </div>
+                                    {/* Redirect URI (override) — replaces the legacy QBO_REDIRECT_URI
+                                        env var. Leave blank to use the computed default. Must match an
+                                        entry in the Intuit Developer app's Redirect URIs allow list. */}
+                                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                        {(() => {
+                                            const savedOverride = (formData.integrations as any).qboRedirectUri || '';
+                                            const computedDefault = typeof window !== 'undefined'
+                                                ? `${window.location.origin.replace(/\/$/, '')}/api/quickbooks/oauth/callback`
+                                                : '<your-site-origin>/api/quickbooks/oauth/callback';
+                                            const effective = savedOverride || computedDefault;
+                                            return (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-on-surface-secondary mb-1">Redirect URI (override, optional)</label>
+                                                    {isEditing ? (
+                                                        <input
+                                                            type="text"
+                                                            value={savedOverride}
+                                                            onChange={(e) =>
+                                                                setFormData((prev) => ({
+                                                                    ...prev,
+                                                                    integrations: {
+                                                                        ...prev.integrations,
+                                                                        qboRedirectUri: e.target.value,
+                                                                    } as any,
+                                                                }))
+                                                            }
+                                                            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-700 text-on-surface px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                                            placeholder={`leave blank to use ${computedDefault}`}
+                                                        />
+                                                    ) : (
+                                                        <p className="text-sm text-on-surface truncate">{savedOverride || `(default: ${computedDefault})`}</p>
+                                                    )}
+                                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                                        <span className="text-on-surface-secondary">Effective Redirect URI:</span>
+                                                        <code className="font-mono text-on-surface break-all">{effective}</code>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                                                    navigator.clipboard.writeText(effective);
+                                                                }
+                                                            }}
+                                                            className="px-2 py-0.5 text-xs rounded border border-default bg-surface hover:bg-surface-elevated"
+                                                        >
+                                                            Copy
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-[10px] text-on-surface-secondary mt-1">
+                                                        Paste the <strong>Effective Redirect URI</strong> exactly (including protocol and path) into the Intuit Developer app&apos;s <strong>Redirect URIs</strong> allow list. Replaces the legacy <code className="font-mono">QBO_REDIRECT_URI</code> env var.
+                                                    </p>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
                                     {/* Connect QuickBooks button */}
                                     <div className="mt-4">
                                         <button

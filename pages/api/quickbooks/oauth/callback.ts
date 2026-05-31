@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../../lib/db';
+import { getQboRedirectUri } from '../../../../lib/quickbooks/qboRedirect';
 
 /**
  * GET /api/quickbooks/oauth/callback
@@ -45,8 +46,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).send(htmlPage('Configuration Error', 'QuickBooks client credentials not found.', false));
   }
 
-  // Must match the redirect URI used in /connect and registered in Intuit
-  const redirectUri = process.env.QBO_REDIRECT_URI || `${(process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '')}/api/quickbooks/oauth/callback`;
+  // Must match the redirect URI used in /connect (same resolver) and registered
+  // in Intuit Developer portal. Resolved from Company Setting → QuickBooks (DB),
+  // env, or computed default.
+  const redirectUri = await getQboRedirectUri();
 
   // Exchange authorization code for tokens
   try {
