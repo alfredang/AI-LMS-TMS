@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://ai-lms-tms.tertiaryinfo.tech/"><img src="https://img.shields.io/badge/Demo-Live%20Site-success?style=for-the-badge" alt="Live Demo" /></a>
+  <a href="https://lms-tms.tertiaryinfotech.com/"><img src="https://img.shields.io/badge/Demo-Live%20Site-success?style=for-the-badge" alt="Live Demo" /></a>
   <a href="https://alfredang.github.io/AI-LMS-TMS/"><img src="https://img.shields.io/badge/Docs-GitHub%20Pages-blue?style=for-the-badge&logo=github" alt="Documentation" /></a>
 </p>
 
@@ -531,7 +531,7 @@ The same codebase is deployed across multiple tenants on **Coolify** (self-hoste
 
 | Tenant | Build Pack | URL |
 |--------|------------|-----|
-| **Tertiary Infotech Academy** | Dockerfile | https://ai-lms-tms.tertiaryinfo.tech |
+| **Tertiary Infotech Academy** | Dockerfile | https://lms-tms.tertiaryinfotech.com |
 | **Chariot / Intellisoft** | Docker Compose | (per-tenant) |
 
 Tenant-specific behavior is gated via DB config, env vars, or feature flags (e.g. `payroll_enabled` in `lib/payroll/featureFlag.ts`) — never by forking shared code.

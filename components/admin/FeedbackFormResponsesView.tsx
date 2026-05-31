@@ -161,9 +161,31 @@ export const FeedbackFormResponsesView: React.FC = () => {
     <div className="space-y-4">
       <Card className="p-6">
         <h2 className="text-2xl font-bold mb-2 dark:text-white">Feedback Responses</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Public read-only API: <code>/api/feedback-form/responses</code>
-        </p>
+        {(() => {
+          // Build the absolute URL from the current origin so external scripts
+          // can copy it directly. Works for any tenant deployment (Tertiary,
+          // Chariot, Intellisoft, previews, etc.) without hardcoding a domain.
+          const apiUrl = typeof window !== 'undefined'
+            ? `${window.location.origin.replace(/\/$/, '')}/api/feedback-form/responses`
+            : '/api/feedback-form/responses';
+          return (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 flex flex-wrap items-center gap-2">
+              <span>Public read-only API:</span>
+              <code className="font-mono text-gray-700 dark:text-gray-200 break-all">{apiUrl}</code>
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                    navigator.clipboard.writeText(apiUrl);
+                  }
+                }}
+                className="px-2 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+              >
+                Copy
+              </button>
+            </p>
+          );
+        })()}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
           <div className="md:col-span-6">
             <label className="block text-xs text-gray-500 mb-1">Search</label>
