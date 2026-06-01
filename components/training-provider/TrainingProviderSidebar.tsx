@@ -105,70 +105,6 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                 {!collapsed && <span className="truncate">Training Dashboard</span>}
             </a>
 
-            {/* Workflow Guides - Collapsible (after Dashboard) */}
-            <div>
-                <button
-                    onClick={() => { setWorkflowsOpen(!workflowsOpen); handleClick(View.WorkflowGuides); onSelectWorkflow?.(''); }}
-                    title={collapsed ? 'Workflow Guides' : undefined}
-                    className={linkClass(View.WorkflowGuides)}
-                >
-                    <Icon name={IconName.BookOpen} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === View.WorkflowGuides ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
-                    {!collapsed && <span className="truncate flex-1 text-left">Workflow Guides</span>}
-                    {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${workflowsOpen ? 'rotate-180' : ''}`} />}
-                </button>
-                {!collapsed && workflowsOpen && (
-                    <div className="ml-4 mt-1 space-y-1">
-                        {/* Training */}
-                        <button onClick={() => setWfTrainingOpen(!wfTrainingOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
-                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Training</span>
-                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfTrainingOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                        {wfTrainingOpen && [
-                            { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
-                            { id: 'assessment', label: 'Assessment', icon: '📝' },
-                        ].map(item => (
-                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
-                                <span className="text-sm">{item.icon}</span>
-                                <span>{item.label}</span>
-                            </a>
-                        ))}
-                        {/* Admin */}
-                        <button onClick={() => setWfAdminOpen(!wfAdminOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
-                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Admin</span>
-                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfAdminOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                        {wfAdminOpen && [
-                            { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
-                            { id: 'direct-application', label: 'Direct Application', icon: '📋' },
-                            { id: 'certificate', label: 'Certificate', icon: '🎓' },
-                            { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
-                        ].map(item => (
-                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
-                                <span className="text-sm">{item.icon}</span>
-                                <span>{item.label}</span>
-                            </a>
-                        ))}
-                        {/* Finance */}
-                        <button onClick={() => setWfFinanceOpen(!wfFinanceOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
-                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Finance</span>
-                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfFinanceOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                        {wfFinanceOpen && [
-                            { id: 'billing-history', label: 'Billing History', icon: '💰' },
-                            { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
-                            { id: 'personal-invoice', label: 'Personal Invoice', icon: '📄' },
-                            { id: 'company-invoice', label: 'Company Invoice', icon: '🏢' },
-                            { id: 'receipt', label: 'Receipt', icon: '🧾' },
-                        ].map(item => (
-                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
-                                <span className="text-sm">{item.icon}</span>
-                                <span>{item.label}</span>
-                            </a>
-                        ))}
-                    </div>
-                )}
-            </div>
-
             {/* Remaining nav items */}
             {navItemsTop.filter(item => item.view !== View.Dashboard).map((item) => (
                 <a key={item.view} href="#" title={collapsed ? item.label : undefined} onClick={(e) => { e.preventDefault(); handleClick(item.view); }} className={linkClass(item.view)}>
@@ -236,6 +172,70 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
                                 className={linkClass(item.view)}
                             >
                                 <Icon name={item.icon} className="w-4 h-4" />
+                                <span>{item.label}</span>
+                            </a>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Workflow Guides - Collapsible (after Cron Jobs) */}
+            <div>
+                <button
+                    onClick={() => { setWorkflowsOpen(!workflowsOpen); handleClick(View.WorkflowGuides); onSelectWorkflow?.(''); }}
+                    title={collapsed ? 'Workflow Guides' : undefined}
+                    className={linkClass(View.WorkflowGuides)}
+                >
+                    <Icon name={IconName.BookOpen} className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${activeView === View.WorkflowGuides ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                    {!collapsed && <span className="truncate flex-1 text-left">Workflow Guides</span>}
+                    {!collapsed && <Icon name={IconName.ChevronDown} className={`w-4 h-4 flex-shrink-0 transition-transform ${workflowsOpen ? 'rotate-180' : ''}`} />}
+                </button>
+                {!collapsed && workflowsOpen && (
+                    <div className="ml-4 mt-1 space-y-1">
+                        {/* Training */}
+                        <button onClick={() => setWfTrainingOpen(!wfTrainingOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
+                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Training</span>
+                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfTrainingOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {wfTrainingOpen && [
+                            { id: 'lesson-delivery', label: 'Lesson Delivery', icon: '📚' },
+                            { id: 'assessment', label: 'Assessment', icon: '📝' },
+                        ].map(item => (
+                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                                <span className="text-sm">{item.icon}</span>
+                                <span>{item.label}</span>
+                            </a>
+                        ))}
+                        {/* Admin */}
+                        <button onClick={() => setWfAdminOpen(!wfAdminOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
+                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Admin</span>
+                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfAdminOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {wfAdminOpen && [
+                            { id: 'ssg-process-steps', label: 'SSG Process Steps', icon: '🏛️' },
+                            { id: 'direct-application', label: 'Direct Application', icon: '📋' },
+                            { id: 'certificate', label: 'Certificate', icon: '🎓' },
+                            { id: 'trainer-invitation', label: 'Trainer Invitation', icon: '📨' },
+                        ].map(item => (
+                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                                <span className="text-sm">{item.icon}</span>
+                                <span>{item.label}</span>
+                            </a>
+                        ))}
+                        {/* Finance */}
+                        <button onClick={() => setWfFinanceOpen(!wfFinanceOpen)} className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md">
+                            <span className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 tracking-wider">Finance</span>
+                            <Icon name={IconName.ChevronDown} className={`w-3 h-3 text-gray-400 transition-transform ${wfFinanceOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {wfFinanceOpen && [
+                            { id: 'billing-history', label: 'Billing History', icon: '💰' },
+                            { id: 'proforma-invoice', label: 'Proforma Invoice', icon: '🧾' },
+                            { id: 'personal-invoice', label: 'Personal Invoice', icon: '📄' },
+                            { id: 'company-invoice', label: 'Company Invoice', icon: '🏢' },
+                            { id: 'receipt', label: 'Receipt', icon: '🧾' },
+                        ].map(item => (
+                            <a key={item.id} href="#" onClick={(e) => { e.preventDefault(); handleClick(View.WorkflowGuides); onSelectWorkflow?.(item.id); }} className="flex items-center gap-2 rounded-md px-3 py-2 ml-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-slate-700 dark:hover:text-white transition-colors">
+                                <span className="text-sm">{item.icon}</span>
                                 <span>{item.label}</span>
                             </a>
                         ))}
