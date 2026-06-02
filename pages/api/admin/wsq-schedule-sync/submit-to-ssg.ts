@@ -293,6 +293,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ssgRunId = data?.course?.runs?.[0]?.runId
           ?? data?.data?.course?.runs?.[0]?.runId
           ?? data?.runs?.[0]?.runId
+          ?? data?.runs?.[0]?.id      // SSG publish response uses "id" not "runId"
           ?? data?.runId
           ?? null;
 
