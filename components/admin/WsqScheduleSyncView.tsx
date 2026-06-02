@@ -1,6 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { AdminPage } from '../../types';
-import { useLms } from '../../contexts/LmsContext';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type SyncStatus = 'synced' | 'missing_in_ssg' | 'extra_in_ssg' | 'unparsed';
 
@@ -32,6 +30,39 @@ type ApiResponse = {
 type ApiError = { error: string; message?: string; status?: number; body?: any };
 type Filter = 'all' | 'missing_in_ssg' | 'extra_in_ssg' | 'unparsed' | 'synced';
 
+type ItemResult = {
+  course_code: string;
+  start_date: string;
+  end_date: string;
+  status: 'submitted' | 'exists' | 'no_course' | 'no_session_timing' | 'ssg_error' | 'error';
+  ssg_run_id?: string;
+  message?: string;
+};
+
+type SyncProgress = {
+  currentBatch: number;
+  totalBatches: number;
+  itemsDone: number;
+  totalItems: number;
+  submitted: number;
+  errors: number;
+};
+
+type SharedJob = {
+  id: number;
+  status: 'running' | 'completed' | 'failed';
+  started_at: string;
+  completed_at: string | null;
+  total_items: number;
+  items_done: number;
+  submitted: number;
+  already_exists: number;
+  ssg_errors: number;
+  skipped: number;
+  failures: ItemResult[];
+  summary: string | null;
+};
+
 const STATUS_LABEL: Record<SyncStatus, string> = {
   synced: '✓ Synced',
   missing_in_ssg: '⚠ Missing in SSG',
@@ -47,7 +78,6 @@ const STATUS_CLASS: Record<SyncStatus, string> = {
 };
 
 const WsqScheduleSyncView: React.FC = () => {
-  const { setAdminPage, setSelectedCourse } = useLms() as any;
   const [data, setData] = useState<ApiResponse | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +85,12 @@ const WsqScheduleSyncView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [staging, setStaging] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const [syncResults, setSyncResults] = useState<ItemResult[]>([]);
+  const [rowResults, setRowResults] = useState<Map<string, ItemResult>>(new Map());
+  const [sharedJob, setSharedJob] = useState<SharedJob | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = async (refresh = false) => {
     setLoading(true);
@@ -77,6 +112,40 @@ const WsqScheduleSyncView: React.FC = () => {
   };
 
   useEffect(() => { void load(false); }, []);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
+  const startPolling = useCallback(() => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const resp = await fetch('/api/admin/wsq-schedule-sync/job-status');
+        if (!resp.ok) return;
+        const job: SharedJob | null = await resp.json();
+        if (!job) return;
+        setSharedJob(job);
+        if (job.status !== 'running') stopPolling();
+      } catch { /* ignore */ }
+    }, 2000);
+  }, [stopPolling]);
+
+  // On mount: check for a recent or running job so any user sees shared state
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const resp = await fetch('/api/admin/wsq-schedule-sync/job-status');
+        if (!resp.ok) return;
+        const job: SharedJob | null = await resp.json();
+        if (!job) return;
+        setSharedJob(job);
+        if (job.status === 'running') startPolling();
+      } catch { /* ignore */ }
+    };
+    void check();
+    return stopPolling;
+  }, [startPolling, stopPolling]);
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -109,67 +178,136 @@ const WsqScheduleSyncView: React.FC = () => {
   const expandAll = () => setExpanded(new Set(filtered.map((g) => g.course_code)));
   const collapseAll = () => setExpanded(new Set());
 
-  const stage = async (items: { course_code: string; start_date: string; end_date: string }[], label: string) => {
+  const syncToSSG = async (items: { course_code: string; start_date: string; end_date: string }[], label: string) => {
     if (items.length === 0) {
-      setNotice('No missing schedules to stage.');
+      setNotice('No missing schedules to sync.');
       return;
     }
-    if (!confirm(`Stage ${items.length} missing course run(s) locally (${label})?\n\nThis inserts course_run rows with the storefront dates. Push to SSG separately via the existing TPG flow.`)) return;
-    setStaging(true);
+    if (!confirm(`Submit ${items.length} missing course run(s) directly to SSG (${label})?\n\nThis will create course runs in SSG/TPGateway using session timing templates and default venue details.`)) return;
+
+    setSyncing(true);
+    setSyncResults([]);
+    setNotice(null);
+
+    const BATCH = 100;
+    const totalBatches = Math.ceil(items.length / BATCH);
+    let submitted = 0, exists = 0, ssgError = 0, skipped = 0;
+    const allResults: ItemResult[] = [];
+
+    // Create the shared job row — all users can see progress via polling
+    let jobId: number | null = null;
     try {
-      const resp = await fetch('/api/admin/wsq-schedule-sync/stage', {
+      const startResp = await fetch('/api/admin/wsq-schedule-sync/start-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ total_items: items.length }),
       });
-      const json = await resp.json();
-      if (!resp.ok) {
-        setNotice(`Stage failed: ${json.error || resp.status}`);
+      const startJson = await startResp.json();
+      if (startResp.status === 409) {
+        // A job is already running — attach to it instead of blocking
+        jobId = startJson.job_id ?? null;
+      } else if (!startResp.ok) {
+        setNotice(`Could not start sync job: ${startJson.error || startResp.status}`);
+        setSyncing(false);
+        return;
       } else {
-        const s = json.summary || {};
-        setNotice(`Staged ${s.created} new, ${s.exists} already existed, ${s.no_course} missing course, ${s.error} errors.`);
-        void load(true);
+        jobId = startJson.job_id;
       }
+    } catch { /* non-fatal — proceed without DB job tracking */ }
+
+    // Start polling so other users see live updates
+    startPolling();
+
+    setSyncProgress({ currentBatch: 0, totalBatches, itemsDone: 0, totalItems: items.length, submitted: 0, errors: 0 });
+
+    try {
+      for (let i = 0; i < items.length; i += BATCH) {
+        const batchNum = Math.floor(i / BATCH) + 1;
+        const batch = items.slice(i, i + BATCH);
+        const isLastBatch = i + BATCH >= items.length;
+
+        const resp = await fetch('/api/admin/wsq-schedule-sync/submit-to-ssg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: batch, job_id: jobId, is_last_batch: isLastBatch }),
+        });
+        const json = await resp.json();
+
+        if (!resp.ok) {
+          setNotice(`Sync failed on batch ${batchNum}: ${json.error || resp.status}`);
+          return;
+        }
+
+        const s = json.summary || {};
+        submitted += s.submitted ?? 0;
+        exists    += s.exists    ?? 0;
+        ssgError  += s.ssg_error ?? 0;
+        skipped   += s.error     ?? 0;
+
+        const batchResults: ItemResult[] = json.results || [];
+        allResults.push(...batchResults);
+
+        // Per-row inline feedback (local — fast, no round-trip)
+        setRowResults((prev) => {
+          const next = new Map(prev);
+          for (const r of batchResults) next.set(`${r.course_code}|${r.start_date}`, r);
+          return next;
+        });
+
+        setSyncProgress({
+          currentBatch: batchNum,
+          totalBatches,
+          itemsDone: Math.min(i + BATCH, items.length),
+          totalItems: items.length,
+          submitted,
+          errors: ssgError + skipped,
+        });
+      }
+
+      setSyncResults(allResults);
+      const parts: string[] = [];
+      if (submitted) parts.push(`${submitted} submitted to SSG`);
+      if (exists)    parts.push(`${exists} already existed`);
+      if (ssgError)  parts.push(`${ssgError} SSG errors`);
+      if (skipped)   parts.push(`${skipped} skipped`);
+      setNotice(parts.join(' · ') + '.');
+      void load(true);
     } catch (e: any) {
-      setNotice(`Stage failed: ${e?.message || e}`);
+      setNotice(`Sync failed: ${e?.message || e}`);
     } finally {
-      setStaging(false);
+      setSyncing(false);
+      setSyncProgress(null);
+      // Final poll so sharedJob reflects completed state
+      stopPolling();
+      try {
+        const finalResp = await fetch('/api/admin/wsq-schedule-sync/job-status');
+        if (finalResp.ok) { const j = await finalResp.json(); if (j) setSharedJob(j); }
+      } catch { /* ignore */ }
     }
   };
 
-  const stageAll = () => {
+  const syncAll = () => {
     const items = filtered.flatMap((g) =>
       g.rows
         .filter((r) => r.status === 'missing_in_ssg' && r.start_date && r.end_date)
         .map((r) => ({ course_code: g.course_code, start_date: r.start_date!, end_date: r.end_date! })),
     );
-    void stage(items, 'all courses, current filter');
+    void syncToSSG(items, 'all courses, current filter');
   };
 
-  const stageCourse = (g: CourseGroup) => {
+  const syncCourse = (g: CourseGroup) => {
     const items = g.rows
       .filter((r) => r.status === 'missing_in_ssg' && r.start_date && r.end_date)
       .map((r) => ({ course_code: g.course_code, start_date: r.start_date!, end_date: r.end_date! }));
-    void stage(items, g.course_code);
+    void syncToSSG(items, g.course_code);
   };
 
-  const handleSubmitToSsg = async (group: CourseGroup, row: Row) => {
-    if (!group.course_id) {
-      setNotice(`Course ${group.course_code} doesn't exist locally. Add it in Course Management first.`);
-      return;
-    }
-    try {
-      const resp = await fetch(`/api/courses/${group.course_id}`);
-      if (resp.ok) {
-        const course = await resp.json();
-        setSelectedCourse(course.data || course);
-      }
-    } catch { /* non-fatal */ }
-    setNotice(
-      `Submit to SSG: course ${group.course_code}, dates ${row.start_date} → ${row.end_date}. ` +
-      `Fill in venue, mode, registration dates and admin email in the form below.`
+  const syncRow = (group: CourseGroup, row: Row) => {
+    if (!row.start_date || !row.end_date) return;
+    void syncToSSG(
+      [{ course_code: group.course_code, start_date: row.start_date, end_date: row.end_date }],
+      `${group.course_code} ${row.start_date}`,
     );
-    setAdminPage(AdminPage.CreateNewClass);
   };
 
   return (
@@ -178,17 +316,17 @@ const WsqScheduleSyncView: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-on-surface">WSQ Schedule Sync</h1>
           <p className="text-sm text-on-surface-secondary mt-1 max-w-3xl">
-            Compares upcoming course dates on the Tertiary Courses storefront against the course runs in SSG/TPGateway. Past-dated schedules are hidden. Use bulk-stage to insert local course_run rows in one step; push them to SSG individually via the existing Create New Class flow.
+            Compares upcoming course dates on the Tertiary Courses storefront against course runs in SSG/TPGateway. Past-dated schedules are hidden. Use &quot;Sync to SSG&quot; to submit missing runs directly to SSG using session timing templates and default venue details.
           </p>
         </div>
         <div className="flex gap-2">
           <button
-            onClick={stageAll}
-            disabled={staging || totalMissing === 0}
-            className="px-3 py-2 text-sm rounded-md bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
-            title="Insert local course_run rows for every Missing-in-SSG schedule across the current filter"
+            onClick={syncAll}
+            disabled={syncing || totalMissing === 0}
+            className="px-3 py-2 text-sm rounded-md bg-primary text-white hover:opacity-90 disabled:opacity-50"
+            title="Submit all Missing-in-SSG schedules directly to SSG using session timing templates and default venue"
           >
-            {staging ? 'Staging…' : `Bulk Stage Missing (${totalMissing})`}
+            {syncing ? 'Syncing…' : `Sync All to SSG (${totalMissing})`}
           </button>
           <button
             onClick={() => load(true)}
@@ -215,6 +353,79 @@ const WsqScheduleSyncView: React.FC = () => {
           <button onClick={() => setNotice(null)} className="text-xs underline">dismiss</button>
         </div>
       )}
+
+      {/* Shared job panel — visible to all users, persists across navigation */}
+      {sharedJob && (() => {
+        const isRunning = sharedJob.status === 'running';
+        const failures: ItemResult[] = Array.isArray(sharedJob.failures) ? sharedJob.failures : [];
+        const hasFailures = failures.length > 0;
+        const STATUS_LABEL_MAP: Record<string, string> = {
+          ssg_error: 'SSG Error',
+          no_course: 'Course Not Found',
+          no_session_timing: 'No Session Timing',
+          error: 'Error',
+        };
+
+        return (
+          <div className={`rounded-md border overflow-hidden ${isRunning ? 'border-blue-200 dark:border-blue-800' : hasFailures ? 'border-red-200 dark:border-red-800' : 'border-green-200 dark:border-green-800'}`}>
+            {/* Header */}
+            <div className={`px-4 py-2 border-b flex justify-between items-center flex-wrap gap-2 ${isRunning ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800' : hasFailures ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800' : 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800'}`}>
+              <div className="flex items-center gap-3 text-sm">
+                {isRunning && (
+                  <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                )}
+                <span className={`font-medium ${isRunning ? 'text-blue-800 dark:text-blue-200' : hasFailures ? 'text-red-800 dark:text-red-200' : 'text-green-800 dark:text-green-200'}`}>
+                  {isRunning
+                    ? `Syncing… ${sharedJob.items_done} / ${sharedJob.total_items} runs`
+                    : sharedJob.summary || (hasFailures ? `Completed with ${failures.length} error${failures.length !== 1 ? 's' : ''}` : 'Sync completed')}
+                </span>
+                <span className="text-xs text-on-surface-secondary">
+                  Started {new Date(sharedJob.started_at).toLocaleTimeString()}
+                  {sharedJob.completed_at && ` · Finished ${new Date(sharedJob.completed_at).toLocaleTimeString()}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-on-surface-secondary">
+                {sharedJob.submitted > 0 && <span className="text-green-600 dark:text-green-400">{sharedJob.submitted} submitted</span>}
+                {sharedJob.already_exists > 0 && <span>{sharedJob.already_exists} existed</span>}
+                {(sharedJob.ssg_errors + sharedJob.skipped) > 0 && (
+                  <span className="text-red-500 dark:text-red-400">{sharedJob.ssg_errors + sharedJob.skipped} errors</span>
+                )}
+                {!isRunning && (
+                  <button onClick={() => setSharedJob(null)} className="underline ml-1">dismiss</button>
+                )}
+              </div>
+            </div>
+
+            {/* Progress bar (running only) */}
+            {isRunning && sharedJob.total_items > 0 && (
+              <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20">
+                <div className="w-full bg-blue-100 dark:bg-blue-900 rounded-full h-1.5">
+                  <div
+                    className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.round((sharedJob.items_done / sharedJob.total_items) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Failure detail rows */}
+            {hasFailures && (
+              <div className="divide-y divide-red-100 dark:divide-red-900 max-h-64 overflow-y-auto">
+                {failures.map((r, i) => (
+                  <div key={i} className="px-4 py-2 flex flex-wrap items-start gap-x-3 gap-y-1 text-xs">
+                    <span className="font-mono font-medium text-on-surface">{r.course_code}</span>
+                    <span className="font-mono text-on-surface-secondary">{r.start_date} → {r.end_date}</span>
+                    <span className={`px-1.5 py-0.5 rounded font-medium ${r.status === 'ssg_error' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'}`}>
+                      {STATUS_LABEL_MAP[r.status] ?? r.status}
+                    </span>
+                    {r.message && <span className="text-on-surface-secondary">{r.message}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {data && (
         <>
@@ -277,12 +488,12 @@ const WsqScheduleSyncView: React.FC = () => {
                       <span className="text-on-surface-secondary">· {g.rows.length} rows</span>
                       {missingCount > 0 && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); stageCourse(g); }}
-                          disabled={staging}
-                          className="ml-2 px-2 py-1 text-xs rounded-md bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
-                          title={`Stage all ${missingCount} missing schedule(s) for ${g.course_code} as local course_run rows`}
+                          onClick={(e) => { e.stopPropagation(); syncCourse(g); }}
+                          disabled={syncing}
+                          className="ml-2 px-2 py-1 text-xs rounded-md bg-primary text-white hover:opacity-90 disabled:opacity-50"
+                          title={`Submit all ${missingCount} missing schedule(s) for ${g.course_code} directly to SSG`}
                         >
-                          Stage all ({missingCount})
+                          Sync to SSG ({missingCount})
                         </button>
                       )}
                     </div>
@@ -314,14 +525,46 @@ const WsqScheduleSyncView: React.FC = () => {
                               {r.ssg_run_id ? r.ssg_run_id : '—'}
                             </td>
                             <td className="px-4 py-2">
-                              {r.status === 'missing_in_ssg' && (
-                                <button
-                                  onClick={() => handleSubmitToSsg(g, r)}
-                                  className="px-2 py-1 text-xs rounded-md bg-primary text-white hover:opacity-90"
-                                >
-                                  Submit to SSG
-                                </button>
-                              )}
+                              {(() => {
+                                const rowKey = `${g.course_code}|${r.start_date}`;
+                                const rowResult = rowResults.get(rowKey);
+                                if (rowResult) {
+                                  if (rowResult.status === 'submitted') {
+                                    return (
+                                      <span className="text-xs text-green-600 dark:text-green-400 font-mono" title="Submitted to SSG">
+                                        ✓ {rowResult.ssg_run_id}
+                                      </span>
+                                    );
+                                  }
+                                  if (rowResult.status === 'exists') {
+                                    return (
+                                      <span className="text-xs text-blue-600 dark:text-blue-400" title={rowResult.ssg_run_id}>
+                                        Already exists
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span
+                                      className="text-xs text-red-600 dark:text-red-400 cursor-help"
+                                      title={rowResult.message || rowResult.status}
+                                    >
+                                      ✗ {rowResult.status.replace(/_/g, ' ')}
+                                    </span>
+                                  );
+                                }
+                                if (r.status === 'missing_in_ssg') {
+                                  return (
+                                    <button
+                                      onClick={() => syncRow(g, r)}
+                                      disabled={syncing}
+                                      className="px-2 py-1 text-xs rounded-md bg-primary text-white hover:opacity-90 disabled:opacity-50"
+                                    >
+                                      Sync to SSG
+                                    </button>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </td>
                           </tr>
                         ))}

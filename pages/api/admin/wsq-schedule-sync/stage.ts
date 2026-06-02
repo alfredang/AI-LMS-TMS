@@ -1,3 +1,29 @@
+/**
+ * ARCHIVED — not called by any UI as of 2026-06-02.
+ *
+ * Original purpose: insert local course_run placeholder rows for Magento
+ * schedules that are missing from SSG, without actually submitting to SSG.
+ * The "Bulk Stage Missing" button in WsqScheduleSyncView used this endpoint.
+ *
+ * Why it was replaced:
+ *   - Staged rows used a fake course_run_id ("STAGED-{code}-{date}") that was
+ *     never automatically replaced with a real SSG run ID after submission.
+ *     The subsequent SSG submission (via save-course-run.ts) inserted a SECOND
+ *     row with the real run ID, leaving the staged row orphaned.
+ *   - Because staged rows matched on dates, the wsq-schedule-sync comparison
+ *     showed them as "synced" even though SSG had no record — hiding genuinely
+ *     missing runs.
+ *
+ * Replacement: submit-to-ssg.ts
+ *   - Submits directly to SSG in one step.
+ *   - Writes the real SSG run ID to course_run on success.
+ *   - If a STAGED- row already exists for the same course/dates, updates it
+ *     in-place rather than creating a duplicate.
+ *
+ * Keep this file if a two-phase staging workflow is ever needed again
+ * (e.g. manual review before SSG submission).
+ */
+
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../../lib/db';
 
@@ -16,12 +42,6 @@ type StageResult = {
   message?: string;
 };
 
-/**
- * Stage missing course runs locally (no SSG submission).
- * Inserts course_run rows with dates from Magento; course_run.course_run_id
- * is left as a placeholder so admin can fill SSG ID later via the existing
- * publish flow.
- */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -63,8 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         continue;
       }
 
-      // Placeholder course_run_id — course_run_id is NOT NULL in schema. Admin
-      // overwrites this with the real SSG run id once published.
+      // Placeholder course_run_id — admin overwrites this with the real SSG run id once published.
       const placeholder = `STAGED-${course_code}-${start_date}`;
       const inserted = await pool.query<{ id: string }>(
         `INSERT INTO course_run (course_id, course_run_id, start_date, end_date, class_status)
@@ -79,10 +98,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const summary = {
-    created: results.filter((r) => r.status === 'created').length,
-    exists: results.filter((r) => r.status === 'exists').length,
+    created:   results.filter((r) => r.status === 'created').length,
+    exists:    results.filter((r) => r.status === 'exists').length,
     no_course: results.filter((r) => r.status === 'no_course').length,
-    error: results.filter((r) => r.status === 'error').length,
+    error:     results.filter((r) => r.status === 'error').length,
   };
   return res.status(200).json({ summary, results });
 }
