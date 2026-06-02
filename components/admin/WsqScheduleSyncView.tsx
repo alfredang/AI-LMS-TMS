@@ -99,6 +99,7 @@ const WsqScheduleSyncView: React.FC = () => {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [refreshingPeriods, setRefreshingPeriods] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoRefreshedPeriodsRef = useRef(false);
 
   const load = async (refresh = false) => {
     setLoading(true);
@@ -120,6 +121,22 @@ const WsqScheduleSyncView: React.FC = () => {
   };
 
   useEffect(() => { void load(false); }, []);
+
+  // Auto-fetch support periods on first load if they haven't been populated yet.
+  // The ref prevents re-triggering if the refresh itself fails and support_periods_loaded
+  // stays false on the subsequent data reload.
+  useEffect(() => {
+    if (
+      data &&
+      !data.support_periods_loaded &&
+      !refreshingPeriods &&
+      !autoRefreshedPeriodsRef.current
+    ) {
+      autoRefreshedPeriodsRef.current = true;
+      void refreshSupportPeriods();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.support_periods_loaded]);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -552,17 +569,21 @@ const WsqScheduleSyncView: React.FC = () => {
 
           {/* Support period notice ───────────────────────────────────── */}
           {!data.support_periods_loaded && (
-            <div className="p-3 rounded-md bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 text-sm flex items-center justify-between gap-4">
+            <div className="p-3 rounded-md bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 text-sm flex items-center gap-3">
+              {refreshingPeriods && <span className="inline-block w-3 h-3 rounded-full bg-orange-500 animate-pulse shrink-0" />}
               <span className="text-orange-800 dark:text-orange-200">
-                WSQ support periods not loaded — sync will not filter out out-of-period runs until you load them.
+                {refreshingPeriods
+                  ? 'Fetching WSQ support periods from SSG — filtering will apply once complete…'
+                  : 'WSQ support periods could not be loaded. Sync will not filter out-of-period runs.'}
               </span>
-              <button
-                onClick={refreshSupportPeriods}
-                disabled={refreshingPeriods}
-                className="shrink-0 px-3 py-1.5 text-xs rounded-md bg-orange-600 text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {refreshingPeriods ? 'Loading…' : 'Load support periods'}
-              </button>
+              {!refreshingPeriods && (
+                <button
+                  onClick={refreshSupportPeriods}
+                  className="shrink-0 px-3 py-1.5 text-xs rounded-md bg-orange-600 text-white hover:opacity-90"
+                >
+                  Retry
+                </button>
+              )}
             </div>
           )}
           {data.support_periods_loaded && (
