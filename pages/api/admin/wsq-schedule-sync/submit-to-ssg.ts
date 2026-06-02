@@ -274,8 +274,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
       if (hasError) {
         const errMsg = result.error?.details?.[0]?.message || result.error?.message || 'SSG returned error';
-        results.push({ course_code, start_date, end_date, status: 'ssg_error', message: errMsg });
-        continue;
+
+        // SSG returns "Course Run already exist. The Course Run ID is XXXXXXX." when a run was
+        // already created (e.g. a previous attempt succeeded on SSG but our local DB write failed).
+        // Extract the run ID and fall through to the local upsert so the staged row gets fixed.
+        const alreadyExistsMatch = errMsg.match(/Course Run ID is (\d+)/i);
+        if (alreadyExistsMatch) {
+          ssgRunId = alreadyExistsMatch[1];
+        } else {
+          results.push({ course_code, start_date, end_date, status: 'ssg_error', message: errMsg });
+          continue;
+        }
       }
 
       // Extract SSG run ID from response
