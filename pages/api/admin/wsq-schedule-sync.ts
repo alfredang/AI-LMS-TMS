@@ -20,7 +20,7 @@ type MagentoResponse = {
   courses: MagentoCourse[];
 };
 
-type SyncStatus = 'synced' | 'missing_in_ssg' | 'extra_in_ssg' | 'unparsed';
+type SyncStatus = 'synced' | 'missing_in_ssg' | 'extra_in_ssg' | 'unparsed' | 'outside_support_period';
 
 type LocalRun = {
   course_id: string;
@@ -31,6 +31,8 @@ type LocalRun = {
   start_date: string | null;
   end_date: string | null;
   class_status: string | null;
+  wsq_support_from: string | null;
+  wsq_support_to: string | null;
 };
 
 type Row = {
@@ -47,6 +49,8 @@ type CourseGroup = {
   course_code: string;
   course_title: string;
   course_id: string | null;
+  wsq_support_from: string | null;
+  wsq_support_to: string | null;
   rows: Row[];
 };
 
@@ -139,6 +143,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Load local WSQ runs (only those ending today or in the future)
   const localResult = await pool.query<LocalRun>(
     `SELECT c.id AS course_id, c.course_code, c.title,
+            c.ssg_wsq_support_from  AS wsq_support_from,
+            c.ssg_wsq_support_to    AS wsq_support_to,
             cr.id AS run_id, cr.course_run_id AS ssg_run_id,
             cr.start_date, cr.end_date, cr.class_status::text AS class_status
        FROM course c
@@ -151,10 +157,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     [today],
   );
 
-  // Index local rows by course_code
-  const localByCode = new Map<string, { course_id: string; title: string; runs: LocalRun[] }>();
+  // Index local rows by course_code, carrying the support period from the course row
+  const localByCode = new Map<string, { course_id: string; title: string; runs: LocalRun[]; wsq_support_from: string | null; wsq_support_to: string | null }>();
   for (const row of localResult.rows) {
-    const entry = localByCode.get(row.course_code) || { course_id: row.course_id, title: row.title, runs: [] };
+    const existing = localByCode.get(row.course_code);
+    const entry = existing || {
+      course_id: row.course_id,
+      title: row.title,
+      runs: [],
+      wsq_support_from: ymd(row.wsq_support_from),
+      wsq_support_to: ymd(row.wsq_support_to),
+    };
     if (row.run_id) entry.runs.push(row);
     localByCode.set(row.course_code, entry);
   }
@@ -163,6 +176,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let countMissing = 0;
   let countExtra = 0;
   let countUnparsed = 0;
+  let countOutsidePeriod = 0;
 
   const groups: CourseGroup[] = [];
   const seenLocalCodes = new Set<string>();
@@ -201,6 +215,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ssg_run_id: hit.ssg_run_id,
         }];
       }
+      // Classify as outside_support_period when the WSQ window is known
+      // and the course start date falls outside it.
+      const supportFrom = local?.wsq_support_from ?? null;
+      const supportTo   = local?.wsq_support_to   ?? null;
+      const isOutside   = supportFrom && supportTo
+        && (s.course_start_date < supportFrom || s.course_start_date > supportTo);
+
+      if (isOutside) {
+        countOutsidePeriod++;
+        return [{
+          source: 'magento' as const,
+          raw: s.raw,
+          start_date: s.course_start_date,
+          end_date: s.course_end_date,
+          status: 'outside_support_period' as const,
+        }];
+      }
       countMissing++;
       return [{
         source: 'magento' as const,
@@ -229,6 +260,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       course_code: m.course_code,
       course_title: m.course_title,
       course_id: local?.course_id || null,
+      wsq_support_from: local?.wsq_support_from || null,
+      wsq_support_to: local?.wsq_support_to || null,
       rows,
     });
   }
@@ -249,13 +282,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ssg_run_id: r.ssg_run_id,
       };
     });
-    localOnly.push({ course_code: code, course_title: entry.title, course_id: entry.course_id, rows });
+    localOnly.push({
+      course_code: code, course_title: entry.title, course_id: entry.course_id,
+      wsq_support_from: entry.wsq_support_from, wsq_support_to: entry.wsq_support_to,
+      rows,
+    });
   }
+
+  // Check whether support periods have been loaded for any TGS course
+  const supportLoaded = localResult.rows.some((r) => r.wsq_support_from != null);
 
   return res.status(200).json({
     generated_at: magento.generated_at,
     magento_count: magento.count,
-    counts: { synced: countSynced, missing_in_ssg: countMissing, extra_in_ssg: countExtra, unparsed: countUnparsed },
+    counts: {
+      synced: countSynced,
+      missing_in_ssg: countMissing,
+      extra_in_ssg: countExtra,
+      unparsed: countUnparsed,
+      outside_support_period: countOutsidePeriod,
+    },
+    support_periods_loaded: supportLoaded,
     courses: [...groups, ...localOnly],
     cached: !forceRefresh && cache ? new Date(cache.at).toISOString() : null,
   });

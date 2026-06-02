@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-type SyncStatus = 'synced' | 'missing_in_ssg' | 'extra_in_ssg' | 'unparsed';
+type SyncStatus = 'synced' | 'missing_in_ssg' | 'extra_in_ssg' | 'unparsed' | 'outside_support_period';
 
 type Row = {
   source: 'magento' | 'ssg';
@@ -16,19 +16,22 @@ type CourseGroup = {
   course_code: string;
   course_title: string;
   course_id: string | null;
+  wsq_support_from: string | null;
+  wsq_support_to: string | null;
   rows: Row[];
 };
 
 type ApiResponse = {
   generated_at: string;
   magento_count: number;
-  counts: { synced: number; missing_in_ssg: number; extra_in_ssg: number; unparsed: number };
+  counts: { synced: number; missing_in_ssg: number; extra_in_ssg: number; unparsed: number; outside_support_period: number };
+  support_periods_loaded: boolean;
   courses: CourseGroup[];
   cached: string | null;
 };
 
 type ApiError = { error: string; message?: string; status?: number; body?: any };
-type Filter = 'all' | 'missing_in_ssg' | 'extra_in_ssg' | 'unparsed' | 'synced';
+type Filter = 'all' | 'missing_in_ssg' | 'extra_in_ssg' | 'unparsed' | 'synced' | 'outside_support_period';
 
 type ItemResult = {
   course_code: string;
@@ -69,6 +72,7 @@ const STATUS_LABEL: Record<SyncStatus, string> = {
   missing_in_ssg: '⚠ Missing in SSG',
   extra_in_ssg: 'ℹ Only in SSG',
   unparsed: '? Unparsed',
+  outside_support_period: '⛔ Outside support period',
 };
 
 const STATUS_CLASS: Record<SyncStatus, string> = {
@@ -76,6 +80,7 @@ const STATUS_CLASS: Record<SyncStatus, string> = {
   missing_in_ssg: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
   extra_in_ssg: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   unparsed: 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
+  outside_support_period: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
 };
 
 const WsqScheduleSyncView: React.FC = () => {
@@ -92,6 +97,7 @@ const WsqScheduleSyncView: React.FC = () => {
   const [rowResults, setRowResults] = useState<Map<string, ItemResult>>(new Map());
   const [allJobs, setAllJobs] = useState<SharedJob[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [refreshingPeriods, setRefreshingPeriods] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = async (refresh = false) => {
@@ -315,6 +321,25 @@ const WsqScheduleSyncView: React.FC = () => {
     );
   };
 
+  const refreshSupportPeriods = async () => {
+    setRefreshingPeriods(true);
+    try {
+      const resp = await fetch('/api/admin/wsq-schedule-sync/refresh-support-periods', { method: 'POST' });
+      const json = await resp.json();
+      if (!resp.ok) {
+        setNotice(`Failed to refresh support periods: ${json.error || resp.status}`);
+      } else {
+        const s = json.summary || {};
+        setNotice(`Support periods refreshed — ${s.updated ?? 0} updated, ${s.no_wsq_support ?? 0} no WSQ support, ${s.ssg_error ?? 0} errors.`);
+        void load(false);
+      }
+    } catch (e: any) {
+      setNotice(`Failed to refresh support periods: ${e?.message}`);
+    } finally {
+      setRefreshingPeriods(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -525,13 +550,43 @@ const WsqScheduleSyncView: React.FC = () => {
             {data.cached && <span className="text-xs text-on-surface-secondary">(cached at {new Date(data.cached).toLocaleTimeString()})</span>}
           </div>
 
+          {/* Support period notice ───────────────────────────────────── */}
+          {!data.support_periods_loaded && (
+            <div className="p-3 rounded-md bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 text-sm flex items-center justify-between gap-4">
+              <span className="text-orange-800 dark:text-orange-200">
+                WSQ support periods not loaded — sync will not filter out out-of-period runs until you load them.
+              </span>
+              <button
+                onClick={refreshSupportPeriods}
+                disabled={refreshingPeriods}
+                className="shrink-0 px-3 py-1.5 text-xs rounded-md bg-orange-600 text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {refreshingPeriods ? 'Loading…' : 'Load support periods'}
+              </button>
+            </div>
+          )}
+          {data.support_periods_loaded && (
+            <div className="flex justify-end">
+              <button
+                onClick={refreshSupportPeriods}
+                disabled={refreshingPeriods}
+                className="px-2 py-1 text-xs rounded-md border border-default text-on-surface-secondary hover:bg-surface-elevated disabled:opacity-50"
+              >
+                {refreshingPeriods ? 'Refreshing…' : 'Refresh support periods'}
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2 items-center">
             {([
-              ['all', `All (${data.counts.synced + data.counts.missing_in_ssg + data.counts.extra_in_ssg + data.counts.unparsed})`],
+              ['all', `All (${data.counts.synced + data.counts.missing_in_ssg + data.counts.extra_in_ssg + data.counts.unparsed + (data.counts.outside_support_period ?? 0)})`],
               ['missing_in_ssg', `Missing in SSG (${data.counts.missing_in_ssg})`],
               ['synced', `Synced (${data.counts.synced})`],
               ['extra_in_ssg', `Only in SSG (${data.counts.extra_in_ssg})`],
               ['unparsed', `Unparsed (${data.counts.unparsed})`],
+              ...(data.counts.outside_support_period > 0
+                ? [['outside_support_period', `Outside support period (${data.counts.outside_support_period})`] as [Filter, string]]
+                : []),
             ] as [Filter, string][]).map(([f, label]) => (
               <button
                 key={f}
@@ -560,8 +615,9 @@ const WsqScheduleSyncView: React.FC = () => {
             )}
             {filtered.map((g) => {
               const isOpen = expanded.has(g.course_code);
-              const missingCount = g.rows.filter((r) => r.status === 'missing_in_ssg').length;
-              const syncedCount = g.rows.filter((r) => r.status === 'synced').length;
+              const missingCount  = g.rows.filter((r) => r.status === 'missing_in_ssg').length;
+              const outsideCount  = g.rows.filter((r) => r.status === 'outside_support_period').length;
+              const syncedCount   = g.rows.filter((r) => r.status === 'synced').length;
               return (
                 <div key={g.course_code} className="bg-surface rounded-md border border-default overflow-hidden">
                   <div className="px-4 py-2 bg-surface-elevated border-b border-default flex items-center gap-3 flex-wrap">
@@ -574,6 +630,7 @@ const WsqScheduleSyncView: React.FC = () => {
                     </button>
                     <div className="flex items-center gap-2 text-xs">
                       {missingCount > 0 && <span className={`px-2 py-0.5 rounded-full ${STATUS_CLASS.missing_in_ssg}`}>{missingCount} missing</span>}
+                      {outsideCount > 0 && <span className={`px-2 py-0.5 rounded-full ${STATUS_CLASS.outside_support_period}`}>{outsideCount} outside period</span>}
                       {syncedCount > 0 && <span className={`px-2 py-0.5 rounded-full ${STATUS_CLASS.synced}`}>{syncedCount} synced</span>}
                       <span className="text-on-surface-secondary">· {g.rows.length} rows</span>
                       {missingCount > 0 && (
@@ -651,6 +708,24 @@ const WsqScheduleSyncView: React.FC = () => {
                                     >
                                       Sync to SSG
                                     </button>
+                                  );
+                                }
+                                if (r.status === 'outside_support_period') {
+                                  return (
+                                    <div className="flex flex-col gap-1 items-start">
+                                      <span className="text-xs text-orange-600 dark:text-orange-400">
+                                        Outside WSQ support period
+                                        {g.wsq_support_from && g.wsq_support_to && ` (${g.wsq_support_from} → ${g.wsq_support_to})`}
+                                      </span>
+                                      <button
+                                        onClick={() => syncRow(g, r)}
+                                        disabled={syncing}
+                                        className="px-2 py-1 text-xs rounded-md border border-orange-400 text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/30 disabled:opacity-50"
+                                        title="SSG will likely reject this — the course start date is outside the approved WSQ support window"
+                                      >
+                                        Attempt sync anyway
+                                      </button>
+                                    </div>
                                   );
                                 }
                                 return null;
