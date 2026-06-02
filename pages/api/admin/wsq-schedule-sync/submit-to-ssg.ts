@@ -210,7 +210,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const regClosing = addDays(start_date, -1);
     const regOpening = todaySg > regClosing ? regClosing : todaySg;
 
-    // 5. Build SSG payload
+    const toInt = (d: string) => parseInt(d.replace(/-/g, ''), 10);
+    const sessionVenue = { floor: VENUE.floor, unit: VENUE.unit, postalCode: VENUE.postalCode, room: VENUE.room };
+
+    // 5. Build SSG payload — SSG publish expects nested objects with YYYYMMDD integers
     const payload = {
       course: {
         courseReferenceNumber: course_code,
@@ -218,14 +221,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         runs: [
           {
             sequenceNumber: 1,
-            openingRegistrationDate: regOpening,
-            closingRegistrationDate: regClosing,
-            courseStartDate: start_date,
-            courseEndDate: end_date,
-            scheduleInfoTypeCode: '01',
-            scheduleInfoTypeDescription: 'Description',
+            registrationDates: {
+              opening: toInt(regOpening),
+              closing: toInt(regClosing),
+            },
+            courseDates: {
+              start: toInt(start_date),
+              end: toInt(end_date),
+            },
+            scheduleInfoType: { code: '01', description: 'Description' },
             scheduleInfo: 'Refer to our website for course schedule details.',
-            ...VENUE,
+            venue: sessionVenue,
             modeOfTraining,
             courseAdminEmail: companyEmail,
             courseVacancy: { code: 'A', description: 'Available' },
@@ -235,7 +241,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               endDate: s.endDate,
               startTime: s.startTime,
               endTime: s.endTime,
-              ...VENUE,
+              venue: sessionVenue,
             })),
           },
         ],
