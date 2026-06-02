@@ -287,15 +287,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      // Extract SSG run ID from response
-      const data = result.data as any;
-      ssgRunId = data?.course?.runs?.[0]?.runId
-        ?? data?.runs?.[0]?.runId
-        ?? null;
-
+      // Extract SSG run ID — check all known response shapes SSG may return
       if (!ssgRunId) {
-        results.push({ course_code, start_date, end_date, status: 'ssg_error', message: 'SSG did not return a run ID' });
-        continue;
+        const data = result.data as any;
+        ssgRunId = data?.course?.runs?.[0]?.runId
+          ?? data?.data?.course?.runs?.[0]?.runId
+          ?? data?.runs?.[0]?.runId
+          ?? data?.runId
+          ?? null;
+
+        if (ssgRunId != null) ssgRunId = String(ssgRunId);
+
+        if (!ssgRunId) {
+          const snippet = JSON.stringify(data ?? result).slice(0, 300);
+          results.push({ course_code, start_date, end_date, status: 'ssg_error', message: `SSG did not return a run ID. Response: ${snippet}` });
+          continue;
+        }
       }
     } catch (e: any) {
       results.push({ course_code, start_date, end_date, status: 'ssg_error', message: e?.message || 'SSG request failed' });
