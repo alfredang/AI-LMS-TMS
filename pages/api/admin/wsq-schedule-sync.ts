@@ -145,6 +145,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
        LEFT JOIN course_run cr ON cr.course_id = c.id
             AND cr.is_deleted = false
             AND cr.end_date >= $1::date
+            AND cr.course_run_id NOT LIKE 'STAGED-%'
       WHERE c.course_code LIKE 'TGS-%'
       ORDER BY c.course_code, cr.start_date NULLS LAST`,
     [today],

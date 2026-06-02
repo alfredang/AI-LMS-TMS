@@ -3,7 +3,7 @@ import pool from '../../../../lib/db';
 
 /**
  * POST /api/admin/wsq-schedule-sync/start-job
- * Body: { total_items: number }
+ * Body: { total_items: number, triggered_by?: 'user' | 'cron' }
  *
  * Creates a wsq_sync_job row and returns the job_id.
  * Blocks if a sync job started within the last 10 minutes is still running —
@@ -20,7 +20,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'total_items is required' });
   }
 
-  // Ensure table exists
+  const triggeredBy = req.body?.triggered_by === 'cron' ? 'cron' : 'user';
+
+  // Ensure table exists (with triggered_by column)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS wsq_sync_job (
       id             SERIAL PRIMARY KEY,
@@ -35,7 +37,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ssg_errors     INT         NOT NULL DEFAULT 0,
       skipped        INT         NOT NULL DEFAULT 0,
       failures       JSONB       NOT NULL DEFAULT '[]',
-      summary        TEXT
+      summary        TEXT,
+      triggered_by   TEXT        NOT NULL DEFAULT 'user'
+                                 CHECK (triggered_by IN ('user', 'cron'))
     )
   `).catch(() => {});
 
@@ -53,8 +57,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const inserted = await pool.query<{ id: number }>(
-    `INSERT INTO wsq_sync_job (total_items) VALUES ($1) RETURNING id`,
-    [totalItems],
+    `INSERT INTO wsq_sync_job (total_items, triggered_by) VALUES ($1, $2) RETURNING id`,
+    [totalItems, triggeredBy],
   );
 
   return res.status(200).json({ job_id: inserted.rows[0].id });

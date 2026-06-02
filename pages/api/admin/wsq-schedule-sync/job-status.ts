@@ -4,9 +4,10 @@ import pool from '../../../../lib/db';
 /**
  * GET /api/admin/wsq-schedule-sync/job-status
  *
- * Returns the most recent wsq_sync_job row (running or completed within 24 h).
- * Returns null if no recent job exists.
- * Polled every 2 s by WsqScheduleSyncView so all users see shared progress.
+ * Returns the 50 most recent wsq_sync_job rows as an array (newest first).
+ * The first element is the current/most-recent job; the rest are history.
+ * Returns [] if no jobs exist.
+ * Polled every 2 s by WsqScheduleSyncView while a job is running.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -14,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Ensure table exists (idempotent — migration may not have run yet on local dev)
+  // Ensure table exists (idempotent)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS wsq_sync_job (
       id             SERIAL PRIMARY KEY,
@@ -29,19 +30,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ssg_errors     INT         NOT NULL DEFAULT 0,
       skipped        INT         NOT NULL DEFAULT 0,
       failures       JSONB       NOT NULL DEFAULT '[]',
-      summary        TEXT
+      summary        TEXT,
+      triggered_by   TEXT        NOT NULL DEFAULT 'user'
+                                 CHECK (triggered_by IN ('user', 'cron'))
     )
   `).catch(() => { /* ignore if already exists */ });
 
   try {
     const result = await pool.query(
       `SELECT * FROM wsq_sync_job
-        WHERE started_at > NOW() - INTERVAL '24 hours'
         ORDER BY started_at DESC
-        LIMIT 1`,
+        LIMIT 50`,
     );
 
-    return res.status(200).json(result.rows[0] ?? null);
+    return res.status(200).json(result.rows);
   } catch (e: any) {
     return res.status(500).json({ error: e?.message || 'Failed to fetch job status' });
   }

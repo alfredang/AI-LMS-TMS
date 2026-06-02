@@ -61,6 +61,7 @@ type SharedJob = {
   skipped: number;
   failures: ItemResult[];
   summary: string | null;
+  triggered_by: 'user' | 'cron';
 };
 
 const STATUS_LABEL: Record<SyncStatus, string> = {
@@ -89,7 +90,8 @@ const WsqScheduleSyncView: React.FC = () => {
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [syncResults, setSyncResults] = useState<ItemResult[]>([]);
   const [rowResults, setRowResults] = useState<Map<string, ItemResult>>(new Map());
-  const [sharedJob, setSharedJob] = useState<SharedJob | null>(null);
+  const [allJobs, setAllJobs] = useState<SharedJob[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = async (refresh = false) => {
@@ -117,35 +119,41 @@ const WsqScheduleSyncView: React.FC = () => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }, []);
 
+  const fetchJobs = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/admin/wsq-schedule-sync/job-status');
+      if (!resp.ok) return;
+      const jobs: SharedJob[] = await resp.json();
+      if (Array.isArray(jobs)) setAllJobs(jobs);
+    } catch { /* ignore */ }
+  }, []);
+
   const startPolling = useCallback(() => {
     if (pollRef.current) return;
     pollRef.current = setInterval(async () => {
       try {
         const resp = await fetch('/api/admin/wsq-schedule-sync/job-status');
         if (!resp.ok) return;
-        const job: SharedJob | null = await resp.json();
-        if (!job) return;
-        setSharedJob(job);
-        if (job.status !== 'running') stopPolling();
+        const jobs: SharedJob[] = await resp.json();
+        if (!Array.isArray(jobs)) return;
+        setAllJobs(jobs);
+        if (!jobs[0] || jobs[0].status !== 'running') stopPolling();
       } catch { /* ignore */ }
     }, 2000);
   }, [stopPolling]);
 
-  // On mount: check for a recent or running job so any user sees shared state
+  // On mount: load job history; resume polling if a job is running
   useEffect(() => {
     const check = async () => {
-      try {
-        const resp = await fetch('/api/admin/wsq-schedule-sync/job-status');
-        if (!resp.ok) return;
-        const job: SharedJob | null = await resp.json();
-        if (!job) return;
-        setSharedJob(job);
-        if (job.status === 'running') startPolling();
-      } catch { /* ignore */ }
+      await fetchJobs();
+      setAllJobs((prev) => {
+        if (prev[0]?.status === 'running') startPolling();
+        return prev;
+      });
     };
     void check();
     return stopPolling;
-  }, [startPolling, stopPolling]);
+  }, [fetchJobs, startPolling, stopPolling]);
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -200,7 +208,7 @@ const WsqScheduleSyncView: React.FC = () => {
       const startResp = await fetch('/api/admin/wsq-schedule-sync/start-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ total_items: items.length }),
+        body: JSON.stringify({ total_items: items.length, triggered_by: 'user' }),
       });
       const startJson = await startResp.json();
       if (startResp.status === 409) {
@@ -279,10 +287,7 @@ const WsqScheduleSyncView: React.FC = () => {
       setSyncProgress(null);
       // Final poll so sharedJob reflects completed state
       stopPolling();
-      try {
-        const finalResp = await fetch('/api/admin/wsq-schedule-sync/job-status');
-        if (finalResp.ok) { const j = await finalResp.json(); if (j) setSharedJob(j); }
-      } catch { /* ignore */ }
+      await fetchJobs();
     }
   };
 
@@ -354,69 +359,65 @@ const WsqScheduleSyncView: React.FC = () => {
         </div>
       )}
 
-      {/* Shared job panel — visible to all users, persists across navigation */}
-      {sharedJob && (() => {
-        const isRunning = sharedJob.status === 'running';
-        const failures: ItemResult[] = Array.isArray(sharedJob.failures) ? sharedJob.failures : [];
+      {/* ── Current / most-recent job panel ─────────────────────────────────── */}
+      {allJobs.length > 0 && (() => {
+        const job = allJobs[0];
+        const isRunning = job.status === 'running';
+        const failures: ItemResult[] = Array.isArray(job.failures) ? job.failures : [];
         const hasFailures = failures.length > 0;
-        const STATUS_LABEL_MAP: Record<string, string> = {
-          ssg_error: 'SSG Error',
-          no_course: 'Course Not Found',
-          no_session_timing: 'No Session Timing',
-          error: 'Error',
+        const ERROR_LABEL: Record<string, string> = {
+          ssg_error: 'SSG Error', no_course: 'Course Not Found',
+          no_session_timing: 'No Session Timing', error: 'Error',
         };
-
+        const borderCls = isRunning ? 'border-blue-200 dark:border-blue-800'
+          : hasFailures ? 'border-red-200 dark:border-red-800'
+          : 'border-green-200 dark:border-green-800';
+        const headerCls = isRunning ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800'
+          : hasFailures ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
+          : 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800';
+        const titleCls = isRunning ? 'text-blue-800 dark:text-blue-200'
+          : hasFailures ? 'text-red-800 dark:text-red-200'
+          : 'text-green-800 dark:text-green-200';
         return (
-          <div className={`rounded-md border overflow-hidden ${isRunning ? 'border-blue-200 dark:border-blue-800' : hasFailures ? 'border-red-200 dark:border-red-800' : 'border-green-200 dark:border-green-800'}`}>
-            {/* Header */}
-            <div className={`px-4 py-2 border-b flex justify-between items-center flex-wrap gap-2 ${isRunning ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800' : hasFailures ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800' : 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800'}`}>
+          <div className={`rounded-md border overflow-hidden ${borderCls}`}>
+            <div className={`px-4 py-2 border-b flex justify-between items-center flex-wrap gap-2 ${headerCls}`}>
               <div className="flex items-center gap-3 text-sm">
-                {isRunning && (
-                  <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                )}
-                <span className={`font-medium ${isRunning ? 'text-blue-800 dark:text-blue-200' : hasFailures ? 'text-red-800 dark:text-red-200' : 'text-green-800 dark:text-green-200'}`}>
+                {isRunning && <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
+                <span className={`font-medium ${titleCls}`}>
                   {isRunning
-                    ? `Syncing… ${sharedJob.items_done} / ${sharedJob.total_items} runs`
-                    : sharedJob.summary || (hasFailures ? `Completed with ${failures.length} error${failures.length !== 1 ? 's' : ''}` : 'Sync completed')}
+                    ? `Syncing… ${job.items_done} / ${job.total_items} runs`
+                    : job.summary || (hasFailures ? `Completed with ${failures.length} error${failures.length !== 1 ? 's' : ''}` : 'Sync completed')}
                 </span>
                 <span className="text-xs text-on-surface-secondary">
-                  Started {new Date(sharedJob.started_at).toLocaleTimeString()}
-                  {sharedJob.completed_at && ` · Finished ${new Date(sharedJob.completed_at).toLocaleTimeString()}`}
+                  {new Date(job.started_at).toLocaleString()}
+                  {job.completed_at && ` → ${new Date(job.completed_at).toLocaleTimeString()}`}
+                </span>
+                <span className={`text-xs px-1.5 py-0.5 rounded ${job.triggered_by === 'cron' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
+                  {job.triggered_by === 'cron' ? 'Cron' : 'Manual'}
                 </span>
               </div>
               <div className="flex items-center gap-3 text-xs text-on-surface-secondary">
-                {sharedJob.submitted > 0 && <span className="text-green-600 dark:text-green-400">{sharedJob.submitted} submitted</span>}
-                {sharedJob.already_exists > 0 && <span>{sharedJob.already_exists} existed</span>}
-                {(sharedJob.ssg_errors + sharedJob.skipped) > 0 && (
-                  <span className="text-red-500 dark:text-red-400">{sharedJob.ssg_errors + sharedJob.skipped} errors</span>
-                )}
-                {!isRunning && (
-                  <button onClick={() => setSharedJob(null)} className="underline ml-1">dismiss</button>
-                )}
+                {job.submitted > 0 && <span className="text-green-600 dark:text-green-400">{job.submitted} submitted</span>}
+                {job.already_exists > 0 && <span>{job.already_exists} existed</span>}
+                {(job.ssg_errors + job.skipped) > 0 && <span className="text-red-500 dark:text-red-400">{job.ssg_errors + job.skipped} errors</span>}
               </div>
             </div>
-
-            {/* Progress bar (running only) */}
-            {isRunning && sharedJob.total_items > 0 && (
+            {isRunning && job.total_items > 0 && (
               <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20">
                 <div className="w-full bg-blue-100 dark:bg-blue-900 rounded-full h-1.5">
-                  <div
-                    className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.round((sharedJob.items_done / sharedJob.total_items) * 100)}%` }}
-                  />
+                  <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.round((job.items_done / job.total_items) * 100)}%` }} />
                 </div>
               </div>
             )}
-
-            {/* Failure detail rows */}
             {hasFailures && (
-              <div className="divide-y divide-red-100 dark:divide-red-900 max-h-64 overflow-y-auto">
+              <div className="divide-y divide-red-100 dark:divide-red-900 max-h-48 overflow-y-auto">
                 {failures.map((r, i) => (
                   <div key={i} className="px-4 py-2 flex flex-wrap items-start gap-x-3 gap-y-1 text-xs">
                     <span className="font-mono font-medium text-on-surface">{r.course_code}</span>
                     <span className="font-mono text-on-surface-secondary">{r.start_date} → {r.end_date}</span>
                     <span className={`px-1.5 py-0.5 rounded font-medium ${r.status === 'ssg_error' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'}`}>
-                      {STATUS_LABEL_MAP[r.status] ?? r.status}
+                      {ERROR_LABEL[r.status] ?? r.status}
                     </span>
                     {r.message && <span className="text-on-surface-secondary">{r.message}</span>}
                   </div>
@@ -426,6 +427,62 @@ const WsqScheduleSyncView: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* ── Collapsible sync history ──────────────────────────────────────────── */}
+      {allJobs.length > 1 && (
+        <div className="rounded-md border border-default overflow-hidden">
+          <button
+            onClick={() => setHistoryOpen((o) => !o)}
+            className="w-full px-4 py-2 flex items-center justify-between text-sm bg-surface-elevated hover:bg-surface text-on-surface"
+          >
+            <span className="font-medium">Sync History ({allJobs.length - 1} previous run{allJobs.length - 1 !== 1 ? 's' : ''})</span>
+            <span>{historyOpen ? '▾' : '▸'}</span>
+          </button>
+          {historyOpen && (
+            <div className="divide-y divide-default max-h-96 overflow-y-auto">
+              {allJobs.slice(1).map((job) => {
+                const failures: ItemResult[] = Array.isArray(job.failures) ? job.failures : [];
+                const hasFailures = failures.length > 0;
+                const statusCls = job.status === 'failed' || hasFailures
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-green-600 dark:text-green-400';
+                return (
+                  <div key={job.id} className="px-4 py-2 text-xs space-y-1">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="font-mono text-on-surface-secondary">
+                        {new Date(job.started_at).toLocaleString()}
+                        {job.completed_at && ` → ${new Date(job.completed_at).toLocaleTimeString()}`}
+                      </span>
+                      <span className={`px-1.5 py-0.5 rounded ${job.triggered_by === 'cron' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
+                        {job.triggered_by === 'cron' ? 'Cron' : 'Manual'}
+                      </span>
+                      <span className={`font-medium ${statusCls}`}>
+                        {job.summary || (hasFailures ? `${failures.length} error${failures.length !== 1 ? 's' : ''}` : 'Completed')}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-on-surface-secondary">
+                      {job.submitted > 0 && <span className="text-green-600 dark:text-green-400">{job.submitted} submitted</span>}
+                      {job.already_exists > 0 && <span>{job.already_exists} existed</span>}
+                      {job.ssg_errors > 0 && <span className="text-red-500">{job.ssg_errors} SSG errors</span>}
+                      {job.skipped > 0 && <span>{job.skipped} skipped</span>}
+                    </div>
+                    {hasFailures && (
+                      <div className="mt-1 space-y-0.5 pl-2 border-l-2 border-red-200 dark:border-red-800">
+                        {failures.map((f, fi) => (
+                          <div key={fi} className="text-on-surface-secondary font-mono">
+                            {f.course_code} {f.start_date} → {f.end_date}
+                            {f.message && <span className="text-red-500 ml-2">{f.message}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Submitted-runs summary — shows SSG run IDs so admins can verify */}
       {syncResults.length > 0 && (() => {
