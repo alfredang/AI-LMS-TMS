@@ -427,6 +427,39 @@ const WsqScheduleSyncView: React.FC = () => {
         );
       })()}
 
+      {/* Submitted-runs summary — shows SSG run IDs so admins can verify */}
+      {syncResults.length > 0 && (() => {
+        const submitted = syncResults.filter((r) => r.status === 'submitted' && r.ssg_run_id);
+        const existed   = syncResults.filter((r) => r.status === 'exists'    && r.ssg_run_id);
+        if (submitted.length === 0 && existed.length === 0) return null;
+        return (
+          <div className="rounded-md border border-green-200 dark:border-green-800 overflow-hidden">
+            <div className="px-4 py-2 bg-green-50 dark:bg-green-900/30 border-b border-green-200 dark:border-green-800 flex justify-between items-center">
+              <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                Submitted run IDs
+              </span>
+              <button onClick={() => setSyncResults([])} className="text-xs underline text-on-surface-secondary">dismiss</button>
+            </div>
+            <div className="divide-y divide-green-100 dark:divide-green-900/40 max-h-64 overflow-y-auto">
+              {submitted.map((r, i) => (
+                <div key={i} className="px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                  <span className="font-mono font-medium text-on-surface">{r.course_code}</span>
+                  <span className="font-mono text-on-surface-secondary">{r.start_date} → {r.end_date}</span>
+                  <span className="text-green-600 dark:text-green-400 font-mono font-semibold">✓ {r.ssg_run_id}</span>
+                </div>
+              ))}
+              {existed.map((r, i) => (
+                <div key={`e${i}`} className="px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                  <span className="font-mono font-medium text-on-surface">{r.course_code}</span>
+                  <span className="font-mono text-on-surface-secondary">{r.start_date} → {r.end_date}</span>
+                  <span className="text-blue-600 dark:text-blue-400 font-mono">○ {r.ssg_run_id} (already existed)</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {data && (
         <>
           <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -538,8 +571,8 @@ const WsqScheduleSyncView: React.FC = () => {
                                   }
                                   if (rowResult.status === 'exists') {
                                     return (
-                                      <span className="text-xs text-blue-600 dark:text-blue-400" title={rowResult.ssg_run_id}>
-                                        Already exists
+                                      <span className="text-xs text-blue-600 dark:text-blue-400 font-mono">
+                                        ○ {rowResult.ssg_run_id || 'Already exists'}
                                       </span>
                                     );
                                   }
