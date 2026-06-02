@@ -309,7 +309,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       continue;
     }
 
-    // 7. Upsert course_run — update staged row if exists, else insert
+    // 7. Upsert course_run — priority order:
+    //   a) STAGED- row with matching dates  → update in-place
+    //   b) Any existing row with this SSG run ID (old staged rows submitted with
+    //      wrong dates end up here) → fix its dates + promote to Confirmed
+    //   c) No match → INSERT fresh
     let localRunId: string | null = null;
     try {
       const stagedRow = await pool.query<{ id: string }>(
@@ -321,7 +325,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
 
       if (stagedRow.rows.length > 0) {
-        // Update the staged row with the real SSG run ID and venue/status
+        // (a) Update the staged row with the real SSG run ID and venue/status
         await pool.query(
           `UPDATE course_run SET
             course_run_id             = $1,
@@ -340,20 +344,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
         localRunId = stagedRow.rows[0].id;
       } else {
-        // Insert fresh course_run row
-        const inserted = await pool.query<{ id: string }>(
-          `INSERT INTO course_run (
-            course_id, course_run_id, start_date, end_date, class_status,
-            registration_opening_date, registration_closing_date,
-            venue_floor, venue_unit, venue_postal_code, venue_room,
-            course_admin_email, created_at, updated_at
-          ) VALUES ($1,$2,$3::date,$4::date,'Confirmed',$5::date,$6::date,$7,$8,$9,$10,$11,NOW(),NOW())
-          RETURNING id`,
-          [courseId, ssgRunId, start_date, end_date,
-           regOpening, regClosing, VENUE.floor, VENUE.unit,
-           VENUE.postalCode, VENUE.room, companyEmail],
+        // (b) Look for an existing row with this SSG run ID regardless of dates.
+        // Old staged rows submitted with a 1-day-off date end up here — they own
+        // the run ID but have the wrong start/end. Fix the dates to match Magento.
+        const existingById = await pool.query<{ id: string }>(
+          `SELECT id FROM course_run
+            WHERE course_id = $1 AND course_run_id = $2 AND is_deleted = false
+            LIMIT 1`,
+          [courseId, ssgRunId],
         );
-        localRunId = inserted.rows[0].id;
+
+        if (existingById.rows.length > 0) {
+          await pool.query(
+            `UPDATE course_run SET
+              start_date                = $1::date,
+              end_date                  = $2::date,
+              class_status              = 'Confirmed',
+              registration_opening_date = $3::date,
+              registration_closing_date = $4::date,
+              venue_floor               = $5,
+              venue_unit                = $6,
+              venue_postal_code         = $7,
+              venue_room                = $8,
+              course_admin_email        = $9,
+              updated_at                = NOW()
+            WHERE id = $10`,
+            [start_date, end_date, regOpening, regClosing,
+             VENUE.floor, VENUE.unit, VENUE.postalCode, VENUE.room,
+             companyEmail, existingById.rows[0].id],
+          );
+          localRunId = existingById.rows[0].id;
+        } else {
+          // (c) Insert fresh course_run row
+          const inserted = await pool.query<{ id: string }>(
+            `INSERT INTO course_run (
+              course_id, course_run_id, start_date, end_date, class_status,
+              registration_opening_date, registration_closing_date,
+              venue_floor, venue_unit, venue_postal_code, venue_room,
+              course_admin_email, created_at, updated_at
+            ) VALUES ($1,$2,$3::date,$4::date,'Confirmed',$5::date,$6::date,$7,$8,$9,$10,$11,NOW(),NOW())
+            RETURNING id`,
+            [courseId, ssgRunId, start_date, end_date,
+             regOpening, regClosing, VENUE.floor, VENUE.unit,
+             VENUE.postalCode, VENUE.room, companyEmail],
+          );
+          localRunId = inserted.rows[0].id;
+        }
       }
     } catch (e: any) {
       // SSG submission succeeded but local DB write failed — still report success with a warning
