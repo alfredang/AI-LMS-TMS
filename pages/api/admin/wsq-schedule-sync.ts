@@ -20,7 +20,7 @@ type MagentoResponse = {
   courses: MagentoCourse[];
 };
 
-type SyncStatus = 'synced' | 'missing_in_ssg' | 'extra_in_ssg' | 'unparsed' | 'outside_support_period';
+type SyncStatus = 'synced' | 'missing_in_ssg' | 'extra_in_ssg' | 'unparsed';
 
 type LocalRun = {
   course_id: string;
@@ -57,12 +57,6 @@ type CourseGroup = {
 let cache: { at: number; data: MagentoResponse } | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-function ymd(d: string | null | Date): string | null {
-  if (!d) return null;
-  if (d instanceof Date) return d.toISOString().slice(0, 10);
-  // pg returns date as 'YYYY-MM-DD' or full ISO depending on driver settings
-  return String(d).slice(0, 10);
-}
 
 async function fetchMagento(baseUrl: string, apiKey: string, forceRefresh: boolean): Promise<MagentoResponse> {
   if (!forceRefresh && cache && Date.now() - cache.at < CACHE_TTL_MS) {
@@ -137,16 +131,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  // Today (Singapore calendar — but ymd diff is harmless either way)
+  // Today in YYYY-MM-DD (UTC — matches to_char() output from the DB query)
   const today = new Date().toISOString().slice(0, 10);
 
   // Load local WSQ runs (only those ending today or in the future)
   const localResult = await pool.query<LocalRun>(
     `SELECT c.id AS course_id, c.course_code, c.title,
-            c.ssg_wsq_support_from  AS wsq_support_from,
-            c.ssg_wsq_support_to    AS wsq_support_to,
+            to_char(c.ssg_wsq_support_from, 'YYYY-MM-DD') AS wsq_support_from,
+            to_char(c.ssg_wsq_support_to,   'YYYY-MM-DD') AS wsq_support_to,
             cr.id AS run_id, cr.course_run_id AS ssg_run_id,
-            cr.start_date, cr.end_date, cr.class_status::text AS class_status
+            to_char(cr.start_date, 'YYYY-MM-DD') AS start_date,
+            to_char(cr.end_date,   'YYYY-MM-DD') AS end_date,
+            cr.class_status::text AS class_status
        FROM course c
        LEFT JOIN course_run cr ON cr.course_id = c.id
             AND cr.is_deleted = false
@@ -165,8 +161,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       course_id: row.course_id,
       title: row.title,
       runs: [],
-      wsq_support_from: ymd(row.wsq_support_from),
-      wsq_support_to: ymd(row.wsq_support_to),
+      wsq_support_from: row.wsq_support_from ?? null,
+      wsq_support_to: row.wsq_support_to ?? null,
     };
     if (row.run_id) entry.runs.push(row);
     localByCode.set(row.course_code, entry);
@@ -176,7 +172,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let countMissing = 0;
   let countExtra = 0;
   let countUnparsed = 0;
-  let countOutsidePeriod = 0;
 
   const groups: CourseGroup[] = [];
   const seenLocalCodes = new Set<string>();
@@ -197,11 +192,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       // Hide schedules that have already ended.
       if (s.course_end_date < today) return [];
-      const hit = localRuns.find((r) =>
-        !matchedLocalRunIds.has(r.run_id!) &&
-        ymd(r.start_date) === s.course_start_date &&
-        ymd(r.end_date) === s.course_end_date,
-      );
+      // Normalise Magento dates to YYYY-MM-DD (strip any trailing time component).
+      // DB dates come from to_char() so are already clean strings.
+      const mStart = s.course_start_date?.slice(0, 10) ?? null;
+      const mEnd   = s.course_end_date?.slice(0, 10)   ?? null;
+
+      // Prefer an unmatched run first; fall back to any run with matching dates
+      // so duplicate Magento schedule entries for the same dates still resolve
+      // to synced rather than missing.
+      const hit =
+        localRuns.find((r) =>
+          !matchedLocalRunIds.has(r.run_id!) &&
+          r.start_date === mStart &&
+          r.end_date   === mEnd,
+        ) ??
+        localRuns.find((r) =>
+          r.start_date === mStart &&
+          r.end_date   === mEnd,
+        );
       if (hit) {
         matchedLocalRunIds.add(hit.run_id!);
         countSynced++;
@@ -213,23 +221,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           status: 'synced' as const,
           local_run_id: hit.run_id,
           ssg_run_id: hit.ssg_run_id,
-        }];
-      }
-      // Classify as outside_support_period when the WSQ window is known
-      // and the course start date falls outside it.
-      const supportFrom = local?.wsq_support_from ?? null;
-      const supportTo   = local?.wsq_support_to   ?? null;
-      const isOutside   = supportFrom && supportTo
-        && (s.course_start_date < supportFrom || s.course_start_date > supportTo);
-
-      if (isOutside) {
-        countOutsidePeriod++;
-        return [{
-          source: 'magento' as const,
-          raw: s.raw,
-          start_date: s.course_start_date,
-          end_date: s.course_end_date,
-          status: 'outside_support_period' as const,
         }];
       }
       countMissing++;
@@ -248,8 +239,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       countExtra++;
       rows.push({
         source: 'ssg',
-        start_date: ymd(r.start_date),
-        end_date: ymd(r.end_date),
+        start_date: r.start_date,
+        end_date: r.end_date,
         status: 'extra_in_ssg',
         local_run_id: r.run_id,
         ssg_run_id: r.ssg_run_id,
@@ -275,8 +266,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       countExtra++;
       return {
         source: 'ssg',
-        start_date: ymd(r.start_date),
-        end_date: ymd(r.end_date),
+        start_date: r.start_date,
+        end_date: r.end_date,
         status: 'extra_in_ssg',
         local_run_id: r.run_id,
         ssg_run_id: r.ssg_run_id,
@@ -289,9 +280,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  // Check whether support periods have been loaded for any TGS course
-  const supportLoaded = localResult.rows.some((r) => r.wsq_support_from != null);
-
   return res.status(200).json({
     generated_at: magento.generated_at,
     magento_count: magento.count,
@@ -300,9 +288,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       missing_in_ssg: countMissing,
       extra_in_ssg: countExtra,
       unparsed: countUnparsed,
-      outside_support_period: countOutsidePeriod,
     },
-    support_periods_loaded: supportLoaded,
     courses: [...groups, ...localOnly],
     cached: !forceRefresh && cache ? new Date(cache.at).toISOString() : null,
   });

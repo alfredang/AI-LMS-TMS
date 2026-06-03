@@ -167,3 +167,5 @@ n8nworkflows.md/
 
 # Tenant-specific seed data (contains plaintext credentials)
 database/seeds/tertiary-software-credentials.sql
+database/01-schema-new.sql
+/markdown/
