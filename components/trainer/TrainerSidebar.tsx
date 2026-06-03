@@ -35,6 +35,7 @@ const ED_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: 'Flash Cards',    icon: IconName.FileText,  href: 'https://alfredang.github.io/flashcard/' },
   { label: 'Live Q&A',       icon: IconName.Help,     href: 'https://alfredang.github.io/live-qna/' },
   { label: 'Whiteboard',     icon: IconName.Edit,     href: 'https://alfredang.github.io/whiteboard/' },
+  { label: 'QR Code Generator', icon: IconName.QrCode, href: 'https://alfredang.github.io/qrcodegenerator/' },
   { label: 'Padlet',         icon: IconName.Bookmark, href: 'https://alfredang.github.io/padlet/' },
   { label: 'Collaborative Note', icon: IconName.FileText, href: 'https://alfredang.github.io/collabnote/' },
   { label: 'Collaborative Flow', icon: IconName.Link, href: 'https://alfredang.github.io/collabflow/' },

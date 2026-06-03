@@ -46,6 +46,12 @@ const ED_TOOLS = [
     href: 'https://alfredang.github.io/whiteboard/',
   },
   {
+    title: 'QR Code Generator',
+    description: 'Generate QR codes for links, text, and resources',
+    icon: IconName.QrCode,
+    href: 'https://alfredang.github.io/qrcodegenerator/',
+  },
+  {
     title: 'Padlet',
     description: 'Collaborative wall for posting notes, links, and media',
     icon: IconName.Bookmark,
