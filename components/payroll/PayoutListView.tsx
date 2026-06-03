@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Icon, IconName } from '../ui/Icon';
 import PayoutEditDialog, { PayoutRow } from './PayoutEditDialog';
+import { PayoutTier } from '@lib/payroll/calculate';
 import { authHeader } from '@lib/auth/authHeader';
 import { fmtDate } from '@lib/payroll/formatDate';
 
@@ -81,6 +82,7 @@ const PAGE_SIZE = 20;
 
 const PayoutListView: React.FC = () => {
   const [rows, setRows] = useState<PayoutRow[]>([]);
+  const [tiers, setTiers] = useState<PayoutTier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<PayoutRow | null>(null);
@@ -99,6 +101,7 @@ const PayoutListView: React.FC = () => {
       const j = await r.json();
       if (!j.success) throw new Error(j.error || 'Failed to load payouts');
       setRows(j.data.payouts || []);
+      setTiers(j.data.tiers || []);
     } catch (e: any) {
       setError(e?.message || 'Failed to load');
     } finally {
@@ -375,6 +378,7 @@ const PayoutListView: React.FC = () => {
       {editing && (
         <PayoutEditDialog
           row={editing}
+          tiers={tiers}
           onClose={() => setEditing(null)}
           onSaved={(updated) => {
             setRows((rs) => rs.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
