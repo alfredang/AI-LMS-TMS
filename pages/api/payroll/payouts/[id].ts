@@ -52,9 +52,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (cur.rowCount === 0) {
         return res.status(404).json({ success: false, error: 'payout not found' });
       }
-      const learners = newLearners ?? Number(cur.rows[0].num_learners) || 0;
-      const fee = newFee ?? Number(cur.rows[0].course_fee) || 0;
-      const tier = newTier ?? Number(cur.rows[0].tier_percent) || 0;
+      const learners = newLearners ?? (Number(cur.rows[0].num_learners) || 0);
+      const fee = newFee ?? (Number(cur.rows[0].course_fee) || 0);
+      const tier = newTier ?? (Number(cur.rows[0].tier_percent) || 0);
       const estimated =
         learners <= 0 || fee <= 0 || tier <= 0 ? 0 : Math.round(fee * learners * tier) / 100;
 
