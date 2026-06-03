@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Icon, IconName } from '../ui/Icon';
 import { authHeader } from '@lib/auth/authHeader';
+import { findTier, PayoutTier } from '@lib/payroll/calculate';
 
 export interface PayoutRow {
   id: string;
@@ -22,9 +23,15 @@ export interface PayoutRow {
 
 interface Props {
   row: PayoutRow;
+  tiers?: PayoutTier[];
   onClose: () => void;
   onSaved: (updated: PayoutRow) => void;
 }
+
+const computeEstimated = (numLearners: number, courseFee: number, tierPercent: number) => {
+  if (numLearners <= 0 || courseFee <= 0 || tierPercent <= 0) return 0;
+  return Math.round(courseFee * numLearners * tierPercent) / 100;
+};
 
 const fmtCurrency = (n: number | string | null | undefined) => {
   if (n === null || n === undefined || n === '') return '-';
@@ -47,7 +54,10 @@ const todayIso = () => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const PayoutEditDialog: React.FC<Props> = ({ row, onClose, onSaved }) => {
+const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => {
+  const [numLearners, setNumLearners] = useState<string>(String(row.num_learners ?? ''));
+  const [courseFee, setCourseFee] = useState<string>(String(row.course_fee ?? ''));
+  const [tierPercent, setTierPercent] = useState<string>(String(row.tier_percent ?? ''));
   const [actual, setActual] = useState<string>(
     row.actual_payout === null || row.actual_payout === undefined ? '' : String(row.actual_payout)
   );
@@ -56,22 +66,39 @@ const PayoutEditDialog: React.FC<Props> = ({ row, onClose, onSaved }) => {
   const [remark, setRemark] = useState<string>(row.remark || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
-  const estimatedNum = Number(row.estimated_payout) || 0;
+  const estimatedNum = useMemo(
+    () => computeEstimated(Number(numLearners) || 0, Number(courseFee) || 0, Number(tierPercent) || 0),
+    [numLearners, courseFee, tierPercent]
+  );
+
+  // Tier % suggested by the configured tiers for the current learner count.
+  const suggestedTier = useMemo(() => {
+    if (!tiers || tiers.length === 0) return null;
+    const t = findTier(Number(numLearners) || 0, tiers);
+    return t ? t.percent : null;
+  }, [tiers, numLearners]);
 
   const dirty = useMemo(() => {
     const origActual = row.actual_payout === null || row.actual_payout === undefined ? '' : String(row.actual_payout);
     return (
+      numLearners !== String(row.num_learners ?? '') ||
+      courseFee !== String(row.course_fee ?? '') ||
+      tierPercent !== String(row.tier_percent ?? '') ||
       actual !== origActual ||
       status !== row.status ||
       paymentDate !== (row.payment_date || '') ||
       remark !== (row.remark || '')
     );
-  }, [actual, status, paymentDate, remark, row]);
+  }, [numLearners, courseFee, tierPercent, actual, status, paymentDate, remark, row]);
 
   const requestClose = () => {
     if (saving) return;
-    if (dirty && !window.confirm('Discard unsaved changes?')) return;
+    if (dirty) {
+      setConfirmDiscard(true);
+      return;
+    }
     onClose();
   };
 
@@ -79,13 +106,14 @@ const PayoutEditDialog: React.FC<Props> = ({ row, onClose, onSaved }) => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        requestClose();
+        if (confirmDiscard) setConfirmDiscard(false);
+        else requestClose();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, saving]);
+  }, [dirty, saving, confirmDiscard]);
 
   const save = async () => {
     setSaving(true);
@@ -95,6 +123,9 @@ const PayoutEditDialog: React.FC<Props> = ({ row, onClose, onSaved }) => {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({
+          num_learners: numLearners === '' ? null : Number(numLearners),
+          course_fee: courseFee === '' ? null : Number(courseFee),
+          tier_percent: tierPercent === '' ? null : Number(tierPercent),
           actual_payout: actual === '' ? null : Number(actual),
           status,
           payment_date: paymentDate || null,
@@ -144,20 +175,75 @@ const PayoutEditDialog: React.FC<Props> = ({ row, onClose, onSaved }) => {
         <div className="px-5 py-4 space-y-4">
           <div className="grid grid-cols-2 gap-3 text-sm bg-gray-50 dark:bg-slate-700/40 rounded-lg p-3">
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-on-surface-secondary"># Learners</div>
-              <div className="font-medium">{row.num_learners}</div>
+              <label htmlFor="payout-learners" className="block text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">
+                # Learners
+              </label>
+              <input
+                id="payout-learners"
+                type="number"
+                min="0"
+                step="1"
+                inputMode="numeric"
+                value={numLearners}
+                onChange={(e) => setNumLearners(e.target.value)}
+                className="w-full border border-default rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
             </div>
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-on-surface-secondary">Tier %</div>
-              <div className="font-medium">{row.tier_percent}%</div>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="payout-tier" className="text-[11px] uppercase tracking-wider text-on-surface-secondary">
+                  Tier %
+                </label>
+                {suggestedTier !== null && Number(tierPercent) !== suggestedTier && (
+                  <button
+                    type="button"
+                    onClick={() => setTierPercent(String(suggestedTier))}
+                    className="text-[11px] text-primary hover:underline normal-case"
+                  >
+                    Use {suggestedTier}%
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  id="payout-tier"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={tierPercent}
+                  onChange={(e) => setTierPercent(e.target.value)}
+                  className="w-full border border-default rounded-md pl-2 pr-7 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-on-surface-secondary pointer-events-none">
+                  %
+                </span>
+              </div>
             </div>
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-on-surface-secondary">Course Fee</div>
-              <div className="font-medium">{fmtCurrency(row.course_fee)}</div>
+              <label htmlFor="payout-fee" className="block text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">
+                Course Fee
+              </label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-on-surface-secondary pointer-events-none">
+                  S$
+                </span>
+                <input
+                  id="payout-fee"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={courseFee}
+                  onChange={(e) => setCourseFee(e.target.value)}
+                  className="w-full border border-default rounded-md pl-9 pr-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
             </div>
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-on-surface-secondary">Estimated Payout</div>
-              <div className="font-semibold text-primary">{fmtCurrency(row.estimated_payout)}</div>
+              <div className="text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">Estimated Payout</div>
+              <div className="font-semibold text-primary py-1.5">{fmtCurrency(estimatedNum)}</div>
             </div>
           </div>
 
@@ -278,6 +364,48 @@ const PayoutEditDialog: React.FC<Props> = ({ row, onClose, onSaved }) => {
           </button>
         </div>
       </div>
+
+      {confirmDiscard && (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setConfirmDiscard(false);
+          }}
+        >
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-default w-full max-w-xs p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+                <Icon name={IconName.Warning} className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">Discard unsaved changes?</h3>
+                <p className="text-xs text-on-surface-secondary mt-0.5">
+                  Your edits to this payout will be lost.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDiscard(false)}
+                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700"
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmDiscard(false);
+                  onClose();
+                }}
+                className="px-3 py-1.5 bg-red-600 text-white rounded-md text-sm hover:bg-red-700"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
