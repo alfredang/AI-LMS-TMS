@@ -41,15 +41,6 @@ type ItemResult = {
   message?: string;
 };
 
-type SyncProgress = {
-  currentBatch: number;
-  totalBatches: number;
-  itemsDone: number;
-  totalItems: number;
-  submitted: number;
-  errors: number;
-};
-
 type SharedJob = {
   id: number;
   status: 'running' | 'completed' | 'failed';
@@ -89,9 +80,6 @@ const WsqScheduleSyncView: React.FC = () => {
   const [notice, setNotice] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
-  const [syncResults, setSyncResults] = useState<ItemResult[]>([]);
-  const [rowResults, setRowResults] = useState<Map<string, ItemResult>>(new Map());
   const [allJobs, setAllJobs] = useState<SharedJob[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -206,103 +194,33 @@ const stopPolling = useCallback(() => {
       setNotice('No missing schedules to sync.');
       return;
     }
-    if (!confirm(`Submit ${items.length} missing course run(s) directly to SSG (${label})?\n\nThis will create course runs in SSG/TPGateway using session timing templates and default venue details.`)) return;
+    if (!confirm(`Submit ${items.length} missing course run(s) to SSG (${label})?\n\nRuns in SSG/TPGateway using session timing templates and default venue details. You can close this page — the sync continues on the server.`)) return;
 
     setSyncing(true);
-    setSyncResults([]);
     setNotice(null);
-
-    const BATCH = 100;
-    const totalBatches = Math.ceil(items.length / BATCH);
-    let submitted = 0, exists = 0, ssgError = 0, skipped = 0;
-    const allResults: ItemResult[] = [];
-
-    // Create the shared job row — all users can see progress via polling
-    let jobId: number | null = null;
     try {
-      const startResp = await fetch('/api/admin/wsq-schedule-sync/start-job', {
+      const resp = await fetch('/api/admin/wsq-schedule-sync/run-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ total_items: items.length, triggered_by: 'user' }),
+        body: JSON.stringify({ items, triggered_by: 'user' }),
       });
-      const startJson = await startResp.json();
-      if (startResp.status === 409) {
-        // A job is already running — attach to it instead of blocking
-        jobId = startJson.job_id ?? null;
-      } else if (!startResp.ok) {
-        setNotice(`Could not start sync job: ${startJson.error || startResp.status}`);
-        setSyncing(false);
+      const json = await resp.json();
+      if (resp.status === 409) {
+        setNotice('A sync is already running — tracking its progress.');
+        startPolling();
         return;
-      } else {
-        jobId = startJson.job_id;
       }
-    } catch { /* non-fatal — proceed without DB job tracking */ }
-
-    // Start polling so other users see live updates
-    startPolling();
-
-    setSyncProgress({ currentBatch: 0, totalBatches, itemsDone: 0, totalItems: items.length, submitted: 0, errors: 0 });
-
-    try {
-      for (let i = 0; i < items.length; i += BATCH) {
-        const batchNum = Math.floor(i / BATCH) + 1;
-        const batch = items.slice(i, i + BATCH);
-        const isLastBatch = i + BATCH >= items.length;
-
-        const resp = await fetch('/api/admin/wsq-schedule-sync/submit-to-ssg', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: batch, job_id: jobId, is_last_batch: isLastBatch }),
-        });
-        const json = await resp.json();
-
-        if (!resp.ok) {
-          setNotice(`Sync failed on batch ${batchNum}: ${json.error || resp.status}`);
-          return;
-        }
-
-        const s = json.summary || {};
-        submitted += s.submitted ?? 0;
-        exists    += s.exists    ?? 0;
-        ssgError  += s.ssg_error ?? 0;
-        skipped   += s.error     ?? 0;
-
-        const batchResults: ItemResult[] = json.results || [];
-        allResults.push(...batchResults);
-
-        // Per-row inline feedback (local — fast, no round-trip)
-        setRowResults((prev) => {
-          const next = new Map(prev);
-          for (const r of batchResults) next.set(`${r.course_code}|${r.start_date}`, r);
-          return next;
-        });
-
-        setSyncProgress({
-          currentBatch: batchNum,
-          totalBatches,
-          itemsDone: Math.min(i + BATCH, items.length),
-          totalItems: items.length,
-          submitted,
-          errors: ssgError + skipped,
-        });
+      if (!resp.ok) {
+        setNotice(`Could not start sync: ${json.error || resp.status}`);
+        return;
       }
-
-      setSyncResults(allResults);
-      const parts: string[] = [];
-      if (submitted) parts.push(`${submitted} submitted to SSG`);
-      if (exists)    parts.push(`${exists} already existed`);
-      if (ssgError)  parts.push(`${ssgError} SSG errors`);
-      if (skipped)   parts.push(`${skipped} skipped`);
-      setNotice(parts.join(' · ') + '.');
-      void load(true);
+      // Job created on server — poll for live progress
+      startPolling();
+      await fetchJobs();
     } catch (e: any) {
-      setNotice(`Sync failed: ${e?.message || e}`);
+      setNotice(`Sync failed to start: ${e?.message || e}`);
     } finally {
       setSyncing(false);
-      setSyncProgress(null);
-      // Final poll so sharedJob reflects completed state
-      stopPolling();
-      await fetchJobs();
     }
   };
 
@@ -330,6 +248,8 @@ const stopPolling = useCallback(() => {
     );
   };
 
+  const isJobRunning = syncing || allJobs[0]?.status === 'running';
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -342,10 +262,10 @@ const stopPolling = useCallback(() => {
         <div className="flex gap-2">
           <button
             onClick={syncAll}
-            disabled={syncing || totalSyncable === 0}
+            disabled={isJobRunning || totalSyncable === 0}
             className="px-3 py-2 text-sm rounded-md text-white hover:opacity-90 disabled:opacity-50 bg-primary"
           >
-            {syncing ? 'Syncing…' : `Sync All to SSG (${totalSyncable})`}
+            {isJobRunning ? 'Syncing…' : `Sync All to SSG (${totalSyncable})`}
           </button>
           <button
             onClick={() => load(true)}
@@ -498,38 +418,6 @@ const stopPolling = useCallback(() => {
         </div>
       )}
 
-      {/* Submitted-runs summary — shows SSG run IDs so admins can verify */}
-      {syncResults.length > 0 && (() => {
-        const submitted = syncResults.filter((r) => r.status === 'submitted' && r.ssg_run_id);
-        const existed   = syncResults.filter((r) => r.status === 'exists'    && r.ssg_run_id);
-        if (submitted.length === 0 && existed.length === 0) return null;
-        return (
-          <div className="rounded-md border border-green-200 dark:border-green-800 overflow-hidden">
-            <div className="px-4 py-2 bg-green-50 dark:bg-green-900/30 border-b border-green-200 dark:border-green-800 flex justify-between items-center">
-              <span className="text-sm font-medium text-green-800 dark:text-green-200">
-                Submitted run IDs
-              </span>
-              <button onClick={() => setSyncResults([])} className="text-xs underline text-on-surface-secondary">dismiss</button>
-            </div>
-            <div className="divide-y divide-green-100 dark:divide-green-900/40 max-h-64 overflow-y-auto">
-              {submitted.map((r, i) => (
-                <div key={i} className="px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                  <span className="font-mono font-medium text-on-surface">{r.course_code}</span>
-                  <span className="font-mono text-on-surface-secondary">{r.start_date} → {r.end_date}</span>
-                  <span className="text-green-600 dark:text-green-400 font-mono font-semibold">✓ {r.ssg_run_id}</span>
-                </div>
-              ))}
-              {existed.map((r, i) => (
-                <div key={`e${i}`} className="px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                  <span className="font-mono font-medium text-on-surface">{r.course_code}</span>
-                  <span className="font-mono text-on-surface-secondary">{r.start_date} → {r.end_date}</span>
-                  <span className="text-blue-600 dark:text-blue-400 font-mono">○ {r.ssg_run_id} (already existed)</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
 
       {data && (
         <>
@@ -578,8 +466,7 @@ const stopPolling = useCallback(() => {
               const syncableCount = g.rows.filter((r) => r.start_date && r.end_date).length;
               const erroredCount  = g.rows.filter((r) =>
                 r.status === 'missing_in_ssg' && r.start_date &&
-                failedAttempts.has(`${g.course_code}|${r.start_date}`) &&
-                !rowResults.has(`${g.course_code}|${r.start_date}`),
+                failedAttempts.has(`${g.course_code}|${r.start_date}`),
               ).length;
               return (
                 <div key={g.course_code} className="bg-surface rounded-md border border-default overflow-hidden">
@@ -604,7 +491,7 @@ const stopPolling = useCallback(() => {
                       {syncableCount > 0 && (
                         <button
                           onClick={(e) => { e.stopPropagation(); syncCourse(g); }}
-                          disabled={syncing}
+                          disabled={isJobRunning}
                           className="ml-2 px-2 py-1 text-xs rounded-md text-white bg-primary hover:opacity-90 disabled:opacity-50"
                         >
                           {`Sync to SSG (${syncableCount})`}
@@ -628,7 +515,7 @@ const stopPolling = useCallback(() => {
                       <tbody>
                         {g.rows.map((r, i) => {
                           const rowKey = `${g.course_code}|${r.start_date}`;
-                          const lastError = !rowResults.has(rowKey) && r.status === 'missing_in_ssg'
+                          const lastError = r.status === 'missing_in_ssg'
                             ? failedAttempts.get(rowKey)
                             : undefined;
                           return (
@@ -645,37 +532,12 @@ const stopPolling = useCallback(() => {
                             </td>
                             <td className="px-4 py-2">
                               {(() => {
-                                const rowResult = rowResults.get(rowKey);
-                                if (rowResult) {
-                                  if (rowResult.status === 'submitted') {
-                                    return (
-                                      <span className="text-xs text-green-600 dark:text-green-400 font-mono" title="Submitted to SSG">
-                                        ✓ {rowResult.ssg_run_id}
-                                      </span>
-                                    );
-                                  }
-                                  if (rowResult.status === 'exists') {
-                                    return (
-                                      <span className="text-xs text-blue-600 dark:text-blue-400 font-mono">
-                                        ○ {rowResult.ssg_run_id || 'Already exists'}
-                                      </span>
-                                    );
-                                  }
-                                  return (
-                                    <span
-                                      className="text-xs text-red-600 dark:text-red-400 cursor-help"
-                                      title={rowResult.message || rowResult.status}
-                                    >
-                                      ✗ {rowResult.status.replace(/_/g, ' ')}
-                                    </span>
-                                  );
-                                }
                                 if (r.status === 'missing_in_ssg') {
                                   return (
                                     <div className="flex flex-col gap-1 items-start">
                                       <button
                                         onClick={() => syncRow(g, r)}
-                                        disabled={syncing}
+                                        disabled={isJobRunning}
                                         className="px-2 py-1 text-xs rounded-md bg-primary text-white hover:opacity-90 disabled:opacity-50"
                                       >
                                         {lastError ? 'Retry sync' : 'Sync to SSG'}

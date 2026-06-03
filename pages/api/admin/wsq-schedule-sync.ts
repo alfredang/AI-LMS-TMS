@@ -190,8 +190,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         countUnparsed++;
         return [{ source: 'magento' as const, raw: s.raw, start_date: s.course_start_date, end_date: s.course_end_date, status: 'unparsed' as const }];
       }
-      // Hide schedules that have already ended.
+      // Hide schedules that have already ended or already started —
+      // SSG rejects runs whose start date is in the past.
       if (s.course_end_date < today) return [];
+      if (s.course_start_date && s.course_start_date < today) return [];
       // Normalise Magento dates to YYYY-MM-DD (strip any trailing time component).
       // DB dates come from to_char() so are already clean strings.
       const mStart = s.course_start_date?.slice(0, 10) ?? null;
