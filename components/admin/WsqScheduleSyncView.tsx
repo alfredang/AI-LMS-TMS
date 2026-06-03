@@ -334,6 +334,22 @@ const stopPolling = useCallback(() => {
                 {job.submitted > 0 && <span className="text-green-600 dark:text-green-400">{job.submitted} submitted</span>}
                 {job.already_exists > 0 && <span>{job.already_exists} existed</span>}
                 {(job.ssg_errors + job.skipped) > 0 && <span className="text-red-500 dark:text-red-400">{job.ssg_errors + job.skipped} errors</span>}
+                {isRunning && (
+                  <button
+                    onClick={async () => {
+                      await fetch('/api/admin/wsq-schedule-sync/cancel-job', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ job_id: job.id }),
+                      });
+                      stopPolling();
+                      await fetchJobs();
+                    }}
+                    className="px-2 py-0.5 rounded border border-red-300 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+                  >
+                    Cancel sync
+                  </button>
+                )}
               </div>
             </div>
             {isRunning && job.total_items > 0 && (
