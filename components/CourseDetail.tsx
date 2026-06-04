@@ -321,6 +321,7 @@ const AssessmentsSection: React.FC<{
     const [linkSubmissions, setLinkSubmissions] = useState<LinkSubmission[]>([]);
     const [selectedLinkFiles, setSelectedLinkFiles] = useState<Record<string, File[]>>({});
     const [isLinkUploading, setIsLinkUploading] = useState<Record<string, boolean>>({});
+    const [linkUploadSuccess, setLinkUploadSuccess] = useState<Record<string, boolean>>({});
     const [linkUploadProgress, setLinkUploadProgress] = useState<Record<string, number>>({});
     const [isLinkResubmitting, setIsLinkResubmitting] = useState<Record<string, boolean>>({});
 
@@ -447,6 +448,12 @@ const AssessmentsSection: React.FC<{
 
             const fileInput = document.getElementById(`link-file-upload-${assessmentType}`) as HTMLInputElement;
             if (fileInput) fileInput.value = '';
+
+            // Show "uploaded successfully" confirmation, auto-clear after 5s
+            setLinkUploadSuccess(prev => ({ ...prev, [assessmentType]: true }));
+            setTimeout(() => {
+                setLinkUploadSuccess(prev => ({ ...prev, [assessmentType]: false }));
+            }, 5000);
 
         } catch (error: any) {
             alert(`Upload failed: ${error.message || 'Please try again.'}`);
@@ -1019,6 +1026,9 @@ const AssessmentsSection: React.FC<{
                                             </div>
                                         </div>
                                     )}
+                                    {linkUploadSuccess['written'] && !isLinkUploading['written'] && (
+                                        <p className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">✓ File uploaded successfully</p>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -1135,6 +1145,9 @@ const AssessmentsSection: React.FC<{
                                                 <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your file...</p>
                                             </div>
                                         </div>
+                                    )}
+                                    {linkUploadSuccess['practical'] && !isLinkUploading['practical'] && (
+                                        <p className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">✓ File uploaded successfully</p>
                                     )}
                                 </div>
                             </div>
@@ -1254,6 +1267,9 @@ const AssessmentsSection: React.FC<{
                                                     <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Uploading your file...</p>
                                                 </div>
                                             </div>
+                                        )}
+                                        {linkUploadSuccess[methodKey] && !isLinkUploading[methodKey] && (
+                                            <p className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">✓ File uploaded successfully</p>
                                         )}
                                     </div>
                                 </div>
