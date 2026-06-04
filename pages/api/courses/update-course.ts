@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
 import { IncomingForm, File as FormidableFile } from 'formidable';
 import fs from 'fs';
 import path from 'path';
@@ -544,8 +545,8 @@ export default async function handler(
         courseData.afterMcesFunding || null,
         !!courseData.isUtapEligible,
         courseData.renewedStatus || null,
-        (fileUrls.writtenAssessmentLink || courseData.writtenAssessmentLink) ?? null,
-        (fileUrls.practicalPerformanceAssessmentLink || courseData.practicalPerformanceAssessmentLink) ?? null,
+        sanitizeGoogleLink(fileUrls.writtenAssessmentLink || courseData.writtenAssessmentLink) || null,
+        sanitizeGoogleLink(fileUrls.practicalPerformanceAssessmentLink || courseData.practicalPerformanceAssessmentLink) || null,
         courseData.courseLink ?? null,
         courseData.brochureLink ?? null,
         courseData.skillsfutureLink ?? null,
@@ -563,10 +564,18 @@ export default async function handler(
       // Use SAVEPOINT so a failure doesn't abort the entire transaction
       if (courseData.assessmentMethods) {
         try {
+          // Sanitize each method's link so multi-account Google share URLs
+          // (ouid / /u/<n>/) don't break for trainers and learners.
+          const sanitizedMethods = Object.fromEntries(
+            Object.entries(courseData.assessmentMethods).map(([key, method]) => [
+              key,
+              { ...method, link: sanitizeGoogleLink(method.link) },
+            ])
+          );
           await client.query('SAVEPOINT update_assessment_methods');
           await client.query(
             'UPDATE course SET assessment_methods = $1::jsonb WHERE id = $2',
-            [JSON.stringify(courseData.assessmentMethods), courseId]
+            [JSON.stringify(sanitizedMethods), courseId]
           );
           await client.query('RELEASE SAVEPOINT update_assessment_methods');
           console.log('✅ assessment_methods updated successfully');
