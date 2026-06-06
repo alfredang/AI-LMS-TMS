@@ -75,6 +75,55 @@ const ReadonlyValueField: React.FC<{ label: string; value?: React.ReactNode }> =
     </div>
 );
 
+// Chevron used by the developer-view collapsible section headers / side nav.
+const SectionChevron: React.FC<{ open: boolean; className?: string }> = ({ open, className }) => (
+    <svg
+        className={`w-5 h-5 flex-shrink-0 text-gray-400 transition-transform ${open ? 'rotate-90' : ''} ${className || ''}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+        aria-hidden="true"
+    >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+);
+
+// Wraps a course-editor section in a Card with an anchor id. When `collapsible`
+// is true (developer view) the header becomes a toggle button; otherwise it
+// renders exactly as before so other roles are unaffected.
+const CollapsibleSection: React.FC<{
+    id: string;
+    title: string;
+    collapsible: boolean;
+    collapsed: boolean;
+    onToggle: (id: string) => void;
+    cardClassName?: string;
+    children: React.ReactNode;
+}> = ({ id, title, collapsible, collapsed, onToggle, cardClassName, children }) => {
+    const open = !collapsible || !collapsed;
+    return (
+        <div id={`section-${id}`} className="scroll-mt-6">
+            <Card className={`p-6 dark:bg-gray-800 dark:border-gray-700 ${cardClassName || ''}`}>
+                {collapsible ? (
+                    <button
+                        type="button"
+                        onClick={() => onToggle(id)}
+                        aria-expanded={open}
+                        className="group flex w-full items-center justify-between gap-2 text-left"
+                    >
+                        <h3 className="text-xl font-bold dark:text-white">{title}</h3>
+                        <SectionChevron open={open} className="group-hover:text-gray-600 dark:group-hover:text-gray-200" />
+                    </button>
+                ) : (
+                    <h3 className="text-xl font-bold mb-4 dark:text-white">{title}</h3>
+                )}
+                {open && <div className={collapsible ? 'mt-4' : ''}>{children}</div>}
+            </Card>
+        </div>
+    );
+};
+
 
 // Sub-component for an editable Learning Unit (Topic)
 const EditableTopicAccordion: React.FC<{
@@ -530,6 +579,37 @@ const CourseEditor: React.FC = () => {
     const [collapseAllSignal, setCollapseAllSignal] = useState(0);
     const [expandAllSignal, setExpandAllSignal] = useState(0);
     const [allTopicsCollapsed, setAllTopicsCollapsed] = useState(false);
+
+    // Developer-only: each editor section is collapsible and reachable via the
+    // side nav. A section id present in this set is collapsed (default: all open).
+    const isDeveloperView = role === UserRole.Developer;
+    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+    const toggleSection = (id: string) => setCollapsedSections(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+    });
+    const scrollToSection = (id: string) => {
+        // Expand before scrolling so the target is in its final position.
+        setCollapsedSections(prev => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+        document.getElementById(`section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    // Side-nav entries, matching exactly which sections this role renders.
+    const navSections = [
+        { id: 'course-details', label: 'Course Details', show: true },
+        { id: 'learning-outcomes', label: 'Learning Outcomes', show: role !== UserRole.Admin },
+        { id: 'courseware', label: 'Courseware', show: true },
+        { id: 'assessment-methods', label: 'Assessment Methods', show: role === UserRole.Admin || role === UserRole.Trainer || role === UserRole.Developer },
+        { id: 'approved-trainers', label: 'Approved Trainers', show: role === UserRole.Admin || role === UserRole.Developer },
+        { id: 'lesson', label: 'Lesson', show: role === UserRole.Developer },
+        { id: 'pricing', label: 'Pricing & Funding', show: role === UserRole.Admin },
+        { id: 'course-settings', label: 'Course Settings', show: true },
+    ].filter(s => s.show);
 
     // Use courseEditMode to determine if this is a new course, with fallback to ID check
     // If course has a real database ID (not starting with 'course_'), it's definitely existing
@@ -1708,8 +1788,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
                 {/* Left Column: Course Details */}
                 <div className="md:col-span-1 xl:col-span-1 space-y-6 xl:sticky xl:top-6">
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Course Details</h3>
+                    <CollapsibleSection
+                        id="course-details"
+                        title="Course Details"
+                        collapsible={isDeveloperView}
+                        collapsed={collapsedSections.has('course-details')}
+                        onToggle={toggleSection}
+                    >
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Course Image</label>
@@ -1916,19 +2001,50 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 </select>
                             </div>
                         </div>
-                    </Card>
+                    </CollapsibleSection>
+                    {isDeveloperView && (
+                        <Card className="p-4 dark:bg-gray-800 dark:border-gray-700">
+                            <h4 className="px-2 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Sections</h4>
+                            <nav className="space-y-0.5">
+                                {navSections.map(s => {
+                                    const open = !collapsedSections.has(s.id);
+                                    return (
+                                        <button
+                                            key={s.id}
+                                            type="button"
+                                            onClick={() => scrollToSection(s.id)}
+                                            className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors"
+                                        >
+                                            <span className="truncate">{s.label}</span>
+                                            <span className={`flex-shrink-0 text-[10px] ${open ? 'text-gray-300 dark:text-gray-600' : 'text-gray-400'}`}>{open ? '▾' : '▸'}</span>
+                                        </button>
+                                    );
+                                })}
+                            </nav>
+                        </Card>
+                    )}
                 </div>
 
                 {/* Right Column: Content Sections */}
                 <div className="md:col-span-1 xl:col-span-2 space-y-6">
                     {role !== UserRole.Admin && (
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-3">Learning Outcomes</h3>
+                        <CollapsibleSection
+                            id="learning-outcomes"
+                            title="Learning Outcomes"
+                            collapsible={isDeveloperView}
+                            collapsed={collapsedSections.has('learning-outcomes')}
+                            onToggle={toggleSection}
+                        >
                             <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..." />
-                        </Card>
+                        </CollapsibleSection>
                     )}
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4">Courseware</h3>
+                    <CollapsibleSection
+                        id="courseware"
+                        title="Courseware"
+                        collapsible={isDeveloperView}
+                        collapsed={collapsedSections.has('courseware')}
+                        onToggle={toggleSection}
+                    >
                         <div className="space-y-4">
                             <div>
                                 <label htmlFor="lessonPlanUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Lesson Plan URL</label>
@@ -2053,11 +2169,16 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                         </div>
-                    </Card>
+                    </CollapsibleSection>
 
                     {(role === UserRole.Admin || role === UserRole.Trainer || role === UserRole.Developer) && (
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4">Assessment Methods</h3>
+                    <CollapsibleSection
+                        id="assessment-methods"
+                        title="Assessment Methods"
+                        collapsible={isDeveloperView}
+                        collapsed={collapsedSections.has('assessment-methods')}
+                        onToggle={toggleSection}
+                    >
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Select the assessment methods for this course. A link field will appear for each selected method.</p>
                         <div className="space-y-3">
                             {(Object.keys(ASSESSMENT_METHOD_LABELS) as AssessmentMethodKey[]).map((methodKey) => {
@@ -2095,12 +2216,17 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 );
                             })}
                         </div>
-                    </Card>
+                    </CollapsibleSection>
                     )}
 
                     {(role === UserRole.Admin || role === UserRole.Developer) && (
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-4 dark:text-white">Approved Trainers</h3>
+                        <CollapsibleSection
+                            id="approved-trainers"
+                            title="Approved Trainers"
+                            collapsible={isDeveloperView}
+                            collapsed={collapsedSections.has('approved-trainers')}
+                            onToggle={toggleSection}
+                        >
                             <div className="space-y-4">
                                 <div>
                                     <label htmlFor="trainerSearch" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Add Trainer</label>
@@ -2176,16 +2302,24 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     )}
                                 </div>
                             </div>
-                        </Card>
+                        </CollapsibleSection>
                     )}
 
                     {role === UserRole.Developer && (
-                        <div className="space-y-4">
+                        <div id="section-lesson" className="space-y-4 scroll-mt-6">
                             {/* Lesson header row — the save buttons are mirrored here
                                 so developers can save without scrolling back up to
                                 the top of the page after editing topics/resources. */}
                             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-                                <h3 className="text-xl font-bold">Lesson</h3>
+                                <button
+                                    type="button"
+                                    onClick={() => toggleSection('lesson')}
+                                    aria-expanded={!collapsedSections.has('lesson')}
+                                    className="group flex items-center gap-2 text-left"
+                                >
+                                    <h3 className="text-xl font-bold">Lesson</h3>
+                                    <SectionChevron open={!collapsedSections.has('lesson')} className="group-hover:text-gray-600 dark:group-hover:text-gray-200" />
+                                </button>
                                 {!isReadOnly && (
                                     <div className="flex flex-wrap items-center gap-2">
                                         <Button
@@ -2214,6 +2348,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     </div>
                                 )}
                             </div>
+                            {!collapsedSections.has('lesson') && (
+                            <>
                             {course.topics.map(topic => (
                                 <div
                                     key={topic.id}
@@ -2259,12 +2395,19 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 dark:!border-gray-600 hover:!border-primary !text-subtle hover:!text-primary">
                                 + Add Learning Unit
                             </Button>
+                            </>
+                            )}
                         </div>
                     )}
 
                     {(role === UserRole.Admin) && (
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-4 dark:text-white">Pricing & Funding</h3>
+                        <CollapsibleSection
+                            id="pricing"
+                            title="Pricing & Funding"
+                            collapsible={isDeveloperView}
+                            collapsed={collapsedSections.has('pricing')}
+                            onToggle={toggleSection}
+                        >
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <div>
                                     <label htmlFor="scheduleId" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Schedule ID</label>
@@ -2322,11 +2465,16 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     </div>
                                 </div>
                             </div>
-                        </Card>
+                        </CollapsibleSection>
                     )}
 
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Course Settings</h3>
+                    <CollapsibleSection
+                        id="course-settings"
+                        title="Course Settings"
+                        collapsible={isDeveloperView}
+                        collapsed={collapsedSections.has('course-settings')}
+                        onToggle={toggleSection}
+                    >
                         <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                             <div>
                                 <p className="font-semibold text-sm">Enable Gaming Leaderboard</p>
@@ -2342,7 +2490,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </button>
                         </div>
-                    </Card>
+                    </CollapsibleSection>
                 </div>
             </div>
             )}
