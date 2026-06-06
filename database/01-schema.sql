@@ -3006,7 +3006,8 @@ CREATE TABLE public.training_provider (
     da_invoice_email_bcc text,
     show_lesson_plan_learner_view boolean DEFAULT false NOT NULL,
     feedback_form_enabled boolean DEFAULT false NOT NULL,
-    feedback_form_external_link text
+    feedback_form_external_link text,
+    briefing_on_assessment text
 );
 
 --

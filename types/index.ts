@@ -22,6 +22,7 @@ export enum View {
   CertificateEmailTemplate = 'certificateEmailTemplate',
   FeedbackEmailTemplate = 'feedbackEmailTemplate',
   PasswordResetEmailTemplate = 'passwordResetEmailTemplate',
+  BriefingOnAssessmentTemplate = 'briefingOnAssessmentTemplate',
   TrainerInvitationEmailTemplate = 'trainerInvitationEmailTemplate',
   TrainerResponseEmailTemplates = 'trainerResponseEmailTemplates',
   FinalCourseConfirmationEmailTemplate = 'finalCourseConfirmationEmailTemplate',
@@ -429,6 +430,7 @@ export interface TrainingProviderProfile {
   certificateDeliveryLink?: string;
   feedbackFormEnabled?: boolean;
   feedbackFormExternalLink?: string;
+  briefingOnAssessment?: string;
 }
 
 export interface CurrentUserProfile {

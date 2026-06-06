@@ -14,7 +14,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const { currentView, handleNavigation, selectedCourse, adminPage, setAdminPage } = useLms();
     const appVersion = useAppVersion();
 
-    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.CoursewareAttendanceEmailTemplate, View.CourseCompletionEmailTemplate, View.ProformaInvoiceEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
+    const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.BriefingOnAssessmentTemplate, View.TrainerInvitationEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.CoursewareAttendanceEmailTemplate, View.CourseCompletionEmailTemplate, View.ProformaInvoiceEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
     const cronJobsViews = [View.Scheduler, View.SchedulerSummary];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
     const [workflowsOpen, setWorkflowsOpen] = useState(currentView === View.WorkflowGuides);
@@ -70,6 +70,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
         { view: View.CertificateEmailTemplate, label: 'Certificate Email', icon: IconName.Award },
         { view: View.FeedbackEmailTemplate, label: 'Feedback Email', icon: IconName.Chat },
         { view: View.PasswordResetEmailTemplate, label: 'Password Reset Email', icon: IconName.Shield },
+        { view: View.BriefingOnAssessmentTemplate, label: 'Briefing on Assessment', icon: IconName.ClipboardCheck },
         { view: View.TrainerInvitationEmailTemplate, label: 'Trainer Invitation Email', icon: IconName.Send },
         { view: View.TrainerResponseEmailTemplates, label: 'Trainer Accept/Decline Email', icon: IconName.Mail },
         { view: View.FinalCourseConfirmationEmailTemplate, label: 'Final Class Confirm Email', icon: IconName.Send },

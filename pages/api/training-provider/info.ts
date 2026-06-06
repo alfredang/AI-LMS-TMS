@@ -53,7 +53,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.certificate_delivery_label,
           tp.certificate_delivery_link,
           tp.feedback_form_enabled,
-          tp.feedback_form_external_link
+          tp.feedback_form_external_link,
+          tp.briefing_on_assessment
         FROM training_provider_member tpm
         JOIN training_provider tp ON tpm.provider_id = tp.id
         WHERE tpm.user_id = $1
@@ -82,7 +83,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.certificate_delivery_label,
           tp.certificate_delivery_link,
           tp.feedback_form_enabled,
-          tp.feedback_form_external_link
+          tp.feedback_form_external_link,
+          tp.briefing_on_assessment
           FROM training_provider tp
           WHERE tp.id = $1
         `, [userId]);
@@ -111,7 +113,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.certificate_delivery_label,
           tp.certificate_delivery_link,
           tp.feedback_form_enabled,
-          tp.feedback_form_external_link
+          tp.feedback_form_external_link,
+          tp.briefing_on_assessment
           FROM provider_admin_user pau
           JOIN training_provider tp ON pau.provider_id = tp.id
           WHERE pau.user_id = $1
@@ -182,6 +185,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           certificateDeliveryLink: trainingProvider.certificate_delivery_link || 'https://goo.gl/R2eumq',
       feedbackFormEnabled: trainingProvider.feedback_form_enabled || false,
       feedbackFormExternalLink: trainingProvider.feedback_form_external_link || '',
+      briefingOnAssessment: trainingProvider.briefing_on_assessment || '',
           privacyPolicy: privacyPolicy || null,
           acceptableUsePolicy: acceptableUsePolicy || null,
           virtualMeetingProvider,
@@ -234,7 +238,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.certificate_delivery_label,
           tp.certificate_delivery_link,
           tp.feedback_form_enabled,
-          tp.feedback_form_external_link
+          tp.feedback_form_external_link,
+          tp.briefing_on_assessment
         FROM user_role_map urm
         JOIN app_user au ON au.id = urm.user_id
         CROSS JOIN training_provider tp
@@ -280,6 +285,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         certificateDeliveryLink: 'https://goo.gl/R2eumq',
         feedbackFormEnabled: false,
         feedbackFormExternalLink: '',
+        briefingOnAssessment: '',
         privacyPolicy: null,
         acceptableUsePolicy: null
       };
@@ -332,6 +338,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       certificateDeliveryLink: trainingProvider.certificate_delivery_link || 'https://goo.gl/R2eumq',
       feedbackFormEnabled: trainingProvider.feedback_form_enabled || false,
       feedbackFormExternalLink: trainingProvider.feedback_form_external_link || '',
+      briefingOnAssessment: trainingProvider.briefing_on_assessment || '',
       privacyPolicy: fallbackPrivacyPolicy || null,
       acceptableUsePolicy: fallbackAcceptableUsePolicy || null,
       virtualMeetingProvider: fallbackVirtualMeetingProvider

@@ -44,6 +44,7 @@ const TP_ITEMS: TpItem[] = [
   { id: 'email-certificate', label: 'Certificate Email', section: 'Email Templates', view: View.CertificateEmailTemplate },
   { id: 'email-feedback', label: 'Feedback Email', section: 'Email Templates', view: View.FeedbackEmailTemplate },
   { id: 'email-password-reset', label: 'Password Reset Email', section: 'Email Templates', view: View.PasswordResetEmailTemplate },
+  { id: 'briefing-on-assessment', label: 'Briefing on Assessment', section: 'Email Templates', view: View.BriefingOnAssessmentTemplate },
   { id: 'email-trainer-invite', label: 'Trainer Invitation Email', section: 'Email Templates', view: View.TrainerInvitationEmailTemplate },
   { id: 'email-trainer-response', label: 'Trainer Accept/Decline Email', section: 'Email Templates', view: View.TrainerResponseEmailTemplates },
   { id: 'email-final-confirm', label: 'Final Class Confirm Email', section: 'Email Templates', view: View.FinalCourseConfirmationEmailTemplate },

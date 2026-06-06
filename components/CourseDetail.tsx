@@ -93,6 +93,16 @@ interface Course {
 // --- Utility Functions ---
 const toId = (label: string) => label.toLowerCase().replace(/ /g, '-');
 
+// Standard assessment briefing shown when a course developer hasn't set custom text.
+const DEFAULT_ASSESSMENT_BRIEFING = [
+    'Place phones & other materials under the table or on the floor',
+    'No photos or recording of assessment scripts',
+    'No discussion during assessment',
+    'Use black/blue pen for assessment [hard copies]',
+    'No usage of liquid paper or correction tape',
+    'Assessment scripts will be collected when the time is up',
+];
+
 const inferVirtualMeetingProvider = (link?: string | null): 'google_meet' | 'zoom' | 'teams' | null => {
     if (!link) return null;
     const normalized = link.toLowerCase();
@@ -1962,6 +1972,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "Learner Slides", icon: IconName.FileText },
         { type: 'link', label: "Lesson", icon: IconName.BookOpen },
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
+        { type: 'link', label: "Briefing on Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Announcements", icon: IconName.Bell },
         { type: 'link', label: "Certificate", icon: IconName.FileText },
@@ -1981,6 +1992,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'separator' },
         { type: 'link', label: "Lesson", icon: IconName.BookOpen },
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
+        { type: 'link', label: "Briefing on Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Grading", icon: IconName.Edit },
         { type: 'link', label: "Announcements", icon: IconName.Bell },
@@ -1996,7 +2008,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     if (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) {
         trainerNavItems = trainerNavItems.filter(item =>
             item.type === 'separator' ||
-            (item.label !== "TRAQOM Survey" && item.label !== "Grading")
+            (item.label !== "TRAQOM Survey" && item.label !== "Grading" && item.label !== "Briefing on Assessment")
         );
     } else if (userRole === UserRole.Trainer) {
         trainerNavItems = trainerNavItems.filter(item =>
@@ -3339,6 +3351,22 @@ export const CourseDetail: React.FC = () => {
                                             </div>
                                         )}
                                     </Card>
+                                </div>
+                            )}
+
+                            {/* Briefing on Assessment — Training-Provider template, shown to learners & trainers */}
+                            {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
+                                <div id={toId("Briefing on Assessment")}>
+                                    <ContentSection title="Briefing on Assessment" collapsible defaultOpen={false}>
+                                        <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300 list-disc pl-5">
+                                            {(trainingProviderProfile?.briefingOnAssessment && trainingProviderProfile.briefingOnAssessment.trim()
+                                                ? trainingProviderProfile.briefingOnAssessment.split('\n').map(line => line.trim()).filter(Boolean)
+                                                : DEFAULT_ASSESSMENT_BRIEFING
+                                            ).map((point, idx) => (
+                                                <li key={idx}>{point}</li>
+                                            ))}
+                                        </ul>
+                                    </ContentSection>
                                 </div>
                             )}
 
