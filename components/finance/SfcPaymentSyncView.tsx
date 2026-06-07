@@ -316,7 +316,7 @@ const SfcPaymentSyncView: React.FC = () => {
   };
 
   const selectAllReady = () => {
-    setSelectedIds(new Set(rows.filter((r) => r.match_status === 'ready').map((r) => r.id)));
+    setSelectedIds(new Set(filteredRows.filter((r) => r.match_status === 'ready').map((r) => r.id)));
   };
 
   const deselectAll = () => setSelectedIds(new Set());
