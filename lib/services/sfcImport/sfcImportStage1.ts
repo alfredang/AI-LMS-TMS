@@ -2,7 +2,6 @@ import * as XLSX from 'xlsx';
 import pool from '@/lib/db';
 import {
   requireSfcImportSchema,
-  insertSfcImportBatch,
   insertSfcImportRow,
   updateSfcImportBatchCounts,
   listAlreadyAppliedSfcClaimIds,
@@ -347,7 +346,13 @@ export async function sfcStage1ParseMatchAndPersist(input: {
     // - Non-DA: main invoice
     // - DA: supplemental SFC invoice (DocNumber SFC-CA-...), created later if missing
     let qboInvoiceId = isDa ? (daSfcInvoiceId ? String(daSfcInvoiceId) : null) : mainInvoiceId;
-    let qboDocNumber = isDa ? null : (mainDocNumber ? String(mainDocNumber) : null);
+    // For DA rows, derive the SFC invoice doc number from the application ID (SFC-{appId}) when the
+    // invoice ID is already stored — this avoids a QB API call on every re-upload while still
+    // showing the invoice number in the preview. On first upload (no stored ID) the QB search
+    // below fills this in from the live result.
+    let qboDocNumber = isDa
+      ? (daSfcInvoiceId && daApplicationId ? `SFC-${String(daApplicationId).trim().toUpperCase()}` : null)
+      : (mainDocNumber ? String(mainDocNumber) : null);
 
     // DA rows: if we don't have the supplemental invoice id stored yet, try to find the existing SFC-CA invoice in QB
     // so the preview can correctly show "QB paid" (balance=0) without requiring an FMS apply.
