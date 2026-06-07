@@ -1139,6 +1139,18 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const userId = currentUser.id; // Use currentUser from context instead of localStorage
 
+      // Resolve the role from the authoritative synchronous source (localStorage via
+      // authService) rather than the React `role` state. This callback can be invoked
+      // from a stale closure during URL restore on refresh/deep-link (restoreStateFromURL
+      // depends on [router.query], not [role]), where the closed-over `role` is still the
+      // default Learner before auth resolves. That made trainers hit the learner detail
+      // endpoint, which never returns facilitatorGuideUrl/trainerSlidesUrl/assessmentPlanUrl,
+      // so trainer courseware silently went missing on a refreshed/deep-linked tab.
+      // authService.getCurrentRole() is set during auth init and updated synchronously in
+      // switchRole(), so it is always at least as fresh as the React state — no extra
+      // network call, no added latency on role switch.
+      const effectiveRole = authService.getCurrentRole() || role;
+
       // Set the selected course first
       setSelectedCourse(course);
 
@@ -1155,7 +1167,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCertificate(null);
 
       // Check if user is a trainer and course has courseRunId
-      if (role === UserRole.Trainer && course.courseRunId) {
+      if (effectiveRole === UserRole.Trainer && course.courseRunId) {
         // Use trainer-specific API for course details
         const trainerResponse = await fetch(`/api/courses/trainer-detail?trainerUserId=${userId}&courseRunId=${course.courseRunId}`);
 
@@ -1242,7 +1254,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setCourseAssessments([]);
           }
         }
-      } else if (role === UserRole.Developer && course.id) {
+      } else if (effectiveRole === UserRole.Developer && course.id) {
         // Use developer-specific API for course details (using course ID, not course run ID)
         try {
           const detailResponse = await fetch(`/api/courses/developer-course-detail?courseId=${course.id}&_t=${Date.now()}`);
