@@ -636,7 +636,10 @@ const AllCourseRunsView: React.FC = () => {
     }
   };
 
-  const pageEnrolmentIds = rows.map((r) => r.enrolment_id).filter((id): id is string => !!id?.trim());
+  const pageEnrolmentIds = rows
+    .filter((r) => !String(r.enrolment_status || '').toLowerCase().includes('cancelled'))
+    .map((r) => r.enrolment_id)
+    .filter((id): id is string => !!id?.trim());
   const allPageSelected =
     pageEnrolmentIds.length > 0 && pageEnrolmentIds.every((id) => selectedEnrolmentIds.includes(id));
 
@@ -1148,6 +1151,7 @@ const AllCourseRunsView: React.FC = () => {
                 const enrId = r.enrolment_id?.trim() || null;
                 const isSelected = enrId ? selectedEnrolmentIds.includes(enrId) : false;
                 const isSent = !!(r.invoice_sent_at && String(r.invoice_sent_at).trim());
+                const isCancelled = String(r.enrolment_status || '').toLowerCase().includes('cancelled');
                 const fullyPaid = String(r.grant_payment_status || '').toUpperCase() === 'FULLY_PAID';
                 const rowTint = isSent
                   ? 'bg-emerald-50/60 dark:bg-emerald-950/25'
@@ -1170,7 +1174,7 @@ const AllCourseRunsView: React.FC = () => {
                         className="rounded border-default"
                         checked={isSelected}
                         onChange={() => toggleSelectEnrolment(enrId)}
-                        disabled={!enrId || loading || isSent}
+                        disabled={!enrId || loading || isSent || isCancelled}
                         aria-label={enrId ? `Select ${enrId}` : 'No enrolment id'}
                       />
                     </td>
