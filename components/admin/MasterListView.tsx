@@ -322,16 +322,17 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ message, details, onConfi
 interface InputCellProps {
   value: string;
   onChange: (v: string) => void;
-  onPasteGrid?: (text: string) => void;
+  onPasteGrid?: (grid: string[][]) => void;
   placeholder?: string;
   align?: 'left' | 'center';
   digitsOnly?: boolean;
   onFillAll?: (v: string) => void;
   bgColor?: CellBgColor;
   onBgColorChange?: (c: CellBgColor) => void;
+  rowSpan?: number;
 }
 
-const InputCell: React.FC<InputCellProps> = ({ value, onChange, onPasteGrid, placeholder = '', align = 'left', digitsOnly = false, onFillAll, bgColor = '', onBgColorChange }) => {
+const InputCell: React.FC<InputCellProps> = ({ value, onChange, onPasteGrid, placeholder = '', align = 'center', digitsOnly = false, onFillAll, bgColor = '', onBgColorChange, rowSpan }) => {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
   const colorMenuRef = useRef<HTMLDivElement>(null);
@@ -355,7 +356,7 @@ const InputCell: React.FC<InputCellProps> = ({ value, onChange, onPasteGrid, pla
   }, [colorMenuOpen]);
 
   return (
-    <td className={`relative px-1.5 py-1 border-r border-default last:border-r-0 group/cell ${align === 'center' ? 'text-center' : ''} ${BG_COLOR_CELL_CLASSES[bgColor]}`}>
+    <td rowSpan={rowSpan} className={`relative px-1.5 py-1 border-r border-default last:border-r-0 group/cell ${align === 'center' ? 'text-center' : ''} ${rowSpan && rowSpan > 1 ? 'align-middle bg-primary/[0.04] dark:bg-primary/[0.07]' : ''} ${BG_COLOR_CELL_CLASSES[bgColor]}`}>
       <textarea
         ref={taRef}
         value={value}
@@ -371,7 +372,7 @@ const InputCell: React.FC<InputCellProps> = ({ value, onChange, onPasteGrid, pla
           if (isGrid) {
             if (!onPasteGrid) return;
             e.preventDefault();
-            onPasteGrid(text);
+            onPasteGrid(extractClipboardGrid(e));
             return;
           }
           e.preventDefault();
@@ -432,7 +433,7 @@ interface LookupCellProps {
   value: string;
   onChange: (v: string) => void;
   onAutofill: (s: LearnerSuggestion) => void;
-  onPasteGrid?: (text: string) => void;
+  onPasteGrid?: (grid: string[][]) => void;
   placeholder?: string;
 }
 
@@ -481,7 +482,7 @@ const LookupCell: React.FC<LookupCellProps> = ({ value, onChange, onAutofill, on
             if (isGrid) {
               if (!onPasteGrid) return;
               e.preventDefault();
-              onPasteGrid(text);
+              onPasteGrid(extractClipboardGrid(e));
               return;
             }
             e.preventDefault();
@@ -494,7 +495,7 @@ const LookupCell: React.FC<LookupCellProps> = ({ value, onChange, onAutofill, on
           setTimeout(() => { if (el.value) search(el.value); }, 0);
         }}
         onFocus={() => suggestions.length > 0 && setOpen(true)}
-        className="w-full px-2 py-1 text-xs bg-transparent rounded focus:outline-none focus:bg-primary/5 focus:ring-1 focus:ring-primary/30 placeholder:text-on-surface-secondary/30"
+        className="w-full px-2 py-1 text-xs text-center bg-transparent rounded focus:outline-none focus:bg-primary/5 focus:ring-1 focus:ring-primary/30 placeholder:text-on-surface-secondary/30"
       />
       {open && suggestions.length > 0 && createPortal(
         <div
@@ -593,8 +594,8 @@ const TrainerLookupInput: React.FC<{
 
 // ─── Select cell ─────────────────────────────────────────────────────────────
 
-const SelectCell: React.FC<{ value: string; onChange: (v: string) => void; options: string[]; onPasteGrid?: (text: string) => void }> = ({ value, onChange, options, onPasteGrid }) => (
-  <td className="px-1.5 py-1 border-r border-default last:border-r-0 text-center">
+const SelectCell: React.FC<{ value: string; onChange: (v: string) => void; options: string[]; onPasteGrid?: (grid: string[][]) => void; rowSpan?: number }> = ({ value, onChange, options, onPasteGrid, rowSpan }) => (
+  <td rowSpan={rowSpan} className={`px-1.5 py-1 border-r border-default last:border-r-0 text-center ${rowSpan && rowSpan > 1 ? 'align-middle bg-primary/[0.04] dark:bg-primary/[0.07]' : ''}`}>
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
@@ -605,7 +606,7 @@ const SelectCell: React.FC<{ value: string; onChange: (v: string) => void; optio
         if (isGrid) {
           if (!onPasteGrid) return;
           e.preventDefault();
-          onPasteGrid(text);
+          onPasteGrid(extractClipboardGrid(e));
           return;
         }
         e.preventDefault();
@@ -866,22 +867,22 @@ const DateRangeCell: React.FC<{ value: string; onChange: (v: string) => void; on
 
 // ─── Column definitions ───────────────────────────────────────────────────────
 
-const COLUMNS: { key: TraineeField | '_no' | '_cancelled' | '_actions'; label: string; minW: string; placeholder?: string; align?: 'center'; digitsOnly?: boolean }[] = [
+const COLUMNS: { key: TraineeField | '_no' | '_cancelled' | '_actions'; label: string; minW: string; placeholder?: string; align?: 'center'; digitsOnly?: boolean; mergeable?: boolean }[] = [
   { key: '_no',               label: 'No.',                       minW: 'min-w-[2rem]',    align: 'center' },
   { key: 'name',              label: 'Name',                      minW: 'min-w-[8rem]',    placeholder: 'Full Name' },
   { key: 'contact_no',        label: 'Contact No.',               minW: 'min-w-[5rem]',    placeholder: '9XXXXXXX', digitsOnly: true },
   { key: 'email',             label: 'Email',                     minW: 'min-w-[10rem]',   placeholder: 'email@example.com' },
-  { key: 'magento_order_no',  label: 'Magento Order #',           minW: 'min-w-[7rem]',    placeholder: 'Order #' },
-  { key: 'virtual_reschedule',label: 'Virtual / Reschedule',      minW: 'min-w-[7rem]',    placeholder: 'Virtual' },
-  { key: 'comments',          label: 'Comments',                  minW: 'min-w-[8rem]',    placeholder: 'Comments' },
-  { key: 'date',              label: 'Date',                      minW: 'min-w-[6.5rem]',  placeholder: 'DD/MM/YYYY' },
-  { key: 'grant',             label: 'Grant (Yes/No)',            minW: 'min-w-[5rem]',    placeholder: '', align: 'center' },
-  { key: 'invoice_no',        label: 'Invoice No. / E-Invoice #', minW: 'min-w-[8.5rem]',  placeholder: 'TCXX-XXXX-XXXXXX' },
-  { key: 'payment_mode',      label: 'Payment Mode',              minW: 'min-w-[6.5rem]',  placeholder: 'e.g. PayNow' },
-  { key: 'course_fee',        label: 'Course Fee (excl. GST)',    minW: 'min-w-[7rem]',    placeholder: '$0.00' },
-  { key: 'payment_status',    label: 'Payment Status',            minW: 'min-w-[6.5rem]',  placeholder: 'Paid / Pending' },
-  { key: 'followup_by',       label: 'Followup By',               minW: 'min-w-[6.5rem]',  placeholder: 'Name' },
-  { key: 'remark',            label: 'Remark',                    minW: 'min-w-[8rem]',    placeholder: 'Remarks' },
+  { key: 'magento_order_no',  label: 'Magento Order #',           minW: 'min-w-[7rem]',    placeholder: 'Order #',           mergeable: true },
+  { key: 'virtual_reschedule',label: 'Virtual / Reschedule',      minW: 'min-w-[7rem]',    placeholder: 'Virtual',           mergeable: true },
+  { key: 'comments',          label: 'Comments',                  minW: 'min-w-[8rem]',    placeholder: 'Comments',          mergeable: true },
+  { key: 'date',              label: 'Date',                      minW: 'min-w-[6.5rem]',  placeholder: 'DD/MM/YYYY',        mergeable: true },
+  { key: 'grant',             label: 'Grant (Yes/No)',            minW: 'min-w-[5rem]',    placeholder: '', align: 'center', mergeable: true },
+  { key: 'invoice_no',        label: 'Invoice No. / E-Invoice #', minW: 'min-w-[8.5rem]',  placeholder: 'TCXX-XXXX-XXXXXX',  mergeable: true },
+  { key: 'payment_mode',      label: 'Payment Mode',              minW: 'min-w-[6.5rem]',  placeholder: 'e.g. PayNow',       mergeable: true },
+  { key: 'course_fee',        label: 'Course Fee (excl. GST)',    minW: 'min-w-[7rem]',    placeholder: '$0.00',             mergeable: true },
+  { key: 'payment_status',    label: 'Payment Status',            minW: 'min-w-[6.5rem]',  placeholder: 'Paid / Pending',    mergeable: true },
+  { key: 'followup_by',       label: 'Followup By',               minW: 'min-w-[6.5rem]',  placeholder: 'Name',              mergeable: true },
+  { key: 'remark',            label: 'Remark',                    minW: 'min-w-[8rem]',    placeholder: 'Remarks',           mergeable: true },
   { key: '_cancelled',        label: 'C/W',                       minW: 'min-w-[2.5rem]',  align: 'center' },
   { key: '_actions',          label: 'Remove',                    minW: 'min-w-[3rem]',    align: 'center' },
 ];
@@ -893,6 +894,57 @@ const COLUMNS: { key: TraineeField | '_no' | '_cancelled' | '_actions'; label: s
 const PASTE_TRAINEE_FIELDS = COLUMNS
   .map(c => c.key)
   .filter((key): key is TraineeField => key !== '_no' && key !== '_cancelled' && key !== '_actions');
+
+// Header-aware paste: when a pasted block's first row looks like spreadsheet headers,
+// we map each source column to a grid field by NAME (any order, extra columns ignored)
+// instead of by position. This is what makes "paste the whole sheet" work reliably.
+const normaliseHeader = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const HEADER_ALIASES: Record<TraineeField, string[]> = {
+  name: ['name', 'fullname', 'traineename', 'learnername', 'studentname', 'participant', 'participantname'],
+  contact_no: ['contactno', 'contact', 'contactnumber', 'phone', 'phoneno', 'mobile', 'mobileno', 'handphone', 'hp'],
+  email: ['email', 'emailaddress', 'mail', 'emailid'],
+  magento_order_no: ['magentoorderno', 'magentoorder', 'magentono', 'magento', 'orderno', 'ordernumber', 'order'],
+  virtual_reschedule: ['virtualreschedule', 'virtualorreschedule', 'virtual', 'reschedule'],
+  comments: ['comments', 'comment'],
+  date: ['date', 'classdate', 'coursedate', 'trainingdate', 'sessiondate'],
+  grant: ['grant', 'grantyesno', 'grantyn', 'funding', 'funded', 'sponsored', 'sponsorship'],
+  invoice_no: ['invoiceno', 'invoice', 'einvoice', 'einvoiceno', 'invoicenumber', 'invoicenoeinvoice'],
+  payment_mode: ['paymentmode', 'modeofpayment', 'paymentmethod', 'paymode'],
+  course_fee: ['coursefee', 'coursefeeexclgst', 'coursefees', 'feeexclgst', 'fee', 'amount', 'price'],
+  payment_status: ['paymentstatus', 'paystatus', 'status'],
+  followup_by: ['followupby', 'followup', 'followedupby', 'followupperson'],
+  remark: ['remark', 'remarks', 'notes', 'note'],
+};
+
+const matchHeaderToField = (raw: string): TraineeField | null => {
+  const n = normaliseHeader(raw);
+  if (!n) return null;
+  // Exact alias hit.
+  for (const field of PASTE_TRAINEE_FIELDS) {
+    if (HEADER_ALIASES[field].includes(n)) return field;
+  }
+  // Fuzzy: substring either way, but only for aliases long enough to be safe.
+  for (const field of PASTE_TRAINEE_FIELDS) {
+    if (HEADER_ALIASES[field].some(a => a.length >= 4 && (n.includes(a) || a.includes(n)))) return field;
+  }
+  return null;
+};
+
+// If the first row maps cleanly to ≥2 known headers (and a majority of its non-empty
+// cells), treat it as a header row → returns columnIndex → field. Otherwise null.
+const detectHeaderMap = (firstRow: string[]): Map<number, TraineeField> | null => {
+  const map = new Map<number, TraineeField>();
+  const used = new Set<TraineeField>();
+  let nonEmpty = 0;
+  firstRow.forEach((cell, i) => {
+    if (cell.trim() !== '') nonEmpty++;
+    const f = matchHeaderToField(cell);
+    if (f && !used.has(f)) { map.set(i, f); used.add(f); }
+  });
+  if (map.size >= 2 && map.size >= Math.ceil(nonEmpty / 2)) return map;
+  return null;
+};
 
 const parseClipboardGrid = (text: string): string[][] => {
   const normalised = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -942,6 +994,31 @@ const parseClipboardGrid = (text: string): string[][] => {
   return rows;
 };
 
+// Parse the HTML table that Sheets/Excel place on the clipboard. Rows and cells come
+// from <tr>/<td>, so a line break *inside* a cell can't split a row — unlike TSV text,
+// where an embedded newline in (say) a name cell breaks the row into two.
+const parseClipboardHtmlGrid = (html: string): string[][] | null => {
+  if (!html || typeof DOMParser === 'undefined') return null;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const trs = Array.from(doc.querySelectorAll('tr'));
+  if (trs.length === 0) return null;
+  const grid: string[][] = [];
+  for (const tr of trs) {
+    const cellEls = Array.from(tr.querySelectorAll('td, th'));
+    if (cellEls.length === 0) continue;
+    grid.push(cellEls.map(td => {
+      td.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+      return (td.textContent ?? '').replace(/\r\n/g, '\n').replace(/ /g, ' ').trim();
+    }));
+  }
+  return grid.length ? grid : null;
+};
+
+// Prefer the HTML grid; fall back to TSV text only when no HTML table is present.
+const extractClipboardGrid = (e: React.ClipboardEvent): string[][] =>
+  parseClipboardHtmlGrid(e.clipboardData.getData('text/html')) ??
+  parseClipboardGrid(e.clipboardData.getData('text'));
+
 // Decide whether a paste is a single-cell value (with possible internal line breaks)
 // or a real multi-cell grid paste. Sheets/Excel emit an HTML clipboard with one <td>
 // per source cell, which lets us tell the two apart:
@@ -990,12 +1067,14 @@ interface ClassBlockProps {
   onClassChange: (field: ClassField, value: string) => void;
   onTraineeChange: (traineeId: string, field: TraineeField, value: string | boolean) => void;
   onFillAll: (field: TraineeField, value: string) => void;
+  onMergedChange: (traineeIds: string[], field: TraineeField, value: string) => void;
+  mergeEnabled?: boolean;
   onAddTrainee: () => void;
   onRemoveTrainee: (traineeId: string) => void;
   onRemoveClass: () => void;
   onMoveClass: (targetTab: ClassTab) => void;
   onBulkAddTrainees: (trainees: { name: string; contact_no: string; email: string }[]) => void;
-  onPasteTraineeGrid: (traineeId: string, startField: TraineeField, text: string) => void;
+  onPasteTraineeGrid: (traineeId: string, startField: TraineeField, grid: string[][]) => void;
   onAddScheduleEntry: () => void;
   onScheduleEntryChange: (entryId: string, field: keyof Omit<ScheduleEntry, 'id'>, value: string | boolean) => void;
   onRemoveScheduleEntry: (entryId: string) => void;
@@ -1004,7 +1083,7 @@ interface ClassBlockProps {
 
 const ClassBlock: React.FC<ClassBlockProps> = ({
   classRun, activeTab, selectedDate, saving, searchQuery = '',
-  onClassChange, onTraineeChange, onFillAll,
+  onClassChange, onTraineeChange, onFillAll, onMergedChange, mergeEnabled = false,
   onAddTrainee, onRemoveTrainee, onRemoveClass, onMoveClass, onBulkAddTrainees,
   onPasteTraineeGrid,
   onAddScheduleEntry, onScheduleEntryChange, onRemoveScheduleEntry,
@@ -1034,6 +1113,37 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
     }
     return dups;
   }, [classRun.trainees]);
+
+  // Auto-merge: for each mergeable column, runs of ≥2 consecutive rows with the same
+  // non-empty value collapse into one cell. mergeMap[traineeId][colKey] = anchor|covered.
+  const mergeMap = useMemo(() => {
+    const result = new Map<string, Record<string, { role: 'anchor' | 'covered'; span?: number; ids?: string[] }>>();
+    if (!mergeEnabled) return result;
+    const trainees = classRun.trainees;
+    const put = (id: string, key: string, info: { role: 'anchor' | 'covered'; span?: number; ids?: string[] }) => {
+      if (!result.has(id)) result.set(id, {});
+      result.get(id)![key] = info;
+    };
+    for (const col of COLUMNS) {
+      if (!col.mergeable) continue;
+      const key = col.key as TraineeField;
+      let i = 0;
+      while (i < trainees.length) {
+        const val = String(trainees[i][key] ?? '').trim();
+        if (!val) { i++; continue; }
+        let j = i + 1;
+        while (j < trainees.length && String(trainees[j][key] ?? '').trim() === val) j++;
+        if (j - i >= 2) {
+          const ids = trainees.slice(i, j).map(t => t.id);
+          put(trainees[i].id, col.key, { role: 'anchor', span: j - i, ids });
+          for (let k = i + 1; k < j; k++) put(trainees[k].id, col.key, { role: 'covered' });
+        }
+        i = j;
+      }
+    }
+    return result;
+  }, [classRun.trainees, mergeEnabled]);
+
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [confirmDeleteRow, setConfirmDeleteRow] = useState<string | null>(null);
   const [confirmDeleteSession, setConfirmDeleteSession] = useState<string | null>(null);
@@ -1395,23 +1505,32 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                     <span className="text-on-surface-secondary">{idx + 1}</span>
                   )}
                 </td>
-                {(COLUMNS.filter(c => c.key !== '_no' && c.key !== '_cancelled' && c.key !== '_actions') as typeof COLUMNS).map(col =>
-                  col.key === 'date' ? (
+                {(COLUMNS.filter(c => c.key !== '_no' && c.key !== '_cancelled' && c.key !== '_actions') as typeof COLUMNS).map(col => {
+                  const fieldKey = col.key as TraineeField;
+                  const merge = (mergeEnabled && col.mergeable) ? mergeMap.get(t.id)?.[col.key] : undefined;
+                  if (merge?.role === 'covered') return null;
+                  const rowSpan = merge?.role === 'anchor' ? merge.span : undefined;
+                  const changeVal = (merge?.role === 'anchor' && merge.ids)
+                    ? (v: string) => onMergedChange(merge.ids!, fieldKey, v)
+                    : (v: string) => onTraineeChange(t.id, fieldKey, v);
+                  return col.key === 'date' ? (
                     <InputCell
                       key={col.key}
                       value={t.date}
-                      onChange={v => onTraineeChange(t.id, 'date', v)}
+                      onChange={changeVal}
                       onPasteGrid={text => onPasteTraineeGrid(t.id, 'date', text)}
                       placeholder="DD/MM/YYYY"
                       onFillAll={v => onFillAll('date', v)}
+                      rowSpan={rowSpan}
                     />
                   ) : col.key === 'grant' ? (
                     <SelectCell
                       key={col.key}
                       value={t.grant}
-                      onChange={v => onTraineeChange(t.id, 'grant', v)}
+                      onChange={changeVal}
                       onPasteGrid={text => onPasteTraineeGrid(t.id, 'grant', text)}
                       options={['Yes', 'No']}
+                      rowSpan={rowSpan}
                     />
                   ) : (col.key === 'name' || col.key === 'email' || col.key === 'contact_no') ? (
                     <LookupCell
@@ -1442,8 +1561,9 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                     <InputCell
                       key={col.key}
                       value={t[col.key as TraineeField] as string}
-                      onChange={v => onTraineeChange(t.id, col.key as TraineeField, v)}
+                      onChange={changeVal}
                       onPasteGrid={text => onPasteTraineeGrid(t.id, col.key as TraineeField, text)}
+                      onFillAll={v => onFillAll(col.key as TraineeField, v)}
                       placeholder={col.placeholder}
                       align={col.align}
                       digitsOnly={col.digitsOnly}
@@ -1453,20 +1573,22 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
                         (col.key === 'invoice_no' ? 'invoice_no_color' : 'payment_mode_color') as TraineeField,
                         c,
                       )}
+                      rowSpan={rowSpan}
                     />
                   ) : (
                     <InputCell
                       key={col.key}
                       value={t[col.key as TraineeField] as string}
-                      onChange={v => onTraineeChange(t.id, col.key as TraineeField, v)}
+                      onChange={changeVal}
                       onPasteGrid={text => onPasteTraineeGrid(t.id, col.key as TraineeField, text)}
-                      onFillAll={col.key !== 'payment_status' && col.key !== 'magento_order_no' ? v => onFillAll(col.key as TraineeField, v) : undefined}
+                      onFillAll={col.key !== 'payment_status' ? v => onFillAll(col.key as TraineeField, v) : undefined}
                       placeholder={col.placeholder}
                       align={col.align}
                       digitsOnly={col.digitsOnly}
+                      rowSpan={rowSpan}
                     />
-                  )
-                )}
+                  );
+                })}
                 {/* Cancelled / Withdrawn toggle */}
                 <td className="px-2 py-1 text-center border-r border-default">
                   <input
@@ -1876,6 +1998,16 @@ const MasterListView: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  // Merge identical-value runs by default (matches the spreadsheet look); choice is remembered.
+  const [mergeView, setMergeView] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('masterlist_merge_view') !== 'off';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('masterlist_merge_view', mergeView ? 'on' : 'off');
+    }
+  }, [mergeView]);
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const syncedMonths = useRef<Set<string>>(new Set());
 
@@ -2427,12 +2559,17 @@ const MasterListView: React.FC = () => {
     });
   };
 
-  const handlePasteTraineeGrid = (classId: string, traineeId: string, startField: TraineeField, text: string) => {
-    const grid = parseClipboardGrid(text);
+  const handlePasteTraineeGrid = (classId: string, traineeId: string, startField: TraineeField, grid: string[][]) => {
     if (grid.length === 0) return;
 
+    // If the first pasted row is a header, map columns by name and drop that row.
+    // Otherwise paste positionally from the column the user started in.
+    const headerMap = detectHeaderMap(grid[0]);
+    const dataRows = headerMap ? grid.slice(1) : grid;
+    if (dataRows.length === 0) return;
+
     const startCol = PASTE_TRAINEE_FIELDS.indexOf(startField);
-    if (startCol < 0) return;
+    if (!headerMap && startCol < 0) return;
 
     setClasses(prev => {
       const updated = prev.map(cr => {
@@ -2444,22 +2581,27 @@ const MasterListView: React.FC = () => {
         const trainees = [...cr.trainees];
         const inheritedDate = trainees.find(t => t.date)?.date || fmtDisplay(selectedDate);
 
-        while (trainees.length < startRow + grid.length) {
+        while (trainees.length < startRow + dataRows.length) {
           trainees.push({ ...newTrainee(), date: inheritedDate });
         }
 
-        grid.forEach((cells, rowOffset) => {
+        dataRows.forEach((cells, rowOffset) => {
           const rowIndex = startRow + rowOffset;
           let trainee = trainees[rowIndex];
 
-          cells.forEach((cellValue, colOffset) => {
-            const field = PASTE_TRAINEE_FIELDS[startCol + colOffset];
-            if (!field) return;
-            trainee = {
-              ...trainee,
-              [field]: normalisePastedTraineeValue(field, cellValue),
-            };
-          });
+          if (headerMap) {
+            headerMap.forEach((field, colIndex) => {
+              const cellValue = cells[colIndex];
+              if (cellValue === undefined) return;
+              trainee = { ...trainee, [field]: normalisePastedTraineeValue(field, cellValue) };
+            });
+          } else {
+            cells.forEach((cellValue, colOffset) => {
+              const field = PASTE_TRAINEE_FIELDS[startCol + colOffset];
+              if (!field) return;
+              trainee = { ...trainee, [field]: normalisePastedTraineeValue(field, cellValue) };
+            });
+          }
 
           trainees[rowIndex] = trainee;
         });
@@ -2477,6 +2619,20 @@ const MasterListView: React.FC = () => {
     setClasses(prev => {
       const updated = prev.map(cr => cr.id === classId
         ? { ...cr, trainees: cr.trainees.map(t => ({ ...t, [field]: value })) }
+        : cr,
+      );
+      const cr = updated.find(c => c.id === classId);
+      if (cr) scheduleSave(cr, activeTab, selectedDate);
+      return updated;
+    });
+  };
+
+  // Editing a merged (auto-grouped) cell updates every row in that run so they stay merged.
+  const handleMergedCellChange = (classId: string, traineeIds: string[], field: TraineeField, value: string) => {
+    const idSet = new Set(traineeIds);
+    setClasses(prev => {
+      const updated = prev.map(cr => cr.id === classId
+        ? { ...cr, trainees: cr.trainees.map(t => (idSet.has(t.id) ? { ...t, [field]: value } : t)) }
         : cr,
       );
       const cr = updated.find(c => c.id === classId);
@@ -2602,6 +2758,20 @@ const MasterListView: React.FC = () => {
               Clear
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setMergeView(v => !v)}
+            title="Merge cells that share the same value down a column (Date, Invoice, Payment Mode, etc.). Toggle off to edit rows individually."
+            className={`inline-flex items-center gap-1.5 h-[42px] px-3 self-end rounded-lg border text-sm font-medium transition-colors ${
+              mergeView
+                ? 'bg-primary text-white border-primary'
+                : 'bg-surface text-on-surface-secondary border-default hover:bg-surface-hover'
+            }`}
+          >
+            <span className="text-base leading-none">⇕</span>
+            {mergeView ? 'Merged' : 'Merge same values'}
+          </button>
 
           <div className="flex flex-col gap-1.5 w-full sm:flex-1 sm:max-w-md sm:ml-auto">
             <label className="text-xs font-medium text-on-surface-secondary uppercase tracking-wide">
@@ -2819,13 +2989,15 @@ const MasterListView: React.FC = () => {
                 handleTraineeChange(cr.id, traineeId, field, value)
               }
               onFillAll={(field, value) => handleFillAll(cr.id, field, value)}
+              onMergedChange={(ids, field, value) => handleMergedCellChange(cr.id, ids, field, value)}
+              mergeEnabled={mergeView}
               onAddTrainee={() => handleAddTrainee(cr.id)}
               onRemoveTrainee={traineeId => handleRemoveTrainee(cr.id, traineeId)}
               onRemoveClass={() => handleRemoveClass(cr.id)}
               onMoveClass={targetTab => handleMoveClass(cr.id, targetTab)}
               onBulkAddTrainees={trainees => handleBulkAddTrainees(cr.id, trainees)}
-              onPasteTraineeGrid={(traineeId, startField, text) =>
-                handlePasteTraineeGrid(cr.id, traineeId, startField, text)
+              onPasteTraineeGrid={(traineeId, startField, grid) =>
+                handlePasteTraineeGrid(cr.id, traineeId, startField, grid)
               }
               onAddScheduleEntry={() => handleAddScheduleEntry(cr.id)}
               onScheduleEntryChange={(entryId, field, value) =>

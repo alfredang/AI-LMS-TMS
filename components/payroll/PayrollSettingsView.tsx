@@ -31,7 +31,7 @@ const PayrollSettingsView: React.FC = () => {
       const r = await fetch('/api/payroll/tiers', { headers: { ...authHeader() } });
       const j = await r.json();
       if (j.success) {
-        setTiers(j.data.tiers);
+        setTiers(j.data.tiers || []);
         setEnabled(!!j.data.enabled);
       } else setError(j.error || 'Failed to load tiers');
     } catch (e: any) {
@@ -143,14 +143,16 @@ const PayrollSettingsView: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Icon name={IconName.Settings} className="w-6 h-6 text-primary" />
-          Payroll Settings
-        </h1>
-        <p className="text-sm text-on-surface-secondary mt-1">
-          Enable or disable the Payroll role, and configure payout tiers.
-        </p>
+      <div className="flex items-center gap-3">
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-white shadow-lg shadow-primary/20 flex-shrink-0">
+          <Icon name={IconName.Settings} className="w-6 h-6" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold leading-tight">Payroll Settings</h1>
+          <p className="text-sm text-on-surface-secondary mt-0.5">
+            Enable or disable the Payroll role, and configure payout tiers.
+          </p>
+        </div>
       </div>
 
       {/* Enable Payroll Role */}

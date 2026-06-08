@@ -43,35 +43,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let i = 1;
 
     // If any of the three drivers changed, persist them and recompute estimated_payout
-    // server-side from the resulting values so it stays authoritative.
+    // atomically in the same UPDATE. The estimate is derived from the *effective*
+    // values — the new value where provided, else the row's current column — so there
+    // is no separate read-modify-write (no lost-update race on concurrent edits).
     if (newLearners !== undefined || newFee !== undefined || newTier !== undefined) {
-      const cur = await pool.query(
-        `SELECT num_learners, course_fee, tier_percent FROM trainer_payout WHERE id = $1`,
-        [id]
-      );
-      if (cur.rowCount === 0) {
-        return res.status(404).json({ success: false, error: 'payout not found' });
-      }
-      const learners = newLearners ?? (Number(cur.rows[0].num_learners) || 0);
-      const fee = newFee ?? (Number(cur.rows[0].course_fee) || 0);
-      const tier = newTier ?? (Number(cur.rows[0].tier_percent) || 0);
-      const estimated =
-        learners <= 0 || fee <= 0 || tier <= 0 ? 0 : Math.round(fee * learners * tier) / 100;
-
       if (newLearners !== undefined) {
         sets.push(`num_learners = $${i++}`);
-        params.push(learners);
+        params.push(newLearners);
       }
       if (newFee !== undefined) {
         sets.push(`course_fee = $${i++}`);
-        params.push(fee);
+        params.push(newFee);
       }
       if (newTier !== undefined) {
         sets.push(`tier_percent = $${i++}`);
-        params.push(tier);
+        params.push(newTier);
       }
-      sets.push(`estimated_payout = $${i++}`);
-      params.push(estimated);
+      // Placeholders for the estimate (null when a driver wasn't provided → COALESCE
+      // falls back to the existing column). Postgres evaluates the RHS against the
+      // pre-update row, so these effective values are correct.
+      const lp = i++; params.push(newLearners ?? null);
+      const fp = i++; params.push(newFee ?? null);
+      const tp = i++; params.push(newTier ?? null);
+      sets.push(
+        `estimated_payout = CASE
+            WHEN COALESCE($${lp}, num_learners) <= 0
+              OR COALESCE($${fp}, course_fee) <= 0
+              OR COALESCE($${tp}, tier_percent) <= 0 THEN 0
+            ELSE round(
+              COALESCE($${fp}, course_fee)
+              * COALESCE($${lp}, num_learners)
+              * COALESCE($${tp}, tier_percent)
+            ) / 100
+          END`
+      );
     }
 
     if (actual_payout !== undefined) {
