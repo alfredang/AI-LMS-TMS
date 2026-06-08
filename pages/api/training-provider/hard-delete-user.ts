@@ -54,13 +54,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // Clean up tables that may not have CASCADE constraints
+    // Clean up tables whose FK to app_user is NOT ON DELETE CASCADE, otherwise the
+    // final DELETE FROM app_user throws a foreign-key violation and the whole delete
+    // fails with a generic error. support_ticket / support_ticket_reply / trainer_payout
+    // are NO ACTION (verified against the live schema); the rest below are defensive.
+    // - support_ticket_reply by user_id: this user's replies on ANY ticket.
+    // - support_ticket by user_id: this user's own tickets (cascades replies on them).
+    // - trainer_payout.updated_by is nullable, so NULL it rather than deleting payout rows.
     const cleanupQueries = [
       `DELETE FROM public.work_experience WHERE developer_id = $1`,
       `DELETE FROM public.education_history WHERE developer_id = $1`,
       `DELETE FROM public.user_subtopic_bookmark WHERE user_id = $1`,
       `DELETE FROM public.learner_subtopic_completion WHERE user_id = $1`,
       `DELETE FROM public.submission WHERE user_id = $1`,
+      `DELETE FROM public.support_ticket_reply WHERE user_id = $1`,
+      `DELETE FROM public.support_ticket WHERE user_id = $1`,
+      `UPDATE public.trainer_payout SET updated_by = NULL WHERE updated_by = $1`,
     ];
     for (const sql of cleanupQueries) {
       await client.query('SAVEPOINT cleanup_sp');
