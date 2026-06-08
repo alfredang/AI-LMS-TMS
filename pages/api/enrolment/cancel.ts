@@ -193,15 +193,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.warn('[enrolment/cancel] ssg_enrolments sync:', e);
     }
 
-    void cancelInvoiceJobOnEnrolmentCancelled(String(enrolmentId).trim()).catch((e: unknown) =>
-      console.warn('[enrolment/cancel] invoice job cancel:', e instanceof Error ? e.message : e)
-    );
+    let qbResult: { qbDeleted: boolean; warnings: string[] } = { qbDeleted: false, warnings: [] };
+    try {
+      qbResult = await cancelInvoiceJobOnEnrolmentCancelled(String(enrolmentId).trim());
+    } catch (e: unknown) {
+      console.warn('[enrolment/cancel] invoice job cancel:', e instanceof Error ? e.message : e);
+    }
 
     void cleanupDaInvoicesForEnrolment(String(enrolmentId).trim()).catch((e: unknown) =>
       console.warn('[enrolment/cancel] DA invoice cleanup:', e instanceof Error ? e.message : e)
     );
 
-    return res.status(200).json({ success: true, data: parsed?.data ?? parsed });
+    return res.status(200).json({
+      success: true,
+      data: parsed?.data ?? parsed,
+      qbInvoiceDeleted: qbResult.qbDeleted,
+      qbWarnings: qbResult.warnings,
+    });
 
   } catch (error) {
     console.error('❌ Cancel enrolment error:', error);

@@ -43,14 +43,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    void cancelInvoiceJobOnEnrolmentCancelled(enrolmentId.trim()).catch((e: unknown) =>
-      console.warn('[enrolments/cancel] invoice job cancel:', e instanceof Error ? e.message : e)
-    );
+    let qbResult: { qbDeleted: boolean; warnings: string[] } = { qbDeleted: false, warnings: [] };
+    try {
+      qbResult = await cancelInvoiceJobOnEnrolmentCancelled(enrolmentId.trim());
+    } catch (e: unknown) {
+      console.warn('[enrolments/cancel] invoice job cancel:', e instanceof Error ? e.message : e);
+    }
 
     return res.status(200).json({
       success: true,
       updated: result.rows.length,
       enrolmentId,
+      qbInvoiceDeleted: qbResult.qbDeleted,
+      qbWarnings: qbResult.warnings,
       message: result.rows.length === 0
         ? 'SSG cancellation succeeded but no matching local enrollment record was found'
         : `${result.rows.length} enrollment record(s) updated to Cancelled`,

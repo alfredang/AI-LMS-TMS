@@ -494,53 +494,97 @@ export async function tryEnqueueInvoiceFromSsgRecord(record: any): Promise<void>
  * Deletes the main QB invoice and the GRN invoice (if any), then marks the job cancelled.
  * Non-fatal — errors are logged but never propagate so the cancellation itself isn't blocked.
  */
-export async function cancelInvoiceJobOnEnrolmentCancelled(enrolmentId: string): Promise<void> {
+function isQbNotFound(msg: string): boolean {
+  return msg.includes('610') || msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('object not found');
+}
+
+/** Try to delete a QB invoice by ID, attempting app2 then app1 (app2 is the primary invoice app). */
+async function qboDeleteInvoiceAnyApp(invoiceId: string): Promise<void> {
+  const apps: Array<'app2' | 'app1'> = ['app2', 'app1'];
+  let lastErr: string | null = null;
+  for (const app of apps) {
+    try {
+      const inv = await qboReadInvoice(app, invoiceId);
+      if (!inv?.syncToken) continue; // not found in this app — try the other
+      await qboDeleteInvoice(app, invoiceId, inv.syncToken);
+      return; // deleted successfully
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (isQbNotFound(msg)) continue; // not in this app — try the other
+      lastErr = `[${app}] ${msg}`;
+    }
+  }
+  // If neither app found the invoice, it was already deleted — that's fine
+  if (lastErr) throw new Error(lastErr);
+}
+
+/** Try to delete a QB invoice by DocNumber, attempting app2 then app1. */
+async function qboDeleteInvoiceByDocNumberAnyApp(docNumber: string): Promise<void> {
+  const apps: Array<'app2' | 'app1'> = ['app2', 'app1'];
+  let lastErr: string | null = null;
+  for (const app of apps) {
+    try {
+      const inv = await qboFindInvoiceByDocNumber(app, docNumber);
+      if (!inv?.id) continue; // not found in this app — try the other
+      // Re-read to ensure we have a fresh SyncToken
+      const full = await qboReadInvoice(app, inv.id);
+      if (!full?.syncToken) continue;
+      await qboDeleteInvoice(app, inv.id, full.syncToken);
+      return; // deleted successfully
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (isQbNotFound(msg)) continue; // not in this app — try the other
+      lastErr = `[${app}] ${msg}`;
+    }
+  }
+  if (lastErr) throw new Error(lastErr);
+}
+
+export async function cancelInvoiceJobOnEnrolmentCancelled(enrolmentId: string): Promise<{ qbDeleted: boolean; warnings: string[] }> {
   let job: InvoiceJobRow | null = null;
   try {
     job = await getInvoiceJobByEnrolmentId(enrolmentId);
   } catch (e) {
     console.warn('[invoice_jobs] cancelInvoiceJobOnEnrolmentCancelled — lookup failed:', e instanceof Error ? e.message : e);
-    return;
+    return { qbDeleted: false, warnings: ['DB lookup failed'] };
   }
 
-  if (!job || job.status !== 'done') return;
+  // No job at all — nothing to clean up
+  if (!job) return { qbDeleted: false, warnings: [] };
+
+  // If the job has no QB references and isn't done, nothing to delete in QB
+  if (!job.qbo_invoice_id && !job.grn_doc_number && job.status !== 'done') {
+    return { qbDeleted: false, warnings: [] };
+  }
 
   const warnings: string[] = [];
 
-  // Delete main QB invoice
+  // Delete main customer invoice (try both apps)
   if (job.qbo_invoice_id) {
     try {
-      const inv = await qboReadInvoice(undefined, job.qbo_invoice_id);
-      if (inv?.syncToken) {
-        await qboDeleteInvoice(undefined, job.qbo_invoice_id, inv.syncToken);
-      }
+      await qboDeleteInvoiceAnyApp(job.qbo_invoice_id);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      // QBO error 610 = "Object Not Found" — invoice already deleted, that's fine
-      if (!msg.includes('610') && !msg.toLowerCase().includes('not found') && !msg.toLowerCase().includes('object not found')) {
-        warnings.push(`main: ${msg}`);
-      }
+      console.warn('[invoice_jobs] cancel — main invoice delete failed:', msg);
+      warnings.push(`customer invoice: ${msg}`);
     }
   }
 
-  // Delete GRN invoice
+  // Delete GRN invoice by doc number (try both apps)
   if (job.grn_doc_number) {
     try {
-      const grn = await qboFindInvoiceByDocNumber(undefined, job.grn_doc_number);
-      if (grn?.id && grn?.syncToken) {
-        await qboDeleteInvoice(undefined, grn.id, grn.syncToken);
-      }
+      await qboDeleteInvoiceByDocNumberAnyApp(job.grn_doc_number);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (!msg.includes('610') && !msg.toLowerCase().includes('not found') && !msg.toLowerCase().includes('object not found')) {
-        warnings.push(`grn: ${msg}`);
-      }
+      console.warn('[invoice_jobs] cancel — GRN invoice delete failed:', msg);
+      warnings.push(`GRN invoice: ${msg}`);
     }
   }
 
-  const note = warnings.length > 0
-    ? `Enrolment cancelled; QB delete warning: ${warnings.join('; ')}`
-    : 'Invoice deleted — enrolment cancelled';
+  const qbDeleted = warnings.length === 0;
+  const note = qbDeleted
+    ? 'Invoice deleted — enrolment cancelled'
+    : `Enrolment cancelled; QB delete warning: ${warnings.join('; ')}`;
 
   try {
     await pool.query(
@@ -563,6 +607,9 @@ export async function cancelInvoiceJobOnEnrolmentCancelled(enrolmentId: string):
     );
   } catch (e) {
     console.warn('[invoice_jobs] cancelInvoiceJobOnEnrolmentCancelled — DB update failed:', e instanceof Error ? e.message : e);
+    warnings.push('DB clear failed');
   }
+
+  return { qbDeleted, warnings };
 }
 
