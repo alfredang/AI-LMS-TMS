@@ -53,18 +53,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     `;
     const candidates = await pool.query(candidatesQuery, [String(months)]);
 
-    // Materialize on read: insert any (course_run, trainer) pair that doesn't yet have a payout row
-    for (const row of candidates.rows) {
-      const numLearners = Number(row.num_learners) || 0;
-      const courseFee = Number(row.course_fee) || 0;
-      const { tier, amount } = estimatedPayout(numLearners, courseFee, tiers);
-      const tierPercent = tier?.percent ?? 0;
+    // Materialize on read: insert any (course_run, trainer) pair that doesn't yet have a
+    // payout row. Skip classes with no enrolled learners — there is nothing to pay out.
+    const toInsert = candidates.rows
+      .map((row) => {
+        const numLearners = Number(row.num_learners) || 0;
+        if (numLearners < 1) return null;
+        const courseFee = Number(row.course_fee) || 0;
+        const { tier, amount } = estimatedPayout(numLearners, courseFee, tiers);
+        return [row.course_run_id, row.trainer_id, numLearners, courseFee, tier?.percent ?? 0, amount];
+      })
+      .filter((v): v is (string | number)[] => v !== null);
+
+    // One multi-row INSERT per chunk instead of a query per candidate. Chunked so the
+    // bound-parameter count stays well under Postgres' 65535 limit (6 cols × 500 = 3000).
+    const CHUNK = 500;
+    for (let start = 0; start < toInsert.length; start += CHUNK) {
+      const batch = toInsert.slice(start, start + CHUNK);
+      const valuesSql = batch
+        .map((_, k) => {
+          const b = k * 6;
+          return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, $${b + 6})`;
+        })
+        .join(', ');
       await pool.query(
         `INSERT INTO trainer_payout
             (course_run_id, trainer_id, num_learners, course_fee, tier_percent, estimated_payout)
-         VALUES ($1, $2, $3, $4, $5, $6)
+         VALUES ${valuesSql}
          ON CONFLICT (course_run_id, trainer_id) DO NOTHING`,
-        [row.course_run_id, row.trainer_id, numLearners, courseFee, tierPercent, amount]
+        batch.flat()
       );
     }
 
@@ -76,6 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cr.course_run_id      AS course_run_code,
         c.title               AS course_title,
         c.course_code         AS course_code,
+        cr.start_date::text   AS start_date,
         cr.end_date::text     AS end_date,
         tp.trainer_id,
         COALESCE(crt.trainer_name, au.full_name, '') AS trainer_name,
@@ -97,11 +115,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       WHERE cr.end_date >= (CURRENT_DATE - ($1 || ' months')::interval)
         AND cr.end_date <= CURRENT_DATE
         AND (cr.class_status::text = 'Confirmed' OR tp.status = 'completed')
+        AND tp.num_learners > 0
       ORDER BY cr.end_date DESC, c.course_code ASC
     `;
     const list = await pool.query(listQuery, [String(months)]);
 
-    return res.status(200).json({ success: true, data: { payouts: list.rows, tiers } });
+    // All-time overview for the summary cards — independent of the selected window
+    // (which only filters the table list). Everything is on one consistent basis so
+    // "windowed vs all-time" is never ambiguous.
+    //  - total_amount  : outstanding owed — estimated payout of all pending classes.
+    //  - completed_amount: actual money already paid out (completed classes).
+    const overviewQuery = `
+      SELECT
+        COUNT(*)::int                                                              AS total_classes,
+        COALESCE(SUM(estimated_payout) FILTER (WHERE status = 'pending'), 0)::float8 AS pending_amount,
+        COUNT(*) FILTER (WHERE status = 'pending')::int                            AS pending_count,
+        COUNT(*) FILTER (WHERE status = 'completed')::int                          AS completed_count,
+        COALESCE(SUM(actual_payout) FILTER (WHERE status = 'completed'), 0)::float8 AS completed_amount,
+        COUNT(*) FILTER (WHERE status = 'cancelled')::int                          AS cancelled_count
+      FROM trainer_payout
+    `;
+    const ov = (await pool.query(overviewQuery)).rows[0] || {};
+    const overview = {
+      totalClasses: Number(ov.total_classes) || 0,
+      totalAmount: Number(ov.pending_amount) || 0, // outstanding still to be paid
+      pendingCount: Number(ov.pending_count) || 0,
+      pendingAmount: Number(ov.pending_amount) || 0,
+      completedCount: Number(ov.completed_count) || 0,
+      completedAmount: Number(ov.completed_amount) || 0,
+      cancelledCount: Number(ov.cancelled_count) || 0,
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: { payouts: list.rows, tiers, overview },
+    });
   } catch (err: any) {
     console.error('payroll/payouts GET failed', err);
     return res.status(500).json({ success: false, error: err?.message || 'Internal error' });
