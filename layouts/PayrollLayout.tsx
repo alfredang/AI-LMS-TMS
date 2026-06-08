@@ -39,15 +39,15 @@ const PayrollLayout: React.FC = () => {
         type="button"
         onClick={() => setPage(target)}
         title={isSidebarOpen ? undefined : label}
-        className={`w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+        className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
           isSidebarOpen ? '' : 'justify-center'
         } ${
           active
-            ? 'bg-primary text-white'
-            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
+            ? 'bg-gradient-to-r from-primary to-primary/80 text-white shadow-sm shadow-primary/20'
+            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700/70'
         }`}
       >
-        <Icon name={icon} className="w-5 h-5 flex-shrink-0" />
+        <Icon name={icon} className={`w-5 h-5 flex-shrink-0 ${active ? '' : 'text-primary/70'}`} />
         {isSidebarOpen && <span>{label}</span>}
       </button>
     );
