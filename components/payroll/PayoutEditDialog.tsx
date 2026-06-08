@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Icon, IconName } from '../ui/Icon';
 import { authHeader } from '@lib/auth/authHeader';
 import { findTier, PayoutTier } from '@lib/payroll/calculate';
+import { fmtDateRange } from '@lib/payroll/formatDate';
+import DateRangeCell from '../ui/DateRangeCell';
 
 export interface PayoutRow {
   id: string;
@@ -9,6 +11,8 @@ export interface PayoutRow {
   course_run_code?: string | null;
   course_title?: string | null;
   course_code?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   trainer_id: string;
   trainer_name?: string | null;
   num_learners: number;
@@ -40,10 +44,30 @@ const fmtCurrency = (n: number | string | null | undefined) => {
   return v.toLocaleString('en-SG', { style: 'currency', currency: 'SGD' });
 };
 
-const STATUS_OPTIONS: { value: PayoutRow['status']; label: string }[] = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
+const STATUS_OPTIONS: {
+  value: PayoutRow['status'];
+  label: string;
+  dot: string;
+  active: string;
+}[] = [
+  {
+    value: 'pending',
+    label: 'Pending',
+    dot: 'bg-amber-500',
+    active: 'border-amber-400 bg-amber-50 text-amber-700 dark:border-amber-500/60 dark:bg-amber-900/30 dark:text-amber-200',
+  },
+  {
+    value: 'completed',
+    label: 'Completed',
+    dot: 'bg-emerald-500',
+    active: 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-900/30 dark:text-emerald-200',
+  },
+  {
+    value: 'cancelled',
+    label: 'Cancelled',
+    dot: 'bg-red-500',
+    active: 'border-red-400 bg-red-50 text-red-700 dark:border-red-500/60 dark:bg-red-900/30 dark:text-red-200',
+  },
 ];
 
 const todayIso = () => {
@@ -150,148 +174,177 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
       }}
     >
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-start justify-between px-5 pt-5 pb-3 border-b border-default">
-          <div className="min-w-0 pr-3">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Icon name={IconName.DollarSign} className="w-5 h-5 text-primary" />
-              Edit Payout
-            </h2>
-            <p className="text-sm font-medium mt-1 truncate" title={row.course_title || ''}>
-              {row.course_title || '-'}
-            </p>
-            <p className="text-xs text-on-surface-secondary mt-0.5 truncate">
-              {row.course_code || '-'} · {row.course_run_code || '-'} · {row.trainer_name || 'Trainer'}
-            </p>
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-default bg-primary/[0.03] dark:bg-primary/[0.06]">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-primary/10 text-primary">
+              <Icon name={IconName.DollarSign} className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold leading-tight">Edit Payout</h2>
+              <p className="text-sm font-medium mt-1 truncate" title={row.course_title || ''}>
+                {row.course_title || '-'}
+              </p>
+              <p className="text-xs text-on-surface-secondary mt-0.5 truncate">
+                {row.course_code || '-'} · {row.course_run_code || '-'} · <span className="uppercase">{row.trainer_name || 'Trainer'}</span>
+              </p>
+              {(row.start_date || row.end_date) && (
+                <p className="text-xs text-on-surface-secondary mt-0.5 flex items-center gap-1">
+                  <Icon name={IconName.Calendar} className="w-3.5 h-3.5 flex-shrink-0" />
+                  {fmtDateRange(row.start_date, row.end_date)}
+                </p>
+              )}
+            </div>
           </div>
           <button
             onClick={requestClose}
             aria-label="Close"
-            className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-slate-700"
+            className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-slate-700 flex-shrink-0"
           >
             <Icon name={IconName.X} className="w-5 h-5" />
           </button>
         </div>
 
         <div className="px-5 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3 text-sm bg-gray-50 dark:bg-slate-700/40 rounded-lg p-3">
-            <div>
-              <label htmlFor="payout-learners" className="block text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">
-                # Learners
-              </label>
-              <input
-                id="payout-learners"
-                type="number"
-                min="0"
-                step="1"
-                inputMode="numeric"
-                value={numLearners}
-                onChange={(e) => setNumLearners(e.target.value)}
-                className="w-full border border-default rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="payout-tier" className="text-[11px] uppercase tracking-wider text-on-surface-secondary">
-                  Tier %
+          {/* Calculation inputs + live estimate */}
+          <div className="rounded-lg border border-default overflow-hidden">
+            <div className="grid grid-cols-3 gap-3 p-3">
+              <div>
+                <label htmlFor="payout-learners" className="block text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">
+                  # Learners
                 </label>
-                {suggestedTier !== null && Number(tierPercent) !== suggestedTier && (
-                  <button
-                    type="button"
-                    onClick={() => setTierPercent(String(suggestedTier))}
-                    className="text-[11px] text-primary hover:underline normal-case"
-                  >
-                    Use {suggestedTier}%
-                  </button>
+                <input
+                  id="payout-learners"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  value={numLearners}
+                  onChange={(e) => setNumLearners(e.target.value)}
+                  className="w-full border border-default rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <label htmlFor="payout-fee" className="block text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">
+                  Course Fee
+                </label>
+                <div className="relative">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-on-surface-secondary pointer-events-none">
+                    S$
+                  </span>
+                  <input
+                    id="payout-fee"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={courseFee}
+                    onChange={(e) => setCourseFee(e.target.value)}
+                    className="w-full border border-default rounded-md pl-7 pr-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1 gap-1">
+                  <label htmlFor="payout-tier" className="text-[11px] uppercase tracking-wider text-on-surface-secondary">
+                    Tier %
+                  </label>
+                  {suggestedTier !== null && Number(tierPercent) !== suggestedTier && (
+                    <button
+                      type="button"
+                      onClick={() => setTierPercent(String(suggestedTier))}
+                      className="text-[11px] text-primary hover:underline normal-case whitespace-nowrap"
+                    >
+                      Use {suggestedTier}%
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    id="payout-tier"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={tierPercent}
+                    onChange={(e) => setTierPercent(e.target.value)}
+                    className="w-full border border-default rounded-md pl-2 pr-7 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-on-surface-secondary pointer-events-none">
+                    %
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-end justify-between gap-3 px-3 py-2.5 bg-primary/5 dark:bg-primary/10 border-t border-primary/20">
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-wider font-medium text-primary/80">Estimated Payout</div>
+                {estimatedNum > 0 && (
+                  <div className="text-[11px] text-on-surface-secondary mt-0.5 truncate">
+                    {Number(numLearners) || 0} learner{(Number(numLearners) || 0) === 1 ? '' : 's'} × {fmtCurrency(courseFee)} × {Number(tierPercent) || 0}%
+                  </div>
                 )}
               </div>
-              <div className="relative">
-                <input
-                  id="payout-tier"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={tierPercent}
-                  onChange={(e) => setTierPercent(e.target.value)}
-                  className="w-full border border-default rounded-md pl-2 pr-7 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-on-surface-secondary pointer-events-none">
-                  %
-                </span>
-              </div>
+              <div className="text-xl font-bold text-primary leading-none">{fmtCurrency(estimatedNum)}</div>
             </div>
-            <div>
-              <label htmlFor="payout-fee" className="block text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">
-                Course Fee
-              </label>
-              <div className="relative">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-on-surface-secondary pointer-events-none">
-                  S$
-                </span>
-                <input
-                  id="payout-fee"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={courseFee}
-                  onChange={(e) => setCourseFee(e.target.value)}
-                  className="w-full border border-default rounded-md pl-9 pr-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-              </div>
+          </div>
+
+          {/* Actual payout — the primary field */}
+          <div className="rounded-lg border-2 border-primary/40 bg-primary/5 dark:bg-primary/10 p-3">
+            <div className="flex items-center justify-between mb-1.5 gap-2">
+              <label htmlFor="payout-actual" className="text-sm font-semibold">Actual Payout</label>
+              {estimatedNum > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setActual(estimatedNum.toFixed(2))}
+                  className="text-[11px] text-primary hover:underline whitespace-nowrap"
+                >
+                  Use estimated ({fmtCurrency(estimatedNum)})
+                </button>
+              )}
             </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">Estimated Payout</div>
-              <div className="font-semibold text-primary py-1.5">{fmtCurrency(estimatedNum)}</div>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base font-medium text-on-surface-secondary pointer-events-none">
+                S$
+              </span>
+              <input
+                id="payout-actual"
+                type="number"
+                step="0.01"
+                inputMode="decimal"
+                value={actual}
+                onChange={(e) => setActual(e.target.value)}
+                className="w-full border border-default rounded-md pl-10 pr-3 py-2.5 text-lg font-semibold bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+                placeholder="0.00"
+              />
             </div>
           </div>
 
           <div className="space-y-3">
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="payout-actual" className="text-xs font-medium">Actual Payout</label>
-                {estimatedNum > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setActual(estimatedNum.toFixed(2))}
-                    className="text-[11px] text-primary hover:underline"
-                  >
-                    Use estimated ({fmtCurrency(estimatedNum)})
-                  </button>
-                )}
+              <label className="block text-xs font-medium mb-1.5">Status</label>
+              <div className="grid grid-cols-3 gap-2">
+                {STATUS_OPTIONS.map((o) => {
+                  const active = status === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => setStatus(o.value)}
+                      className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-sm font-medium transition-colors ${
+                        active
+                          ? o.active
+                          : 'border-default text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${active ? o.dot : 'bg-gray-300 dark:bg-slate-500'}`} />
+                      {o.label}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="relative">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-on-surface-secondary pointer-events-none">
-                  S$
-                </span>
-                <input
-                  id="payout-actual"
-                  type="number"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={actual}
-                  onChange={(e) => setActual(e.target.value)}
-                  className="w-full border border-default rounded-md pl-9 pr-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="payout-status" className="block text-xs font-medium mb-1">Status</label>
-              <select
-                id="payout-status"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as PayoutRow['status'])}
-                className="w-full border border-default rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                {STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
               {status === 'pending' && (
-                <p className="mt-1 text-[11px] text-on-surface-secondary">
+                <p className="mt-1.5 text-[11px] text-on-surface-secondary">
                   Trainer will only see this payout once status is set to Completed.
                 </p>
               )}
@@ -308,12 +361,11 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
                   Today
                 </button>
               </div>
-              <input
-                id="payout-date"
-                type="date"
+              <DateRangeCell
+                singleDate
+                standalone
                 value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                className="w-full border border-default rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                onChange={setPaymentDate}
               />
             </div>
 
@@ -323,7 +375,7 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
                 id="payout-remark"
                 value={remark}
                 onChange={(e) => setRemark(e.target.value)}
-                rows={3}
+                rows={2}
                 placeholder="Optional note (e.g. PayNow ref, adjustment reason)…"
                 className="w-full border border-default rounded-md px-2 py-1.5 text-sm bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
               />
