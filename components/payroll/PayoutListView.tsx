@@ -406,11 +406,11 @@ const PayoutListView: React.FC = () => {
 
       {/* Summary: prominent all-time overview + compact selected-window detail */}
       <div className="space-y-3">
-      {/* All-time overview — independent of the window filter */}
+      {/* Year-to-date overview — independent of the window filter */}
       <div className="space-y-2.5">
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-semibold text-on-surface">Overview</h2>
-          <span className="text-xs text-on-surface-secondary">All-time · not affected by the window filter</span>
+          <span className="text-xs text-on-surface-secondary">Since 1 Jan {new Date().getFullYear()} · not affected by the window filter</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard

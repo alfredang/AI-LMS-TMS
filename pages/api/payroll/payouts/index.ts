@@ -120,20 +120,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     `;
     const list = await pool.query(listQuery, [String(months)]);
 
-    // All-time overview for the summary cards — independent of the selected window
-    // (which only filters the table list). Everything is on one consistent basis so
-    // "windowed vs all-time" is never ambiguous.
+    // Year-to-date overview for the summary cards — independent of the selected
+    // window (which only filters the table list). Scoped to classes whose end_date
+    // falls in the current calendar year (1 Jan onwards), so the cards reflect
+    // "this year" rather than all-time. The lower bound is derived from the DB
+    // clock (date_trunc('year', CURRENT_DATE)) so it rolls over automatically.
     //  - total_amount  : outstanding owed — estimated payout of all pending classes.
     //  - completed_amount: actual money already paid out (completed classes).
     const overviewQuery = `
       SELECT
         COUNT(*)::int                                                              AS total_classes,
-        COALESCE(SUM(estimated_payout) FILTER (WHERE status = 'pending'), 0)::float8 AS pending_amount,
-        COUNT(*) FILTER (WHERE status = 'pending')::int                            AS pending_count,
-        COUNT(*) FILTER (WHERE status = 'completed')::int                          AS completed_count,
-        COALESCE(SUM(actual_payout) FILTER (WHERE status = 'completed'), 0)::float8 AS completed_amount,
-        COUNT(*) FILTER (WHERE status = 'cancelled')::int                          AS cancelled_count
-      FROM trainer_payout
+        COALESCE(SUM(tp.estimated_payout) FILTER (WHERE tp.status = 'pending'), 0)::float8 AS pending_amount,
+        COUNT(*) FILTER (WHERE tp.status = 'pending')::int                            AS pending_count,
+        COUNT(*) FILTER (WHERE tp.status = 'completed')::int                          AS completed_count,
+        COALESCE(SUM(tp.actual_payout) FILTER (WHERE tp.status = 'completed'), 0)::float8 AS completed_amount,
+        COUNT(*) FILTER (WHERE tp.status = 'cancelled')::int                          AS cancelled_count
+      FROM trainer_payout tp
+      JOIN course_run cr ON cr.id = tp.course_run_id
+      WHERE cr.end_date >= date_trunc('year', CURRENT_DATE)::date
     `;
     const ov = (await pool.query(overviewQuery)).rows[0] || {};
     const overview = {
