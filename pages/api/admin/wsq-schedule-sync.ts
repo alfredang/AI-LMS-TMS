@@ -177,8 +177,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const seenLocalCodes = new Set<string>();
 
   for (const m of magento.courses) {
-    const local = localByCode.get(m.course_code);
-    seenLocalCodes.add(m.course_code);
+    // MMS occasionally sends course codes with stray whitespace (e.g. a trailing
+    // tab), which breaks exact-match lookups against the local course table.
+    const courseCode = (m.course_code ?? '').trim();
+    const local = localByCode.get(courseCode);
+    seenLocalCodes.add(courseCode);
 
     // Match Magento schedules against local runs by (start, end)
     const localRuns = local?.runs ?? [];
@@ -250,7 +253,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     groups.push({
-      course_code: m.course_code,
+      course_code: courseCode,
       course_title: m.course_title,
       course_id: local?.course_id || null,
       wsq_support_from: local?.wsq_support_from || null,

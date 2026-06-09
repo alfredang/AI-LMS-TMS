@@ -81,13 +81,16 @@ async function processItem(
   companyEmail: string,
   todaySg: string,
 ): Promise<ItemResult> {
-  const { course_code, start_date, end_date } = item;
+  const { start_date, end_date } = item;
+  // MMS can send course codes with stray whitespace (e.g. a trailing tab) that
+  // breaks the exact-match lookup and pollutes the SSG courseReferenceNumber.
+  const course_code = (item.course_code ?? '').trim();
 
   const courseRow = await pool.query<{ id: string }>(
     `SELECT id FROM course WHERE course_code = $1 LIMIT 1`, [course_code],
   ).catch(() => ({ rows: [] as { id: string }[] }));
   if (!courseRow.rows[0]) {
-    return { course_code, start_date, end_date, status: 'no_course', message: 'Course not found locally' };
+    return { course_code, start_date, end_date, status: 'no_course', message: 'Course not found in LMS' };
   }
   const courseId = courseRow.rows[0].id;
 

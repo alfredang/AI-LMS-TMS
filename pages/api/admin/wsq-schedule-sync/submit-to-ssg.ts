@@ -159,7 +159,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ).catch(() => ({ rows: [] as { id: string }[] }));
 
     if (courseRow.rows.length === 0) {
-      results.push({ course_code, start_date, end_date, status: 'no_course', message: 'Course not found locally' });
+      results.push({ course_code, start_date, end_date, status: 'no_course', message: 'Course not found in LMS' });
       continue;
     }
     const courseId = courseRow.rows[0].id;

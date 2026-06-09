@@ -30,7 +30,19 @@ type ApiResponse = {
 };
 
 type ApiError = { error: string; message?: string; status?: number; body?: any };
-type Filter = 'missing_in_ssg' | 'synced' | 'extra_in_ssg' | 'unparsed';
+type Filter = 'missing_in_ssg' | 'blocked' | 'synced' | 'extra_in_ssg' | 'unparsed';
+
+const BLOCKED_PATTERNS = ['not eligible', 'support period', 'course start date has to be between'];
+const isBlockedError = (msg: string) => {
+  const l = msg.toLowerCase();
+  return BLOCKED_PATTERNS.some((p) => l.includes(p));
+};
+const normalizeError = (msg: string): string => {
+  if (/support period/i.test(msg) || /course start date has to be between/i.test(msg)) {
+    return 'Outside Course Support Period';
+  }
+  return msg;
+};
 
 type ItemResult = {
   course_code: string;
@@ -145,17 +157,44 @@ const stopPolling = useCallback(() => {
     return stopPolling;
   }, [fetchJobs, startPolling, stopPolling]);
 
+  // Most-recent error per "course_code|start_date" across all completed jobs.
+  // Oldest jobs processed first so newer runs overwrite older ones.
+  // Error messages are normalised (long support-period message shortened).
+  const failedAttempts = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const job of [...allJobs].reverse()) {
+      const failures: ItemResult[] = Array.isArray(job.failures) ? job.failures : [];
+      for (const f of failures) {
+        if (f.course_code && f.start_date) {
+          map.set(`${f.course_code}|${f.start_date}`, normalizeError(f.message || f.status));
+        }
+      }
+    }
+    return map;
+  }, [allJobs]);
+
   const filtered = useMemo(() => {
     if (!data) return [];
     const q = search.trim().toLowerCase();
     return data.courses
-      .map((g) => ({ ...g, rows: g.rows.filter((r) => r.status === filter) }))
+      .map((g) => ({
+        ...g,
+        rows: g.rows.filter((r) => {
+          if (filter === 'missing_in_ssg' || filter === 'blocked') {
+            if (r.status !== 'missing_in_ssg') return false;
+            const err = r.start_date ? failedAttempts.get(`${g.course_code}|${r.start_date}`) : undefined;
+            const blocked = !!err && isBlockedError(err);
+            return filter === 'blocked' ? blocked : !blocked;
+          }
+          return r.status === filter;
+        }),
+      }))
       .filter((g) => {
         if (g.rows.length === 0) return false;
         if (!q) return true;
         return g.course_code.toLowerCase().includes(q) || g.course_title.toLowerCase().includes(q);
       });
-  }, [data, filter, search]);
+  }, [data, filter, search, failedAttempts]);
 
   // Count of syncable rows visible in the current filter (g.rows is already status-filtered)
   const totalSyncable = useMemo(
@@ -163,20 +202,17 @@ const stopPolling = useCallback(() => {
     [filtered],
   );
 
-  // Most-recent error per "course_code|start_date" across all completed jobs.
-  // Oldest jobs processed first so newer runs overwrite older ones.
-  const failedAttempts = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const job of [...allJobs].reverse()) {
-      const failures: ItemResult[] = Array.isArray(job.failures) ? job.failures : [];
-      for (const f of failures) {
-        if (f.course_code && f.start_date) {
-          map.set(`${f.course_code}|${f.start_date}`, f.message || f.status);
-        }
-      }
-    }
-    return map;
-  }, [allJobs]);
+  // Count of missing rows with blocked errors (not eligible / outside support period)
+  const blockedCount = useMemo(() => {
+    if (!data) return 0;
+    return data.courses.reduce((sum, g) =>
+      sum + g.rows.filter((r) => {
+        if (r.status !== 'missing_in_ssg' || !r.start_date) return false;
+        const err = failedAttempts.get(`${g.course_code}|${r.start_date}`);
+        return !!err && isBlockedError(err);
+      }).length, 0,
+    );
+  }, [data, failedAttempts]);
 
   const toggle = (code: string) => {
     setExpanded((prev) => {
@@ -263,9 +299,9 @@ const stopPolling = useCallback(() => {
           <button
             onClick={syncAll}
             disabled={isJobRunning || totalSyncable === 0}
-            className="px-3 py-2 text-sm rounded-md text-white hover:opacity-90 disabled:opacity-50 bg-primary"
+            className={`px-3 py-2 text-sm rounded-md text-white hover:opacity-90 disabled:opacity-50 ${filter === 'blocked' ? 'bg-orange-600' : 'bg-primary'}`}
           >
-            {isJobRunning ? 'Syncing…' : `Sync All to SSG (${totalSyncable})`}
+            {isJobRunning ? 'Syncing…' : filter === 'blocked' ? `Retry All (${totalSyncable})` : `Sync All to SSG (${totalSyncable})`}
           </button>
           <button
             onClick={() => load(true)}
@@ -293,135 +329,88 @@ const stopPolling = useCallback(() => {
         </div>
       )}
 
-      {/* ── Current / most-recent job panel ─────────────────────────────────── */}
-      {allJobs.length > 0 && (() => {
-        const job = allJobs[0];
-        const isRunning = job.status === 'running';
-        const failures: ItemResult[] = Array.isArray(job.failures) ? job.failures : [];
-        const hasFailures = failures.length > 0;
-        const ERROR_LABEL: Record<string, string> = {
-          ssg_error: 'SSG Error', no_course: 'Course Not Found',
-          no_session_timing: 'No Session Timing', error: 'Error',
-        };
-        const borderCls = isRunning ? 'border-blue-200 dark:border-blue-800'
-          : hasFailures ? 'border-red-200 dark:border-red-800'
-          : 'border-green-200 dark:border-green-800';
-        const headerCls = isRunning ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800'
-          : hasFailures ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
-          : 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800';
-        const titleCls = isRunning ? 'text-blue-800 dark:text-blue-200'
-          : hasFailures ? 'text-red-800 dark:text-red-200'
-          : 'text-green-800 dark:text-green-200';
-        return (
-          <div className={`rounded-md border overflow-hidden ${borderCls}`}>
-            <div className={`px-4 py-2 border-b flex justify-between items-center flex-wrap gap-2 ${headerCls}`}>
-              <div className="flex items-center gap-3 text-sm">
-                {isRunning && <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
-                <span className={`font-medium ${titleCls}`}>
-                  {isRunning
-                    ? `Syncing… ${job.items_done} / ${job.total_items} runs`
-                    : job.summary || (hasFailures ? `Completed with ${failures.length} error${failures.length !== 1 ? 's' : ''}` : 'Sync completed')}
-                </span>
-                <span className="text-xs text-on-surface-secondary">
-                  {new Date(job.started_at).toLocaleString()}
-                  {job.completed_at && ` → ${new Date(job.completed_at).toLocaleTimeString()}`}
-                </span>
-                <span className={`text-xs px-1.5 py-0.5 rounded ${job.triggered_by === 'cron' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
-                  {job.triggered_by === 'cron' ? 'Cron' : 'Manual'}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-on-surface-secondary">
-                {job.submitted > 0 && <span className="text-green-600 dark:text-green-400">{job.submitted} submitted</span>}
-                {job.already_exists > 0 && <span>{job.already_exists} existed</span>}
-                {(job.ssg_errors + job.skipped) > 0 && <span className="text-red-500 dark:text-red-400">{job.ssg_errors + job.skipped} errors</span>}
-                {isRunning && (
-                  <button
-                    onClick={async () => {
-                      await fetch('/api/admin/wsq-schedule-sync/cancel-job', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ job_id: job.id }),
-                      });
-                      stopPolling();
-                      await fetchJobs();
-                    }}
-                    className="px-2 py-0.5 rounded border border-red-300 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
-                  >
-                    Cancel sync
-                  </button>
-                )}
-              </div>
-            </div>
-            {isRunning && job.total_items > 0 && (
-              <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20">
-                <div className="w-full bg-blue-100 dark:bg-blue-900 rounded-full h-1.5">
-                  <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.round((job.items_done / job.total_items) * 100)}%` }} />
-                </div>
-              </div>
-            )}
-            {hasFailures && (
-              <div className="divide-y divide-red-100 dark:divide-red-900 max-h-48 overflow-y-auto">
-                {failures.map((r, i) => (
-                  <div key={i} className="px-4 py-2 flex flex-wrap items-start gap-x-3 gap-y-1 text-xs">
-                    <span className="font-mono font-medium text-on-surface">{r.course_code}</span>
-                    <span className="font-mono text-on-surface-secondary">{r.start_date} → {r.end_date}</span>
-                    <span className={`px-1.5 py-0.5 rounded font-medium ${r.status === 'ssg_error' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'}`}>
-                      {ERROR_LABEL[r.status] ?? r.status}
-                    </span>
-                    {r.message && <span className="text-on-surface-secondary">{r.message}</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* ── Collapsible sync history ──────────────────────────────────────────── */}
-      {allJobs.length > 1 && (
+      {/* ── Sync History (single fully-collapsible panel) ────────────────────── */}
+      {allJobs.length > 0 && (
         <div className="rounded-md border border-default overflow-hidden">
           <button
             onClick={() => setHistoryOpen((o) => !o)}
             className="w-full px-4 py-2 flex items-center justify-between text-sm bg-surface-elevated hover:bg-surface text-on-surface"
           >
-            <span className="font-medium">Sync History ({allJobs.length - 1} previous run{allJobs.length - 1 !== 1 ? 's' : ''})</span>
+            <span className="font-medium flex items-center gap-2 flex-wrap">
+              Sync History
+              <span className="text-xs text-on-surface-secondary font-normal">({allJobs.length} run{allJobs.length !== 1 ? 's' : ''})</span>
+              {allJobs[0].status === 'running' && (
+                <span className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-normal">
+                  <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  Syncing {allJobs[0].items_done} / {allJobs[0].total_items}
+                </span>
+              )}
+            </span>
             <span>{historyOpen ? '▾' : '▸'}</span>
           </button>
+
           {historyOpen && (
-            <div className="divide-y divide-default max-h-96 overflow-y-auto">
-              {allJobs.slice(1).map((job) => {
+            <div className="divide-y divide-default max-h-[32rem] overflow-y-auto border-t border-default">
+              {allJobs.map((job) => {
+                const isRunning = job.status === 'running';
                 const failures: ItemResult[] = Array.isArray(job.failures) ? job.failures : [];
-                const hasFailures = failures.length > 0;
-                const statusCls = job.status === 'failed' || hasFailures
-                  ? 'text-red-600 dark:text-red-400'
+                const jobHasFailures = failures.length > 0;
+                const statusCls = isRunning ? 'text-blue-600 dark:text-blue-400'
+                  : (job.status === 'failed' || jobHasFailures) ? 'text-red-600 dark:text-red-400'
                   : 'text-green-600 dark:text-green-400';
                 return (
                   <div key={job.id} className="px-4 py-2 text-xs space-y-1">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="font-mono text-on-surface-secondary">
-                        {new Date(job.started_at).toLocaleString()}
-                        {job.completed_at && ` → ${new Date(job.completed_at).toLocaleTimeString()}`}
-                      </span>
-                      <span className={`px-1.5 py-0.5 rounded ${job.triggered_by === 'cron' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
-                        {job.triggered_by === 'cron' ? 'Cron' : 'Manual'}
-                      </span>
-                      <span className={`font-medium ${statusCls}`}>
-                        {job.summary || (hasFailures ? `${failures.length} error${failures.length !== 1 ? 's' : ''}` : 'Completed')}
-                      </span>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {isRunning && <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />}
+                        <span className="font-mono text-on-surface-secondary">
+                          {new Date(job.started_at).toLocaleString()}
+                          {job.completed_at && ` → ${new Date(job.completed_at).toLocaleTimeString()}`}
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded ${job.triggered_by === 'cron' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
+                          {job.triggered_by === 'cron' ? 'Cron' : 'Manual'}
+                        </span>
+                        <span className={`font-medium ${statusCls}`}>
+                          {isRunning
+                            ? `Syncing… ${job.items_done} / ${job.total_items} runs`
+                            : job.summary || (jobHasFailures ? `${failures.length} error${failures.length !== 1 ? 's' : ''}` : 'Completed')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-on-surface-secondary">
+                        {job.submitted > 0 && <span className="text-green-600 dark:text-green-400">{job.submitted} submitted</span>}
+                        {job.already_exists > 0 && <span>{job.already_exists} existed</span>}
+                        {job.ssg_errors > 0 && <span className="text-red-500">{job.ssg_errors} SSG errors</span>}
+                        {job.skipped > 0 && <span>{job.skipped} skipped</span>}
+                        {isRunning && (
+                          <button
+                            onClick={async () => {
+                              await fetch('/api/admin/wsq-schedule-sync/cancel-job', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ job_id: job.id }),
+                              });
+                              stopPolling();
+                              await fetchJobs();
+                            }}
+                            className="px-2 py-0.5 rounded border border-red-300 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+                          >
+                            Cancel sync
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-on-surface-secondary">
-                      {job.submitted > 0 && <span className="text-green-600 dark:text-green-400">{job.submitted} submitted</span>}
-                      {job.already_exists > 0 && <span>{job.already_exists} existed</span>}
-                      {job.ssg_errors > 0 && <span className="text-red-500">{job.ssg_errors} SSG errors</span>}
-                      {job.skipped > 0 && <span>{job.skipped} skipped</span>}
-                    </div>
-                    {hasFailures && (
-                      <div className="mt-1 space-y-0.5 pl-2 border-l-2 border-red-200 dark:border-red-800">
+                    {isRunning && job.total_items > 0 && (
+                      <div className="w-full bg-blue-100 dark:bg-blue-900 rounded-full h-1.5">
+                        <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.round((job.items_done / job.total_items) * 100)}%` }} />
+                      </div>
+                    )}
+                    {jobHasFailures && (
+                      <div className="mt-1 space-y-0.5 pl-2 border-l-2 border-red-200 dark:border-red-800 max-h-48 overflow-y-auto">
                         {failures.map((f, fi) => (
                           <div key={fi} className="text-on-surface-secondary font-mono">
                             {f.course_code} {f.start_date} → {f.end_date}
-                            {f.message && <span className="text-red-500 ml-2">{f.message}</span>}
+                            {f.message && <span className="text-red-500 ml-2">{normalizeError(f.message)}</span>}
                           </div>
                         ))}
                       </div>
@@ -445,7 +434,8 @@ const stopPolling = useCallback(() => {
 
           <div className="flex flex-wrap gap-2 items-center">
             {([
-              ['missing_in_ssg', `Missing (${data.counts.missing_in_ssg})`],
+              ['missing_in_ssg', `Missing (${Math.max(0, data.counts.missing_in_ssg - blockedCount)})`],
+              ['blocked',        `Not eligible / Outside support period (${blockedCount})`],
               ['synced',         `Synced (${data.counts.synced})`],
               ['extra_in_ssg',   `Only in SSG (${data.counts.extra_in_ssg})`],
               ['unparsed',       `Unparsed (${data.counts.unparsed})`],
@@ -453,7 +443,11 @@ const stopPolling = useCallback(() => {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 text-xs rounded-full border ${filter === f ? 'bg-primary text-white border-primary' : 'bg-surface text-on-surface border-default hover:bg-surface-elevated'}`}
+                className={`px-3 py-1.5 text-xs rounded-full border ${
+                  filter === f
+                    ? (f === 'blocked' ? 'bg-orange-600 text-white border-orange-600' : 'bg-primary text-white border-primary')
+                    : 'bg-surface text-on-surface border-default hover:bg-surface-elevated'
+                }`}
               >
                 {label}
               </button>
@@ -480,10 +474,17 @@ const stopPolling = useCallback(() => {
               const missingCount  = g.rows.filter((r) => r.status === 'missing_in_ssg').length;
               const syncedCount   = g.rows.filter((r) => r.status === 'synced').length;
               const syncableCount = g.rows.filter((r) => r.start_date && r.end_date).length;
-              const erroredCount  = g.rows.filter((r) =>
-                r.status === 'missing_in_ssg' && r.start_date &&
-                failedAttempts.has(`${g.course_code}|${r.start_date}`),
-              ).length;
+              // "errored" = missing rows with a non-blocked error; "blocked" = not eligible / outside support period
+              const erroredCount  = g.rows.filter((r) => {
+                if (r.status !== 'missing_in_ssg' || !r.start_date) return false;
+                const err = failedAttempts.get(`${g.course_code}|${r.start_date}`);
+                return !!err && !isBlockedError(err);
+              }).length;
+              const groupBlockedCount = g.rows.filter((r) => {
+                if (r.status !== 'missing_in_ssg' || !r.start_date) return false;
+                const err = failedAttempts.get(`${g.course_code}|${r.start_date}`);
+                return !!err && isBlockedError(err);
+              }).length;
               return (
                 <div key={g.course_code} className="bg-surface rounded-md border border-default overflow-hidden">
                   <div className="px-4 py-2 bg-surface-elevated border-b border-default flex items-center gap-3 flex-wrap">
@@ -502,15 +503,17 @@ const stopPolling = useCallback(() => {
                     <div className="flex items-center gap-2 text-xs">
                       {missingCount > 0 && <span className={`px-2 py-0.5 rounded-full ${STATUS_CLASS.missing_in_ssg}`}>{missingCount} missing</span>}
                       {erroredCount > 0 && <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">{erroredCount} errored</span>}
+                      {groupBlockedCount > 0 && <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">{groupBlockedCount} blocked</span>}
                       {syncedCount > 0 && <span className={`px-2 py-0.5 rounded-full ${STATUS_CLASS.synced}`}>{syncedCount} synced</span>}
                       <span className="text-on-surface-secondary">· {g.rows.length} rows</span>
                       {syncableCount > 0 && (
                         <button
                           onClick={(e) => { e.stopPropagation(); syncCourse(g); }}
                           disabled={isJobRunning}
-                          className="ml-2 px-2 py-1 text-xs rounded-md text-white bg-primary hover:opacity-90 disabled:opacity-50"
+                          className={`ml-2 px-2 py-1 text-xs rounded-md text-white hover:opacity-90 disabled:opacity-50 ${filter === 'blocked' ? 'bg-orange-600' : 'bg-primary'}`}
+                          title={filter === 'blocked' ? 'Retry — SSG previously rejected these as not eligible or outside the support period' : undefined}
                         >
-                          {`Sync to SSG (${syncableCount})`}
+                          {filter === 'blocked' ? `Retry (${syncableCount})` : `Sync to SSG (${syncableCount})`}
                         </button>
                       )}
                     </div>
@@ -534,8 +537,12 @@ const stopPolling = useCallback(() => {
                           const lastError = r.status === 'missing_in_ssg'
                             ? failedAttempts.get(rowKey)
                             : undefined;
+                          const rowBlocked = !!lastError && isBlockedError(lastError);
+                          const rowTint = lastError
+                            ? (rowBlocked ? ' bg-orange-50/40 dark:bg-orange-900/10' : ' bg-red-50/40 dark:bg-red-900/10')
+                            : '';
                           return (
-                          <tr key={i} className={`border-t border-default${lastError ? ' bg-red-50/40 dark:bg-red-900/10' : ''}`}>
+                          <tr key={i} className={`border-t border-default${rowTint}`}>
                             <td className="px-4 py-2 text-xs text-on-surface-secondary">{r.source === 'magento' ? 'Storefront' : 'SSG'}</td>
                             <td className="px-4 py-2 text-on-surface">{r.raw || '—'}</td>
                             <td className="px-4 py-2 font-mono text-xs">{r.start_date || '—'}</td>
@@ -549,18 +556,20 @@ const stopPolling = useCallback(() => {
                             <td className="px-4 py-2">
                               {(() => {
                                 if (r.status === 'missing_in_ssg') {
+                                  const blocked = !!lastError && isBlockedError(lastError);
                                   return (
                                     <div className="flex flex-col gap-1 items-start">
                                       <button
                                         onClick={() => syncRow(g, r)}
                                         disabled={isJobRunning}
-                                        className="px-2 py-1 text-xs rounded-md bg-primary text-white hover:opacity-90 disabled:opacity-50"
+                                        className={`px-2 py-1 text-xs rounded-md text-white hover:opacity-90 disabled:opacity-50 ${blocked ? 'bg-orange-600' : 'bg-primary'}`}
+                                        title={blocked ? 'Retry — SSG previously rejected this as not eligible or outside the support period' : undefined}
                                       >
                                         {lastError ? 'Retry sync' : 'Sync to SSG'}
                                       </button>
                                       {lastError && (
                                         <span
-                                          className="text-xs text-red-600 dark:text-red-400 cursor-help max-w-[220px] truncate"
+                                          className={`text-xs cursor-help max-w-[220px] truncate ${blocked ? 'text-orange-600 dark:text-orange-400' : 'text-red-600 dark:text-red-400'}`}
                                           title={lastError}
                                         >
                                           ✗ {lastError}
