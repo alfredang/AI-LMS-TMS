@@ -570,14 +570,36 @@ export async function cancelInvoiceJobOnEnrolmentCancelled(enrolmentId: string):
     }
   }
 
-  // Delete GRN invoice by doc number (try both apps)
+  // Collect GRN doc numbers to delete: use invoice_jobs if set, otherwise
+  // fall back to ssg_grants so invoices created before grn_doc_number was
+  // tracked are still cleaned up.
+  const grnDocNumbers: string[] = [];
   if (job.grn_doc_number) {
+    grnDocNumbers.push(String(job.grn_doc_number));
+  } else {
     try {
-      await qboDeleteInvoiceByDocNumberAnyApp(job.grn_doc_number);
+      const grantRows = await pool.query(
+        `SELECT grant_id::text AS grant_id
+         FROM public.ssg_grants
+         WHERE LOWER(TRIM(COALESCE(enrollment_id::text, ''))) = LOWER(TRIM($1::text))
+           AND grant_id IS NOT NULL AND TRIM(COALESCE(grant_id::text, '')) <> ''`,
+        [enrolmentId]
+      );
+      for (const gr of grantRows.rows) {
+        if (gr.grant_id) grnDocNumbers.push(String(gr.grant_id));
+      }
+    } catch (e) {
+      console.warn('[invoice_jobs] cancel — ssg_grants lookup failed:', e instanceof Error ? e.message : e);
+    }
+  }
+
+  for (const docNum of grnDocNumbers) {
+    try {
+      await qboDeleteInvoiceByDocNumberAnyApp(docNum);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.warn('[invoice_jobs] cancel — GRN invoice delete failed:', msg);
-      warnings.push(`GRN invoice: ${msg}`);
+      console.warn('[invoice_jobs] cancel — GRN invoice delete failed:', docNum, msg);
+      warnings.push(`GRN ${docNum}: ${msg}`);
     }
   }
 
