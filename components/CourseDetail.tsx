@@ -898,9 +898,9 @@ const AssessmentsSection: React.FC<{
 
     return (
         <ContentSection title="Assessment" collapsible>
-            {userRole === UserRole.Learner && (
+            {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    Download the assessment file as a Microsoft Word or make a new Google Doc copy, complete all questions, then upload the finished file below.
+                    Open the assessment link, download the questions as a Microsoft Word document (or make a Google Doc copy), fill in the answers, then submit the completed file on the LMS.
                 </p>
             )}
             {/* Other file-based assessments (excluding Written/Practical which are shown separately with toggle) */}
