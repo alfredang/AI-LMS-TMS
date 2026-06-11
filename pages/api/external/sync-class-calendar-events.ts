@@ -30,6 +30,15 @@ async function ensureLogTable() {
 }
 
 export async function runAutomation(opts: { daysAhead?: number } = {}) {
+  // ROLLBACK (calendar refactor): reconciliation no longer creates / syncs / removes
+  // calendar events or attendees. It will be rebuilt as a READ-ONLY discrepancy
+  // detector (highlighter) — see markdown/calendar-cancellation-fix-spec.md. Until
+  // then it is a hard no-op (even if toggled on in the Task Scheduler) so it can
+  // never recreate the cancelled-class incident. Set ALLOW_LEGACY_CALENDAR_RECON=true
+  // only to deliberately run the old write behaviour.
+  if (process.env.ALLOW_LEGACY_CALENDAR_RECON !== 'true') {
+    return { success: true, skipped: true, message: 'reconciliation disabled pending highlighter rebuild' };
+  }
   const started = Date.now();
   await ensureLogTable();
 

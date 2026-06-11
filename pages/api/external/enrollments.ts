@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import { triggerClassCalendarSync } from '@lib/calendar/triggerClassCalendarSync';
 
 /**
  * External API — Enrollments
@@ -201,10 +200,6 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse) {
     );
 
     const enrollment = result.rows[0];
-
-    // Calendar: enrollment changed -> reconcile the class event/attendees.
-    // (Re-evaluates the whole run, so safe regardless of this row's status.)
-    triggerClassCalendarSync(courseRun.id);
 
     return res.status(201).json({
       success: true,

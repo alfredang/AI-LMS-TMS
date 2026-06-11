@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import { triggerClassCalendarSync } from '@lib/calendar/triggerClassCalendarSync';
 
 /**
  * External API — Unassign Trainer from Course Run
@@ -49,9 +48,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `DELETE FROM course_run_trainer WHERE course_run_id = $1`,
       [result.rows[0].id]
     );
-
-    // Calendar: trainer unassigned -> drop them from the event's attendees.
-    triggerClassCalendarSync(result.rows[0].id);
 
     return res.status(200).json({
       success: true,

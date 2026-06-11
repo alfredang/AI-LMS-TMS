@@ -6,7 +6,6 @@ import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { isEnrolmentEligibleForAutoInvoice } from '../../../lib/services/invoiceEligibility';
 import { enqueueInvoiceJob } from '../../../lib/services/invoiceJobs';
-import { triggerClassCalendarSync } from '@lib/calendar/triggerClassCalendarSync';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -248,10 +247,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     await client.query('COMMIT');
-
-    // Calendar: a (confirmed) learner was added -> ensure the class event exists
-    // and reconcile attendees. Fire-and-forget; never blocks the response.
-    triggerClassCalendarSync(courseRunUuid);
 
     const st = (enrolmentStatus as string | undefined) || 'Confirmed';
     if (enrolmentId && userId && traineeEmail && courseCode && isEnrolmentEligibleForAutoInvoice(st)) {

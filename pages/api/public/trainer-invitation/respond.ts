@@ -16,7 +16,6 @@ import {
 import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSender';
 import { getGoogleCredentials } from '@/lib/google-auth/googleAuth';
 import { pushTrainerToTpgForRun } from '@/lib/ssg/pushTrainerToTpgForRun';
-import { triggerClassCalendarSync } from '@/lib/calendar/triggerClassCalendarSync';
 import { calendarWritesAllowed } from '@/lib/calendar/calendarGuard';
 import { getLocalYMD } from '../../../../lib/dateHelpers';
 
@@ -400,9 +399,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tpgErr
           );
         }
-        // Calendar: trainer accepted -> ensure the class event exists and the
-        // trainer (+ learners) are on it. Fire-and-forget; independent of TPG.
-        triggerClassCalendarSync(invitation.course_run_id);
       } catch (crtErr) {
         // Log loudly but do NOT rethrow — the invitation is already marked
         // accepted and the trainer should still see the thank-you page.
