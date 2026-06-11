@@ -137,4 +137,25 @@ pool
     console.warn('Auto-migration warning:', err.message);
   });
 
+// Durable course_run -> Google Calendar event mapping (per session date).
+// See database/migrations/create_course_run_calendar_event.sql.
+pool
+  .query(`
+    CREATE TABLE IF NOT EXISTS course_run_calendar_event (
+      id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      course_run_id   uuid NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
+      event_date      date NOT NULL,
+      google_event_id text NOT NULL,
+      base_event_id   text,
+      created_at      timestamptz NOT NULL DEFAULT now(),
+      updated_at      timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (course_run_id, event_date)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS crce_google_event_uniq ON course_run_calendar_event (google_event_id);
+    CREATE INDEX IF NOT EXISTS crce_course_run_idx ON course_run_calendar_event (course_run_id);
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
 export default pool;

@@ -24,6 +24,7 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/uti
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { syncEnrolmentToDB } from '../../../lib/ssg/utils/sync-enrolment-to-db';
 import { syncAllDaApplicantsToCalendar } from '../../../lib/google-calendar/da-calendar-sync';
+import { triggerClassCalendarSync } from '@lib/calendar/triggerClassCalendarSync';
 import type {
   UpsertFromSsgRequest,
   UpsertFromSsgResponse,
@@ -1060,6 +1061,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               syncAllDaApplicantsToCalendar(courseRunStep.courseRunUuid!).catch(err => {
                 console.error('❌ [upsert-from-ssg] background DA calendar sync failed:', err);
               });
+              // Also reconcile the durable class event + attendees for this run.
+              triggerClassCalendarSync(courseRunStep.courseRunUuid!);
             });
           }
         } else {

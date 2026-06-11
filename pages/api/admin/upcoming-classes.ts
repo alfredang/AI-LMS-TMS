@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { normalizeTrainerName, splitTrainerList } from '@/lib/trainerInvitations';
+import { triggerClassCalendarSync } from '@lib/calendar/triggerClassCalendarSync';
 
 interface UpcomingClass {
   id: string;
@@ -150,6 +151,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (result.rowCount === 0) {
         return res.status(404).json({ success: false, error: 'Course run not found' });
       }
+
+      // Calendar: a status change may require creating or removing the class's
+      // events (Cancelled -> remove; Confirmed/Pending/Unconfirmed -> ensure if it
+      // still has confirmed learners). Fire-and-forget; never blocks the response.
+      if (class_status) triggerClassCalendarSync(id);
 
       return res.status(200).json({ success: true, data: result.rows[0] });
     } catch (err) {

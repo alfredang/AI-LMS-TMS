@@ -490,6 +490,15 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
 
   console.log(`📨 Trainer invitation ${allowResend ? '(resend) ' : ''}sent to ${nextTrainerName} (${trainer.email}) for course run ${classRow.course_run_id}`);
 
+  // A reset (Unconfirmed) class re-enters the invite pipeline: flip it back to
+  // Pending once an invitation actually goes out. Central here so every caller
+  // (admin manual send, auto-sweep, on-decline escalation) gets it.
+  await pool.query(
+    `UPDATE course_run SET class_status = 'Pending', updated_at = NOW()
+      WHERE id = $1 AND class_status = 'Unconfirmed'`,
+    [courseRunUuid]
+  );
+
   return {
     ...baseResult,
     status: 'sent',

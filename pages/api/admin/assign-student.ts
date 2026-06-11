@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { triggerProformaGeneration } from '../../../lib/services/proformaInvoiceService';
+import { triggerClassCalendarSync } from '@lib/calendar/triggerClassCalendarSync';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -183,6 +184,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (newEnrollmentId) {
       triggerProformaGeneration(newEnrollmentId);
     }
+    // Calendar: a new/restored confirmed learner -> ensure the event + add them.
+    triggerClassCalendarSync(courseRunUuid);
 
     res.status(200).json({ success: true, message: enrollmentRestored ? 'Student re-enrolled successfully' : 'Student enrolled successfully' });
   } catch (error) {
