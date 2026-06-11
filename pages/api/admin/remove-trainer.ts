@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { triggerClassCalendarSync } from '@lib/calendar/triggerClassCalendarSync';
 
 /** Sync legacy single-trainer columns on course_run with the first trainer from the junction table */
 async function syncLegacyColumns(courseRunUuid: string) {
@@ -65,6 +66,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Sync the legacy columns
     await syncLegacyColumns(courseRunUuid);
+
+    // Calendar: trainer removed -> drop them from the event's attendees.
+    triggerClassCalendarSync(courseRunUuid);
 
     return res.status(200).json({ success: true, message: 'Trainer removed successfully' });
   } catch (error) {

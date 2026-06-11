@@ -3,6 +3,7 @@ import { getTrainingPartnerIdentifiers } from '@/lib/trainingPartnerIdentifiers'
 import { upsertSsgEnrolmentFromLocalEnrollment } from '@/lib/services/billingSync';
 import { isEnrolmentEligibleForAutoInvoice } from '@/lib/services/invoiceEligibility';
 import { enqueueInvoiceJob } from '@/lib/services/invoiceJobs';
+import { triggerClassCalendarSync } from '@/lib/calendar/triggerClassCalendarSync';
 
 export interface PostSsgEnrolSyncInput {
   traineeEmail: string;
@@ -233,6 +234,10 @@ export async function runPostSsgEnrolSync(input: PostSsgEnrolSyncInput): Promise
     );
 
     await client.query('COMMIT');
+
+    // Calendar: SSG enrolment synced to a (confirmed) learner -> ensure the class
+    // event exists and reconcile attendees. Fire-and-forget.
+    triggerClassCalendarSync(courseRunUuid);
 
     const enrollmentCreated = enrollResult.rows.length > 0;
     const dbEnrollmentId: string | null = enrollResult.rows[0]?.id ?? null;

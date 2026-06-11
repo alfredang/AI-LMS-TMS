@@ -16,6 +16,8 @@ import {
 import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSender';
 import { getGoogleCredentials } from '@/lib/google-auth/googleAuth';
 import { pushTrainerToTpgForRun } from '@/lib/ssg/pushTrainerToTpgForRun';
+import { triggerClassCalendarSync } from '@/lib/calendar/triggerClassCalendarSync';
+import { calendarWritesAllowed } from '@/lib/calendar/calendarGuard';
 import { getLocalYMD } from '../../../../lib/dateHelpers';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
@@ -398,6 +400,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tpgErr
           );
         }
+        // Calendar: trainer accepted -> ensure the class event exists and the
+        // trainer (+ learners) are on it. Fire-and-forget; independent of TPG.
+        triggerClassCalendarSync(invitation.course_run_id);
       } catch (crtErr) {
         // Log loudly but do NOT rethrow — the invitation is already marked
         // accepted and the trainer should still see the thank-you page.
@@ -420,7 +425,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
         );
         const tpCalRow = tpCalRes.rows[0];
-        if (!tpCalRow?.sync_google_calendar) {
+        if (!tpCalRow?.sync_google_calendar || !calendarWritesAllowed()) {
           console.log(`📅 [trainer-invitation/respond] sync_google_calendar is off — skipping`);
         } else {
           const calCredentials = await getGoogleCredentials(pool);

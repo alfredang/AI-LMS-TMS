@@ -5,6 +5,7 @@ import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { triggerProformaGeneration } from '../../../lib/services/proformaInvoiceService';
+import { triggerClassCalendarSync } from '@lib/calendar/triggerClassCalendarSync';
 
 /**
  * External API — Auto Create Learners
@@ -411,6 +412,10 @@ async function _runAutomationInner() {
           logEntry.details.push({ enrolmentRef, email, name, status: 'error', accountExists, reason: err instanceof Error ? err.message : String(err) });
         }
       }
+
+      // Calendar: reconcile this run's event + attendees once, after all its
+      // enrollees (adds + cancellations) are processed. Fire-and-forget.
+      if (enrollees.length > 0) triggerClassCalendarSync(run.db_id);
 
       logEntry.status = logEntry.errorCount === 0 ? 'success' : 'partial';
     } catch (err) {

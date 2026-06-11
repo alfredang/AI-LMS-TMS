@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import pool from '../db';
 import { getGoogleCredentials } from '../google-auth/googleAuth';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
+import { calendarWritesAllowed } from '../calendar/calendarGuard';
 import * as crypto from 'crypto';
 
 /**
@@ -80,7 +81,7 @@ export async function addDaLearnerToCalendar(
     const tpRes = await pool.query(
       `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
     );
-    if (!tpRes.rows[0]?.sync_google_calendar) return result;
+    if (!tpRes.rows[0]?.sync_google_calendar || !calendarWritesAllowed()) return result;
 
     // 1b. Verify the application is still active (not cancelled)
     const activeAppRes = await pool.query(
@@ -441,7 +442,7 @@ export async function removeDaLearnerFromCalendar(
     const tpRes = await pool.query(
       `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
     );
-    if (!tpRes.rows[0]?.sync_google_calendar) return result;
+    if (!tpRes.rows[0]?.sync_google_calendar || !calendarWritesAllowed()) return result;
 
     const credentials = await getGoogleCredentials(pool);
     const oauth2Client = new google.auth.OAuth2(

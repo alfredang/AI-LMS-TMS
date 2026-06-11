@@ -44,6 +44,7 @@ import { shouldSendQboInvoiceEmailFromQuickBooks } from './services/qboInvoiceEm
 import { toDateOnlyIso } from './utils/dateOnly';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from './google-auth/googleAuth';
+import { calendarWritesAllowed } from './calendar/calendarGuard';
 import { getLocalYMD } from './dateHelpers';
 
 export type AutoEnrolStatus =
@@ -466,7 +467,7 @@ async function addLearnerToCalendarEvent(
     `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
   );
   const tpRow = tpRes.rows[0];
-  if (!tpRow?.sync_google_calendar) {
+  if (!tpRow?.sync_google_calendar || !calendarWritesAllowed()) {
     console.log(`📅 [calendar-attendee] sync_google_calendar is off — skipping`);
     return false;
   }
@@ -593,7 +594,7 @@ export async function addTrainerToCalendarEvent(
     `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
   );
   const tpRow = tpRes.rows[0];
-  if (!tpRow?.sync_google_calendar) return result;
+  if (!tpRow?.sync_google_calendar || !calendarWritesAllowed()) return result;
 
   const credentials = await getGoogleCredentials(pool);
 
