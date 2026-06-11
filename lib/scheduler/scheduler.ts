@@ -192,6 +192,24 @@ async function seedDefaults() {
             api_endpoint: '/api/external/sync-google-calendar',
         },
         {
+            id: 'sync_trainers_to_calendar',
+            name: 'Add Trainers to Google Calendar',
+            description: 'Daily (LMS → Calendar): for every upcoming class in the window (today + days_in_advance, SGT) that has a trainer assigned IN THE LMS, adds that trainer as an attendee on the matching Google Calendar event (reuses addTrainerToCalendar). Only ADDS — it never reads trainers back from the calendar and never overwrites LMS data. This is the trainer counterpart to the learner calendar sync. Logged to lms_to_calendar_trainer_sync_log. DISABLED by default — enable from the Task Scheduler.',
+            cron_expression: '0 2 * * *', // 2:00 AM SGT daily
+            api_endpoint: '/api/external/sync-trainers-to-calendar',
+            days_in_advance: 7,
+            default_enabled: false,
+        },
+        {
+            id: 'sync_class_calendar_events',
+            name: 'Reconcile Class Calendar Events',
+            description: 'Daily (LMS → Calendar): for every upcoming class in the window (today + days_in_advance, SGT) with at least one confirmed learner, ensures a Google Calendar event exists (creating it if missing, regardless of how the learners were added) and reconciles attendees to the class roster + accepted trainers. For classes that are Cancelled or have no confirmed learners, removes their events. Uses the durable course_run_calendar_event mapping. Logged to class_calendar_sync_log. DISABLED by default — enable from the Task Scheduler.',
+            cron_expression: '0 3 * * *', // 3:00 AM SGT daily (before trainer/learner attendee syncs is fine; idempotent)
+            api_endpoint: '/api/external/sync-class-calendar-events',
+            days_in_advance: 14,
+            default_enabled: false,
+        },
+        {
             id: 'auto_send_courseware_attendance',
             name: 'Auto Send Courseware and Attendance Email',
             description: 'Sends courseware and attendance taking emails to learners in course runs starting today. Uses the email template configured in Company Settings.',
@@ -357,6 +375,14 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_generate_da_invoices', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-generate-da-invoices');
+            return runAutomation();
+        });
+        directHandlers.set('sync_trainers_to_calendar', async () => {
+            const { runAutomation } = await import('../../pages/api/external/sync-trainers-to-calendar');
+            return runAutomation();
+        });
+        directHandlers.set('sync_class_calendar_events', async () => {
+            const { runAutomation } = await import('../../pages/api/external/sync-class-calendar-events');
             return runAutomation();
         });
     }
