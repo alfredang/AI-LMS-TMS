@@ -251,10 +251,12 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
     const grn = row.grantId!;
     const exists = ssgExistsMap.get(grn) || { ok: false };
     if (!exists.ok) {
-      // Fallback: GRN not in ssg_grants — check if the enrolment exists in ssg_enrolments.
-      // This handles enrolments whose QB invoices exist but whose grants were never synced into FMS.
+      // GRN not in ssg_grants — try to proceed if we have a valid enrolment ID.
+      // Level 1: enrolment found in ssg_enrolments (synced from TPGateway)
+      // Level 2: enrolment not in ssg_enrolments but ID is present (not yet synced to FMS)
+      // In both cases the apply step will verify the invoice exists in QB before creating a payment.
       const enrId = String(row.enrolmentId || '').trim();
-      if (!enrId || !enrolmentExistsMap.get(enrId)) {
+      if (!enrId) {
         matched.push({
           ...row,
           matchStatus: 'unmatched',
@@ -266,11 +268,17 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
         });
         continue;
       }
-      // Enrolment found in FMS; proceed via QB invoice lookup (matchedFmsRecordId will be null).
-      row.warnings.push({
-        field: 'grant_id',
-        message: 'Grant not in FMS (ssg_grants); matched via enrolment in ssg_enrolments',
-      });
+      if (enrolmentExistsMap.get(enrId)) {
+        row.warnings.push({
+          field: 'grant_id',
+          message: 'Grant not in FMS (ssg_grants); matched via enrolment in ssg_enrolments',
+        });
+      } else {
+        row.warnings.push({
+          field: 'grant_id',
+          message: 'Grant and enrolment not in FMS; QB invoice will be verified during apply',
+        });
+      }
     }
 
     const alreadyAppliedLocal = alreadyAppliedSet.has(grn);
