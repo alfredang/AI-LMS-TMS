@@ -8,9 +8,13 @@ import {
   updateRowApplyResult,
 } from './grantImportDb';
 import { recalcAndPersistGrantPaymentRollups } from './grantImportRollup';
+import {
+  qboQuery,
+  qboCreatePayment as qboCreatePaymentSvc,
+  qboReadPayment as qboReadPaymentSvc,
+  qboVoidPayment as qboVoidPaymentSvc,
+} from '@/lib/services/qboInvoiceService';
 import pool from '@/lib/db';
-
-type ProxyResponse<T = any> = { success: boolean; data?: T; error?: string; details?: unknown };
 
 function escapeQbQueryString(value: string): string {
   return value.replace(/'/g, "''");
@@ -19,34 +23,10 @@ function escapeQbQueryString(value: string): string {
 const QB_ACCOUNT_ID_BY_NAME_PROMISE = new Map<string, Promise<string | null>>();
 const QB_PAYMENT_METHOD_ID_BY_NAME_PROMISE = new Map<string, Promise<string | null>>();
 
-async function callQbProxy(body: Record<string, any>): Promise<any> {
-  // IMPORTANT: this runs server-side. Do not use NEXT_PUBLIC_BASE_URL here because in local dev
-  // it may point to production, causing server-to-server calls to hit the wrong environment.
-  const baseUrl =
-    process.env.QBO_PROXY_BASE_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
-    'http://localhost:3000';
-  const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = (await resp.json().catch(() => null)) as ProxyResponse | null;
-  if (!resp.ok || !data?.success) {
-    throw new Error(data?.error || `QB proxy returned ${resp.status}`);
-  }
-  return data.data;
-}
-
 async function qbFindInvoiceByDocNumber(app: string | undefined, docNumber: string): Promise<{ id: string; customerRef?: string } | null> {
   const safe = escapeQbQueryString(String(docNumber || '').trim());
   if (!safe) return null;
-  const data = await callQbProxy({
-    action: 'query',
-    entity: 'invoice',
-    app,
-    query: `SELECT * FROM Invoice WHERE DocNumber = '${safe}' MAXRESULTS 1`,
-  });
+  const data = await qboQuery(app, `SELECT * FROM Invoice WHERE DocNumber = '${safe}' MAXRESULTS 1`);
   const inv = data?.QueryResponse?.Invoice;
   const row = Array.isArray(inv) ? inv[0] : inv;
   if (!row?.Id) return null;
@@ -61,12 +41,7 @@ async function qbFindInvoiceByLineDescriptionContains(
   if (!raw) return null;
   const safe = escapeQbQueryString(raw);
   try {
-    const data = await callQbProxy({
-      action: 'query',
-      entity: 'invoice',
-      app,
-      query: `SELECT * FROM Invoice WHERE Line.Description LIKE '%${safe}%' MAXRESULTS 1`,
-    });
+    const data = await qboQuery(app, `SELECT * FROM Invoice WHERE Line.Description LIKE '%${safe}%' MAXRESULTS 1`);
     const inv = data?.QueryResponse?.Invoice;
     const row = Array.isArray(inv) ? inv[0] : inv;
     if (!row?.Id) return null;
@@ -193,12 +168,7 @@ async function qbFindInvoiceByScanningRecentInvoices(
   const maxPages = 3; // up to 300 invoices in window
   for (let page = 0; page < maxPages; page++) {
     const startPos = page * pageSize + 1;
-    const data = await callQbProxy({
-      action: 'query',
-      entity: 'invoice',
-      app,
-      query: `SELECT * FROM Invoice WHERE TxnDate >= '${startIso}' AND TxnDate <= '${endIso}' STARTPOSITION ${startPos} MAXRESULTS ${pageSize}`,
-    });
+    const data = await qboQuery(app, `SELECT * FROM Invoice WHERE TxnDate >= '${startIso}' AND TxnDate <= '${endIso}' STARTPOSITION ${startPos} MAXRESULTS ${pageSize}`);
     const rows = data?.QueryResponse?.Invoice;
     const arr = Array.isArray(rows) ? rows : rows ? [rows] : [];
     if (arr.length === 0) return null;
@@ -219,12 +189,7 @@ async function qbQueryPaymentsByCustomerAndDate(
   const safeCust = escapeQbQueryString(String(customerRef || '').trim());
   const safeDate = escapeQbQueryString(String(txnDate || '').trim());
   if (!safeCust || !safeDate) return [];
-  const data = await callQbProxy({
-    action: 'query',
-    entity: 'payment',
-    app,
-    query: `SELECT * FROM Payment WHERE CustomerRef = '${safeCust}' AND TxnDate = '${safeDate}' MAXRESULTS 200`,
-  });
+  const data = await qboQuery(app, `SELECT * FROM Payment WHERE CustomerRef = '${safeCust}' AND TxnDate = '${safeDate}' MAXRESULTS 200`);
   const rows = data?.QueryResponse?.Payment;
   return Array.isArray(rows) ? rows : rows ? [rows] : [];
 }
@@ -232,12 +197,7 @@ async function qbQueryPaymentsByCustomerAndDate(
 async function qbQueryPaymentByRefNum(app: string | undefined, paymentRefNum: string): Promise<any | null> {
   const safe = escapeQbQueryString(String(paymentRefNum || '').trim());
   if (!safe) return null;
-  const data = await callQbProxy({
-    action: 'query',
-    entity: 'payment',
-    app,
-    query: `SELECT * FROM Payment WHERE PaymentRefNum = '${safe}' MAXRESULTS 1`,
-  });
+  const data = await qboQuery(app, `SELECT * FROM Payment WHERE PaymentRefNum = '${safe}' MAXRESULTS 1`);
   const rows = data?.QueryResponse?.Payment;
   const row = Array.isArray(rows) ? rows[0] : rows;
   return row?.Id ? row : null;
@@ -246,12 +206,7 @@ async function qbQueryPaymentByRefNum(app: string | undefined, paymentRefNum: st
 async function qbQueryPaymentsByRefNum(app: string | undefined, paymentRefNum: string): Promise<any[]> {
   const safe = escapeQbQueryString(String(paymentRefNum || '').trim());
   if (!safe) return [];
-  const data = await callQbProxy({
-    action: 'query',
-    entity: 'payment',
-    app,
-    query: `SELECT * FROM Payment WHERE PaymentRefNum = '${safe}' MAXRESULTS 200`,
-  });
+  const data = await qboQuery(app, `SELECT * FROM Payment WHERE PaymentRefNum = '${safe}' MAXRESULTS 200`);
   const rows = data?.QueryResponse?.Payment;
   return Array.isArray(rows) ? rows : rows ? [rows] : [];
 }
@@ -266,23 +221,13 @@ async function qbFindAccountIdByName(app: string | undefined, name: string): Pro
   const p = (async () => {
     const safe = escapeQbQueryString(n);
     // Exact match first
-    const exact = await callQbProxy({
-      action: 'query',
-      entity: 'account',
-      app,
-      query: `SELECT * FROM Account WHERE Name = '${safe}' MAXRESULTS 1`,
-    });
+    const exact = await qboQuery(app, `SELECT * FROM Account WHERE Name = '${safe}' MAXRESULTS 1`);
     const exactRows = exact?.QueryResponse?.Account;
     const exactRow = Array.isArray(exactRows) ? exactRows[0] : exactRows;
     if (exactRow?.Id) return String(exactRow.Id);
 
     // Fallback: some companies have slightly different suffixes, e.g. "DBS Bank" vs "DBS Bank - SGD".
-    const like = await callQbProxy({
-      action: 'query',
-      entity: 'account',
-      app,
-      query: `SELECT * FROM Account WHERE Name LIKE '${safe.replace(/%/g, '\\%')}%' MAXRESULTS 50`,
-    });
+    const like = await qboQuery(app, `SELECT * FROM Account WHERE Name LIKE '${safe.replace(/%/g, '\\%')}%' MAXRESULTS 50`);
     const likeRows = like?.QueryResponse?.Account;
     const likeArr = Array.isArray(likeRows) ? likeRows : likeRows ? [likeRows] : [];
     const found =
@@ -311,12 +256,7 @@ async function qbFindBankAccountIdByNameContains(app: string | undefined, nameCo
 
   const p = (async () => {
     const safe = escapeQbQueryString(t);
-    const data = await callQbProxy({
-      action: 'query',
-      entity: 'account',
-      app,
-      query: `SELECT * FROM Account WHERE AccountType = 'Bank' AND Name LIKE '%${safe.replace(/%/g, '\\%')}%' MAXRESULTS 50`,
-    });
+    const data = await qboQuery(app, `SELECT * FROM Account WHERE AccountType = 'Bank' AND Name LIKE '%${safe.replace(/%/g, '\\%')}%' MAXRESULTS 50`);
     const rows = data?.QueryResponse?.Account;
     const arr = Array.isArray(rows) ? rows : rows ? [rows] : [];
     const found =
@@ -343,12 +283,7 @@ async function qbFindPaymentMethodIdByName(app: string | undefined, name: string
 
   const p = (async () => {
     const safe = escapeQbQueryString(n);
-    const data = await callQbProxy({
-      action: 'query',
-      entity: 'paymentmethod',
-      app,
-      query: `SELECT * FROM PaymentMethod WHERE Name = '${safe}' MAXRESULTS 1`,
-    });
+    const data = await qboQuery(app, `SELECT * FROM PaymentMethod WHERE Name = '${safe}' MAXRESULTS 1`);
     const rows = data?.QueryResponse?.PaymentMethod;
     const row = Array.isArray(rows) ? rows[0] : rows;
     return row?.Id ? String(row.Id) : null;
@@ -386,9 +321,9 @@ async function qbReadPayment(
   depositToAccountId?: string;
   paymentMethodId?: string;
 } | null> {
-  const data = await callQbProxy({ action: 'read', entity: 'payment', id: paymentId, app });
-  const p = data?.Payment ?? data;
-  if (!p?.Id) return null;
+  const result = await qboReadPaymentSvc(app, paymentId);
+  if (!result?.id) return null;
+  const p = result.raw;
   return {
     id: String(p.Id),
     syncToken: p?.SyncToken ? String(p.SyncToken) : undefined,
@@ -400,14 +335,13 @@ async function qbReadPayment(
 }
 
 async function qbVoidPayment(app: string | undefined, paymentId: string, syncToken: string): Promise<void> {
-  await callQbProxy({ action: 'void', entity: 'payment', app, body: { Id: paymentId, SyncToken: syncToken } });
+  await qboVoidPaymentSvc(app, paymentId, syncToken);
 }
 
 async function qbCreatePayment(app: string | undefined, body: any): Promise<{ id: string }> {
-  const data = await callQbProxy({ action: 'create', entity: 'payment', app, body });
-  const p = data?.Payment ?? data;
-  if (!p?.Id) throw new Error('QB payment create returned no Id');
-  return { id: String(p.Id) };
+  const result = await qboCreatePaymentSvc(app, body);
+  if (!result?.id) throw new Error('QB payment create returned no Id');
+  return { id: result.id };
 }
 
 function toNum(x: unknown): number {
