@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { splitTrainerList } from '@/lib/trainerInvitations';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -29,9 +30,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.is_utap_eligible,
           c.funding_validity,
           c.renewed_status,
+          c.cas_score,
+          c.es_score,
+          c.whitelist_status,
           c.brochure_link,
           c.num_of_trainers,
-          c.trainers_list
+          c.trainers_list,
+          c.trainers_email_list,
+          (SELECT ARRAY_AGG(cr.course_run_id) FROM course_run cr WHERE cr.course_id = c.id) AS course_run_ids
       FROM course c
       ORDER BY c.course_code DESC
     `;
@@ -60,10 +66,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       isUtapEligible: !!row.is_utap_eligible,
       fundingValidity: row.funding_validity || null,
       renewedStatus: row.renewed_status || null,
+      casScore: row.cas_score != null ? parseFloat(row.cas_score) : null,
+      esScore: row.es_score != null ? parseFloat(row.es_score) : null,
+      whitelistStatus: row.whitelist_status || null,
       brochureLink: row.brochure_link || null,
       numOfTrainers: row.num_of_trainers || 0,
       trainersList: row.trainers_list || null,
+      trainersEmailList: row.trainers_email_list || null,
+      approvedTrainers: splitTrainerList(row.trainers_list),
       courseRunId: null,
+      courseRunIds: row.course_run_ids || [],
       startDate: null,
       endDate: null,
       classStatus: 'Published',

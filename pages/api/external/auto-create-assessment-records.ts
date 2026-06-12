@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { getGoogleDriveFolderId } from '../../../lib/googleDriveFolder';
 import {
     getDriveClient,
     findSubfolder,
@@ -67,9 +68,26 @@ async function ensureLogTable() {
     `);
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __assessmentRecordsRunning?: boolean };
+if (g.__assessmentRecordsRunning === undefined) g.__assessmentRecordsRunning = false;
+
 // ── Main automation runner ────────────────────────────────────────────────────
 
 export async function runAutomation() {
+    if (g.__assessmentRecordsRunning) {
+        console.warn('[auto-create-assessment-records] Another run is already in progress — skipping');
+        return { runId: '', startedAt: '', processed: 0, created: 0, existing: 0, errors: 0, results: [], skipped: true };
+    }
+    g.__assessmentRecordsRunning = true;
+    try {
+        return await _runAutomationInner();
+    } finally {
+        g.__assessmentRecordsRunning = false;
+    }
+}
+
+async function _runAutomationInner() {
     await ensureLogTable();
 
     const runId = `trainer_folder_${Date.now()}`;
@@ -117,9 +135,10 @@ export async function runAutomation() {
          FROM course_run cr
          JOIN course c ON c.id = cr.course_id
          LEFT JOIN trainer_profile tp ON tp.user_id = cr.assigned_trainer_id
-         WHERE DATE(cr.start_date) = CURRENT_DATE
+         WHERE cr.start_date = (NOW() AT TIME ZONE 'Asia/Singapore')::date
            AND cr.course_run_id IS NOT NULL
            AND cr.course_run_id <> ''
+           AND (cr.class_status IS NULL OR cr.class_status::text NOT ILIKE 'cancelled')
          ORDER BY cr.start_date ASC`
     );
 
@@ -132,14 +151,45 @@ export async function runAutomation() {
 
     // Google Drive
     const drive = await getDriveClient();
-    const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-    if (!rootFolderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID is not configured');
+    const rootFolderId = await getGoogleDriveFolderId();
+    if (!rootFolderId) throw new Error('Google Drive Root Folder ID is not configured. Set it in Company Setting → Integration → Google.');
 
     let created = 0, existing = 0, errors = 0;
     const results: any[] = [];
 
+    // Pre-fetch course_run_ids that were already successfully processed today.
+    // Guards against duplicate folder creation when the task runs multiple times
+    // (e.g. server restart at cron boundary) — the Google Drive Search API has
+    // eventual consistency and the in-memory folderCache is lost on restart.
+    const alreadyProcessedRes = await pool.query(
+        `SELECT DISTINCT course_run_id FROM auto_create_trainer_folder_log
+         WHERE status IN ('created', 'existing')
+           AND created_at::date = (NOW() AT TIME ZONE 'Asia/Singapore')::date`
+    );
+    const alreadyProcessed = new Set(alreadyProcessedRes.rows.map(r => r.course_run_id));
+
     for (const run of runs) {
         console.log(`\n📋 Processing: "${run.course_title}" [${run.course_code}] | run: ${run.course_run_id}`);
+
+        // Skip if already processed today (prevents duplicates on re-runs)
+        if (alreadyProcessed.has(run.course_run_id)) {
+            console.log(`  ⏭️ Already processed today — skipping`);
+            existing++;
+            results.push({
+                runId,
+                courseRunId: run.course_run_id,
+                courseTitle: run.course_title,
+                courseCode: run.course_code,
+                startDate: run.start_date,
+                endDate: run.end_date,
+                trainerName: run.trainer_name,
+                trainerSource: run.trainer_source,
+                folderName: null,
+                status: 'existing',
+                errorMessage: 'Already processed in an earlier run today',
+            });
+            continue;
+        }
 
         const logEntry: any = {
             runId,

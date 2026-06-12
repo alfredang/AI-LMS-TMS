@@ -4,6 +4,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
+import { RefreshCw } from 'lucide-react';
 
 // FormSection component definition moved outside to prevent re-creation on re-renders
 const FormSection: React.FC<{ title: string | React.ReactNode; children: React.ReactNode; className?: string }> = ({ title, children, className = "" }) => (
@@ -58,6 +59,92 @@ const salutationOptions = [
     { value: 'MRS', label: 'Mrs' },
     { value: 'DR', label: 'Dr' }
 ];
+
+// ── Session template helpers (shared with AddSessionsView) ─────────────────
+
+type SessionType = 'day' | 'evening';
+
+const normalizeModeOfTraining = (raw: any): string => {
+    if (!raw) return '';
+    const s = String(raw).trim();
+    if (['1','2','4','8','9','10'].includes(s)) return s;
+    const leading = s.match(/^(\d+)/);
+    if (leading) return leading[1];
+    const l = s.toLowerCase();
+    if (l.includes('assess'))                           return '8';
+    if (l.includes('sync') || l.includes('synchronous')) return '9';
+    if (l.includes('async') || l.includes('asynchronous')) return '2';
+    if (l.includes('classroom'))                        return '1';
+    if (l.includes('job') || l.includes('ojt'))         return '4';
+    if (l.includes('work'))                             return '10';
+    return '1';
+};
+
+const addDays = (dateStr: string, days: number): string => {
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+};
+
+const buildAutoSessions = (
+    timing: Record<string, any> | null,
+    type: SessionType,
+    defaultMode: string,
+    startDate: string,
+    endDate: string,
+    defaultVenueFields: { block: string; street: string; building: string; floor: string; unit: string; postalCode: string; room: string },
+) => {
+    if (!timing) return [];
+    const isOneDay = startDate && endDate && startDate === endDate;
+    const max = type === 'evening' ? 3 : 11;
+    const sessions: any[] = [];
+
+    let currentDate = startDate;
+    let prevEndTime = '';
+
+    for (let i = 1; i <= max; i++) {
+        const prefix = type === 'evening' ? `session_${i}_evening` : `session_${i}`;
+        const startTime = timing[`${prefix}_start_time`] || '';
+        const endTime   = timing[`${prefix}_end_time`]   || '';
+        if (!startTime && !endTime) break;
+
+        const mode = normalizeModeOfTraining(timing[`${prefix}_mode_of_training`]) || normalizeModeOfTraining(defaultMode) || '1';
+
+        let date = '';
+        if (startDate) {
+            if (isOneDay) {
+                date = startDate;
+            } else {
+                if (prevEndTime && startTime && startTime < prevEndTime) {
+                    const next = addDays(currentDate, 1);
+                    currentDate = (endDate && next > endDate) ? endDate : next;
+                }
+                date = currentDate;
+            }
+        }
+
+        prevEndTime = endTime;
+        sessions.push({
+            id: i - 1,
+            modeOfTraining: mode,
+            startDate: date,
+            endDate: date,
+            startTime,
+            endTime,
+            useDefaultVenue: true,
+            block: defaultVenueFields.block,
+            street: defaultVenueFields.street,
+            building: defaultVenueFields.building,
+            wheelchairAccess: OptionalSelector.YES,
+            primaryVenue: OptionalSelector.YES,
+            floor: defaultVenueFields.floor,
+            unit: defaultVenueFields.unit,
+            postalCode: defaultVenueFields.postalCode,
+            room: defaultVenueFields.room,
+        });
+    }
+    return sessions;
+};
 
 export const CreateNewClassView: React.FC = () => {
     const { setAdminPage, trainingProviderProfile } = useLms();
@@ -130,6 +217,13 @@ export const CreateNewClassView: React.FC = () => {
     // Optional sections visibility state
     const [showSessions, setShowSessions] = useState(false);
     const [showTrainer, setShowTrainer] = useState(false);
+
+    // Session template state
+    const [sessionTiming, setSessionTiming] = useState<Record<string, any> | null>(null);
+    const [sessionType, setSessionType] = useState<SessionType>('day');
+    const [hasDay, setHasDay] = useState(false);
+    const [hasEvening, setHasEvening] = useState(false);
+    const [isFetchingTiming, setIsFetchingTiming] = useState(false);
 
     // Optional field visibility states (only needed for intake details now)
     const [showOptionalFields, setShowOptionalFields] = useState({
@@ -255,6 +349,45 @@ export const CreateNewClassView: React.FC = () => {
         const newTrainers = [...trainers];
         newTrainers[trainerIndex] = { ...newTrainers[trainerIndex], [field]: value };
         setTrainers(newTrainers);
+    };
+
+    // Fetch session timing template from course_session_timing table
+    const fetchSessionTiming = async () => {
+        const code = courseReferenceNumber.trim().toUpperCase();
+        if (!code) return;
+
+        setIsFetchingTiming(true);
+        try {
+            const res = await fetch(getApiUrl(`/api/admin/course-session-timing?courseCode=${encodeURIComponent(code)}`));
+            const json = await res.json();
+
+            const timing = json.data ?? json.rows?.[0] ?? null;
+            setSessionTiming(timing);
+
+            if (timing) {
+                const isOneDay = courseStartDate && courseEndDate && courseStartDate === courseEndDate;
+                const dayAvailable = !!(timing.session_1_start_time);
+                const eveningAvailable = !isOneDay && !!(timing.session_1_evening_start_time);
+                setHasDay(dayAvailable);
+                setHasEvening(eveningAvailable);
+
+                const type: SessionType = !eveningAvailable || dayAvailable ? 'day' : 'evening';
+                setSessionType(type);
+
+                const autoSessions = buildAutoSessions(
+                    timing, type, modeOfTraining, courseStartDate, courseEndDate,
+                    { block, street, building, floor, unit, postalCode, room }
+                );
+                if (autoSessions.length > 0) {
+                    setSessions(autoSessions);
+                    setSessionCount(autoSessions.length);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching session timing:', err);
+        } finally {
+            setIsFetchingTiming(false);
+        }
     };
 
     // Function to fetch course run details from SSG API and save to database
@@ -416,8 +549,8 @@ export const CreateNewClassView: React.FC = () => {
         if (openingRegistrationDate && closingRegistrationDate) {
             const openingDate = new Date(openingRegistrationDate);
             const closingDate = new Date(closingRegistrationDate);
-            if (closingDate < openingDate) {
-                alert('Error: Closing Registration Date cannot be earlier than Opening Registration Date');
+            if (closingDate <= openingDate) {
+                alert('Error: Closing Registration Date must be after Opening Registration Date');
                 return;
             }
         }
@@ -1068,27 +1201,74 @@ export const CreateNewClassView: React.FC = () => {
                                     onChange={(e) => {
                                         const isChecked = e.target.checked;
                                         setShowSessions(isChecked);
-                                        // If checking the box and no sessions exist, add one
-                                        if (isChecked && sessions.length === 0) {
-                                            setSessions([{
-                                                id: 0,
-                                                modeOfTraining: '1',
-                                                startDate: '',
-                                                endDate: '',
-                                                startTime: '09:15',
-                                                endTime: '13:15',
-                                                useDefaultVenue: true,
-                                                block: '',
-                                                street: '',
-                                                building: '',
-                                                wheelchairAccess: OptionalSelector.YES,
-                                                primaryVenue: OptionalSelector.YES,
-                                                floor: '',
-                                                unit: '',
-                                                postalCode: '',
-                                                room: ''
-                                            }]);
-                                            setSessionCount(1);
+                                        if (isChecked) {
+                                            // Try to fetch template sessions from course_session_timing
+                                            const code = courseReferenceNumber.trim().toUpperCase();
+                                            if (code) {
+                                                // Fetch timing and auto-populate
+                                                setIsFetchingTiming(true);
+                                                fetch(getApiUrl(`/api/admin/course-session-timing?courseCode=${encodeURIComponent(code)}`))
+                                                    .then(res => res.json())
+                                                    .then(json => {
+                                                        const timing = json.data ?? json.rows?.[0] ?? null;
+                                                        setSessionTiming(timing);
+                                                        if (timing) {
+                                                            const isOneDay = courseStartDate && courseEndDate && courseStartDate === courseEndDate;
+                                                            const dayAvailable = !!(timing.session_1_start_time);
+                                                            const eveningAvailable = !isOneDay && !!(timing.session_1_evening_start_time);
+                                                            setHasDay(dayAvailable);
+                                                            setHasEvening(eveningAvailable);
+                                                            const type: SessionType = !eveningAvailable || dayAvailable ? 'day' : 'evening';
+                                                            setSessionType(type);
+                                                            const autoSessions = buildAutoSessions(
+                                                                timing, type, modeOfTraining, courseStartDate, courseEndDate,
+                                                                { block, street, building, floor, unit, postalCode, room }
+                                                            );
+                                                            if (autoSessions.length > 0) {
+                                                                setSessions(autoSessions);
+                                                                setSessionCount(autoSessions.length);
+                                                                return;
+                                                            }
+                                                        }
+                                                        // Fallback: add one blank session if no template found
+                                                        if (sessions.length === 0) {
+                                                            setSessions([{
+                                                                id: 0, modeOfTraining: '1', startDate: '', endDate: '',
+                                                                startTime: '09:15', endTime: '13:15', useDefaultVenue: true,
+                                                                block: '', street: '', building: '',
+                                                                wheelchairAccess: OptionalSelector.YES, primaryVenue: OptionalSelector.YES,
+                                                                floor: '', unit: '', postalCode: '', room: ''
+                                                            }]);
+                                                            setSessionCount(1);
+                                                        }
+                                                    })
+                                                    .catch(() => {
+                                                        // Fallback: add one blank session
+                                                        if (sessions.length === 0) {
+                                                            setSessions([{
+                                                                id: 0, modeOfTraining: '1', startDate: '', endDate: '',
+                                                                startTime: '09:15', endTime: '13:15', useDefaultVenue: true,
+                                                                block: '', street: '', building: '',
+                                                                wheelchairAccess: OptionalSelector.YES, primaryVenue: OptionalSelector.YES,
+                                                                floor: '', unit: '', postalCode: '', room: ''
+                                                            }]);
+                                                            setSessionCount(1);
+                                                        }
+                                                    })
+                                                    .finally(() => setIsFetchingTiming(false));
+                                            } else {
+                                                // No course code yet — add one blank session
+                                                if (sessions.length === 0) {
+                                                    setSessions([{
+                                                        id: 0, modeOfTraining: '1', startDate: '', endDate: '',
+                                                        startTime: '09:15', endTime: '13:15', useDefaultVenue: true,
+                                                        block: '', street: '', building: '',
+                                                        wheelchairAccess: OptionalSelector.YES, primaryVenue: OptionalSelector.YES,
+                                                        floor: '', unit: '', postalCode: '', room: ''
+                                                    }]);
+                                                    setSessionCount(1);
+                                                }
+                                            }
                                         }
                                     }}
                                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -1125,7 +1305,56 @@ export const CreateNewClassView: React.FC = () => {
             {showSessions && (
                 <div className="mb-12 border-t border-gray-200 pt-8">
                     <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Sessions</h3>
+                        <div className="flex items-center gap-3">
+                            <h3 className="text-2xl font-bold text-gray-800 dark:text-white">Sessions</h3>
+                            <Button
+                                variant="outline"
+                                onClick={fetchSessionTiming}
+                                disabled={isFetchingTiming || !courseReferenceNumber.trim()}
+                                className="flex items-center gap-1.5 text-sm px-3 py-1.5"
+                                title="Refetch template sessions from course timing"
+                            >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isFetchingTiming ? 'animate-spin' : ''}`} />
+                                <span>{isFetchingTiming ? 'Loading...' : 'Refresh Template'}</span>
+                            </Button>
+                            {/* Day / Evening toggle (only shown when both are available) */}
+                            {hasDay && hasEvening && (
+                                <div className="flex items-center gap-2 ml-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSessionType('day');
+                                            if (sessionTiming) {
+                                                const autoSessions = buildAutoSessions(
+                                                    sessionTiming, 'day', modeOfTraining, courseStartDate, courseEndDate,
+                                                    { block, street, building, floor, unit, postalCode, room }
+                                                );
+                                                if (autoSessions.length > 0) { setSessions(autoSessions); setSessionCount(autoSessions.length); }
+                                            }
+                                        }}
+                                        className={`px-3 py-1 text-sm rounded-md border ${sessionType === 'day' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'}`}
+                                    >
+                                        Day
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSessionType('evening');
+                                            if (sessionTiming) {
+                                                const autoSessions = buildAutoSessions(
+                                                    sessionTiming, 'evening', modeOfTraining, courseStartDate, courseEndDate,
+                                                    { block, street, building, floor, unit, postalCode, room }
+                                                );
+                                                if (autoSessions.length > 0) { setSessions(autoSessions); setSessionCount(autoSessions.length); }
+                                            }
+                                        }}
+                                        className={`px-3 py-1 text-sm rounded-md border ${sessionType === 'evening' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'}`}
+                                    >
+                                        Evening
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                         <Button
                             variant="outline"
                             onClick={() => updateSessionCount(sessions.length + 1)}

@@ -429,14 +429,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const linkCourseRunTrainer = requestData.course.run.linkCourseRunTrainer;
-      
-      if (!Array.isArray(linkCourseRunTrainer) || linkCourseRunTrainer.length === 0) {
-        return res.status(400).json({ 
-          error: 'linkCourseRunTrainer must be a non-empty array' 
+
+      if (!Array.isArray(linkCourseRunTrainer)) {
+        return res.status(400).json({
+          error: 'linkCourseRunTrainer must be an array'
         });
       }
 
-      // Validate trainer data
+      // Empty array is valid — used by the Remove TPG Trainer flow to clear all trainers on a course run.
+      // Non-empty arrays must validate each trainer entry.
       for (const trainerLink of linkCourseRunTrainer) {
         if (!trainerLink.trainer?.idNumber) {
           return res.status(400).json({ 
@@ -453,26 +454,110 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       console.log('✅ Trainer assignment validation passed, sending to SSG API...');
 
-      // First, fetch the existing course run data to get complete venue information
-      console.log('📥 Fetching existing course run data for venue information...');
-      const existingCourseRun = await apiClient.viewCourseRun(runId, includeExpired);
-      
-      if (existingCourseRun.error) {
-        console.log('❌ Failed to fetch existing course run data:', existingCourseRun.error);
-        return res.status(existingCourseRun.status || 500).json({
-          error: 'Failed to fetch existing course run data',
-          details: existingCourseRun.error
+      // Fetch existing course run data from SSG as the AUTHORITATIVE source for
+      // dates, venue, and scheduleInfo. The client's `ssgApiResponse.data.course.run`
+      // may be stale or missing fields — which caused SSG to reject the update with
+      // "Opening registration date must be before closing registration date" when
+      // the client payload defaulted registrationDates to {opening: 0, closing: 0}.
+      //
+      // SSG's viewCourseRun response shape is `data.course.run` — note the previous
+      // version of this code incorrectly read `data.run.venue`, so `existingVenue`
+      // was always empty regardless of whether the SSG fetch succeeded.
+      console.log('📥 Fetching existing course run data from SSG for dates + venue...');
+      let existingVenue: any = {};
+      let existingSsgRun: any = null;
+      try {
+        const existingCourseRun = await apiClient.viewCourseRun(runId, includeExpired);
+        if (!existingCourseRun.error) {
+          // Correct shape: data.course.run (not data.run)
+          existingSsgRun = (existingCourseRun.data as any)?.course?.run || null;
+          existingVenue = existingSsgRun?.venue || {};
+          console.log('📍 Existing SSG run snapshot:', JSON.stringify({
+            registrationOpeningDate: existingSsgRun?.registrationOpeningDate,
+            registrationClosingDate: existingSsgRun?.registrationClosingDate,
+            courseStartDate: existingSsgRun?.courseStartDate,
+            courseEndDate: existingSsgRun?.courseEndDate,
+            venue: existingVenue,
+          }, null, 2));
+        } else {
+          console.log('⚠️ Could not fetch existing course run data from SSG — falling back to client payload');
+        }
+      } catch (fetchErr) {
+        console.log('⚠️ Error fetching existing course run data, proceeding with request body data:', fetchErr);
+      }
+
+      // Transform the request to match the exact nested structure expected by SSG API.
+      // Prefer SSG's own snapshot fields when present — only fall back to client
+      // payload if the SSG fetch failed.
+      const runData = requestData.course.run;
+      const trainerData = requestData.course.run.linkCourseRunTrainer;
+
+      // Authoritative date resolvers. SSG returns dates as flat integers in
+      // YYYYMMDD form (e.g. 20260410). Client may send them as `registrationDates.opening`
+      // (nested). Prefer SSG's flat values; fall back to client nested; then 0.
+      let resolvedOpeningReg = existingSsgRun?.registrationOpeningDate
+        || runData.registrationDates?.opening
+        || 0;
+      let resolvedClosingReg = existingSsgRun?.registrationClosingDate
+        || runData.registrationDates?.closing
+        || 0;
+      const resolvedStartDate = existingSsgRun?.courseStartDate
+        || runData.courseDates?.start
+        || 0;
+      const resolvedEndDate = existingSsgRun?.courseEndDate
+        || runData.courseDates?.end
+        || 0;
+
+      // Validate course dates BEFORE hitting SSG — if missing, nothing we can do.
+      if (!resolvedStartDate || !resolvedEndDate) {
+        console.error('❌ Cannot assign trainer: SSG-side course dates are missing', {
+          resolvedStartDate, resolvedEndDate, runId,
+        });
+        return res.status(400).json({
+          error: {
+            code: 'MISSING_SSG_DATES',
+            message: `Cannot assign trainer to course run ${runId}: SSG does not have valid course start/end dates for this run. Please ensure the course run is fully published on TPGateway, then try again.`,
+          },
         });
       }
 
-      const existingRunData = existingCourseRun.data?.run;
-      const existingVenue = existingRunData?.venue || {};
+      // Auto-correct broken registration dates. Known SSG quirk: a course run
+      // can have both opening and closing registration dates set to the same
+      // day (or even empty), and SSG will reject its OWN data on edit with
+      // "Opening registration date must be before closing registration date".
+      //
+      // Since we're doing action="update" anyway, we fix the dates in the
+      // outbound payload: default opening to the course start date, closing
+      // to course start + 1 day. This lets us push through a trainer assignment
+      // without forcing the admin to hand-edit dates on TPGateway first.
+      const addOneDayYYYYMMDD = (yyyymmdd: number | string): number => {
+        const s = String(yyyymmdd);
+        if (s.length !== 8) return Number(yyyymmdd) || 0;
+        const y = parseInt(s.slice(0, 4), 10);
+        const m = parseInt(s.slice(4, 6), 10);
+        const d = parseInt(s.slice(6, 8), 10);
+        const date = new Date(Date.UTC(y, m - 1, d));
+        date.setUTCDate(date.getUTCDate() + 1);
+        const yy = date.getUTCFullYear();
+        const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(date.getUTCDate()).padStart(2, '0');
+        return parseInt(`${yy}${mm}${dd}`, 10);
+      };
 
-      console.log('📍 Existing venue data:', JSON.stringify(existingVenue, null, 2));
-
-      // Transform the request to match the exact nested structure expected by SSG API
-      const runData = requestData.course.run;
-      const trainerData = requestData.course.run.linkCourseRunTrainer;
+      if (!resolvedOpeningReg || !resolvedClosingReg || Number(resolvedOpeningReg) >= Number(resolvedClosingReg)) {
+        const originalOpening = resolvedOpeningReg;
+        const originalClosing = resolvedClosingReg;
+        // Default: open registration on the course start date, close it one day later.
+        // This is a safe minimal window that satisfies SSG's "opening < closing" rule
+        // without assuming anything about the real-world registration window.
+        resolvedOpeningReg = Number(resolvedStartDate);
+        resolvedClosingReg = addOneDayYYYYMMDD(resolvedStartDate);
+        console.warn(`⚠️ SSG registration dates invalid for run ${runId} — auto-correcting`, {
+          originalOpening, originalClosing,
+          newOpening: resolvedOpeningReg, newClosing: resolvedClosingReg,
+          reason: 'opening >= closing or missing',
+        });
+      }
       
       console.log('🔍 Raw trainer data received:', JSON.stringify(trainerData, null, 2));
       console.log('🔍 Is trainer data array?', Array.isArray(trainerData));
@@ -498,12 +583,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           run: {
             action: "update",
             registrationDates: {
-              opening: runData.registrationDates?.opening || 0,
-              closing: runData.registrationDates?.closing || 0
+              opening: resolvedOpeningReg,
+              closing: resolvedClosingReg
             },
             courseDates: {
-              start: runData.courseDates?.start || 0,
-              end: runData.courseDates?.end || 0
+              start: resolvedStartDate,
+              end: resolvedEndDate
             },
             scheduleInfoType: {
               code: runData.scheduleInfoType?.code || "01",
@@ -544,27 +629,96 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       console.log('🔄 Transformed payload for SSG API:', JSON.stringify(ssgRequestBody, null, 2));
 
+      // Helper: SSG sends dates as flat YYYYMMDD integers (or strings). EditRunInfo
+      // expects YYYY-MM-DD strings. Normalise either shape.
+      const toIsoDate = (val: any): string | undefined => {
+        if (!val) return undefined;
+        const s = String(val);
+        if (s.length === 8 && /^\d{8}$/.test(s)) {
+          return s.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
+        }
+        return s;
+      };
+
+      // Build the sessions filter: include ONLY sessions that have not yet
+      // started (session startDate > today). This avoids SSG errors on past
+      // sessions — when SSG receives an edit payload that references sessions
+      // whose startDate is in the past, its run-level validation can reject
+      // the whole request. By omitting past sessions from the payload, SSG
+      // leaves them untouched and only re-validates the future ones.
+      //
+      // Edge case: if all sessions are in the past (or there are no sessions
+      // at all), we simply omit the `sessions` field from editRunInfo, which
+      // matches the previous behaviour — SSG leaves sessions untouched.
+      const todayYYYYMMDD = (() => {
+        const now = new Date();
+        const y = now.getUTCFullYear();
+        const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(now.getUTCDate()).padStart(2, '0');
+        return parseInt(`${y}${m}${d}`, 10);
+      })();
+
+      const existingSsgSessions: any[] = Array.isArray(existingSsgRun?.sessions)
+        ? existingSsgRun.sessions
+        : [];
+
+      const futureSsgSessions = existingSsgSessions.filter((s: any) => {
+        const raw = s?.startDate;
+        if (!raw) return false;
+        const asNum = Number(String(raw).replace(/-/g, ''));
+        return Number.isFinite(asNum) && asNum > todayYYYYMMDD;
+      });
+
+      console.log(`📅 Sessions filter for run ${runId}: total=${existingSsgSessions.length}, future=${futureSsgSessions.length}, today=${todayYYYYMMDD}`);
+
+      // Build RunSessionEditInfo entries for the future sessions. Each one
+      // preserves all existing fields from SSG unchanged — we're not trying
+      // to mutate the sessions, just pass-through the subset SSG is allowed
+      // to re-validate. action="update" on each means "no-op update, just
+      // re-sync". toEditPayload will serialise these into the payload.
+      const mappedFutureSessions: any[] | undefined = futureSsgSessions.length > 0
+        ? futureSsgSessions.map((s: any) => {
+            const startDate = toIsoDate(s.startDate);
+            const endDate = toIsoDate(s.endDate);
+            return {
+              sessionId: s.sessionId || s.id,
+              startDate,
+              endDate,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              modeOfTraining: typeof s.modeOfTraining === 'object'
+                ? s.modeOfTraining?.code
+                : s.modeOfTraining,
+              action: 'update',
+              // Pass-through venue — SSG will keep these unchanged, no
+              // surprise mutations from partial venue data.
+              block: s?.venue?.block,
+              street: s?.venue?.street,
+              floor: s?.venue?.floor,
+              unit: s?.venue?.unit,
+              building: s?.venue?.building,
+              postalCode: s?.venue?.postalCode,
+              room: s?.venue?.room,
+              wheelChairAccess: s?.venue?.wheelChairAccess,
+            };
+          })
+        : undefined;
+
       // Create flat EditRunInfo structure that will produce the nested structure we want
       const editRunInfo: EditRunInfo = {
         courseReferenceNumber: requestData.course.courseReferenceNumber,
-        
-        // Convert dates back to YYYY-MM-DD format for EditRunInfo
-        openingRegistrationDate: runData.registrationDates?.opening ? 
-          (String(runData.registrationDates.opening).length === 8 ? 
-            String(runData.registrationDates.opening).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : 
-            String(runData.registrationDates.opening)) : undefined,
-        closingRegistrationDate: runData.registrationDates?.closing ? 
-          (String(runData.registrationDates.closing).length === 8 ? 
-            String(runData.registrationDates.closing).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : 
-            String(runData.registrationDates.closing)) : undefined,
-        courseStartDate: runData.courseDates?.start ? 
-          (String(runData.courseDates.start).length === 8 ? 
-            String(runData.courseDates.start).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : 
-            String(runData.courseDates.start)) : undefined,
-        courseEndDate: runData.courseDates?.end ? 
-          (String(runData.courseDates.end).length === 8 ? 
-            String(runData.courseDates.end).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : 
-            String(runData.courseDates.end)) : undefined,
+
+        // Dates sourced from SSG (preferred) or client fallback — already validated above.
+        openingRegistrationDate: toIsoDate(resolvedOpeningReg),
+        closingRegistrationDate: toIsoDate(resolvedClosingReg),
+        courseStartDate: toIsoDate(resolvedStartDate),
+        courseEndDate: toIsoDate(resolvedEndDate),
+
+        // Only pass future sessions — past sessions cause SSG run-level
+        // validation errors. Omitted entirely when no future sessions exist
+        // (toEditPayload drops undefined/empty arrays via the check at
+        // edit-delete-course-run.ts:448).
+        sessions: mappedFutureSessions,
 
         // Schedule info
         scheduleInfoTypeCode: runData.scheduleInfoType?.code || "01",
@@ -596,10 +750,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }))
       };
 
-      // Use the standard edit course run API method
-      const result = await apiClient.editCourseRun(runId, editRunInfo, includeExpired);
+      // For empty trainer arrays (Remove TPG Trainer flow), use editCourseRunTrainerOnly —
+      // it always serializes linkCourseRunTrainer even when empty, while the regular editCourseRun
+      // path (via toPayload) drops the field if the array is empty (edit-delete-course-run.ts:455),
+      // making removal impossible. editCourseRunTrainerOnly also re-fetches existing SSG data so
+      // it doesn't zero out other fields.
+      const result = trainersArray.length === 0
+        ? await apiClient.editCourseRunTrainerOnly(runId, editRunInfo, includeExpired)
+        : await apiClient.editCourseRun(runId, editRunInfo, includeExpired);
 
-      if (result.error) {
+      if (result.error && (result.error.code || result.error.message)) {
         console.log('❌ SSG API error during trainer assignment:', result.error);
         return res.status(result.status || 500).json(result.error);
       }

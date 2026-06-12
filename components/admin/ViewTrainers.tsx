@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -59,15 +59,10 @@ const DEFAULT_TRAINER_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
 )}`;
 
 const getTrainerThumbnailSrc = (trainer: Trainer): string => {
-  if (trainer.linkedin_url) {
-    const params = new URLSearchParams({ name: trainer.trainer_name });
-    if (trainer.profile_picture) {
-      params.set('profilePictureUrl', trainer.profile_picture);
-    }
-    return `/api/admin/trainer-image?${params.toString()}`;
+  if (trainer.profile_picture) {
+    return ensureAbsoluteImageUrl(trainer.profile_picture) || DEFAULT_TRAINER_AVATAR;
   }
-
-  return ensureAbsoluteImageUrl(trainer.profile_picture) || DEFAULT_TRAINER_AVATAR;
+  return DEFAULT_TRAINER_AVATAR;
 };
 
 const ViewTrainers: React.FC = () => {
@@ -81,6 +76,12 @@ const ViewTrainers: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddTrainerForm, setShowAddTrainerForm] = useState(false);
   const [visibleNrics, setVisibleNrics] = useState<Set<string>>(new Set());
+  // Track current page in a ref to avoid closure bugs in window event listeners
+  const currentPageRef = useRef(currentPage);
+
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
 
   const toggleNricVisibility = (userId: string) => {
     setVisibleNrics(prev => {
@@ -97,7 +98,129 @@ const ViewTrainers: React.FC = () => {
   const [targetStatus, setTargetStatus] = useState<'Active' | 'Inactive' | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  const itemsPerPage = 10;
+  // Inline NRIC editing states
+  const [editingNricId, setEditingNricId] = useState<string | null>(null);
+  const [nricEditValue, setNricEditValue] = useState('');
+  const [savingNric, setSavingNric] = useState(false);
+  const [nricMessage, setNricMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Profile image upload
+  const [uploadingImageFor, setUploadingImageFor] = useState<string | null>(null);
+  const [syncingAllImages, setSyncingAllImages] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadTargetRef = useRef<string | null>(null);
+
+  const handleImageUploadClick = (userId: string) => {
+    uploadTargetRef.current = userId;
+    fileInputRef.current?.click();
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const userId = uploadTargetRef.current;
+    if (!file || !userId) return;
+    e.target.value = '';
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be under 5MB');
+      return;
+    }
+
+    setUploadingImageFor(userId);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadRes = await fetch(`/api/upload/profile-picture-drive?role=trainer&userId=${userId}`, {
+        method: 'POST',
+        body: formData,
+      });
+      const uploadData = await uploadRes.json();
+
+      if (uploadData.success) {
+        await fetch('/api/profile/update-trainer', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            profileData: { profilePictureUrl: uploadData.data.fileUrl },
+          }),
+        });
+
+        setTrainers(prev => prev.map(t =>
+          t.user_id === userId ? { ...t, profile_picture: uploadData.data.fileUrl } : t
+        ));
+      } else {
+        alert('Upload failed: ' + (uploadData.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Upload failed');
+    } finally {
+      setUploadingImageFor(null);
+    }
+  };
+
+  // Sync single trainer image: auto-match from Google Drive folder by name
+  const handleSyncImage = async (trainer: Trainer) => {
+    setUploadingImageFor(trainer.user_id);
+    setSyncMessage(null);
+    try {
+      const res = await fetch('/api/admin/sync-trainer-images-from-drive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trainerIds: [trainer.user_id] }),
+      });
+      const data = await res.json();
+      if (data.success && data.summary.updated > 0) {
+        const updatedUrl = data.results.find((r: any) => r.status === 'updated')?.imageUrl;
+        if (updatedUrl) {
+          setTrainers(prev => prev.map(t =>
+            t.user_id === trainer.user_id ? { ...t, profile_picture: updatedUrl } : t
+          ));
+        }
+        setSyncMessage({ type: 'success', text: `Profile image synced from Google Drive for ${trainer.trainer_name}` });
+      } else {
+        setSyncMessage({ type: 'error', text: `No matching image found in Google Drive for ${trainer.trainer_name}. Upload the image to the trainer image folder first.` });
+      }
+    } catch {
+      setSyncMessage({ type: 'error', text: 'Failed to sync image.' });
+    } finally {
+      setUploadingImageFor(null);
+      setTimeout(() => setSyncMessage(null), 8000);
+    }
+  };
+
+  // Bulk sync: fetch LinkedIn images via Playwright, upload to Drive for all trainers missing images
+  const handleSyncAllImages = async () => {
+    if (!confirm('This will fetch LinkedIn profile images for all trainers without a photo. This may take a few minutes. Continue?')) return;
+    setSyncingAllImages(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch('/api/admin/sync-trainer-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSyncMessage({
+          type: 'success',
+          text: `Synced ${data.summary.updated} images from LinkedIn to Google Drive (${data.summary.skipped} skipped, ${data.summary.failed} failed).`,
+        });
+        if (data.summary.updated > 0) fetchTrainers();
+      } else {
+        setSyncMessage({ type: 'error', text: data.error || 'Sync failed.' });
+      }
+    } catch {
+      setSyncMessage({ type: 'error', text: 'Failed to sync images.' });
+    } finally {
+      setSyncingAllImages(false);
+      setTimeout(() => setSyncMessage(null), 10000);
+    }
+  };
+
+  const itemsPerPage = 50;
   const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
 
   const toggleCheckbox = (
@@ -161,6 +284,28 @@ const ViewTrainers: React.FC = () => {
     }
   };
 
+  const handleSaveNric = async (userId: string) => {
+    setSavingNric(true);
+    setNricMessage(null);
+    try {
+      const res = await fetch('/api/admin/update-trainer-nric', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, nric: nricEditValue }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.message || 'Failed to update NRIC');
+      setTrainers(prev => prev.map(t => t.user_id === userId ? { ...t, nric: nricEditValue || null } : t));
+      setNricMessage({ type: 'success', text: 'NRIC saved.' });
+      setEditingNricId(null);
+      setTimeout(() => setNricMessage(null), 3000);
+    } catch (err) {
+      setNricMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save NRIC' });
+    } finally {
+      setSavingNric(false);
+    }
+  };
+
   const fetchTrainers = async () => {
     try {
       setLoading(true);
@@ -174,7 +319,19 @@ const ViewTrainers: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchTrainers(); }, []);
+  useEffect(() => {
+    fetchTrainers();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👀 Tab focused, refreshing trainers for page:', currentPageRef.current);
+        fetchTrainers();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   const filteredTrainers = trainers.filter(trainer => {
     const matchesSearch = !searchQuery ||
@@ -237,10 +394,31 @@ const ViewTrainers: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Hidden file input for profile image upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        className="hidden"
+        onChange={handleImageFileChange}
+      />
       {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">View Trainers</h1>
         <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            onClick={handleSyncAllImages}
+            disabled={syncingAllImages}
+            className="border border-purple-500 text-purple-600 hover:bg-purple-50 dark:border-purple-400 dark:text-purple-400 dark:hover:bg-purple-900/20"
+          >
+            {syncingAllImages ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2" />
+            ) : (
+              <Icon name={IconName.User} className="w-4 h-4 mr-2" />
+            )}
+            {syncingAllImages ? 'Syncing...' : 'Sync LinkedIn Images'}
+          </Button>
           <Button variant="ghost" onClick={() => setShowBulkUpload(true)} className="border border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900/20">
             <Icon name={IconName.Upload} className="w-4 h-4 mr-2" />
             Bulk Upload Trainers
@@ -251,6 +429,18 @@ const ViewTrainers: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Feedback messages */}
+      {nricMessage && (
+        <div className={`px-4 py-2 rounded-md text-sm ${nricMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
+          {nricMessage.text}
+        </div>
+      )}
+      {syncMessage && (
+        <div className={`px-4 py-2 rounded-md text-sm ${syncMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300' : 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'}`}>
+          {syncMessage.text}
+        </div>
+      )}
 
       {/* KPI Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -369,67 +559,126 @@ const ViewTrainers: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-700/50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Name</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Contact</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">NRIC</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Type</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Area of Expertise</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Status</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account Status</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">LinkedIn Profile</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">CV Folder</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Skill Tags</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Certification Tags</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer Name</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Email</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Tel</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">NRIC</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Type</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Expertise</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Status</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Account</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">LinkedIn</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">CV</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Skills</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Certs</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                 {paginatedTrainers.map((trainer, index) => (
                   <tr key={`${trainer.trainer_name}-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
+                        <div
+                          className="flex-shrink-0 h-8 w-8 relative group cursor-pointer"
+                          onClick={() => handleImageUploadClick(trainer.user_id)}
+                          title="Click to upload profile image"
+                        >
                           <img
-                            className="h-10 w-10 rounded-full object-cover"
+                            className="h-8 w-8 rounded-full object-cover"
                             src={getTrainerThumbnailSrc(trainer)}
                             alt={trainer.trainer_name}
                             onError={(e) => {
                               e.currentTarget.src = DEFAULT_TRAINER_AVATAR;
                             }}
                           />
+                          {uploadingImageFor === trainer.user_id ? (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                            </div>
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Icon name={IconName.Upload} className="w-3.5 h-3.5 text-white" />
+                            </div>
+                          )}
                         </div>
-                        <div className="ml-4">
+                        <div className="ml-3">
                           <div className="text-sm font-medium text-gray-900 dark:text-white">{trainer.trainer_name}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <div className="text-sm text-gray-900 dark:text-white">{trainer.email}</div>
                       {trainer.secondary_email && (
                         <div className="text-sm text-gray-500 dark:text-gray-400">{trainer.secondary_email}</div>
                       )}
-                      <div className="text-sm text-gray-500 dark:text-gray-400">{trainer.telephone || 'N/A'}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-900 dark:text-white">
-                          {trainer.nric && trainer.nric !== 'N/A'
-                            ? (visibleNrics.has(trainer.user_id) ? trainer.nric : maskNric(trainer.nric))
-                            : 'N/A'}
-                        </span>
-                        {trainer.nric && trainer.nric !== 'N/A' && (
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      {trainer.telephone || 'N/A'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {editingNricId === trainer.user_id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={nricEditValue}
+                            onChange={e => setNricEditValue(e.target.value)}
+                            placeholder="e.g. S1234567A"
+                            className="w-32 px-2 py-1 text-sm border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:border-blue-500"
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleSaveNric(trainer.user_id);
+                              if (e.key === 'Escape') setEditingNricId(null);
+                            }}
+                          />
                           <button
-                            onClick={() => toggleNricVisibility(trainer.user_id)}
-                            className="text-gray-400 hover:text-blue-500 transition-colors"
-                            title={visibleNrics.has(trainer.user_id) ? 'Hide NRIC' : 'Show full NRIC'}
+                            onClick={() => handleSaveNric(trainer.user_id)}
+                            disabled={savingNric}
+                            className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                            title="Save"
                           >
-                            <Icon name={visibleNrics.has(trainer.user_id) ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                            <Icon name={IconName.Check} className="w-4 h-4" />
                           </button>
-                        )}
-                      </div>
+                          <button
+                            onClick={() => setEditingNricId(null)}
+                            disabled={savingNric}
+                            className="text-red-500 hover:text-red-700 disabled:opacity-50"
+                            title="Cancel"
+                          >
+                            <Icon name={IconName.Close} className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-900 dark:text-white">
+                            {trainer.nric && trainer.nric !== 'N/A'
+                              ? (visibleNrics.has(trainer.user_id) ? trainer.nric : maskNric(trainer.nric))
+                              : <span className="text-gray-400 italic">N/A</span>}
+                          </span>
+                          {trainer.nric && trainer.nric !== 'N/A' && (
+                            <button
+                              onClick={() => toggleNricVisibility(trainer.user_id)}
+                              className="text-gray-400 hover:text-blue-500 transition-colors"
+                              title={visibleNrics.has(trainer.user_id) ? 'Hide NRIC' : 'Show full NRIC'}
+                            >
+                              <Icon name={visibleNrics.has(trainer.user_id) ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setEditingNricId(trainer.user_id);
+                              setNricEditValue(trainer.nric && trainer.nric !== 'N/A' ? trainer.nric : '');
+                            }}
+                            className="text-gray-400 hover:text-blue-500 transition-colors"
+                            title="Edit NRIC"
+                          >
+                            <Icon name={IconName.Edit} className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{trainer.trainer_type || 'N/A'}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{trainer.trainer_type || 'N/A'}</td>
+                    <td className="px-3 py-2">
                       {(() => {
                         const areas = Array.isArray(trainer.areas_of_expertise)
                           ? trainer.areas_of_expertise
@@ -448,17 +697,17 @@ const ViewTrainers: React.FC = () => {
                         );
                       })()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(trainer.status)}`}>
                         {trainer.status || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getAccountStatusColor(trainer.account_status)}`}>
                         {capitalise(trainer.account_status)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {trainer.linkedin_url ? (
                         <a
                           href={trainer.linkedin_url.startsWith('http') ? trainer.linkedin_url : `https://${trainer.linkedin_url}`}
@@ -473,7 +722,7 @@ const ViewTrainers: React.FC = () => {
                         'N/A'
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {trainer.cv_folder_url ? (
                         <a
                           href={trainer.cv_folder_url}
@@ -489,7 +738,7 @@ const ViewTrainers: React.FC = () => {
                       )}
                     </td>
                     {/* Skill Tags */}
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       {Array.isArray(trainer.skills_tags) && trainer.skills_tags.length > 0 ? (
                         <div className="flex items-center gap-1 max-w-[200px]" title={trainer.skills_tags.join(', ')}>
                           <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 truncate max-w-[150px]">
@@ -504,7 +753,7 @@ const ViewTrainers: React.FC = () => {
                       )}
                     </td>
                     {/* Certification Tags */}
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       {Array.isArray(trainer.certification_tags) && trainer.certification_tags.length > 0 ? (
                         <div className="flex items-center gap-1 max-w-[200px]" title={trainer.certification_tags.join(', ')}>
                           <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 truncate max-w-[150px]">
@@ -518,42 +767,101 @@ const ViewTrainers: React.FC = () => {
                         <span className="text-sm text-gray-500 dark:text-gray-400">N/A</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {trainer.status === 'Active' ? (
-                        <Button
-                          variant="ghost"
-                          onClick={() => handleStatusChange(trainer, 'Inactive')}
-                          className="text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleSyncImage(trainer)}
+                          disabled={uploadingImageFor === trainer.user_id}
+                          title={uploadingImageFor === trainer.user_id ? 'Syncing image...' : 'Sync profile image'}
+                          className="inline-flex items-center justify-center p-1.5 rounded-md text-purple-600 hover:text-purple-800 hover:bg-purple-50 dark:hover:bg-purple-900/20 disabled:opacity-50"
                         >
-                          <Icon name={IconName.Close} className="w-4 h-4 mr-1" />
-                          Deactivate
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          onClick={() => handleStatusChange(trainer, 'Active')}
-                          className="text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
-                        >
-                          <Icon name={IconName.Check} className="w-4 h-4 mr-1" />
-                          Activate
-                        </Button>
-                      )}
+                          {uploadingImageFor === trainer.user_id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600" />
+                          ) : (
+                            <Icon name={IconName.User} className="w-4 h-4" />
+                          )}
+                        </button>
+                        {trainer.status === 'Active' ? (
+                          <button
+                            onClick={() => handleStatusChange(trainer, 'Inactive')}
+                            title="Deactivate trainer"
+                            className="inline-flex items-center justify-center p-1.5 rounded-md text-red-600 hover:text-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <Icon name={IconName.Close} className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleStatusChange(trainer, 'Active')}
+                            title="Activate trainer"
+                            className="inline-flex items-center justify-center p-1.5 rounded-md text-green-600 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-900/20"
+                          >
+                            <Icon name={IconName.Check} className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {totalPages > 1 && (
-              <div className="p-4 flex justify-between items-center border-t dark:border-gray-700">
-                <Button variant="ghost" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>
-                  Previous
-                </Button>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <Button variant="ghost" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>
-                  Next
-                </Button>
+              <div className="p-4 flex items-center justify-between border-t dark:border-gray-700">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, filteredTrainers.length)} of {filteredTrainers.length} trainers
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    First
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Prev
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(i => i === 1 || i === totalPages || Math.abs(i - currentPage) <= 1)
+                    .reduce<(number | 'ellipsis')[]>((acc, i, idx, arr) => {
+                      if (idx > 0 && i - (arr[idx - 1] as number) > 1) acc.push('ellipsis');
+                      acc.push(i);
+                      return acc;
+                    }, [])
+                    .map((item, idx) =>
+                      item === 'ellipsis' ? (
+                        <span key={`e${idx}`} className="px-2 text-gray-400">...</span>
+                      ) : (
+                        <button
+                          key={item}
+                          onClick={() => setCurrentPage(item)}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${currentPage === item
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                          {item}
+                        </button>
+                      )
+                    )}
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Last
+                  </button>
+                </div>
               </div>
             )}
           </>

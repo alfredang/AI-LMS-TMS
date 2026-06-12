@@ -1,4 +1,6 @@
 // User role types
+export type VirtualMeetingProvider = 'google_meet' | 'zoom' | 'teams';
+
 export enum UserRole {
   Learner = 'Learner',
   Trainer = 'Trainer',
@@ -224,6 +226,12 @@ export interface ApiKeyWithModel {
 
 export interface TrainingProviderProfile extends BaseProfile {
   password?: string;
+  // Top-level mirrors of selected adminSettings, populated by /api/training-provider/info
+  // for non-admin contexts (e.g. learner/trainer course view).
+  showLessonPlanLearnerView?: boolean;
+  showCertificateDelivery?: boolean;
+  certificateDeliveryLabel?: string;
+  certificateDeliveryLink?: string;
   companyName: string;
   companyShortname: string;
   uen: string;
@@ -232,6 +240,8 @@ export interface TrainingProviderProfile extends BaseProfile {
   companyTel: string;
   companyWebsite: string;
   companyLogoUrl?: string;
+  supportEmail?: string;
+  contactTel?: string;
   loginId: string;
   contactPerson: {
     name: string;
@@ -256,6 +266,8 @@ export interface TrainingProviderProfile extends BaseProfile {
   ssgApp4ClientId?: string;
   ssgApp4ClientSecret?: string;
   ssgDefaultApp?: string;
+  ssgAppCount?: number;
+  ssgAppNames?: Record<string, string>;
   integrations: {
     syncGoogleCalendar: boolean;
     googleCalendarUrl?: string;
@@ -266,6 +278,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     googleClientSecret?: string;
     googleRefreshToken?: string;
     googleSlidesTemplateId?: string;
+    googleServiceAccountJson?: string;
     trainerProfileImageUrl?: string;
     certificateFolderUrl?: string;
     masterListUrl?: string;
@@ -275,13 +288,19 @@ export interface TrainingProviderProfile extends BaseProfile {
     tertiaryTpmsUrl?: string;
     n8nHost1Url?: string;
     n8nHost2Url?: string;
-    magentoBackendUrl?: string;
+    tertiaryCoursesSgUrl?: string;
+    tertiaryCoursesSgApiKey?: string;
     openClawMode?: 'live' | 'local';
     openClawGatewayUrl?: string;
     openClawLocalGatewayUrl?: string;
     openClawHooksPath?: string;
     openClawAgentId?: string;
     openClawCallbackUrl?: string;
+    virtualMeetingProvider?: VirtualMeetingProvider;
+    zoomClientId?: string;
+    zoomClientSecret?: string;
+    zoomConnected?: boolean;
+    zoomUserEmail?: string;
   };
   adminSettings: {
     autoSendProFormaInvoice: boolean;
@@ -290,10 +309,22 @@ export interface TrainingProviderProfile extends BaseProfile {
     autoSendReceiptOnPayment: boolean;
     autoSendCertificateOnCompletion: boolean;
     autoSendThankYouEmail: boolean;
+    autoImportDaFromEmail: boolean;
+    autoEnrolDirectApplications: boolean;
+    autoGenerateQbInvoice: boolean;
+    autoAddLearnerToCalendar: boolean;
+    showLessonPlanLearnerView: boolean;
+    showCertificateDelivery: boolean;
+    certificateDeliveryLabel: string;
+    certificateDeliveryLink: string;
     upcomingClassesThresholdDays: number;
+    certificateAttendanceThreshold: number;
+    casThreshold: number;
+    esThreshold: number;
   };
   securitySettings: {
     autoMaskSensitiveData: boolean;
+    sanitiseAfterMonths: number;
     autoDeleteAfter6Months: boolean;
     enableOtpLogin: boolean;
     enableDefaultOtp: boolean;
@@ -310,6 +341,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     enhancedFunding: number;
     gstRate: number;
     isGstRegistered: boolean;
+    gstRegistrationNumber: string;
   };
   colorScheme?: string; // Stored as text/hex color in database
 }

@@ -36,12 +36,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           COALESCE(cr.assigned_trainer_name, au.full_name, '') AS assigned_trainer_name,
           cr.start_date,
           cr.end_date,
-          cr.mode_of_learning
+          cr.mode_of_learning,
+          cr.class_status,
+          COALESCE(cr.class_type, 'Physical') AS class_type,
+          CASE
+            WHEN cr.virtual_meeting_provider = 'zoom'
+              THEN COALESCE(cr.virtual_meeting_host_link, cr.virtual_meeting_link)
+            ELSE cr.virtual_meeting_link
+          END AS virtual_meeting_link,
+          cr.virtual_meeting_host_link,
+          cr.virtual_meeting_link AS virtual_meeting_join_link,
+          cr.virtual_meeting_provider
       FROM course_run cr
       JOIN course c ON cr.course_id = c.id
       LEFT JOIN app_user au ON cr.assigned_trainer_id = au.id
       WHERE (
         cr.assigned_trainer_id = $1
+        OR cr.tpg_assigned_trainer_id = $1
         OR EXISTS (
           SELECT 1 FROM course_run_trainer crt
           WHERE crt.course_run_id = cr.id AND crt.trainer_id = $1
@@ -87,6 +98,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `;
     }
 
+    // Active only: current + upcoming classes (not ended yet)
+    if (req.query.activeOnly === 'true') {
+      sqlQuery += ` AND (cr.end_date IS NULL OR cr.end_date >= CURRENT_DATE)`;
+    }
+
     sqlQuery += ` ORDER BY cr.start_date DESC`;
 
     const result = await pool.query(sqlQuery, params);
@@ -109,8 +125,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       tgsRef: row.course_code,
       startDate: row.start_date,
       endDate: row.end_date,
-      modeOfLearning: Array.isArray(row.mode_of_learning) 
-        ? row.mode_of_learning 
+      classType: row.class_type || 'Physical',
+      virtualMeetingLink: row.virtual_meeting_link || null,
+      virtualMeetingHostLink: row.virtual_meeting_host_link || null,
+      virtualMeetingJoinLink: row.virtual_meeting_join_link || null,
+      virtualMeetingProvider: row.virtual_meeting_provider || null,
+      classStatus: row.class_status,
+      modeOfLearning: Array.isArray(row.mode_of_learning)
+        ? row.mode_of_learning
         : [row.mode_of_learning],
       trainer: 'Current Trainer',
       enrollmentStatus: 'not-enrolled',

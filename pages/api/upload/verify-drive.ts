@@ -3,6 +3,7 @@ import { google, drive_v3 } from 'googleapis';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
 import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
+import { getGoogleDriveFolderId } from '../../../lib/googleDriveFolder';
 
 export const config = {
     api: {
@@ -121,9 +122,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ success: false, error: 'Missing studentName or courseRunId' });
     }
 
-    const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    const parentFolderId = await getGoogleDriveFolderId();
     if (!parentFolderId) {
-        return res.status(500).json({ success: false, error: 'GOOGLE_DRIVE_FOLDER_ID is not configured.' });
+        return res.status(500).json({ success: false, error: 'Google Drive Root Folder ID is not configured. Set it in Company Setting → Integration → Google.' });
     }
 
     try {

@@ -71,21 +71,27 @@ function parseSsgDate(d: number | string | undefined): string | null {
   return null;
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __dateSyncRunning?: boolean };
+if (g.__dateSyncRunning === undefined) g.__dateSyncRunning = false;
+
 // ── Main sync runner ──────────────────────────────────────────────────────────
 
 export async function runDateSync() {
-  await ensureLogTable();
-
-  // De-duplication guard: skip if already ran 3 or more times today (SGT)
-  const recent = await pool.query(
-    `SELECT COUNT(DISTINCT run_id) AS run_count
-     FROM course_run_date_sync_log
-     WHERE (created_at AT TIME ZONE 'Asia/Singapore')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')::date`
-  );
-  if (Number(recent.rows[0]?.run_count) >= 3) {
-    console.log(`⏭️ sync-course-run-dates: skipping — already ran 3 times today (SGT)`);
-    return { runId: `skipped_${Date.now()}`, startedAt: new Date().toISOString(), processed: 0, updated: 0, noChange: 0, errors: 0, results: [], skipped: true };
+  if (g.__dateSyncRunning) {
+    console.warn('[sync-course-run-dates] Another run is already in progress — skipping');
+    return { runId: '', startedAt: '', processed: 0, updated: 0, noChange: 0, errors: 0, results: [], skipped: true };
   }
+  g.__dateSyncRunning = true;
+  try {
+    return await _runDateSyncInner();
+  } finally {
+    g.__dateSyncRunning = false;
+  }
+}
+
+async function _runDateSyncInner() {
+  await ensureLogTable();
 
   const runId = `sync_${Date.now()}`;
   const startedAt = new Date().toISOString();
@@ -108,7 +114,7 @@ export async function runDateSync() {
        TO_CHAR(cr.end_date,   'YYYY-MM-DD')    AS db_end_date
      FROM course_run cr
      JOIN course c ON c.id = cr.course_id
-     WHERE DATE(cr.start_date) = CURRENT_DATE
+     WHERE cr.start_date = (NOW() AT TIME ZONE 'Asia/Singapore')::date
        AND cr.course_run_id IS NOT NULL
        AND cr.course_run_id <> ''
      ORDER BY cr.start_date ASC`
@@ -257,9 +263,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const result = await runDateSync();
-    if (result.skipped) {
-      return res.status(429).json({ success: false, error: 'Daily run limit reached (3 runs/day SGT). Try again tomorrow.' });
-    }
     return res.status(200).json({ success: true, ...result });
   } catch (err) {
     console.error('❌ sync-course-run-dates error:', err);

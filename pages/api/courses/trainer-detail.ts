@@ -76,7 +76,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cr.start_date,
         cr.end_date,
         c.resource_links,
-        c.funding_validity
+        c.funding_validity,
+        COALESCE(cr.class_type, 'Physical') AS class_type,
+        CASE
+          WHEN cr.virtual_meeting_provider = 'zoom'
+            THEN COALESCE(cr.virtual_meeting_host_link, cr.virtual_meeting_link)
+          ELSE cr.virtual_meeting_link
+        END AS virtual_meeting_link,
+        cr.virtual_meeting_host_link,
+        cr.virtual_meeting_link AS virtual_meeting_join_link,
+        cr.virtual_meeting_provider
       FROM trainer_profile tp
       JOIN course_run cr ON (
         tp.user_id = cr.assigned_trainer_id
@@ -225,7 +234,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           courseId: courseDetail.course_id,
           courseCode: courseDetail.course_code,
           resourceLinks: courseDetail.resource_links ? (typeof courseDetail.resource_links === 'string' ? JSON.parse(courseDetail.resource_links) : courseDetail.resource_links) : [],
-          fundingValidity: courseDetail.funding_validity || null
+          fundingValidity: courseDetail.funding_validity || null,
+          classType: courseDetail.class_type || 'Physical',
+          virtualMeetingLink: courseDetail.virtual_meeting_link || null,
+          virtualMeetingHostLink: courseDetail.virtual_meeting_host_link || null,
+          virtualMeetingJoinLink: courseDetail.virtual_meeting_join_link || null,
+          virtualMeetingProvider: courseDetail.virtual_meeting_provider || null
         },
         learningUnits,
         bookmarkedSubtopics

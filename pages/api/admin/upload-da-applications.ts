@@ -3,6 +3,9 @@ import pool from '../../../lib/db';
 import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { bulkProcessDirectApplications, createNativeEnrolmentFromDA, processDirectApplication } from '../../../lib/autoEnrolDirectApplications';
+import { addDaLearnerToCalendar, removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -36,8 +39,11 @@ const columnMapping: Record<string, string> = {
     'SkillsFuture subsidy': 'skillsfuture_subsidy',
     'SkillsFuture Subsidy': 'skillsfuture_subsidy',
     'SkillsFuture Credit': 'skillsfuture_credit',
+    'SF Claim ID': 'skillsfuture_credit_claim_id',
     'SkillsFuture Credit claim ID': 'skillsfuture_credit_claim_id',
     'SkillsFuture Credit Claim ID': 'skillsfuture_credit_claim_id',
+    'Grant ID': 'grant_id',
+    'Grant ID (BL)': 'grant_id',
     'Application Status': 'application_status',
     'Course Title': 'course_title',
     'Course Reference Number': 'course_reference_number',
@@ -47,7 +53,20 @@ const columnMapping: Record<string, string> = {
     'Course Run End Date': 'course_end_date',
     'Highest Qualification': 'highest_qualification',
     'Highest Relevant Certification': 'highest_relevant_certification',
+    'Enrol Status': 'enrolment_status',
+    'Enrolment Status': 'enrolment_status',
+    'Enrol ID': 'enrolment_id',
+    'Enrolment ID': 'enrolment_id',
+    'Status': 'application_status',
 };
+
+function hasRealEnrolmentId(value: unknown): boolean {
+    if (value === null || value === undefined) return false;
+    const enrolmentId = String(value).trim();
+    if (!enrolmentId) return false;
+    const upper = enrolmentId.toUpperCase();
+    return upper !== 'MANUAL' && upper !== 'N/A' && upper !== 'NA' && upper !== '-';
+}
 
 // Parse date from various formats
 function parseDate(value: any): string | null {
@@ -91,45 +110,50 @@ function parseDate(value: any): string | null {
     return null;
 }
 
+// Normalize a header label so matching is tolerant of casing, leading/trailing
+// whitespace, and collapsed internal spaces (e.g. "Application ID " or "application  id").
+const normalizeHeader = (label: string): string => label.trim().toLowerCase().replace(/\s+/g, ' ');
+
+// Pre-build a normalized lookup: normalized Excel header -> db column.
+const normalizedColumnMapping: Record<string, string> = Object.entries(columnMapping).reduce(
+    (acc, [excelKey, dbKey]) => {
+        acc[normalizeHeader(excelKey)] = dbKey;
+        return acc;
+    },
+    {} as Record<string, string>
+);
+
+const NUMERIC_FIELDS = ['payable_fee', 'full_course_fee', 'gst', 'skillsfuture_subsidy', 'skillsfuture_credit'];
+
 // Transform Excel row to database format
 function transformRow(excelRow: Record<string, any>): Record<string, any> {
     const dbRow: Record<string, any> = {};
 
-    for (const [excelKey, dbKey] of Object.entries(columnMapping)) {
-        if (excelRow[excelKey] !== undefined && excelRow[excelKey] !== '') {
-            let value = excelRow[excelKey];
+    for (const [excelKey, rawValue] of Object.entries(excelRow)) {
+        if (rawValue === undefined || rawValue === '') continue;
 
-            // Handle date fields
-            if (dbKey.includes('date')) {
-                value = parseDate(value);
-            }
+        // Match the header (normalized) against the column mapping. Also accept a
+        // snake_case key in case the data was already transformed upstream.
+        const dbKey = normalizedColumnMapping[normalizeHeader(excelKey)]
+            ?? (Object.values(columnMapping).includes(excelKey.toLowerCase().replace(/\s+/g, '_'))
+                ? excelKey.toLowerCase().replace(/\s+/g, '_')
+                : undefined);
+        if (!dbKey || dbRow[dbKey] !== undefined) continue;
 
-            // Handle numeric fields
-            if (['payable_fee', 'full_course_fee', 'gst', 'skillsfuture_subsidy', 'skillsfuture_credit'].includes(dbKey) && value) {
-                value = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
-            }
+        let value: any = rawValue;
 
-            if (value !== null && value !== undefined) {
-                dbRow[dbKey] = value;
-            }
+        // Handle date fields
+        if (dbKey.includes('date')) {
+            value = parseDate(value);
         }
-    }
 
-    // Also check for snake_case keys (in case data is already transformed)
-    for (const key of Object.keys(excelRow)) {
-        const snakeKey = key.toLowerCase().replace(/\s+/g, '_');
-        if (Object.values(columnMapping).includes(snakeKey) && !dbRow[snakeKey]) {
-            let value = excelRow[key];
+        // Handle numeric fields
+        if (NUMERIC_FIELDS.includes(dbKey) && value) {
+            value = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
+        }
 
-            // Apply same transformations as above
-            if (snakeKey.includes('date')) {
-                value = parseDate(value);
-            }
-            if (['payable_fee', 'full_course_fee', 'gst', 'skillsfuture_subsidy', 'skillsfuture_credit'].includes(snakeKey) && value) {
-                value = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
-            }
-
-            dbRow[snakeKey] = value;
+        if (value !== null && value !== undefined) {
+            dbRow[dbKey] = value;
         }
     }
 
@@ -265,7 +289,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Get existing application IDs, their statuses, and enrolment status to check for duplicates
         const existingResult = await pool.query(
-            `SELECT application_id, application_status, enrolment_status FROM da_application`
+            `SELECT application_id, application_status, enrolment_status, trainee_id, course_run_id FROM da_application`
         );
 
         const existingApps = new Map<string, { application_status: string; enrolment_status: string | null }>(
@@ -274,6 +298,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 enrolment_status: r.enrolment_status,
             }])
         );
+
+        // Build a map of trainee_id + course_run_id → application_status for same-person-same-course duplicate detection
+        // Key format: "TRAINEE_ID||COURSE_RUN_ID" (lowercased, trimmed)
+        const existingTraineeCourseMap = new Map<string, { application_id: string; application_status: string }>();
+        for (const r of existingResult.rows) {
+            const tid = (r.trainee_id || '').toString().trim().toLowerCase();
+            const crid = (r.course_run_id || '').toString().trim().toLowerCase();
+            if (tid && crid) {
+                const key = `${tid}||${crid}`;
+                // Keep the most relevant (non-cancelled) entry; if multiple exist, prefer active ones
+                const existing = existingTraineeCourseMap.get(key);
+                const status = (r.application_status || '').toLowerCase();
+                if (!existing || status !== 'cancelled') {
+                    existingTraineeCourseMap.set(key, {
+                        application_id: r.application_id,
+                        application_status: r.application_status,
+                    });
+                }
+            }
+        }
 
         // Transform and filter records
         const newRecords: Record<string, any>[] = [];
@@ -308,29 +352,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     // 1. "Confirm application" → "Confirmed" or "Cancelled"
                     // 2. "Confirmed" → "Cancelled"
                     // 3. "Cancelled" → "Confirmed"
-                    const shouldUpdate =
+                    const shouldUpdateStatus =
                         (isExistingConfirmApplication && (isUploadedConfirmed || isUploadedCancelled)) ||
                         (isExistingConfirmed && isUploadedCancelled) ||
                         (isExistingCancelled && isUploadedConfirmed);
 
-                    if (shouldUpdate) {
-                        // Webhook should be called for all updates EXCEPT "Confirm application" → "Confirmed"
-                        // "Confirm application" → "Confirmed" is the default acceptance flow from TPG
-                        const skipWebhook = isExistingConfirmApplication && isUploadedConfirmed;
+                    // Webhook should be called for all updates EXCEPT "Confirm application" → "Confirmed"
+                    const skipWebhook = isExistingConfirmApplication && isUploadedConfirmed;
 
-                        toUpdate.push({
-                            application_id: appId,
-                            application_status: transformed.application_status,
-                            old_status: existing.application_status,
-                            old_enrolment_status: existing.enrolment_status,
-                            shouldCallWebhook: !skipWebhook,
-                            // Include all trainee info for webhook
-                            ...transformed,
-                        });
-                    } else {
+                    toUpdate.push({
+                        ...transformed,
+                        old_status: existing.application_status,
+                        old_enrolment_status: existing.enrolment_status,
+                        shouldCallWebhook: shouldUpdateStatus && !skipWebhook,
+                        // Override application_status to the existing one if the transition is invalid
+                        application_status: shouldUpdateStatus ? transformed.application_status : existing.application_status,
+                    });
+
+                    // If status didn't change, we still consider it a duplicate for reporting purposes
+                    if (!shouldUpdateStatus) {
                         duplicates.push(appId);
                     }
                     continue;
+                }
+
+                // Check for same trainee + course run duplicate (different application_id but same person+course)
+                const tid = (transformed.trainee_id || '').toString().trim().toLowerCase();
+                const crid = (transformed.course_run_id || '').toString().trim().toLowerCase();
+                if (tid && crid) {
+                    const tcKey = `${tid}||${crid}`;
+                    const existingTC = existingTraineeCourseMap.get(tcKey);
+                    if (existingTC) {
+                        const existingTCStatus = (existingTC.application_status || '').toLowerCase();
+                        // Only block if the existing row is still active (not cancelled)
+                        if (existingTCStatus !== 'cancelled') {
+                            console.log(`⚠️ Duplicate trainee+course: ${appId} — same trainee ${tid} already has active application ${existingTC.application_id} for course run ${crid}`);
+                            errors.push({
+                                row: i + 1,
+                                error: `Duplicate: ${transformed.trainee_name || tid} already has an active application (${existingTC.application_id}) for this course run`,
+                            });
+                            continue;
+                        }
+                    }
+                    // Track this new record for intra-batch duplicate detection
+                    existingTraineeCourseMap.set(tcKey, {
+                        application_id: appId,
+                        application_status: transformed.application_status || '',
+                    });
                 }
 
                 newRecords.push(transformed);
@@ -354,8 +422,67 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         for (const record of toUpdate) {
             try {
                 const result = await pool.query(
-                    `UPDATE da_application SET application_status = $1 WHERE application_id = $2 RETURNING *`,
-                    [record.application_status, record.application_id]
+                    `UPDATE da_application SET
+                        trainee_id_type = COALESCE($1, trainee_id_type),
+                        trainee_id = COALESCE($2, trainee_id),
+                        date_of_birth = COALESCE($3, date_of_birth),
+                        trainee_name = COALESCE($4, trainee_name),
+                        course_run_id = COALESCE($5, course_run_id),
+                        trainee_email = COALESCE($6, trainee_email),
+                        trainee_phone_country_code = COALESCE($7, trainee_phone_country_code),
+                        trainee_phone = COALESCE($8, trainee_phone),
+                        sponsorship_type = COALESCE($9, sponsorship_type),
+                        application_date = COALESCE($10, application_date),
+                        application_cancelled_by = COALESCE($11, application_cancelled_by),
+                        payable_fee = COALESCE($12, payable_fee),
+                        full_course_fee = COALESCE($13, full_course_fee),
+                        gst = COALESCE($14, gst),
+                        skillsfuture_subsidy = COALESCE($15, skillsfuture_subsidy),
+                        skillsfuture_credit = COALESCE($16, skillsfuture_credit),
+                        skillsfuture_credit_claim_id = COALESCE($17, skillsfuture_credit_claim_id),
+                        grant_id = COALESCE($18, grant_id),
+                        application_status = COALESCE($19, application_status),
+                        enrolment_status = COALESCE($20, enrolment_status),
+                        enrolment_id = COALESCE($21, enrolment_id),
+                        course_title = COALESCE($22, course_title),
+                        course_reference_number = COALESCE($23, course_reference_number),
+                        course_start_date = COALESCE($24, course_start_date),
+                        course_end_date = COALESCE($25, course_end_date),
+                        highest_qualification = COALESCE($26, highest_qualification),
+                        highest_relevant_certification = COALESCE($27, highest_relevant_certification),
+                        updated_at = NOW()
+                      WHERE application_id = $28
+                      RETURNING *`,
+                    [
+                        record.trainee_id_type ?? null,
+                        record.trainee_id ?? null,
+                        record.date_of_birth ?? null,
+                        record.trainee_name ?? null,
+                        record.course_run_id ?? null,
+                        record.trainee_email ?? null,
+                        record.trainee_phone_country_code ?? null,
+                        record.trainee_phone ?? null,
+                        record.sponsorship_type ?? null,
+                        record.application_date ?? null,
+                        record.application_cancelled_by ?? null,
+                        record.payable_fee ?? null,
+                        record.full_course_fee ?? null,
+                        record.gst ?? null,
+                        record.skillsfuture_subsidy ?? null,
+                        record.skillsfuture_credit ?? null,
+                        record.skillsfuture_credit_claim_id ?? null,
+                        record.grant_id ?? null,
+                        record.application_status ?? null,
+                        record.enrolment_status ?? null,
+                        record.enrolment_id ?? null,
+                        record.course_title ?? null,
+                        record.course_reference_number ?? null,
+                        record.course_start_date ?? null,
+                        record.course_end_date ?? null,
+                        record.highest_qualification ?? null,
+                        record.highest_relevant_certification ?? null,
+                        record.application_id
+                    ]
                 );
                 if (result.rows.length > 0) {
                     updatedCount++;
@@ -406,14 +533,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         skillsfuture_subsidy,
                         skillsfuture_credit,
                         skillsfuture_credit_claim_id,
+                        grant_id,
                         application_status,
+                        enrolment_status,
+                        enrolment_id,
                         course_title,
                         course_reference_number,
                         course_start_date,
                         course_end_date,
                         highest_qualification,
                         highest_relevant_certification
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
                     RETURNING *`,
                     [
                         record.trainee_id_type || null,
@@ -434,7 +564,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         record.skillsfuture_subsidy || null,
                         record.skillsfuture_credit || null,
                         record.skillsfuture_credit_claim_id || null,
+                        record.grant_id || null,
                         record.application_status || null,
+                        record.enrolment_status || null,
+                        record.enrolment_id || null,
                         record.course_title || null,
                         record.course_reference_number || null,
                         record.course_start_date || null,
@@ -471,6 +604,168 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             webhookResult = await callSearchEnrolmentSSGBatch(webhookQueue, tp.uen, tp.code);
         }
 
+        // Fire-and-forget auto-enrol pipeline for all eligible records:
+        //   - Newly inserted records
+        //   - Updated records (status transitions)
+        //   - Duplicate records that already exist but were never auto-enrolled
+        try {
+            // Helper: only real SSG enrolment references (ENR-...) count as "already enrolled"
+            const isRealSsgEnrolmentId = (value: unknown): boolean =>
+                /^ENR-/i.test(String(value || '').trim());
+
+            // Collect IDs from inserted + updated records
+            const processedIds = [...insertedRecords, ...updatedRecords]
+                .filter(r => {
+                    if (!r?.id) return false;
+                    const status = (r.application_status || '').toLowerCase();
+                    const autoStatus = String(r.auto_enrol_status || '').toLowerCase();
+                    const hasTraineeId = String(r.trainee_id || '').trim() !== '';
+                    const alreadyEnrolled = autoStatus && !['failed'].includes(autoStatus) && !(autoStatus === 'pending_identity' && hasTraineeId);
+                    // Only skip if the row already has a real SSG enrolment reference (ENR-...)
+                    // Placeholder values like "N/A", "-", "MANUAL", or empty are NOT real enrolments
+                    return (status === 'confirmed' || status === 'confirm application') && !alreadyEnrolled && !isRealSsgEnrolmentId(r.enrolment_id);
+                })
+                .map(r => r.id as string);
+
+            const allEligibleIds = [...new Set(processedIds)];
+
+            if (allEligibleIds.length > 0) {
+                // Pre-mark as 'pending' so we can distinguish "never triggered" from "triggered but failed"
+                await pool.query(
+                    `UPDATE da_application SET auto_enrol_status = 'pending', auto_enrol_error = NULL
+                     WHERE id = ANY($1) AND (auto_enrol_status IS NULL OR auto_enrol_status = 'failed')`,
+                    [allEligibleIds]
+                );
+
+                console.log(`🚀 auto-enrol: queuing ${allEligibleIds.length} applications for background processing`);
+                setImmediate(() => {
+                    bulkProcessDirectApplications(allEligibleIds).catch(err => {
+                        console.error('❌ Background auto-enrol failed:', err);
+                    });
+                });
+            }
+        } catch (err) {
+            // Never fail the upload response because of auto-enrol setup errors.
+            console.error('⚠️  auto-enrol kickoff setup failed (non-fatal):', err);
+        }
+
+        // ---- DIRECT APPLICATION AUTOMATIONS ----
+        // Fire-and-forget sync for Calendar, Native Enrolments, and DA invoice generation.
+        try {
+            const allProcessedRecords = [...insertedRecords, ...updatedRecords];
+            const insertedDbIdSet = new Set(
+                insertedRecords
+                    .map(r => r?.id)
+                    .filter((x: unknown): x is string => typeof x === 'string' && x.length > 0)
+            );
+            const daInvoiceTriggerIds: string[] = [];
+            
+            // Background async processing to avoid blocking UI response
+            setImmediate(async () => {
+                for (const record of allProcessedRecords) {
+                    const appStatus = String(record.application_status || '').toLowerCase();
+                    const oldStatus = String(record.old_status || '').toLowerCase();
+
+                    // Automation 1a: Add to Calendar (triggers if application_status is Confirmed)
+                    if (appStatus === 'confirmed' && record.trainee_email) {
+                        try {
+                            // Resolve course_run UUID and check if course run is in the future
+                            const crRes = await pool.query(
+                                `SELECT id, start_date FROM course_run WHERE course_run_id = $1 LIMIT 1`,
+                                [record.course_run_id]
+                            );
+                            const courseRunUuid = crRes.rows[0]?.id || record.course_run_id;
+                            const startDate = crRes.rows[0]?.start_date;
+
+                            // Skip calendar add for past course runs
+                            if (startDate && new Date(startDate) < getLocalYMD(new Date(new Date()))) {
+                                console.log(`⏭️ Skipping calendar add for ${record.trainee_email} — course run ${record.course_run_id} already started`);
+                            } else {
+                                const calResult = await addDaLearnerToCalendar(
+                                    record.trainee_email,
+                                    courseRunUuid,
+                                    record.course_title,
+                                    record.course_start_date
+                                );
+                                if (calResult.addedTo > 0) {
+                                    console.log(`📅 Added ${record.trainee_email} to ${calResult.addedTo} calendar event(s)`);
+                                    await pool.query(
+                                        `UPDATE da_application SET calendar_added = true WHERE application_id = $1`,
+                                        [record.application_id]
+                                    );
+                                }
+                            }
+                        } catch (calErr) {
+                            console.error('Failed to sync to Calendar:', calErr);
+                        }
+                    }
+
+                    // Automation 1b: Remove from Calendar (triggers if status changed TO Cancelled)
+                    if (appStatus === 'cancelled' && oldStatus && oldStatus !== 'cancelled' && record.trainee_email) {
+                        try {
+                            const crRes = await pool.query(
+                                `SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1`,
+                                [record.course_run_id]
+                            );
+                            const courseRunUuid = crRes.rows[0]?.id || record.course_run_id;
+
+                            const removeResult = await removeDaLearnerFromCalendar(
+                                record.trainee_email,
+                                courseRunUuid,
+                                record.course_title,
+                                record.course_start_date
+                            );
+                            if (removeResult.removedFrom > 0) {
+                                console.log(`🗑️ Removed ${record.trainee_email} from ${removeResult.removedFrom} calendar event(s)`);
+                            }
+                            // Untick the CAL column
+                            await pool.query(
+                                `UPDATE da_application SET calendar_added = false WHERE application_id = $1`,
+                                [record.application_id]
+                            );
+                        } catch (calErr) {
+                            console.error('Failed to remove from Calendar:', calErr);
+                        }
+                    }
+
+                    // Automation 2: Native Enrolment Creation (triggers if Enrol Status/enrolment_status is Confirmed)
+                    const isEnrolConfirmed = String(record.enrolment_status || '').toLowerCase() === 'confirmed';
+                    const wasEnrolAlreadyConfirmed = String(record.old_enrolment_status || '').toLowerCase() === 'confirmed';
+
+                    if (isEnrolConfirmed && (!wasEnrolAlreadyConfirmed || !record.old_enrolment_status)) {
+                        await createNativeEnrolmentFromDA(record, pool);
+                        console.log(`✅ Automatically created native enrolment for DA ${record.application_id}`);
+                    }
+
+                    // Automation 3: DA invoice auto-generation trigger
+                    // Fires when enrol is effectively ticked (Confirmed) and there is a real enrolment_id.
+                    const shouldTriggerDaInvoice =
+                        insertedDbIdSet.has(record.id) &&
+                        isEnrolConfirmed &&
+                        hasRealEnrolmentId(record.enrolment_id) &&
+                        !record.invoice_id;
+
+                    if (shouldTriggerDaInvoice && typeof record.id === 'string' && record.id.length > 0) {
+                        daInvoiceTriggerIds.push(record.id);
+                    }
+                }
+
+                for (const applicationDbId of daInvoiceTriggerIds) {
+                    try {
+                        await processDirectApplication(applicationDbId, undefined, {
+                            forceInvoice: true,
+                            sendInvoiceEmail: true,
+                        });
+                        console.log(`Auto-triggered DA invoice generation + email for application ${applicationDbId}`);
+                    } catch (invoiceErr) {
+                        console.error(`Failed auto-triggered DA invoice generation for ${applicationDbId}:`, invoiceErr);
+                    }
+                }
+            });
+        } catch (autoErr) {
+            console.error('Error triggering new DA automations', autoErr);
+        }
+
         return res.status(200).json({
             success: true,
             inserted: insertedCount,
@@ -498,4 +793,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
     }
 }
-

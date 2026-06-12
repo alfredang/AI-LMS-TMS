@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { View, UserRole, AdminPage, TrainerPage, CurrentUserProfile, CalendarEvent, Course, CourseDetail, LearningUnit, CourseAssessment, Submission } from '@app-types';
+import { View, UserRole, AdminPage, TrainerPage, DeveloperPage, CurrentUserProfile, CalendarEvent, Course, CourseDetail, LearningUnit, CourseAssessment, Submission } from '@app-types';
 import { TrainingProviderProfile } from '@app-types/profile';
 import { courseService } from '@lib/services/courseService';
 import { authService, User } from '@lib/services/authService';
@@ -8,7 +8,7 @@ import { resetTutorChat } from '@lib/services/geminiService';
 import { initializeColorScheme } from '@utils/colorUtils';
 
 // Function to fetch training provider info for all users
-const fetchTrainingProviderInfo = async (userId?: string): Promise<{ companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; referenceLinks?: any }> => {
+const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; showCertificateDelivery?: boolean; certificateDeliveryLabel?: string; certificateDeliveryLink?: string; feedbackFormEnabled?: boolean; feedbackFormExternalLink?: string; briefingOnAssessment?: string; referenceLinks?: any; virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' }> => {
   try {
     // If userId is provided, fetch specific organization info
     const url = userId 
@@ -34,11 +34,24 @@ const fetchTrainingProviderInfo = async (userId?: string): Promise<{ companyLogo
     }
 
     return {
+      uen: result.data.uen,
       companyLogoUrl: result.data.companyLogoUrl || '/images/default-company-logo.png',
       companyName: result.data.companyName || 'Training Provider',
       companyShortname: result.data.companyShortname,
       companyWebsite: result.data.companyWebsite,
+      companyEmail: result.data.companyEmail,
+      supportEmail: result.data.supportEmail,
+      contactTel: result.data.contactTel,
+      companyAddress: result.data.companyAddress,
+      showLessonPlanLearnerView: result.data.showLessonPlanLearnerView ?? false,
+      showCertificateDelivery: result.data.showCertificateDelivery ?? false,
+      certificateDeliveryLabel: result.data.certificateDeliveryLabel || 'TP Course Evaluation',
+      certificateDeliveryLink: result.data.certificateDeliveryLink || 'https://goo.gl/R2eumq',
+      feedbackFormEnabled: result.data.feedbackFormEnabled ?? false,
+      feedbackFormExternalLink: result.data.feedbackFormExternalLink || '',
+      briefingOnAssessment: result.data.briefingOnAssessment || '',
       referenceLinks: result.data.referenceLinks,
+      virtualMeetingProvider: result.data.virtualMeetingProvider || 'google_meet',
     };
   } catch (error) {
     console.error('Error fetching training provider info:', error);
@@ -73,6 +86,8 @@ const convertToUserRole = (roleString: string): UserRole => {
       return UserRole.Developer;
     case 'finance':
       return UserRole.Finance;
+    case 'payroll':
+      return UserRole.Payroll;
     case 'training_provider':
     case 'trainingprovider':
       return UserRole.TrainingProvider;
@@ -216,6 +231,8 @@ interface LmsContextType {
   setAdminPage: (page: AdminPage) => void;
   trainerPage: TrainerPage;
   setTrainerPage: (page: TrainerPage) => void;
+  developerPage: DeveloperPage;
+  setDeveloperPage: (page: DeveloperPage) => void;
   selectedCourseRunId: string | null;
   setSelectedCourseRunId: (courseRunId: string | null) => void;
   pendingAttendanceCourseRunId: string | null;
@@ -244,12 +261,18 @@ interface LmsContextType {
   setCourseEditMode: (mode: 'create' | 'edit' | 'view' | null) => void;
   editingCourseRun: any | null;
   setEditingCourseRun: (courseRun: any | null) => void;
+  classListReturnTo: AdminPage | null;
+  setClassListReturnTo: (page: AdminPage | null) => void;
+  classListCurrentPage: number;
+  setClassListCurrentPage: (page: number) => void;
   ssgApp: string;
   setSsgApp: (app: string) => void;
+  financePage: string;
+  setFinancePage: (page: string) => void;
   courseListPage: number;
   setCourseListPage: (page: number) => void;
   courseDetail: CourseDetail | null;
-  resourceLinks: { id: string; topicId: string; type: string; title: string; url: string }[];
+  resourceLinks: { id: string; topicId: string; type: string; title: string; url: string; instructions?: string; questions?: Array<{ id: string; question: string; options: string[]; correctIndex: number }> }[];
   learningUnits: LearningUnit[];
   courseAssessments: CourseAssessment[];
   bookmarkedSubtopics: string[];
@@ -292,7 +315,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [userRoles, setUserRoles] = useState<UserRole[]>([]); // All roles the user has
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
   const [adminPage, setAdminPage] = useState<AdminPage>(AdminPage.Dashboard);
-  const [trainerPage, setTrainerPage] = useState<TrainerPage>(TrainerPage.EAttendance);
+  const [trainerPage, setTrainerPage] = useState<TrainerPage>(TrainerPage.MyClasses);
+  const [developerPage, setDeveloperPage] = useState<DeveloperPage>(DeveloperPage.Dashboard);
   const [selectedCourseRunId, setSelectedCourseRunId] = useState<string | null>(null);
   const [pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId] = useState<string | null>(null);
   const [pendingGradingCourseRunId, setPendingGradingCourseRunId] = useState<string | null>(null);
@@ -310,10 +334,43 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [courseEditMode, setCourseEditMode] = useState<'create' | 'edit' | 'view' | null>(null);
   const [editingCourseRun, setEditingCourseRun] = useState<any | null>(null);
-  const [ssgApp, setSsgApp] = useState<string>('app2');  // default app, user can switch
+  const [classListReturnTo, setClassListReturnTo] = useState<AdminPage | null>(null);
+  const [classListCurrentPage, setClassListCurrentPage] = useState(0);
+
+  // Auto-clear classListReturnTo and classListCurrentPage when navigating away
+  // from the class detail/edit flow AND the class list pages themselves.
+  // This ensures sidebar switches reset the page, while edit→return preserves it.
+  const CLASS_FLOW_PAGES = new Set([
+    AdminPage.ClassDetail,
+    AdminPage.EditClass,
+    AdminPage.UpcomingClasses,
+    AdminPage.OngoingClasses,
+    AdminPage.CompletedClasses,
+    AdminPage.ViewClassByDate,
+  ]);
+  useEffect(() => {
+    if (!CLASS_FLOW_PAGES.has(adminPage)) {
+      setClassListReturnTo(null);
+      setClassListCurrentPage(0);
+    }
+  }, [adminPage]);
+  const [ssgApp, setSsgApp] = useState<string>('app1');  // default, overridden by DB setting
+  const [ssgAppLoaded, setSsgAppLoaded] = useState(false);
+  const FINANCE_PAGE_STORAGE_KEY = 'lms.financePage';
+  const [financePage, _setFinancePage] = useState<string>('dashboard');
+  const setFinancePage = (page: string) => {
+    _setFinancePage(page);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(FINANCE_PAGE_STORAGE_KEY, page);
+      } catch {
+        // ignore storage errors (e.g. blocked, quota)
+      }
+    }
+  };
   const [courseListPage, setCourseListPage] = useState(1);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
-  const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: string; title: string; url: string }[]>([]);
+  const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: string; title: string; url: string; instructions?: string; questions?: Array<{ id: string; question: string; options: string[]; correctIndex: number }> }[]>([]);
   const [learningUnits, setLearningUnits] = useState<LearningUnit[]>([]);
   const [courseAssessments, setCourseAssessments] = useState<CourseAssessment[]>([]);
   const [bookmarkedSubtopics, setBookmarkedSubtopics] = useState<string[]>([]);
@@ -361,6 +418,36 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadColorScheme();
   }, []);
 
+  // Fetch default SSG app from Company Settings
+  useEffect(() => {
+    if (ssgAppLoaded) return;
+    fetch('/api/training-provider/ssg-default-app')
+      .then(r => r.json())
+      .then(data => {
+        if (data.defaultApp) {
+          setSsgApp(data.defaultApp);
+          console.log(`[LmsContext] SSG default app: ${data.defaultApp}`);
+        }
+        setSsgAppLoaded(true);
+      })
+      .catch(() => setSsgAppLoaded(true));
+  }, [ssgAppLoaded]);
+
+  // Persist FinanceLayout internal navigation across hard refreshes.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = window.localStorage.getItem(FINANCE_PAGE_STORAGE_KEY);
+      if (saved && typeof saved === 'string' && saved !== financePage) {
+        _setFinancePage(saved);
+      }
+    } catch {
+      // ignore storage errors
+    }
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Check for existing authentication on mount
   useEffect(() => {
     console.log('🔄 LmsContext: Checking for existing authentication...');
@@ -395,11 +482,23 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             const providerInfo = await fetchTrainingProviderInfo(verificationResult.user.id);
             setTrainingProviderProfile({
+              uen: providerInfo.uen,
               companyLogoUrl: providerInfo.companyLogoUrl,
               companyName: providerInfo.companyName,
               companyShortname: providerInfo.companyShortname,
               companyWebsite: providerInfo.companyWebsite || '',
-              integrations: providerInfo.referenceLinks || {},
+              companyEmail: providerInfo.companyEmail || '',
+              supportEmail: providerInfo.supportEmail || '',
+              contactTel: providerInfo.contactTel || '',
+              companyAddress: providerInfo.companyAddress || '',
+              showLessonPlanLearnerView: providerInfo.showLessonPlanLearnerView,
+              showCertificateDelivery: providerInfo.showCertificateDelivery,
+              certificateDeliveryLabel: providerInfo.certificateDeliveryLabel,
+              certificateDeliveryLink: providerInfo.certificateDeliveryLink,
+              feedbackFormEnabled: providerInfo.feedbackFormEnabled,
+              feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
+              briefingOnAssessment: providerInfo.briefingOnAssessment,
+              integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
             } as TrainingProviderProfile);
           } catch (error) {
             console.error('❌ LmsContext: Failed to load training provider info:', error);
@@ -496,7 +595,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    const { view, courseId, adminPage, trainerPage } = router.query;
+    const { view, courseId, adminPage, trainerPage, courseRunId: courseRunIdParam } = router.query;
 
     // Restore current view - View enum values are lowercase, URL values are lowercase
     if (view && typeof view === 'string') {
@@ -512,6 +611,38 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const matchedAdminPage = Object.values(AdminPage).find(v => v.toLowerCase() === adminPage.toLowerCase());
       if (matchedAdminPage) {
         console.log(`📍 LmsContext: Restored adminPage from URL: ${matchedAdminPage}`);
+
+        // Hydrate editingCourseRun BEFORE setting adminPage so the data is
+        // ready when the page renders (avoids flash of "Create New Class").
+        if (courseRunIdParam && typeof courseRunIdParam === 'string') {
+          try {
+            const crRes = await fetch(`/api/admin/lookup-course-run?courseRunCode=${encodeURIComponent(courseRunIdParam)}`);
+            if (crRes.ok) {
+              const crJson = await crRes.json();
+              if (crJson.success && crJson.data) {
+                const cr = crJson.data;
+                setEditingCourseRun({
+                  id: cr.courseRunId,        // UUID (cr.id in DB)
+                  courseRunId: cr.courseRunCode, // SSG run ID (e.g. "1077462")
+                  courseTitle: cr.title,
+                  courseCode: cr.courseCode,
+                  startDate: cr.startDate,
+                  endDate: cr.endDate,
+                  classType: cr.classType,
+                  virtualMeetingLink: cr.virtualMeetingLink,
+                  virtualMeetingProvider: cr.virtualMeetingProvider,
+                  virtualMeetingExternalId: cr.virtualMeetingExternalId,
+                  virtualMeetingStatus: cr.virtualMeetingStatus,
+                  virtualMeetingSyncedAt: cr.virtualMeetingSyncedAt,
+                });
+                console.log(`📍 LmsContext: Restored editingCourseRun from URL: ${courseRunIdParam}`);
+              }
+            }
+          } catch (err) {
+            console.error('❌ LmsContext: Failed to restore courseRun from URL:', err);
+          }
+        }
+
         setAdminPage(matchedAdminPage);
       }
     }
@@ -571,6 +702,15 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       delete newQuery.courseId;
     }
 
+    // Skip the push if the resulting URL would be identical to the current
+    // one — Next.js 16 throws an "Invariant: attempted to hard navigate to
+    // the same URL" runtime error when you push the URL you're already on.
+    const currentQuery = router.query;
+    const sameQuery =
+      Object.keys(currentQuery).length === Object.keys(newQuery).length &&
+      Object.entries(newQuery).every(([k, v]) => String(currentQuery[k] ?? '') === String(v ?? ''));
+    if (sameQuery) return;
+
     // Update URL with a new history entry so browser back/forward works
     router.push({
       pathname: router.pathname,
@@ -618,10 +758,10 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (matchedTrainerPage) {
             setTrainerPage(matchedTrainerPage);
           } else {
-            setTrainerPage(TrainerPage.EAttendance);
+            setTrainerPage(TrainerPage.MyClasses);
           }
         } else {
-          setTrainerPage(TrainerPage.EAttendance);
+          setTrainerPage(TrainerPage.MyClasses);
         }
 
         // Sync the selected course state
@@ -664,24 +804,54 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [router, selectedCourse]);
 
+  // Helper: push only if the resulting query differs from the current one.
+  // Next.js 16 throws "Invariant: attempted to hard navigate to the same URL"
+  // when a router.push lands the user on the URL they're already viewing
+  // (e.g. clicking the sidebar item they're currently on).
+  const pushQueryIfDifferent = useCallback((newQuery: Record<string, any>) => {
+    const currentQuery = router.query;
+    const sameQuery =
+      Object.keys(currentQuery).length === Object.keys(newQuery).length &&
+      Object.entries(newQuery).every(([k, v]) => String(currentQuery[k] ?? '') === String(v ?? ''));
+    if (sameQuery) return;
+    router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
+  }, [router]);
+
   // Wrapped setAdminPage that clears courseId from URL and resets selected course
   const navigateAdminPage = useCallback((page: AdminPage) => {
     setAdminPage(page);
     setSelectedCourse(null);
+    if (role === UserRole.Admin) {
+      setCurrentView(View.Admin);
+    }
     const newQuery: any = { ...router.query, adminPage: page };
+    if (role === UserRole.Admin) {
+      newQuery.view = View.Admin;
+    }
     delete newQuery.courseId;
-    delete newQuery.view;
-    router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
-  }, [router]);
+    pushQueryIfDifferent(newQuery);
+  }, [role, router, pushQueryIfDifferent]);
 
   // Wrapped setTrainerPage to sync with URL
   const navigateTrainerPage = useCallback((page: TrainerPage) => {
     setTrainerPage(page);
+    setSelectedCourse(null);
     const newQuery: any = { ...router.query, trainerPage: page };
+    delete newQuery.courseId;
     // Clear stale view param so profile view doesn't persist
     delete newQuery.view;
-    router.push({ pathname: router.pathname, query: newQuery }, undefined, { shallow: true });
-  }, [router]);
+    pushQueryIfDifferent(newQuery);
+  }, [router, pushQueryIfDifferent]);
+
+  // Wrapped setDeveloperPage to sync with URL
+  const navigateDeveloperPage = useCallback((page: DeveloperPage) => {
+    setDeveloperPage(page);
+    setSelectedCourse(null);
+    const newQuery: any = { ...router.query, developerPage: page };
+    delete newQuery.courseId;
+    delete newQuery.view;
+    pushQueryIfDifferent(newQuery);
+  }, [router, pushQueryIfDifferent]);
 
 
   // Login function
@@ -713,11 +883,19 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           const providerInfo = await fetchTrainingProviderInfo(user.id);
           setTrainingProviderProfile({
+            uen: providerInfo.uen,
             companyLogoUrl: providerInfo.companyLogoUrl,
             companyName: providerInfo.companyName,
             companyShortname: providerInfo.companyShortname,
             companyWebsite: providerInfo.companyWebsite || '',
-            integrations: providerInfo.referenceLinks || {},
+            showLessonPlanLearnerView: providerInfo.showLessonPlanLearnerView,
+            showCertificateDelivery: providerInfo.showCertificateDelivery,
+            certificateDeliveryLabel: providerInfo.certificateDeliveryLabel,
+            certificateDeliveryLink: providerInfo.certificateDeliveryLink,
+            feedbackFormEnabled: providerInfo.feedbackFormEnabled,
+            feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
+            briefingOnAssessment: providerInfo.briefingOnAssessment,
+            integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
           } as TrainingProviderProfile);
           console.log('✅ LmsContext: Training provider info loaded after login');
         } catch (error) {
@@ -755,11 +933,23 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             const providerInfo = await fetchTrainingProviderInfo(user.id);
             setTrainingProviderProfile({
+              uen: providerInfo.uen,
               companyLogoUrl: providerInfo.companyLogoUrl,
               companyName: providerInfo.companyName,
               companyShortname: providerInfo.companyShortname,
               companyWebsite: providerInfo.companyWebsite || '',
-              integrations: providerInfo.referenceLinks || {},
+              companyEmail: providerInfo.companyEmail || '',
+              supportEmail: providerInfo.supportEmail || '',
+              contactTel: providerInfo.contactTel || '',
+              companyAddress: providerInfo.companyAddress || '',
+              showLessonPlanLearnerView: providerInfo.showLessonPlanLearnerView,
+              showCertificateDelivery: providerInfo.showCertificateDelivery,
+              certificateDeliveryLabel: providerInfo.certificateDeliveryLabel,
+              certificateDeliveryLink: providerInfo.certificateDeliveryLink,
+              feedbackFormEnabled: providerInfo.feedbackFormEnabled,
+              feedbackFormExternalLink: providerInfo.feedbackFormExternalLink,
+              briefingOnAssessment: providerInfo.briefingOnAssessment,
+              integrations: { ...(providerInfo.referenceLinks || {}), virtualMeetingProvider: providerInfo.virtualMeetingProvider || 'google_meet' },
             } as TrainingProviderProfile);
             console.log('✅ LmsContext: Training provider info loaded after login');
           } catch (error) {
@@ -812,8 +1002,13 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCertificate(null);
     setCalendarEvents([]);
 
-    // Clear URL parameters
-    router.replace('/', undefined, { shallow: true });
+    // Clear URL parameters — but only if we're not already at "/" with no
+    // query string. Next.js 16 throws "Invariant: attempted to hard
+    // navigate to the same URL" if you replace the URL you're already on.
+    const hasQuery = Object.keys(router.query).length > 0;
+    if (router.pathname !== '/' || hasQuery) {
+      router.replace('/', undefined, { shallow: true });
+    }
 
     console.log('✅ LmsContext: Logout completed');
   }, [router]);
@@ -887,6 +1082,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const resetAdminView = useCallback(() => {
     console.log('🔄 LmsContext: Resetting admin view');
     setAdminPage(AdminPage.Dashboard);
+    setClassListReturnTo(null);
   }, []);
 
   // Function to refresh current user profile
@@ -943,6 +1139,18 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const userId = currentUser.id; // Use currentUser from context instead of localStorage
 
+      // Resolve the role from the authoritative synchronous source (localStorage via
+      // authService) rather than the React `role` state. This callback can be invoked
+      // from a stale closure during URL restore on refresh/deep-link (restoreStateFromURL
+      // depends on [router.query], not [role]), where the closed-over `role` is still the
+      // default Learner before auth resolves. That made trainers hit the learner detail
+      // endpoint, which never returns facilitatorGuideUrl/trainerSlidesUrl/assessmentPlanUrl,
+      // so trainer courseware silently went missing on a refreshed/deep-linked tab.
+      // authService.getCurrentRole() is set during auth init and updated synchronously in
+      // switchRole(), so it is always at least as fresh as the React state — no extra
+      // network call, no added latency on role switch.
+      const effectiveRole = authService.getCurrentRole() || role;
+
       // Set the selected course first
       setSelectedCourse(course);
 
@@ -959,7 +1167,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCertificate(null);
 
       // Check if user is a trainer and course has courseRunId
-      if (role === UserRole.Trainer && course.courseRunId) {
+      if (effectiveRole === UserRole.Trainer && course.courseRunId) {
         // Use trainer-specific API for course details
         const trainerResponse = await fetch(`/api/courses/trainer-detail?trainerUserId=${userId}&courseRunId=${course.courseRunId}`);
 
@@ -992,6 +1200,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           assessmentPlanUrl: trainerData.data.courseDetail.assessmentPlanUrl,
           courseLink: trainerData.data.courseDetail.courseLink,
           assessmentRecordLink: trainerData.data.courseDetail.assessmentRecordLink,
+          assessmentSummaryRecordUrl: trainerData.data.courseDetail.assessmentSummaryRecordUrl,
           writtenAssessmentLink: trainerData.data.courseDetail.writtenAssessmentLink,
           practicalPerformanceAssessmentLink: trainerData.data.courseDetail.practicalPerformanceAssessmentLink,
           writtenAssessmentPublished: trainerData.data.courseDetail.writtenAssessmentPublished ?? false,
@@ -1001,6 +1210,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           startDate: trainerData.data.courseDetail.startDate || null,
           endDate: trainerData.data.courseDetail.endDate || null,
           fundingValidity: trainerData.data.courseDetail.fundingValidity || null,
+          classType: trainerData.data.courseDetail.classType || 'Physical',
+          virtualMeetingLink: trainerData.data.courseDetail.virtualMeetingLink || null,
           certificate: ''
         } as any);
 
@@ -1043,7 +1254,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setCourseAssessments([]);
           }
         }
-      } else if (role === UserRole.Developer && course.id) {
+      } else if (effectiveRole === UserRole.Developer && course.id) {
         // Use developer-specific API for course details (using course ID, not course run ID)
         try {
           const detailResponse = await fetch(`/api/courses/developer-course-detail?courseId=${course.id}&_t=${Date.now()}`);
@@ -1571,6 +1782,8 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAdminPage: navigateAdminPage,
     trainerPage,
     setTrainerPage: navigateTrainerPage,
+    developerPage,
+    setDeveloperPage: navigateDeveloperPage,
     selectedCourseRunId,
     setSelectedCourseRunId,
     pendingAttendanceCourseRunId,
@@ -1595,8 +1808,14 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCourseEditMode,
     editingCourseRun,
     setEditingCourseRun,
+    classListReturnTo,
+    setClassListReturnTo,
+    classListCurrentPage,
+    setClassListCurrentPage,
     ssgApp,
     setSsgApp,
+    financePage,
+    setFinancePage,
     courseListPage,
     setCourseListPage,
     courseDetail,

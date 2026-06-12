@@ -5,6 +5,17 @@ import { Button } from '../ui/Button';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
 
+// Helper to safely extract local YYYY-MM-DD from a date string (avoids timezone shift bugs from .slice(0, 10) on UTC strings)
+const extractLocalDate = (dateVal: string | Date | undefined | null): string => {
+    if (!dateVal) return '';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal).slice(0, 10);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 // Searchable select dropdown component
 const SearchableSelect: React.FC<{
     options: { value: string; label: string }[];
@@ -130,6 +141,7 @@ interface EditRunInfo {
 
 interface ClassManagerViewProps {
     courseToEdit?: any | null;
+    viewOnly?: boolean;
 }
 
 // FormSection component definition moved outside to prevent re-creation on re-renders
@@ -140,10 +152,15 @@ const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ t
     </Card>
 );
 
-export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit }) => {
-    const { setAdminPage, currentUser } = useLms();
+export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit, viewOnly = false }) => {
+    const { setAdminPage, setEditingCourseRun, currentUser, classListReturnTo, setClassListReturnTo, trainingProviderProfile } = useLms();
+    const goBackToList = () => {
+        const target = classListReturnTo || AdminPage.Dashboard;
+        setClassListReturnTo(null);
+        setAdminPage(target);
+    };
     const isEditMode = !!courseToEdit;
-    const title = isEditMode ? 'Edit Class' : 'Create New Class';
+    const title = viewOnly ? 'Class Details' : (isEditMode ? 'Edit Class' : 'Create New Class');
 
     // Get current user's email for courseAdminEmail
     const currentUserEmail = currentUser?.email || "";
@@ -157,8 +174,33 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         }
     }, [currentUser, currentUserEmail]);
 
+    React.useEffect(() => {
+        if (courseToEdit?.virtualMeetingProvider) return;
+        const configured = (trainingProviderProfile as any)?.integrations?.virtualMeetingProvider;
+        if (configured === 'zoom' || configured === 'teams' || configured === 'google_meet') {
+            setVirtualMeetingProvider(configured);
+        }
+    }, [courseToEdit?.virtualMeetingProvider, trainingProviderProfile]);
+
     // Tab state for navigation
-    const [activeTab, setActiveTab] = useState<'courseRun' | 'sessions' | 'trainer'>('courseRun');
+    const [activeTab, setActiveTab] = useState<'courseRun' | 'sessions' | 'enrollments' | 'trainer' | 'assessment'>('courseRun');
+    const [assessmentLinks, setAssessmentLinks] = useState<{
+        courseTitle?: string | null;
+        courseCode?: string | null;
+        assessmentFolderUrl?: string | null;
+        assessmentRecordFolderUrl?: string | null;
+        assessmentSummaryRecordUrl?: string | null;
+    } | null>(null);
+    const [assessmentLinksLoading, setAssessmentLinksLoading] = useState(false);
+    const [assessmentLinksError, setAssessmentLinksError] = useState<string | null>(null);
+    const [enrolledLearners, setEnrolledLearners] = useState<Array<{
+        user_id: string; full_name: string; email: string; secondary_email: string | null;
+        nric: string | null; tel: string | null; sponsorship_type: string | null;
+        enrolment_id: string | null; grant_id: string | null; grant_amount: number | null;
+        sf_claim_amount: number | null;
+    }>>([]);
+    const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
+    const [visibleNrics, setVisibleNrics] = useState<Set<string>>(new Set());
 
     // Form state management
     const [courseRunId, setCourseRunId] = useState('');
@@ -210,11 +252,68 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [dbTrainerAssignMode, setDbTrainerAssignMode] = useState<'dropdown' | 'manual'>('dropdown');
     const [manualTrainerName, setManualTrainerName] = useState('');
     const [manualTrainerEmail, setManualTrainerEmail] = useState('');
+    const [manualTrainerContact, setManualTrainerContact] = useState('');
     // Track all locally-assigned trainers from junction table
     const [assignedTrainersList, setAssignedTrainersList] = useState<any[]>([]);
+    // Per-session trainer override state. `sessionTrainerList` is the list of
+    // local course_session rows (not SSG) with each session's resolved trainer
+    // — either the run-level default or a per-session override.
+    const [sessionTrainerList, setSessionTrainerList] = useState<any[]>([]);
+    const [sessionTrainerLoading, setSessionTrainerLoading] = useState(false);
+    const [sessionTrainerExpanded, setSessionTrainerExpanded] = useState(false);
     // Legacy single-trainer state (kept for backward compat during transition)
     const [localAssignedTrainerName, setLocalAssignedTrainerName] = useState(courseToEdit?.assignedTrainerName || '');
     const [localAssignedTrainerEmail, setLocalAssignedTrainerEmail] = useState(courseToEdit?.assignedTrainerEmail || '');
+
+    // Class Status and Type
+    const [classStatus, setClassStatus] = useState(courseToEdit?.classStatus || 'Pending');
+    const [invitationPaused, setInvitationPaused] = useState(!!(courseToEdit as any)?.invitationPaused);
+    const [repliesBlocked, setRepliesBlocked] = useState(!!(courseToEdit as any)?.invitationRepliesBlocked);
+    const [coursewareEmailDisabled, setCoursewareEmailDisabled] = useState(!!(courseToEdit as any)?.coursewareEmailDisabled);
+    const [classType, setClassType] = useState(() => {
+        // Use DB class_type first, then fallback to modeOfTraining
+        if (courseToEdit?.classType && courseToEdit.classType !== 'Physical') return courseToEdit.classType;
+        if (courseToEdit?.classType) return courseToEdit.classType;
+        const mode = (courseToEdit?.modeOfTraining || '').toLowerCase();
+        if (mode.includes('virtual') || mode.includes('online')) return 'Virtual';
+        if (mode.includes('blended') || mode.includes('hybrid')) return 'Hybrid';
+        return 'Physical';
+    });
+    const [virtualMeetingLink, setVirtualMeetingLink] = useState(courseToEdit?.virtualMeetingLink || '');
+    const [virtualMeetingHostLink, setVirtualMeetingHostLink] = useState(courseToEdit?.virtualMeetingHostLink || '');
+    const [virtualMeetingProvider, setVirtualMeetingProvider] = useState<'google_meet' | 'zoom' | 'teams'>(() => {
+        const stored = courseToEdit?.virtualMeetingProvider;
+        if (stored === 'zoom' || stored === 'teams' || stored === 'google_meet') return stored;
+        const configured = (trainingProviderProfile as any)?.integrations?.virtualMeetingProvider;
+        return configured === 'zoom' || configured === 'teams' ? configured : 'google_meet';
+    });
+    const [storedVirtualMeetingLink, setStoredVirtualMeetingLink] = useState(courseToEdit?.virtualMeetingLink || '');
+    const [storedVirtualMeetingHostLink, setStoredVirtualMeetingHostLink] = useState(courseToEdit?.virtualMeetingHostLink || '');
+    const [storedVirtualMeetingProvider, setStoredVirtualMeetingProvider] = useState<'google_meet' | 'zoom' | 'teams' | ''>(() => {
+        const stored = courseToEdit?.virtualMeetingProvider;
+        return stored === 'zoom' || stored === 'teams' || stored === 'google_meet' ? stored : '';
+    });
+    const [meetingBusy, setMeetingBusy] = useState(false);
+
+    useEffect(() => {
+        const nextStoredLink = courseToEdit?.virtualMeetingLink || '';
+        const nextStoredHostLink = courseToEdit?.virtualMeetingHostLink || '';
+        setVirtualMeetingLink(nextStoredLink);
+        setStoredVirtualMeetingLink(nextStoredLink);
+        setVirtualMeetingHostLink(nextStoredHostLink);
+        setStoredVirtualMeetingHostLink(nextStoredHostLink);
+        const stored = courseToEdit?.virtualMeetingProvider;
+        if (stored === 'zoom' || stored === 'teams' || stored === 'google_meet') {
+            setVirtualMeetingProvider(stored);
+            setStoredVirtualMeetingProvider(stored);
+            return;
+        }
+        setStoredVirtualMeetingProvider('');
+        const configured = (trainingProviderProfile as any)?.integrations?.virtualMeetingProvider;
+        if (configured === 'zoom' || configured === 'teams' || configured === 'google_meet') {
+            setVirtualMeetingProvider(configured);
+        }
+    }, [courseToEdit?.id, courseToEdit?.virtualMeetingLink, courseToEdit?.virtualMeetingHostLink, courseToEdit?.virtualMeetingProvider, trainingProviderProfile]);
 
     // ViewCourseRun state management
     const [includeExpired, setIncludeExpired] = useState(false);
@@ -251,6 +350,97 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     // Constants for form options
     const inputClasses = "block w-full px-3 py-2 text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
     const disabledInputClasses = "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed";
+    const virtualMeetingProviderLabel = virtualMeetingProvider === 'zoom' ? 'Zoom' : virtualMeetingProvider === 'teams' ? 'Microsoft Teams' : 'Google Meet';
+    const canGenerateZoomMeeting = classType === 'Virtual' || classType === 'Hybrid';
+    const isZoomMeetingProvider = virtualMeetingProvider === 'zoom';
+    const hasStoredZoomMeeting = storedVirtualMeetingProvider === 'zoom' && !!(storedVirtualMeetingHostLink || storedVirtualMeetingLink);
+
+    const handleGenerateZoomMeeting = async (force = false) => {
+        if (!courseToEdit?.id) return;
+        if (force && (storedVirtualMeetingHostLink || storedVirtualMeetingLink)) {
+            const shouldRegenerate = confirm('Generate a new Zoom meeting and replace the currently stored Zoom links? The learner join URL and trainer start URL will both be replaced.');
+            if (!shouldRegenerate) return;
+        }
+
+        setMeetingBusy(true);
+        try {
+            const response = await fetch(getApiUrl('/api/virtual-meetings/create'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseRunId: courseToEdit.id, provider: 'zoom', force }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.error || 'Failed to create Zoom meeting');
+            const meeting = result.data?.meeting || {};
+            const joinUrl = meeting.join_url || meeting.joinUrl || '';
+            const startUrl = meeting.start_url || meeting.startUrl || '';
+            if (joinUrl) setVirtualMeetingLink(joinUrl);
+            if (startUrl) setVirtualMeetingHostLink(startUrl);
+            setVirtualMeetingProvider('zoom');
+            if (joinUrl) setStoredVirtualMeetingLink(joinUrl);
+            if (startUrl) setStoredVirtualMeetingHostLink(startUrl);
+            setStoredVirtualMeetingProvider('zoom');
+            alert(result.data?.reused ? 'Existing Zoom meeting link reused.' : force ? 'Zoom meeting regenerated.' : 'Zoom meeting created.');
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Failed to create Zoom meeting');
+        } finally {
+            setMeetingBusy(false);
+        }
+    };
+
+    const handleSaveVirtualMeeting = async () => {
+        if (!courseToEdit?.id) {
+            showErrorPopup('No course run selected.');
+            return;
+        }
+
+        const hasStoredMeetingLinks = isZoomMeetingProvider
+            ? !!(storedVirtualMeetingHostLink || storedVirtualMeetingLink)
+            : !!storedVirtualMeetingLink;
+        const meetingLinksChanged = isZoomMeetingProvider
+            ? storedVirtualMeetingHostLink !== virtualMeetingHostLink || storedVirtualMeetingLink !== virtualMeetingLink
+            : storedVirtualMeetingLink !== virtualMeetingLink;
+
+        if (
+            hasStoredMeetingLinks &&
+            (meetingLinksChanged || storedVirtualMeetingProvider !== virtualMeetingProvider)
+        ) {
+            const shouldReplace = confirm(
+                isZoomMeetingProvider
+                    ? 'Save these Zoom meeting URLs? The trainer start URL is sensitive and should only be shared with trainers.'
+                    : 'Save this virtual meeting link and make it the active link shown to learners and trainers? This will replace the currently stored meeting link for this class.'
+            );
+            if (!shouldReplace) return;
+        }
+
+        try {
+            const response = await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: courseToEdit.id,
+                    ...(isZoomMeetingProvider
+                        ? { virtual_meeting_host_link: virtualMeetingHostLink, virtual_meeting_link: virtualMeetingLink }
+                        : { virtual_meeting_link: virtualMeetingLink }),
+                    virtual_meeting_provider: virtualMeetingProvider,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Failed to save virtual meeting link');
+            }
+
+            setVirtualMeetingLink(result.data?.virtual_meeting_link || virtualMeetingLink);
+            setVirtualMeetingHostLink(result.data?.virtual_meeting_host_link || virtualMeetingHostLink);
+            setVirtualMeetingProvider(result.data?.virtual_meeting_provider || virtualMeetingProvider);
+            setStoredVirtualMeetingLink(result.data?.virtual_meeting_link || virtualMeetingLink);
+            setStoredVirtualMeetingHostLink(result.data?.virtual_meeting_host_link || virtualMeetingHostLink);
+            setStoredVirtualMeetingProvider(result.data?.virtual_meeting_provider || virtualMeetingProvider);
+            showSuccessPopup('Virtual meeting link saved.');
+        } catch (error) {
+            showErrorPopup(error instanceof Error ? error.message : 'Failed to save virtual meeting link');
+        }
+    };
 
     const modeOfTrainingOptions = [
         { value: '1', label: '1 - Classroom' },
@@ -582,6 +772,23 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             return `${startDate} - ${endDate}`; // Single day course
         } else {
             return `${startDate} - ${endDate}`; // Multi-day course
+        }
+    };
+
+    // Function to fetch enrolled learners
+    const fetchEnrolledLearners = async () => {
+        if (!courseToEdit?.id) return;
+        setEnrollmentsLoading(true);
+        try {
+            const res = await fetch(getApiUrl(`/api/admin/course-run-enrollments?courseRunId=${courseToEdit.id}`));
+            const data = await res.json();
+            if (data.success) {
+                setEnrolledLearners(data.data);
+            }
+        } catch (error) {
+            console.error('Error fetching enrollments:', error);
+        } finally {
+            setEnrollmentsLoading(false);
         }
     };
 
@@ -1398,16 +1605,26 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
 
         const run = ssgResponse.data.course.run;
+        const virtualMeetingLinkFromResponse = run.virtualMeetingLink || ssgResponse.data.virtualMeetingLink || '';
+        const virtualMeetingProviderFromResponse = run.virtualMeetingProvider || ssgResponse.data.virtualMeetingProvider || '';
 
-        // Update form data with the actual SSG response structure
+        // Update form data with the actual SSG response structure, falling back to local database data
         const updatedFormData = {
-            // Registration dates - flat format ?? nested format fallback
-            openingRegistrationDate: (run.registrationOpeningDate ?? run.registrationDates?.opening) ? convertSsgDateToHtml(run.registrationOpeningDate ?? run.registrationDates?.opening) : undefined,
-            closingRegistrationDate: (run.registrationClosingDate ?? run.registrationDates?.closing) ? convertSsgDateToHtml(run.registrationClosingDate ?? run.registrationDates?.closing) : undefined,
+            // Registration dates - Local DB fallback to SSG
+            openingRegistrationDate: (courseToEdit as any)?.registrationOpeningDate 
+                ? extractLocalDate((courseToEdit as any).registrationOpeningDate) 
+                : ((run.registrationOpeningDate ?? run.registrationDates?.opening) ? convertSsgDateToHtml(run.registrationOpeningDate ?? run.registrationDates?.opening) : undefined),
+            closingRegistrationDate: (courseToEdit as any)?.registrationClosingDate
+                ? extractLocalDate((courseToEdit as any).registrationClosingDate)
+                : ((run.registrationClosingDate ?? run.registrationDates?.closing) ? convertSsgDateToHtml(run.registrationClosingDate ?? run.registrationDates?.closing) : undefined),
 
-            // Course dates - flat format ?? nested format fallback
-            courseStartDate: (run.courseStartDate ?? run.courseDates?.start) ? convertSsgDateToHtml(run.courseStartDate ?? run.courseDates?.start) : undefined,
-            courseEndDate: (run.courseEndDate ?? run.courseDates?.end) ? convertSsgDateToHtml(run.courseEndDate ?? run.courseDates?.end) : undefined,
+            // Course dates - Local DB fallback to SSG
+            courseStartDate: courseToEdit?.startDate 
+                ? extractLocalDate(courseToEdit.startDate) 
+                : ((run.courseStartDate ?? run.courseDates?.start) ? convertSsgDateToHtml(run.courseStartDate ?? run.courseDates?.start) : undefined),
+            courseEndDate: courseToEdit?.endDate
+                ? extractLocalDate(courseToEdit.endDate)
+                : ((run.courseEndDate ?? run.courseDates?.end) ? convertSsgDateToHtml(run.courseEndDate ?? run.courseDates?.end) : undefined),
 
             // Course vacancy
             courseVacancy: run.courseVacancy ? {
@@ -1460,6 +1677,19 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         const endDateRaw = run.courseEndDate ?? run.courseDates?.end;
         if (endDateRaw) {
             setEndDate(convertSsgDateToHtml(endDateRaw));
+        }
+
+        if (virtualMeetingLinkFromResponse) {
+            setVirtualMeetingLink(virtualMeetingLinkFromResponse);
+            setStoredVirtualMeetingLink(virtualMeetingLinkFromResponse);
+        }
+        if (
+            virtualMeetingProviderFromResponse === 'google_meet' ||
+            virtualMeetingProviderFromResponse === 'zoom' ||
+            virtualMeetingProviderFromResponse === 'teams'
+        ) {
+            setVirtualMeetingProvider(virtualMeetingProviderFromResponse);
+            setStoredVirtualMeetingProvider(virtualMeetingProviderFromResponse);
         }
 
         setSsgDataPopulated(true);
@@ -1559,7 +1789,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
     };
 
-    // Function to handle course run update specifically
+    // Function to handle course run update — pushes to SSG first, then saves locally
     const handleUpdateCourseRunOnly = async () => {
         if (!courseRunId.trim()) {
             showErrorPopup('Course Run ID is required for updating');
@@ -1567,8 +1797,70 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
 
         setLoading(true);
+        let ssgSuccess = false;
+        let ssgError = '';
+
         try {
-            const requestBody = {
+            // ── Step 1: Push to SSG (mirrors EditCourseRunView.handleSubmit) ──
+            if (courseReferenceNumber.trim()) {
+                const scheduleInfo = (editFormData.courseStartDate && editFormData.courseEndDate)
+                    ? (editFormData.courseStartDate === editFormData.courseEndDate
+                        ? editFormData.courseStartDate
+                        : `${editFormData.courseStartDate} - ${editFormData.courseEndDate}`)
+                    : '';
+
+                const ssgBody: any = {
+                    courseReferenceNumber,
+                    openingRegistrationDate: editFormData.openingRegistrationDate || undefined,
+                    closingRegistrationDate: editFormData.closingRegistrationDate || undefined,
+                    courseStartDate: editFormData.courseStartDate || undefined,
+                    courseEndDate: editFormData.courseEndDate || undefined,
+                    scheduleInfoTypeCode: '01',
+                    scheduleInfoTypeDescription: 'Description',
+                    scheduleInfo,
+                    block: editFormData.block || '',
+                    street: editFormData.street || '',
+                    floor: editFormData.floor || '',
+                    unit: editFormData.unit || '',
+                    building: editFormData.building || '',
+                    postalCode: editFormData.postalCode || '',
+                    room: editFormData.room || '',
+                    wheelChairAccess: editFormData.wheelChairAccess || OptionalSelector.NO,
+                    courseAdminEmail: editFormData.courseAdminEmail || currentUserEmail,
+                    courseVacancy: editFormData.courseVacancy || { code: 'A', description: 'Available' },
+                    fileName: '',
+                    fileContent: '',
+                };
+
+                console.log('📦 [Edit Class] Pushing to SSG:', JSON.stringify(ssgBody, null, 2));
+
+                const ssgRes = await fetch(
+                    `/api/ssg/courses/courseRuns/${encodeURIComponent(courseRunId.trim())}?action=edit`,
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ssgBody) }
+                );
+
+                const contentType = ssgRes.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    const ssgData = await ssgRes.json();
+                    if (!ssgRes.ok) {
+                        const msg = ssgData?.details?.[0] || ssgData?.message || ssgData?.error?.message || `SSG error ${ssgRes.status}`;
+                        ssgError = typeof msg === 'string' ? msg : JSON.stringify(msg);
+                        console.error('❌ [Edit Class] SSG update failed:', ssgError);
+                    } else {
+                        ssgSuccess = true;
+                        console.log('✅ [Edit Class] SSG update succeeded');
+                    }
+                } else {
+                    const text = await ssgRes.text();
+                    ssgError = `Server error ${ssgRes.status}: ${text.slice(0, 300)}`;
+                    console.error('❌ [Edit Class] SSG non-JSON response:', ssgError);
+                }
+            } else {
+                console.warn('⚠️ [Edit Class] No course reference number — skipping SSG update');
+            }
+
+            // ── Step 2: Save locally (always runs) ──
+            const localBody = {
                 courseRunId,
                 courseStartDate: editFormData.courseStartDate || undefined,
                 courseEndDate: editFormData.courseEndDate || undefined,
@@ -1585,23 +1877,32 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
                 courseVacancyCode: editFormData.courseVacancy?.code || undefined,
                 courseVacancyDescription: editFormData.courseVacancy?.description || undefined,
                 courseAdminEmail: editFormData.courseAdminEmail || currentUserEmail,
+                classStatus: classStatus || undefined,
+                classType: classType || undefined,
             };
 
-            const response = await fetch(getApiUrl('/api/admin/update-course-run-local'), {
+            const localRes = await fetch(getApiUrl('/api/admin/update-course-run-local'), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify(localBody)
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error: ${response.status}`);
+            if (!localRes.ok) {
+                const errorData = await localRes.json();
+                throw new Error(errorData.error || `Local save HTTP error: ${localRes.status}`);
             }
 
-            showSuccessPopup('Course run saved locally.');
+            // ── Step 3: Show combined result ──
+            if (ssgSuccess) {
+                showSuccessPopup('Course run updated on both SSG and local database.');
+            } else if (ssgError) {
+                showWarningPopup(`Local database saved, but SSG update failed:\n\n${ssgError}`, 'Partial Save');
+            } else {
+                showSuccessPopup('Course run saved locally. (SSG update skipped — no course reference number)');
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'An error occurred during update';
-            console.error('Local update error:', error);
+            console.error('Update error:', error);
             showErrorPopup('Failed to save course run: ' + errorMessage);
         } finally {
             setLoading(false);
@@ -1625,6 +1926,33 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
     };
 
+    // Load assessment links when the Assessment tab becomes active
+    useEffect(() => {
+        if (!isEditMode || activeTab !== 'assessment' || !courseToEdit?.id) return;
+        let cancelled = false;
+        (async () => {
+            setAssessmentLinksLoading(true);
+            setAssessmentLinksError(null);
+            try {
+                const res = await fetch(`/api/admin/course-run-assessment-links?courseRunId=${encodeURIComponent(courseToEdit.id)}`);
+                const json = await res.json();
+                if (cancelled) return;
+                if (!res.ok || !json.success) {
+                    setAssessmentLinksError(typeof json.error === 'string' ? json.error : `Error ${res.status}`);
+                    setAssessmentLinks(null);
+                } else {
+                    setAssessmentLinks(json.data);
+                }
+            } catch (err) {
+                if (cancelled) return;
+                setAssessmentLinksError(err instanceof Error ? err.message : 'Failed to load assessment links');
+            } finally {
+                if (!cancelled) setAssessmentLinksLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [isEditMode, activeTab, courseToEdit?.id]);
+
     // Load trainers when trainer tab becomes active
     useEffect(() => {
         if (isEditMode && activeTab === 'trainer' && availableTrainers.length === 0) {
@@ -1632,8 +1960,52 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         }
         if (isEditMode && activeTab === 'trainer' && courseToEdit?.id) {
             fetchAssignedTrainers();
+            fetchSessionTrainers();
         }
     }, [isEditMode, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Fetch per-session trainer overrides from local DB. The endpoint resolves
+    // the effective trainer per session server-side (inherit or override).
+    const fetchSessionTrainers = async () => {
+        if (!courseToEdit?.id) return;
+        setSessionTrainerLoading(true);
+        try {
+            const res = await fetch(`/api/admin/course-sessions/list-with-trainers?courseRunUuid=${courseToEdit.id}`);
+            const json = await res.json();
+            if (json.success && json.data?.sessions) {
+                setSessionTrainerList(json.data.sessions);
+            }
+        } catch {
+            // silent — feature degrades gracefully
+        } finally {
+            setSessionTrainerLoading(false);
+        }
+    };
+
+    // Update or clear a per-session trainer override. Pass trainerId=null to clear.
+    const updateSessionTrainer = async (
+        sessionId: string,
+        trainerId: string | null,
+        trainerName: string | null,
+        trainerEmail: string | null
+    ) => {
+        try {
+            const res = await fetch('/api/admin/course-sessions/update-trainer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, trainerId, trainerName, trainerEmail }),
+            });
+            const json = await res.json();
+            if (!json.success) {
+                showErrorPopup(json.error || 'Failed to update session trainer');
+                return;
+            }
+            // Refetch to pick up the server-resolved effective trainer
+            await fetchSessionTrainers();
+        } catch (err) {
+            showErrorPopup('Failed to update session trainer');
+        }
+    };
 
     // Fetch all trainers assigned to this course run from the junction table
     const fetchAssignedTrainers = async () => {
@@ -1724,13 +2096,15 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
         if (!courseToEdit?.id) return;
         try {
             setLoading(true);
+            // If junctionId is 'legacy', there's no junction row — remove all
+            // trainers (clears legacy scalar columns via syncLegacyColumns)
+            const body = junctionId === 'legacy'
+                ? { courseRunUuid: courseToEdit.id }
+                : { courseRunUuid: courseToEdit.id, junctionId };
             const res = await fetch('/api/admin/remove-trainer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    courseRunUuid: courseToEdit.id,
-                    junctionId,
-                }),
+                body: JSON.stringify(body),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to remove trainer');
@@ -2000,8 +2374,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             setEditFormData(prev => ({
                 ...prev,
                 courseReferenceNumber: refNumber,
-                courseStartDate: courseToEdit.startDate || '',
-                courseEndDate: courseToEdit.endDate || ''
+                courseStartDate: extractLocalDate(courseToEdit.startDate),
+                courseEndDate: extractLocalDate(courseToEdit.endDate),
+                openingRegistrationDate: extractLocalDate((courseToEdit as any).registrationOpeningDate),
+                closingRegistrationDate: extractLocalDate((courseToEdit as any).registrationClosingDate)
             }));
 
             // Automatically fetch course run data and course sessions, then switch to Course Run tab
@@ -2021,12 +2397,44 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
         }
     }, [activeTab, courseRunId, courseReferenceNumber, includeExpiredSessions, specifyMonthYear, selectedMonth, selectedYear]);
 
+    // Fetch enrolled learners when Enrollments tab is activated
+    useEffect(() => {
+        if (isEditMode && activeTab === 'enrollments' && courseToEdit?.id) {
+            fetchEnrolledLearners();
+        }
+    }, [activeTab, courseToEdit?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold">{title}</h2>
                 <div>
-                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)} className="mr-2">Cancel</Button>
+                    <Button variant="ghost" onClick={goBackToList} className="mr-2">{viewOnly ? 'Back to List' : 'Cancel'}</Button>
+                    {viewOnly && isEditMode && (
+                        <Button
+                            onClick={() => {
+                                setEditingCourseRun(courseToEdit);
+                                setAdminPage(AdminPage.EditClass);
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                            Edit Class
+                        </Button>
+                    )}
+                    {!viewOnly && isEditMode && activeTab === 'courseRun' && (
+                        <Button
+                            onClick={handleUpdateCourseRunOnly}
+                            disabled={loading}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                            {loading ? (
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Saving...
+                                </div>
+                            ) : 'Save Changes'}
+                        </Button>
+                    )}
                     {!isEditMode && (
                         <Button onClick={() => {
                             showInfoPopup('Create mode functionality will be implemented');
@@ -2045,7 +2453,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             {isEditMode && (
                 <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
                     <nav className="-mb-px flex space-x-8">
-                        {(['courseRun', 'sessions', 'trainer'] as const).map(tab => (
+                        {(['courseRun', 'sessions', 'enrollments', 'trainer', 'assessment'] as const).map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
@@ -2055,7 +2463,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'
                                 }`}
                             >
-                                {tab === 'courseRun' ? 'Course Run' : tab === 'sessions' ? 'Sessions' : 'Trainer'}
+                                {tab === 'courseRun' ? 'Course Run' : tab === 'sessions' ? 'Sessions' : tab === 'enrollments' ? 'Enrolled Learners' : tab === 'trainer' ? 'Trainer' : 'Assessment'}
                             </button>
                         ))}
                     </nav>
@@ -2067,18 +2475,36 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 {(!isEditMode || activeTab === 'courseRun') && (
                     <>
                         {isEditMode && ssgDataPopulated && !ssgApiLoading && (
-                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-3 mb-4">
-                                <p className="text-sm text-green-800 dark:text-green-300">
+                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
+                                <p className="text-sm text-green-800 dark:text-green-300 flex-1">
                                     <strong>✓ Form populated with SSG data</strong> - The form fields below have been automatically filled with data from the SSG API. You can modify any field as needed before updating.
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={() => fetchCourseRunData(courseRunId)}
+                                    disabled={ssgApiLoading || !courseRunId}
+                                    className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border border-green-300 dark:border-green-600 text-green-800 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/40 disabled:opacity-50"
+                                    title="Re-fetch this course run from SSG and re-populate the form"
+                                >
+                                    Refetch
+                                </button>
                             </div>
                         )}
 
                         {isEditMode && ssgApiResponse && !ssgApiLoading && !ssgDataPopulated && (
-                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-3 mb-4">
-                                <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
+                                <p className="text-sm text-yellow-800 dark:text-yellow-300 flex-1">
                                     <strong>⚠ SSG data retrieved but form not populated</strong> - The SSG API returned data, but the form fields could not be filled. The response may have an unexpected structure.
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={() => fetchCourseRunData(courseRunId)}
+                                    disabled={ssgApiLoading || !courseRunId}
+                                    className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border border-yellow-400 dark:border-yellow-600 text-yellow-900 dark:text-yellow-200 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 disabled:opacity-50"
+                                    title="Re-fetch this course run from SSG and retry populating the form. Switch SSG App above if you suspect the wrong cert is being used."
+                                >
+                                    Refetch
+                                </button>
                             </div>
                         )}
 
@@ -2094,6 +2520,18 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                         )}
 
                         <FormSection title="Basic Class Information">
+                            {isEditMode && courseToEdit?.courseTitle && (
+                                <div className="mb-4">
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                                    <input
+                                        type="text"
+                                        value={courseToEdit.courseTitle}
+                                        className={`${inputClasses} ${disabledInputClasses}`}
+                                        readOnly
+                                        disabled
+                                    />
+                                </div>
+                            )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
@@ -2126,7 +2564,226 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     </div>
                                 )}
                             </div>
+                            {isEditMode && (
+                                <div className="flex items-center gap-3 mt-4 px-1">
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={coursewareEmailDisabled}
+                                            onChange={async (e) => {
+                                                const newVal = e.target.checked;
+                                                setCoursewareEmailDisabled(newVal);
+                                                if (courseToEdit?.id) {
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ id: courseToEdit.id, courseware_email_disabled: newVal }),
+                                                        });
+                                                    } catch {
+                                                        setCoursewareEmailDisabled(!newVal);
+                                                    }
+                                                }
+                                            }}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500" />
+                                    </label>
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Disable Auto Courseware &amp; Attendance Email
+                                    </span>
+                                    <span className="text-xs text-gray-400">
+                                        {coursewareEmailDisabled
+                                            ? 'Scheduled auto-send is skipped for this class only'
+                                            : 'Scheduled auto-send will run for this class'}
+                                    </span>
+                                </div>
+                            )}
                         </FormSection>
+
+                        {/* Class Status & Type */}
+                        {isEditMode && (
+                            <FormSection title="Class Status & Type">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Class Status *</label>
+                                        <select
+                                            value={classStatus}
+                                            onChange={async (e) => {
+                                                const newStatus = e.target.value;
+                                                setClassStatus(newStatus);
+                                                if (courseToEdit?.id) {
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ id: courseToEdit.id, class_status: newStatus }),
+                                                        });
+                                                    } catch { /* silent */ }
+                                                }
+                                            }}
+                                            className={`${inputClasses} text-center`}
+                                        >
+                                            <option value="Confirmed">Confirmed</option>
+                                            <option value="Pending">Pending</option>
+                                            <option value="Cancelled">Cancelled</option>
+                                            <option value="Unconfirmed">Unconfirmed</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Class Type *</label>
+                                        <select
+                                            value={classType}
+                                            onChange={async (e) => {
+                                                const newType = e.target.value;
+                                                setClassType(newType);
+                                                if (courseToEdit?.id) {
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ id: courseToEdit.id, class_type: newType }),
+                                                        });
+                                                    } catch { /* silent */ }
+                                                }
+                                            }}
+                                            className={inputClasses}
+                                        >
+                                            <option value="Physical">Physical</option>
+                                            <option value="Virtual">Virtual</option>
+                                            <option value="Hybrid">Hybrid</option>
+                                            <option value="External">External</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </FormSection>
+                        )}
+
+                        {/* Virtual Meeting Link */}
+                        {isEditMode && (
+                            <FormSection title="Virtual Meeting">
+                                <div>
+                                    <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Provider</label>
+                                            <select
+                                                value={virtualMeetingProvider}
+                                                onChange={(e) => {
+                                                    const nextProvider = e.target.value as 'google_meet' | 'zoom' | 'teams';
+                                                    setVirtualMeetingProvider(nextProvider);
+                                                    setVirtualMeetingLink(nextProvider === storedVirtualMeetingProvider ? storedVirtualMeetingLink : '');
+                                                }}
+                                                className={inputClasses}
+                                            >
+                                                <option value="google_meet">Google Meet</option>
+                                                <option value="zoom">Zoom</option>
+                                                <option value="teams">Microsoft Teams</option>
+                                            </select>
+                                        </div>
+                                        {virtualMeetingProvider === 'zoom' && (
+                                            <div className="relative flex items-end">
+                                                <div className="h-10 flex items-center">
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        type="button"
+                                                        onClick={() => handleGenerateZoomMeeting(!!storedVirtualMeetingLink)}
+                                                        disabled={meetingBusy || !canGenerateZoomMeeting}
+                                                        className="w-auto flex-none"
+                                                    >
+                                                        {meetingBusy ? 'Generating...' : hasStoredZoomMeeting ? 'Regenerate Zoom Meeting' : 'Generate Zoom Meeting'}
+                                                    </Button>
+                                                </div>
+                                                {!canGenerateZoomMeeting && (
+                                                    <p className="absolute left-0 top-full mt-1 w-max max-w-[min(28rem,90vw)] text-xs text-amber-600 dark:text-amber-400">
+                                                        Set Class Type to Virtual or Hybrid before generating a Zoom meeting.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {isZoomMeetingProvider ? (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Trainer Zoom Start URL</label>
+                                                <input
+                                                    type="url"
+                                                    value={virtualMeetingHostLink}
+                                                    onChange={(e) => setVirtualMeetingHostLink(e.target.value)}
+                                                    placeholder="https://zoom.us/s/..."
+                                                    className={inputClasses}
+                                                />
+                                                {virtualMeetingHostLink && (
+                                                    <a href={virtualMeetingHostLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                        Open trainer start URL
+                                                    </a>
+                                                )}
+                                                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                                    Sensitive trainer-only URL. This starts the Zoom meeting with host access and must not be shared with learners.
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Learner Join URL</label>
+                                                <input
+                                                    type="url"
+                                                    value={virtualMeetingLink}
+                                                    onChange={(e) => setVirtualMeetingLink(e.target.value)}
+                                                    placeholder="https://zoom.us/j/..."
+                                                    className={inputClasses}
+                                                />
+                                                {virtualMeetingLink && (
+                                                    <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                        Open learner join URL
+                                                    </a>
+                                                )}
+                                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                    This URL is shown to learners. Trainers can also join with it, but may not have host/admin controls.
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    type="button"
+                                                    onClick={handleSaveVirtualMeeting}
+                                                >
+                                                    Save Zoom URLs
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Virtual Meeting Link</label>
+                                            <div className="flex gap-3">
+                                                <input
+                                                    type="url"
+                                                    value={virtualMeetingLink}
+                                                    onChange={(e) => setVirtualMeetingLink(e.target.value)}
+                                                    placeholder={virtualMeetingProvider === 'teams' ? 'https://teams.microsoft.com/l/meetup-join/...' : 'https://meet.google.com/xxx-xxxx-xxx'}
+                                                    className={inputClasses}
+                                                />
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    type="button"
+                                                    onClick={handleSaveVirtualMeeting}
+                                                >
+                                                    Save
+                                                </Button>
+                                            </div>
+                                            {virtualMeetingLink && (
+                                                <a href={virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:underline">
+                                                    Open {virtualMeetingProviderLabel}
+                                                </a>
+                                            )}
+                                            <p className="mt-1 text-xs text-gray-400">
+                                                Google Meet links are synced from Google Calendar; Teams links can be entered manually.
+                                            </p>
+                                        </>
+                                    )}
+                                </div>
+                            </FormSection>
+                        )}
 
                         {/* Course Vacancy Details */}
                         {isEditMode && (
@@ -2325,20 +2982,6 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     />
                                 </div>
 
-                                <div className="flex justify-end mt-6">
-                                    <Button
-                                        onClick={handleUpdateCourseRunOnly}
-                                        disabled={loading}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                                    >
-                                        {loading ? (
-                                            <div className="flex items-center">
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Saving...
-                                            </div>
-                                        ) : 'Save to Local Database'}
-                                    </Button>
-                                </div>
                             </FormSection>
                         )}
                     </>
@@ -2354,11 +2997,55 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
                             {!sessionsLoading && (
                                 <>
+                                    {/* Add New Session button at top right */}
+                                    <div className="flex justify-end mb-2">
+                                        <Button
+                                            type="button"
+                                            variant="primary"
+                                            onClick={toggleNewSessionForm}
+                                            className="bg-green-600 text-white hover:bg-green-700"
+                                        >
+                                            {showNewSessionForm ? 'Cancel Add Session' : 'Add New Session'}
+                                        </Button>
+                                    </div>
+
                                     {hasExistingSessions ? (
                                         <div className="space-y-4">
-                                            {existingSessions.map((session: any, index: number) => (
+                                            {/* Sessions Table */}
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm whitespace-nowrap">
+                                                    <thead className="bg-gray-100 dark:bg-gray-700/60">
+                                                        <tr>
+                                                            <th className="text-left py-3 px-3 font-semibold">Session</th>
+                                                            <th className="text-left py-3 px-3 font-semibold">Date</th>
+                                                            <th className="text-left py-3 px-3 font-semibold">Time</th>
+                                                            <th className="text-left py-3 px-3 font-semibold">Mode</th>
+                                                            <th className="text-right py-3 px-3 font-semibold"></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {existingSessions.map((session: any, index: number) => (
+                                                            <tr key={session.id || index} className="border-b border-gray-100 dark:border-gray-800">
+                                                                <td className="py-3 px-3 text-gray-500 font-medium">S{index + 1}</td>
+                                                                <td className="py-3 px-3">{session.startDate ? formatDateForDisplay(session.startDate) : 'N/A'} - {session.endDate ? formatDateForDisplay(session.endDate) : 'N/A'}</td>
+                                                                <td className="py-3 px-3">{session.startTime || 'N/A'} - {session.endTime || 'N/A'}</td>
+                                                                <td className="py-3 px-3">{getModeLabel(session.modeOfTraining)}</td>
+                                                                <td className="py-3 px-3 text-right">
+                                                                    <Button variant="ghost" onClick={() => startEditingSession(index)} className="!text-blue-600 hover:!bg-blue-50" size="sm">Edit</Button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                            {/* Inline edit form for a selected session */}
+                                            {editingSessionIndex !== null && existingSessions[editingSessionIndex] && (() => {
+                                                const index = editingSessionIndex;
+                                                const session = existingSessions[index];
+                                                return (
                                                 <Card key={session.id || index} className="p-4 bg-gray-50 dark:bg-gray-800/60">
-                                                    {editingSessionIndex === index ? (
+                                                    {true ? (
                                                         // Editing mode for existing session
                                                         <div className="space-y-3">
                                                             <h4 className="font-medium text-blue-600">Edit Session {index + 1}</h4>
@@ -2624,64 +3311,14 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 </button>
                                                             </div>
                                                         </div>
-                                                    ) : (
-                                                        // Display mode for existing session
-                                                        <div className="space-y-2">
-                                                            <div className="flex justify-between items-start">
-                                                                <h4 className="font-medium">Session {index + 1}</h4>
-                                                                <div className="flex space-x-2">
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        onClick={() => startEditingSession(index)}
-                                                                        className="!text-blue-600 hover:!bg-blue-50"
-                                                                    >
-                                                                        Edit
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        onClick={() => deleteExistingSession(session.id, index)}
-                                                                        className="!text-red-600 hover:!bg-red-50"
-                                                                    >
-                                                                        Delete
-                                                                    </Button>
-                                                                </div>
-                                                            </div>
-                                                            <div className="grid grid-cols-3 gap-4 text-sm">
-                                                                <div>
-                                                                    <span className="font-medium">Date:</span> {session.startDate ? formatDateForDisplay(session.startDate) : 'N/A'} - {session.endDate ? formatDateForDisplay(session.endDate) : 'N/A'}
-                                                                </div>
-                                                                <div>
-                                                                    <span className="font-medium">Time:</span> {session.startTime || 'N/A'} - {session.endTime || 'N/A'}
-                                                                </div>
-                                                                <div>
-                                                                    <span className="font-medium">Mode:</span> {getModeLabel(session.modeOfTraining)}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                    ) : null}
                                                 </Card>
-                                            ))}
-
-                                            <Button
-                                                type="button"
-                                                variant="primary"
-                                                onClick={toggleNewSessionForm}
-                                                className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                                            >
-                                                {showNewSessionForm ? 'Cancel Add Session' : 'Add New Session'}
-                                            </Button>
+                                                );
+                                            })()}
                                         </div>
                                     ) : (
-                                        // No existing sessions - show add form
                                         <div className="text-center py-8">
-                                            <p className="text-gray-600 mb-4">No existing sessions found.</p>
-                                            <button
-                                                type="button"
-                                                onClick={toggleNewSessionForm}
-                                                className="px-6 py-3 bg-green-600 text-white rounded hover:bg-green-700"
-                                            >
-                                                {showNewSessionForm ? 'Cancel' : 'Add First Session'}
-                                            </button>
+                                            <p className="text-gray-500 dark:text-gray-400">No existing sessions found.</p>
                                         </div>
                                     )}
 
@@ -2872,298 +3509,1096 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                     </FormSection>
                 )}
 
+                {/* Enrolled Learners Tab */}
+                {isEditMode && activeTab === 'enrollments' && (
+                    <FormSection title="Enrolled Learners">
+                        {enrollmentsLoading ? (
+                            <div className="flex items-center justify-center py-8">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
+                                Loading enrollments...
+                            </div>
+                        ) : enrolledLearners.length === 0 ? (
+                            <p className="text-gray-500 dark:text-gray-400 py-4">No learners enrolled in this course run.</p>
+                        ) : (
+                            <div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                    {enrolledLearners.length} learner{enrolledLearners.length !== 1 ? 's' : ''} enrolled
+                                </p>
+                                <div className="overflow-x-auto">
+                                    <table className="text-sm whitespace-nowrap min-w-max w-full">
+                                        <thead className="bg-gray-100 dark:bg-gray-700/60">
+                                            <tr>
+                                                <th className="text-left py-3 px-3 font-semibold">#</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Name</th>
+                                                <th className="text-left py-3 px-3 font-semibold">NRIC</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Email</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Tel</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Sponsorship</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Enrollment ID</th>
+                                                <th className="text-left py-3 px-3 font-semibold">Grant ID</th>
+                                                <th className="text-right py-3 px-3 font-semibold">Grant Amt</th>
+                                                <th className="text-right py-3 px-3 font-semibold">SF Claim Amt</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {enrolledLearners.map((learner, idx) => {
+                                                const nric = learner.nric || '';
+                                                const isVisible = visibleNrics.has(learner.user_id);
+                                                const maskedNric = nric.length >= 5
+                                                    ? `${nric[0]}${'X'.repeat(nric.length - 5)}${nric.slice(-4)}`
+                                                    : nric || '-';
+                                                return (
+                                                <tr key={`${learner.user_id}-${idx}`} className="border-b border-gray-100 dark:border-gray-800">
+                                                    <td className="py-3 px-3 text-gray-500">{idx + 1}</td>
+                                                    <td className="py-3 px-3">{learner.full_name}</td>
+                                                    <td className="py-3 px-3 font-mono">
+                                                        <span className="inline-flex items-center gap-1.5">
+                                                            {isVisible ? nric || '-' : maskedNric}
+                                                            {nric && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setVisibleNrics(prev => {
+                                                                        const next = new Set(Array.from(prev));
+                                                                        if (next.has(learner.user_id)) next.delete(learner.user_id);
+                                                                        else next.add(learner.user_id);
+                                                                        return next;
+                                                                    })}
+                                                                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                                                    title={isVisible ? 'Hide NRIC' : 'Show NRIC'}
+                                                                >
+                                                                    {isVisible ? (
+                                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" /></svg>
+                                                                    ) : (
+                                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                    )}
+                                                                </button>
+                                                            )}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3 px-3">
+                                                        <div>{learner.email}</div>
+                                                        {learner.secondary_email && <div className="text-xs text-gray-400 dark:text-gray-500">{learner.secondary_email}</div>}
+                                                    </td>
+                                                    <td className="py-3 px-3">{learner.tel || '-'}</td>
+                                                    <td className="py-3 px-3">
+                                                        {learner.sponsorship_type === 'Employer' ? (
+                                                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">Employer</span>
+                                                        ) : learner.sponsorship_type === 'Individual' ? (
+                                                            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Self</span>
+                                                        ) : (
+                                                            <span className="text-gray-400">-</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-3 px-3 font-mono text-xs">{learner.enrolment_id || '-'}</td>
+                                                    <td className="py-3 px-3 font-mono text-xs">{learner.grant_id || '-'}</td>
+                                                    <td className="py-3 px-3 text-right">{learner.grant_amount != null ? `$${Number(learner.grant_amount).toFixed(2)}` : '-'}</td>
+                                                    <td className="py-3 px-3 text-right">{`$${Number(learner.sf_claim_amount || 0).toFixed(2)}`}</td>
+                                                </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </FormSection>
+                )}
+
                 {/* Trainer Tab */}
                 {isEditMode && activeTab === 'trainer' && (
                     <FormSection title="Trainer Management">
                         <div className="space-y-6">
-                            {/* Currently Assigned Local Trainers */}
-                            {assignedTrainersList.length > 0 ? (
-                                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
-                                    <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-3">
-                                        Assigned Trainers (Local System) — {assignedTrainersList.length}
-                                    </h4>
-                                    <div className="space-y-2">
-                                        {assignedTrainersList.map((t: any) => (
-                                            <div key={t.id} className="flex items-center justify-between bg-white dark:bg-gray-800 border border-green-200 dark:border-green-700/50 rounded-lg px-4 py-2.5">
-                                                <div className="flex flex-wrap gap-4 text-sm">
-                                                    <div>
-                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
-                                                        <span className="text-gray-900 dark:text-white">{t.trainer_name}</span>
-                                                    </div>
-                                                    {t.trainer_email && (
-                                                        <div>
-                                                            <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
-                                                            <span className="text-gray-900 dark:text-white">{t.trainer_email}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => handleRemoveTrainerLocal(t.id, t.trainer_name, e)}
-                                                    disabled={loading}
-                                                    className="ml-3 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                                    title={`Remove ${t.trainer_name}`}
-                                                >
-                                                    ✕ Remove
-                                                </button>
-                                            </div>
-                                        ))}
+                            {/* Assigned Trainer (Local) */}
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <div>
+                                        <h4 className="text-lg font-medium text-gray-900 dark:text-white">Assigned Trainer (Local)</h4>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Manually assigned by the system or admin.</p>
                                     </div>
-                                    <p className="text-xs text-green-700 dark:text-green-400 mt-2">
-                                        These trainers can view this class in their attendance dashboard.
-                                    </p>
-                                </div>
-                            ) : localAssignedTrainerName ? (
-                                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
-                                    <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-2">Assigned Trainer (Local System)</h4>
-                                    <div className="flex flex-wrap gap-6 text-sm">
-                                        <div>
-                                            <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
-                                            <span className="text-gray-900 dark:text-white">{localAssignedTrainerName}</span>
-                                        </div>
-                                        {localAssignedTrainerEmail && (
-                                            <div>
-                                                <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
-                                                <span className="text-gray-900 dark:text-white">{localAssignedTrainerEmail}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className="text-xs text-green-700 dark:text-green-400 mt-2">
-                                        This trainer can view this class in their attendance dashboard.
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
-                                    No trainer has been locally assigned to this course run yet. Use the form below to assign one.
-                                </div>
-                            )}
+                                    <div className="flex items-center gap-2">
+                                        <select
+                                            value={selectedDbTrainerId || manualTrainerName}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (!val) { setSelectedDbTrainerId(''); setManualTrainerName(''); setManualTrainerEmail(''); return; }
+                                                const td = availableTrainers.find((at: any) => at.user_id === val);
+                                                if (td) { setSelectedDbTrainerId(td.user_id); setManualTrainerName(td.trainer_name); setManualTrainerEmail(td.email || ''); }
+                                                else { setSelectedDbTrainerId(''); setManualTrainerName(val); setManualTrainerEmail(''); }
+                                            }}
+                                            className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">-- Reassign Trainer --</option>
+                                            {courseToEdit?.trainersList
+                                                ? (courseToEdit.trainersList.includes('|') ? courseToEdit.trainersList.split('|') : courseToEdit.trainersList.split(',')).map((t: string) => t.trim()).filter(Boolean).map((name: string, idx: number) => {
+                                                    const td = availableTrainers.find((at: any) => at.trainer_name?.toLowerCase() === name.toLowerCase());
+                                                    return <option key={idx} value={td?.user_id || name}>{name}</option>;
+                                                })
+                                                : availableTrainers.map((t: any) => (
+                                                    <option key={t.user_id} value={t.user_id}>{t.trainer_name}</option>
+                                                ))
+                                            }
+                                        </select>
+                                        <Button
+                                            type="button"
+                                            onClick={(e) => handleAssignTrainerLocal(e)}
+                                            disabled={loading || (!selectedDbTrainerId && !manualTrainerName)}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                                            size="sm"
+                                        >
+                                            {loading ? 'Saving...' : 'Re-Assign'}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={() => setDbTrainerAssignMode(dbTrainerAssignMode === 'manual' ? '' as any : 'manual')}
+                                            className={`${dbTrainerAssignMode === 'manual' ? 'bg-gray-500 hover:bg-gray-600' : 'bg-green-600 hover:bg-green-700'} text-white`}
+                                            size="sm"
+                                        >
+                                            {dbTrainerAssignMode === 'manual' ? 'Cancel' : 'Add New Trainer'}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={async () => {
+                                                const localEmail = assignedTrainersList[0]?.trainer_email || localAssignedTrainerEmail;
+                                                const localName = assignedTrainersList[0]?.trainer_name || localAssignedTrainerName;
+                                                if (!localName) { showErrorPopup('No local trainer assigned.'); return; }
+                                                const match = availableTrainers.find((t: any) =>
+                                                    (localEmail && t.email?.toLowerCase() === localEmail.toLowerCase()) ||
+                                                    (localName && t.trainer_name?.toLowerCase() === localName.toLowerCase())
+                                                );
+                                                const nric = match?.nric;
+                                                if (!nric || nric === 'NA') {
+                                                    showErrorPopup('No NRIC found for the assigned local trainer. Please ensure the trainer has an NRIC on file.');
+                                                    return;
+                                                }
+                                                if (!ssgApiResponse?.data?.course?.run) {
+                                                    // No SSG data — save locally only
+                                                    setLoading(true);
+                                                    try {
+                                                        await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
+                                                        });
+                                                        showSuccessPopup(`TPG trainer saved locally as ${localName}. SSG data not available — sync will update TPG when available.`);
+                                                    } catch { showErrorPopup('Failed to save TPG trainer.'); }
+                                                    finally { setLoading(false); }
+                                                    return;
+                                                }
+                                                // SSG data available — try SSG API
+                                                const runData = ssgApiResponse.data.course.run;
+                                                const requestBody = {
+                                                    course: {
+                                                        courseReferenceNumber: courseReferenceNumber,
+                                                        trainingProvider: { uen: runData.organizationKey },
+                                                        run: {
+                                                            action: "update",
+                                                            registrationDates: { opening: runData.registrationOpeningDate || runData.registrationDates?.opening || 0, closing: runData.registrationClosingDate || runData.registrationDates?.closing || 0 },
+                                                            courseDates: { start: runData.courseStartDate || runData.courseDates?.start || 0, end: runData.courseEndDate || runData.courseDates?.end || 0 },
+                                                            scheduleInfoType: { code: "01", description: "Description" },
+                                                            scheduleInfo: "Schedule",
+                                                            venue: runData.venue || {},
+                                                            courseAdminEmail: runData.courseAdminEmail || currentUserEmail,
+                                                            courseVacancy: runData.courseVacancy || { code: "A", description: "Available" },
+                                                            file: { Name: "", content: "" },
+                                                            linkCourseRunTrainer: [{ trainer: { photo: { name: "", content: "" }, trainerType: { code: "1", description: "Existing" }, idNumber: nric } }]
+                                                        }
+                                                    }
+                                                };
+                                                showConfirmPopup(
+                                                    `Assign trainer ${localName} (NRIC: ${nric}) to TPG via SSG API?`,
+                                                    async () => {
+                                                        setLoading(true);
+                                                        try {
+                                                            const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
+                                                                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody)
+                                                            });
 
-                            {/* Display Assigned Trainer Information */}
-                            {ssgApiResponse?.data?.course?.run ? (
-                                <div>
-                                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Currently Assigned Trainer</h4>
-                                    {ssgApiResponse.data.course.run.linkCourseRunTrainer &&
-                                        ssgApiResponse.data.course.run.linkCourseRunTrainer.length > 0 ? (
-                                        <div className="space-y-4">
-                                            {ssgApiResponse.data.course.run.linkCourseRunTrainer.map((trainerLink: any, index: number) => {
-                                                const trainer = trainerLink.trainer;
+                                                            // Parse the body regardless of HTTP status — SSG returns HTTP 200 with
+                                                            // `error: { code, message }` in the body on silent/validation failures
+                                                            // (e.g. #62 registration-date-immutable rule). Relying on `response.ok`
+                                                            // alone masked real failures and ghost-wrote local tpg_assigned_trainer_*
+                                                            // (see backlog #60). Extract error uniformly from both paths.
+                                                            const body = await response.json().catch(() => ({} as any));
+                                                            const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
+                                                            const httpErrorDetail = !response.ok
+                                                                ? (body?.details?.[0]?.message || body?.message || '')
+                                                                : '';
+                                                            const ssgErrorMessage: string = bodyError?.message || bodyError?.code || httpErrorDetail || '';
+                                                            const ssgHadError = !!ssgErrorMessage;
+
+                                                            // Legitimate fallback case: trainer isn't registered in SSG's TP Profile
+                                                            // yet. Preserve the existing behavior — save locally and prompt the
+                                                            // admin to register the trainer in SSG.
+                                                            const isExistingTrainerNotFound = ssgErrorMessage.includes('Existing_Trainer_NotFound');
+
+                                                            if (!ssgHadError) {
+                                                                // Real success — write local using the admin's input (not a re-fetch,
+                                                                // which would blank local if the re-fetch itself failed).
+                                                                await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
+                                                                });
+                                                                showSuccessPopup(`Trainer ${localName} assigned to TPG successfully!`);
+                                                                // Non-destructive verification re-fetch — only used to refresh the UI,
+                                                                // never to overwrite local.
+                                                                const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
+                                                                if (updated.ok) setSsgApiResponse(await updated.json());
+                                                            } else if (isExistingTrainerNotFound) {
+                                                                // Legitimate local-only fallback
+                                                                await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName: localName, trainerEmail: localEmail })
+                                                                });
+                                                                showInfoPopup(`Trainer ${localName} is not registered in the SSG TP Profile yet. TPG trainer has been saved locally. Please register the trainer in SSG first.`);
+                                                            } else {
+                                                                // Real SSG rejection — do NOT write local, surface the error so the
+                                                                // admin knows the assignment didn't actually go through. This is the
+                                                                // fix for backlog #60 (ghost-write on silent SSG failure).
+                                                                showErrorPopup(`SSG rejected the trainer assignment: ${ssgErrorMessage}. Local DB was NOT updated. Please resolve the SSG-side issue and try again.`);
+                                                            }
+                                                        } catch { showErrorPopup('Failed to assign trainer to TPG.'); }
+                                                        finally { setLoading(false); }
+                                                    }
+                                                );
+                                            }}
+                                            disabled={loading || (!assignedTrainersList.length && !localAssignedTrainerName)}
+                                            className="bg-purple-600 hover:bg-purple-700 text-white"
+                                            size="sm"
+                                        >
+                                            {loading ? 'Assigning...' : 'Assign to TPG'}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            onClick={async () => {
+                                                const localEmail = assignedTrainersList[0]?.trainer_email || localAssignedTrainerEmail;
+                                                const localName = assignedTrainersList[0]?.trainer_name || localAssignedTrainerName;
+                                                if (!localEmail) {
+                                                    showErrorPopup('No email found for the locally assigned trainer. Cannot add to calendar.');
+                                                    return;
+                                                }
+                                                setLoading(true);
+                                                try {
+                                                    const res = await fetch('/api/admin/add-trainer-to-calendar', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ courseRunId, trainerEmail: localEmail })
+                                                    });
+                                                    const data = await res.json();
+                                                    if (res.ok && data.success) {
+                                                        showSuccessPopup(`Trainer ${localName} added to ${data.addedCount} calendar event(s).`);
+                                                    } else {
+                                                        showErrorPopup(data.error || 'Failed to add trainer to calendar.');
+                                                    }
+                                                } catch (err) {
+                                                    console.error('Error adding to calendar:', err);
+                                                    showErrorPopup('An error occurred while adding to calendar.');
+                                                } finally {
+                                                    setLoading(false);
+                                                }
+                                            }}
+                                            disabled={loading || (!assignedTrainersList.length && !localAssignedTrainerName)}
+                                            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                                            size="sm"
+                                        >
+                                            {loading ? 'Adding...' : 'Add to Calendar'}
+                                        </Button>
+                                    </div>
+                                </div>
+                                {(assignedTrainersList.length > 0 || localAssignedTrainerName) ? (
+                                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
+                                        <div className="space-y-2">
+                                            {/* Display ALL locally assigned trainers — junction first, scalar fallback */}
+                                            {(assignedTrainersList.length > 0 ? assignedTrainersList : [{
+                                              id: 'legacy',
+                                              trainer_name: localAssignedTrainerName,
+                                              trainer_email: localAssignedTrainerEmail,
+                                            }]).map((t: any) => {
+                                                const trainerDetail = availableTrainers.find((at: any) =>
+                                                    (at.email && t.trainer_email && at.email.toLowerCase() === t.trainer_email.toLowerCase()) ||
+                                                    (at.trainer_name && t.trainer_name && at.trainer_name.toLowerCase() === t.trainer_name.toLowerCase())
+                                                );
                                                 return (
-                                                    <Card key={index} className="p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700">
-                                                        <div className="flex justify-between items-start">
-                                                            <div className="flex-1">
-                                                                <h5 className="text-md font-semibold text-blue-800 dark:text-blue-300 mb-2">
-                                                                    Trainer {index + 1}
-                                                                </h5>
-                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                                                    <div>
-                                                                        <span className="font-bold text-gray-700 dark:text-gray-300 ">ID Number:</span>
-                                                                        <div className="text-gray-900 dark:text-white">{trainer.idNumber}</div>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>
-                                                                        <div className="text-gray-900 dark:text-white">{trainer.name}</div>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>
-                                                                        <div className="text-gray-900 dark:text-white">{trainer.email}</div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
+                                                <div key={t.id} className="flex items-center justify-between bg-white dark:bg-gray-800 border border-green-200 dark:border-green-700/50 rounded-lg px-4 py-2.5">
+                                                    <div className="flex flex-wrap gap-4 text-sm">
+                                                        <div>
+                                                            <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
+                                                            <span className="text-gray-900 dark:text-white">{t.trainer_name}</span>
                                                         </div>
-                                                    </Card>
+                                                        {t.trainer_email && (
+                                                            <div>
+                                                                <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
+                                                                <span className="text-gray-900 dark:text-white">{t.trainer_email}</span>
+                                                            </div>
+                                                        )}
+                                                        {trainerDetail?.telephone && (
+                                                            <div>
+                                                                <span className="font-bold text-gray-700 dark:text-gray-300">Contact (HP):</span>{' '}
+                                                                <span className="text-gray-900 dark:text-white">{trainerDetail.telephone}</span>
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <span className="font-bold text-gray-700 dark:text-gray-300">NRIC:</span>{' '}
+                                                            {trainerDetail?.nric && trainerDetail.nric !== 'NA' ? (
+                                                                <span className="text-gray-900 dark:text-white font-mono">{trainerDetail.nric}</span>
+                                                            ) : (
+                                                                <span className="text-amber-500 dark:text-amber-400 text-xs italic">Not on file</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => handleRemoveTrainerLocal(t.id, t.trainer_name, e)}
+                                                        disabled={loading}
+                                                        className="ml-3 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                                        title={`Remove ${t.trainer_name}`}
+                                                    >
+                                                        ✕ Remove
+                                                    </button>
+                                                </div>
                                                 );
                                             })}
                                         </div>
-                                    ) : (
-                                        <Card className="p-6 bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 text-center">
-                                            <div className="text-gray-600 dark:text-gray-300">
-                                                <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                                </svg>
-                                                <h5 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Trainer Assigned</h5>
-                                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                    No trainer has been assigned to this course run yet. Use the form below to assign a trainer.
-                                                </p>
-                                            </div>
-                                        </Card>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-4">
-                                    <div className="flex">
-                                        <div className="flex-shrink-0">
-                                            <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                        <div className="ml-3">
-                                            <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-                                                Course Run Data Required
-                                            </h3>
-                                            <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
-                                                Please fetch SSG course run data first to view assigned trainer information.
-                                            </p>
-                                        </div>
                                     </div>
-                                </div>
-                            )}
-
-                            {/* Assign New Trainer Form */}
-                            <div className="border-t dark:border-gray-700 pt-6">
-                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Assign New Trainer</h4>
-
-                                {Array.from({ length: trainerCount }, (_, index) => {
-                                    const trainerInfo = getTrainerData(index);
-                                    // Set default trainer type to "1" (Existing) if not already set
-                                    const trainerType = trainerInfo.trainerTypeCode || '1';
-
-                                    // Ensure the default value is set in the data
-                                    if (!trainerInfo.trainerTypeCode) {
-                                        updateTrainerField(index, 'trainerTypeCode', '1');
-                                    }
-
-                                    return (
-                                        <Card key={index} className="p-4 bg-gray-50 dark:bg-gray-800/60">
-                                            <div className="space-y-4">
-                                                {/* Hidden Trainer Type field - always set to "1" (Existing) for request body */}
-                                                <input
-                                                    type="hidden"
-                                                    value="1"
-                                                    onChange={(e) => updateTrainerField(index, 'trainerTypeCode', e.target.value)}
-                                                />
-
-                                                {/* Trainer ID Number field - always displayed */}
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer ID Number *</label>
-                                                    <input
-                                                        type="text"
-                                                        value={trainerInfo.trainerIdNumber || ''}
-                                                        onChange={(e) => updateTrainerField(index, 'trainerIdNumber', e.target.value)}
-                                                        className={inputClasses}
-                                                        placeholder="Enter existing trainer ID"
-                                                        required
-                                                    />
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                        Enter the ID number of an existing trainer to assign them to this course run.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </Card>
+                                ) : localAssignedTrainerName ? (() => {
+                                    const trainerDetail = availableTrainers.find((at: any) =>
+                                        (at.email && localAssignedTrainerEmail && at.email.toLowerCase() === localAssignedTrainerEmail.toLowerCase()) ||
+                                        (at.trainer_name && at.trainer_name.toLowerCase() === localAssignedTrainerName.toLowerCase())
                                     );
-                                })}
-
-                                <div className="flex justify-end mt-6">
-                                    <Button
-                                        onClick={handleUpdateTrainer}
-                                        disabled={loading}
-                                        className="bg-purple-600 hover:bg-purple-700 text-white"
-                                    >
-                                        {loading ? (
-                                            <div className="flex items-center">
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Assigning Trainer...
+                                    return (
+                                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-md p-4">
+                                        <div className="flex flex-wrap gap-6 text-sm">
+                                            <div>
+                                                <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
+                                                <span className="text-gray-900 dark:text-white">{localAssignedTrainerName}</span>
                                             </div>
-                                        ) : 'Assign Trainer'}
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* Local DB Trainer Assignment */}
-                            <div className="border-t dark:border-gray-700 pt-6 mt-6">
-                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-1">Assign Trainer (Local Database)</h4>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                                    Select a trainer from your system so they can view this class in their attendance dashboard.
-                                </p>
-
-                                {/* Toggle: dropdown vs manual */}
-                                <div className="flex gap-3 mb-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setDbTrainerAssignMode('dropdown')}
-                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                                            dbTrainerAssignMode === 'dropdown'
-                                                ? 'bg-blue-600 text-white'
-                                                : 'border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        Select from list
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setDbTrainerAssignMode('manual')}
-                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-                                            dbTrainerAssignMode === 'manual'
-                                                ? 'bg-blue-600 text-white'
-                                                : 'border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                        }`}
-                                    >
-                                        Enter manually
-                                    </button>
-                                </div>
-
-                                {dbTrainerAssignMode === 'dropdown' ? (
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Trainer <span className="text-red-500">*</span>
-                                        </label>
-                                        {availableTrainers.length === 0 ? (
-                                            <p className="text-sm text-gray-500 italic">Loading trainers...</p>
-                                        ) : (
-                                            <SearchableSelect
-                                                options={availableTrainers.map((t: any) => ({ value: t.user_id, label: `${t.trainer_name} (${t.email})` }))}
-                                                value={selectedDbTrainerId}
-                                                onChange={setSelectedDbTrainerId}
-                                                placeholder="— Search trainer by name or email —"
-                                                className={inputClasses}
-                                            />
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                Trainer Name <span className="text-red-500">*</span>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                placeholder="Full name"
-                                                value={manualTrainerName}
-                                                onChange={e => setManualTrainerName(e.target.value)}
-                                                className={inputClasses}
-                                            />
+                                            {localAssignedTrainerEmail && (
+                                                <div>
+                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
+                                                    <span className="text-gray-900 dark:text-white">{localAssignedTrainerEmail}</span>
+                                                </div>
+                                            )}
+                                            {trainerDetail?.telephone && (
+                                                <div>
+                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Contact (HP):</span>{' '}
+                                                    <span className="text-gray-900 dark:text-white">{trainerDetail.telephone}</span>
+                                                </div>
+                                            )}
+                                            <div>
+                                                <span className="font-bold text-gray-700 dark:text-gray-300">NRIC:</span>{' '}
+                                                {trainerDetail?.nric && trainerDetail.nric !== 'NA' ? (
+                                                    <span className="text-gray-900 dark:text-white font-mono">{trainerDetail.nric}</span>
+                                                ) : (
+                                                    <span className="text-amber-500 dark:text-amber-400 text-xs italic">Not on file</span>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                Trainer Email
-                                            </label>
-                                            <input
-                                                type="email"
-                                                placeholder="email@example.com"
-                                                value={manualTrainerEmail}
-                                                onChange={e => setManualTrainerEmail(e.target.value)}
-                                                className={inputClasses}
-                                            />
+                                    </div>
+                                    );
+                                })() : (
+                                    <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                        No trainer has been locally assigned yet.
+                                    </div>
+                                )}
+
+
+                                {/* Inline Add New Trainer form */}
+                                {dbTrainerAssignMode === 'manual' && (
+                                    <div className="mt-4 border border-green-200 dark:border-green-700 rounded-lg p-4 bg-green-50/50 dark:bg-green-900/10">
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Add a new trainer:</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name <span className="text-red-500">*</span></label>
+                                                <input type="text" placeholder="Full name" value={manualTrainerName} onChange={e => setManualTrainerName(e.target.value)} className={inputClasses} />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                                                <input type="email" placeholder="email@example.com" value={manualTrainerEmail} onChange={e => setManualTrainerEmail(e.target.value)} className={inputClasses} />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact (HP)</label>
+                                                <input type="tel" placeholder="Phone number" value={manualTrainerContact || ''} onChange={e => setManualTrainerContact(e.target.value)} className={inputClasses} />
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-end mt-4">
+                                            <Button type="button" onClick={(e) => handleAssignTrainerLocal(e)} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white">
+                                                {loading ? 'Saving...' : 'Add & Assign Trainer'}
+                                            </Button>
                                         </div>
                                     </div>
                                 )}
 
-                                <div className="flex justify-end mt-4">
-                                    <Button
-                                        type="button"
-                                        onClick={(e) => handleAssignTrainerLocal(e)}
-                                        disabled={loading}
-                                        className="bg-green-600 hover:bg-green-700 text-white"
-                                    >
-                                        {loading ? (
-                                            <div className="flex items-center">
-                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                                Saving...
+                                {/* --- Per-Session Trainer Assignment --- */}
+                                {/* By default every session inherits the run-level trainer
+                                    above. This collapsible panel lets the admin override
+                                    specific sessions with a different trainer from the
+                                    pool of locally assigned trainers. */}
+                                {sessionTrainerList.length > 0 && (
+                                    <div className="mt-6 border border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50/40 dark:bg-blue-900/10">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSessionTrainerExpanded(v => !v)}
+                                            className="w-full flex items-center justify-between px-4 py-3 text-left"
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="text-base">📋</span>
+                                                <div className="min-w-0">
+                                                    <h4 className="text-sm font-semibold text-gray-800 dark:text-white">
+                                                        Per-Session Trainer Assignment
+                                                    </h4>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                        {sessionTrainerList.length} session{sessionTrainerList.length === 1 ? '' : 's'} ·
+                                                        {' '}{sessionTrainerList.filter(s => s.hasOverride).length} overridden ·
+                                                        {' '}{sessionTrainerList.filter(s => !s.hasOverride).length} using default
+                                                    </p>
+                                                </div>
                                             </div>
-                                        ) : 'Save Local Assignment'}
-                                    </Button>
-                                </div>
+                                            <span className="text-xs text-blue-600 dark:text-blue-400 flex-shrink-0">
+                                                {sessionTrainerExpanded ? 'Hide ▲' : 'Show ▼'}
+                                            </span>
+                                        </button>
+                                        {sessionTrainerExpanded && (
+                                            <div className="px-4 pb-4 border-t border-blue-200 dark:border-blue-800">
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 py-3">
+                                                    Every session below uses the <strong>run-level trainer</strong> by default.
+                                                    Use the dropdown to assign a different trainer to specific sessions —
+                                                    choose a trainer from the Assigned Trainer (Local) list above. Select
+                                                    "Use default" to revert a session back to the run-level trainer.
+                                                </p>
+                                                {sessionTrainerLoading ? (
+                                                    <p className="text-xs text-gray-500 italic">Loading sessions…</p>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        {sessionTrainerList.map((s: any) => {
+                                                            const effectiveName = s.trainer?.trainerName || '—';
+                                                            // Format date: 20260411 -> 11 Apr 2026
+                                                            const formatDate = (yyyymmdd: string) => {
+                                                                if (!yyyymmdd || yyyymmdd.length !== 8) return yyyymmdd || '';
+                                                                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                                                                const y = yyyymmdd.slice(0, 4);
+                                                                const m = parseInt(yyyymmdd.slice(4, 6), 10) - 1;
+                                                                const d = parseInt(yyyymmdd.slice(6, 8), 10);
+                                                                return `${d} ${months[m] || '?'} ${y}`;
+                                                            };
+                                                            return (
+                                                                <div
+                                                                    key={s.id}
+                                                                    className={`flex items-center gap-3 px-3 py-2 rounded border ${
+                                                                        s.hasOverride
+                                                                            ? 'border-blue-400 dark:border-blue-600 bg-white dark:bg-gray-800'
+                                                                            : 'border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/60'
+                                                                    }`}
+                                                                >
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                            <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
+                                                                                {s.sessionNumber || 'S?'}
+                                                                            </span>
+                                                                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                                                                                {formatDate(s.startDate)}
+                                                                                {s.startTime && s.endTime && ` · ${s.startTime}–${s.endTime}`}
+                                                                            </span>
+                                                                            {s.hasOverride ? (
+                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">
+                                                                                    Override
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                                                                    Default
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-700 dark:text-gray-200 mt-0.5 truncate">
+                                                                            {effectiveName}
+                                                                        </div>
+                                                                    </div>
+                                                                    <select
+                                                                        value={s.hasOverride ? (s.trainer?.trainerId || '') : ''}
+                                                                        onChange={(e) => {
+                                                                            const chosenId = e.target.value;
+                                                                            if (!chosenId) {
+                                                                                // Clear override — revert to run-level default
+                                                                                updateSessionTrainer(s.id, null, null, null);
+                                                                                return;
+                                                                            }
+                                                                            const chosen = assignedTrainersList.find((t: any) => t.trainer_id === chosenId);
+                                                                            if (chosen) {
+                                                                                updateSessionTrainer(s.id, chosen.trainer_id, chosen.trainer_name, chosen.trainer_email);
+                                                                            }
+                                                                        }}
+                                                                        className="flex-shrink-0 text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                                    >
+                                                                        <option value="">Use default</option>
+                                                                        {assignedTrainersList.map((t: any) => (
+                                                                            <option key={t.trainer_id || t.trainer_name} value={t.trainer_id || ''}>
+                                                                                {t.trainer_name}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Assigned Trainer (TPG) */}
+                            {(() => {
+                                // Use freshly fetched SSG data if available, otherwise fall back to initial courseToEdit data
+                                const ssgTrainers = ssgApiResponse?.data?.course?.run?.linkCourseRunTrainer;
+                                const tpgName = ssgTrainers?.[0]?.trainer?.name || courseToEdit?.assignedTrainerTpg;
+                                const tpgEmail = ssgTrainers?.[0]?.trainer?.email || courseToEdit?.assignedTrainerTpgEmail;
+                                const tpgId = ssgTrainers?.[0]?.trainer?.idNumber;
+                                const handleRemoveTpgTrainer = () => {
+                                    const runData = ssgApiResponse?.data?.course?.run;
+                                    showConfirmPopup(
+                                        `Remove ${tpgName} from ${runData ? 'SSG/TPG and' : ''} the local database for this course run?`,
+                                        async () => {
+                                            setLoading(true);
+                                            try {
+                                                let ssgErrorMessage = '';
+
+                                                // Only call SSG API if we have SSG data loaded
+                                                if (runData) {
+                                                    const requestBody = {
+                                                        course: {
+                                                            courseReferenceNumber: courseReferenceNumber,
+                                                            trainingProvider: { uen: runData.organizationKey },
+                                                            run: {
+                                                                action: "update",
+                                                                registrationDates: { opening: runData.registrationOpeningDate || runData.registrationDates?.opening || 0, closing: runData.registrationClosingDate || runData.registrationDates?.closing || 0 },
+                                                                courseDates: { start: runData.courseStartDate || runData.courseDates?.start || 0, end: runData.courseEndDate || runData.courseDates?.end || 0 },
+                                                                scheduleInfoType: { code: "01", description: "Description" },
+                                                                scheduleInfo: "Schedule",
+                                                                venue: runData.venue || {},
+                                                                courseAdminEmail: runData.courseAdminEmail || currentUserEmail,
+                                                                courseVacancy: runData.courseVacancy || { code: "A", description: "Available" },
+                                                                file: { Name: "", content: "" },
+                                                                linkCourseRunTrainer: []
+                                                            }
+                                                        }
+                                                    };
+                                                    const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify(requestBody)
+                                                    });
+
+                                                    const body = await response.json().catch(() => ({} as any));
+                                                    const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
+                                                    const httpErrorDetail = !response.ok
+                                                        ? (body?.details?.[0]?.message || body?.message || body?.error || '')
+                                                        : '';
+                                                    ssgErrorMessage = bodyError?.message || bodyError?.code || httpErrorDetail || '';
+                                                }
+
+                                                                // Always clear local TPG columns regardless of SSG result
+                                                    await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                            action: 'update-tpg-trainer',
+                                                            courseRunId,
+                                                            trainerName: null,
+                                                            trainerEmail: null,
+                                                        }),
+                                                    });
+                                                    // Non-destructive refetch to refresh the card
+                                                    try {
+                                                        const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
+                                                        if (updated.ok) setSsgApiResponse(await updated.json());
+                                                    } catch { /* ignore refetch errors */ }
+                                                if (!ssgErrorMessage) {
+                                                    showSuccessPopup(`TPG trainer removed${runData ? '' : ' (local only)'}.`);
+                                                } else {
+                                                    showInfoPopup(`Local TPG trainer cleared. Note: SSG returned: ${ssgErrorMessage}. You may need to update SSG separately.`);
+                                                }
+                                            } catch {
+                                                showErrorPopup('Failed to remove TPG trainer.');
+                                            } finally {
+                                                setLoading(false);
+                                            }
+                                        }
+                                    );
+                                };
+                                return (
+                                <div>
+                                    <div className="mb-3">
+                                        <h4 className="text-lg font-medium text-gray-900 dark:text-white">Assigned Trainer (TPG)</h4>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Auto-pulled from the SSG/TPG API. Use "Reassign TPG" or "Assign to TPG" to change.</p>
+                                    </div>
+                                    {/* Quick Reassign TPG Trainer */}
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <select
+                                            id="tpg-reassign-select"
+                                            className="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                                            defaultValue=""
+                                        >
+                                            <option value="">-- Reassign TPG Trainer --</option>
+                                            {availableTrainers.filter((t: any) => t.nric && t.nric !== 'NA').map((t: any) => (
+                                                <option key={t.user_id} value={t.user_id}>{t.trainer_name} (NRIC: {t.nric})</option>
+                                            ))}
+                                        </select>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            className="bg-purple-600 hover:bg-purple-700 text-white"
+                                            disabled={loading}
+                                            onClick={async () => {
+                                                const sel = document.getElementById('tpg-reassign-select') as HTMLSelectElement;
+                                                const userId = sel?.value;
+                                                if (!userId) { showErrorPopup('Please select a trainer to reassign.'); return; }
+                                                const match = availableTrainers.find((t: any) => t.user_id === userId);
+                                                if (!match?.nric || match.nric === 'NA') { showErrorPopup('Selected trainer has no NRIC on file.'); return; }
+                                                const trainerName = match.trainer_name;
+                                                const trainerEmail = match.email || '';
+                                                const nric = match.nric;
+
+                                                const runData = ssgApiResponse?.data?.course?.run;
+                                                if (!runData) {
+                                                    // No SSG data — save locally only
+                                                    await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName, trainerEmail })
+                                                    });
+                                                    showSuccessPopup(`TPG trainer updated locally to ${trainerName}. SSG data not available.`);
+                                                    return;
+                                                }
+
+                                                showConfirmPopup(`Assign ${trainerName} (NRIC: ${nric}) as TPG trainer via SSG?`, async () => {
+                                                    setLoading(true);
+                                                    try {
+                                                        const requestBody = {
+                                                            course: {
+                                                                courseReferenceNumber: courseReferenceNumber,
+                                                                trainingProvider: { uen: runData.organizationKey },
+                                                                run: {
+                                                                    action: "update",
+                                                                    registrationDates: { opening: runData.registrationOpeningDate || runData.registrationDates?.opening || 0, closing: runData.registrationClosingDate || runData.registrationDates?.closing || 0 },
+                                                                    courseDates: { start: runData.courseStartDate || runData.courseDates?.start || 0, end: runData.courseEndDate || runData.courseDates?.end || 0 },
+                                                                    scheduleInfoType: { code: "01", description: "Description" },
+                                                                    scheduleInfo: "Schedule",
+                                                                    venue: runData.venue || {},
+                                                                    courseAdminEmail: runData.courseAdminEmail || currentUserEmail,
+                                                                    courseVacancy: runData.courseVacancy || { code: "A", description: "Available" },
+                                                                    file: { Name: "", content: "" },
+                                                                    linkCourseRunTrainer: [{ trainer: { photo: { name: "", content: "" }, trainerType: { code: "1", description: "Existing" }, idNumber: nric } }]
+                                                                }
+                                                            }
+                                                        };
+                                                        const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=true&action=assign-trainer`, {
+                                                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody)
+                                                        });
+                                                        const body = await response.json().catch(() => ({} as any));
+                                                        const bodyError = body?.error && (body.error.code || body.error.message) ? body.error : null;
+                                                        const ssgErr = bodyError?.message || bodyError?.code || (!response.ok ? (body?.details?.[0]?.message || body?.message || '') : '');
+
+                                                        // Always update local TPG columns
+                                                        await fetch(getApiUrl('/api/admin/rename-trainer'), {
+                                                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ action: 'update-tpg-trainer', courseRunId, trainerName, trainerEmail })
+                                                        });
+                                                        try {
+                                                            const updated = await fetch(`/api/ssg/courses?runId=${courseRunId}&includeExpired=false`);
+                                                            if (updated.ok) setSsgApiResponse(await updated.json());
+                                                        } catch { /* ignore */ }
+
+                                                        if (!ssgErr) {
+                                                            showSuccessPopup(`TPG trainer reassigned to ${trainerName}.`);
+                                                        } else {
+                                                            showInfoPopup(`Local TPG updated to ${trainerName}. SSG note: ${ssgErr}`);
+                                                        }
+                                                    } catch { showErrorPopup('Failed to reassign TPG trainer.'); }
+                                                    finally { setLoading(false); }
+                                                });
+                                            }}
+                                        >
+                                            {loading ? 'Assigning...' : 'Reassign TPG'}
+                                        </Button>
+                                    </div>
+                                    {tpgName ? (
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4">
+                                            <div className="flex flex-wrap gap-6 text-sm">
+                                                <div>
+                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
+                                                    <span className="text-gray-900 dark:text-white">{tpgName}</span>
+                                                </div>
+                                                {tpgEmail && (
+                                                    <div>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
+                                                        <span className="text-gray-900 dark:text-white">{tpgEmail}</span>
+                                                    </div>
+                                                )}
+                                                {tpgId && (
+                                                    <div>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300">NRIC:</span>{' '}
+                                                        <span className="text-gray-900 dark:text-white font-mono">{tpgId}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                            No TPG trainer assigned. Data will appear after SSG/TPG sync or after clicking "Assign to TPG".
+                                        </div>
+                                    )}
+                                </div>
+                                );
+                            })()}
+
+                            {/* Next Available Trainer — hidden when a local trainer is already assigned */}
+                            {!assignedTrainersList.length && !localAssignedTrainerName ? (
+                            <div>
+                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Next Available Trainer</h4>
+                                {courseToEdit?.nextAvailableTrainer ? (() => {
+                                    const nextDetail = availableTrainers.find((at: any) =>
+                                        (at.email && courseToEdit.nextAvailableTrainerEmail && at.email.toLowerCase() === courseToEdit.nextAvailableTrainerEmail.toLowerCase()) ||
+                                        (at.trainer_name && at.trainer_name.toLowerCase() === courseToEdit.nextAvailableTrainer.toLowerCase())
+                                    );
+                                    return (
+                                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-md p-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex flex-wrap gap-6 text-sm">
+                                                <div>
+                                                    <span className="font-bold text-gray-700 dark:text-gray-300">Name:</span>{' '}
+                                                    <span className="text-gray-900 dark:text-white">{courseToEdit.nextAvailableTrainer}</span>
+                                                </div>
+                                                {(courseToEdit.nextAvailableTrainerEmail || nextDetail?.email) && (
+                                                    <div>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Email:</span>{' '}
+                                                        <span className="text-gray-900 dark:text-white">{courseToEdit.nextAvailableTrainerEmail || nextDetail?.email}</span>
+                                                    </div>
+                                                )}
+                                                {nextDetail?.telephone && (
+                                                    <div>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Contact (HP):</span>{' '}
+                                                        <span className="text-gray-900 dark:text-white">{nextDetail.telephone}</span>
+                                                    </div>
+                                                )}
+                                                {courseToEdit.latestInvitationStatus && (
+                                                    <div>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300">Invitation Status:</span>{' '}
+                                                        <span className={`font-medium ${
+                                                            courseToEdit.latestInvitationStatus === 'accepted' ? 'text-green-600 dark:text-green-400' :
+                                                            courseToEdit.latestInvitationStatus === 'declined' ? 'text-red-600 dark:text-red-400' :
+                                                            courseToEdit.latestInvitationStatus === 'pending' ? 'text-yellow-600 dark:text-yellow-400' :
+                                                            'text-gray-900 dark:text-white'
+                                                        }`}>{courseToEdit.latestInvitationStatus}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <Button
+                                                onClick={async () => {
+                                                    if (!courseToEdit?.id) return;
+                                                    try {
+                                                        setLoading(true);
+                                                        const res = await fetch(getApiUrl('/api/admin/send-trainer-invitation'), {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ courseRunUuid: courseToEdit.id }),
+                                                        });
+                                                        const data = await res.json();
+                                                        if (data.success) {
+                                                            showSuccessPopup(`Invitation sent to ${data.trainerName || courseToEdit.nextAvailableTrainer}`);
+                                                        } else {
+                                                            showErrorPopup(data.error || 'Failed to send invitation');
+                                                        }
+                                                    } catch {
+                                                        showErrorPopup('Failed to send trainer invitation');
+                                                    } finally {
+                                                        setLoading(false);
+                                                    }
+                                                }}
+                                                disabled={loading}
+                                                className="bg-orange-600 hover:bg-orange-700 text-white ml-4 whitespace-nowrap"
+                                            >
+                                                {loading ? 'Sending...' : 'Send Invitation'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    );
+                                })() : (
+                                    <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                        No next available trainer in the approved list.
+                                    </div>
+                                )}
+                            </div>
+                            ) : null}
+
+                            {/* Pause Invitations toggle */}
+                            <div className="flex items-center gap-3 mb-4 px-1">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={invitationPaused}
+                                        onChange={async (e) => {
+                                            const newVal = e.target.checked;
+                                            setInvitationPaused(newVal);
+                                            if (courseToEdit?.id) {
+                                                try {
+                                                    await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                        method: 'PUT',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ id: courseToEdit.id, invitation_paused: newVal }),
+                                                    });
+                                                } catch {
+                                                    setInvitationPaused(!newVal);
+                                                }
+                                            }
+                                        }}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500" />
+                                </label>
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Pause Invitations
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                    {invitationPaused ? 'Scheduler and cascade invitations are blocked for this course run' : 'Invitations are active'}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-3 mb-4 px-1">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={repliesBlocked}
+                                        onChange={async (e) => {
+                                            const newVal = e.target.checked;
+                                            setRepliesBlocked(newVal);
+                                            if (courseToEdit?.id) {
+                                                try {
+                                                    await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+                                                        method: 'PUT',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ id: courseToEdit.id, invitation_replies_blocked: newVal }),
+                                                    });
+                                                } catch {
+                                                    setRepliesBlocked(!newVal);
+                                                }
+                                            }
+                                        }}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-300 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500" />
+                                </label>
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Block Replies
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                    {repliesBlocked ? 'All accept/decline responses are blocked — trainers see "Already Assigned"' : 'Trainers can respond to pending invitations'}
+                                </span>
+                            </div>
+
+                            {/* Approved Trainers List */}
+                            <div>
+                                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Approved Trainers for This Course</h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Trainers approved to teach this course (from course record). The next available trainer follows the assigned local trainer in this order.</p>
+                                {courseToEdit?.trainersList ? (() => {
+                                    const approvedTrainers = (courseToEdit.trainersList.includes('|') ? courseToEdit.trainersList.split('|') : courseToEdit.trainersList.split(',')).map((t: string) => t.trim()).filter(Boolean);
+                                    const nextName = courseToEdit.nextAvailableTrainer;
+
+                                    // Build bidirectional name <-> email maps from availableTrainers (app_user data)
+                                    const dbNameToEmail = new Map<string, string>();
+                                    const emailToDbNames = new Map<string, Set<string>>();
+                                    availableTrainers.forEach((t: any) => {
+                                        if (t.trainer_name && t.email) {
+                                            const name = t.trainer_name.toLowerCase().trim();
+                                            const email = t.email.toLowerCase().trim();
+                                            dbNameToEmail.set(name, email);
+                                            if (!emailToDbNames.has(email)) emailToDbNames.set(email, new Set());
+                                            emailToDbNames.get(email)!.add(name);
+                                        }
+                                    });
+
+                                    // Collect all local assigned emails and expand to ALL known names via email
+                                    const localEmails = new Set<string>();
+                                    const localAllNames = new Set<string>();
+                                    assignedTrainersList.forEach((t: any) => {
+                                        if (t.trainer_name) localAllNames.add(t.trainer_name.toLowerCase().trim());
+                                        if (t.trainer_email) localEmails.add(t.trainer_email.toLowerCase().trim());
+                                    });
+                                    if (localAssignedTrainerName) localAllNames.add(localAssignedTrainerName.toLowerCase().trim());
+                                    if (localAssignedTrainerEmail) localEmails.add(localAssignedTrainerEmail.toLowerCase().trim());
+                                    // Expand: for each local email, add all names associated with that email
+                                    localEmails.forEach(email => {
+                                        const names = emailToDbNames.get(email);
+                                        if (names) names.forEach(n => localAllNames.add(n));
+                                    });
+
+                                    // Match: an approved trainer is locally assigned if their name, email, or word overlap matches
+                                    const isLocallyAssigned = (approvedName: string) => {
+                                        const lower = approvedName.toLowerCase().trim();
+                                        if (localAllNames.has(lower)) return true;
+                                        const approvedEmail = dbNameToEmail.get(lower);
+                                        if (approvedEmail && localEmails.has(approvedEmail)) return true;
+                                        // Word-overlap fallback for name mismatches (e.g. "Dr. Siraj Mohammad" vs "Dr. Muhammed Siraj")
+                                        const approvedWords = lower.split(/\s+/).filter((w: string) => w.length > 2);
+                                        if (approvedWords.length > 0) {
+                                            const approvedSet = new Set(approvedWords);
+                                            const localNamesArr = Array.from(localAllNames);
+                                            for (let i = 0; i < localNamesArr.length; i++) {
+                                                const localWords = localNamesArr[i].split(/\s+/).filter((w: string) => w.length > 2);
+                                                const shared = localWords.filter((w: string) => approvedSet.has(w));
+                                                if (shared.length >= 2 || (shared.length >= 1 && (approvedWords.length <= 1 || localWords.length <= 1))) {
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                        return false;
+                                    };
+
+                                    // Invitation data from the API (passed via setEditingCourseRun)
+                                    const invitations = (courseToEdit as any)?.trainerInvitations || {};
+                                    const isDetailedView = classListReturnTo === AdminPage.ViewClassByDate;
+
+                                    const formatDt = (iso: string | null) => {
+                                        if (!iso) return '';
+                                        const d = new Date(iso);
+                                        if (isNaN(d.getTime())) return '';
+                                        return d.toLocaleString('en-SG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+                                    };
+
+                                    const statusBadge = (status: string) => {
+                                        switch (status) {
+                                            case 'accepted': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Accepted</span>;
+                                            case 'declined': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">Declined</span>;
+                                            case 'pending': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Pending</span>;
+                                            case 'resent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">Resent</span>;
+                                            case 'not_sent': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Not Sent</span>;
+                                            case 'manual': return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Manually Added</span>;
+                                            default: return <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">{status}</span>;
+                                        }
+                                    };
+
+                                    return (
+                                        <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4">
+                                            <div className="space-y-2">
+                                                {approvedTrainers.map((trainerName: string, idx: number) => {
+                                                    const isLocal = isLocallyAssigned(trainerName);
+                                                    const isNext = nextName && trainerName.toLowerCase().trim() === nextName.toLowerCase().trim();
+                                                    const norm = trainerName.toLowerCase().replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim();
+                                                    const trainerInvs = invitations[norm];
+
+                                                    return (
+                                                        <div key={idx} className={`text-sm rounded border ${
+                                                            isLocal ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' :
+                                                            isNext ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-700' :
+                                                            'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                                                        }`}>
+                                                            <div className="flex items-center justify-between py-1.5 px-3">
+                                                                <div className="flex items-center">
+                                                                    <span className="text-gray-400 mr-3 w-6 text-right">{idx + 1}.</span>
+                                                                    <span className="text-gray-900 dark:text-white">{trainerName}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    {/* Latest status badge — "Manually Added" when local but no invitation, else default to "Not Sent" */}
+                                                                    {statusBadge(isLocal && !trainerInvs?.[0] ? 'manual' : (trainerInvs?.[0]?.status || 'not_sent'))}
+                                                                    {isLocal && (
+                                                                        <span className="text-xs font-medium text-green-600 dark:text-green-400">Assigned (Local)</span>
+                                                                    )}
+                                                                    {isNext && !isLocal && (
+                                                                        <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Next Available</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {/* Detailed view: full invitation history with timestamps */}
+                                                            {isDetailedView && trainerInvs && trainerInvs.length > 0 && (
+                                                                <div className="px-3 pb-2 pt-0.5 ml-9 border-t border-gray-100 dark:border-gray-700/50">
+                                                                    {trainerInvs.map((inv: any, i: number) => (
+                                                                        <div key={i} className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400 py-0.5">
+                                                                            {statusBadge(inv.status)}
+                                                                            <span>Sent: {formatDt(inv.sent_at)}</span>
+                                                                            {inv.responded_at && (
+                                                                                <span>→ Responded: {formatDt(inv.responded_at)}</span>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })() : (
+                                    <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-md p-4 text-sm text-gray-500 dark:text-gray-400">
+                                        No approved trainers list available for this course.
+                                    </div>
+                                )}
+                            </div>
+
+
                         </div>
+                    </FormSection>
+                )}
+
+                {/* Assessment Tab */}
+                {isEditMode && activeTab === 'assessment' && (
+                    <FormSection title="Assessment Resources">
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            Quick access to the Assessment folder and Assessment Record folder configured on the parent course.
+                        </p>
+
+                        {assessmentLinksLoading && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                Loading…
+                            </div>
+                        )}
+
+                        {!assessmentLinksLoading && assessmentLinksError && (
+                            <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 rounded-r-lg p-3 text-sm text-red-800 dark:text-red-300">
+                                {assessmentLinksError}
+                            </div>
+                        )}
+
+                        {!assessmentLinksLoading && !assessmentLinksError && assessmentLinks && (
+                            <div className="space-y-3">
+                                {[
+                                    { label: 'Assessment Folder', url: assessmentLinks.assessmentFolderUrl, hint: 'Folder containing the assessment plan and source documents.' },
+                                    { label: 'Assessment Record Folder', url: assessmentLinks.assessmentRecordFolderUrl, hint: 'Folder where graded assessment records are stored.' },
+                                    { label: 'Assessment Summary Record', url: assessmentLinks.assessmentSummaryRecordUrl, hint: 'Optional — link to the consolidated ASR document or folder.' },
+                                ].map(item => (
+                                    <div key={item.label} className="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-gray-900 dark:text-white">{item.label}</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.hint}</p>
+                                                {item.url ? (
+                                                    <a
+                                                        href={item.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="block mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline break-all"
+                                                    >
+                                                        {item.url}
+                                                    </a>
+                                                ) : (
+                                                    <p className="mt-2 text-sm text-gray-400 italic">Not configured on the course.</p>
+                                                )}
+                                            </div>
+                                            {item.url && (
+                                                <a
+                                                    href={item.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-blue-600 hover:bg-blue-700 text-white"
+                                                >
+                                                    Open
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                    These links are configured on the course (not the run). Update them in <strong>Course Management → Edit Course</strong>.
+                                </p>
+                            </div>
+                        )}
                     </FormSection>
                 )}
             </div>
@@ -3492,7 +4927,7 @@ export const AssignTrainerView: React.FC = () => {
             courseRuns
                 .map(run => {
                     const local = localAssignments[run.id];
-                    return local?.name || run.assignedTrainerName;
+                    return local?.name || run.primaryAssignedTrainerName;
                 })
                 .filter(Boolean)
         )
@@ -3505,7 +4940,7 @@ export const AssignTrainerView: React.FC = () => {
     // Apply client-side filters
     const filteredRuns = courseRuns.filter(run => {
         const local = localAssignments[run.id];
-        const trainerName = local?.name ?? run.assignedTrainerName;
+        const trainerName = local?.name ?? run.primaryAssignedTrainerName;
 
         if (filterNoTrainer && trainerName) return false;
         if (filterTrainerName && trainerName !== filterTrainerName) return false;
@@ -3521,7 +4956,7 @@ export const AssignTrainerView: React.FC = () => {
     const totalClasses = courseRuns.length;
     const trainersAssigned = courseRuns.filter(run => {
         const local = localAssignments[run.id];
-        return (local?.name ?? run.assignedTrainerName);
+        return (local?.name ?? run.primaryAssignedTrainerName);
     }).length;
     const missingTrainers = totalClasses - trainersAssigned;
 
@@ -3664,6 +5099,7 @@ export const AssignTrainerView: React.FC = () => {
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Class Status</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Action</th>
                                 </tr>
@@ -3671,7 +5107,7 @@ export const AssignTrainerView: React.FC = () => {
                             <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                                 {paginatedRuns.map(run => {
                                     const local = localAssignments[run.id];
-                                    const currentName = local?.name ?? run.assignedTrainerName;
+                                    const currentName = local?.name ?? run.primaryAssignedTrainerName;
                                     const currentEmail = local?.email ?? run.assignedTrainerEmail;
                                     const isExpanded = selectedRunId === run.id;
 
@@ -3689,6 +5125,20 @@ export const AssignTrainerView: React.FC = () => {
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
                                                     {run.courseCode || '—'}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                                    {run.classStatus ? (
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                            run.classStatus === 'Confirmed'  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                                                            run.classStatus === 'Cancelled'  ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                                                            run.classStatus === 'Pending'    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                                                        }`}>
+                                                            {run.classStatus}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400">—</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm">
                                                     {currentName ? (
@@ -3727,7 +5177,7 @@ export const AssignTrainerView: React.FC = () => {
                                             {/* Expanded assignment form row */}
                                             {isExpanded && (
                                                 <tr>
-                                                    <td colSpan={6} className="px-4 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                                                    <td colSpan={7} className="px-4 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
                                                         <div className="max-w-2xl space-y-4">
                                                             {/* Detailed Trainers List (Multi-Trainer) */}
                                                             <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
@@ -4432,7 +5882,7 @@ export const AddCourseView: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold dark:text-white">Add Course</h2>
-                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back to Dashboard</Button>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.ViewCourses)}>Back to Courses</Button>
             </div>
             {message && (
                 <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
@@ -4455,6 +5905,7 @@ export const AddCourseView: React.FC = () => {
                             <select value={form.courseType} onChange={e => setForm(p => ({ ...p, courseType: e.target.value }))} className={inputClasses}>
                                 <option value="Non-WSQ">Non-WSQ</option>
                                 <option value="WSQ">WSQ</option>
+                                <option value="IBF">IBF</option>
                             </select>
                         </div>
                         <div>
@@ -4561,7 +6012,7 @@ export const AddCourseRunView: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold dark:text-white">Add Course Run</h2>
-                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back to Dashboard</Button>
+                <Button variant="ghost" onClick={() => setAdminPage(AdminPage.ViewCourses)}>Back to Courses</Button>
             </div>
             {message && (
                 <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'}`}>
@@ -4940,222 +6391,6 @@ export const AutomationLogsView: React.FC = () => {
     );
 };
 
-// ─── Assign Trainer Logging ───────────────────────────────────────────────────
-
-interface AssignTrainerLogRow {
-    id: number;
-    created_at: string;
-    course_run_id: string;
-    course_code: string | null;
-    course_title: string | null;
-    start_date: string | null;
-    end_date: string | null;
-    ra_code: string | null;
-    trainer_name: string | null;
-    trainer_email: string | null;
-    action: string | null;
-    status: 'success' | 'error';
-    error_message: string | null;
-}
-
-export const AssignTrainerLogsView: React.FC = () => {
-    const { setAdminPage } = useLms();
-    const [logs, setLogs] = useState<AssignTrainerLogRow[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
-
-    const fetchLogs = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch('/api/admin/assign-trainer-logs?limit=500');
-            const json = await res.json();
-            if (json.success) setLogs(json.data);
-        } catch {
-            /* silent */
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-    const displayLogs = logs;
-
-    // Flatten to one batch per date+hour (SG time), e.g. "31 Mar 2026 · 07:00"
-    const batches = useMemo(() => {
-        const map = new Map<string, AssignTrainerLogRow[]>();
-        for (const log of displayLogs) {
-            const dt = new Date(log.created_at);
-            const dateLabel = dt.toLocaleDateString('en-SG', {
-                timeZone: 'Asia/Singapore',
-                day: '2-digit', month: 'short', year: 'numeric',
-            });
-            const hourLabel = dt.toLocaleTimeString('en-SG', {
-                timeZone: 'Asia/Singapore',
-                hour: '2-digit', minute: '2-digit', hour12: false,
-            }).slice(0, 2) + ':00';
-            const key = `${dateLabel} · ${hourLabel}`;
-            if (!map.has(key)) map.set(key, []);
-            map.get(key)!.push(log);
-        }
-        return Array.from(map.entries()); // [ ["31 Mar 2026 · 07:00", rows[]], ... ]
-    }, [displayLogs]);
-
-    // Expand the most recent batch by default
-    useEffect(() => {
-        if (batches.length > 0) {
-            setExpandedDates(new Set([batches[0][0]]));
-        }
-    }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    const toggleDate = (key: string) => {
-        setExpandedDates(prev => {
-            const next = new Set(prev);
-            next.has(key) ? next.delete(key) : next.add(key);
-            return next;
-        });
-    };
-
-    const actionBadge = (action: string | null) => {
-        const map: Record<string, string> = {
-            created: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-            updated: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-            skipped: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-            error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-        };
-        const key = action ?? 'skipped';
-        return (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[key] ?? map.skipped}`}>
-                {key}
-            </span>
-        );
-    };
-
-    return (
-        <div>
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-                <h2 className="text-3xl font-bold">Assign Trainer Log</h2>
-                <div className="flex items-center gap-2">
-                    <Button variant="ghost" onClick={fetchLogs} disabled={loading}>
-                        {loading ? 'Refreshing…' : 'Refresh'}
-                    </Button>
-                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
-                        Back
-                    </Button>
-                </div>
-            </div>
-
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Records every trainer assignment made via the external API (Kael). Each card is one automation batch (grouped by date &amp; hour).
-            </p>
-
-            {loading ? (
-                <div className="text-center py-12 text-gray-400">Loading logs…</div>
-            ) : batches.length === 0 ? (
-                <Card className="p-8 text-center text-gray-500 dark:text-gray-400">No assign trainer logs yet.</Card>
-            ) : (
-                <div className="space-y-3">
-                    {batches.map(([batchKey, rows]) => {
-                        const isOpen = expandedDates.has(batchKey);
-                        const successCount = rows.filter(r => r.status === 'success').length;
-                        const errorCount   = rows.filter(r => r.status === 'error').length;
-                        return (
-                            <Card key={batchKey} className="overflow-hidden">
-                                {/* Batch header */}
-                                <button
-                                    onClick={() => toggleDate(batchKey)}
-                                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors text-left"
-                                >
-                                    <div className="flex items-center gap-4 flex-wrap">
-                                        <span className="font-semibold text-gray-900 dark:text-white font-mono">{batchKey}</span>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400">{rows.length} assignment{rows.length !== 1 ? 's' : ''}</span>
-                                        {successCount > 0 && (
-                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                                {successCount} success
-                                            </span>
-                                        )}
-                                        {errorCount > 0 && (
-                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-                                                {errorCount} error{errorCount !== 1 ? 's' : ''}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <svg className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                </button>
-
-                                {/* Rows table */}
-                                {isOpen && (
-                                    <div className="border-t border-gray-100 dark:border-gray-700 overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead className="bg-gray-50 dark:bg-gray-800 text-left">
-                                                <tr>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Time</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Title</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Code</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Course Run ID</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Start Date</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">End Date</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">RA Code</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Trainer</th>
-                                                    <th className="px-4 py-2.5 font-semibold text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 text-center">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                                {rows.map(log => (
-                                                    <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                                        <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-400 text-xs">
-                                                            {new Date(log.created_at).toLocaleTimeString('en-SG', {
-                                                                timeZone: 'Asia/Singapore',
-                                                                hour: '2-digit', minute: '2-digit', hour12: false,
-                                                            })}
-                                                        </td>
-                                                        <td className="px-4 py-3 max-w-[260px]">
-                                                            <div className="font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words">{log.course_title || '—'}</div>
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                            {log.course_code
-                                                                ? <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded">{log.course_code}</span>
-                                                                : <span className="text-gray-400">—</span>}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                            <span className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                                                                {log.course_run_id || '—'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                            {log.start_date || '—'}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                            {log.end_date || '—'}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                                            {log.ra_code || '—'}
-                                                        </td>
-                                                        <td className="px-4 py-3">
-                                                            <div className="font-medium text-gray-800 dark:text-gray-200">{log.trainer_name || '—'}</div>
-                                                            <div className="text-xs text-gray-400 font-mono">{log.trainer_email || ''}</div>
-                                                            {log.error_message && (
-                                                                <div className="text-xs text-red-500 mt-0.5">{log.error_message}</div>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-center">
-                                                            {actionBadge(log.status === 'error' ? 'error' : log.action)}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </Card>
-                        );
-                    })}
-                </div>
-            )}
-        </div>
-    );
-};
-
 // ── Backfill Enrollments ──────────────────────────────────────────────────────
 
 interface BackfillPreviewRow {
@@ -5434,7 +6669,14 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
         }
     };
 
-    const fmt = (d: string) => d ? new Date(d).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const fmt = (d: string) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+    };
 
     return (
         <div className="max-w-5xl">
@@ -5582,6 +6824,306 @@ export const FetchUpcomingEnrolmentsView: React.FC = () => {
             )}
         </div>
     );
+};
+
+// ── Upcoming Enrolment View (with Calendar Matching) ─────────────────────────
+
+// ── Shared Enrolment Table (used by both Upcoming + New Enrolment) ───────────
+// Mirrors the View DA table columns: Enrol/Cal/Inv checkboxes, KPI cards,
+// Sync + Action buttons, NRIC/DOB masking with eye toggle.
+
+const EnrolmentTable: React.FC<{
+    title: string;
+    description: string;
+    data: any[];
+    loading: boolean;
+    onRefresh: () => void;
+    onSync?: () => void;
+    syncLabel?: string;
+    syncing?: boolean;
+    showDateRange?: boolean;
+    startDate?: string;
+    endDate?: string;
+    onStartDateChange?: (v: string) => void;
+    onEndDateChange?: (v: string) => void;
+}> = ({ title, description, data, loading, onRefresh, onSync, syncLabel, syncing, showDateRange, startDate, endDate, onStartDateChange, onEndDateChange }) => {
+    const { setAdminPage } = useLms();
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [showPii, setShowPii] = useState(false);
+    const [isAddingToCal, setIsAddingToCal] = useState(false);
+    const [isSyncingCal, setIsSyncingCal] = useState(false);
+    const [isSyncingGrants, setIsSyncingGrants] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [localData, setLocalData] = useState<any[]>([]);
+
+    React.useEffect(() => { setLocalData(data); }, [data]);
+
+    const filteredData = searchQuery.trim()
+        ? localData.filter(r => {
+            const q = searchQuery.toLowerCase();
+            return (r.learner_name || '').toLowerCase().includes(q)
+                || (r.email || '').toLowerCase().includes(q)
+                || (r.enrolment_id || '').toLowerCase().includes(q)
+                || (r.nric || '').toLowerCase().includes(q)
+                || (r.course_title || r.title || '').toLowerCase().includes(q)
+                || (r.course_code || '').toLowerCase().includes(q)
+                || (r.course_run_id || '').toLowerCase().includes(q);
+        })
+        : localData;
+
+    const total = localData.length;
+    const enrolled = localData.filter(r => r.enrolment_id && String(r.enrolment_id).trim()).length;
+    const calAdded = localData.filter(r => !!r.calendar_added).length;
+    const invoiced = localData.filter(r => r.invoice_id && String(r.invoice_id).trim()).length;
+
+    const toggleSelect = (id: string) => setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+    const toggleSelectAll = () => {
+        const allSelected = filteredData.length > 0 && filteredData.every(r => selectedIds.has(r.id));
+        setSelectedIds(allSelected ? new Set() : new Set(filteredData.map(r => r.id)));
+    };
+
+    const toggleField = async (enrollmentId: string, field: 'calendar' | 'invoice', newValue: boolean) => {
+        setLocalData(prev => prev.map(r => {
+            if (r.id !== enrollmentId) return r;
+            if (field === 'calendar') return { ...r, calendar_added: newValue };
+            if (field === 'invoice') return { ...r, invoice_id: newValue ? 'MANUAL' : null };
+            return r;
+        }));
+        try {
+            await fetch('/api/admin/enrolment-actions', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'toggle-field', enrollmentId, field, value: newValue }),
+            });
+        } catch { console.error('Toggle save failed'); }
+    };
+
+    const handleSyncCal = async () => {
+        setIsSyncingCal(true);
+        try {
+            const res = await fetch('/api/admin/enrolment-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync-calendar' }) });
+            const json = await res.json();
+            alert(json.success ? `Sync: ${json.checked} checked, ${json.matched} in calendar.` : `Failed: ${json.error}`);
+            onRefresh();
+        } catch { alert('Sync calendar failed.'); }
+        finally { setIsSyncingCal(false); }
+    };
+
+    const handleSyncGrants = async () => {
+        setIsSyncingGrants(true);
+        try {
+            const res = await fetch('/api/admin/enrolment-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync-grants' }) });
+            const json = await res.json();
+            alert(json.success ? `Sync: ${json.matched} grant(s) matched.` : `Failed: ${json.error}`);
+            onRefresh();
+        } catch { alert('Sync grants failed.'); }
+        finally { setIsSyncingGrants(false); }
+    };
+
+    const handleAddToCal = async () => {
+        const ids = Array.from(selectedIds).filter(id => { const r = localData.find(d => d.id === id); return r && !r.calendar_added; });
+        if (ids.length === 0) { alert('No eligible rows selected.'); return; }
+        if (!window.confirm(`Add ${ids.length} learner(s) to calendar?`)) return;
+        setIsAddingToCal(true);
+        try {
+            const res = await fetch('/api/admin/enrolment-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add-to-calendar', enrollmentIds: ids }) });
+            const json = await res.json();
+            const ok = (json.results || []).filter((r: any) => r.success).length;
+            const fail = (json.results || []).filter((r: any) => !r.success);
+            const successIds = new Set((json.results || []).filter((r: any) => r.success).map((r: any) => r.id));
+            setLocalData(prev => prev.map(r => successIds.has(r.id) ? { ...r, calendar_added: true } : r));
+            alert(`${ok} added.` + (fail.length ? `\n${fail.length} failed.` : ''));
+        } catch { alert('Failed.'); }
+        finally { setIsAddingToCal(false); }
+    };
+
+    const fmt = (d: string | null) => {
+        if (!d) return '—';
+        const date = new Date(d);
+        if (isNaN(date.getTime())) return d;
+        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Singapore' }).format(date);
+    };
+
+    const formatDateInput = (value: string) => {
+        const numeric = value.replace(/\D/g, '');
+        if (numeric.length <= 2) return numeric;
+        if (numeric.length <= 4) return `${numeric.slice(0, 2)}/${numeric.slice(2)}`;
+        return `${numeric.slice(0, 2)}/${numeric.slice(2, 4)}/${numeric.slice(4, 8)}`;
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 className="text-3xl font-bold">{title}</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{description}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    {onSync && <Button onClick={onSync} disabled={syncing}>{syncing ? 'Syncing…' : syncLabel || 'Sync'}</Button>}
+                    <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>Back</Button>
+                </div>
+            </div>
+
+            {/* KPI Cards */}
+            {total > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-blue-600">{total}</p><p className="text-xs text-gray-500 mt-1">Total Enrolments</p></Card>
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-green-600">{enrolled}</p><p className="text-xs text-gray-500 mt-1">Enrolled (SSG)</p></Card>
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-indigo-600">{calAdded}</p><p className="text-xs text-gray-500 mt-1">Added to Calendar</p></Card>
+                    <Card className="p-4 text-center"><p className="text-3xl font-bold text-amber-600">{invoiced}</p><p className="text-xs text-gray-500 mt-1">Invoice Created</p></Card>
+                </div>
+            )}
+
+            {/* Date Range + Search */}
+            <Card className="p-4">
+                <div className="flex flex-wrap items-end gap-4">
+                    {showDateRange && (
+                        <>
+                            <div className="space-y-1">
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Start Date</label>
+                                <input type="text" placeholder="DD/MM/YYYY" value={startDate} onChange={e => onStartDateChange?.(formatDateInput(e.target.value))} maxLength={10} className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">End Date</label>
+                                <input type="text" placeholder="DD/MM/YYYY" value={endDate} onChange={e => onEndDateChange?.(formatDateInput(e.target.value))} maxLength={10} className="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                        </>
+                    )}
+                    <div className="flex-1">
+                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Search</label>
+                        <input type="text" placeholder="Search name, NRIC, email, course..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                    <Button onClick={onRefresh} disabled={loading}>{loading ? 'Loading...' : 'Refresh'}</Button>
+                </div>
+            </Card>
+
+            {/* Action + Sync buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+                <button onClick={handleAddToCal} disabled={isAddingToCal || selectedIds.size === 0} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed">{isAddingToCal ? 'Adding...' : 'Add to Calendar'}</button>
+                <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
+                <button onClick={handleSyncGrants} disabled={isSyncingGrants} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50">{isSyncingGrants ? 'Syncing...' : 'Sync Grants'}</button>
+                <button onClick={handleSyncCal} disabled={isSyncingCal} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50">{isSyncingCal ? 'Syncing...' : 'Sync Calendar'}</button>
+            </div>
+
+            {/* Table */}
+            <Card className="overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                        <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                            <tr>
+                                <th className="px-2 py-2 w-8"><input type="checkbox" checked={filteredData.length > 0 && filteredData.every(r => selectedIds.has(r.id))} onChange={toggleSelectAll} className="w-3.5 h-3.5" /></th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap" title="SSG Enrolled">Enrol</th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap" title="In Calendar">Cal</th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap" title="Invoice">Inv</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Enrolment ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Enrol Date</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Name</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">NRIC <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide' : 'Reveal'}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={showPii ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button></th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">DOB <button onClick={() => setShowPii(v => !v)} className="ml-1 inline-flex align-middle text-gray-400 hover:text-blue-500" title={showPii ? 'Hide' : 'Reveal'}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={showPii ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button></th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Email</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Title</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Course Ref No.</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Start Date</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Run ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Fee</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">GST</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Sponsor</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Sub</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Cr</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Payable</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">SF Claim ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Payment</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Status</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Grant ID</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Grant Amt</th>
+                                <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Invoice #</th>
+                                <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Not In Cal</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            {loading ? (
+                                <tr><td colSpan={27} className="px-3 py-8 text-center text-gray-500 italic">Loading...</td></tr>
+                            ) : filteredData.length === 0 ? (
+                                <tr><td colSpan={27} className="px-3 py-8 text-center text-gray-500 italic">No enrolments found.</td></tr>
+                            ) : filteredData.map((row, idx) => (
+                                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                    <td className="px-2 py-1.5"><input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)} className="w-3.5 h-3.5" /></td>
+                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(row.enrolment_id && String(row.enrolment_id).trim())} readOnly className={`w-3.5 h-3.5 rounded border-gray-300 cursor-default ${row.enrolment_id ? 'text-green-600 accent-green-600' : ''}`} title={row.enrolment_id || 'Not enrolled'} /></td>
+                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!row.calendar_added} onChange={e => toggleField(row.id, 'calendar', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${row.calendar_added ? 'text-blue-600 accent-blue-600' : ''}`} /></td>
+                                    <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={!!(row.invoice_id && String(row.invoice_id).trim())} onChange={e => toggleField(row.id, 'invoice', e.target.checked)} className={`w-3.5 h-3.5 rounded border-gray-300 cursor-pointer ${row.invoice_id ? 'text-amber-600 accent-amber-600' : ''}`} /></td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-700 dark:text-gray-200">{row.enrolment_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{fmt(row.enrolment_date)}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-700 dark:text-gray-200 max-w-[140px] truncate" title={row.learner_name}>{row.learner_name || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300" title={showPii ? row.nric : undefined}>{row.nric ? (showPii ? row.nric : `${row.nric.charAt(0)}****${row.nric.slice(-3)}`) : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.date_of_birth ? (showPii ? fmt(row.date_of_birth) : `**/**/${new Date(row.date_of_birth).getFullYear()}`) : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[160px] truncate" title={row.email}>{row.email || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-700 dark:text-gray-300 max-w-[180px] truncate" title={row.course_title || row.title}>{row.course_title || row.title || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.course_code || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{fmt(row.start_date)}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.course_run_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.fee != null ? `$${parseFloat(row.fee || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.gst != null ? `$${parseFloat(row.gst || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.course_sponsorship || row.sponsorship_type || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.sf_subsidy != null ? `$${parseFloat(row.sf_subsidy || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.sf_credit != null ? `$${parseFloat(row.sf_credit || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.payable != null ? `$${parseFloat(row.payable || 0).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.sf_claim_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.payment_status || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${(row.enrolment_status || row.class_status) === 'Confirmed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{row.enrolment_status || row.class_status || '—'}</span></td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.grant_id || '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{row.grant_amount ? `$${parseFloat(row.grant_amount).toFixed(2)}` : '—'}</td>
+                                    <td className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-500 dark:text-gray-300">{row.invoice_id || '—'}</td>
+                                    <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                                        {row.match ? (
+                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-semibold" title={row.matchDetail}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>In Cal</span>
+                                        ) : row.reason ? (
+                                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${row.reason === 'Not in Cal' ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-600'}`}><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>{row.reason}</span>
+                                        ) : <span className="text-gray-400">—</span>}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+export const UpcomingEnrolmentView: React.FC = () => {
+    const { trainingProviderProfile } = useLms();
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    // Use admin threshold from Company Settings (default 21 days, same as Upcoming Classes)
+    const thresholdDays = (trainingProviderProfile as any)?.adminSettings?.upcomingClassesThresholdDays || 21;
+    const fmtDmy = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    const [startDate, setStartDate] = useState(() => fmtDmy(new Date()));
+    const [endDate, setEndDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() + thresholdDays); return fmtDmy(d); });
+    const toIsoDate = (dmy: string) => { const p = dmy.split('/'); return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : dmy; };
+    const fetchData = async () => {
+        setLoading(true);
+        try { const res = await fetch(`/api/admin/upcoming-enrolment?startDate=${toIsoDate(startDate)}&endDate=${toIsoDate(endDate)}`); const json = await res.json(); if (json.success) setData(json.data); }
+        catch { /* silent */ } finally { setLoading(false); }
+    };
+    useEffect(() => { fetchData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return <EnrolmentTable title="Upcoming Enrolment" description={`Confirmed enrolments starting from today to ${thresholdDays} days ahead (same threshold as Upcoming Classes). Sorted by start date.`} data={data} loading={loading} onRefresh={fetchData} showDateRange startDate={startDate} endDate={endDate} onStartDateChange={setStartDate} onEndDateChange={setEndDate} />;
+};
+
+export const NewEnrolmentView: React.FC = () => {
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [syncing, setSyncing] = useState(false);
+    const fetchData = async () => {
+        setLoading(true);
+        try { const res = await fetch('/api/admin/ssg-enrolment-records?limit=500'); const json = await res.json(); if (json.success) setData((json.data || []).map((r: any) => ({ ...r, enrolment_id: r.enrolment_reference, nric: r.learner_nric, email: r.learner_email, course_title: r.course_title, course_code: r.course_ref_code, start_date: r.start_date, enrolment_status: r.status }))); }
+        catch { /* silent */ } finally { setLoading(false); }
+    };
+    const handleSync = async () => {
+        setSyncing(true);
+        try { const res = await fetch('/api/external/sync-ssg-enrolments', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-internal-scheduler': '1' } }); const json = await res.json(); if (json.success) { alert(`Sync: ${json.inserted} new, ${json.skipped} existing, ${json.errors} errors`); fetchData(); } else alert(`Failed: ${json.error}`); }
+        catch { alert('Sync failed.'); } finally { setSyncing(false); }
+    };
+    React.useEffect(() => { fetchData(); }, []);
+    return <EnrolmentTable title="New Enrolment" description="Enrolments from yesterday & today for upcoming courses. Synced from SSG every 3 hours. Click Sync to pull latest." data={data} loading={loading} onRefresh={fetchData} onSync={handleSync} syncLabel="Sync from SSG Now" syncing={syncing} />;
 };
 
 // ── Course Run Date Sync Log ──────────────────────────────────────────────────
@@ -5878,11 +7420,10 @@ export const TrainerFolderLogsView: React.FC = () => {
         setMessage(null);
         try {
             // Re-trigger the background function locally without scheduler API key requirement
-            const res = await fetch('/api/scheduler/execute', { 
+            const res = await fetch('/api/admin/scheduler', { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    authKey: process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback', // fallback for dev
                     taskId: 'auto_create_trainer_folders'
                 })
             });
@@ -6077,128 +7618,1563 @@ export const TrainerFolderLogsView: React.FC = () => {
     );
 };
 export const AutoCreateCertificatesLogView: React.FC = () => {
+  const { setAdminPage } = useLms();
   const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ totalGenerated: number; totalSkipped: number; totalErrors: number } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
 
   const fetchLogs = async () => {
     setLoading(true);
-    setError(null);
     try {
-      const res = await fetch('/api/admin/auto-create-certificates-log');
+      const res = await fetch('/api/admin/auto-create-certificates-log?limit=500');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (!data.success) throw new Error(data.message || 'Error fetching logs');
-      setLogs(data.logs || []);
-    } catch (err: any) {
-      setError(err.message);
+      if (data.success) setLogs(data.data || []);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch('/api/admin/run-auto-create-certificates', { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      const stats = json.stats || { totalGenerated: 0, totalSkipped: 0, totalErrors: 0 };
+      setRunResult(stats);
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  // Group by run_id
+  const batches = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    const cls = status === 'created' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+      : status === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+      : status === 'skipped' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">Auto-Create Certificates Log</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Now'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Scheduler)}>
+            ← Back to Scheduler
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Daily at 6:30 PM SGT. Generates certificates for learners who meet attendance thresholds in recently-ended course runs, and emails them. Use <strong>Run Now</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          ✅ Done — {runResult.totalGenerated} generated, {runResult.totalSkipped} skipped, {runResult.totalErrors} error(s).
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to trigger this cron manually.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const createdCount = rows.filter((r: any) => r.status === 'created').length;
+        const skippedCount = rows.filter((r: any) => r.status === 'skipped').length;
+        const errorCount   = rows.filter((r: any) => r.status === 'error').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
+                {createdCount > 0 && <span className="text-xs text-green-600 dark:text-green-400">{createdCount} created</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Course Run ID', 'Course Code', 'Course Title', 'Learner Name', 'Learner Email', 'NRIC', 'Status', 'Certificate', 'Error'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map((row: any) => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_code ?? '—'}</td>
+                        <td className="px-3 py-2 max-w-[260px] truncate" title={row.course_title ?? ''}>{row.course_title ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.learner_name ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.learner_email ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-500">{row.nric ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2">
+                          {row.certificate_url ? (
+                            <a href={row.certificate_url} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs inline-flex items-center gap-1">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              View
+                            </a>
+                          ) : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="px-3 py-2 max-w-[320px] truncate text-red-600 dark:text-red-400" title={row.error_message ?? ''}>{row.error_message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Upcoming Course Runs Log ───────────────────────────────────────────────────
+
+interface UpcomingRunLogRow {
+  id: number;
+  run_id: string;
+  created_at: string;
+  course_run_id: string;
+  course_title: string;
+  course_code: string;
+  db_start_date: string | null;
+  db_end_date: string | null;
+  ssg_start_date: string | null;
+  ssg_end_date: string | null;
+  mode_of_learning: string | null;
+  vacancy_code: string | null;
+  status: string;
+  error_message: string | null;
+}
+
+export const UpcomingCourseRunsLogView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<UpcomingRunLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ processed: number; success: number; errors: number; thresholdDays: number } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/upcoming-course-runs-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch('/api/admin/run-upcoming-course-runs', { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult({ processed: json.processed, success: json.success, errors: json.errors, thresholdDays: json.thresholdDays });
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  // Group by run_id batch
+  const batches = useMemo(() => {
+    const map = new Map<string, UpcomingRunLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      success:  'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+      error:    'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+      pending:  'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+    };
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? 'bg-gray-100 text-gray-600'}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">TGS Enrolments &amp; Assign Trainers Log</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Now'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Daily automation (2 AM SGT): for each upcoming TGS- course run within the configured threshold window, searches SSG for enrolments and assigns trainers accordingly. Use <strong>Run Now</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          ✅ Done — processed <strong>{runResult.processed}</strong> run(s) within <strong>{runResult.thresholdDays}</strong>-day window: {runResult.success} succeeded, {runResult.errors} error(s).
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to fetch TGS enrolments and assign trainers.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const successCount = rows.filter(r => r.status === 'success').length;
+        const errorCount   = rows.filter(r => r.status === 'error').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} run(s)</span>
+                {successCount > 0 && <span className="text-xs text-green-600 dark:text-green-400">{successCount} ok</span>}
+                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Course Run ID', 'Course Code', 'Title', 'DB Start', 'SSG Start', 'SSG End', 'Mode', 'Vacancy', 'Status', 'Error'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.course_code}</td>
+                        <td className="px-3 py-2 max-w-[200px] truncate">{row.course_title}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.db_start_date ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.ssg_start_date ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.ssg_end_date ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.mode_of_learning ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.vacancy_code ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2 text-red-600 dark:text-red-400 max-w-[180px] truncate">{row.error_message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Course Confirmation Email Logs ───────────────────────────────────────────
+
+interface ConfirmationEmailLogRow {
+  id: number;
+  run_id: string;
+  course_run_id: string | null;
+  course_title: string | null;
+  course_code: string | null;
+  learner_name: string | null;
+  learner_email: string | null;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+}
+
+export const CourseConfirmationEmailLogsView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<ConfirmationEmailLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/course-confirmation-email-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch {
+      /* silent */
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const batches = useMemo(() => {
+    const map = new Map<string, ConfirmationEmailLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
   useEffect(() => {
-    fetchLogs();
-  }, []);
+    if (batches.length > 0) {
+      setExpandedDates(new Set([batches[0][0]]));
+    }
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleDate = (key: string) => {
+    setExpandedDates(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      sent:    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+      skipped: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+      error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+      summary: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    };
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? map.error}`}>
+        {status}
+      </span>
+    );
+  };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      <div className="flex justify-between items-center pb-5 border-b border-default">
-        <div>
-          <h2 className="text-2xl font-semibold text-on-surface">Auto-Create Certificates Logs</h2>
-          <p className="text-sm text-on-surface-secondary mt-1">Logs for the daily 6:30 PM background generation of certificates.</p>
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold dark:text-white">Course Confirmation Email Logs</h2>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Scheduler)}>
+            ← Back to Scheduler
+          </Button>
         </div>
-        <button
-          onClick={fetchLogs}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-surface-elevated text-on-surface-secondary border border-default rounded-md hover:bg-surface-hover text-sm"
-        >
-          <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Refresh
-        </button>
       </div>
 
-      {error ? (
-        <div className="p-4 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-md">
-          {error}
-        </div>
-      ) : (
-        <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-surface-elevated border-b border-default text-on-surface-secondary font-semibold">
-                <tr>
-                  <th className="px-5 py-3">Timestamp</th>
-                  <th className="px-5 py-3">Batch/Run ID</th>
-                  <th className="px-5 py-3">Course Code/Title</th>
-                  <th className="px-5 py-3">Learner Name</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3 max-w-sm text-right">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-default">
-                {logs.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-muted">
-                      No matching logs found.
-                    </td>
-                  </tr>
-                ) : (
-                  logs.map((log: any) => (
-                    <tr key={log.id} className="hover:bg-surface-hover transition-colors">
-                      <td className="px-5 py-4 whitespace-nowrap text-on-surface font-mono text-xs">
-                        {new Date(log.created_at).toLocaleString('en-SG')}
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap text-on-surface-secondary font-mono text-xs" title={log.run_id}>
-                        {log.run_id ? log.run_id.substring(0, 8) + '...' : '—'}
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="font-medium text-on-surface">{log.course_code || '—'}</div>
-                        <div className="text-xs text-on-surface-secondary truncate max-w-[200px]" title={log.course_title}>
-                          {log.course_title || '—'}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        <div className="font-medium text-on-surface">{log.learner_name || '—'}</div>
-                        {log.nric && <div className="text-xs text-on-surface-secondary">{log.nric}</div>}
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        {log.status === 'error' ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400 border border-red-200 dark:border-red-500/20">
-                            Error
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400 border border-green-200 dark:border-green-500/20">
-                            Success
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-right max-w-sm">
-                        {log.status === 'error' ? (
-                          <div className="text-xs text-red-600 dark:text-red-400 break-words" title={log.error_message}>
-                            {log.error_message || 'Unknown error'}
-                          </div>
-                        ) : log.certificate_url ? (
-                          <a href={log.certificate_url} target="_blank" rel="noreferrer" className="text-primary hover:underline font-mono text-xs inline-flex items-center gap-1">
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                            View Cert
-                          </a>
-                        ) : (
-                          <span className="text-xs text-muted">No URL</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+      {loading && logs.length === 0 && (
+        <div className="flex justify-center py-16">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto" />
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading logs...</p>
           </div>
         </div>
       )}
+
+      {!loading && logs.length === 0 && (
+        <Card className="p-10">
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <p className="text-lg font-medium">No confirmation email logs yet</p>
+            <p className="text-sm mt-1">Logs will appear here after the scheduled task runs.</p>
+          </div>
+        </Card>
+      )}
+
+      {batches.map(([runId, entries]) => {
+        const isOpen = expandedDates.has(runId);
+        const date = entries[0]?.created_at ? new Date(entries[0].created_at).toLocaleString('en-SG', {
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Singapore',
+        }) : runId;
+        const sentCount = entries.filter(e => e.status === 'sent').length;
+        const errorCount = entries.filter(e => e.status === 'error').length;
+        const skippedCount = entries.filter(e => e.status === 'skipped').length;
+
+        return (
+          <div key={runId} className="mb-3">
+            <button onClick={() => toggleDate(runId)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+              <div className="flex items-center gap-3">
+                <span className={`transform transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{date}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">({entries.length} records)</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                {sentCount > 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 font-semibold">{sentCount} sent</span>}
+                {skippedCount > 0 && <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 font-semibold">{skippedCount} skipped</span>}
+                {errorCount > 0 && <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 font-semibold">{errorCount} errors</span>}
+              </div>
+            </button>
+
+            {isOpen && (
+              <div className="mt-1 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-500 dark:text-gray-400 uppercase">
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">Learner</th>
+                      <th className="px-3 py-2">Email</th>
+                      <th className="px-3 py-2">Course</th>
+                      <th className="px-3 py-2">Course Run ID</th>
+                      <th className="px-3 py-2">Error</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {entries.map(entry => (
+                      <tr key={entry.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="px-3 py-2">{statusBadge(entry.status)}</td>
+                        <td className="px-3 py-2 text-gray-900 dark:text-white">{entry.learner_name || '—'}</td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400 font-mono text-xs">{entry.learner_email || '—'}</td>
+                        <td className="px-3 py-2 text-gray-900 dark:text-white">{entry.course_title || '—'}</td>
+                        <td className="px-3 py-2 text-gray-500 dark:text-gray-400 font-mono text-xs">{entry.course_run_id || '—'}</td>
+                        <td className="px-3 py-2 text-red-600 dark:text-red-400 text-xs max-w-xs truncate" title={entry.error_message || ''}>{entry.error_message || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };
+
+// ── Sync Trainer to TPG Log ───────────────────────────────────────────────────
+
+interface SyncTrainerTpgLogRow {
+  id: number;
+  run_id: string;
+  created_at: string;
+  course_run_id: string | null;
+  course_code: string | null;
+  course_ref_number: string | null;
+  trainer_name: string | null;
+  trainer_email: string | null;
+  nric_present: boolean;
+  nric_masked: string | null;
+  ssg_status: number | null;
+  status: string;
+  error_message: string | null;
+}
+
+export const SyncTrainerTpgLogsView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<SyncTrainerTpgLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ total: number; successCount: number; skipped: number; errors: number; thresholdDays: number } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/sync-trainer-tpg-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch('/api/admin/run-sync-trainer-tpg', { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult({ total: json.total, successCount: json.successCount, skipped: json.skipped, errors: json.errors, thresholdDays: json.thresholdDays });
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const batches = useMemo(() => {
+    const map = new Map<string, SyncTrainerTpgLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      success: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+      error:   'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+      skipped: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+      pending: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+    };
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] ?? 'bg-gray-100 text-gray-600'}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">Sync Trainer to TPG Log</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Now'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Daily automation: for each upcoming confirmed course run with an assigned trainer (no TPG trainer yet), resolves the trainer's NRIC and syncs to SSG. Use <strong>Run Now</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          ✅ Done — {runResult.total} run(s) within {runResult.thresholdDays}-day window: {runResult.successCount} synced, {runResult.skipped} skipped, {runResult.errors} error(s).
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to sync trainers to TPG.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const successCount = rows.filter(r => r.status === 'success').length;
+        const errorCount   = rows.filter(r => r.status === 'error').length;
+        const skippedCount = rows.filter(r => r.status === 'skipped').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} run(s)</span>
+                {successCount > 0 && <span className="text-xs text-green-600 dark:text-green-400">{successCount} synced</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Course Run ID', 'Course Code', 'Trainer Name', 'Trainer Email', 'NRIC', 'SSG Status', 'Status', 'Error'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.course_code ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.trainer_name ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.trainer_email ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap font-mono">
+                          {row.nric_present ? (row.nric_masked ?? '✓') : <span className="text-red-500">Not in database</span>}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.ssg_status ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2 text-red-600 dark:text-red-400 max-w-[200px] truncate">{row.error_message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Auto Send Trainer Invitation Log ─────────────────────────────────────────
+
+interface AutoSendTrainerInvitationLogRow {
+  id: number;
+  run_id: string;
+  created_at: string;
+  course_run_uuid: string | null;
+  course_run_id: string | null;
+  course_title: string | null;
+  trainer_name: string | null;
+  trainer_email: string | null;
+  status: string;
+  message: string | null;
+}
+
+export const AutoSendTrainerInvitationLogView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<AutoSendTrainerInvitationLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ totalEligible: number; sent: number; skipped: number; errors: number; windowDays: number } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/auto-send-trainer-invitation-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch('/api/admin/run-auto-send-trainer-invitations', { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult({
+        totalEligible: json.totalEligible,
+        sent: json.sent,
+        skipped: json.skipped,
+        errors: json.errors,
+        windowDays: json.windowDays,
+      });
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const batches = useMemo(() => {
+    const map = new Map<string, AutoSendTrainerInvitationLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  // Success, error, and every skipped_* variant share consistent colors so the
+  // grouped header counts (sent / skipped / error) stay readable at a glance.
+  const statusBadge = (status: string) => {
+    let cls: string;
+    if (status === 'sent') cls = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    else if (status === 'error') cls = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    else if (status.startsWith('skipped')) cls = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
+    else cls = 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">Auto Send Trainer Invitation Log</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Now'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Scheduled sweep (default Mon &amp; Thu 10:00 AM SGT): scans upcoming course runs within the lookahead window and, for every class missing a locally-assigned trainer, invites the next approved trainer who hasn't already been invited, declined, or assigned. Use <strong>Run Now</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          ✅ Done — {runResult.totalEligible} eligible run(s) within {runResult.windowDays}-day window: {runResult.sent} sent, {runResult.skipped} skipped, {runResult.errors} error(s).
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to invite trainers for upcoming classes.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const sentCount    = rows.filter(r => r.status === 'sent').length;
+        const skippedCount = rows.filter(r => r.status.startsWith('skipped')).length;
+        const errorCount   = rows.filter(r => r.status === 'error').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
+                {sentCount    > 0 && <span className="text-xs text-green-600 dark:text-green-400">{sentCount} sent</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Course Run ID', 'Course Title', 'Trainer Name', 'Trainer Email', 'Status', 'Message'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                        <td className="px-3 py-2 max-w-[220px] truncate">{row.course_title ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.trainer_name ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.trainer_email ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2 max-w-[320px] truncate" title={row.message ?? ''}>{row.message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Auto Sanitise Data Log ───────────────────────────────────────────────────
+
+interface AutoSanitiseDataLogRow {
+  id: number;
+  run_id: string;
+  created_at: string;
+  table_name: string;
+  rows_scanned: number;
+  rows_updated: number;
+  cutoff_date: string | null;
+  status: string;
+  message: string | null;
+}
+
+export const AutoSanitiseDataLogView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<AutoSanitiseDataLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ totalScanned: number; totalUpdated: number; retentionMonths: number; cutoffDate: string; enabled: boolean } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/auto-sanitise-data-logs?limit=500');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch('/api/admin/run-auto-sanitise-data', { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult({
+        totalScanned: json.totalScanned,
+        totalUpdated: json.totalUpdated,
+        retentionMonths: json.retentionMonths,
+        cutoffDate: json.cutoffDate,
+        enabled: json.enabled,
+      });
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const batches = useMemo(() => {
+    const map = new Map<string, AutoSanitiseDataLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    let cls: string;
+    if (status === 'success') cls = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    else if (status === 'error') cls = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    else if (status === 'skipped') cls = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
+    else cls = 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">Auto Sanitise Data Log</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Once'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Weekly sweep (default Sunday 02:00 SGT): redacts NRIC and phone digits on rows older than the retention window configured in <strong>Company Settings → Security Setting → Auto Sanitise Data</strong>. Honours the master toggle (off → skipped). Use <strong>Run Once</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className={`mb-4 p-3 rounded-lg border text-sm ${runResult.enabled
+          ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
+          : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300'}`}>
+          {runResult.enabled
+            ? <>✅ Done — scanned <strong>{runResult.totalScanned}</strong>, sanitised <strong>{runResult.totalUpdated}</strong> row(s) older than {runResult.cutoffDate} (retention {runResult.retentionMonths} months).</>
+            : <>⚠️ Skipped — Auto Sanitise Data is currently <strong>disabled</strong>. Enable it in Company Settings → Security Setting.</>
+          }
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Once</strong> to sanitise old PII now.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const totalScanned = rows.reduce((sum, r) => sum + (r.rows_scanned || 0), 0);
+        const totalUpdated = rows.reduce((sum, r) => sum + (r.rows_updated || 0), 0);
+        const errorCount   = rows.filter(r => r.status === 'error').length;
+        const skippedCount = rows.filter(r => r.status === 'skipped').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} table(s)</span>
+                {totalUpdated > 0 && <span className="text-xs text-green-600 dark:text-green-400">{totalUpdated} sanitised / {totalScanned} scanned</span>}
+                {totalUpdated === 0 && totalScanned > 0 && <span className="text-xs text-gray-500 dark:text-gray-400">{totalScanned} scanned</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Table', 'Scanned', 'Updated', 'Cutoff Date', 'Status', 'Message'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.table_name}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{row.rows_scanned}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold">{row.rows_updated}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.cutoff_date ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2 max-w-[320px] truncate" title={row.message ?? ''}>{row.message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Auto Send Courseware/Attendance + Course Completion Logs ─────────────────
+
+interface AutoSendEmailLogRow {
+  id: number;
+  run_id: string;
+  created_at: string;
+  course_run_id: string | null;
+  course_code: string | null;
+  course_title: string | null;
+  learner_name: string | null;
+  learner_email: string | null;
+  status: string;
+  error_message: string | null;
+}
+
+const AutoSendEmailLogView: React.FC<{
+  title: string;
+  description: React.ReactNode;
+  logsEndpoint: string;
+  runEndpoint: string;
+}> = ({ title, description, logsEndpoint, runEndpoint }) => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<AutoSendEmailLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ totalSent: number; totalSkipped: number; totalErrors: number } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${logsEndpoint}?limit=500`);
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch(runEndpoint, { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      const stats = json.stats || { totalSent: 0, totalSkipped: 0, totalErrors: 0 };
+      setRunResult(stats);
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const batches = useMemo(() => {
+    const map = new Map<string, AutoSendEmailLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    const cls = status === 'sent' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+      : status === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+      : status === 'skipped' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">{title}</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Now'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{description}</p>
+
+      {runResult && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          ✅ Done — {runResult.totalSent} sent, {runResult.totalSkipped} skipped, {runResult.totalErrors} error(s).
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to trigger this cron manually.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const sentCount    = rows.filter(r => r.status === 'sent').length;
+        const skippedCount = rows.filter(r => r.status === 'skipped').length;
+        const errorCount   = rows.filter(r => r.status === 'error').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
+                {sentCount    > 0 && <span className="text-xs text-green-600 dark:text-green-400">{sentCount} sent</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount   > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {['Course Run ID', 'Course Code', 'Course Title', 'Learner Name', 'Learner Email', 'Status', 'Error'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_run_id ?? '—'}</td>
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.course_code ?? '—'}</td>
+                        <td className="px-3 py-2 max-w-[260px] truncate" title={row.course_title ?? ''}>{row.course_title ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.learner_name ?? '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.learner_email ?? '—'}</td>
+                        <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                        <td className="px-3 py-2 max-w-[320px] truncate" title={row.error_message ?? ''}>{row.error_message ?? ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export const AutoSendCoursewareAttendanceLogView: React.FC = () => (
+  <AutoSendEmailLogView
+    title="Auto Send Courseware and Attendance Log"
+    description={<>Daily at 7:00 AM SGT. Sends the <strong>Courseware and Attendance Taking</strong> email template to all confirmed learners enrolled in course runs starting today. Use <strong>Run Now</strong> to trigger manually.</>}
+    logsEndpoint="/api/admin/auto-send-courseware-attendance-logs"
+    runEndpoint="/api/admin/run-auto-send-courseware-attendance"
+  />
+);
+
+export const AutoSendCourseCompletionLogView: React.FC = () => (
+  <AutoSendEmailLogView
+    title="Auto Send Course Completion Log"
+    description={<>Daily at 5:35 PM SGT. Sends the <strong>Course Completion and Thank You</strong> email template to all confirmed learners enrolled in course runs ending today. Use <strong>Run Now</strong> to trigger manually.</>}
+    logsEndpoint="/api/admin/auto-send-course-completion-logs"
+    runEndpoint="/api/admin/run-auto-send-course-completion"
+  />
+);
+
+type ScheduledInvoiceLogRow = {
+  id: number;
+  run_id: string;
+  created_at: string;
+  status: string;
+  application_id?: string | null;
+  enrolment_id?: string | null;
+  enrollment_id?: string | null;
+  learner_name?: string | null;
+  course_code?: string | null;
+  course_title?: string | null;
+  invoice_number?: string | null;
+  drive_url?: string | null;
+  stage?: string | null;
+  failed_step?: string | null;
+  message?: string | null;
+  reason?: string | null;
+  error_message?: string | null;
+};
+
+const ScheduledInvoiceLogView: React.FC<{
+  title: string;
+  description: React.ReactNode;
+  logsEndpoint: string;
+  runEndpoint: string;
+  type: 'proforma' | 'da';
+}> = ({ title, description, logsEndpoint, runEndpoint, type }) => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<ScheduledInvoiceLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<Record<string, number> | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${logsEndpoint}?limit=500`);
+      const json = await res.json();
+      if (json.success) setLogs(json.data || []);
+    } catch {
+      // Keep the page quiet; manual refresh can retry.
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const res = await fetch(runEndpoint, { method: 'POST' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult(json.stats || {});
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const batches = useMemo(() => {
+    const map = new Map<string, ScheduledInvoiceLogRow[]>();
+    for (const log of logs) {
+      if (!map.has(log.run_id)) map.set(log.run_id, []);
+      map.get(log.run_id)!.push(log);
+    }
+    return Array.from(map.entries());
+  }, [logs]);
+
+  useEffect(() => {
+    if (batches.length > 0) setExpandedBatches(new Set([batches[0][0]]));
+  }, [batches.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBatch = (runId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      next.has(runId) ? next.delete(runId) : next.add(runId);
+      return next;
+    });
+  };
+
+  const statusBadge = (status: string) => {
+    const cls = ['generated', 'success'].includes(status)
+      ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+      : status === 'error'
+        ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+        : status === 'skipped'
+          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+          : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{status}</span>;
+  };
+
+  const runSummary = runResult
+    ? Object.entries(runResult)
+        .filter(([, value]) => typeof value === 'number')
+        .map(([key, value]) => `${key.replace(/^total/, '')}: ${value}`)
+        .join(', ')
+    : null;
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">{title}</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running...' : 'Run Now'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Scheduler)}>
+            Back to Scheduler
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{description}</p>
+
+      {runSummary && (
+        <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-800 dark:text-green-300">
+          Done - {runSummary}.
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading...</p>}
+      {!loading && batches.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No logs yet. Click <strong>Run Now</strong> to trigger this cron manually.</p>
+      )}
+
+      {batches.map(([runId, rows]) => {
+        const isOpen = expandedBatches.has(runId);
+        const ts = new Date(rows[0].created_at).toLocaleString('en-SG', {
+          timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const successCount = rows.filter(r => ['generated', 'success'].includes(r.status)).length;
+        const skippedCount = rows.filter(r => r.status === 'skipped').length;
+        const errorCount = rows.filter(r => r.status === 'error').length;
+
+        return (
+          <div key={runId} className="mb-3 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggleBatch(runId)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ts} SGT</span>
+                <span className="text-xs text-gray-500">{rows.length} row(s)</span>
+                {successCount > 0 && <span className="text-xs text-green-600 dark:text-green-400">{successCount} ok</span>}
+                {skippedCount > 0 && <span className="text-xs text-yellow-600 dark:text-yellow-400">{skippedCount} skipped</span>}
+                {errorCount > 0 && <span className="text-xs text-red-600 dark:text-red-400">{errorCount} error</span>}
+              </div>
+              <span className="text-gray-400 text-xs">{isOpen ? '^' : 'v'}</span>
+            </button>
+
+            {isOpen && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-slate-700/30">
+                    <tr>
+                      {(type === 'proforma'
+                        ? ['Enrolment ID', 'Learner', 'Course Code', 'Course Title', 'Invoice No.', 'Drive', 'Status', 'Message']
+                        : ['Application ID', 'Enrolment ID', 'Stage', 'Status', 'Failed Step', 'Message', 'Error']
+                      ).map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.map(row => (
+                      <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                        {type === 'proforma' ? (
+                          <>
+                            <td className="px-3 py-2 font-mono whitespace-nowrap">{row.enrolment_id ?? row.enrollment_id ?? '-'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{row.learner_name ?? '-'}</td>
+                            <td className="px-3 py-2 font-mono whitespace-nowrap">{row.course_code ?? '-'}</td>
+                            <td className="px-3 py-2 max-w-[260px] truncate" title={row.course_title ?? ''}>{row.course_title ?? '-'}</td>
+                            <td className="px-3 py-2 font-mono whitespace-nowrap">{row.invoice_number ?? '-'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{row.drive_url ? <a className="text-blue-600 hover:underline" href={row.drive_url} target="_blank" rel="noreferrer">Open</a> : '-'}</td>
+                            <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                            <td className="px-3 py-2 max-w-[320px] truncate" title={row.reason ?? row.error_message ?? ''}>{row.reason ?? row.error_message ?? ''}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-3 py-2 font-mono whitespace-nowrap">{row.application_id ?? '-'}</td>
+                            <td className="px-3 py-2 font-mono whitespace-nowrap">{row.enrolment_id ?? '-'}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{row.stage ?? '-'}</td>
+                            <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{row.failed_step ?? '-'}</td>
+                            <td className="px-3 py-2 max-w-[320px] truncate" title={row.message ?? ''}>{row.message ?? ''}</td>
+                            <td className="px-3 py-2 max-w-[320px] truncate" title={row.error_message ?? ''}>{row.error_message ?? ''}</td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export const AutoGenerateProformaInvoicesLogView: React.FC = () => (
+  <ScheduledInvoiceLogView
+    title="Auto Generate Proforma Invoices Log"
+    description={<>Daily at 4:00 AM SGT. Generates proforma invoices for active enrollments still missing a proforma URL. Use <strong>Run Now</strong> to trigger manually.</>}
+    logsEndpoint="/api/admin/auto-generate-proforma-invoices-logs"
+    runEndpoint="/api/admin/run-auto-generate-proforma-invoices"
+    type="proforma"
+  />
+);
+
+export const AutoGenerateDaInvoicesLogView: React.FC = () => (
+  <ScheduledInvoiceLogView
+    title="Auto Generate DA Invoices Log"
+    description={<>Daily at 11:00 PM SGT. Generates missing DA QuickBooks invoices and sends unsent main invoice emails once. Use <strong>Run Now</strong> to trigger manually.</>}
+    logsEndpoint="/api/admin/auto-generate-da-invoices-logs"
+    runEndpoint="/api/admin/run-auto-generate-da-invoices"
+    type="da"
+  />
+);

@@ -38,6 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         c.course_code,
         cr.start_date,
         cr.end_date,
+        cr.class_status,
         cr.assigned_trainer_id,
         cr.assigned_trainer_name,
         cr.assigned_trainer_email,
@@ -49,6 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN (
         SELECT course_run_id, COUNT(*) AS enrollment_count
         FROM enrollment
+        WHERE LOWER(COALESCE(enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
         GROUP BY course_run_id
       ) ec ON ec.course_run_id = cr.id
       LEFT JOIN (
@@ -99,9 +101,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         courseCode: row.course_code,
         startDate: row.start_date,
         endDate: row.end_date,
+        classStatus: row.class_status,
         assignedTrainerId: row.assigned_trainer_id,
-        assignedTrainerName: row.all_trainer_names || row.assigned_trainer_name,
-        assignedTrainerEmail: row.all_trainer_emails || row.assigned_trainer_email,
+        assignedTrainerName: row.all_trainer_names,
+        primaryAssignedTrainerName: row.all_trainer_names,
+        assignedTrainerEmail: row.all_trainer_emails,
         enrollmentCount: parseInt(row.enrollment_count, 10),
       })),
     });

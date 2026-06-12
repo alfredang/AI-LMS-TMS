@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/router';
 import { useLms } from '../../contexts/LmsContext';
 import { useTrainerCourses } from '../../hooks/useTrainerCourses';
 
@@ -40,65 +41,6 @@ const StatusBadge: React.FC<{ value: string }> = ({ value }) => {
   return <span className={cls}>{value}</span>;
 };
 
-const QrCodePanel: React.FC<{ title: string; description: string; imageSrc: string }> = ({ title, description, imageSrc }) => {
-  const [open, setOpen] = React.useState(false);
-  return (
-    <>
-      <div className="flex flex-col items-start gap-3">
-        <p className="text-xs text-on-surface-secondary">{description}</p>
-        <button
-          onClick={() => setOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="7" height="7" rx="1" strokeWidth={2} />
-            <rect x="14" y="3" width="7" height="7" rx="1" strokeWidth={2} />
-            <rect x="3" y="14" width="7" height="7" rx="1" strokeWidth={2} />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 14h.01M14 17h3M17 14v3M20 14h.01M20 17h.01" />
-          </svg>
-          Show QR Code
-        </button>
-      </div>
-
-      {/* Modal overlay */}
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-5 max-w-sm w-full mx-4"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Close button */}
-            <button
-              onClick={() => setOpen(false)}
-              className="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              aria-label="Close"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center -mt-2">{description}</p>
-
-            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-inner">
-              <img
-                src={imageSrc}
-                alt={`${title} QR Code`}
-                className="w-64 h-64 object-contain"
-              />
-            </div>
-
-            <p className="text-xs text-gray-400 dark:text-gray-500">Tap outside or press × to close</p>
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
 
 const RefreshIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -156,14 +98,38 @@ const SectionHeader: React.FC<{ title: string; count?: number; right?: React.Rea
 );
 
 const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
-  const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId } = useLms();
-  const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false);
+  const router = useRouter();
+  const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId, setSelectedCourse } = useLms();
+  const [sourceCourse, setSourceCourse] = useState<any | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = sessionStorage.getItem('attendanceSourceCourse');
+      if (raw) setSourceCourse(JSON.parse(raw));
+    } catch {}
+  }, []);
+  const handleBackToClass = () => {
+    if (!sourceCourse) return;
+    if (typeof window !== 'undefined') {
+      try { sessionStorage.removeItem('attendanceSourceCourse'); } catch {}
+    }
+    setSelectedCourse(sourceCourse);
+  };
+  const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false, true);
 
   // Admin-mode course run lookup
   const [adminInput, setAdminInput]             = useState('');
   const [isSearching, setIsSearching]           = useState(false);
   const [searchError, setSearchError]           = useState<string | null>(null);
   const [adminCourse, setAdminCourse]           = useState<any | null>(null);
+
+  // Admin-mode: list of ongoing classes for the dropdown
+  const [adminOngoingClasses, setAdminOngoingClasses] = useState<Array<{
+    id: string; courseRunId: string; courseTitle: string; courseCode: string;
+    trainerName: string; startDate: string; endDate: string;
+  }>>([]);
+  const [adminOngoingLoading, setAdminOngoingLoading] = useState(false);
+  const [adminDropdownValue, setAdminDropdownValue] = useState('');
 
   const [uen, setUen] = useState('');
   const [selectedCourseRunId, setSelectedCourseRunId] = useState('');
@@ -172,7 +138,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
   const [isFetchingSessions, setIsFetchingSessions]    = useState(false);
   const [fetchError, setFetchError]                    = useState<string | null>(null);
 
-  const [activeTab, setActiveTab]                      = useState<'qr' | 'elist' | 'traqom' | 'cert'>('qr');
+  const [activeTab, setActiveTab]                      = useState<'qr' | 'elist'>('qr');
 
   const [isLoadingAttendance, setIsLoadingAttendance]  = useState(false);
   const [showNric, setShowNric]                        = useState(false);
@@ -252,9 +218,10 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       .catch(() => {});
   }, []);
 
-  const handleAdminSearch = async () => {
-    const code = adminInput.trim();
+  const handleAdminSearch = async (codeOverride?: string) => {
+    const code = (codeOverride ?? adminInput).trim();
     if (!code) return;
+    if (codeOverride && codeOverride !== adminInput) setAdminInput(codeOverride);
     setIsSearching(true);
     setSearchError(null);
     setAdminCourse(null);
@@ -306,6 +273,66 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
       setIsSearching(false);
     }
   };
+
+  // Admin: fetch ongoing classes once for the dropdown
+  useEffect(() => {
+    if (!isAdminMode) return;
+    const controller = new AbortController();
+    setAdminOngoingLoading(true);
+    fetch('/api/admin/ongoing-classes?page=0&limit=500&classStatus=ActiveOnly', { signal: controller.signal })
+      .then(res => res.json())
+      .then(json => {
+        if (json?.success && Array.isArray(json.data?.classes)) {
+          setAdminOngoingClasses(json.data.classes);
+        }
+      })
+      .catch(err => { if (err.name !== 'AbortError') console.error('Failed to fetch ongoing classes:', err); })
+      .finally(() => setAdminOngoingLoading(false));
+    return () => controller.abort();
+  }, [isAdminMode]);
+
+  // Auto-populate from URL query param (e.g. ctrl+click from calendar)
+  const urlCourseRunIdHandled = useRef(false);
+  useEffect(() => {
+    if (!isAdminMode || urlCourseRunIdHandled.current) return;
+    const urlCourseRunId = router.query.courseRunId;
+    if (urlCourseRunId && typeof urlCourseRunId === 'string') {
+      urlCourseRunIdHandled.current = true;
+      setAdminInput(urlCourseRunId);
+      // Trigger search after state update
+      setTimeout(async () => {
+        setIsSearching(true);
+        setSearchError(null);
+        try {
+          const res = await fetch(`/api/admin/lookup-course-run?courseRunCode=${encodeURIComponent(urlCourseRunId)}`);
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || 'Course run not found');
+          const course = json.data;
+          setAdminCourse(course);
+          setSelectedCourseRunId(course.courseRunId);
+          if (course.digitalAttendanceId) {
+            setDigitalAttendanceId(course.digitalAttendanceId);
+          } else if (course.courseRunId && course.courseRunCode) {
+            fetchDigitalAttendanceId(course.courseRunId, course.courseRunCode);
+          }
+          if (course.courseRunCode && course.courseCode) {
+            setUen(course.uen || '');
+            handleFetchSessions(course.courseRunCode, course.courseCode, course);
+            fetchEnrolments(course.courseRunCode, course);
+          }
+          if (course.courseRunId) {
+            fetchManualSessions(course.courseRunId);
+            fetchAttendanceSummary(course.courseRunId);
+            fetchLocalAssignments(course.courseRunId);
+          }
+        } catch (err: any) {
+          setSearchError(err.message || 'Failed to look up course run');
+        } finally {
+          setIsSearching(false);
+        }
+      }, 0);
+    }
+  }, [isAdminMode, router.query.courseRunId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Manual Attendance handlers ──
 
@@ -960,7 +987,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     }
   };
 
-  const attendanceLinkUrl = (type: 'qr' | 'elist' | 'traqom' | 'cert') =>
+  const attendanceLinkUrl = (type: 'qr' | 'elist') =>
     type === 'qr'
       ? `https://www.myskillsfuture.gov.sg/spface/splogin/select-session?course-run-code=${digitalAttendanceId}`
       : `https://www.myskillsfuture.gov.sg/api/take-attendance/${digitalAttendanceId}`;
@@ -1055,11 +1082,26 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     <div className="space-y-5">
 
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-on-surface">E-Attendance</h1>
-        <p className="text-sm text-on-surface-secondary mt-0.5">
-          {isAdminMode ? 'Enter a Course Run ID to look up attendance.' : 'Select an assigned class to manage sessions and view enrolments.'}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-on-surface">E-Attendance</h1>
+          <p className="text-sm text-on-surface-secondary mt-0.5">
+            {isAdminMode ? 'Enter a Course Run ID to look up attendance.' : 'Select an assigned class to manage sessions and view enrolments.'}
+          </p>
+        </div>
+        {sourceCourse && !isAdminMode && (
+          <button
+            type="button"
+            onClick={handleBackToClass}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-default bg-surface hover:bg-surface-elevated text-on-surface transition-colors flex-shrink-0"
+            title={`Back to ${sourceCourse?.title || 'class'}`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Class
+          </button>
+        )}
       </div>
 
       {/* ── Class & Session Selection ── */}
@@ -1084,13 +1126,39 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             <div className="flex flex-wrap items-center gap-3">
               {isAdminMode ? (
                 <>
-                  <div className="flex-1 min-w-[260px]">
+                  <div className="flex-1 min-w-[260px] space-y-2">
+                    <div className="relative">
+                      <select
+                        value={adminDropdownValue}
+                        onChange={e => {
+                          const code = e.target.value;
+                          setAdminDropdownValue(code);
+                          if (code) handleAdminSearch(code);
+                        }}
+                        disabled={adminOngoingLoading || isSearching}
+                        className="input-themed w-full border rounded px-3 py-2 text-sm pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      >
+                        <option value="">
+                          {adminOngoingLoading
+                            ? 'Loading ongoing classes…'
+                            : adminOngoingClasses.length === 0
+                              ? 'No ongoing classes'
+                              : `— Select from ${adminOngoingClasses.length} ongoing class${adminOngoingClasses.length === 1 ? '' : 'es'} —`}
+                        </option>
+                        {adminOngoingClasses.map(c => (
+                          <option key={c.id} value={c.courseRunId}>
+                            {c.courseTitle} | {c.courseRunId} ({c.trainerName})
+                          </option>
+                        ))}
+                      </select>
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none text-xs">▼</span>
+                    </div>
                     <input
                       type="text"
                       value={adminInput}
-                      onChange={e => { setAdminInput(e.target.value); setSearchError(null); }}
+                      onChange={e => { setAdminInput(e.target.value); setSearchError(null); setAdminDropdownValue(''); }}
                       onKeyDown={e => { if (e.key === 'Enter') handleAdminSearch(); }}
-                      placeholder="e.g. 1069549"
+                      placeholder="…or enter a Course Run ID, e.g. 1069549"
                       className="input-themed w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                       disabled={isSearching}
                     />
@@ -1104,7 +1172,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     )}
                   </div>
                   <button
-                    onClick={handleAdminSearch}
+                    onClick={() => handleAdminSearch()}
                     disabled={isSearching || !adminInput.trim()}
                     className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -1293,11 +1361,11 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
 
       {/* ── Attendance Links ── */}
       <div className="bg-surface rounded-lg border border-default shadow-sm">
-        <SectionHeader title="Attendance / TRAQOM / Cert QR Codes" />
+        <SectionHeader title="Attendance" />
         <div className="p-4">
           {/* Tab bar */}
           <div className="flex border-b border-default mb-4">
-            {(['qr', 'elist', 'traqom', 'cert'] as const).map(tab => (
+            {(['qr', 'elist'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -1307,25 +1375,12 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                     : 'border-transparent text-on-surface-secondary hover:text-on-surface'
                 }`}
               >
-                {tab === 'qr' ? 'QR Attendance' : tab === 'elist' ? 'E-Attendance List' : tab === 'traqom' ? 'TRAQOM QR Code' : 'Cert QR Code'}
+                {tab === 'qr' ? 'QR Attendance' : 'E-Attendance List'}
               </button>
             ))}
           </div>
 
-          {/* TRAQOM tab — QR code */}
-          {activeTab === 'traqom' ? (
-            <QrCodePanel
-              title="TRAQOM Survey"
-              description="Show this QR code to learners to complete the TRAQOM survey."
-              imageSrc="/qr_codes/traqom_survey_qr_code.png"
-            />
-          ) : activeTab === 'cert' ? (
-            <QrCodePanel
-              title="Certificate Survey"
-              description="Show this QR code to learners to complete the certificate delivery survey."
-              imageSrc="/qr_codes/cert_delivery_qr_code.png"
-            />
-          ) : isFetchingDigitalId ? (
+          {isFetchingDigitalId ? (
             <div className="flex items-center gap-2 text-sm text-muted py-2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
               Loading attendance link...
@@ -1665,6 +1720,20 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             {(loadingManualSessions || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance) && (
               <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-primary" />
             )}
+            {(() => {
+              const allRows = [...manualAttendance, ...extraAttendees];
+              const total = allRows.length;
+              if (total === 0) return null;
+              const present = allRows.filter(r => r.isPresent).length;
+              const absent = total - present;
+              return (
+                <div className="flex items-center gap-2 text-xs ml-2">
+                  <span className="px-2 py-0.5 rounded bg-green-500/15 text-green-400 font-medium">Present: {present}</span>
+                  <span className="px-2 py-0.5 rounded bg-red-500/15 text-red-400 font-medium">Absent: {absent}</span>
+                  <span className="px-2 py-0.5 rounded bg-gray-500/15 text-muted font-medium">Total: {total}</span>
+                </div>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-2">
             {extraAttendees.length > 0 && (
@@ -1679,6 +1748,20 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
               Remove Learner
             </button>
             )}
+            <button
+              onClick={() => {
+                setManualAttendance(prev => prev.map(r => ({ ...r, isPresent: true, reasonOfAbsence: '' })));
+                setExtraAttendees(prev => prev.map(r => ({ ...r, isPresent: true, reasonOfAbsence: '' })));
+              }}
+              disabled={!selectedManualSession || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance || (manualAttendance.length === 0 && extraAttendees.length === 0)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Mark all learners as present"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              All Present
+            </button>
             <button
               onClick={() => { setShowAddLearnerModal(true); setAddLearnerError(null); setAddLearnerForm({ fullName: '', email: '', nric: '' }); }}
               disabled={!selectedManualSession || loadingManualAttendance || isLoadingEnrolments || isLoadingAttendance}

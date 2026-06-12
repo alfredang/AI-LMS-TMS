@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { searchEnrolment, cancelEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
+import { removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
 
 /**
  * Build the search enrolment payload for a single DA application record.
@@ -108,16 +110,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         for (const record of records) {
             const appId = record.application_id;
+            const daRow = applicationRows.find(r => r.application_id === appId);
 
             try {
                 // Step 1: Search for the enrolment reference number
                 const searchResult = await searchEnrolment(record.ssgPayload as any);
 
                 if (!searchResult.success || !searchResult.referenceNumber) {
+                    // If SSG can't find the enrolment, check if local status is already Cancelled
+                    // This means it was cancelled externally (e.g. via SSG portal) — sync local DB
+                    const localAppStatus = (daRow?.application_status || '').toLowerCase();
+                    if (searchResult.status === 'not_found' && (localAppStatus === 'cancelled' || daRow?.enrolment_id)) {
+                        console.log(`ℹ️ [cancel-da] ${appId}: Enrolment not found in SSG — treating as already cancelled`);
+                        succeeded.push({
+                            application_id: appId,
+                            enrolment_ref: daRow?.enrolment_id || '',
+                            enrolment_status: 'Cancelled',
+                        });
+                        continue;
+                    }
                     const errMsg = searchResult.status === 'not_found'
                         ? 'Enrolment not found in SSG'
                         : (searchResult.error || 'Search failed');
                     failed.push({ application_id: appId, error: errMsg });
+                    continue;
+                }
+
+                // Check if SSG already reports enrolment as cancelled
+                const ssgStatus = (searchResult as any).enrolmentStatus || (searchResult as any).status || '';
+                if (ssgStatus.toLowerCase() === 'cancelled') {
+                    console.log(`ℹ️ [cancel-da] ${appId}: SSG reports enrolment already cancelled (ref: ${searchResult.referenceNumber})`);
+                    succeeded.push({
+                        application_id: appId,
+                        enrolment_ref: searchResult.referenceNumber,
+                        enrolment_status: 'Cancelled',
+                    });
                     continue;
                 }
 
@@ -128,6 +155,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 );
 
                 if (!cancelResult.success) {
+                    // If cancel fails with "already cancelled" type error, treat as success
+                    const cancelErr = (cancelResult.error || '').toLowerCase();
+                    if (cancelErr.includes('cancel') || cancelErr.includes('not found') || cancelErr.includes('does not exist')) {
+                        console.log(`ℹ️ [cancel-da] ${appId}: SSG cancel returned "${cancelResult.error}" — treating as already cancelled`);
+                        succeeded.push({
+                            application_id: appId,
+                            enrolment_ref: searchResult.referenceNumber,
+                            enrolment_status: 'Cancelled',
+                        });
+                        continue;
+                    }
                     failed.push({ application_id: appId, error: cancelResult.error || 'Cancel failed' });
                     continue;
                 }
@@ -174,7 +212,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     [succeededRefs]
                 );
                 console.log(`✅ Updated ${enrolmentUpdateResult.rows.length} enrollment record(s) to Cancelled`);
+                for (const ref of succeededRefs) {
+                    try {
+                        await upsertSsgEnrolmentFromLocalEnrollment(String(ref));
+                    } catch (e) {
+                        console.warn('[cancel-da-applications] ssg_enrolments sync:', ref, e);
+                    }
+                }
             }
+
+            // Remove cancelled learners from Google Calendar (fire-and-forget)
+            setImmediate(async () => {
+                for (const s of succeeded) {
+                    const daRow = applicationRows.find(r => r.application_id === s.application_id);
+                    if (!daRow?.trainee_email || !daRow?.course_title) continue;
+                    try {
+                        // Resolve course_run UUID
+                        const crRes = await pool.query(
+                            `SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1`,
+                            [daRow.course_run_id]
+                        );
+                        const courseRunUuid = crRes.rows[0]?.id || daRow.course_run_id;
+
+                        const removeResult = await removeDaLearnerFromCalendar(
+                            daRow.trainee_email,
+                            courseRunUuid,
+                            daRow.course_title,
+                            daRow.course_start_date
+                        );
+                        if (removeResult.removedFrom > 0) {
+                            console.log(`🗑️ Removed ${daRow.trainee_email} from ${removeResult.removedFrom} calendar event(s)`);
+                        }
+                        // Untick the CAL column
+                        await pool.query(
+                            `UPDATE da_application SET calendar_added = false WHERE application_id = $1`,
+                            [s.application_id]
+                        );
+                    } catch (calErr) {
+                        console.error(`⚠️ Failed to remove ${daRow.trainee_email} from calendar:`, calErr);
+                    }
+                }
+            });
         }
 
         if (failed.length > 0) {

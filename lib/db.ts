@@ -1,8 +1,10 @@
 import { Pool } from 'pg';
+import * as dotenv from 'dotenv';
 
-// Check if DATABASE_URL is set
+dotenv.config({ path: '.env.local' });
+dotenv.config(); // Also try default .env
 if (!process.env.DATABASE_URL) {
-  console.warn('⚠️ DATABASE_URL is not set. Database connections will fail.');
+  console.warn('DATABASE_URL is not set. Database connections will fail.');
 }
 
 // Create connection pool with support for both local and Supabase (cloud) databases
@@ -11,24 +13,149 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 
   // SSL configuration - enable for Supabase (cloud) or production
-  ssl: process.env.DATABASE_URL && (process.env.NODE_ENV === 'production' || process.env.DATABASE_URL.includes('supabase'))
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl:
+    process.env.DATABASE_URL &&
+    (process.env.NODE_ENV === 'production' || process.env.DATABASE_URL.includes('supabase'))
+      ? { rejectUnauthorized: false }
+      : false,
 
-  // Connection pool settings optimized for serverless
-  // Keep these low for serverless environments
-  max: 5, // Reduced for serverless - each function instance has its own pool
-  idleTimeoutMillis: 10000, // Close idle clients after 10 seconds
-  connectionTimeoutMillis: 10000, // Return an error if connection takes longer than 10 seconds
+  // Connection pool settings
+  max: 30,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 15000,
 });
 
 // Test connection
 pool.on('connect', () => {
-  console.log('✅ Connected to PostgreSQL database');
+  console.log('Connected to PostgreSQL database');
 });
 
 pool.on('error', (err) => {
-  console.error('❌ PostgreSQL connection error:', err);
+  console.error('PostgreSQL connection error:', err);
 });
+
+// Auto-migrations: safe to run on every startup (all use IF NOT EXISTS)
+pool
+  .query(`
+    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS invoice_doc_number text;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS invoice_drive_file_id text;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS invoice_drive_web_view_link text;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS grant_invoice_drive_file_id text;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS grant_invoice_drive_web_view_link text;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS sfc_invoice_drive_file_id text;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS sfc_invoice_drive_web_view_link text;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS grant_invoice_id character varying(100);
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE da_application ADD COLUMN IF NOT EXISTS sfc_invoice_id character varying(100);
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS show_lesson_plan_learner_view boolean DEFAULT false NOT NULL;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS show_certificate_delivery boolean DEFAULT false NOT NULL;
+    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS certificate_delivery_label text DEFAULT 'TP Course Evaluation' NOT NULL;
+    UPDATE training_provider
+      SET show_certificate_delivery = true,
+          certificate_delivery_label = 'Certificate of Achievement'
+      WHERE uen = '201200696W'
+        AND certificate_delivery_label IN ('TP Course Evaluation', 'Certificate Delivery');
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+pool
+  .query(`
+    ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS certificate_delivery_link text DEFAULT 'https://goo.gl/R2eumq' NOT NULL;
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
+// Durable course_run -> Google Calendar event mapping (per session date).
+// See database/migrations/create_course_run_calendar_event.sql.
+pool
+  .query(`
+    CREATE TABLE IF NOT EXISTS course_run_calendar_event (
+      id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      course_run_id   uuid NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
+      event_date      date NOT NULL,
+      google_event_id text NOT NULL,
+      base_event_id   text,
+      created_at      timestamptz NOT NULL DEFAULT now(),
+      updated_at      timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (course_run_id, event_date)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS crce_google_event_uniq ON course_run_calendar_event (google_event_id);
+    CREATE INDEX IF NOT EXISTS crce_course_run_idx ON course_run_calendar_event (course_run_id);
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
 
 export default pool;

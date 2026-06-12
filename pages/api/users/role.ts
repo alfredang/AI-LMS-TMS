@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
+import { isPayrollEnabled } from '../../../lib/payroll/featureFlag';
 
 interface UserRoleResponse {
   success: boolean;
@@ -46,8 +47,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse<UserRoleRespons
           WHEN 'Developer' THEN 3
           WHEN 'Admin' THEN 4
           WHEN 'Finance' THEN 5
-          WHEN 'Training Provider' THEN 6
-          ELSE 7
+          WHEN 'Payroll' THEN 6
+          WHEN 'Training Provider' THEN 7
+          ELSE 8
         END
     `;
 
@@ -61,10 +63,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse<UserRoleRespons
       });
     }
 
+    // Filter out roles that are disabled at the tenant level
+    const payrollEnabled = await isPayrollEnabled();
+    const dbRoles = roleResult.rows
+      .map((row: { role: string }) => row.role)
+      .filter((r) => payrollEnabled || r !== 'Payroll');
+
+    if (dbRoles.length === 0) {
+      console.log(`❌ UserRole API: No enabled roles for userId: ${userId}`);
+      return res.status(404).json({ success: false, error: 'User role not found' });
+    }
+
     // Convert database roles to lowercase for consistency
-    const roles: string[] = roleResult.rows.map((row: { role: string }) => {
-      const dbRole = row.role;
-      // Convert "Training Provider" to "trainingProvider" for frontend compatibility
+    const roles: string[] = dbRoles.map((dbRole: string) => {
       if (dbRole === 'Training Provider') return 'trainingProvider';
       return dbRole.toLowerCase();
     });

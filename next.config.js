@@ -1,14 +1,28 @@
+const { execSync } = require('child_process');
+const COMMIT_HASH = (() => {
+  const formatDate = (d) => {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  };
+  try {
+    const isoDate = execSync('git log -1 --format=%ci', { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
+    const shortHash = execSync('git log -1 --format=%h', { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
+    return `${formatDate(new Date(isoDate))} (${shortHash})`;
+  } catch (e) {
+    console.warn('[version] git lookup failed, falling back to build date:', e.message);
+    return formatDate(new Date());
+  }
+})();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
-
   // Turbopack configuration (Next.js 16 default bundler)
   turbopack: {
     resolveAlias: {
@@ -31,7 +45,20 @@ const nextConfig = {
     unoptimized: process.env.NODE_ENV !== 'production',
   },
 
-  serverExternalPackages: ['node-cron'],
+  serverExternalPackages: ['node-cron', '@anthropic-ai/claude-agent-sdk'],
+
+  // Force-include the Claude Agent SDK's runtime files in the standalone
+  // bundle. The SDK loads `cli.js` and `vendor/` (ripgrep + audio-capture)
+  // dynamically at runtime, which Next.js's static tracer cannot detect,
+  // so without this they get stripped from the production image and the
+  // SDK throws: "Native CLI binary for linux-x64 not found." Including
+  // the whole package directory ensures every runtime asset travels into
+  // the standalone output.
+  outputFileTracingIncludes: {
+    '/api/**': [
+      './node_modules/@anthropic-ai/claude-agent-sdk/**',
+    ],
+  },
 
   // Webpack configuration
   webpack: (config, { isServer }) => {
@@ -65,7 +92,16 @@ const nextConfig = {
   // Only expose PUBLIC environment variables
   // NEVER expose database credentials or secrets here
   env: {
-    // Public variables only (prefixed with NEXT_PUBLIC_)
+    NEXT_PUBLIC_COMMIT_HASH: COMMIT_HASH,
+  },
+
+  // Silence dev-server request logs for the sidebar badge poll (fires every
+  // 60s while admin sidebar is mounted). Errors from the handler still show
+  // because they go through console.error, not the request logger.
+  logging: {
+    incomingRequests: {
+      ignore: [/api\/admin\/ca-stuck-count/],
+    },
   },
 };
 

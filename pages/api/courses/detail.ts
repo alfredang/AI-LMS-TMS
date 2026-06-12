@@ -19,6 +19,7 @@ interface CourseDetailRow {
   written_assessment_published: boolean;
   practical_assessment_published: boolean;
   certificate: string;
+  assessment_summary_record_url: string | null;
 }
 
 export default async function handler(
@@ -70,13 +71,17 @@ export default async function handler(
           c.slides_url,
           c.written_assessment_link,
           c.practical_performance_assessment_link,
+          c.assessment_summary_record_url,
           cr.written_assessment_published,
           cr.practical_assessment_published,
           cr.start_date,
           cr.end_date,
           e.certificate,
           c.resource_links,
-          c.funding_validity
+          c.funding_validity,
+          COALESCE(cr.class_type, 'Physical') AS class_type,
+          cr.virtual_meeting_link,
+          cr.virtual_meeting_provider
         FROM enrollment e
         JOIN course_run cr
           ON e.course_run_id = cr.id
@@ -104,13 +109,17 @@ export default async function handler(
           c.slides_url,
           c.written_assessment_link,
           c.practical_performance_assessment_link,
+          c.assessment_summary_record_url,
           cr.written_assessment_published,
           cr.practical_assessment_published,
           cr.start_date,
           cr.end_date,
           e.certificate,
           c.resource_links,
-          c.funding_validity
+          c.funding_validity,
+          COALESCE(cr.class_type, 'Physical') AS class_type,
+          cr.virtual_meeting_link,
+          cr.virtual_meeting_provider
         FROM enrollment e
         JOIN course_run cr
           ON e.course_run_id = cr.id
@@ -189,6 +198,7 @@ export default async function handler(
         slidesUrl: courseDetail.slides_url,
         writtenAssessmentLink: courseDetail.written_assessment_link,
         practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
+        assessmentSummaryRecordUrl: courseDetail.assessment_summary_record_url,
         writtenAssessmentPublished: courseDetail.written_assessment_published ?? false,
         practicalAssessmentPublished: courseDetail.practical_assessment_published ?? false,
         assessmentMethods: assessmentMethodsValue,
@@ -197,7 +207,10 @@ export default async function handler(
         endDate: (courseDetail as any).end_date || null,
         certificate: courseDetail.certificate,
         resourceLinks: (courseDetail as any).resource_links ? (typeof (courseDetail as any).resource_links === 'string' ? JSON.parse((courseDetail as any).resource_links) : (courseDetail as any).resource_links) : [],
-        fundingValidity: (courseDetail as any).funding_validity || null
+        fundingValidity: (courseDetail as any).funding_validity || null,
+        classType: (courseDetail as any).class_type || 'Physical',
+        virtualMeetingLink: (courseDetail as any).virtual_meeting_link || null,
+        virtualMeetingProvider: (courseDetail as any).virtual_meeting_provider || null
       }
     });
 

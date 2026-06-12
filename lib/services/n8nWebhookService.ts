@@ -1,3 +1,5 @@
+import pool from '../db';
+
 export interface N8nWebhookResult {
   ok: boolean;
   statusCode: number;
@@ -6,6 +8,36 @@ export interface N8nWebhookResult {
 }
 
 const MAX_BODY_LOG = 2000;
+const DEFAULT_TIMEOUT_MS = 10 * 60_000; // 10 minutes
+
+// Cache the timeout for 60s to avoid hammering the DB on bursty triggers.
+let cachedTimeoutMs: { value: number; expiresAt: number } | null = null;
+
+export function invalidateN8nWebhookTimeoutCache(): void {
+  cachedTimeoutMs = null;
+}
+
+async function getTimeoutMs(): Promise<number> {
+  if (cachedTimeoutMs && cachedTimeoutMs.expiresAt > Date.now()) return cachedTimeoutMs.value;
+
+  let dbValue = '';
+  try {
+    const r = await pool.query(
+      `SELECT n8n_webhook_timeout_ms FROM training_provider ORDER BY created_at ASC NULLS LAST LIMIT 1`,
+    );
+    dbValue = String(r.rows[0]?.n8n_webhook_timeout_ms || '').trim();
+  } catch {
+    // Column may not exist yet — fall through to default.
+  }
+
+  const raw = dbValue;
+  const parsed = raw ? Number(raw) : NaN;
+  const ms = Number.isFinite(parsed) ? parsed : DEFAULT_TIMEOUT_MS;
+  // clamp between 5s and 30m
+  const clamped = Math.min(30 * 60_000, Math.max(5_000, Math.floor(ms)));
+  cachedTimeoutMs = { value: clamped, expiresAt: Date.now() + 60_000 };
+  return clamped;
+}
 
 /**
  * POST (or GET) to an n8n webhook URL with JSON body for POST.
@@ -24,7 +56,8 @@ export async function triggerN8nWebhook(
       init.body = JSON.stringify(options.body ?? { trigger: true });
     }
 
-    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(120_000) });
+    const timeoutMs = await getTimeoutMs();
+    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
     const text = await res.text();
     const bodySnippet = text.length > MAX_BODY_LOG ? `${text.slice(0, MAX_BODY_LOG)}…` : text;
 

@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { isEnrolmentEligibleForAutoInvoice } from '../../../lib/services/invoiceEligibility';
+import { enqueueInvoiceJob } from '../../../lib/services/invoiceJobs';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -156,6 +158,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // 4b. Check if same learner is already actively enrolled in the same course run
+    const existingUserCourseRun = await client.query(
+      `SELECT id, enrolment_status FROM enrollment
+       WHERE user_id = $1 AND course_run_id = $2
+         AND LOWER(COALESCE(enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+       LIMIT 1`,
+      [userId, courseRunUuid]
+    );
+
+    if (existingUserCourseRun.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: `Duplicate enrolment — ${traineeName || traineeEmail} is already enrolled in this course run`,
+          details: [{ field: 'enrolment', message: `Active enrolment already exists (status: ${existingUserCourseRun.rows[0].enrolment_status || 'active'})` }]
+        }
+      });
+    }
+
     // 5. Insert enrollment
     const enrolmentUuid = crypto.randomUUID();
     await client.query(
@@ -225,6 +247,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     await client.query('COMMIT');
+
+    const st = (enrolmentStatus as string | undefined) || 'Confirmed';
+    if (enrolmentId && userId && traineeEmail && courseCode && isEnrolmentEligibleForAutoInvoice(st)) {
+      try {
+        await enqueueInvoiceJob({
+          enrolmentId,
+          userId,
+          learnerEmail: traineeEmail,
+          courseCode,
+          batchId: null,
+        });
+      } catch (e) {
+        console.warn('[enrolments/bulk-create] Failed to enqueue invoice job (non-blocking):', e);
+      }
+    }
 
     return res.status(200).json({
       success: true,

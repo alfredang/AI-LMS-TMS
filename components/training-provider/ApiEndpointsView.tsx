@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Icon, IconName } from '../ui/Icon';
 
 interface EndpointDoc {
@@ -27,50 +27,6 @@ const sections: EndpointSection[] = [
     endpoints: [
       {
         method: 'POST',
-        path: '/api/external/assign-trainer',
-        title: 'Assign Trainer to Course Run',
-        description: 'Assigns a trainer to a course run. Creates the course run if it does not exist, or updates it if the digital attendance ID is not yet set.',
-        headers: [
-          { name: 'x-api-key', value: '<API_KEY>', description: 'API key for authentication' },
-          { name: 'Content-Type', value: 'application/json', description: 'Request body format' },
-        ],
-        bodyFields: [
-          { name: 'course_run_id', type: 'string', required: true, description: 'The SSG course run ID (e.g. "1303232")' },
-          { name: 'primary_email', type: 'string', required: true, description: 'Trainer primary email address' },
-          { name: 'course_code', type: 'string', required: true, description: 'Course code (e.g. "TGS-2023011234")' },
-          { name: 'secondary_email', type: 'string', required: false, description: 'Trainer secondary email (empty string if none)' },
-          { name: 'course_title', type: 'string', required: false, description: 'Course title (used to derive mode of learning)' },
-          { name: 'start_date', type: 'string', required: false, description: 'Start date (formats: "12 Mar 2026", "2026-03-12", or 20260312)' },
-          { name: 'end_date', type: 'string', required: false, description: 'End date (same formats as start_date)' },
-          { name: 'ra_code', type: 'string', required: false, description: 'Digital attendance RA code (e.g. "RA741642")' },
-        ],
-        exampleRequest: `curl -X POST https://ai-lms-tms.tertiaryinfo.tech/api/external/assign-trainer \\
-  -H "x-api-key: YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "course_run_id": "1303232",
-    "primary_email": "trainer@example.com",
-    "course_code": "TGS-2023011234",
-    "course_title": "Virtual Training Course",
-    "start_date": "12 Mar 2026",
-    "end_date": "14 Mar 2026",
-    "ra_code": "RA741642"
-  }'`,
-        exampleResponse: `{
-  "success": true,
-  "message": "Trainer assigned successfully (course run created)",
-  "action": "created",
-  "data": {
-    "courseRunId": "1303232",
-    "courseCode": "TGS-2023011234",
-    "trainerId": "uuid-...",
-    "trainerName": "John Doe",
-    "trainerEmail": "trainer@example.com"
-  }
-}`,
-      },
-      {
-        method: 'POST',
         path: '/api/external/unassign-trainer',
         title: 'Unassign Trainer from Course Run',
         description: 'Removes the assigned trainer from a course run by clearing the trainer fields.',
@@ -81,7 +37,7 @@ const sections: EndpointSection[] = [
         bodyFields: [
           { name: 'course_run_id', type: 'string', required: true, description: 'The SSG course run ID' },
         ],
-        exampleRequest: `curl -X POST https://ai-lms-tms.tertiaryinfo.tech/api/external/unassign-trainer \\
+        exampleRequest: `curl -X POST __BASE_URL__/api/external/unassign-trainer \\
   -H "x-api-key: YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "course_run_id": "1303232" }'`,
@@ -101,7 +57,7 @@ const sections: EndpointSection[] = [
         queryParams: [
           { name: 'course_run_id', type: 'string', required: true, description: 'The SSG course run ID' },
         ],
-        exampleRequest: `curl -X GET "https://ai-lms-tms.tertiaryinfo.tech/api/external/get-course-run?course_run_id=1303232" \\
+        exampleRequest: `curl -X GET "__BASE_URL__/api/external/get-course-run?course_run_id=1303232" \\
   -H "x-api-key: YOUR_API_KEY"`,
         exampleResponse: `{
   "success": true,
@@ -133,7 +89,7 @@ const sections: EndpointSection[] = [
           { name: 'status', type: 'string', required: false, description: 'Filter by class status (e.g. "Confirmed", "Completed")' },
           { name: 'trainer_email', type: 'string', required: false, description: 'Filter by assigned trainer email (case-insensitive)' },
         ],
-        exampleRequest: `curl -X GET "https://ai-lms-tms.tertiaryinfo.tech/api/external/list-course-runs?status=Confirmed" \\
+        exampleRequest: `curl -X GET "__BASE_URL__/api/external/list-course-runs?status=Confirmed" \\
   -H "x-api-key: YOUR_API_KEY"`,
         exampleResponse: `{
   "success": true,
@@ -162,7 +118,7 @@ const sections: EndpointSection[] = [
         queryParams: [
           { name: 'status', type: 'string', required: false, description: 'Filter by trainer status (e.g. "Active")' },
         ],
-        exampleRequest: `curl -X GET "https://ai-lms-tms.tertiaryinfo.tech/api/external/list-trainers?status=Active" \\
+        exampleRequest: `curl -X GET "__BASE_URL__/api/external/list-trainers?status=Active" \\
   -H "x-api-key: YOUR_API_KEY"`,
         exampleResponse: `{
   "success": true,
@@ -650,12 +606,13 @@ const sections: EndpointSection[] = [
         method: 'POST',
         path: '/api/enrolment/cancel',
         title: 'Cancel Enrolment',
-        description: 'Cancels an existing enrolment.',
+        description: 'Cancels an existing enrolment. Course Run ID is auto-resolved from SSG when omitted.',
         headers: [
           { name: 'Content-Type', value: 'application/json', description: 'Request body format' },
         ],
         bodyFields: [
-          { name: 'enrolmentId', type: 'string', required: true, description: 'Enrolment UUID' },
+          { name: 'enrolmentId', type: 'string', required: true, description: 'SSG enrolment reference (e.g. ENR-2602-014784)' },
+          { name: 'courseRunId', type: 'string', required: false, description: 'Optional. Resolved from SSG via the enrolmentId when omitted.' },
         ],
       },
       {
@@ -1183,13 +1140,6 @@ const sections: EndpointSection[] = [
       },
       {
         method: 'GET',
-        path: '/api/admin/assign-trainer-logs',
-        title: 'Assign Trainer Logs',
-        description: 'Returns logs from the trainer assignment automation.',
-        headers: [],
-      },
-      {
-        method: 'GET',
         path: '/api/admin/course-run-date-sync-logs',
         title: 'Course Run Date Sync Logs',
         description: 'Returns logs from the course run date synchronization process.',
@@ -1218,6 +1168,11 @@ const ApiEndpointsView: React.FC = () => {
   const [expandedSections, setExpandedSections] = useState<Record<number, boolean>>({ 0: true });
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const resolvedSections = useMemo(() => JSON.parse(
+    JSON.stringify(sections).replace(/__BASE_URL__/g, baseUrl)
+  ), [baseUrl]);
+
   const toggleSection = (idx: number) => {
     setExpandedSections(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
@@ -1232,7 +1187,7 @@ const ApiEndpointsView: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const totalEndpoints = sections.reduce((sum, s) => sum + s.endpoints.length, 0);
+  const totalEndpoints = resolvedSections.reduce((sum: number, s: any) => sum + s.endpoints.length, 0);
 
   return (
     <div className="space-y-6">
@@ -1240,7 +1195,7 @@ const ApiEndpointsView: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">API Endpoints</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Complete API documentation for all {totalEndpoints} endpoints across {sections.length} categories.
+          Complete API documentation for all {totalEndpoints} endpoints across {resolvedSections.length} categories.
         </p>
       </div>
 
@@ -1258,7 +1213,7 @@ const ApiEndpointsView: React.FC = () => {
               <strong>Internal APIs</strong> use session-based authentication via JWT tokens from the login endpoint.
             </p>
             <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
-              Base URL: <code className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-800 text-xs font-mono">https://ai-lms-tms.tertiaryinfo.tech</code>
+              Base URL: <code className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-800 text-xs font-mono">__BASE_URL__</code>
             </p>
           </div>
         </div>
@@ -1266,7 +1221,7 @@ const ApiEndpointsView: React.FC = () => {
 
       {/* Sections */}
       <div className="space-y-4">
-        {sections.map((section, sIdx) => (
+        {resolvedSections.map((section: any, sIdx: number) => (
           <div key={sIdx} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-800 overflow-hidden">
             {/* Section Header */}
             <button
@@ -1293,7 +1248,7 @@ const ApiEndpointsView: React.FC = () => {
             {/* Section Endpoints */}
             {expandedSections[sIdx] && (
               <div className="border-t border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700/50">
-                {section.endpoints.map((ep, eIdx) => {
+                {section.endpoints.map((ep: any, eIdx: number) => {
                   const epKey = `${sIdx}-${eIdx}`;
                   const isExpanded = expandedEndpoint === epKey;
 
@@ -1336,7 +1291,7 @@ const ApiEndpointsView: React.FC = () => {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {ep.headers.map((h, i) => (
+                                    {ep.headers.map((h: any, i: number) => (
                                       <tr key={i} className="border-b dark:border-gray-700/50 last:border-0">
                                         <td className="py-1.5 pr-4 font-mono text-xs text-gray-700 dark:text-gray-300">{h.name}</td>
                                         <td className="py-1.5 pr-4 font-mono text-xs text-gray-500 dark:text-gray-400">{h.value}</td>
@@ -1364,7 +1319,7 @@ const ApiEndpointsView: React.FC = () => {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {ep.queryParams.map((p, i) => (
+                                    {ep.queryParams.map((p: any, i: number) => (
                                       <tr key={i} className="border-b dark:border-gray-700/50 last:border-0">
                                         <td className="py-1.5 pr-4 font-mono text-xs text-gray-700 dark:text-gray-300">{p.name}</td>
                                         <td className="py-1.5 pr-4 text-xs text-gray-500 dark:text-gray-400">{p.type}</td>
@@ -1398,7 +1353,7 @@ const ApiEndpointsView: React.FC = () => {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {ep.bodyFields.map((f, i) => (
+                                    {ep.bodyFields.map((f: any, i: number) => (
                                       <tr key={i} className="border-b dark:border-gray-700/50 last:border-0">
                                         <td className="py-1.5 pr-4 font-mono text-xs text-gray-700 dark:text-gray-300">{f.name}</td>
                                         <td className="py-1.5 pr-4 text-xs text-gray-500 dark:text-gray-400">{f.type}</td>

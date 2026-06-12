@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
 import { UserRole } from '@app-types';
+import { useLms } from '@contexts/LmsContext';
 
 interface Course {
     id: string;
@@ -17,18 +18,41 @@ interface AssessmentSummarySectionProps {
     courseRunUuid: string;
 }
 
-const ContentSection: React.FC<{ title?: string; children: React.ReactNode; className?: string }> = ({ title, children, className }) => (
-    <Card className={`p-6 ${className}`}>
-        {title && <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>}
-        {children}
-    </Card>
-);
+const ContentSection: React.FC<{ title?: string; children: React.ReactNode; className?: string; collapsible?: boolean; defaultOpen?: boolean }> = ({ title, children, className, collapsible = false, defaultOpen = true }) => {
+    const [open, setOpen] = useState(defaultOpen);
+    if (collapsible && title) {
+        return (
+            <Card className={`p-6 ${className}`}>
+                <button
+                    type="button"
+                    onClick={() => setOpen(prev => !prev)}
+                    className="w-full flex items-center justify-between text-left"
+                    aria-expanded={open}
+                >
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h3>
+                    <Icon
+                        name={IconName.ChevronDown}
+                        className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${open ? 'rotate-0' : '-rotate-90'}`}
+                    />
+                </button>
+                {open && <div className="mt-4">{children}</div>}
+            </Card>
+        );
+    }
+    return (
+        <Card className={`p-6 ${className}`}>
+            {title && <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>}
+            {children}
+        </Card>
+    );
+};
 
-export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> = ({ 
-    course, 
-    userRole, 
-    courseRunUuid 
+export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> = ({
+    course,
+    userRole,
+    courseRunUuid
 }) => {
+    const { currentUser } = useLms();
     const [learners, setLearners] = useState<any[]>([]);
     const [selectedLearner, setSelectedLearner] = useState<string>('');
     const [isUploading, setIsUploading] = useState(false);
@@ -46,16 +70,29 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
         }
     }, [userRole, courseRunUuid]);
 
-    if (userRole !== UserRole.Trainer && userRole !== UserRole.Admin && userRole !== UserRole.Developer && userRole !== UserRole.TrainingProvider) {
+    if (userRole !== UserRole.Trainer && userRole !== UserRole.Admin && userRole !== UserRole.Developer && userRole !== UserRole.TrainingProvider && userRole !== UserRole.Learner) {
         return null;
     }
 
+    const isLearner = userRole === UserRole.Learner;
+
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !selectedLearner) return;
+        if (!file) return;
 
-        const learner = learners.find(l => l.user_id === selectedLearner);
-        if (!learner) return;
+        let studentName: string | undefined;
+        if (isLearner) {
+            studentName = currentUser?.fullName;
+            if (!studentName) {
+                setUploadError('Unable to identify your name; please refresh and try again.');
+                return;
+            }
+        } else {
+            if (!selectedLearner) return;
+            const learner = learners.find(l => l.user_id === selectedLearner);
+            if (!learner) return;
+            studentName = learner.full_name;
+        }
 
         setIsUploading(true);
         setUploadError(null);
@@ -63,7 +100,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
 
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('studentName', learner.full_name);
+        formData.append('studentName', studentName);
         formData.append('courseRunId', courseRunUuid);
 
         try {
@@ -87,7 +124,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
     };
 
     return (
-        <ContentSection title="Assessment Summary Record">
+        <ContentSection title="Assessment Summary Record (Virtual Class)" collapsible>
             <div className="space-y-4">
                 {course.assessmentSummaryRecordUrl && (
                     <a
@@ -104,31 +141,37 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                     </a>
                 )}
 
-                {userRole === UserRole.Trainer && (
+                {(userRole === UserRole.Trainer || isLearner) && (
                     <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
-                        <h4 className="text-sm font-bold text-blue-900 dark:text-blue-100 mb-3 uppercase tracking-wider">Upload Learner Summary Record</h4>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Select Learner</label>
-                                <select 
-                                    className="w-full p-2 text-sm border rounded-md dark:bg-gray-800 dark:border-gray-700 font-sans"
-                                    value={selectedLearner}
-                                    onChange={(e) => setSelectedLearner(e.target.value)}
-                                >
-                                    <option value="">Choose a learner...</option>
-                                    {learners.map(l => (
-                                        <option key={l.user_id} value={l.user_id}>{l.full_name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            
+                        <h4 className="text-sm font-bold text-blue-900 dark:text-blue-100 mb-3 uppercase tracking-wider">
+                            {isLearner
+                                ? 'Upload Assessment Summary Record after fill up the learner info and signed'
+                                : 'Upload Assessment Summary Record after fill up the trainer info and signed'}
+                        </h4>
+
+                        <div className={`grid grid-cols-1 ${isLearner ? '' : 'md:grid-cols-2'} gap-4`}>
+                            {!isLearner && (
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Select Learner</label>
+                                    <select
+                                        className="w-full p-2 text-sm border rounded-md dark:bg-gray-800 dark:border-gray-700 font-sans"
+                                        value={selectedLearner}
+                                        onChange={(e) => setSelectedLearner(e.target.value)}
+                                    >
+                                        <option value="">Choose a learner...</option>
+                                        {learners.map(l => (
+                                            <option key={l.user_id} value={l.user_id}>{l.full_name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
                             <div>
                                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Upload File</label>
-                                <input 
-                                    type="file" 
+                                <input
+                                    type="file"
                                     onChange={handleUpload}
-                                    disabled={!selectedLearner || isUploading}
+                                    disabled={(!isLearner && !selectedLearner) || isUploading}
                                     className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 disabled:opacity-50"
                                 />
                             </div>

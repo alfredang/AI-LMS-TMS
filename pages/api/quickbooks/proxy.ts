@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { qboSendInvoice } from '../../../lib/services/qboInvoiceService';
 
 /**
  * POST /api/quickbooks/proxy
@@ -23,28 +24,53 @@ interface QBOCredentials {
   accessTokenExpiry?: number;
 }
 
-let cachedCreds: QBOCredentials | null = null;
+type QBOCredentialsResolved = QBOCredentials & {
+  selectedApp?: 'app1' | 'app2';
+  refreshTokenKeyName?: 'QUICKBOOKS_REFRESH_TOKEN' | 'QUICKBOOKS_APP1_REFRESH_TOKEN' | 'QUICKBOOKS_APP2_REFRESH_TOKEN';
+  fallbackRefreshToken?: string;
+};
 
-async function getQBOCredentials(appOverride?: string): Promise<QBOCredentials | null> {
+type CachedAccessToken = {
+  accessToken: string;
+  accessTokenExpiry: number;
+};
+
+const accessTokenByCredsKey = new Map<string, CachedAccessToken>();
+const inFlightTokenByCredsKey = new Map<string, Promise<string>>();
+
+async function getQBOCredentials(appOverride?: string): Promise<QBOCredentialsResolved | null> {
   try {
     const result = await pool.query(
       `SELECT a.key_name, a.key_value
        FROM training_provider_api a
        JOIN training_provider tp ON tp.id = a.training_provider_id
-       WHERE a.key_name IN ('QUICKBOOKS_APP1_CLIENT_ID', 'QUICKBOOKS_APP1_CLIENT_SECRET', 'QUICKBOOKS_REFRESH_TOKEN', 'QUICKBOOKS_REALM_ID', 'QUICKBOOKS_APP2_CLIENT_ID', 'QUICKBOOKS_APP2_CLIENT_SECRET', 'QUICKBOOKS_DEFAULT_APP')
+       WHERE a.key_name IN (
+         'QUICKBOOKS_APP1_CLIENT_ID', 'QUICKBOOKS_APP1_CLIENT_SECRET',
+         'QUICKBOOKS_APP2_CLIENT_ID', 'QUICKBOOKS_APP2_CLIENT_SECRET',
+         'QUICKBOOKS_REFRESH_TOKEN',
+         'QUICKBOOKS_APP1_REFRESH_TOKEN', 'QUICKBOOKS_APP2_REFRESH_TOKEN',
+         'QUICKBOOKS_REALM_ID', 'QUICKBOOKS_DEFAULT_APP'
+       )
        LIMIT 10`
     );
     const map: Record<string, string> = {};
     for (const row of result.rows) map[row.key_name] = row.key_value;
 
-    const selectedApp = appOverride || map.QUICKBOOKS_DEFAULT_APP || 'app1';
+    const selectedApp = (appOverride || map.QUICKBOOKS_DEFAULT_APP || 'app1') as 'app1' | 'app2';
     const clientId = selectedApp === 'app2' ? map.QUICKBOOKS_APP2_CLIENT_ID : map.QUICKBOOKS_APP1_CLIENT_ID;
     const clientSecret = selectedApp === 'app2' ? map.QUICKBOOKS_APP2_CLIENT_SECRET : map.QUICKBOOKS_APP1_CLIENT_SECRET;
-    const refreshToken = map.QUICKBOOKS_REFRESH_TOKEN;
+    const appSpecificRefreshToken = selectedApp === 'app2' ? map.QUICKBOOKS_APP2_REFRESH_TOKEN : map.QUICKBOOKS_APP1_REFRESH_TOKEN;
+    const globalRefreshToken = map.QUICKBOOKS_REFRESH_TOKEN;
+    const refreshToken = appSpecificRefreshToken || globalRefreshToken;
     const realmId = map.QUICKBOOKS_REALM_ID;
 
     if (clientId && clientSecret && refreshToken && realmId) {
-      return { clientId, clientSecret, refreshToken, realmId };
+      const refreshTokenKeyName: QBOCredentialsResolved['refreshTokenKeyName'] =
+        appSpecificRefreshToken ? (selectedApp === 'app2' ? 'QUICKBOOKS_APP2_REFRESH_TOKEN' : 'QUICKBOOKS_APP1_REFRESH_TOKEN') : 'QUICKBOOKS_REFRESH_TOKEN';
+      const fallbackRefreshToken = appSpecificRefreshToken && globalRefreshToken && globalRefreshToken !== appSpecificRefreshToken
+        ? globalRefreshToken
+        : undefined;
+      return { clientId, clientSecret, refreshToken, realmId, selectedApp, refreshTokenKeyName, fallbackRefreshToken };
     }
   } catch (err) {
     console.warn('Could not fetch QBO credentials from DB:', err);
@@ -56,16 +82,21 @@ async function getQBOCredentials(appOverride?: string): Promise<QBOCredentials |
   const refreshToken = process.env.QBO_REFRESH_TOKEN;
   const realmId = process.env.QBO_REALM_ID;
   if (clientId && clientSecret && refreshToken && realmId) {
-    return { clientId, clientSecret, refreshToken, realmId };
+    return { clientId, clientSecret, refreshToken, realmId, refreshTokenKeyName: 'QUICKBOOKS_REFRESH_TOKEN' };
   }
   return null;
 }
 
-async function getAccessToken(creds: QBOCredentials): Promise<string> {
-  if (cachedCreds?.accessToken && cachedCreds.accessTokenExpiry && Date.now() < cachedCreds.accessTokenExpiry) {
-    return cachedCreds.accessToken;
-  }
+function credsCacheKey(creds: QBOCredentialsResolved): string {
+  // Key by clientId+realmId only. The refresh token rotates on every refresh,
+  // so including it would invalidate the cache after each rotation and force
+  // every call to refresh again — causing token-rotation stampedes under
+  // concurrent load (batch invoice generation), which manifest as
+  // invalid_grant failures.
+  return `${creds.clientId}|${creds.realmId}`;
+}
 
+async function refreshAccessToken(creds: QBOCredentialsResolved, refreshTokenToUse: string): Promise<any> {
   const basic = Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString('base64');
   const resp = await fetch(QBO_TOKEN_URL, {
     method: 'POST',
@@ -74,7 +105,7 @@ async function getAccessToken(creds: QBOCredentials): Promise<string> {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Accept': 'application/json',
     },
-    body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(creds.refreshToken)}`,
+    body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshTokenToUse)}`,
   });
 
   if (!resp.ok) {
@@ -82,29 +113,73 @@ async function getAccessToken(creds: QBOCredentials): Promise<string> {
     throw new Error(`QBO token refresh failed: ${resp.status} ${text}`);
   }
 
-  const data = await resp.json();
+  return await resp.json();
+}
 
-  // Store new refresh token if returned
-  if (data.refresh_token && data.refresh_token !== creds.refreshToken) {
-    try {
-      await pool.query(
-        `UPDATE training_provider_api SET key_value = $1 WHERE key_name = 'QUICKBOOKS_REFRESH_TOKEN'`,
-        [data.refresh_token]
-      );
-      console.log('[qbo] Refresh token updated in DB');
-    } catch (err) {
-      console.warn('[qbo] Failed to update refresh token:', err);
+async function maybePersistRotatedRefreshToken(creds: QBOCredentialsResolved, oldRefreshToken: string, newRefreshToken: string) {
+  const keyName = creds.refreshTokenKeyName || 'QUICKBOOKS_REFRESH_TOKEN';
+  try {
+    // Conditional update: only overwrite if the row still holds the token we
+    // just consumed. Prevents a slow rotation from clobbering a faster one
+    // that already wrote a newer token.
+    const r = await pool.query(
+      `UPDATE training_provider_api SET key_value = $1 WHERE key_name = $2 AND key_value = $3`,
+      [newRefreshToken, keyName, oldRefreshToken]
+    );
+    if (r.rowCount && r.rowCount > 0) {
+      console.log(`[qbo] Refresh token updated in DB (${keyName})`);
+    } else {
+      console.log(`[qbo] Refresh token rotation skipped (${keyName}) — DB already holds a newer token`);
     }
+  } catch (err) {
+    console.warn('[qbo] Failed to update refresh token:', err);
   }
+}
 
-  cachedCreds = {
-    ...creds,
-    accessToken: data.access_token,
-    accessTokenExpiry: Date.now() + (data.expires_in ? data.expires_in * 1000 - 60000 : 3300000),
-    refreshToken: data.refresh_token || creds.refreshToken,
-  };
+async function getAccessToken(creds: QBOCredentialsResolved): Promise<string> {
+  const key = credsCacheKey(creds);
+  const cached = accessTokenByCredsKey.get(key);
+  if (cached && Date.now() < cached.accessTokenExpiry) return cached.accessToken;
 
-  return data.access_token;
+  const inflight = inFlightTokenByCredsKey.get(key);
+  if (inflight) return inflight;
+
+  const p = (async () => {
+    // 1) Try app-specific / selected refresh token
+    try {
+      const data = await refreshAccessToken(creds, creds.refreshToken);
+      if (data.refresh_token && data.refresh_token !== creds.refreshToken) {
+        await maybePersistRotatedRefreshToken(creds, creds.refreshToken, data.refresh_token);
+      }
+
+      const accessToken = data.access_token;
+      const accessTokenExpiry = Date.now() + (data.expires_in ? data.expires_in * 1000 - 60000 : 3300000);
+      accessTokenByCredsKey.set(key, { accessToken, accessTokenExpiry });
+      return accessToken;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // 2) If invalid_grant and we have a fallback refresh token, retry once with it.
+      if (creds.fallbackRefreshToken && msg.includes('invalid_grant')) {
+        const data = await refreshAccessToken(creds, creds.fallbackRefreshToken);
+        if (data.refresh_token && data.refresh_token !== creds.fallbackRefreshToken) {
+          // Persist to GLOBAL token key, because fallback is the global token by definition.
+          await maybePersistRotatedRefreshToken({ ...creds, refreshTokenKeyName: 'QUICKBOOKS_REFRESH_TOKEN' }, creds.fallbackRefreshToken, data.refresh_token);
+        }
+        const accessToken = data.access_token;
+        const accessTokenExpiry = Date.now() + (data.expires_in ? data.expires_in * 1000 - 60000 : 3300000);
+        accessTokenByCredsKey.set(key, { accessToken, accessTokenExpiry });
+        return accessToken;
+      }
+      throw e;
+    }
+  })();
+
+  inFlightTokenByCredsKey.set(key, p);
+  try {
+    return await p;
+  } finally {
+    inFlightTokenByCredsKey.delete(key);
+  }
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -150,8 +225,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       case 'send': {
         if (!id) return res.status(400).json({ success: false, error: 'id is required for send.' });
+        if (entity === 'invoice') {
+          await qboSendInvoice(appOverride, String(id), typeof sendTo === 'string' ? sendTo : undefined);
+          return res.status(200).json({ success: true, data: null });
+        }
         url = `${baseUrl}/${entity}/${id}/send${sendTo ? `?sendTo=${encodeURIComponent(sendTo)}` : ''}${sendTo ? '&' : '?'}minorversion=${MINOR_VERSION}`;
         method = 'POST';
+        headers['Content-Type'] = 'application/octet-stream';
+        fetchBody = '';
         break;
       }
       case 'delete': {

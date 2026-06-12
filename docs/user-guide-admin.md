@@ -498,6 +498,12 @@ Assign or modify user roles:
 - Check data format matches SSG requirements
 - Review error messages for specific issues
 
+**Company Application rows stuck at "pending"?**
+- After upload, rows poll SSG every 30 seconds until their grant appears (usually under a minute, but can take 15+ minutes)
+- If the server restarted during the poll (deploy, crash), the poll does not auto-resume
+- Recovery: open **View Company Application** and click **Sync Grants** — this runs the same sweep and flips rows to "grant_found" once SSG returns the grant
+- For learners who are permanently grant-ineligible (e.g. non-citizen), toggle **Grant Ineligible** on the row to release the rest of the group for invoicing
+
 ---
 
 ## Best Practices

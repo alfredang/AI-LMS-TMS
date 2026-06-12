@@ -158,7 +158,7 @@ Feel free to let me know if you need anything else. Thank you.
 Best regards,
 Support Team
 {COMPANY_SHORT_NAME}
-Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/6561000613`;
+Tel: ${tp.contactTel} | Email: ${tp.supportEmail || tp.companyEmail} | WhatsApp: https://wa.me/${tp.contactTel.replace(/[^0-9]/g, '')}`;
 
     const bodyText = (dbBody || defaultBody)
       .replace(/\{STUDENT_NAME\}/g, studentName)
@@ -168,9 +168,10 @@ Tel: 61000613 | Email: support@tertiaryinfotech.com | WhatsApp: https://wa.me/65
       .replace(/\{COMPANY_WEBSITE\}/g, tp.companyWebsite || '')
       .replace(/\{CERTIFICATE_URL\}/g, '');
 
+    const isHtml = /<[a-z][\s\S]*>/i.test(bodyText);
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; color: #333;">
-        ${bodyText.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '<br/>').join('\n        ')}
+        ${isHtml ? bodyText : bodyText.split('\n').map(line => line.trim() ? `<p style="margin:0 0 2px 0;">${line}</p>` : '<br/>').join('\n        ')}
       </div>
     `;
 

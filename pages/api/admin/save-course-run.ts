@@ -1,9 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
-import { google, drive_v3 } from 'googleapis';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
-import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
+import { autoShareCourseResourcesWithTrainer } from '../../../lib/google-drive/drive-helpers';
 import { ensureTpgTrainerColumns } from '@/lib/trainerInvitations';
 
 // Helper function for database queries
@@ -454,51 +453,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             modeOfLearning: 'Physical'
         });
 
-        // --- Auto-share courseware Google Drive folder with the assigned trainer ---
+        // --- Auto-share Google resources (courseware folder + trainer slides) with the assigned trainer ---
         if (trainerEmail) {
-            try {
-                const coursewareRes = await query(
-                    `SELECT courseware_link FROM course WHERE id = $1 AND courseware_link IS NOT NULL AND courseware_link LIKE '%drive.google.com%'`,
-                    [courseId]
-                );
-
-                if (coursewareRes.rows.length > 0 && coursewareRes.rows[0].courseware_link) {
-                    const coursewareLink = coursewareRes.rows[0].courseware_link;
-                    let folderId: string | null = null;
-
-                    if (coursewareLink.includes('folders/')) {
-                        const parts = coursewareLink.split('folders/');
-                        if (parts.length > 1) folderId = parts[1].split('?')[0].split('/')[0];
-                    } else if (coursewareLink.includes('id=')) {
-                        folderId = new URL(coursewareLink).searchParams.get('id');
-                    }
-
-                    if (folderId) {
-                        try {
-                            const drive = await getDriveClient();
-
-                            try {
-                                await drive.permissions.create({
-                                    fileId: folderId,
-                                    sendNotificationEmail: false,
-                                    requestBody: { role: 'reader', type: 'user', emailAddress: trainerEmail }
-                                });
-                                console.log(`📂 Auto-shared courseware folder with trainer ${trainerEmail}`);
-                            } catch (shareErr: any) {
-                                if (shareErr.message?.includes('already exists')) {
-                                    console.log(`📂 Trainer ${trainerEmail} already has access to courseware folder.`);
-                                } else {
-                                    console.warn(`⚠️ Could not share courseware folder with ${trainerEmail}: ${shareErr.message}`);
-                                }
-                            }
-                        } catch (authErr: any) {
-                            console.warn(`⚠️ Google Auth failed for auto-sharing: ${authErr.message}`);
-                        }
-                    }
-                }
-            } catch (shareError) {
-                console.warn('⚠️ Auto-share courseware error (non-blocking):', shareError);
-            }
+            await autoShareCourseResourcesWithTrainer(courseId, trainerEmail);
         }
 
         return res.status(200).json({

@@ -11,7 +11,7 @@ const Profile: NextPage = () => {
       <Head>
         <title>Profile - {appTitle} LMS TMS</title>
         <meta name="description" content="User Profile Management" />
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon.png?size=32" />
       </Head>
       <ProfilePage />
     </>

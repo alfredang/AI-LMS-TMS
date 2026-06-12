@@ -38,6 +38,20 @@ const AGENTIC_AI_CATEGORIES = [
       { label: 'Synthesia', href: 'https://www.synthesia.io/' },
     ],
   },
+  {
+    title: 'Webhook Demo',
+    description: 'Interactive demo showcasing n8n webhook integrations and automated workflows.',
+    items: [
+      { label: 'Nike Enquiry Webform', href: 'https://alfredang.github.io/n8nnike/' },
+    ],
+  },
+  {
+    title: 'Multi Agent Demo',
+    description: 'Demonstration of multi-agent orchestration using n8n for collaborative AI workflows.',
+    items: [
+      { label: 'Nike Market Research', href: 'https://alfredang.github.io/n8nmultiagents/' },
+    ],
+  },
 ];
 
 const AgenticAIToolsPage: React.FC = () => {

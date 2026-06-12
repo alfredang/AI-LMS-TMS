@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 /**
  * Fetch Upcoming Class Enrolments
@@ -27,7 +28,7 @@ function parseDate(raw: string | undefined): string | null {
   if (/^\d{8}$/.test(raw)) return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
   const d = new Date(raw);
   if (isNaN(d.getTime())) return null;
-  return d.toISOString().slice(0, 10);
+  return getLocalYMD(d);
 }
 
 function mapSponsorship(s: string | undefined): string | null {
@@ -239,8 +240,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let dateMismatch: string | undefined;
 
       if (ssgStartDate || ssgEndDate) {
-        const dbStart = cr.start_date ? new Date(cr.start_date).toISOString().slice(0, 10) : null;
-        const dbEnd = cr.end_date ? new Date(cr.end_date).toISOString().slice(0, 10) : null;
+        const dbStart = cr.start_date ? getLocalYMD(new Date(cr.start_date)) : null;
+        const dbEnd = cr.end_date ? getLocalYMD(new Date(cr.end_date)) : null;
 
         const startMismatch = ssgStartDate && dbStart && ssgStartDate !== dbStart;
         const endMismatch = ssgEndDate && dbEnd && ssgEndDate !== dbEnd;

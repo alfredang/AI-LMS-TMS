@@ -11,22 +11,22 @@ const StatCard: React.FC<{ title: string; value: string | number }> = ({ title, 
 );
 
 interface AdminStatistics {
-    totalLearners: number;
-    totalTrainers: number;
     ongoingClasses: number;
-    classesNext7Days: number;
-    classesNext30Days: number;
+    upcomingClasses: number;
     completedClasses: number;
+    assignedTrainersLocal: number;
+    missingTrainersLocal: number;
+    missingTrainersTPG: number;
 }
 
 export const AdminDashboard: React.FC = () => {
     const [statistics, setStatistics] = useState<AdminStatistics>({
-        totalLearners: 0,
-        totalTrainers: 0,
         ongoingClasses: 0,
-        classesNext7Days: 0,
-        classesNext30Days: 0,
+        upcomingClasses: 0,
         completedClasses: 0,
+        assignedTrainersLocal: 0,
+        missingTrainersLocal: 0,
+        missingTrainersTPG: 0,
     });
 
     const pageTitle = 'Admin Dashboard';
@@ -53,16 +53,16 @@ export const AdminDashboard: React.FC = () => {
                 <h1 className="text-3xl font-bold mb-6">{pageTitle}</h1>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10 w-full">
-                    <StatCard title="Total Learners" value={statistics.totalLearners} />
-                    <StatCard title="Total Trainers" value={statistics.totalTrainers} />
                     <StatCard title="Ongoing Classes" value={statistics.ongoingClasses} />
-                    <StatCard title="Classes (Next 7 Days)" value={statistics.classesNext7Days} />
-                    <StatCard title="Classes (Next 30 Days)" value={statistics.classesNext30Days} />
+                    <StatCard title="Upcoming Classes" value={statistics.upcomingClasses} />
                     <StatCard title="Completed Classes" value={statistics.completedClasses} />
+                    <StatCard title="Assigned Trainers (Local) for Upcoming" value={statistics.assignedTrainersLocal} />
+                    <StatCard title="Missing Trainers (Local) for Upcoming" value={statistics.missingTrainersLocal} />
+                    <StatCard title="Missing Trainers (TPG) for Upcoming" value={statistics.missingTrainersTPG} />
                 </div>
 
                 <Card className="p-4 overflow-hidden">
-                    <UpcomingClassesTable showTitle={true} showFilters={true} />
+                    <UpcomingClassesTable showTitle={false} showFilters={true} includeOngoing={true} />
                 </Card>
             </div>
     );

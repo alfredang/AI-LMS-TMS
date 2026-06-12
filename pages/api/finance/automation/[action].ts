@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getFinanceAutomationAction } from '../../../../lib/config/financeAutomationActions';
+import { resolveFinanceAutomationWebhookUrlFromDb } from '../../../../lib/services/financeAutomationWebhookConfig';
 import { refreshGrantsForEnrolments } from '../../../../lib/services/billingSync';
 import { triggerN8nWebhook } from '../../../../lib/services/n8nWebhookService';
 
@@ -34,7 +35,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      const results = await refreshGrantsForEnrolments(enrolmentIds);
+      const ssgApp = (req.headers['x-ssg-app'] as string | undefined)?.trim() || undefined;
+      const results = await refreshGrantsForEnrolments(enrolmentIds, ssgApp);
       const okCount = results.filter((r) => r.success).length;
       const failCount = results.length - okCount;
 
@@ -55,10 +57,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!envKey) {
         return res.status(500).json({ error: 'Action missing webhookEnvKey' });
       }
-      const url = process.env[envKey];
+      const url = await resolveFinanceAutomationWebhookUrlFromDb(envKey);
       if (!url) {
         return res.status(503).json({
-          error: `Webhook not configured: set ${envKey}`,
+          error: `Webhook not configured. Set it in the automation page (Webhook URL → Save).`,
           action: def.id,
         });
       }
@@ -71,7 +73,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const payload =
         method === 'GET' ? undefined : { ...clientPayload, trigger: true as const };
 
+      const startedAt = Date.now();
       const webhookResult = await triggerN8nWebhook(url, { method, body: payload });
+      const durationMs = Math.max(0, Date.now() - startedAt);
 
       if (!webhookResult.ok) {
         return res.status(502).json({
@@ -80,6 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           error: webhookResult.error || 'Webhook request failed',
           statusCode: webhookResult.statusCode,
           bodySnippet: webhookResult.bodySnippet,
+          durationMs,
         });
       }
 
@@ -88,6 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         action: def.id,
         statusCode: webhookResult.statusCode,
         bodySnippet: webhookResult.bodySnippet,
+        durationMs,
       });
     }
 

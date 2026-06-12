@@ -4,6 +4,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { detectIdType } from '@/lib/utils/id-type';
 import { useLms } from '@contexts/LmsContext';
+import { ssgFetch } from '@/lib/ssgAppState';
 
 // Enums based on the Python constants
 enum IdTypeSummary {
@@ -203,6 +204,46 @@ const EnrollLearners: React.FC = () => {
     }
   };
 
+  // Date conversion helpers
+  const toDisplayDate = (isoDate: string): string => {
+    if (!isoDate) return '';
+    // YYYY-MM-DD → DD/MM/YYYY
+    const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+    return isoDate;
+  };
+
+  const toApiDate = (displayDate: string): string => {
+    if (!displayDate) return '';
+    // DD/MM/YYYY → YYYY-MM-DD
+    const match = displayDate.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+    // Already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(displayDate)) return displayDate;
+    return displayDate;
+  };
+
+  // Fetch UEN from training provider table on mount
+  useEffect(() => {
+    const fetchUen = async () => {
+      try {
+        const res = await fetch('/api/training-provider/uen');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.uen) {
+          setFormData(prev => ({
+            ...prev,
+            trainingPartnerUen: data.uen,
+            trainingPartnerCode: `${data.uen}-01`
+          }));
+        }
+      } catch {
+        // Silently fail — user can fill manually
+      }
+    };
+    fetchUen();
+  }, []);
+
   // Fetch available courses on component mount
   const fetchAvailableCourses = async () => {
     setLoadingCourses(true);
@@ -371,15 +412,28 @@ const EnrollLearners: React.FC = () => {
       console.log('Learner profile response:', result);
       if (res.ok && result.success && result.data) {
         const profile = result.data;
-        const dobFormatted = profile.dob || '';
-        console.log('Populating form with:', { nric: profile.nric, tel: profile.tel, dob: dobFormatted });
+        // Prefer SSG raw_data fields over learner_profile fields (more accurate)
+        const dobRaw = profile.ssg_dob || profile.dob || '';
+        const dobFormatted = dobRaw ? toDisplayDate(dobRaw) : '';
+        const nric = profile.ssg_nric || profile.nric || '';
+        const phone = profile.ssg_phone || profile.tel || '';
+        const countryCode = profile.ssg_country_code || '+65';
+        const areaCode = profile.ssg_area_code || '';
+        const idType = profile.ssg_id_type as IdTypeSummary || IdTypeSummary.NRIC;
+        const tpUen = profile.ssg_tp_uen || '';
+        const tpCode = profile.ssg_tp_code || (tpUen ? `${tpUen}-01` : '');
+        console.log('Populating form with:', { nric, phone, dob: dobFormatted, tpUen });
         setFormData(prev => ({
           ...prev,
           traineeFullName: profile.full_name || learner.name,
           traineeEmailAddress: profile.email || learner.email,
-          traineeId: profile.nric || '',
+          traineeId: nric,
+          traineeIdType: idType,
           traineeDateOfBirth: dobFormatted,
-          traineeContactNumberPhoneNumber: profile.tel || '',
+          traineeContactNumberCountryCode: countryCode,
+          traineeContactNumberAreaCode: areaCode,
+          traineeContactNumberPhoneNumber: phone,
+          ...(tpUen ? { trainingPartnerUen: tpUen, trainingPartnerCode: tpCode } : {}),
         }));
       }
     } catch (err) {
@@ -464,7 +518,7 @@ const EnrollLearners: React.FC = () => {
       setEnrolmentError(null);
       console.log('🔍 Searching enrolment records for course run:', courseRunId);
 
-      const response = await fetch('/api/enrolment/search', {
+      const response = await ssgFetch('/api/enrolment/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ courseRunId }),
@@ -474,7 +528,10 @@ const EnrollLearners: React.FC = () => {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result?.error || `Enrolment search failed with status: ${response.status}`);
+        // Don't throw (avoids Next.js redbox overlay); just show error state.
+        const msg = result?.error || `Enrolment search failed with status: ${response.status}`;
+        setEnrolmentError(msg);
+        return;
       }
 
       console.log('✅ Enrolment search results:', result);
@@ -615,8 +672,6 @@ const EnrollLearners: React.FC = () => {
     if (formData.traineeSponsorshipType === SponsorshipType.EMPLOYER) {
       if (!formData.employerUen?.trim()) {
         newErrors.push('Employer UEN is required for employer-sponsored trainees');
-      } else if (!validateUEN(formData.employerUen)) {
-        newErrors.push('Employer UEN is not valid');
       }
 
       if (!formData.employerFullName?.trim()) {
@@ -648,14 +703,14 @@ const EnrollLearners: React.FC = () => {
       id: formData.traineeId,
       idType: { type: formData.traineeIdType },
       fullName: formData.traineeFullName,
-      dateOfBirth: formData.traineeDateOfBirth,
+      dateOfBirth: toApiDate(formData.traineeDateOfBirth),
       emailAddress: formData.traineeEmailAddress,
       contactNumber: {
         countryCode: formData.traineeContactNumberCountryCode,
         phoneNumber: formData.traineeContactNumberPhoneNumber,
         ...(formData.traineeContactNumberAreaCode ? { areaCode: formData.traineeContactNumberAreaCode } : {})
       },
-      enrolmentDate: formData.traineeEnrolmentDate || new Date().toISOString().split('T')[0],
+      enrolmentDate: formData.traineeEnrolmentDate ? toApiDate(formData.traineeEnrolmentDate) : new Date().toISOString().split('T')[0],
       sponsorshipType: formData.traineeSponsorshipType,
       fees: {
         discountAmount: formData.traineeFeesDiscountAmount ?? 0,
@@ -723,7 +778,7 @@ const EnrollLearners: React.FC = () => {
 
       console.log('Submitting enrolment to SSG API:', JSON.stringify(payload, null, 2));
 
-      const response = await fetch('/api/enrolment/create', {
+      const response = await ssgFetch('/api/enrolment/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -735,10 +790,20 @@ const EnrollLearners: React.FC = () => {
       const storedDraft = JSON.parse(localStorage.getItem(ENROLMENT_DRAFT_KEY) || '{}');
 
       if (parsed?.success) {
+        const d = parsed.data ?? {};
+        const ref =
+          d?.enrolment?.referenceNumber ??
+          d?.referenceNumber ??
+          undefined;
+        const st =
+          d?.enrolment?.status ??
+          d?.status ??
+          undefined;
+
         setSubmissionResult({
           success: true,
-          referenceNumber:       parsed.data?.enrolment?.referenceNumber,
-          enrolmentStatus:       parsed.data?.enrolment?.status,
+          referenceNumber:       ref,
+          enrolmentStatus:       st,
           traineeName:           storedDraft.traineeFullName,
           traineeId:             storedDraft.traineeId,
           traineeIdType:         storedDraft.traineeIdType,
@@ -750,27 +815,29 @@ const EnrollLearners: React.FC = () => {
           submittedAt:           storedDraft.submittedAt,
         });
 
-        // Sync enrollment to local DB — auto-creates learner / course / course_run
-        // if any are missing, then inserts the enrollment row.
-        try {
-          const syncRes = await fetch(getApiUrl('/api/enrolments/post-ssg-enrol'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              traineeEmail:          storedDraft.traineeEmailAddress,
-              courseReferenceNumber: storedDraft.courseReferenceNumber,
-              courseRunId:           storedDraft.courseRunId,
-              sponsorshipType:       storedDraft.sponsorshipType,
-              traineeName:           storedDraft.traineeFullName,
-              traineeNric:           storedDraft.traineeId,
-              enrolmentId:           parsed.data?.enrolment?.referenceNumber,
-              enrolmentStatus:       parsed.data?.enrolment?.status,
-            }),
-          });
-          const syncData = await syncRes.json();
-          console.log('📋 Local enrollment sync:', syncData);
-        } catch (syncErr) {
-          console.warn('⚠️ Local enrollment sync failed (non-critical):', syncErr);
+        // Server runs the same sync in /api/enrolment/create (invoice enqueue). Retry here only if that failed.
+        if (parsed.localEnrollmentSynced !== true) {
+          try {
+            const syncRes = await fetch(getApiUrl('/api/enrolments/post-ssg-enrol'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                traineeEmail:          storedDraft.traineeEmailAddress,
+                courseReferenceNumber: storedDraft.courseReferenceNumber,
+                courseRunId:           storedDraft.courseRunId,
+                sponsorshipType:       storedDraft.sponsorshipType,
+                traineeName:           storedDraft.traineeFullName,
+                traineeNric:           storedDraft.traineeId,
+                enrolmentId:           ref,
+                enrolmentStatus:       st,
+              }),
+            });
+            const syncData = await syncRes.json();
+            console.log('📋 Local enrollment sync (client fallback):', syncData);
+          } catch (syncErr) {
+            console.warn('⚠️ Local enrollment sync failed (non-critical):', syncErr);
+          }
         }
 
         setFormData({
@@ -1306,10 +1373,11 @@ const EnrollLearners: React.FC = () => {
                     Trainee Date of Birth <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="date"
+                    type="text"
                     value={formData.traineeDateOfBirth}
                     onChange={(e) => handleInputChange('traineeDateOfBirth', e.target.value)}
-                    min="1900-01-01"
+                    placeholder="DD/MM/YYYY"
+                    maxLength={10}
                     className={inputClasses}
                   />
                 </div>
@@ -1381,10 +1449,11 @@ const EnrollLearners: React.FC = () => {
                 {showOptionalFields.enrolmentDate && (
                   <div className="mt-2">
                     <input
-                      type="date"
+                      type="text"
                       value={formData.traineeEnrolmentDate || ''}
                       onChange={(e) => handleInputChange('traineeEnrolmentDate', e.target.value)}
-                      min="1900-01-01"
+                      placeholder="DD/MM/YYYY"
+                      maxLength={10}
                       className={inputClasses}
                     />
                   </div>

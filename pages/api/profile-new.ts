@@ -45,6 +45,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       profileData = await getAdminProfile(userId);
     } else if (role === 'finance') {
       profileData = await getFinanceProfile(userId);
+    } else if (role === 'payroll') {
+      profileData = await getPayrollProfile(userId);
     } else if (role === 'trainer') {
       profileData = await getTrainerProfile(userId);
     } else if (role === 'training_provider') {
@@ -225,6 +227,41 @@ async function getFinanceProfile(userId: string) {
   };
 }
 
+async function getPayrollProfile(userId: string) {
+  console.log('💵 Fetching payroll profile for userId:', userId);
+
+  const result = await pool.query(`
+    SELECT
+        au.id AS user_id,
+        au.full_name,
+        au.email,
+        au.password,
+        au.profile_picture_url
+    FROM app_user au
+    WHERE au.id = $1
+  `, [userId]);
+
+  if (result.rows.length === 0) {
+    console.log('❌ No user found with ID:', userId);
+    return null;
+  }
+
+  const profile = result.rows[0];
+  console.log('✅ Payroll profile found:', profile.full_name);
+
+  return {
+    id: profile.user_id,
+    name: profile.full_name,
+    email: profile.email,
+    tel: '',
+    loginId: profile.email,
+    profilePictureUrl: profile.profile_picture_url || `https://i.pravatar.cc/150?img=2`,
+    password: profile.password,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
 async function getTrainerProfile(userId: string) {
   console.log('👨‍🏫 Fetching trainer profile for userId:', userId);
 
@@ -326,6 +363,8 @@ async function getTrainingProviderProfile(userId: string) {
         tp.ssg_app4_client_id,
         tp.ssg_app4_client_secret,
         tp.ssg_default_app,
+        tp.ssg_app_count,
+        tp.ssg_app_names,
         tp.sync_google_calendar,
         tp.sync_ms_calendar,
         tp.google_calendar_url,
@@ -337,6 +376,7 @@ async function getTrainingProviderProfile(userId: string) {
         tp.google_client_secret,
         tp.google_refresh_token,
         tp.google_slides_template_id,
+        tp.google_service_account_json,
         tp.certificate_folder_url,
         tp.auto_send_proforma_invoice,
         tp.auto_send_confirm_email,
@@ -344,6 +384,16 @@ async function getTrainingProviderProfile(userId: string) {
         tp.auto_send_receipt,
         tp.auto_send_certificate,
         tp.auto_send_thankyou_email,
+        tp.auto_import_da_from_email,
+        tp.auto_enrol_direct_applications,
+        tp.auto_generate_qb_invoice,
+        tp.auto_add_learner_to_calendar,
+        tp.show_lesson_plan_learner_view,
+        tp.show_certificate_delivery,
+        tp.certificate_delivery_label,
+        tp.certificate_delivery_link,
+        tp.feedback_form_enabled,
+        tp.feedback_form_external_link,
         tp.auto_mask_sensitive_data,
         tp.auto_delete_after_six_months,
         tp.enable_otp_login,
@@ -402,6 +452,7 @@ async function getTrainingProviderProfile(userId: string) {
           tp.google_client_secret,
           tp.google_refresh_token,
           tp.google_slides_template_id,
+        tp.google_service_account_json,
         tp.certificate_folder_url,
           tp.auto_send_proforma_invoice,
           tp.auto_send_confirm_email,
@@ -409,6 +460,16 @@ async function getTrainingProviderProfile(userId: string) {
           tp.auto_send_receipt,
           tp.auto_send_certificate,
           tp.auto_send_thankyou_email,
+        tp.auto_import_da_from_email,
+        tp.auto_enrol_direct_applications,
+        tp.auto_generate_qb_invoice,
+        tp.auto_add_learner_to_calendar,
+        tp.show_lesson_plan_learner_view,
+        tp.show_certificate_delivery,
+        tp.certificate_delivery_label,
+        tp.certificate_delivery_link,
+        tp.feedback_form_enabled,
+        tp.feedback_form_external_link,
           tp.auto_mask_sensitive_data,
           tp.auto_delete_after_six_months,
           tp.enable_otp_login,
@@ -467,6 +528,7 @@ async function getTrainingProviderProfile(userId: string) {
           tp.google_client_secret,
           tp.google_refresh_token,
           tp.google_slides_template_id,
+        tp.google_service_account_json,
         tp.certificate_folder_url,
           tp.auto_send_proforma_invoice,
           tp.auto_send_confirm_email,
@@ -474,6 +536,16 @@ async function getTrainingProviderProfile(userId: string) {
           tp.auto_send_receipt,
           tp.auto_send_certificate,
           tp.auto_send_thankyou_email,
+        tp.auto_import_da_from_email,
+        tp.auto_enrol_direct_applications,
+        tp.auto_generate_qb_invoice,
+        tp.auto_add_learner_to_calendar,
+        tp.show_lesson_plan_learner_view,
+        tp.show_certificate_delivery,
+        tp.certificate_delivery_label,
+        tp.certificate_delivery_link,
+        tp.feedback_form_enabled,
+        tp.feedback_form_external_link,
           tp.auto_mask_sensitive_data,
           tp.auto_delete_after_six_months,
           tp.enable_otp_login,
@@ -539,11 +611,21 @@ async function getTrainingProviderProfile(userId: string) {
   } catch (e) { /* column doesn't exist yet */ }
 
   let upcomingClassesThresholdDays = 21;
+  let certificateAttendanceThreshold = 60;
+  let casThreshold = 70;
+  let esThreshold = 40;
   try {
-    const r = await pool.query(`SELECT upcoming_classes_threshold_days FROM training_provider WHERE id = $1`, [profileData.provider_id]);
-    const parsed = parseInt(String(r.rows[0]?.upcoming_classes_threshold_days || '21'), 10);
-    if (!Number.isNaN(parsed) && parsed > 0) upcomingClassesThresholdDays = parsed;
-  } catch (e) { /* column doesn't exist yet */ }
+    const r = await pool.query(`SELECT upcoming_classes_threshold_days, certificate_attendance_threshold, cas_threshold, es_threshold FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    const row = r.rows[0] || {};
+    const parsedDays = parseInt(String(row.upcoming_classes_threshold_days || '21'), 10);
+    if (!Number.isNaN(parsedDays) && parsedDays > 0) upcomingClassesThresholdDays = parsedDays;
+    const parsedCert = parseInt(String(row.certificate_attendance_threshold || '60'), 10);
+    if (!Number.isNaN(parsedCert) && parsedCert > 0) certificateAttendanceThreshold = parsedCert;
+    const parsedCas = parseInt(String(row.cas_threshold || '70'), 10);
+    if (!Number.isNaN(parsedCas) && parsedCas >= 0) casThreshold = parsedCas;
+    const parsedEs = parseInt(String(row.es_threshold || '40'), 10);
+    if (!Number.isNaN(parsedEs) && parsedEs >= 0) esThreshold = parsedEs;
+  } catch (e) { /* columns don't exist yet */ }
 
   // Safely fetch extra integration columns (each group independent so missing columns don't wipe others)
   let refLinks: any = {};
@@ -554,19 +636,43 @@ async function getTrainingProviderProfile(userId: string) {
   } catch (e) { /* columns don't exist */ }
   // n8n
   try {
-    const r = await pool.query(`SELECT n8n_host1_url, n8n_host2_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    const r = await pool.query(
+      `SELECT n8n_host1_url, n8n_host2_url, n8n_finance_webhooks_json, n8n_webhook_timeout_ms FROM training_provider WHERE id = $1`,
+      [profileData.provider_id]
+    );
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
-  // Magento
+  // Tertiary Courses SG (Magento storefront)
   try {
-    const r = await pool.query(`SELECT magento_backend_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    const r = await pool.query(`SELECT tertiary_courses_sg_url, tertiary_courses_sg_api_key, magento_backend_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
+  // Cloudflare R2
+  try {
+    const r = await pool.query(
+      `SELECT r2_endpoint, r2_access_key_id, r2_secret_access_key, r2_bucket, r2_public_url FROM training_provider WHERE id = $1`,
+      [profileData.provider_id]
+    );
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
+  // SMTP
+  try {
+    const r = await pool.query(
+      `SELECT smtp_enabled, smtp_host, smtp_port, smtp_secure, smtp_auth, smtp_user, smtp_password, smtp_from FROM training_provider WHERE id = $1`,
+      [profileData.provider_id]
+    );
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
   // Google Drive extras
   try {
-    const r = await pool.query(`SELECT trainer_profile_image_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    const r = await pool.query(`SELECT trainer_profile_image_url, google_drive_folder_id FROM training_provider WHERE id = $1`, [profileData.provider_id]);
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
+  // QuickBooks
+  try {
+    const r = await pool.query(`SELECT qbo_oauth_redirect_uri FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* column doesn't exist */ }
   // OpenClaw / Orion
   try {
     const r = await pool.query(
@@ -575,6 +681,30 @@ async function getTrainingProviderProfile(userId: string) {
     );
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
+
+  // Virtual Meeting provider + Zoom connection (tolerant of pre-migration DBs)
+  let virtualMeetingProvider: 'google_meet' | 'zoom' | 'teams' = 'google_meet';
+  let zoomClientId = '';
+  let zoomClientSecret = '';
+  let zoomRedirectUri = '';
+  let zoomScopes = '';
+  let zoomConnected = false;
+  let zoomUserEmail = '';
+  try {
+    const r = await pool.query(
+      `SELECT virtual_meeting_provider, zoom_oauth_client_id, zoom_oauth_client_secret, zoom_oauth_redirect_uri, zoom_oauth_scopes, zoom_oauth_refresh_token, zoom_user_email
+       FROM training_provider WHERE id = $1`,
+      [profileData.provider_id]
+    );
+    const v = r.rows[0]?.virtual_meeting_provider;
+    if (v === 'zoom' || v === 'teams') virtualMeetingProvider = v;
+    zoomClientId = r.rows[0]?.zoom_oauth_client_id || '';
+    zoomClientSecret = r.rows[0]?.zoom_oauth_client_secret || '';
+    zoomRedirectUri = r.rows[0]?.zoom_oauth_redirect_uri || '';
+    zoomScopes = r.rows[0]?.zoom_oauth_scopes || '';
+    zoomConnected = !!r.rows[0]?.zoom_oauth_refresh_token;
+    zoomUserEmail = r.rows[0]?.zoom_user_email || '';
+  } catch (e) { /* column doesn't exist yet */ }
 
   // Parse color scheme - now returning as string instead of object
   let colorScheme;
@@ -629,6 +759,8 @@ async function getTrainingProviderProfile(userId: string) {
     ssgApp4ClientId: profileData.ssg_app4_client_id || '',
     ssgApp4ClientSecret: profileData.ssg_app4_client_secret || '',
     ssgDefaultApp: profileData.ssg_default_app || 'app2',
+    ssgAppCount: typeof profileData.ssg_app_count === 'number' ? profileData.ssg_app_count : 1,
+    ssgAppNames: profileData.ssg_app_names || {},
     integrations: {
       syncGoogleCalendar: profileData.sync_google_calendar || false,
       googleCalendarUrl: profileData.google_calendar_url || '',
@@ -639,7 +771,17 @@ async function getTrainingProviderProfile(userId: string) {
       googleClientSecret: profileData.google_client_secret || '',
       googleRefreshToken: profileData.google_refresh_token || '',
       googleSlidesTemplateId: profileData.google_slides_template_id || '',
+      googleServiceAccountJson: profileData.google_service_account_json || '',
+      virtualMeetingProvider,
+      zoomClientId,
+      zoomClientSecret,
+      zoomRedirectUri,
+      zoomScopes,
+      zoomConnected,
+      zoomUserEmail,
       trainerProfileImageUrl: refLinks.trainer_profile_image_url || '',
+      googleDriveFolderId: refLinks.google_drive_folder_id || '',
+      qboRedirectUri: refLinks.qbo_oauth_redirect_uri || '',
       certificateFolderUrl: profileData.certificate_folder_url || '',
       masterListUrl: refLinks.master_list_url || '',
       tertiaryTmsUrl: refLinks.tertiary_tms_url || '',
@@ -648,7 +790,23 @@ async function getTrainingProviderProfile(userId: string) {
       tertiaryTpmsUrl: refLinks.tertiary_tpms_url || '',
       n8nHost1Url: refLinks.n8n_host1_url || '',
       n8nHost2Url: refLinks.n8n_host2_url || '',
-      magentoBackendUrl: refLinks.magento_backend_url || '',
+      n8nFinanceWebhooksJson: refLinks.n8n_finance_webhooks_json || '',
+      n8nWebhookTimeoutMs: refLinks.n8n_webhook_timeout_ms || '',
+      tertiaryCoursesSgUrl: refLinks.tertiary_courses_sg_url || refLinks.magento_backend_url || '',
+      tertiaryCoursesSgApiKey: refLinks.tertiary_courses_sg_api_key || '',
+      r2Endpoint: refLinks.r2_endpoint || '',
+      r2AccessKeyId: refLinks.r2_access_key_id || '',
+      r2SecretAccessKey: refLinks.r2_secret_access_key || '',
+      r2Bucket: refLinks.r2_bucket || '',
+      r2PublicUrl: refLinks.r2_public_url || '',
+      smtpEnabled: refLinks.smtp_enabled === true,
+      smtpHost: refLinks.smtp_host || '',
+      smtpPort: refLinks.smtp_port ? String(refLinks.smtp_port) : '',
+      smtpSecure: refLinks.smtp_secure || 'tls',
+      smtpAuth: refLinks.smtp_auth || 'login',
+      smtpUser: refLinks.smtp_user || '',
+      smtpPassword: refLinks.smtp_password || '',
+      smtpFrom: refLinks.smtp_from || '',
       openClawMode: refLinks.openclaw_mode || 'live',
       openClawGatewayUrl: refLinks.openclaw_gateway_url || '',
       openClawLocalGatewayUrl: refLinks.openclaw_local_gateway_url || '',
@@ -663,10 +821,24 @@ async function getTrainingProviderProfile(userId: string) {
       autoSendReceiptOnPayment: profileData.auto_send_receipt || false,
       autoSendCertificateOnCompletion: profileData.auto_send_certificate || false,
       autoSendThankYouEmail: profileData.auto_send_thankyou_email || false,
-      upcomingClassesThresholdDays
+      autoImportDaFromEmail: profileData.auto_import_da_from_email || false,
+      autoEnrolDirectApplications: profileData.auto_enrol_direct_applications || false,
+      autoGenerateQbInvoice: profileData.auto_generate_qb_invoice || false,
+      autoAddLearnerToCalendar: profileData.auto_add_learner_to_calendar || false,
+      showLessonPlanLearnerView: profileData.show_lesson_plan_learner_view || false,
+      showCertificateDelivery: profileData.show_certificate_delivery || false,
+      certificateDeliveryLabel: profileData.certificate_delivery_label || 'TP Course Evaluation',
+      certificateDeliveryLink: profileData.certificate_delivery_link || 'https://goo.gl/R2eumq',
+      feedbackFormEnabled: profileData.feedback_form_enabled || false,
+      feedbackFormExternalLink: profileData.feedback_form_external_link || '',
+      upcomingClassesThresholdDays,
+      certificateAttendanceThreshold,
+      casThreshold,
+      esThreshold,
     },
     securitySettings: {
       autoMaskSensitiveData: profileData.auto_mask_sensitive_data || false,
+      sanitiseAfterMonths: profileData.sanitise_after_months ?? 6,
       autoDeleteAfter6Months: profileData.auto_delete_after_six_months || false,
       enableOtpLogin: profileData.enable_otp_login || false,
       enableDefaultOtp: profileData.enable_default_otp || false,
@@ -682,7 +854,8 @@ async function getTrainingProviderProfile(userId: string) {
       normalFunding: (profileData.normal_fund_rate as 50 | 70) || 70,
       enhancedFunding: profileData.enhanced_fund_rate || 90,
       gstRate: profileData.gst_rate || 8.0,
-      isGstRegistered: profileData.gst_register || false
+      isGstRegistered: profileData.gst_register || false,
+      gstRegistrationNumber: profileData.gst_registration_number || profileData.uen || '',
     },
     colorScheme: colorScheme,
     created_at: new Date().toISOString(),

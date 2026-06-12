@@ -5,9 +5,10 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
 import Spinner from './ui/Spinner';
-import { generateCourseImage } from '@lib/services/geminiService';
 import { getCourseImageUrl } from '@utils/imageUtils';
 import { getApiUrl } from '@/lib/urlHelpers';
+import QuizEditorModal, { QuizQuestion } from './QuizEditorModal';
+import { TopicAccordion } from './CourseDetail';
 
 const inputGhostClasses = (isTitle: boolean) =>
     `flex-grow border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-gray-300 dark:focus:border-gray-600 rounded-md px-2 py-1 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 focus:bg-gray-50 dark:focus:bg-gray-800 focus:outline-none w-full transition-colors dark:text-white ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
@@ -74,6 +75,55 @@ const ReadonlyValueField: React.FC<{ label: string; value?: React.ReactNode }> =
     </div>
 );
 
+// Chevron used by the developer-view collapsible section headers / side nav.
+const SectionChevron: React.FC<{ open: boolean; className?: string }> = ({ open, className }) => (
+    <svg
+        className={`w-5 h-5 flex-shrink-0 text-gray-400 transition-transform ${open ? 'rotate-90' : ''} ${className || ''}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+        aria-hidden="true"
+    >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+);
+
+// Wraps a course-editor section in a Card with an anchor id. When `collapsible`
+// is true (developer view) the header becomes a toggle button; otherwise it
+// renders exactly as before so other roles are unaffected.
+const CollapsibleSection: React.FC<{
+    id: string;
+    title: string;
+    collapsible: boolean;
+    collapsed: boolean;
+    onToggle: (id: string) => void;
+    cardClassName?: string;
+    children: React.ReactNode;
+}> = ({ id, title, collapsible, collapsed, onToggle, cardClassName, children }) => {
+    const open = !collapsible || !collapsed;
+    return (
+        <div id={`section-${id}`} className="scroll-mt-6">
+            <Card className={`p-6 dark:bg-gray-800 dark:border-gray-700 ${cardClassName || ''}`}>
+                {collapsible ? (
+                    <button
+                        type="button"
+                        onClick={() => onToggle(id)}
+                        aria-expanded={open}
+                        className="group flex w-full items-center justify-between gap-2 text-left"
+                    >
+                        <h3 className="text-xl font-bold dark:text-white">{title}</h3>
+                        <SectionChevron open={open} className="group-hover:text-gray-600 dark:group-hover:text-gray-200" />
+                    </button>
+                ) : (
+                    <h3 className="text-xl font-bold mb-4 dark:text-white">{title}</h3>
+                )}
+                {open && <div className={collapsible ? 'mt-4' : ''}>{children}</div>}
+            </Card>
+        </div>
+    );
+};
+
 
 // Sub-component for an editable Learning Unit (Topic)
 const EditableTopicAccordion: React.FC<{
@@ -88,48 +138,83 @@ const EditableTopicAccordion: React.FC<{
     dropTargetSubtopic: { topicId: string; subtopicId: string } | null;
     onSubtopicDragStart: (e: React.DragEvent, topicId: string, subtopicId: string) => void;
     onSubtopicDrop: (e: React.DragEvent, topicId: string, subtopicId: string) => void;
+    onSubtopicDropAtEnd: (e: React.DragEvent, targetTopicId: string) => void;
     onSubtopicDragOver: (e: React.DragEvent, topicId: string, subtopicId: string) => void;
     onSubtopicDragLeave: (e: React.DragEvent) => void;
     onSubtopicDragEnd: (e: React.DragEvent) => void;
+    // Whether any subtopic drag is currently in progress — used to light up
+    // the Add Topic row as a drop target in other topics.
+    isSubtopicDragging: boolean;
     // Drag-and-drop props for the topic itself
     onSelfDragStart: (e: React.DragEvent) => void;
     onSelfDragEnd: (e: React.DragEvent) => void;
-    // Resource links props
-    resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string }[];
+    // Resource links props. `instructions` is an optional free-text field
+    // used by Activity-type resources as an alternative to a URL — the
+    // developer chooses between a clickable link and an in-app instruction
+    // block. Stored in the `resource_links` JSONB column on the course row,
+    // so older rows without the field simply render as URL activities.
+    resourceLinks: { id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string; instructions?: string; questions?: Array<{ id: string; question: string; options: string[]; correctIndex: number }> }[];
     onAddResourceLink: (topicId: string, type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz') => void;
-    onUpdateResourceLink: (id: string, field: 'title' | 'url', value: string) => void;
+    onUpdateResourceLink: (id: string, field: 'title' | 'url' | 'instructions', value: string) => void;
+    // Quiz rows use a dedicated callback to update title + questions
+    // atomically, since the editor modal edits both together.
+    onUpdateResourceLinkQuiz: (id: string, title: string, questions: QuizQuestion[]) => void;
     onDeleteResourceLink: (id: string) => void;
     onReorderResourceLink: (draggedId: string, targetId: string, parentId: string) => void;
     onMoveResourceLink: (draggedId: string, targetParentId: string) => void;
     draggedResourceLinkId: string | null;
     onResourceLinkDragStart: (id: string) => void;
     onResourceLinkDragEnd: () => void;
+    // Bumped by parent to force-collapse / force-expand all topics. Each
+    // signal value carries the desired open state.
+    collapseSignal?: number;
+    expandSignal?: number;
 }> = ({
     topic, onUpdateTitle, onDelete, onAddSubtopic, onUpdateSubtopic, onDeleteSubtopic,
-    draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd,
+    draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDropAtEnd, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd, isSubtopicDragging,
     onSelfDragStart, onSelfDragEnd,
-    resourceLinks, onAddResourceLink, onUpdateResourceLink, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink,
-    draggedResourceLinkId, onResourceLinkDragStart, onResourceLinkDragEnd
+    resourceLinks, onAddResourceLink, onUpdateResourceLink, onUpdateResourceLinkQuiz, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink,
+    draggedResourceLinkId, onResourceLinkDragStart, onResourceLinkDragEnd,
+    collapseSignal, expandSignal
 }) => {
         const [isSubtopicsOpen, setSubtopicsOpen] = useState(true);
+        useEffect(() => { if (collapseSignal !== undefined) setSubtopicsOpen(false); }, [collapseSignal]);
+        useEffect(() => { if (expandSignal !== undefined) setSubtopicsOpen(true); }, [expandSignal]);
+        // Tracks which Quiz-type resource link row has its editor modal open.
+        // Only one modal at a time; clicking Edit Quiz on a row sets this to
+        // the row id. Closing the modal clears it.
+        const [openQuizEditorId, setOpenQuizEditorId] = useState<string | null>(null);
+        // Resolve the currently-open quiz row once so the modal (rendered
+        // outside the draggable subtree) can bind to it. We search across all
+        // subtopics' resource links so this works regardless of which row
+        // triggered the modal.
+        const activeQuizRl = openQuizEditorId
+            ? resourceLinks.find(rl => rl.id === openQuizEditorId && rl.type === 'quiz')
+            : null;
 
         return (
             <Card className="p-0 overflow-hidden bg-white dark:bg-gray-800">
-                {/* Learning Unit Header */}
-                <div className="p-4 flex items-center justify-between gap-2 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600">
-                    <div
-                        draggable
-                        onDragStart={onSelfDragStart}
-                        onDragEnd={onSelfDragEnd}
-                        className="cursor-grab p-1"
-                    >
+                {/* Learning Unit Header — the entire header (except the text
+                    input) is a drag source. Previously only the small grip
+                    icon was draggable which made reordering very hard to hit. */}
+                <div
+                    draggable
+                    onDragStart={onSelfDragStart}
+                    onDragEnd={onSelfDragEnd}
+                    className="p-4 flex items-center justify-between gap-2 bg-gray-50 dark:bg-gray-700 border-b dark:border-gray-600 cursor-grab active:cursor-grabbing"
+                >
+                    <div className="p-1 flex-shrink-0">
                         <Icon name={IconName.DragHandle} className="w-5 h-5 text-gray-400" />
                     </div>
                     <input
                         type="text"
                         value={topic.title}
                         onChange={e => onUpdateTitle(topic.id, e.target.value)}
-                        className={inputGhostClasses(true)}
+                        // Prevent the text input from eating the drag when the
+                        // user clicks the title to start dragging from there.
+                        draggable={false}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className={inputGhostClasses(true) + ' cursor-text'}
                         placeholder="Learning Unit Title"
                     />
                     <div className="flex items-center ml-auto flex-shrink-0">
@@ -259,19 +344,105 @@ const EditableTopicAccordion: React.FC<{
                                                     onChange={e => onUpdateResourceLink(rl.id, 'title', e.target.value)}
                                                     className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
                                                 />
-                                                <input
-                                                    type="url"
-                                                    placeholder="URL"
-                                                    value={rl.url}
-                                                    draggable={false}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    onMouseDown={(e) => e.stopPropagation()}
-                                                    onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
-                                                    className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
-                                                />
+                                                {rl.type === 'activity' ? (
+                                                    // Activity rows let the developer choose between a URL (external
+                                                    // link) and an inline instructions block (free text). Mode is
+                                                    // implicit from the data: non-empty instructions = instructions
+                                                    // mode, otherwise url mode. The pill button toggles which field
+                                                    // is shown; switching modes clears the *other* field so the row
+                                                    // has exactly one payload.
+                                                    (() => {
+                                                        const isInstructionsMode = !!(rl.instructions && rl.instructions.length > 0);
+                                                        return (
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (isInstructionsMode) {
+                                                                            // Switch to URL mode — clear instructions
+                                                                            onUpdateResourceLink(rl.id, 'instructions', '');
+                                                                        } else {
+                                                                            // Switch to instructions mode — seed with
+                                                                            // a single space so the predicate flips
+                                                                            // (the textarea will be focusable and the
+                                                                            // developer can type their real content).
+                                                                            onUpdateResourceLink(rl.id, 'url', '');
+                                                                            onUpdateResourceLink(rl.id, 'instructions', ' ');
+                                                                        }
+                                                                    }}
+                                                                    className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 bg-purple-200/60 hover:bg-purple-300/80 dark:bg-purple-900/40 dark:hover:bg-purple-900/60 text-purple-800 dark:text-purple-300 transition-colors"
+                                                                    title={isInstructionsMode ? 'Switch to URL link' : 'Switch to instructions text'}
+                                                                >
+                                                                    {isInstructionsMode ? '📝 Text' : '🔗 URL'}
+                                                                </button>
+                                                                {isInstructionsMode ? (
+                                                                    <textarea
+                                                                        placeholder="Instructions (e.g. steps the learner should follow)"
+                                                                        value={rl.instructions || ''}
+                                                                        draggable={false}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                                        onChange={e => onUpdateResourceLink(rl.id, 'instructions', e.target.value)}
+                                                                        rows={2}
+                                                                        className="flex-[2] min-w-0 px-1.5 py-0.5 text-xs border border-purple-200 dark:border-purple-900/50 hover:border-purple-400 dark:hover:border-purple-700 rounded bg-purple-50/30 dark:bg-purple-900/10 dark:text-white focus:outline-none focus:border-purple-500 resize-y leading-snug"
+                                                                    />
+                                                                ) : (
+                                                                    <input
+                                                                        type="url"
+                                                                        placeholder="URL"
+                                                                        value={rl.url}
+                                                                        draggable={false}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                                        onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
+                                                                        className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
+                                                                    />
+                                                                )}
+                                                            </>
+                                                        );
+                                                    })()
+                                                ) : rl.type === 'quiz' ? (
+                                                    // Quiz rows open a modal to edit questions + correct
+                                                    // answers. The URL input is replaced with a summary
+                                                    // button that shows the current question count.
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setOpenQuizEditorId(rl.id);
+                                                        }}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        className="flex-1 min-w-0 flex items-center justify-between px-2.5 py-1 text-xs rounded-md border border-green-200 dark:border-green-900/50 hover:border-green-400 dark:hover:border-green-700 bg-green-50/30 dark:bg-green-900/10 text-green-800 dark:text-green-300 font-medium transition-colors"
+                                                    >
+                                                        <span>
+                                                            {rl.questions && rl.questions.length > 0
+                                                                ? `📝 ${rl.questions.length} question${rl.questions.length === 1 ? '' : 's'}`
+                                                                : '📝 Click to add questions'}
+                                                        </span>
+                                                        <span className="text-[10px] opacity-70">Edit Quiz →</span>
+                                                    </button>
+                                                ) : (
+                                                    <input
+                                                        type="url"
+                                                        placeholder="URL"
+                                                        value={rl.url}
+                                                        draggable={false}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        onChange={e => onUpdateResourceLink(rl.id, 'url', e.target.value)}
+                                                        className="flex-1 min-w-0 px-1.5 py-0.5 text-xs border-0 border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 bg-transparent dark:text-white focus:outline-none focus:border-blue-500"
+                                                    />
+                                                )}
                                                 <button onClick={() => onDeleteResourceLink(rl.id)} className="p-0.5 text-gray-400 hover:text-red-500 rounded opacity-0 group-hover/rl:opacity-100 transition-opacity flex-shrink-0">
                                                     <Icon name={IconName.Delete} className="w-3 h-3" />
                                                 </button>
+                                                {/* QuizEditorModal is NOT rendered here on purpose:
+                                                    this row is `draggable`, and React synthetic
+                                                    dragstart events would bubble from the modal
+                                                    buttons into the parent drag handler, causing
+                                                    the browser to initiate a drag and swallow the
+                                                    subsequent click (Save Quiz would do nothing).
+                                                    The modal is rendered at the TopicCard root
+                                                    instead — see the bottom of this component. */}
                                             </div>
                                         ))}
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity">
@@ -285,14 +456,43 @@ const EditableTopicAccordion: React.FC<{
                                 </li>
                                 );
                             })}
-                            <li className="pt-2">
+                            <li
+                                className={`pt-2 rounded-md transition-colors ${
+                                    isSubtopicDragging
+                                        ? 'ring-1 ring-dashed ring-blue-400/70 bg-blue-50/30 dark:bg-blue-900/10'
+                                        : ''
+                                }`}
+                                onDragOver={(e) => {
+                                    // Accept a subtopic drop at the end of this topic's list.
+                                    // This is the only way to drop into a learning unit that
+                                    // has zero subtopics, since there's no other drop target.
+                                    if (!draggedSubtopic) return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                }}
+                                onDrop={(e) => onSubtopicDropAtEnd(e, topic.id)}
+                            >
                                 <Button size="sm" variant="ghost" onClick={() => onAddSubtopic(topic.id)} className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
                                     <Icon name={IconName.Add} className="w-4 h-4 mr-2" />
-                                    Add Topic
+                                    {isSubtopicDragging ? 'Drop here to move topic' : 'Add Topic'}
                                 </Button>
                             </li>
                         </ul>
                     </div>
+                )}
+                {/* Quiz editor modal — rendered OUTSIDE the draggable resource
+                    link rows so dragstart events from the modal buttons can't
+                    bubble into the parent drag handler and swallow clicks. */}
+                {activeQuizRl && (
+                    <QuizEditorModal
+                        initialTitle={activeQuizRl.title}
+                        initialQuestions={activeQuizRl.questions || []}
+                        onClose={() => setOpenQuizEditorId(null)}
+                        onSave={(newTitle, newQuestions) => {
+                            onUpdateResourceLinkQuiz(activeQuizRl.id, newTitle, newQuestions);
+                            setOpenQuizEditorId(null);
+                        }}
+                    />
                 )}
             </Card>
         );
@@ -300,7 +500,7 @@ const EditableTopicAccordion: React.FC<{
 
 
 const CourseEditor: React.FC = () => {
-    const { editingCourse, setEditingCourse, role, courseEditMode, setCourseEditMode, trainingProviderProfile } = useLms();
+    const { editingCourse, setEditingCourse, role, courseEditMode, setCourseEditMode, trainingProviderProfile, currentUser } = useLms();
 
     if (!editingCourse) {
         return <div className="flex items-center justify-center h-full"><Spinner text="Loading course editor..." /></div>;
@@ -361,7 +561,7 @@ const CourseEditor: React.FC = () => {
     });
 
     // Resource links state (file links, YouTube links, quiz links) — each link belongs to a topic
-    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string }[]>(
+    const [resourceLinks, setResourceLinks] = useState<{ id: string; topicId: string; type: 'file' | 'document' | 'youtube' | 'activity' | 'quiz'; title: string; url: string; instructions?: string; questions?: Array<{ id: string; question: string; options: string[]; correctIndex: number }> }[]>(
         (course as any).resourceLinks || []
     );
 
@@ -375,6 +575,41 @@ const CourseEditor: React.FC = () => {
 
     // Drag and Drop state for Resource Links (needed because dataTransfer.getData() returns '' during dragover)
     const [draggedResourceLinkId, setDraggedResourceLinkId] = useState<string | null>(null);
+    // Bumped to broadcast a collapse/expand-all action to every topic accordion.
+    const [collapseAllSignal, setCollapseAllSignal] = useState(0);
+    const [expandAllSignal, setExpandAllSignal] = useState(0);
+    const [allTopicsCollapsed, setAllTopicsCollapsed] = useState(false);
+
+    // Developer-only: each editor section is collapsible and reachable via the
+    // side nav. A section id present in this set is collapsed (default: all open).
+    const isDeveloperView = role === UserRole.Developer;
+    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+    const toggleSection = (id: string) => setCollapsedSections(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+    });
+    const scrollToSection = (id: string) => {
+        // Expand before scrolling so the target is in its final position.
+        setCollapsedSections(prev => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+        document.getElementById(`section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    // Side-nav entries, matching exactly which sections this role renders.
+    const navSections = [
+        { id: 'course-details', label: 'Course Details', show: true },
+        { id: 'learning-outcomes', label: 'Learning Outcomes', show: role !== UserRole.Admin },
+        { id: 'courseware', label: 'Courseware', show: true },
+        { id: 'assessment-methods', label: 'Assessment Methods', show: role === UserRole.Admin || role === UserRole.Trainer || role === UserRole.Developer },
+        { id: 'approved-trainers', label: 'Approved Trainers', show: role === UserRole.Admin || role === UserRole.Developer },
+        { id: 'lesson', label: 'Lesson', show: role === UserRole.Developer },
+        { id: 'pricing', label: 'Pricing & Funding', show: role === UserRole.Admin },
+        { id: 'course-settings', label: 'Course Settings', show: true },
+    ].filter(s => s.show);
 
     // Use courseEditMode to determine if this is a new course, with fallback to ID check
     // If course has a real database ID (not starting with 'course_'), it's definitely existing
@@ -405,7 +640,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     }, [courseEditMode, isNewCourse, course.id, hasRealId]);
 
     useEffect(() => {
-        if (role !== UserRole.Admin) return;
+        if (role !== UserRole.Admin && role !== UserRole.Developer) return;
         let cancelled = false;
         const loadTrainers = async () => {
             try {
@@ -451,7 +686,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 brochureLink: editingCourse.brochureLink,
                 approvedTrainers: normalizedApprovedTrainers,
                 numOfTrainers: normalizedApprovedTrainers.length,
-                trainersList: normalizedApprovedTrainers.join(', '),
+                trainersList: normalizedApprovedTrainers.join(' | '),
+                trainersEmailList: editingCourse.trainersEmailList || '',
             };
         });
     }, [editingCourse]);
@@ -461,6 +697,26 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             .replace(/\s*[\[<(]?[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}[\]>)]?/gi, '')
             .replace(/\s{2,}/g, ' ')
             .trim();
+
+    // Build trainers_email_list aligned to the new name array.
+    // Uses a merged map: existing positional emails + fresh availableTrainers lookup.
+    // This preserves emails during reorder/remove even before availableTrainers loads.
+    const buildTrainersEmailList = (newNames: string[]): string => {
+        const tl = (course.trainersList || '').trim();
+        const existingNames = (tl.includes('|') ? tl.split('|') : tl.split(',')).map(s => s.trim());
+        const el = (course.trainersEmailList || '').trim();
+        const existingEmails = (el.includes('|') ? el.split('|') : el.split(',')).map(s => s.trim());
+        const nameToEmail = new Map<string, string>();
+        // Layer 1: existing positional pairs (preserves data during reorder/remove)
+        existingNames.forEach((name, i) => {
+            if (name && existingEmails[i]) nameToEmail.set(name, existingEmails[i]);
+        });
+        // Layer 2: fresh data from availableTrainers (overrides if loaded)
+        availableTrainers.forEach(t => {
+            if (t.trainer_name) nameToEmail.set(t.trainer_name, t.email || '');
+        });
+        return newNames.map(name => nameToEmail.get(name) || '').join(' | ');
+    };
 
     const selectedApprovedTrainers = (course.approvedTrainers || []).map(normalizeApprovedTrainerName).filter(Boolean);
     const availableTrainerChoices = availableTrainers.filter(trainer => {
@@ -476,7 +732,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             ...prev,
             approvedTrainers: updated,
             numOfTrainers: updated.length,
-            trainersList: updated.join(', ')
+            trainersList: updated.join(' | '),
+            trainersEmailList: buildTrainersEmailList(updated),
         }));
         setTrainerSearch('');
     };
@@ -488,7 +745,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             ...prev,
             approvedTrainers: updated,
             numOfTrainers: updated.length,
-            trainersList: updated.join(', ')
+            trainersList: updated.join(' | '),
+            trainersEmailList: buildTrainersEmailList(updated),
         }));
     };
 
@@ -507,7 +765,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             ...prev,
             approvedTrainers: updated,
             numOfTrainers: updated.length,
-            trainersList: updated.join(', ')
+            trainersList: updated.join(' | '),
+            trainersEmailList: buildTrainersEmailList(updated),
         }));
     };
 
@@ -568,8 +827,22 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     const handleTopicDragStart = (e: React.DragEvent, topicId: string) => {
         setDraggedTopicId(topicId);
         e.dataTransfer.effectAllowed = 'move';
+        // Firefox (and some Chromium builds) silently refuse to start a drag
+        // if setData is never called. We use a custom MIME type that is
+        // unambiguous, so the topic/subtopic/resource-link handlers can tell
+        // what kind of payload is being dragged and bail out if it isn't theirs.
+        try {
+            e.dataTransfer.setData('application/x-lms-topic', topicId);
+            // text/plain is a fallback for browsers that ignore custom types
+            e.dataTransfer.setData('text/plain', topicId);
+        } catch {
+            // Some browsers throw on setData during synthetic events — ignore
+        }
     };
     const handleTopicDragOver = (e: React.DragEvent, topicId: string) => {
+        // Only intercept if an actual topic drag is in progress — otherwise
+        // let the event bubble so subtopic/resource-link handlers can run.
+        if (!draggedTopicId) return;
         e.preventDefault();
         if (topicId !== draggedTopicId) {
             setDropTargetTopicId(topicId);
@@ -579,8 +852,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         setDropTargetTopicId(null);
     };
     const handleTopicDrop = (e: React.DragEvent, dropTargetTopicId: string) => {
+        if (!draggedTopicId) return;
         e.preventDefault();
-        if (!draggedTopicId || draggedTopicId === dropTargetTopicId) return;
+        e.stopPropagation();
+        if (draggedTopicId === dropTargetTopicId) return;
 
         const fromIndex = course.topics.findIndex(t => t.id === draggedTopicId);
         const toIndex = course.topics.findIndex(t => t.id === dropTargetTopicId);
@@ -591,6 +866,9 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             newTopics.splice(toIndex, 0, removed);
             setCourse(prev => ({ ...prev, topics: newTopics }));
         }
+        // Clear state so the drop indicator disappears immediately
+        setDraggedTopicId(null);
+        setDropTargetTopicId(null);
     };
     const handleTopicDragEnd = () => {
         setDraggedTopicId(null);
@@ -602,44 +880,99 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         e.stopPropagation();
         setDraggedSubtopic({ topicId, subtopicId });
         e.dataTransfer.effectAllowed = 'move';
+        try {
+            e.dataTransfer.setData('application/x-lms-subtopic', subtopicId);
+            e.dataTransfer.setData('text/plain', subtopicId);
+        } catch { /* ignore */ }
     };
     const handleSubtopicDragOver = (e: React.DragEvent, topicId: string, subtopicId: string) => {
+        // If a topic-level drag is in progress, don't consume this event —
+        // let it bubble up to the parent topic wrapper so the topic reorder
+        // can still register drops that land in a subtopic row.
+        if (draggedTopicId) return;
         e.stopPropagation();
         e.preventDefault();
-        if (draggedSubtopic && draggedSubtopic.topicId === topicId && draggedSubtopic.subtopicId !== subtopicId) {
+        // Accept cross-unit targets: only bail out when we'd be dropping
+        // onto the SAME subtopic the user is dragging (no-op). Any other
+        // subtopic — same learning unit or a different one — is a valid drop.
+        if (draggedSubtopic && draggedSubtopic.subtopicId !== subtopicId) {
             setDropTargetSubtopic({ topicId, subtopicId });
         }
     };
     const handleSubtopicDragLeave = (e: React.DragEvent) => {
+        if (draggedTopicId) return;
         e.stopPropagation();
         e.currentTarget.classList.remove('ring-1', 'ring-blue-400');
         setDropTargetSubtopic(null);
     };
     const handleSubtopicDrop = (e: React.DragEvent, dropTargetTopicId: string, dropTargetSubtopicId: string) => {
+        // If a topic drag is happening, let the event bubble to the topic
+        // wrapper so the topic reorder can complete. Only consume the event
+        // when we're actually handling a subtopic drop.
+        if (draggedTopicId || !draggedSubtopic) return;
         e.stopPropagation();
         e.preventDefault();
-        if (!draggedSubtopic || draggedSubtopic.topicId !== dropTargetTopicId || draggedSubtopic.subtopicId === dropTargetSubtopicId) return;
+        if (draggedSubtopic.subtopicId === dropTargetSubtopicId) return;
 
         setCourse(prev => {
-            const newTopics = [...prev.topics];
-            const topicIndex = newTopics.findIndex(t => t.id === draggedSubtopic.topicId);
-            if (topicIndex === -1) return prev;
+            const newTopics = prev.topics.map(t => ({ ...t, subtopics: [...t.subtopics] }));
+            const srcTopicIdx = newTopics.findIndex(t => t.id === draggedSubtopic.topicId);
+            const dstTopicIdx = newTopics.findIndex(t => t.id === dropTargetTopicId);
+            if (srcTopicIdx === -1 || dstTopicIdx === -1) return prev;
 
-            const topic = { ...newTopics[topicIndex] };
-            const newSubtopics = [...topic.subtopics];
+            const srcSubtopics = newTopics[srcTopicIdx].subtopics;
+            const fromIndex = srcSubtopics.findIndex(st => st.id === draggedSubtopic.subtopicId);
+            if (fromIndex === -1) return prev;
 
-            const fromIndex = newSubtopics.findIndex(st => st.id === draggedSubtopic.subtopicId);
-            const toIndex = newSubtopics.findIndex(st => st.id === dropTargetSubtopicId);
+            // Also migrate any resource_links that belong to the moved subtopic.
+            // (They're keyed by topicId, which in this codebase actually refers
+            // to subtopic id — a historical naming quirk — so no change needed.)
+            const [removed] = srcSubtopics.splice(fromIndex, 1);
 
-            if (fromIndex !== -1 && toIndex !== -1) {
-                const [removed] = newSubtopics.splice(fromIndex, 1);
-                newSubtopics.splice(toIndex, 0, removed);
-                topic.subtopics = newSubtopics;
-                newTopics[topicIndex] = topic;
-                return { ...prev, topics: newTopics };
+            // Insert at the target subtopic's index inside the destination topic
+            const dstSubtopics = newTopics[dstTopicIdx].subtopics;
+            const toIndex = dstSubtopics.findIndex(st => st.id === dropTargetSubtopicId);
+            if (toIndex === -1) {
+                // Shouldn't happen, but be safe: append
+                dstSubtopics.push(removed);
+            } else {
+                dstSubtopics.splice(toIndex, 0, removed);
             }
-            return prev;
+
+            return { ...prev, topics: newTopics };
         });
+    };
+
+    // Drop the dragged subtopic at the END of a target topic's subtopics list.
+    // Used by the "Add Topic" row which acts as a fallback drop target for
+    // learning units that have no subtopics (or when the user just wants to
+    // append rather than insert at a specific position).
+    const handleSubtopicDropAtEnd = (e: React.DragEvent, targetTopicId: string) => {
+        if (draggedTopicId || !draggedSubtopic) return;
+        e.stopPropagation();
+        e.preventDefault();
+        if (draggedSubtopic.topicId === targetTopicId) {
+            // Check whether the subtopic is already last in its own topic
+            const sourceTopic = course.topics.find(t => t.id === targetTopicId);
+            if (sourceTopic && sourceTopic.subtopics[sourceTopic.subtopics.length - 1]?.id === draggedSubtopic.subtopicId) {
+                return; // already at the end — no-op
+            }
+        }
+        setCourse(prev => {
+            const newTopics = prev.topics.map(t => ({ ...t, subtopics: [...t.subtopics] }));
+            const srcTopicIdx = newTopics.findIndex(t => t.id === draggedSubtopic.topicId);
+            const dstTopicIdx = newTopics.findIndex(t => t.id === targetTopicId);
+            if (srcTopicIdx === -1 || dstTopicIdx === -1) return prev;
+
+            const srcSubtopics = newTopics[srcTopicIdx].subtopics;
+            const fromIndex = srcSubtopics.findIndex(st => st.id === draggedSubtopic.subtopicId);
+            if (fromIndex === -1) return prev;
+
+            const [removed] = srcSubtopics.splice(fromIndex, 1);
+            newTopics[dstTopicIdx].subtopics.push(removed);
+            return { ...prev, topics: newTopics };
+        });
+        setDropTargetSubtopic(null);
     };
     const handleSubtopicDragEnd = (e: React.DragEvent) => {
         e.stopPropagation();
@@ -671,14 +1004,27 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     };
 
     const handleRegenerateImage = async () => {
-        setIsGeneratingImage(true);
-        const newImageUrl = await generateCourseImage(course.title, course.learningOutcomes || 'General learning topics');
-        if (newImageUrl) {
-            setCourse({ ...course, imageUrl: newImageUrl });
-        } else {
-            alert("Failed to generate a new image. Please try again.");
+        if (!course.title?.trim()) {
+            alert('Please enter a Course Title before generating an image.');
+            return;
         }
-        setIsGeneratingImage(false);
+        setIsGeneratingImage(true);
+        try {
+            const response = await fetch('/api/admin/course-images/regenerate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseId: course.id, title: course.title }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to generate image');
+            }
+            setCourse(prev => ({ ...prev, imageUrl: data.url }));
+        } catch (err) {
+            alert(`Failed to generate a new image: ${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setIsGeneratingImage(false);
+        }
     };
 
     // File type validation functions
@@ -802,23 +1148,43 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 renewedStatus: course.renewedStatus,
                 // Include trainer slides URL if it's a link (not upload)
                 trainerSlidesUrl: course.trainerSlidesUrl,
-                lessonPlanUrl: course.lessonPlanUrl || undefined,
-                learnerGuideUrl: course.learnerGuideUrl || undefined,
-                facilitatorGuideUrl: course.facilitatorGuideUrl || undefined,
-                assessmentPlanUrl: course.assessmentPlanUrl || undefined,
-                slidesUrl: course.slidesUrl || undefined,
-                courseLink: course.courseLink || undefined,
-                brochureLink: course.brochureLink || undefined,
-                skillsfutureLink: course.skillsfutureLink || undefined,
-                fundingValidity: course.fundingValidity || undefined,
-                assessmentRecordLink: course.assessmentRecordLink || undefined,
+                lessonPlanUrl: course.lessonPlanUrl || null,
+                learnerGuideUrl: course.learnerGuideUrl || null,
+                facilitatorGuideUrl: course.facilitatorGuideUrl || null,
+                assessmentPlanUrl: course.assessmentPlanUrl || null,
+                slidesUrl: course.slidesUrl || null,
+                courseLink: course.courseLink || null,
+                brochureLink: course.brochureLink || null,
+                skillsfutureLink: course.skillsfutureLink || null,
+                fundingValidity: course.fundingValidity || null,
+                assessmentRecordLink: course.assessmentRecordLink || null,
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
                 numOfTrainers: selectedApprovedTrainers.length,
-                trainersList: selectedApprovedTrainers.join(', '),
-                writtenAssessmentLink: writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || undefined) : undefined,
-                practicalPerformanceAssessmentLink: practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || undefined) : undefined,
-                assessmentMethods: course.assessmentMethods || undefined,
-                resourceLinks: resourceLinks.filter(rl => rl.url.trim() !== ''),
+                trainersList: selectedApprovedTrainers.join(' | '),
+                // Sync assessmentMethods links to legacy columns so view mode always shows latest
+                writtenAssessmentLink: (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
+                    ? course.assessmentMethods.writtenAssessment.link
+                    : (writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || null) : null),
+                practicalPerformanceAssessmentLink: (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
+                    ? course.assessmentMethods.practicalExam.link
+                    : (practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || null) : null),
+                assessmentMethods: course.assessmentMethods || null,
+                // Drop rows that have no payload at all. Activity-type rows
+                // can use instructions instead of a URL; Quiz-type rows can
+                // use in-app questions instead of a URL. Other resource
+                // types still require a URL.
+                resourceLinks: resourceLinks.filter(rl => {
+                    const hasUrl = rl.url.trim() !== '';
+                    const hasInstructions =
+                        rl.type === 'activity' &&
+                        typeof rl.instructions === 'string' &&
+                        rl.instructions.trim() !== '';
+                    const hasQuizQuestions =
+                        rl.type === 'quiz' &&
+                        Array.isArray(rl.questions) &&
+                        rl.questions.length > 0;
+                    return hasUrl || hasInstructions || hasQuizQuestions;
+                }),
                 // Convert topics to learning units with position
                 learningUnits: course.topics.map((topic, index) => ({
                     id: topic.id,
@@ -1073,8 +1439,14 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         setResourceLinks(prev => [...prev, { id: `rl_${Date.now()}`, topicId, type, title: '', url: '' }]);
     };
 
-    const updateResourceLink = (id: string, field: 'title' | 'url', value: string) => {
+    const updateResourceLink = (id: string, field: 'title' | 'url' | 'instructions', value: string) => {
         setResourceLinks(prev => prev.map(rl => rl.id === id ? { ...rl, [field]: value } : rl));
+    };
+
+    const updateResourceLinkQuiz = (id: string, title: string, questions: QuizQuestion[]) => {
+        setResourceLinks(prev => prev.map(rl =>
+            rl.id === id ? { ...rl, title, questions } : rl
+        ));
     };
 
     const deleteResourceLink = (id: string) => {
@@ -1366,32 +1738,23 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Lesson</h3>
                             <div className="space-y-4">
-                                {course.topics?.length ? course.topics.map((topic, index) => (
-                                    <div key={topic.id} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                                        <h4 className="text-lg font-semibold dark:text-white">{index + 1}. {topic.title}</h4>
-                                        {topic.subtopics?.length > 0 && (
-                                            <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300">
-                                                {topic.subtopics.map((subtopic, subIndex) => (
-                                                    <li key={subtopic.id}>{index + 1}.{subIndex + 1} {subtopic.title}</li>
-                                                ))}
-                                            </ul>
-                                        )}
-                                        {resourceLinks.filter(link => link.topicId === topic.id).length > 0 && (
-                                            <div className="mt-4 space-y-2">
-                                                {resourceLinks.filter(link => link.topicId === topic.id).map(link => (
-                                                    <a
-                                                        key={link.id}
-                                                        href={link.url}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="block rounded-md border border-gray-200 px-3 py-2 text-sm text-blue-600 hover:underline dark:border-gray-700 dark:text-blue-300"
-                                                    >
-                                                        {link.title || link.url}
-                                                    </a>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
+                                {course.topics?.length ? course.topics.map(topic => (
+                                    <TopicAccordion
+                                        key={topic.id}
+                                        topic={topic}
+                                        progress={0}
+                                        bookmarkedSubtopics={new Set()}
+                                        onToggleBookmark={() => {}}
+                                        userRole={role}
+                                        completedSubtopics={new Set()}
+                                        onToggleCompletion={() => {}}
+                                        completedTopics={new Set()}
+                                        onToggleTopicCompletion={() => {}}
+                                        resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
+                                        userId={currentUser?.id}
+                                        courseId={course.id}
+                                        latestQuizScores={{}}
+                                    />
                                 )) : (
                                     <div className="text-gray-500 dark:text-gray-400">No lessons available.</div>
                                 )}
@@ -1401,12 +1764,20 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Assessment Links</h3>
                             <div className="space-y-4">
-                                <LinkField label="Written Exam" value={course.writtenAssessmentLink} />
-                                <LinkField label="Practical Exam" value={course.practicalPerformanceAssessmentLink} />
+                                <LinkField label="Written Exam" value={
+                                    (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
+                                        ? course.assessmentMethods.writtenAssessment.link
+                                        : course.writtenAssessmentLink
+                                } />
+                                <LinkField label="Practical Exam" value={
+                                    (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
+                                        ? course.assessmentMethods.practicalExam.link
+                                        : course.practicalPerformanceAssessmentLink
+                                } />
                                 {course.assessmentMethods && Object.entries(course.assessmentMethods).map(([key, method]) => {
                                     if (!method?.enabled) return null;
-                                    if (key === 'writtenAssessment' && course.writtenAssessmentLink) return null;
-                                    if (key === 'practicalExam' && course.practicalPerformanceAssessmentLink) return null;
+                                    if (key === 'writtenAssessment') return null;
+                                    if (key === 'practicalExam') return null;
                                     return <LinkField key={key} label={ASSESSMENT_METHOD_LABELS[key as AssessmentMethodKey]} value={method.link} />;
                                 })}
                             </div>
@@ -1417,8 +1788,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
                 {/* Left Column: Course Details */}
                 <div className="md:col-span-1 xl:col-span-1 space-y-6 xl:sticky xl:top-6">
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Course Details</h3>
+                    <CollapsibleSection
+                        id="course-details"
+                        title="Course Details"
+                        collapsible={isDeveloperView}
+                        collapsed={collapsedSections.has('course-details')}
+                        onToggle={toggleSection}
+                    >
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Course Image</label>
@@ -1625,19 +2001,50 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 </select>
                             </div>
                         </div>
-                    </Card>
+                    </CollapsibleSection>
+                    {isDeveloperView && (
+                        <Card className="p-4 dark:bg-gray-800 dark:border-gray-700">
+                            <h4 className="px-2 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Sections</h4>
+                            <nav className="space-y-0.5">
+                                {navSections.map(s => {
+                                    const open = !collapsedSections.has(s.id);
+                                    return (
+                                        <button
+                                            key={s.id}
+                                            type="button"
+                                            onClick={() => scrollToSection(s.id)}
+                                            className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors"
+                                        >
+                                            <span className="truncate">{s.label}</span>
+                                            <span className={`flex-shrink-0 text-[10px] ${open ? 'text-gray-300 dark:text-gray-600' : 'text-gray-400'}`}>{open ? '▾' : '▸'}</span>
+                                        </button>
+                                    );
+                                })}
+                            </nav>
+                        </Card>
+                    )}
                 </div>
 
                 {/* Right Column: Content Sections */}
                 <div className="md:col-span-1 xl:col-span-2 space-y-6">
                     {role !== UserRole.Admin && (
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-3">Learning Outcomes</h3>
+                        <CollapsibleSection
+                            id="learning-outcomes"
+                            title="Learning Outcomes"
+                            collapsible={isDeveloperView}
+                            collapsed={collapsedSections.has('learning-outcomes')}
+                            onToggle={toggleSection}
+                        >
                             <textarea id="learningOutcomes" name="learningOutcomes" value={course.learningOutcomes} onChange={handleCourseChange} className={`${inputClasses} h-32`} placeholder="Describe the key learning outcomes..." />
-                        </Card>
+                        </CollapsibleSection>
                     )}
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4">Courseware</h3>
+                    <CollapsibleSection
+                        id="courseware"
+                        title="Courseware"
+                        collapsible={isDeveloperView}
+                        collapsed={collapsedSections.has('courseware')}
+                        onToggle={toggleSection}
+                    >
                         <div className="space-y-4">
                             <div>
                                 <label htmlFor="lessonPlanUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Lesson Plan URL</label>
@@ -1762,11 +2169,16 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </div>
                         </div>
-                    </Card>
+                    </CollapsibleSection>
 
-                    {(role === UserRole.Trainer || role === UserRole.Developer) && (
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4">Assessment Methods</h3>
+                    {(role === UserRole.Admin || role === UserRole.Trainer || role === UserRole.Developer) && (
+                    <CollapsibleSection
+                        id="assessment-methods"
+                        title="Assessment Methods"
+                        collapsible={isDeveloperView}
+                        collapsed={collapsedSections.has('assessment-methods')}
+                        onToggle={toggleSection}
+                    >
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Select the assessment methods for this course. A link field will appear for each selected method.</p>
                         <div className="space-y-3">
                             {(Object.keys(ASSESSMENT_METHOD_LABELS) as AssessmentMethodKey[]).map((methodKey) => {
@@ -1804,12 +2216,17 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 );
                             })}
                         </div>
-                    </Card>
+                    </CollapsibleSection>
                     )}
 
-                    {role === UserRole.Admin ? (
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-4 dark:text-white">Assigned Trainers</h3>
+                    {(role === UserRole.Admin || role === UserRole.Developer) && (
+                        <CollapsibleSection
+                            id="approved-trainers"
+                            title="Approved Trainers"
+                            collapsible={isDeveloperView}
+                            collapsed={collapsedSections.has('approved-trainers')}
+                            onToggle={toggleSection}
+                        >
                             <div className="space-y-4">
                                 <div>
                                     <label htmlFor="trainerSearch" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Add Trainer</label>
@@ -1823,8 +2240,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     />
                                 </div>
                                 {availableTrainerChoices.length > 0 && (
-                                    <div className="max-h-56 overflow-y-auto rounded-md border border-gray-300 dark:border-gray-600">
-                                        {availableTrainerChoices.slice(0, 12).map((trainer) => (
+                                    <div className="max-h-80 overflow-y-auto rounded-md border border-gray-300 dark:border-gray-600">
+                                        {availableTrainerChoices.map((trainer) => (
                                             <button
                                                 key={trainer.user_id}
                                                 type="button"
@@ -1885,10 +2302,54 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     )}
                                 </div>
                             </div>
-                        </Card>
-                    ) : (
-                        <div className="space-y-4">
-                            <h3 className="text-xl font-bold px-1">Lesson</h3>
+                        </CollapsibleSection>
+                    )}
+
+                    {role === UserRole.Developer && (
+                        <div id="section-lesson" className="space-y-4 scroll-mt-6">
+                            {/* Lesson header row — the save buttons are mirrored here
+                                so developers can save without scrolling back up to
+                                the top of the page after editing topics/resources. */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleSection('lesson')}
+                                    aria-expanded={!collapsedSections.has('lesson')}
+                                    className="group flex items-center gap-2 text-left"
+                                >
+                                    <h3 className="text-xl font-bold">Lesson</h3>
+                                    <SectionChevron open={!collapsedSections.has('lesson')} className="group-hover:text-gray-600 dark:group-hover:text-gray-200" />
+                                </button>
+                                {!isReadOnly && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                if (allTopicsCollapsed) {
+                                                    setExpandAllSignal(s => s + 1);
+                                                    setAllTopicsCollapsed(false);
+                                                } else {
+                                                    setCollapseAllSignal(s => s + 1);
+                                                    setAllTopicsCollapsed(true);
+                                                }
+                                            }}
+                                        >
+                                            {allTopicsCollapsed ? 'Expand All Topics' : 'Collapse All Topics'}
+                                        </Button>
+                                        {!isNewCourse && (
+                                            <Button variant="outline" size="sm" onClick={() => handleSaveCourse(true)} disabled={isSaving}>
+                                                {isSaving ? <Spinner size="sm" /> : 'Save & Continue Editing'}
+                                            </Button>
+                                        )}
+                                        <Button variant="primary" size="sm" onClick={() => handleSaveCourse(false)} disabled={isSaving}>
+                                            {isSaving ? <Spinner size="sm" /> : (isNewCourse ? 'Create Course' : 'Save Changes')}
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                            {!collapsedSections.has('lesson') && (
+                            <>
                             {course.topics.map(topic => (
                                 <div
                                     key={topic.id}
@@ -1911,30 +2372,42 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         dropTargetSubtopic={dropTargetSubtopic}
                                         onSubtopicDragStart={handleSubtopicDragStart}
                                         onSubtopicDrop={handleSubtopicDrop}
+                                        onSubtopicDropAtEnd={handleSubtopicDropAtEnd}
                                         onSubtopicDragOver={handleSubtopicDragOver}
                                         onSubtopicDragLeave={handleSubtopicDragLeave}
                                         onSubtopicDragEnd={handleSubtopicDragEnd}
+                                        isSubtopicDragging={!!draggedSubtopic}
                                         resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
                                         onAddResourceLink={addResourceLink}
                                         onUpdateResourceLink={updateResourceLink}
+                                        onUpdateResourceLinkQuiz={updateResourceLinkQuiz}
                                         onDeleteResourceLink={deleteResourceLink}
                                         onReorderResourceLink={reorderResourceLink}
                                         onMoveResourceLink={moveResourceLink}
                                         draggedResourceLinkId={draggedResourceLinkId}
                                         onResourceLinkDragStart={(id: string) => setDraggedResourceLinkId(id)}
                                         onResourceLinkDragEnd={() => setDraggedResourceLinkId(null)}
+                                        collapseSignal={collapseAllSignal}
+                                        expandSignal={expandAllSignal}
                                     />
                                 </div>
                             ))}
                             <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 dark:!border-gray-600 hover:!border-primary !text-subtle hover:!text-primary">
                                 + Add Learning Unit
                             </Button>
+                            </>
+                            )}
                         </div>
                     )}
 
                     {(role === UserRole.Admin) && (
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-4 dark:text-white">Pricing & Funding</h3>
+                        <CollapsibleSection
+                            id="pricing"
+                            title="Pricing & Funding"
+                            collapsible={isDeveloperView}
+                            collapsed={collapsedSections.has('pricing')}
+                            onToggle={toggleSection}
+                        >
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <div>
                                     <label htmlFor="scheduleId" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Schedule ID</label>
@@ -1992,11 +2465,16 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     </div>
                                 </div>
                             </div>
-                        </Card>
+                        </CollapsibleSection>
                     )}
 
-                    <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                        <h3 className="text-xl font-bold mb-4 dark:text-white">Course Settings</h3>
+                    <CollapsibleSection
+                        id="course-settings"
+                        title="Course Settings"
+                        collapsible={isDeveloperView}
+                        collapsed={collapsedSections.has('course-settings')}
+                        onToggle={toggleSection}
+                    >
                         <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
                             <div>
                                 <p className="font-semibold text-sm">Enable Gaming Leaderboard</p>
@@ -2012,7 +2490,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 />
                             </button>
                         </div>
-                    </Card>
+                    </CollapsibleSection>
                 </div>
             </div>
             )}

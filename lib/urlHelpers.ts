@@ -11,9 +11,15 @@ import { getBaseUrl } from './config';
  * @returns Full API URL
  */
 export function getApiUrl(path: string): string {
-  const baseUrl = getBaseUrl();
   // Ensure path starts with /
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  // On the client side, always use relative URLs so requests go to the current origin.
+  // Absolute URLs built from NEXT_PUBLIC_BASE_URL can point to the wrong host (e.g. prod)
+  // when running locally, causing "Failed to fetch" / CORS errors.
+  if (typeof window !== 'undefined') {
+    return normalizedPath;
+  }
+  const baseUrl = getBaseUrl();
   return `${baseUrl}${normalizedPath}`;
 }
 
@@ -35,10 +41,18 @@ export function getFileUrl(filePath: string | undefined | null): string | undefi
     return filePath;
   }
 
-  const baseUrl = getBaseUrl();
   // Ensure path starts with /
   const normalizedPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
 
+  // On the client side, return a relative URL so the browser fetches from the
+  // current origin. NEXT_PUBLIC_BASE_URL can drift from the actual dev port
+  // (e.g. .env says 3000 but dev runs on 3003) and produce broken image src.
+  // Mirrors the same pattern as getApiUrl().
+  if (typeof window !== 'undefined') {
+    return normalizedPath;
+  }
+
+  const baseUrl = getBaseUrl();
   return `${baseUrl}${normalizedPath}`;
 }
 

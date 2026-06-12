@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { cors } from '../../../lib/cors';
 import pool from '../../../lib/db';
 import { google } from 'googleapis';
+import { isSmtpEnabled, sendViaSmtp, getSmtpConfig } from '../../../lib/smtp';
+import { sendViaGmailOAuth } from '../../../lib/gmailOauthSend';
 
 interface SendOtpResponse {
   success: boolean;
@@ -12,6 +14,27 @@ interface SendOtpResponse {
 // Generate a 6-digit OTP
 function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Module-level cached OAuth2 client — survives across requests so token refresh
+// only happens once (on first call or after expiry), not on every OTP send.
+let cachedOAuth2Client: InstanceType<typeof google.auth.OAuth2> | null = null;
+let cachedOAuth2Key = ''; // tracks credential identity so we rebuild on config change
+
+function getOrCreateOAuth2Client(clientId: string, clientSecret: string, refreshToken: string) {
+  const key = `${clientId}:${refreshToken}`;
+  if (cachedOAuth2Client && cachedOAuth2Key === key) {
+    return cachedOAuth2Client;
+  }
+  const client = new google.auth.OAuth2(
+    clientId,
+    clientSecret,
+    'https://developers.google.com/oauthplayground'
+  );
+  client.setCredentials({ refresh_token: refreshToken });
+  cachedOAuth2Client = client;
+  cachedOAuth2Key = key;
+  return client;
 }
 
 async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse>) {
@@ -86,38 +109,197 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     const replyToEmail = supportEmail || company_email || email_user;
     console.log('📧 OTP reply-to:', replyToEmail, '(support_email:', supportEmail, ', company_email:', company_email, ')');
 
-    if (!email_user || !google_client_id || !google_client_secret || !google_refresh_token) {
-      console.error('❌ Gmail OAuth not configured in Company Settings');
+    // SMTP toggle takes precedence when enabled in Company Settings → Integration → SMTP.
+    // Default is OFF, so the existing Gmail OAuth flow below runs unchanged for every
+    // deployment that hasn't explicitly opted in.
+    const smtpOn = await isSmtpEnabled();
+
+    // Only block early if BOTH transports are unusable. SMTP-creds-saved-but-toggle-off
+    // is still a valid fallback path if Gmail OAuth fails, so we let the request through.
+    const gmailReady = !!(email_user && google_client_id && google_client_secret && google_refresh_token);
+    const smtpCfgEarly = await getSmtpConfig();
+    const smtpReady = !!(smtpCfgEarly && smtpCfgEarly.host && smtpCfgEarly.user && smtpCfgEarly.password);
+    if (!gmailReady && !smtpReady) {
+      console.error('❌ No email transport configured (Gmail OAuth missing AND SMTP missing)');
       console.error(`  email_user: ${email_user ? 'set' : 'MISSING'}, google_client_id: ${google_client_id ? 'set' : 'MISSING'}, google_client_secret: ${google_client_secret ? 'set' : 'MISSING'}, google_refresh_token: ${google_refresh_token ? 'set' : 'MISSING'}`);
-      return res.status(500).json({ success: false, error: 'Email not configured. Please configure Gmail OAuth in Company Settings.' });
+      return res.status(500).json({ success: false, error: 'Email not configured. Configure Gmail OAuth and/or SMTP in Company Settings → Integration.' });
     }
 
-    // Set up Google OAuth2
-    const oauth2Client = new google.auth.OAuth2(
-      google_client_id,
-      google_client_secret,
-      'https://developers.google.com/oauthplayground'
-    );
-    oauth2Client.setCredentials({ refresh_token: google_refresh_token });
+    // Return success immediately — OTP is stored, email config is valid.
+    // The user transitions to the OTP screen right away while the email
+    // is sent in the background. This eliminates the 3-10s delay caused by
+    // OAuth token refresh + Gmail API round-trip on first attempt.
+    res.status(200).json({
+      success: true,
+      message: 'OTP has been sent to your email address'
+    });
 
-    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    // --- Fire-and-forget: send the OTP email asynchronously ---
+    // Safe because we run on Coolify (persistent Node.js process), not serverless.
+    (async () => {
+      // Shared template prep (used by both SMTP and Gmail OAuth branches).
+      const companyShortName = tp.company_shortname || company_name || 'Training Provider';
+      const siteUrl = (process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '') + '/';
+      const replaceVars = (template: string) =>
+        template
+          .replace(/\{OTP\}/g, otp)
+          .replace(/\{COMPANY_SHORT_NAME\}/g, companyShortName)
+          .replace(/\{COMPANY_NAME\}/g, companyShortName)
+          .replace(/\{SITE_URL\}/g, siteUrl)
+          .replace(/\{EXPIRY_MINUTES\}/g, String(expiryMinutes))
+          .replace(/\{USER_EMAIL\}/g, email);
+      const defaultSubjectTpl = '{COMPANY_SHORT_NAME} LMS - Verification Code';
+      const defaultBodyTpl = `Hi,
 
-    const companyShortName = tp.company_shortname || company_name || 'Training Provider';
-    const siteUrl = 'https://ai-lms-tms.tertiaryinfo.tech/';
+Your OTP is {OTP}.
 
-    // Helper to replace template variables
-    const replaceVars = (template: string) =>
-      template
-        .replace(/\{OTP\}/g, otp)
-        .replace(/\{COMPANY_SHORT_NAME\}/g, companyShortName)
-        .replace(/\{COMPANY_NAME\}/g, companyShortName)
-        .replace(/\{SITE_URL\}/g, siteUrl)
-        .replace(/\{EXPIRY_MINUTES\}/g, String(expiryMinutes))
-        .replace(/\{USER_EMAIL\}/g, email);
+Please use this to login to your account on the {COMPANY_SHORT_NAME} AI LMS TMS {SITE_URL} within {EXPIRY_MINUTES} minutes.
 
-    // Use custom template from DB if available, otherwise use defaults
-    const defaultSubject = '{COMPANY_SHORT_NAME} LMS - Verification Code';
-    const defaultBody = `Hi,
+If your OTP does not work, please request for a new OTP on the login page.
+
+If you did not make this request, you may ignore this email. Do not share this OTP with anyone. This is strictly confidential and to be used by you only.
+
+Warm regards
+{COMPANY_SHORT_NAME}`;
+      const subjectForSend = replaceVars(tp.otp_email_subject || defaultSubjectTpl);
+      const bodyTextForSend = replaceVars(tp.otp_email_body || defaultBodyTpl);
+      const htmlBodyForSend = `
+          <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
+            ${bodyTextForSend.split('\n').map(line => {
+              if (!line.trim()) return '<br style="line-height: 0.5;">';
+              const highlighted = line.replace(new RegExp(otp, 'g'), `<strong style="font-size: 18px; letter-spacing: 2px;">${otp}</strong>`);
+              const withLinks = highlighted.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1">$1</a>');
+              return `<p style="margin: 0 0 4px 0;">${withLinks}</p>`;
+            }).join('\n')}
+          </div>
+        `;
+
+      // SMTP branch — primary when toggle is ON. On failure, fall back to Gmail OAuth.
+      if (smtpOn) {
+        let smtpErrMsg = '';
+        try {
+          const smtpCfg = await getSmtpConfig();
+          const fromHeader = smtpCfg?.from
+            ? `${companyShortName} <${smtpCfg.from}>`
+            : `${companyShortName} <${smtpCfg?.user || ''}>`;
+          const result = await sendViaSmtp({
+            to: email,
+            subject: subjectForSend,
+            text: bodyTextForSend,
+            html: htmlBodyForSend,
+            from: fromHeader,
+            replyTo: replyToEmail || undefined,
+          });
+          if (result.ok) {
+            console.log(`✅ OTP email sent successfully to ${email} via SMTP (messageId: ${result.messageId})`);
+            return;
+          }
+          smtpErrMsg = result.error || 'unknown SMTP error';
+          console.error(`❌ SMTP OTP send failed for ${email}:`, smtpErrMsg);
+        } catch (smtpErr: any) {
+          smtpErrMsg = smtpErr?.message || String(smtpErr);
+          console.error('❌ SMTP OTP send threw:', smtpErrMsg);
+        }
+        // Fallback: try Gmail OAuth using the Company Setting credentials.
+        console.warn(`⚠️ Falling back to Gmail OAuth after SMTP failure for ${email}`);
+        const fb = await sendViaGmailOAuth({
+          to: email,
+          subject: subjectForSend,
+          text: bodyTextForSend,
+          html: htmlBodyForSend,
+          replyTo: replyToEmail || undefined,
+        });
+        if (fb.ok) {
+          console.log(`✅ OTP email sent to ${email} via Gmail OAuth fallback (messageId: ${fb.messageId})`);
+        } else {
+          console.error(`❌ Both SMTP and Gmail OAuth fallback failed for ${email}. SMTP: ${smtpErrMsg} | Gmail: ${fb.error}`);
+        }
+        return;
+      }
+
+      // Inline SMTP fallback used when Gmail OAuth fails (token refresh or all
+      // 3 send attempts). Uses whatever SMTP creds are saved in Company Setting,
+      // even if the master toggle is OFF — so an admin can pre-populate SMTP
+      // as a safety net for Gmail outages without flipping the toggle.
+      const tryGmailFailureFallbackToSmtp = async (gmailErr: string) => {
+        console.warn(`⚠️ Falling back to SMTP (Company Setting) after Gmail OAuth failure for ${email}: ${gmailErr}`);
+        try {
+          const smtpCfg = await getSmtpConfig();
+          if (!smtpCfg || !smtpCfg.host || !smtpCfg.user || !smtpCfg.password) {
+            console.error(`❌ SMTP fallback unavailable (no SMTP creds saved in Company Setting). Gmail error: ${gmailErr}`);
+            return;
+          }
+          const fromHeader = smtpCfg.from
+            ? `${companyShortName} <${smtpCfg.from}>`
+            : `${companyShortName} <${smtpCfg.user}>`;
+          const result = await sendViaSmtp({
+            to: email,
+            subject: subjectForSend,
+            text: bodyTextForSend,
+            html: htmlBodyForSend,
+            from: fromHeader,
+            replyTo: replyToEmail || undefined,
+          });
+          if (result.ok) {
+            console.log(`✅ OTP email sent to ${email} via SMTP fallback (messageId: ${result.messageId})`);
+          } else {
+            console.error(`❌ Both Gmail OAuth and SMTP fallback failed for ${email}. Gmail: ${gmailErr} | SMTP: ${result.error}`);
+          }
+        } catch (e: any) {
+          console.error(`❌ SMTP fallback threw for ${email}:`, e?.message || e);
+        }
+      };
+
+      try {
+        // Reuse cached OAuth2 client (avoids redundant token refresh on every request)
+        let oauth2Client = getOrCreateOAuth2Client(google_client_id, google_client_secret, google_refresh_token);
+
+        // Ensure access token is fresh — retry on transient failures (cold-start
+        // network blips, slow DNS, intermittent Google OAuth endpoint hiccups).
+        // Without retry, the first OTP send after a Coolify redeploy often fails
+        // and the user has to click "Resend" to get a working second attempt.
+        let tokenReady = false;
+        for (let tokenAttempt = 1; tokenAttempt <= 3; tokenAttempt++) {
+          try {
+            await oauth2Client.getAccessToken();
+            console.log(`✅ Gmail OAuth access token ready (attempt ${tokenAttempt})`);
+            tokenReady = true;
+            break;
+          } catch (tokenError: any) {
+            console.error(`❌ Token refresh attempt ${tokenAttempt} failed:`, tokenError?.message);
+            // Invalidate the cached client so we rebuild fresh on the next try
+            cachedOAuth2Client = null;
+            cachedOAuth2Key = '';
+            if (tokenAttempt < 3) {
+              await new Promise(r => setTimeout(r, tokenAttempt * 500));
+              oauth2Client = getOrCreateOAuth2Client(google_client_id, google_client_secret, google_refresh_token);
+            }
+          }
+        }
+        if (!tokenReady) {
+          console.error('❌ Failed to refresh Gmail OAuth access token after 3 attempts');
+          await tryGmailFailureFallbackToSmtp('token refresh failed after 3 attempts');
+          return;
+        }
+
+        const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+        const companyShortName = tp.company_shortname || company_name || 'Training Provider';
+        const siteUrl = (process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '') + '/';
+
+        // Helper to replace template variables
+        const replaceVars = (template: string) =>
+          template
+            .replace(/\{OTP\}/g, otp)
+            .replace(/\{COMPANY_SHORT_NAME\}/g, companyShortName)
+            .replace(/\{COMPANY_NAME\}/g, companyShortName)
+            .replace(/\{SITE_URL\}/g, siteUrl)
+            .replace(/\{EXPIRY_MINUTES\}/g, String(expiryMinutes))
+            .replace(/\{USER_EMAIL\}/g, email);
+
+        // Use custom template from DB if available, otherwise use defaults
+        const defaultSubject = '{COMPANY_SHORT_NAME} LMS - Verification Code';
+        const defaultBody = `Hi,
 
 Your OTP is {OTP}.
 
@@ -130,51 +312,78 @@ If you did not make this request, you may ignore this email. Do not share this O
 Warm regards
 {COMPANY_SHORT_NAME}`;
 
-    const subject = replaceVars(tp.otp_email_subject || defaultSubject);
-    const bodyText = replaceVars(tp.otp_email_body || defaultBody);
+        const subject = replaceVars(tp.otp_email_subject || defaultSubject);
+        const bodyText = replaceVars(tp.otp_email_body || defaultBody);
 
-    // Convert plain text body to HTML
-    const htmlBody = `
-      <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
-        ${bodyText.split('\n').map(line => {
-          if (!line.trim()) return '<br style="line-height: 0.5;">';
-          // Bold the OTP value
-          const highlighted = line.replace(new RegExp(otp, 'g'), `<strong style="font-size: 18px; letter-spacing: 2px;">${otp}</strong>`);
-          // Make URLs clickable
-          const withLinks = highlighted.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1">$1</a>');
-          return `<p style="margin: 0 0 4px 0;">${withLinks}</p>`;
-        }).join('\n')}
-      </div>
-    `;
+        // Convert plain text body to HTML
+        const htmlBody = `
+          <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
+            ${bodyText.split('\n').map(line => {
+              if (!line.trim()) return '<br style="line-height: 0.5;">';
+              // Bold the OTP value
+              const highlighted = line.replace(new RegExp(otp, 'g'), `<strong style="font-size: 18px; letter-spacing: 2px;">${otp}</strong>`);
+              // Make URLs clickable
+              const withLinks = highlighted.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1">$1</a>');
+              return `<p style="margin: 0 0 4px 0;">${withLinks}</p>`;
+            }).join('\n')}
+          </div>
+        `;
 
-    const rawEmail = [
-      `From: ${companyShortName} <${email_user}>`,
-      `Reply-To: ${replyToEmail}`,
-      `To: ${email}`,
-      `Subject: ${subject}`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=utf-8',
-      '',
-      htmlBody,
-    ].join('\r\n');
+        const rawEmail = [
+          `From: ${companyShortName} <${email_user}>`,
+          `Reply-To: ${replyToEmail}`,
+          `To: ${email}`,
+          `Subject: ${subject}`,
+          'MIME-Version: 1.0',
+          'Content-Type: text/html; charset=utf-8',
+          '',
+          htmlBody,
+        ].join('\r\n');
 
-    const encodedMessage = Buffer.from(rawEmail)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+        const encodedMessage = Buffer.from(rawEmail)
+          .toString('base64')
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
 
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodedMessage },
-    });
-
-    console.log(`✅ OTP email sent successfully to ${email} via Gmail OAuth`);
-
-    return res.status(200).json({
-      success: true,
-      message: 'OTP has been sent to your email address'
-    });
+        // Send with retry — Gmail API can transiently fail on first attempt after cold start
+        let lastGmailErr = 'unknown';
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            await gmail.users.messages.send({
+              userId: 'me',
+              requestBody: { raw: encodedMessage },
+            });
+            console.log(`✅ OTP email sent successfully to ${email} via Gmail OAuth (attempt ${attempt})`);
+            return;
+          } catch (sendError: any) {
+            lastGmailErr = sendError?.message || String(sendError);
+            console.error(`❌ Gmail send attempt ${attempt} failed:`, lastGmailErr);
+            if (attempt < 3) {
+              // Exponential backoff: 1s, then 2s
+              await new Promise(r => setTimeout(r, attempt * 1000));
+              // On auth errors, force token refresh before retrying
+              if (sendError?.code === 401 || sendError?.message?.includes('invalid_grant')) {
+                try {
+                  oauth2Client.setCredentials({ refresh_token: google_refresh_token });
+                  await oauth2Client.getAccessToken();
+                  console.log('🔄 Refreshed OAuth token after auth error');
+                } catch {
+                  cachedOAuth2Client = null;
+                  cachedOAuth2Key = '';
+                }
+              }
+            } else {
+              console.error(`❌ All ${attempt} attempts to send OTP email to ${email} failed`);
+            }
+          }
+        }
+        await tryGmailFailureFallbackToSmtp(lastGmailErr);
+      } catch (bgError: any) {
+        console.error('❌ Background OTP email error:', bgError?.message || bgError);
+        await tryGmailFailureFallbackToSmtp(`background error: ${bgError?.message || bgError}`);
+      }
+    })();
 
   } catch (error: any) {
     console.error('❌ Send OTP error:', error?.message || error);

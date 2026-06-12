@@ -3,6 +3,7 @@ import { cors } from '../../../lib/cors';
 import bcrypt from 'bcryptjs';
 import pool from '../../../lib/db';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { isPayrollEnabled } from '../../../lib/payroll/featureFlag';
 
 
 interface LoginRequest {
@@ -28,6 +29,7 @@ interface LoginResponse {
     roles: string[]; // All available roles for role selection
     token?: string;
     forcePasswordChange?: boolean;
+    requiresProfileSetup?: boolean;
   };
   error?: string;
 }
@@ -209,6 +211,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
     const userResult = await pool.query(userQuery2, [email]);
 
     let user: any;
+    let requiresProfileSetup = false;
 
     if (userResult.rows.length === 0 && loginType === 'otp') {
       // Create new user for OTP login (similar to OAuth flow)
@@ -239,6 +242,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       `, [user.id]);
 
       console.log(`✅ Created new user and assigned Learner role: ${email}`);
+      requiresProfileSetup = true;
     } else {
       user = userResult.rows[0];
 
@@ -270,10 +274,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
 
     const rolesResult = await pool.query(rolesQuery, [user.id]);
 
+    // Filter out tenant-disabled roles (Payroll is opt-in per training_provider)
+    const payrollEnabled = await isPayrollEnabled();
+    const dbRoleStrings = rolesResult.rows
+      .map((row: { role: string }) => row.role)
+      .filter((r) => payrollEnabled || r !== 'Payroll');
+
     // Convert database roles to lowercase for consistency
-    const userRoles: string[] = rolesResult.rows.map((row: { role: string }) => {
-      const dbRole = row.role;
-      // Convert "Training Provider" to "trainingProvider" for frontend compatibility
+    const userRoles: string[] = dbRoleStrings.map((dbRole: string) => {
       if (dbRole === 'Training Provider') return 'trainingProvider';
       return dbRole.toLowerCase();
     });
@@ -340,7 +348,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
         role: primaryRole,
         roles: userRoles,
         token: `mock-jwt-token-${user.id}`, // In production, generate a real JWT
-        forcePasswordChange
+        forcePasswordChange,
+        requiresProfileSetup
       }
     };
 

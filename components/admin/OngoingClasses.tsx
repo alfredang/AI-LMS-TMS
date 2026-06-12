@@ -1,5 +1,5 @@
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -8,15 +8,22 @@ import { authService } from '@lib/services/authService';
 import { AdminPage } from '@app-types';
 
 interface OngoingClass {
+  id: string;
   courseRunId: string;
   courseTitle: string;
   courseCode: string;
   classStatus: string;
+  classType: string;
   digitalAttendanceId: string;
   startDate: string;
   endDate: string;
   trainerName: string;
   numOfTrainee: string;
+  assignedTrainerTpg?: string;
+  assignedTrainerTpgEmail?: string;
+  tpgSyncStatus?: string | null;
+  assignedTrainerLocal?: string;
+  assignedTrainerLocalEmail?: string;
 }
 
 interface Statistics {
@@ -49,7 +56,7 @@ interface Trainer {
 }
 
 const OngoingClasses: React.FC = () => {
-  const { setAdminPage, setSelectedCourseRunId } = useLms();
+  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo, classListCurrentPage, setClassListCurrentPage } = useLms();
   const [ongoingClasses, setOngoingClasses] = useState<OngoingClass[]>([]);
   const [statistics, setStatistics] = useState<Statistics>({
     ongoingClassesFound: 0,
@@ -67,6 +74,14 @@ const OngoingClasses: React.FC = () => {
   const [courseCode, setCourseCode] = useState('');
   const [courseRunId, setCourseRunId] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState('');
+  // Default to 'ActiveOnly' (Pending + Confirmed) so the Ongoing Classes
+  // list doesn't clutter with cancelled runs. Admins can switch to 'all'
+  // from the Advanced Filters dropdown to include cancelled classes.
+  const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled'>('ActiveOnly');
+  const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External'>('all');
+  const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
+  const [selectedLearnerFilter, setSelectedLearnerFilter] = useState<'all' | 'withLearners' | 'noLearners'>('withLearners');
+  const [selectedTrainerAssignmentFilter, setSelectedTrainerAssignmentFilter] = useState<'all' | 'withTrainers' | 'noTrainers'>('all');
   const [startDateFrom, setStartDateFrom] = useState('');
   const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -78,9 +93,20 @@ const OngoingClasses: React.FC = () => {
   const [debouncedStartDate, setDebouncedStartDate] = useState('');
   const [debouncedEndDate, setDebouncedEndDate] = useState('');
 
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(() => classListCurrentPage);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+
+  // Track initial mount to prevent filter-reset effects from overriding the restored page
+  const isInitialMount = useRef(true);
+  // Track current page in a ref to avoid closure bugs and sync with context
+  const currentPageRef = useRef(currentPage);
+
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+    // Sync back to context so edit→return preserves the page
+    setClassListCurrentPage(currentPage);
+  }, [currentPage]);
 
   const ITEMS_PER_PAGE = 20;
 
@@ -110,7 +136,7 @@ const OngoingClasses: React.FC = () => {
       console.log('🔄 Fetching ongoing classes...');
       setLoading(true);
       const params = new URLSearchParams({
-        page: currentPage.toString(),
+        page: currentPageRef.current.toString(),
         limit: ITEMS_PER_PAGE.toString(),
         _t: Date.now().toString(),
       });
@@ -121,6 +147,11 @@ const OngoingClasses: React.FC = () => {
       if (debouncedCourseCode) params.append('courseCode', debouncedCourseCode);
       if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
       if (selectedTrainer) params.append('trainer', selectedTrainer);
+      if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
+      if (selectedClassType !== 'all') params.append('classType', selectedClassType);
+      if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
+      if (selectedLearnerFilter !== 'all') params.append('learnerFilter', selectedLearnerFilter);
+      if (selectedTrainerAssignmentFilter !== 'all') params.append('trainerAssignmentFilter', selectedTrainerAssignmentFilter);
       if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
       if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -167,6 +198,9 @@ const OngoingClasses: React.FC = () => {
 
   // Debounce text filter inputs (300ms) and reset page
   useEffect(() => {
+    if (isInitialMount.current) {
+      return; // Skip first run — debounced values already default to '' and page is restored from context
+    }
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
       setDebouncedCourseTitle(courseTitle);
@@ -181,13 +215,22 @@ const OngoingClasses: React.FC = () => {
 
   // Reset page immediately for non-debounced filters (dropdowns)
   useEffect(() => {
+    if (isInitialMount.current) {
+      return;
+    }
     setCurrentPage(0);
-  }, [selectedTrainer]);
+  }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter]);
+
+  // Mark initial mount as done AFTER all other mount effects have executed
+  useEffect(() => {
+    isInitialMount.current = false;
+    return () => { isInitialMount.current = true; }; // Reset for React StrictMode remount
+  }, []);
 
   // Fetch data when debounced filters or pagination change
   useEffect(() => {
     fetchOngoingClasses();
-  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, debouncedStartDate, debouncedEndDate]);
+  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter, debouncedStartDate, debouncedEndDate]);
 
   // Date formatting function
   const formatDateInput = (value: string) => {
@@ -217,17 +260,29 @@ const OngoingClasses: React.FC = () => {
     setCourseCode('');
     setCourseRunId('');
     setSelectedTrainer('');
+    // Reset to the default view (Pending + Confirmed), not 'all' — 'all'
+    // would surface cancelled runs which admins usually don't want to see.
+    setSelectedClassStatus('ActiveOnly');
+    setSelectedClassType('all');
+    setSelectedCourseType('all');
+    setSelectedLearnerFilter('withLearners');
+    setSelectedTrainerAssignmentFilter('all');
     setStartDateFrom('');
     setEndDateUntil('');
     setCurrentPage(0);
   };
 
-  const handleViewDetails = (courseRunId: string) => {
-    setSelectedCourseRunId(courseRunId);
+  const handleViewDetails = (classItem: any) => {
+    setEditingCourseRun(classItem);
+    setSelectedCourseRunId(classItem.courseRunId);
+    setClassListCurrentPage(currentPage);
+    setClassListReturnTo(AdminPage.OngoingClasses);
     setAdminPage(AdminPage.ClassDetail);
   };
 
   const handleEditClass = (classItem: OngoingClass) => {
+    setClassListCurrentPage(currentPage);
+    setClassListReturnTo(AdminPage.OngoingClasses);
     setAdminPage(AdminPage.EditClass);
   };
 
@@ -250,15 +305,16 @@ const OngoingClasses: React.FC = () => {
   };
 
   const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'confirmed':
-        return 'bg-green-500';
-      case 'pending':
-        return 'bg-yellow-500';
-      case 'cancelled':
-        return 'bg-red-500';
+    switch (status) {
+      case 'Confirmed':
+        return 'bg-green-100 text-green-800';
+      case 'Pending':
+      case 'In Progress':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'Cancelled':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200';
       default:
-        return 'bg-blue-500';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     }
   };
 
@@ -375,6 +431,76 @@ const OngoingClasses: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
+                  <select
+                    value={selectedClassStatus}
+                    onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="ActiveOnly">Active (Pending + Confirmed)</option>
+                    <option value="all">All (incl. Cancelled)</option>
+                    <option value="Confirmed">Confirmed only</option>
+                    <option value="Pending">Pending only</option>
+                    <option value="Cancelled">Cancelled only</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
+                  <select
+                    value={selectedClassType}
+                    onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="Physical">Physical</option>
+                    <option value="Virtual">Virtual</option>
+                    <option value="Hybrid">Hybrid</option>
+                    <option value="External">External</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Type</label>
+                  <select
+                    value={selectedCourseType}
+                    onChange={(e) => setSelectedCourseType(e.target.value as 'all' | 'WSQ' | 'IBF' | 'Non-WSQ')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="WSQ">WSQ</option>
+                    <option value="IBF">IBF</option>
+                    <option value="Non-WSQ">Non-WSQ</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Learners</label>
+                  <select
+                    value={selectedLearnerFilter}
+                    onChange={(e) => setSelectedLearnerFilter(e.target.value as 'all' | 'withLearners' | 'noLearners')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="withLearners">With Learners</option>
+                    <option value="noLearners">No Learners Only</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer Assignment</label>
+                  <select
+                    value={selectedTrainerAssignmentFilter}
+                    onChange={(e) => setSelectedTrainerAssignmentFilter(e.target.value as 'all' | 'withTrainers' | 'noTrainers')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="withTrainers">With Trainers</option>
+                    <option value="noTrainers">No Trainers Only</option>
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
                   <input
                     type="text"
@@ -411,7 +537,7 @@ const OngoingClasses: React.FC = () => {
             <Icon name={IconName.BookOpen} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2 dark:text-white">No ongoing classes found</h3>
             <p className="text-gray-500 mb-6 dark:text-gray-400">
-              {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || startDateFrom || endDateUntil
+              {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || (selectedClassStatus !== 'all' && selectedClassStatus !== 'ActiveOnly') || selectedClassType !== 'all' || selectedCourseType !== 'all' || selectedLearnerFilter !== 'withLearners' || selectedTrainerAssignmentFilter !== 'all' || startDateFrom || endDateUntil
                 ? "No classes match your current search criteria."
                 : "There are no ongoing classes in the system yet."}
             </p>
@@ -419,57 +545,145 @@ const OngoingClasses: React.FC = () => {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '1850px' }}>
+                <colgroup>
+                  <col style={{ width: '90px' }} />
+                  <col style={{ width: '420px' }} />
+                  <col style={{ width: '160px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '100px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '80px' }} />
+                  <col style={{ width: '200px' }} />
+                  <col style={{ width: '200px' }} />
+                  <col style={{ width: '70px' }} />
+                </colgroup>
                 <thead className="bg-gray-50 dark:bg-gray-700/50">
-                  <tr className="border-b">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Start Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">End Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"># of Trainee</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Actions</th>
+                  <tr className="border-b dark:border-gray-700">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Learners</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
-                  {ongoingClasses.map((classItem, index) => (
-                    <tr key={classItem.courseRunId || index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{classItem.courseRunId}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseTitle}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.trainerName}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 text-center dark:text-gray-200">{classItem.numOfTrainee}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleViewDetails(classItem.courseRunId)}
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {ongoingClasses.map((classItem: any, index) => (
+                    <tr key={classItem.courseRunId || index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                      <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm">
+                        <select
+                          value={classItem.classStatus === 'Cancelled' ? 'Cancelled' : 'auto'}
+                          onChange={async (e) => {
+                            // Two-option dropdown: "Pending/Confirmed" (auto-derived from local trainer)
+                            // or "Cancelled" (manual sticky override).
+                            const selection = e.target.value;
+                            const hasLocalTrainer = !!(classItem.assignedTrainerLocal || '').trim();
+                            const newStatus = selection === 'Cancelled'
+                              ? 'Cancelled'
+                              : (hasLocalTrainer ? 'Confirmed' : 'Pending');
+                            try {
+                              await fetch(getApiUrl('/api/admin/ongoing-classes'), {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: classItem.id, class_status: newStatus }),
+                              });
+                              setOngoingClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
+                            } catch { /* silent */ }
+                          }}
+                          className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${getStatusColor(classItem.classStatus)}`}
+                        >
+                          <option value="auto">{(classItem.assignedTrainerLocal || '').trim() ? 'Confirmed' : 'Pending'}</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm">
+                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classItem.classType || 'Physical') === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (classItem.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : (classItem.classType || 'Physical') === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classItem.classType || 'Physical'}</span>
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                        {classItem.assignedTrainerTpg ? (
+                          classItem.assignedTrainerTpg
+                        ) : classItem.tpgSyncStatus === 'no_nric' ? (
+                          <span
+                            className="text-amber-500 text-xs cursor-pointer inline-flex items-center gap-1"
+                            title="To find the trainer's NRIC: 1) Check Google Drive 2) Search TPG Trainer Management 3) Ask someone with access (e.g. Ms. Tan and Dr. Ang) 4) Contact the trainer directly, or collect it on class day if physical"
+                            onClick={() => alert('To find the trainer\'s NRIC:\n\n1. Check Google Drive for their records\n2. Search TPG Trainer Management — their NRIC may be listed there\n3. Ask someone with access to their NRIC (e.g. Ms. Tan and Dr. Ang)\n4. Contact the trainer directly, or collect it on class day if physical')}
                           >
-                            Details
-                          </Button>
-                          {/* <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditClass(classItem)}
-                            className="!text-blue-600 hover:!bg-blue-50"
-                          >
-                            <Icon name={IconName.Edit} className="w-4 h-4 mr-1"/>
-                            Edit
-                          </Button> */}
-                          {/* <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(classItem.courseRunId, classItem.courseTitle)}
-                            className="!text-red-600 hover:!bg-red-50"
-                          >
-                            <Icon name={IconName.Delete} className="w-4 h-4 mr-1"/>
-                            Delete
-                          </Button> */}
-                        </div>
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />
+                            No NRIC
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'no_tpg_profile' ? (
+                          <span className="text-red-400 text-xs inline-flex items-center gap-1">
+                            <span className="cursor-pointer" title="Trainer not in TPG — click for steps to add" onClick={() => alert('How to add a trainer to TPG:\n\n1. Login to TPG via Singpass (need Dr. Ang to give you access)\n2. Click "Course Runs"\n3. Click "Trainers" in the header menu\n4. Click "Add Trainer"\n5. Fill in the details — for Expertise and Experience, search the course at tertiarycourses.com.sg (trainer section for reference). Education: if unknown, put First Degree.\n6. Click "Add Trainer"\n7. Try assigning to TPG again — it should work.')}>
+                              No TPG Profile
+                            </span>
+                            <a href="https://www.tpgateway.gov.sg/" target="_blank" rel="noopener noreferrer" title="Open TPG">
+                              <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5 hover:text-red-300" />
+                            </a>
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'reg_date_passed' ? (
+                          <span className="text-amber-400 text-xs inline-flex items-center gap-1" title="Registration date passed — assign directly via TPG.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Reg Date Passed
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'course_cancelled' ? (
+                          <span className="text-gray-400 text-xs inline-flex items-center gap-1" title="Course run cancelled on SSG.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Cancelled (SSG)
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'course_expired' ? (
+                          <span className="text-gray-400 text-xs inline-flex items-center gap-1" title="Course run expired/completed on SSG.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Expired (SSG)
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'not_editable' ? (
+                          <span className="text-amber-400 text-xs inline-flex items-center gap-1" title="Not editable on SSG — assign directly via TPG.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Not Editable
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'run_not_found_ssg' ? (
+                          <span className="text-red-400 text-xs inline-flex items-center gap-1" title="Course run not found on SSG.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Not Found (SSG)
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'ssg_timeout' ? (
+                          <span className="text-amber-400 text-xs inline-flex items-center gap-1" title="SSG timed out — will retry next run.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />SSG Timeout
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'ssg_auth_error' ? (
+                          <span className="text-red-400 text-xs inline-flex items-center gap-1" title="SSG auth failed — check certificates.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Auth Error
+                          </span>
+                        ) : classItem.tpgSyncStatus === 'ssg_decrypt_error' ? (
+                          <span className="text-red-400 text-xs inline-flex items-center gap-1" title="SSG decryption failed — check encryption key.">
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Decrypt Error
+                          </span>
+                        ) : classItem.tpgSyncStatus?.startsWith('error:') ? (
+                          <span className="text-red-400 text-xs cursor-pointer inline-flex items-center gap-1"
+                            title={classItem.tpgSyncStatus.replace('error:', '')}>
+                            <Icon name={IconName.Warning} className="w-3.5 h-3.5" />Sync Error
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.assignedTrainerLocal || <span className="text-gray-400">—</span>}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleViewDetails(classItem)}
+                        >
+                          <Icon name={IconName.Eye} className="w-4 h-4 mr-1" />
+                          View
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -483,23 +697,30 @@ const OngoingClasses: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   Showing {currentPage * ITEMS_PER_PAGE + 1} to {Math.min((currentPage + 1) * ITEMS_PER_PAGE, total)} of {total} classes
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                    disabled={currentPage === 0}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                    disabled={currentPage >= totalPages - 1}
-                  >
-                    Next
-                  </Button>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>First</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 0}>Prev</Button>
+                  {(() => {
+                    const pages: number[] = [];
+                    const maxVisible = 5;
+                    let start = Math.max(0, currentPage - Math.floor(maxVisible / 2));
+                    let end = Math.min(totalPages - 1, start + maxVisible - 1);
+                    if (end - start < maxVisible - 1) start = Math.max(0, end - maxVisible + 1);
+                    if (start > 0) pages.push(0);
+                    if (start > 1) pages.push(-1);
+                    for (let i = start; i <= end; i++) pages.push(i);
+                    if (end < totalPages - 2) pages.push(-2);
+                    if (end < totalPages - 1) pages.push(totalPages - 1);
+                    return pages.map((p, idx) =>
+                      p < 0 ? (
+                        <span key={`ellipsis-${idx}`} className="px-1 text-gray-400 dark:text-gray-500">...</span>
+                      ) : (
+                        <button key={p} onClick={() => setCurrentPage(p)} className={`px-3 py-1 text-sm rounded-md ${p === currentPage ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>{p + 1}</button>
+                      )
+                    );
+                  })()}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>Next</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>Last</Button>
                 </div>
               </div>
             )}

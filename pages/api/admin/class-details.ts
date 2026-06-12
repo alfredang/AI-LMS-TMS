@@ -10,6 +10,7 @@ interface ClassDetailsResponse {
       trainer: string;
       startDate: string;
       endDate: string;
+      classType: string;
       mode: string;
       overallAssessment: string;
       tgsRef: string;
@@ -69,6 +70,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           cr.assigned_trainer_name AS trainer,
           cr.start_date AS start_date,
           cr.end_date AS end_date,
+          COALESCE(cr.class_type, 'Physical') AS class_type,
+          COALESCE(cr.invitation_paused, false) AS invitation_paused,
+          COALESCE(cr.invitation_replies_blocked, false) AS invitation_replies_blocked,
+          cr.virtual_meeting_link,
+          cr.virtual_meeting_host_link,
+          cr.virtual_meeting_provider,
           cr.mode_of_learning AS mode,
           c.course_code AS tgs_ref,
           cr.course_run_id AS course_run_id,
@@ -171,18 +178,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
         lp.dob AS dob,
         e.payment_status AS payment_details,
         e.assessment_status AS assessment,
-        sg.grant_id AS grant_id,
-        sc.claim_id AS claim_id
+        COALESCE(
+          (SELECT sg.grant_id FROM ssg_grants sg WHERE sg.enrollment_id = e.enrolment_id ORDER BY sg.created_date DESC LIMIT 1),
+          e.grant_id
+        ) AS grant_id,
+        (SELECT sc.claim_id FROM ssg_claims sc WHERE sc.enrollment_id = e.enrolment_id ORDER BY sc.created_date DESC LIMIT 1) AS claim_id
       FROM enrollment e
-      JOIN app_user au 
+      JOIN app_user au
         ON e.user_id = au.id
-      JOIN learner_profile lp 
+      LEFT JOIN learner_profile lp
         ON e.user_id = lp.user_id
-      LEFT JOIN ssg_grants sg
-        ON sg.enrollment_id = e.enrolment_id
-      LEFT JOIN ssg_claims sc
-        ON sc.enrollment_id = e.enrolment_id
       WHERE e.course_run_id = $1
+        AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
       ORDER BY au.full_name
     `;
 
@@ -220,6 +227,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           trainer: trainerDisplay,
           startDate: basicData.start_date,
           endDate: basicData.end_date,
+          classType: basicData.class_type || 'Physical',
+          invitationPaused: !!basicData.invitation_paused,
+          invitationRepliesBlocked: !!basicData.invitation_replies_blocked,
+          virtualMeetingLink: basicData.virtual_meeting_link || null,
+          virtualMeetingHostLink: basicData.virtual_meeting_host_link || null,
+          virtualMeetingJoinLink: basicData.virtual_meeting_link || null,
+          virtualMeetingProvider: basicData.virtual_meeting_provider || null,
           mode: basicData.mode,
           overallAssessment,
           tgsRef: basicData.tgs_ref,

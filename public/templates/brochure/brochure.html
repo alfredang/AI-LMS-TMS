@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WSQ - Design and Build Responsive Websites from Scratch</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10.5pt;
+            line-height: 1.35;
+            color: #333;
+            background-color: #fff;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header-logo {
+            width: 240px;
+            height: auto;
+        }
+
+        h1 {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #2b5a87;
+            margin-bottom: 15px;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        h2 {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #333;
+            margin: 14px 0 8px 0;
+        }
+
+        h3 {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #2b5a87;
+            margin: 10px 0 5px 0;
+        }
+
+        p {
+            margin-bottom: 8px;
+            text-align: justify;
+        }
+
+        ul, ol {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 4px;
+        }
+
+        /* Course Outline Table - Ultra-compact for 5+ Learning Units */
+        .course-outline {
+            margin: 8px 0;
+        }
+
+        .course-outline table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #ccc;
+        }
+
+        .course-outline td {
+            padding: 4px 10px;
+            border: 1px solid #ccc;
+            vertical-align: top;
+            border-left: 4px solid #2b5a87;
+            font-size: 9.5pt;
+            line-height: 1.25;
+        }
+
+        .course-outline .topic-header {
+            font-weight: bold;
+            background-color: #fff;
+            border-left: 4px solid #2b5a87;
+            padding: 5px 10px;
+            font-size: 10pt;
+        }
+
+        .course-outline .topic-content {
+            background-color: #fff;
+            border-left: 4px solid #2b5a87;
+            padding: 3px 10px 3px 16px;
+            font-size: 9pt;
+            line-height: 1.2;
+        }
+
+        /* Course Info Box */
+        .course-info {
+            background-color: #f5f7fa;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+            border: 1px solid #e0e0e0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .course-info p {
+            margin-bottom: 8px;
+            width: 100%;
+        }
+
+        .course-info a {
+            display: inline-block;
+            max-width: 100%;
+            word-break: break-all;
+            overflow-wrap: anywhere;
+            white-space: normal;
+        }
+
+        /* Certificate Section - Unified blue box */
+        .certificate-section {
+            background-color: #2b5a87;
+            color: white;
+            padding: 14px 18px;
+            border-radius: 12px;
+            margin: 14px 0;
+        }
+
+        .certificate-section h3 {
+            color: white;
+            font-size: 14pt;
+            font-weight: bold;
+            margin: 0 0 8px 0;
+        }
+
+        .certificate-section p {
+            color: white;
+            text-align: left;
+            margin: 0 0 6px 0;
+            font-size: 9.5pt;
+            line-height: 1.4;
+        }
+
+        .certificate-section strong {
+            color: white;
+            font-weight: bold;
+        }
+
+        .certificate-section .cert-subheader {
+            color: white;
+            font-weight: bold;
+            font-size: 10pt;
+            margin: 10px 0 4px 0;
+            padding-left: 15px;
+        }
+
+        .certificate-section .cert-detail {
+            color: white;
+            margin: 0 0 8px 0;
+            padding-left: 15px;
+        }
+
+        .certificate-section .cert-normal {
+            color: white;
+            font-weight: normal;
+        }
+
+        /* Enquiry Section */
+        .enquiry-section {
+            background-color: #2b5a87;
+            color: white;
+            padding: 12px 18px;
+            border-radius: 12px;
+            margin: 15px 0;
+        }
+
+        .enquiry-section h3 {
+            color: white;
+            font-size: 16pt;
+            margin-bottom: 8px;
+        }
+
+        /* Funding Section */
+        .funding-section {
+            background-color: #2b5a87;
+            color: white;
+            padding: 18px;
+            border-radius: 12px;
+            margin: 15px 0;
+        }
+
+        .funding-section h2 {
+            color: white;
+            margin-bottom: 12px;
+        }
+
+        .funding-section h3 {
+            color: white;
+            margin: 12px 0 6px 0;
+        }
+
+        .funding-section p {
+            text-align: left;
+            margin-bottom: 8px;
+        }
+
+        /* Funding Table */
+        .funding-table-container {
+            background-color: white;
+            color: #333;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 12px 0;
+        }
+
+        .funding-table-container h4 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .funding-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            color: #333;
+        }
+
+        .funding-table th,
+        .funding-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .funding-table th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+
+        .link {
+            color: #0066cc;
+            text-decoration: underline;
+            word-break: break-all;
+            overflow-wrap: anywhere;
+        }
+
+        /* Page Break */
+        .page-break {
+            page-break-before: always;
+            break-before: page;
+            padding-top: 0;
+        }
+
+        .page-header {
+            margin-bottom: 10px;
+        }
+
+        /* Page 1 content - removed overflow constraint */
+
+        /* Print styles */
+        @media print {
+            @page {
+                size: A4;
+                margin: 18mm;
+            }
+
+            .page-break {
+                page-break-before: always;
+                break-before: page;
+            }
+
+            .funding-section,
+            .enquiry-section,
+            .course-info,
+            .certificate-section {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            .certificate-section {
+                background-color: #2b5a87 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            /* Allow course outline to flow across page if needed, but keep rows together */
+            .course-outline tr {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            /* Keep topic header and its content together */
+            .course-outline .topic-header + .topic-content {
+                page-break-before: avoid;
+                break-before: avoid;
+            }
+
+            h1, h2, h3 {
+                page-break-after: avoid;
+                break-after: avoid;
+            }
+
+            body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Page 1 -->
+        <div class="page-header">
+            <img src="TertiaryCoursesSingapore.png" alt="Tertiary Courses Singapore" class="header-logo">
+        </div>
+
+        <h1>WSQ - Design and Build Responsive Websites from Scratch</h1>
+
+        <h2>About This Course</h2>
+        <p>Elevate your web development skills with our course on Responsive Web Interface Design using Bootstrap. This course equips you with the knowledge and practical skills to build visually appealing and highly functional web interfaces. You'll learn how to use Bootstrap's grid system, components, and utilities to design layouts that adapt seamlessly to various screen sizes. The course covers essential concepts like navigation bars, form controls, and responsive typography, ensuring you can create professional-quality websites.</p>
+
+        <p>In addition to the core Bootstrap components, this course also delves into best practices for user experience (UX) design. You'll understand how to conduct basic usability tests, apply responsive design patterns, and optimize site performance. These complementary skills will enable you to create web interfaces that not only look good but also provide an exceptional user experience, making you a more versatile and employable front-end developer.</p>
+
+        <h2>What You'll Learn</h2>
+        <p>By end of course, learners should be able to:</p>
+        <ul>
+            <li>Identify Bootstrap framework functionalities and information flows for responsive web interface.</li>
+            <li>Develop components and design GUI.</li>
+            <li>Evaluate the web responsiveness and interactivity.</li>
+            <li>Apply Bootstrap framework to update single page design.</li>
+        </ul>
+
+        <div class="certificate-section">
+            <h3>Course Certificate</h3>
+            <p>Two e-certificates will be awarded to trainees who have passed the assessment.</p>
+            <p class="cert-subheader">1. Statement of Achievement</p>
+            <p class="cert-detail"><strong>User Interface Design ICT-DES-3008-1.1 TSC</strong> under ICT Skills Framework issued by WSG/SSG.</p>
+            <p class="cert-subheader">2. Certification of Achievement <span class="cert-normal">issued by Tertiary Infotech Academy Pte Ltd.</span></p>
+        </div>
+
+        <!-- Page 2 - Course Outline -->
+        <div class="page-break">
+            <div class="page-header">
+                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Courses Singapore" class="header-logo">
+            </div>
+
+            <h1>WSQ - Design and Build Responsive Websites from Scratch</h1>
+
+            <h2>Course Outline:</h2>
+            <div class="course-outline">
+                <table>
+                    <tr>
+                        <td class="topic-header"><strong>LU1: Overview of Responsive Web Interface Design and Bootstrap</strong></td>
+                    </tr>
+                    <tr>
+                        <td class="topic-content">T1: What is Responsive Web Design?<br>
+                        T2: Introduction to Bootstrap Framework<br>
+                        T3: Create Responsive Web Layout using Bootstrap</td>
+                    </tr>
+                    <tr>
+                        <td class="topic-header"><strong>LU2: Components and Graphics Content</strong></td>
+                    </tr>
+                    <tr>
+                        <td class="topic-content">T1: Create Basic Bootstrap Components<br>
+                        T2: Design GUI with Style and Content Elements</td>
+                    </tr>
+                    <tr>
+                        <td class="topic-header"><strong>LU3: Interactivity and Responsiveness</strong></td>
+                    </tr>
+                    <tr>
+                        <td class="topic-content">T1: Create Interactive Components<br>
+                        T2: Apply Bootstrap Utilities<br>
+                        T3: Evaluate Web Interface Interactivity and Responsiveness</td>
+                    </tr>
+                    <tr>
+                        <td class="topic-header"><strong>LU4: Single Page Design</strong></td>
+                    </tr>
+                    <tr>
+                        <td class="topic-content">T1: Web Design Requirement for Single Page<br>
+                        T2: Implement Single Page Design</td>
+                    </tr>
+                    <tr>
+                        <td class="topic-header"><strong>Final Assessment</strong></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Page 3 - Course Information -->
+        <div class="page-break">
+            <div class="page-header">
+                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Courses Singapore" class="header-logo">
+            </div>
+
+            <h2>Course Information</h2>
+
+            <div class="course-info">
+                <p><strong>Course Code:</strong> TGS-2021002504</p>
+
+                <p><strong>Skills Framework:</strong> <strong>User Interface Design ICT-DES-3008-1.1 TSC</strong> under ICT Skills Framework</p>
+
+                <p><strong>Course Fee (Before Funding):</strong></p>
+                <p>$750.00 (Bef. GST)<br>
+                $817.50 (Incl. GST)</p>
+
+                <p><strong>Time:</strong> 9:30am-6:30pm<br>
+                <strong>Duration:</strong> 16hrs (2 days)</p>
+
+                <p><strong>Tel:</strong> +65 6100 0613</p>
+                <p><strong>Email:</strong> <a href="mailto:support@tertiaryinfotech.com" class="link">support@tertiaryinfotech.com</a></p>
+                <p><strong>WhatsApp:</strong> <a href="https://wa.me/6561000613" class="link">https://wa.me/6561000613</a></p>
+
+                <p><strong>Registration Link:</strong> <a href="https://www.tertiarycourses.com.sg/wsq-bootstrap-web-design.html" class="link">https://www.tertiarycourses.com.sg/wsq-bootstrap-web-design.html</a></p>
+            </div>
+
+            <div class="enquiry-section">
+                <h3>Enquiry</h3>
+                <p><strong>Venue:</strong> 12 Woodlands Square, #07-85/86/87,<br>
+                Woods Square Tower 1, Singapore 733715 (Disabled-Friendly)</p>
+            </div>
+
+            <h2>Minimum Entry Requirements</h2>
+
+            <h3>Knowledge and Skills</h3>
+            <ul>
+                <li>Able to operate using computer functions with minimum Computer Literacy<br>
+                Level 2 based on ICAS Computer Skills Assessment Framework.</li>
+                <li>Minimum 3 GCE 'O' Levels Passes including English or WPL Level 5<br>
+                (Average of Reading, Listening, Speaking & Writing Scores).</li>
+            </ul>
+        </div>
+
+        <!-- Page 4 - WSQ Funding -->
+        <div class="page-break">
+            <div class="page-header">
+                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Courses Singapore" class="header-logo">
+            </div>
+
+            <div class="funding-section">
+                <h2>WSQ Funding</h2>
+                <p>WSQ funding is only applicable to Singaporeans/PRs. Subject to eligibility, the funding support is subjected to funding caps.</p>
+
+                <p><strong>Baseline:</strong> Singaporean/PR age 21 and above<br>
+                <strong>MCES:</strong> Singaporeans aged 40 years old and above<br>
+                <strong>SME:</strong> Small and Medium Enterprises.</p>
+
+                <h3>SkillsFuture Enterprise Credit (SFEC):</h3>
+                <p>Eligible Singapore-registered companies can claim up to $10,000.</p>
+
+                <div class="funding-table-container">
+                    <h4>Effective for Courses starting from 1 Jan 2024</h4>
+
+                    <table class="funding-table">
+                        <tr>
+                            <th rowspan="2">Full<br>Fee</th>
+                            <th rowspan="2">GST</th>
+                            <th colspan="2">Nett Fee after Funding (Inc. GST)</th>
+                        </tr>
+                        <tr>
+                            <th>Baseline</th>
+                            <th>MCES / SME</th>
+                        </tr>
+                        <tr>
+                            <td>$750</td>
+                            <td>$67.50</td>
+                            <td>$442.50</td>
+                            <td>$292.50</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <h3>UTAP Funding</h3>
+                <p>Eligible NTUC members can apply for 50% of the unfunded fee from UTAP, capped at $250 per year. NTUC members aged 40 and above will get increased funding support from $250 to $500.</p>
+
+                <h3>Absentee Payroll (AP) Funding</h3>
+                <p>$4.50 per hour, capped at $100,000 per enterprise per calendar year.<br>
+                AP funding will be computed based on the actual number of training hours attended by the trainee.</p>
+            </div>
+        </div>
+
+        <!-- Page 5 - FAQ -->
+        <div class="page-break">
+            <div class="page-header">
+                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Courses Singapore" class="header-logo">
+            </div>
+
+            <h2>Frequently Asked Questions</h2>
+
+            <h3>* What are the prerequisites for WSQ Funding?</h3>
+            <ol>
+                <li>You need to be a Singaporean Citizen or Permanent Resident, physically based in Singapore.</li>
+                <li>You must successfully complete the programme and pass the assessment in order to be eligible.</li>
+                <li>You must attend at least 75% of the training.</li>
+            </ol>
+
+            <h3>* Can I club any other grant with this subsidy?</h3>
+            <p>No, you cannot claim any other grant if you are claiming this subsidy from SSG. You should not be claiming for any other grants, subsidies, or tax concessions, provided unless explicitly permitted.</p>
+
+            <h3>* Do I need to pay the full fee, and then claim the subsidy from WSQ Funding?</h3>
+            <p>The programme works on a Nett fee model, i.e. you only need to pay the difference between the fee, and the funding amount at the time of enrollment. The training provider (TP) will claim the funding amount from SSG on completion of the programme. In case you fail to complete the programme, or if the claim raised by TP is rejected by SSG then you are liable to pay the funding amount to TP.</p>
+        </div>
+    </div>
+</body>
+</html>

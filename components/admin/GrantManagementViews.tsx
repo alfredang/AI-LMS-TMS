@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useRouter } from 'next/router';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -1163,6 +1164,468 @@ export const UpdateAssessmentView: React.FC = () => {
     );
 };
 
+// All Course Runs sheet headers (0-indexed) — matches the Update Assessment tab column order
+const ALL_COURSE_RUNS_HEADERS = [
+    'Course Run', 'Course Code', 'Course Title', 'Start Date', 'End Date',
+    'Trainee', 'Trainee Email', 'Trainee Contact', 'Trainee ID', 'Trainee DOB',
+    'Sponsorship Type', 'UEN of Employer', 'Employer Name', 'Employer Phone Country Code',
+    'Employer Phone', 'Employer Contact Name', 'Employer Contact Email', 'Company Address',
+    'Enrolement Status', 'Enrolment Response', 'Enrolment ID', 'Grant Appl Date',
+    'Grant Status (BL)', 'Grant ID (BL)', 'Amount (BL)', 'Grant Status (MCES/SME/IBF)',
+    'Grant ID (MCES/SME)', 'Funding Scheme Code', 'Amount (MCES/SME)', 'Total TG Amount',
+    'TG Payment Status', 'SFC Claim ID', 'SFC Amount', 'SFC Payment Date',
+    'SFC Payout Request ID', 'SFC Application ID', 'SFC Payment Status', 'QB SFC Invoice Num',
+    'QB SFC Invoice Amount', 'QB SFC Status', 'TG Payment Date', 'Financial Transaction ID (BL)',
+    'Financial Transaction ID (MCES/SME)', 'Attendance', 'Assessment', 'Fee Collection Update Status',
+    'Assessment ID', 'Assessment ID Date', 'Skill Code', 'Assessment Update',
+    'QB Invoice # (Net Fee)', 'QB Net Fee Amount', 'Payment Type', 'QB Net Fee Status',
+    'QB Invoice # (Grant)', 'QB TG Status', 'Bank Reference ID (BL)', 'Course Fees',
+    'Bank Reference ID (MCES/SME)', 'Course Type', 'Unique Course Run ID', 'Invoice No.',
+    'Pay by SFC', 'Terms', 'Payable Fees', 'Invoice Creation',
+    'Column 65', 'Column 66', 'Column 67',
+];
+
+// Columns used by SSG API (highlighted in the table)
+const SSG_USED_COLS = new Set([0, 1, 4, 5, 8, 20, 46, 47, 48]);
+
+interface BulkAssessmentRow {
+    rawCols: string[];
+    // Editable per-row inputs (primary)
+    action: string;
+    result: string;
+    assessmentDate: string;
+    skillCode: string;
+    // Editable per-row inputs (advanced — auto-filled from paste)
+    courseRunId: string;
+    courseCode: string;
+    traineeFullName: string;
+    traineeId: string;
+    enrolmentId: string;
+}
+
+interface BulkAssessmentResult {
+    enrolmentId: string;
+    traineeFullName: string;
+    status: 'success' | 'error' | 'pending';
+    assessmentReferenceNumber?: string;
+    createdOn?: string;
+    updatedOn?: string;
+    error?: string;
+}
+
+export const BulkUpdateAssessmentView: React.FC = () => {
+    const [rows, setRows] = useState<BulkAssessmentRow[]>([]);
+    const [parseError, setParseError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [results, setResults] = useState<BulkAssessmentResult[]>([]);
+    const [error, setError] = useState<string | null>(null);
+    const [summary, setSummary] = useState<{ total: number; success: number; error: number } | null>(null);
+    const pasteRef = useRef<HTMLTextAreaElement>(null);
+
+    const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+    const cellInputClasses = "w-full px-1.5 py-1 text-xs bg-white border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white";
+
+    // Column indices from "All Course Runs" sheet (0-indexed)
+    const COL = {
+        COURSE_RUN: 0, COURSE_CODE: 1, COURSE_TITLE: 2, END_DATE: 4,
+        TRAINEE: 5, TRAINEE_ID: 8, ENROLMENT_ID: 20,
+        ASSESSMENT_ID: 46, ASSESSMENT_ID_DATE: 47, SKILL_CODE: 48, ASSESSMENT_UPDATE: 49,
+    };
+
+    // Parse on paste, then clear the textarea
+    const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text');
+        if (!text.trim()) return;
+
+        const lines = text.trim().split('\n').filter(line => line.trim());
+        if (lines.length === 0) return;
+
+        const firstLine = lines[0].toLowerCase();
+        const hasHeader = firstLine.includes('course run') && firstLine.includes('course code');
+        const dataLines = hasHeader ? lines.slice(1) : lines;
+
+        if (dataLines.length === 0) { setParseError('Input error: only header row detected, no data rows.'); return; }
+
+        // Validate all rows have enough columns
+        const allCols = dataLines.map(line => line.split('\t'));
+        const badRows = allCols.filter(cols => cols.length < 21);
+
+        if (badRows.length === allCols.length) {
+            setParseError(`Input error: pasted data does not match the expected format. Expected 21+ tab-separated columns from "All Course Runs" sheet, but got ${badRows[0].length} columns. Make sure you are copying full rows from the Google Sheet.`);
+            return;
+        }
+
+        const parsed: BulkAssessmentRow[] = [];
+
+        for (let i = 0; i < allCols.length; i++) {
+            const cols = allCols[i].map(c => c.trim());
+            if (cols.length < 21) continue;
+
+            const existingSkillCode = cols[COL.SKILL_CODE] || '';
+            const existingDate = cols[COL.ASSESSMENT_ID_DATE] || '';
+
+            parsed.push({
+                rawCols: cols,
+                action: 'update',
+                result: 'Pass',
+                assessmentDate: existingDate || cols[COL.END_DATE] || '',
+                skillCode: existingSkillCode,
+                courseRunId: cols[COL.COURSE_RUN] || '',
+                courseCode: cols[COL.COURSE_CODE] || '',
+                traineeFullName: cols[COL.TRAINEE] || '',
+                traineeId: cols[COL.TRAINEE_ID] || '',
+                enrolmentId: cols[COL.ENROLMENT_ID] || '',
+            });
+        }
+
+        if (parsed.length === 0) {
+            setParseError('Input error: no valid rows found in pasted data.');
+            return;
+        }
+
+        setRows(prev => [...prev, ...parsed]);
+        setParseError(badRows.length > 0
+            ? `Parsed ${parsed.length} rows. Skipped ${badRows.length} row(s) with insufficient columns.`
+            : null
+        );
+        setResults([]);
+        setSummary(null);
+    };
+
+    const updateRow = (idx: number, field: keyof BulkAssessmentRow, value: string) => {
+        setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+    };
+
+    const removeRow = (idx: number) => {
+        setRows(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    const handleSubmit = async () => {
+        if (rows.length === 0) { setError('No rows to submit.'); return; }
+
+        const missing = rows.filter(r => !r.skillCode || !r.assessmentDate);
+        if (missing.length > 0) {
+            setError(`${missing.length} row(s) missing Skill Code or Assessment Date.`);
+            return;
+        }
+
+        setIsSubmitting(true);
+        setError(null);
+        setResults(rows.map(r => ({
+            enrolmentId: r.enrolmentId,
+            traineeFullName: r.traineeFullName,
+            status: 'pending' as const,
+        })));
+        setSummary(null);
+
+        try {
+            const response = await fetch('/api/assessments/ssg-bulk-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: rows.map(r => ({
+                        enrolmentReferenceNumber: r.enrolmentId,
+                        courseRunId: r.courseRunId,
+                        courseReferenceNumber: r.courseCode,
+                        traineeFullName: r.traineeFullName,
+                        traineeId: r.traineeId,
+                        action: r.action,
+                        result: r.result,
+                        assessmentDate: r.assessmentDate,
+                        skillCode: r.skillCode,
+                    })),
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                setError(data.error || 'Bulk update failed');
+                setResults([]);
+                return;
+            }
+
+            setResults((data.results || []).map((r: Record<string, unknown>) => ({
+                ...r,
+                enrolmentId: r.enrolmentReferenceNumber || r.enrolmentId,
+            })));
+            setSummary(data.summary || null);
+        } catch (err) {
+            console.error('Bulk assessment error:', err);
+            setError(err instanceof Error ? err.message : 'Failed to submit bulk assessment');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleClear = () => {
+        setRows([]);
+        setResults([]);
+        setError(null);
+        setParseError(null);
+        setSummary(null);
+    };
+
+    // Number of columns to display (up to what we have headers for, or raw data length)
+    const displayColCount = Math.min(ALL_COURSE_RUNS_HEADERS.length, rows[0]?.rawCols.length || ALL_COURSE_RUNS_HEADERS.length);
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold mb-6 dark:text-white">Bulk Update Assessment</h2>
+
+            {/* Paste Data Card */}
+            <Card className="p-6 mb-6">
+                <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Paste Data from All Course Runs</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Copy rows from the FMS Google Sheet &quot;All Course Runs&quot; tab and paste below. Rows are parsed instantly and the paste box clears. You can paste multiple times to add more rows.
+                </p>
+
+                <textarea
+                    ref={pasteRef}
+                    onPaste={handlePaste}
+                    placeholder="Paste rows from Google Sheet here (they will appear in the table below)..."
+                    className={`${inputClasses} font-mono text-sm`}
+                    rows={3}
+                    disabled={isSubmitting}
+                />
+
+                <div className="flex items-center gap-3 mt-3">
+                    {rows.length > 0 && (
+                        <>
+                            <Button onClick={handleClear} variant="outline" disabled={isSubmitting}>
+                                Clear All ({rows.length})
+                            </Button>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                {rows.length} row{rows.length !== 1 ? 's' : ''} loaded
+                            </span>
+                        </>
+                    )}
+                </div>
+            </Card>
+
+            {/* Errors */}
+            {(error || parseError) && (
+                <Card className="p-4 mb-6 border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-700">
+                    <pre className="text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error || parseError}</pre>
+                </Card>
+            )}
+
+            {/* Parsed Table with all columns + editable inputs */}
+            {rows.length > 0 && results.length === 0 && (
+                <Card className="p-6 mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-4">
+                            <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">
+                                {rows.length} Enrolment{rows.length !== 1 ? 's' : ''} to Process
+                            </h3>
+                            <button
+                                onClick={() => setShowAdvanced(!showAdvanced)}
+                                className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline"
+                            >
+                                {showAdvanced ? 'Hide' : 'Show'} advanced fields
+                            </button>
+                        </div>
+                        <Button onClick={handleSubmit} disabled={isSubmitting}>
+                            {isSubmitting ? 'Submitting...' : `Submit All (${rows.length})`}
+                        </Button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="text-sm border-collapse whitespace-nowrap">
+                            <thead>
+                                {/* Group headers row */}
+                                <tr className="border-b dark:border-gray-700">
+                                    <th className="sticky left-0 z-10 bg-gray-100 dark:bg-gray-800"></th>
+                                    <th colSpan={4} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 border-r-2 border-blue-300 dark:border-blue-600">
+                                        SSG Input Fields
+                                    </th>
+                                    {showAdvanced && (
+                                        <th colSpan={5} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20 border-r-2 border-orange-300 dark:border-orange-600">
+                                            Advanced (auto-filled)
+                                        </th>
+                                    )}
+                                    <th colSpan={displayColCount} className="p-2 text-center text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800">
+                                        Parsed Data from All Course Runs
+                                    </th>
+                                </tr>
+                                {/* Column headers row */}
+                                <tr className="border-b-2 dark:border-gray-600">
+                                    <th className="sticky left-0 z-10 bg-gray-100 dark:bg-gray-800 p-2 font-bold text-gray-600 dark:text-gray-300 text-left"></th>
+                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[90px] bg-blue-50 dark:bg-blue-900/20">Action</th>
+                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[80px] bg-blue-50 dark:bg-blue-900/20">Result</th>
+                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[150px] bg-blue-50 dark:bg-blue-900/20">Assessment Date <span className="font-normal text-[10px] text-gray-400">(DD/MM/YYYY)</span></th>
+                                    <th className="p-2 font-bold text-blue-600 dark:text-blue-400 text-left min-w-[160px] bg-blue-50 dark:bg-blue-900/20 border-r-2 border-blue-300 dark:border-blue-600">Skill Code</th>
+                                    {showAdvanced && (
+                                        <>
+                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[100px] bg-orange-50/50 dark:bg-orange-900/10">Course Run ID</th>
+                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[130px] bg-orange-50/50 dark:bg-orange-900/10">Course Code</th>
+                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[150px] bg-orange-50/50 dark:bg-orange-900/10">Trainee Name</th>
+                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[110px] bg-orange-50/50 dark:bg-orange-900/10">Trainee ID</th>
+                                            <th className="p-2 font-bold text-orange-600 dark:text-orange-400 text-left min-w-[140px] bg-orange-50/50 dark:bg-orange-900/10 border-r-2 border-orange-300 dark:border-orange-600">Enrolment ID</th>
+                                        </>
+                                    )}
+                                    {Array.from({ length: displayColCount }, (_, i) => (
+                                        <th key={i} className={`p-2 font-bold text-left text-xs ${SSG_USED_COLS.has(i) ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10' : 'text-gray-500 dark:text-gray-400'}`}>
+                                            {ALL_COURSE_RUNS_HEADERS[i] || `Col ${i}`}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map((row, idx) => {
+                                    const existingDate = row.rawCols[COL.ASSESSMENT_ID_DATE] || '';
+                                    const existingSkill = row.rawCols[COL.SKILL_CODE] || '';
+                                    // Format YYYY-MM-DD to DD/MM/YYYY
+                                    const formatDateDisplay = (d: string) => {
+                                        if (!d) return '';
+                                        const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                                        return m ? `${m[3]}/${m[2]}/${m[1]}` : d;
+                                    };
+                                    const dateChanged = row.assessmentDate !== existingDate;
+                                    const skillChanged = row.skillCode !== existingSkill;
+
+                                    return (
+                                        <tr key={idx} className="border-b dark:border-gray-700 hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
+                                            <td className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-800 p-1 text-center">
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-gray-400 text-xs w-5">{idx + 1}</span>
+                                                    <button
+                                                        onClick={() => removeRow(idx)}
+                                                        className="text-red-400 hover:text-red-600 dark:hover:text-red-300 text-xs px-1"
+                                                        title="Remove row"
+                                                        disabled={isSubmitting}
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            {/* Editable input cells */}
+                                            <td className="p-1 bg-blue-50/50 dark:bg-blue-900/10">
+                                                <select value={row.action} onChange={(e) => updateRow(idx, 'action', e.target.value)} className={cellInputClasses} disabled={isSubmitting}>
+                                                    <option value="update">Update</option>
+                                                    <option value="void">Void</option>
+                                                </select>
+                                            </td>
+                                            <td className="p-1 bg-blue-50/50 dark:bg-blue-900/10">
+                                                <select value={row.result} onChange={(e) => updateRow(idx, 'result', e.target.value)} className={cellInputClasses} disabled={isSubmitting}>
+                                                    <option value="Pass">Pass</option>
+                                                    <option value="Fail">Fail</option>
+                                                    <option value="Exempt">Exempt</option>
+                                                </select>
+                                            </td>
+                                            <td className="p-1 bg-blue-50/50 dark:bg-blue-900/10">
+                                                <input type="date" value={row.assessmentDate} onChange={(e) => updateRow(idx, 'assessmentDate', e.target.value)} className={`${cellInputClasses} ${dateChanged ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`} disabled={isSubmitting} />
+                                                <div className={`text-[10px] mt-0.5 ${!existingDate ? 'text-red-400 italic' : dateChanged ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'}`}>
+                                                    {existingDate ? `was: ${formatDateDisplay(existingDate)}` : 'existing cell is empty'}
+                                                </div>
+                                            </td>
+                                            <td className="p-1 bg-blue-50/50 dark:bg-blue-900/10 border-r-2 border-blue-300 dark:border-blue-600">
+                                                <input type="text" value={row.skillCode} onChange={(e) => updateRow(idx, 'skillCode', e.target.value)} className={`${cellInputClasses} ${skillChanged ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`} disabled={isSubmitting} />
+                                                <div className={`text-[10px] mt-0.5 ${!existingSkill ? 'text-red-400 italic' : skillChanged ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'}`}>
+                                                    {existingSkill ? `was: ${existingSkill}` : 'existing cell is empty'}
+                                                </div>
+                                            </td>
+                                            {/* Advanced editable inputs (hidden by default) */}
+                                            {showAdvanced && (() => {
+                                                const advancedFields: { field: keyof BulkAssessmentRow; colIdx: number; isLast?: boolean }[] = [
+                                                    { field: 'courseRunId', colIdx: COL.COURSE_RUN },
+                                                    { field: 'courseCode', colIdx: COL.COURSE_CODE },
+                                                    { field: 'traineeFullName', colIdx: COL.TRAINEE },
+                                                    { field: 'traineeId', colIdx: COL.TRAINEE_ID },
+                                                    { field: 'enrolmentId', colIdx: COL.ENROLMENT_ID, isLast: true },
+                                                ];
+                                                return advancedFields.map(({ field, colIdx, isLast }) => {
+                                                    const original = row.rawCols[colIdx] || '';
+                                                    const current = row[field] as string;
+                                                    const changed = current !== original;
+                                                    return (
+                                                        <td key={field} className={`p-1 bg-orange-50/30 dark:bg-orange-900/10 ${isLast ? 'border-r-2 border-orange-300 dark:border-orange-600' : ''}`}>
+                                                            <input type="text" value={current} onChange={(e) => updateRow(idx, field, e.target.value)} className={`${cellInputClasses} ${changed ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`} disabled={isSubmitting} />
+                                                            <div className={`text-[10px] mt-0.5 ${!original ? 'text-red-400 italic' : changed ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'}`}>
+                                                                {original ? `was: ${original}` : 'existing cell is empty'}
+                                                            </div>
+                                                        </td>
+                                                    );
+                                                });
+                                            })()}
+                                            {/* All columns from the sheet */}
+                                            {Array.from({ length: displayColCount }, (_, i) => (
+                                                <td key={i} className={`p-2 text-xs ${SSG_USED_COLS.has(i) ? 'bg-blue-50/30 dark:bg-blue-900/10 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                    {row.rawCols[i] || <span className="text-gray-300 dark:text-gray-600">—</span>}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+
+            {/* Results Table */}
+            {results.length > 0 && (
+                <Card className="p-6 mb-6">
+                    {summary && (
+                        <div className="flex gap-4 mb-4">
+                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+                                Total: {summary.total}
+                            </span>
+                            <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                                Success: {summary.success}
+                            </span>
+                            <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                                Errors: {summary.error}
+                            </span>
+                        </div>
+                    )}
+
+                    {isSubmitting && (
+                        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded text-sm text-blue-700 dark:text-blue-300">
+                            Processing {rows.length} assessments... This may take a while (2s delay between SSG calls).
+                        </div>
+                    )}
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b dark:border-gray-700">
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">#</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Enrolment ID</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Trainee</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Status</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Assessment Ref #</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Date</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Error</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {results.map((r, idx) => (
+                                    <tr key={idx} className={`border-b dark:border-gray-700 ${r.status === 'error' ? 'bg-red-50 dark:bg-red-900/10' : r.status === 'success' ? 'bg-green-50 dark:bg-green-900/10' : ''}`}>
+                                        <td className="p-2 text-gray-500">{idx + 1}</td>
+                                        <td className="p-2 font-mono text-xs">{r.enrolmentId}</td>
+                                        <td className="p-2">{r.traineeFullName}</td>
+                                        <td className="p-2">
+                                            {r.status === 'success' && <span className="text-green-600 dark:text-green-400 font-bold">Success</span>}
+                                            {r.status === 'error' && <span className="text-red-600 dark:text-red-400 font-bold">Error</span>}
+                                            {r.status === 'pending' && <span className="text-gray-400 italic">Pending...</span>}
+                                        </td>
+                                        <td className="p-2 font-mono text-xs">{r.assessmentReferenceNumber || '-'}</td>
+                                        <td className="p-2 text-xs">{r.createdOn ? `${r.createdOn}${r.updatedOn ? ` (updated ${r.updatedOn})` : ''}` : '-'}</td>
+                                        <td className="p-2 text-xs text-red-600 dark:text-red-400">{r.error || ''}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+        </div>
+    );
+};
+
 export const UpdateEnrolmentFeesView: React.FC = () => {
     const { trainingProviderProfile } = useLms();
     const [enrolmentReferenceNumber, setEnrolmentReferenceNumber] = useState<string>('');
@@ -2158,6 +2621,13 @@ export const SearchGrantView: React.FC = () => {
     const [grantsData, setGrantsData] = useState<{ data: any[]; meta: any } | null>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState<number>(0);
+    // Track current page in a ref for safety (future effects/listeners)
+    const currentPageRef = useRef(currentPage);
+
+    useEffect(() => {
+        currentPageRef.current = currentPage;
+    }, [currentPage]);
+
     const PAGE_SIZE = 10;
 
     // Helper functions for consistent styling
@@ -2193,6 +2663,28 @@ export const SearchGrantView: React.FC = () => {
     };
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+
+    const getLearnerName = (grants: any[]) => {
+        const candidates = grants.flatMap((grant: any) => [
+            grant?.learnerName,
+            grant?.learner_name,
+            grant?.traineeName,
+            grant?.trainee_name,
+            grant?.enrolment?.learnerName,
+            grant?.enrolment?.learner_name,
+            grant?.enrolment?.traineeName,
+            grant?.enrolment?.trainee_name,
+            grant?.enrolment?.trainee?.fullName,
+            grant?.enrolment?.trainee?.full_name,
+            grant?.enrolment?.trainee?.name,
+            grant?.trainee?.fullName,
+            grant?.trainee?.full_name,
+            grant?.trainee?.name,
+        ]);
+
+        const found = candidates.find((value: any) => typeof value === 'string' && value.trim());
+        return found ? found.trim() : '—';
+    };
 
     const handleSearch = async () => {
         if (!courseRunId.trim()) {
@@ -2327,13 +2819,14 @@ export const SearchGrantView: React.FC = () => {
                                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
                                             <thead className="bg-gray-50 dark:bg-gray-700">
                                                 <tr>
-                                                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider">Enrolment</th>
+                                                    <th colSpan={2} className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider">Enrolment</th>
                                                     <th colSpan={3} className="px-3 py-2 text-center text-xs font-semibold text-blue-700 dark:text-blue-400 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider bg-blue-50 dark:bg-blue-900/20">Baseline (BL)</th>
                                                     <th colSpan={4} className="px-3 py-2 text-center text-xs font-semibold text-purple-700 dark:text-purple-400 border-r border-gray-200 dark:border-gray-600 uppercase tracking-wider bg-purple-50 dark:bg-purple-900/20">MCES / SME / IBF</th>
                                                     <th className="px-3 py-2 text-center text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider bg-green-50 dark:bg-green-900/20">Total</th>
                                                 </tr>
                                                 <tr>
-                                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Enrolment ID</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">Enrolment ID</th>
+                                                    <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600">Name</th>
                                                     <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap bg-blue-50 dark:bg-blue-900/20">Grant Status</th>
                                                     <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap bg-blue-50 dark:bg-blue-900/20">Grant ID (BL)</th>
                                                     <th className="px-3 py-2 text-left font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap border-r border-gray-200 dark:border-gray-600 bg-blue-50 dark:bg-blue-900/20">Amount (BL)</th>
@@ -2349,9 +2842,11 @@ export const SearchGrantView: React.FC = () => {
                                                     const bl      = grants.find((g: any) => BL_CODES.includes(g.fundingScheme?.code));
                                                     const mces    = grants.find((g: any) => !BL_CODES.includes(g.fundingScheme?.code));
                                                     const totalTG = grants.reduce((sum: number, g: any) => sum + (g.grantAmount?.estimated ?? 0), 0);
+                                                    const learnerName = getLearnerName(grants);
                                                     return (
                                                         <tr key={enrolmentId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                            <td className="px-3 py-3 font-mono text-gray-800 dark:text-gray-200 whitespace-nowrap border-r border-gray-200 dark:border-gray-700">{enrolmentId}</td>
+                                                            <td className="px-3 py-3 font-mono text-gray-800 dark:text-gray-200 whitespace-nowrap">{enrolmentId}</td>
+                                                            <td className="px-3 py-3 text-gray-800 dark:text-gray-200 whitespace-nowrap border-r border-gray-200 dark:border-gray-700 max-w-[180px] truncate" title={learnerName}>{learnerName}</td>
                                                             <td className="px-3 py-3 whitespace-nowrap bg-blue-50/30 dark:bg-blue-900/10">
                                                                 {bl ? <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${getStatusColor(bl.status)}`}>{bl.status}</span> : <span className="text-gray-400">—</span>}
                                                             </td>
@@ -2379,12 +2874,19 @@ export const SearchGrantView: React.FC = () => {
                                             const bl      = grants.find((g: any) => BL_CODES.includes(g.fundingScheme?.code));
                                             const mces    = grants.find((g: any) => !BL_CODES.includes(g.fundingScheme?.code));
                                             const totalTG = grants.reduce((sum: number, g: any) => sum + (g.grantAmount?.estimated ?? 0), 0);
+                                            const learnerName = getLearnerName(grants);
                                             return (
                                                 <div key={enrolmentId} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                                                     {/* Enrolment header */}
-                                                    <div className="bg-gray-50 dark:bg-gray-700 px-4 py-2 flex items-center justify-between">
-                                                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Enrolment ID</span>
-                                                        <span className="font-mono text-sm font-bold text-gray-800 dark:text-white">{enrolmentId}</span>
+                                                    <div className="bg-gray-50 dark:bg-gray-700 px-4 py-2">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Enrolment ID</span>
+                                                            <span className="font-mono text-sm font-bold text-gray-800 dark:text-white text-right">{enrolmentId}</span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-3 mt-1">
+                                                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Name</span>
+                                                            <span className="text-sm font-medium text-gray-800 dark:text-white text-right truncate">{learnerName}</span>
+                                                        </div>
                                                     </div>
                                                     <div className="divide-y divide-gray-100 dark:divide-gray-700">
                                                         {/* BL section */}
@@ -2540,6 +3042,7 @@ export const SearchGrantView: React.FC = () => {
 };
 
 export const SearchEnrolmentView: React.FC = () => {
+    const router = useRouter();
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [isSearching, setIsSearching] = useState(false);
     const [webhookResponse, setWebhookResponse] = useState<any>(null);
@@ -2604,6 +3107,42 @@ export const SearchEnrolmentView: React.FC = () => {
             setIsSearching(false);
         }
     };
+
+    // Auto-populate from URL query param (e.g. ctrl+click from calendar)
+    const urlHandled = useRef(false);
+    useEffect(() => {
+        if (urlHandled.current) return;
+        const urlCourseRunId = router.query.courseRunId;
+        if (urlCourseRunId && typeof urlCourseRunId === 'string') {
+            urlHandled.current = true;
+            setCourseRunId(urlCourseRunId);
+            // Auto-trigger search
+            setTimeout(async () => {
+                setIsSearching(true);
+                setSearchError(null);
+                setWebhookResponse(null);
+                setParsedData(null);
+                try {
+                    const response = await fetch(SEARCH_ENROLMENT_API, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ courseRunId: urlCourseRunId.trim() })
+                    });
+                    const json = await response.json();
+                    if (!response.ok || !json.success) {
+                        const errMsg = typeof json.error === 'string' ? json.error : (json.error?.message ?? JSON.stringify(json.error) ?? `SSG API error (${response.status})`);
+                        throw new Error(errMsg);
+                    }
+                    setWebhookResponse(json);
+                    setParsedData(json.data ?? null);
+                } catch (error) {
+                    setSearchError(error instanceof Error ? error.message : 'Failed to fetch enrolment data');
+                } finally {
+                    setIsSearching(false);
+                }
+            }, 0);
+        }
+    }, [router.query.courseRunId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div>
@@ -3155,6 +3694,15 @@ export const SearchCourseRunsView: React.FC = () => {
     const [searchError, setSearchError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(0);
     const [displayPage, setDisplayPage] = useState(0);
+    
+    // Track current page in refs for safety (future effects/listeners)
+    const currentPageRef = useRef(currentPage);
+    const displayPageRef = useRef(displayPage);
+
+    useEffect(() => {
+        currentPageRef.current = currentPage;
+        displayPageRef.current = displayPage;
+    }, [currentPage, displayPage]);
     const DISPLAY_PAGE_SIZE = 10;
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
@@ -3531,6 +4079,11 @@ export const ViewCourseRunView: React.FC = () => {
     const [webhookResponse, setWebhookResponse] = useState<any>(null);
     const [parsedData, setParsedData] = useState<any>(null);
     const [searchError, setSearchError] = useState<string | null>(null);
+    // Local DB snapshot for the same course_run_id — fetched in parallel with the SSG call.
+    // Independent error/loading state so one failing doesn't block the other.
+    const [localDetails, setLocalDetails] = useState<any>(null);
+    const [localLoading, setLocalLoading] = useState(false);
+    const [localError, setLocalError] = useState<string | null>(null);
 
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
@@ -3596,8 +4149,25 @@ export const ViewCourseRunView: React.FC = () => {
         setWebhookResponse(null);
         setParsedData(null);
 
+        // Fire local fetch in parallel — completely independent error path.
+        const trimmedRunId = courseRunId.trim();
+        setLocalLoading(true);
+        setLocalError(null);
+        setLocalDetails(null);
+        fetch(`/api/admin/course-runs/local-by-run-id?courseRunId=${encodeURIComponent(trimmedRunId)}`)
+            .then((r) => r.json())
+            .then((j) => {
+                if (j.success) {
+                    setLocalDetails(j.data);
+                } else {
+                    setLocalError(j.error || 'Failed to load local details');
+                }
+            })
+            .catch((e) => setLocalError(e instanceof Error ? e.message : String(e)))
+            .finally(() => setLocalLoading(false));
+
         try {
-            const response = await fetch(`/api/course-runs/view?courseRunId=${encodeURIComponent(courseRunId.trim())}`);
+            const response = await fetch(`/api/course-runs/view?courseRunId=${encodeURIComponent(trimmedRunId)}`);
             const json = await response.json();
 
             if (!json.success) {
@@ -3625,6 +4195,98 @@ export const ViewCourseRunView: React.FC = () => {
         } finally {
             setIsSearching(false);
         }
+    };
+
+    // Helper to render the Local Details card — lives OUTSIDE the SSG render path
+    // so it's visible even when the SSG lookup fails (the whole point of this section).
+    const renderLocalDetails = () => {
+        // Don't render at all until a search has been initiated
+        if (!localLoading && !localError && localDetails === null && !webhookResponse && !searchError) {
+            return null;
+        }
+        return (
+            <Card className="p-0 overflow-hidden mt-6 mb-6">
+                <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                        <thead className="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th colSpan={2} className="px-6 py-3 text-left border-b dark:border-gray-700">
+                                    <div className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Local Details</div>
+                                    <div className="text-[11px] font-normal normal-case text-gray-500 dark:text-gray-400 mt-0.5">
+                                        From local <code className="px-1 bg-gray-200 dark:bg-gray-700 rounded">course_run</code> — may differ from SSG if sync is stale.
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                {localLoading ? (
+                    <tbody className="bg-white dark:bg-gray-900"><tr><td colSpan={2} className="p-6 text-sm text-gray-500 dark:text-gray-400">Loading local details…</td></tr></tbody>
+                ) : localError ? (
+                    <tbody className="bg-white dark:bg-gray-900"><tr><td colSpan={2} className="p-6 text-sm text-red-600 dark:text-red-400">Failed to load local details: {localError}</td></tr></tbody>
+                ) : !localDetails ? (
+                    <tbody className="bg-white dark:bg-gray-900"><tr><td colSpan={2} className="p-6 text-sm text-gray-500 dark:text-gray-400 italic">No local record found for this Course Run ID.</td></tr></tbody>
+                ) : (
+                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300 w-1/3">Class Status</td>
+                                <td className="px-6 py-4 text-sm">
+                                    {(() => {
+                                        const status = localDetails.classStatus;
+                                        if (!status) {
+                                            return <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700">N/A</span>;
+                                        }
+                                        const lower = String(status).toLowerCase();
+                                        let cls = 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700';
+                                        if (lower === 'cancelled') cls = 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700';
+                                        else if (lower === 'pending') cls = 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700';
+                                        else if (lower === 'confirmed') cls = 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700';
+                                        return <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full border ${cls}`}>{status}</span>;
+                                    })()}
+                                </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">Local Trainer</td>
+                                <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {localDetails.assignedTrainerName ? (
+                                        <>
+                                            <span className="font-medium">{localDetails.assignedTrainerName}</span>
+                                            {localDetails.assignedTrainerEmail && (
+                                                <span className="text-gray-500 dark:text-gray-400 ml-2">({localDetails.assignedTrainerEmail})</span>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <span className="text-gray-400 italic">None assigned</span>
+                                    )}
+                                </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">TPG Trainer (Local)</td>
+                                <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {localDetails.tpgAssignedTrainerName ? (
+                                        <>
+                                            <span className="font-medium">{localDetails.tpgAssignedTrainerName}</span>
+                                            {localDetails.tpgAssignedTrainerEmail && (
+                                                <span className="text-gray-500 dark:text-gray-400 ml-2">({localDetails.tpgAssignedTrainerEmail})</span>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <span className="text-gray-400 italic">None assigned</span>
+                                    )}
+                                </td>
+                            </tr>
+                            <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-700 dark:text-gray-300">Digital Attendance ID</td>
+                                <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {localDetails.digitalAttendanceId
+                                        ? <code className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs">{localDetails.digitalAttendanceId}</code>
+                                        : <span className="text-gray-400 italic">Not set</span>}
+                                </td>
+                            </tr>
+                        </tbody>
+                )}
+                    </table>
+                </div>
+            </Card>
+        );
     };
 
     // Helper to render course run details
@@ -3839,7 +4501,7 @@ export const ViewCourseRunView: React.FC = () => {
                 {/* Trainer Section */}
                 {run.linkCourseRunTrainer && run.linkCourseRunTrainer.length > 0 && (
                     <Card className="p-6">
-                        <h4 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-4">Assigned Trainer(s)</h4>
+                        <h4 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-4">Assigned Trainer (TPG)</h4>
                         <div className="space-y-3">
                             {run.linkCourseRunTrainer.map((link: any, idx: number) => {
                                 const t = link.trainer;
@@ -3969,6 +4631,8 @@ export const ViewCourseRunView: React.FC = () => {
                                             setWebhookResponse(null);
                                             setParsedData(null);
                                             setCourseRunId('');
+                                            setLocalDetails(null);
+                                            setLocalError(null);
                                         }}
                                     >
                                         Clear Results
@@ -3997,6 +4661,9 @@ export const ViewCourseRunView: React.FC = () => {
                 </Card>
             )}
 
+            {/* Local Details — renders below Course Run Details. Independent of SSG state, visible even on SSG failure. */}
+            {renderLocalDetails()}
+
             {/* Empty State */}
             {!webhookResponse && !isSearching && (
                 <Card className="p-12">
@@ -4015,26 +4682,61 @@ export const ViewCourseRunView: React.FC = () => {
 export const CancelEnrolmentView: React.FC = () => {
     const [enrolmentId, setEnrolmentId] = useState<string>('');
     const [courseRunId, setCourseRunId] = useState<string>('');
+    const [isLookingUp, setIsLookingUp] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [preview, setPreview] = useState<any>(null);
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
-    const [showConfirm, setShowConfirm] = useState(false);
 
+    const VIEW_ENROLMENT_API = '/api/enrolment/view';
     const CANCEL_ENROLMENT_API = '/api/enrolment/cancel';
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
+    const handleLookup = async () => {
+        setIsLookingUp(true);
+        setPreview(null);
+        setResult(null);
+        setError(null);
+        try {
+            const url = `${VIEW_ENROLMENT_API}?enrolmentId=${encodeURIComponent(enrolmentId.trim())}`;
+            const response = await fetch(url);
+            const json = await response.json();
+
+            if (!response.ok || !json.success) {
+                const errMsg = typeof json.error === 'string' ? json.error : (json.error?.message ?? `Error ${response.status}`);
+                setError(errMsg);
+                return;
+            }
+
+            const enrolment = json.data?.enrolment ?? json.data;
+            setPreview(enrolment);
+            // Prefill courseRunId from preview if user hasn't typed one — saves a lookup on submit.
+            if (!courseRunId.trim()) {
+                const id = enrolment?.course?.run?.id;
+                if (id) setCourseRunId(String(id));
+            }
+        } catch (err) {
+            console.error('❌ Error looking up enrolment:', err);
+            setError(err instanceof Error ? err.message : 'Failed to look up enrolment');
+        } finally {
+            setIsLookingUp(false);
+        }
+    };
+
     const handleSubmit = async () => {
-        setShowConfirm(false);
         setIsSubmitting(true);
         setError(null);
         setResult(null);
 
         try {
+            const body: { enrolmentId: string; courseRunId?: string } = { enrolmentId: enrolmentId.trim() };
+            if (courseRunId.trim()) body.courseRunId = courseRunId.trim();
+
             const response = await fetch(CANCEL_ENROLMENT_API, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enrolmentId: enrolmentId.trim(), courseRunId: courseRunId.trim() })
+                body: JSON.stringify(body)
             });
 
             const json = await response.json();
@@ -4048,6 +4750,7 @@ export const CancelEnrolmentView: React.FC = () => {
 
             console.log('✅ Cancel enrolment response:', json);
             setResult(json.data);
+            setPreview(null);
         } catch (err) {
             console.error('❌ Error cancelling enrolment:', err);
             setError(err instanceof Error ? err.message : 'Failed to cancel enrolment');
@@ -4059,12 +4762,19 @@ export const CancelEnrolmentView: React.FC = () => {
     const handleClear = () => {
         setEnrolmentId('');
         setCourseRunId('');
+        setPreview(null);
         setResult(null);
         setError(null);
-        setShowConfirm(false);
     };
 
-    const isFormValid = enrolmentId.trim() && courseRunId.trim();
+    const isFormValid = !!enrolmentId.trim();
+
+    const previewLearnerName = preview?.trainee?.fullName ?? preview?.trainee?.name ?? '—';
+    const previewCourseRunId = preview?.course?.run?.id ?? '—';
+    const previewCourseTitle = preview?.course?.title ?? preview?.course?.referenceNumber ?? '—';
+    const previewStartDate = preview?.course?.run?.startDate ?? '—';
+    const previewEndDate = preview?.course?.run?.endDate ?? '—';
+    const previewStatus = preview?.status ?? '—';
 
     return (
         <div>
@@ -4074,7 +4784,7 @@ export const CancelEnrolmentView: React.FC = () => {
             <Card className="p-6 mb-6">
                 <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-4">Enrolment Details</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Both Enrolment ID and Course Run ID are required to cancel an enrolment.
+                    Only the Enrolment ID is required. The Course Run ID is auto-resolved from SSG; provide it explicitly to skip the lookup.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -4086,68 +4796,122 @@ export const CancelEnrolmentView: React.FC = () => {
                             id="cancel-enrolment-id"
                             type="text"
                             value={enrolmentId}
-                            onChange={(e) => setEnrolmentId(e.target.value)}
+                            onChange={(e) => { setEnrolmentId(e.target.value); if (preview) setPreview(null); }}
                             placeholder="e.g. ENR-2602-014784"
                             className={inputClasses}
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || isLookingUp}
                         />
                     </div>
                     <div>
                         <label htmlFor="cancel-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                            Course Run ID <span className="text-red-500">*</span>
+                            Course Run ID <span className="text-gray-400 font-normal">(optional)</span>
                         </label>
                         <input
                             id="cancel-course-run-id"
                             type="text"
                             value={courseRunId}
                             onChange={(e) => setCourseRunId(e.target.value)}
-                            placeholder="e.g. 1225151"
+                            placeholder="Auto-resolved from SSG if blank"
                             className={inputClasses}
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || isLookingUp}
                         />
                     </div>
                 </div>
 
                 <div className="flex gap-3">
-                    {!showConfirm ? (
+                    {!preview ? (
                         <Button
-                            onClick={() => setShowConfirm(true)}
-                            disabled={isSubmitting || !isFormValid}
+                            onClick={handleLookup}
+                            disabled={isLookingUp || isSubmitting || !isFormValid}
                         >
-                            {isSubmitting ? (
+                            {isLookingUp ? (
                                 <div className="flex items-center">
                                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                                    Cancelling...
+                                    Looking up…
                                 </div>
                             ) : (
                                 <>
-                                    <Icon name={IconName.X} className="w-4 h-4 mr-2" />
-                                    Cancel Enrolment
+                                    <Icon name={IconName.Search} className="w-4 h-4 mr-2" />
+                                    Look up Enrolment
                                 </>
                             )}
                         </Button>
-                    ) : (
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm text-red-600 dark:text-red-400 font-medium">
-                                Are you sure you want to cancel this enrolment?
-                            </span>
-                            <Button onClick={handleSubmit}>
-                                Yes, Cancel It
-                            </Button>
-                            <Button variant="outline" onClick={() => setShowConfirm(false)}>
-                                No, Go Back
-                            </Button>
-                        </div>
-                    )}
-                    <Button variant="outline" onClick={handleClear} disabled={isSubmitting}>
+                    ) : null}
+                    <Button variant="outline" onClick={handleClear} disabled={isSubmitting || isLookingUp}>
                         Clear
                     </Button>
                 </div>
 
-                {error && !result && (
+                {error && !result && !preview && (
                     <p className="text-red-500 text-sm mt-3">{error}</p>
                 )}
             </Card>
+
+            {/* Preview + Confirmation */}
+            {preview && !result && (
+                <Card className="p-6 mb-6 border-l-4 border-yellow-500">
+                    <div className="flex items-center gap-2 mb-4">
+                        <Icon name={IconName.InfoCircle} className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                        <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Confirm Cancellation</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        Please review the enrolment details below before proceeding. This action cannot be undone.
+                    </p>
+
+                    <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 mb-5 text-sm">
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Learner Name</dt>
+                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewLearnerName}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Enrolment ID</dt>
+                            <dd className="mt-0.5 font-mono text-gray-900 dark:text-gray-100">{preview?.referenceNumber ?? enrolmentId.trim()}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Course Run ID</dt>
+                            <dd className="mt-0.5 font-mono text-gray-900 dark:text-gray-100">{previewCourseRunId}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Course Title</dt>
+                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewCourseTitle}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Start Date</dt>
+                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewStartDate}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">End Date</dt>
+                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewEndDate}</dd>
+                        </div>
+                        <div>
+                            <dt className="font-medium text-gray-500 dark:text-gray-400">Current Status</dt>
+                            <dd className="mt-0.5 text-gray-900 dark:text-gray-100">{previewStatus}</dd>
+                        </div>
+                    </dl>
+
+                    <div className="flex items-center gap-3">
+                        <Button onClick={handleSubmit} disabled={isSubmitting}>
+                            {isSubmitting ? (
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    Cancelling…
+                                </div>
+                            ) : (
+                                <>
+                                    <Icon name={IconName.X} className="w-4 h-4 mr-2" />
+                                    Confirm Cancel
+                                </>
+                            )}
+                        </Button>
+                        <Button variant="outline" onClick={() => setPreview(null)} disabled={isSubmitting}>
+                            Go Back
+                        </Button>
+                        {error && (
+                            <span className="text-red-500 text-sm">{error}</span>
+                        )}
+                    </div>
+                </Card>
+            )}
 
             {/* Loading State */}
             {isSubmitting && (
@@ -4570,6 +5334,7 @@ export const CourseSessionsView: React.FC = () => {
     const [sessions, setSessions] = useState<any[]>([]);
     const [runInfo, setRunInfo] = useState<any>(null);
     const [courseTitle, setCourseTitle] = useState<string>('');
+    const [syncResult, setSyncResult] = useState<{ inserted: number; updated: number; softDeleted: number } | null>(null);
 
     // Delete state
     const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -4635,6 +5400,7 @@ export const CourseSessionsView: React.FC = () => {
         setRunInfo(null);
         setCourseTitle('');
         setDeleteResults(null);
+        setSyncResult(null);
 
         try {
             // Step 1: SSG viewCourseRun → get course reference number + full run details
@@ -4660,6 +5426,7 @@ export const CourseSessionsView: React.FC = () => {
             const sessRes = await fetch(`/api/ssg/courses/runs/${encodeURIComponent(runId)}/sessions?${params}`);
             const sessData = await sessRes.json();
 
+            let fetchedSessions: any[] = [];
             if (!sessRes.ok) {
                 if (sessRes.status === 404) {
                     // No sessions registered yet — show empty state, not error
@@ -4668,8 +5435,31 @@ export const CourseSessionsView: React.FC = () => {
                     throw new Error(sessData.error || `Sessions fetch failed (${sessRes.status})`);
                 }
             } else {
-                const sessionList = sessData?.data?.result?.sessions ?? sessData?.data?.sessions ?? [];
-                setSessions(sessionList);
+                fetchedSessions = sessData?.data?.result?.sessions ?? sessData?.data?.sessions ?? [];
+                setSessions(fetchedSessions);
+            }
+
+            // Step 3: sync fetched sessions to local course_session table so the
+            // admin calendar and other local-DB consumers see them. Fire-and-log
+            // on failure — do not block the main fetch flow.
+            try {
+                const syncRes = await fetch('/api/admin/course-sessions/sync-from-ssg', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ courseRunId: runId, sessions: fetchedSessions }),
+                });
+                const syncJson = await syncRes.json();
+                if (syncRes.ok && syncJson.success) {
+                    setSyncResult({
+                        inserted: syncJson.data.inserted || 0,
+                        updated: syncJson.data.updated || 0,
+                        softDeleted: syncJson.data.softDeleted || 0,
+                    });
+                } else {
+                    console.warn('[CourseSessionsView] Local sync failed:', syncJson.error);
+                }
+            } catch (syncErr) {
+                console.warn('[CourseSessionsView] Local sync error:', syncErr);
             }
         } catch (err) {
             setSearchError(err instanceof Error ? err.message : 'Failed to fetch sessions.');
@@ -4784,6 +5574,13 @@ export const CourseSessionsView: React.FC = () => {
                     <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-sm text-green-800 dark:text-green-300">
                         ✓ <strong>{courseTitle}</strong> — {sessions.length} session{sessions.length !== 1 ? 's' : ''} found
                         {activeSessions.length < sessions.length && ` (${activeSessions.length} active)`}
+                    </div>
+                )}
+
+                {syncResult && !isSearching && (
+                    <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded text-xs text-blue-800 dark:text-blue-300">
+                        Synced to local DB: {syncResult.inserted} inserted, {syncResult.updated} updated
+                        {syncResult.softDeleted > 0 && `, ${syncResult.softDeleted} soft-deleted`}
                     </div>
                 )}
             </Card>

@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
+import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
 
 // Configure multer for file uploads
 const storage: StorageEngine = multer.diskStorage({
@@ -108,7 +109,7 @@ interface CourseData {
     category: string;
     fileName?: string;
   }>;
-  resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string }>;
+  resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string; instructions?: string }>;
 }
 
 export default function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
@@ -208,8 +209,8 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
           filesByFieldname?.assessmentPlan ? `/uploads/plans/${filesByFieldname.assessmentPlan[0].filename}` : null,
           filesByFieldname?.facilitatorGuide ? `/uploads/guides/${filesByFieldname.facilitatorGuide[0].filename}` : null,
           filesByFieldname?.trainerSlides ? `/uploads/slides/${filesByFieldname.trainerSlides[0].filename}` : courseData.trainerSlidesUrl || null,
-          filesByFieldname?.writtenAssessment ? `/uploads/assessments/${filesByFieldname.writtenAssessment[0].filename}` : courseData.writtenAssessmentLink || null,
-          filesByFieldname?.practicalPerformanceAssessment ? `/uploads/assessments/${filesByFieldname.practicalPerformanceAssessment[0].filename}` : courseData.practicalPerformanceAssessmentLink || null,
+          filesByFieldname?.writtenAssessment ? `/uploads/assessments/${filesByFieldname.writtenAssessment[0].filename}` : sanitizeGoogleLink(courseData.writtenAssessmentLink) || null,
+          filesByFieldname?.practicalPerformanceAssessment ? `/uploads/assessments/${filesByFieldname.practicalPerformanceAssessment[0].filename}` : sanitizeGoogleLink(courseData.practicalPerformanceAssessmentLink) || null,
           courseData.courseLink || null,
           courseData.assessmentRecordLink || null,
           courseData.assessmentSummaryRecordUrl || null,
@@ -228,10 +229,16 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
         // Use SAVEPOINT so a failure doesn't abort the entire transaction
         if (courseData.assessmentMethods) {
           try {
+            const sanitizedMethods = Object.fromEntries(
+              Object.entries(courseData.assessmentMethods).map(([key, method]) => [
+                key,
+                { ...method, link: sanitizeGoogleLink(method.link) },
+              ])
+            );
             await client.query('SAVEPOINT set_assessment_methods');
             await client.query(
               'UPDATE course SET assessment_methods = $1 WHERE id = $2',
-              [JSON.stringify(courseData.assessmentMethods), courseId]
+              [JSON.stringify(sanitizedMethods), courseId]
             );
             await client.query('RELEASE SAVEPOINT set_assessment_methods');
           } catch (e) {

@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
 import { IncomingForm, File as FormidableFile } from 'formidable';
 import fs from 'fs';
 import path from 'path';
@@ -64,6 +65,7 @@ interface CourseData {
   fundingValidity?: string;
   numOfTrainers?: number;
   trainersList?: string;
+  trainersEmailList?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
@@ -85,7 +87,7 @@ interface CourseData {
     status?: string;
     action?: 'create' | 'update' | 'delete';
   }[];
-  resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string }>;
+  resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string; instructions?: string }>;
 }
 
 // Ensure upload directories exist
@@ -500,18 +502,19 @@ export default async function handler(
           after_mces_funding = $24,
           is_utap_eligible = $25,
           renewed_status = $26,
-          written_assessment_link = COALESCE($27, written_assessment_link),
-          practical_performance_assessment_link = COALESCE($28, practical_performance_assessment_link),
-          courseware_link = COALESCE($29, courseware_link),
-          brochure_link = COALESCE($30, brochure_link),
-          skillsfuture_link = COALESCE($31, skillsfuture_link),
-          assessment_record_link = COALESCE($32, assessment_record_link),
+          written_assessment_link = $27,
+          practical_performance_assessment_link = $28,
+          courseware_link = $29,
+          brochure_link = $30,
+          skillsfuture_link = $31,
+          assessment_record_link = $32,
           assessment_summary_record_url = $33,
           funding_validity = $34,
           num_of_trainers = $35,
           trainers_list = $36,
+          trainers_email_list = $37,
           updated_at = now()
-        WHERE id = $37
+        WHERE id = $38
         RETURNING id
       `;
 
@@ -542,16 +545,17 @@ export default async function handler(
         courseData.afterMcesFunding || null,
         !!courseData.isUtapEligible,
         courseData.renewedStatus || null,
-        fileUrls.writtenAssessmentLink || courseData.writtenAssessmentLink || null,
-        fileUrls.practicalPerformanceAssessmentLink || courseData.practicalPerformanceAssessmentLink || null,
-        courseData.courseLink || null,
-        courseData.brochureLink || null,
-        courseData.skillsfutureLink || null,
-        courseData.assessmentRecordLink || null,
+        sanitizeGoogleLink(fileUrls.writtenAssessmentLink || courseData.writtenAssessmentLink) || null,
+        sanitizeGoogleLink(fileUrls.practicalPerformanceAssessmentLink || courseData.practicalPerformanceAssessmentLink) || null,
+        courseData.courseLink ?? null,
+        courseData.brochureLink ?? null,
+        courseData.skillsfutureLink ?? null,
+        courseData.assessmentRecordLink ?? null,
         courseData.assessmentSummaryRecordUrl || null,
         courseData.fundingValidity || null,
         courseData.numOfTrainers ?? 0,
         courseData.trainersList || null,
+        courseData.trainersEmailList || null,
         courseId
       ]);
 
@@ -560,15 +564,24 @@ export default async function handler(
       // Use SAVEPOINT so a failure doesn't abort the entire transaction
       if (courseData.assessmentMethods) {
         try {
+          // Sanitize each method's link so multi-account Google share URLs
+          // (ouid / /u/<n>/) don't break for trainers and learners.
+          const sanitizedMethods = Object.fromEntries(
+            Object.entries(courseData.assessmentMethods).map(([key, method]) => [
+              key,
+              { ...method, link: sanitizeGoogleLink(method.link) },
+            ])
+          );
           await client.query('SAVEPOINT update_assessment_methods');
           await client.query(
-            'UPDATE course SET assessment_methods = COALESCE($1, assessment_methods) WHERE id = $2',
-            [JSON.stringify(courseData.assessmentMethods), courseId]
+            'UPDATE course SET assessment_methods = $1::jsonb WHERE id = $2',
+            [JSON.stringify(sanitizedMethods), courseId]
           );
           await client.query('RELEASE SAVEPOINT update_assessment_methods');
+          console.log('✅ assessment_methods updated successfully');
         } catch (e) {
           await client.query('ROLLBACK TO SAVEPOINT update_assessment_methods');
-          console.log('⚠️ Could not update assessment_methods (column may not exist yet)');
+          console.error('⚠️ Could not update assessment_methods:', e instanceof Error ? e.message : e);
         }
       }
 

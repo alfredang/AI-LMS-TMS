@@ -651,7 +651,7 @@ const DocumentSection: React.FC<{
                                 </a>
                             )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Upload your CV and certifications to this Google Drive folder.</p>
+                        <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Add the link to your Google Drive folder containing your CV and certifications.</p>
                     </div>
                 </div>
             </section>

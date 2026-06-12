@@ -1,10 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { google } from 'googleapis';
-import path from 'path';
-import fs from 'fs';
-import os from 'os';
-import { execSync } from 'child_process';
 import PizZip from 'pizzip';
+import { Readable } from 'stream';
+import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
 
 interface Grant {
   funding_scheme: string;
@@ -26,15 +23,7 @@ interface ProFormaRequest {
 }
 
 const TEMPLATE_ID = '1KbvgGpNsirzmCvLZOuMv7SY5IWxX0XfTSbnNF_pjZYY';
-const SOFFICE_PATH = 'C:\\Program Files\\LibreOffice\\program\\soffice.exe';
 
-function getAuth() {
-  const keyFile = path.join(process.cwd(), 'service-account.json');
-  return new google.auth.GoogleAuth({
-    keyFile,
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  });
-}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -56,6 +45,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const order = (data.enrolment_id ?? '').replace('#', '');
   const amount1 = parseFloat((data.course_fees_exclude_gst ?? '0').replace(/,/g, ''));
+  if (!Number.isFinite(amount1) || amount1 < 0) {
+    return res.status(400).json({
+      error: 'Invalid course fee',
+      detail: 'course_fees_exclude_gst is missing or not a number. Set course fees on the course in admin.',
+    });
+  }
 
   let subTotal = amount1;
   let amount2 = 0;
@@ -116,15 +111,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     '{{total}}': total.toFixed(2),
   };
 
-  const tmpDir = os.tmpdir();
-  const timestamp = Date.now();
-  const docxPath = path.join(tmpDir, `invoice_${timestamp}.docx`);
-  const pdfFile = path.join(tmpDir, `invoice_${timestamp}.pdf`);
-
   try {
-    // 1. Download template as docx from Google Drive (read-only, no storage used)
-    const auth = getAuth();
-    const drive = google.drive({ version: 'v3', auth });
+    // 1. Download template as docx — same OAuth Drive client as invoice PDF uploads (Company Settings)
+    const drive = await getDriveClient();
 
     const exportRes = await drive.files.export(
       { fileId: TEMPLATE_ID, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
@@ -134,7 +123,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const docxBuffer = Buffer.from(exportRes.data as ArrayBuffer);
 
     // 2. Use PizZip to open the docx and do raw XML find-replace
-    //    This avoids docxtemplater parsing issues with {{}} syntax
     const zip = new PizZip(docxBuffer);
 
     const xmlFiles = [
@@ -149,7 +137,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (zip.files[xmlFile]) {
         let xml = zip.files[xmlFile].asText();
         for (const [placeholder, value] of Object.entries(replacements)) {
-          // Escape special regex chars in placeholder
           const escaped = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           xml = xml.replace(new RegExp(escaped, 'g'), value);
         }
@@ -159,32 +146,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const filledDocx = zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
-    // 3. Save filled docx to temp folder
-    fs.writeFileSync(docxPath, filledDocx);
-
-    // 4. Convert to PDF using LibreOffice
-    execSync(`"${SOFFICE_PATH}" --headless --convert-to pdf --outdir "${tmpDir}" "${docxPath}"`, {
-      timeout: 30000,
+    // 3. Upload filled docx to Drive as a Google Doc (Drive converts automatically)
+    const tempDocRes = await drive.files.create({
+      requestBody: {
+        name: '_temp_proforma_convert',
+        mimeType: 'application/vnd.google-apps.document',
+      },
+      media: {
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        body: Readable.from(filledDocx),
+      },
+      fields: 'id',
     });
 
-    // 5. Read the PDF
+    const tempDocId = tempDocRes.data.id!;
+
+    // 4. Export the Google Doc as PDF
+    const pdfExport = await drive.files.export(
+      { fileId: tempDocId, mimeType: 'application/pdf' },
+      { responseType: 'arraybuffer' }
+    );
+    const pdfBuffer = Buffer.from(pdfExport.data as ArrayBuffer);
+
+    // 5. Delete the temp Google Doc
+    await drive.files.delete({ fileId: tempDocId }).catch((e: any) => {
+      console.warn(`[proforma] Failed to delete temp doc ${tempDocId}: ${e?.message}`);
+    });
+
+    // 6. Return PDF to browser
     const orderNum = order || data.course_code || 'invoice';
-    const pdfBuffer = fs.readFileSync(pdfFile);
-
-    // 6. Clean up temp files
-    try { fs.unlinkSync(docxPath); } catch (_) {}
-    try { fs.unlinkSync(pdfFile); } catch (_) {}
-
-    // 7. Return PDF to browser
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="ProFormaInvoice_${orderNum}.pdf"`);
     res.setHeader('Content-Length', pdfBuffer.length);
     res.status(200).end(pdfBuffer);
 
   } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
     console.error('[proforma] Error:', err);
-    try { fs.unlinkSync(docxPath); } catch (_) {}
-    try { fs.unlinkSync(pdfFile); } catch (_) {}
-    res.status(500).json({ error: 'Failed to generate PDF' });
+    res.status(500).json({
+      error: 'Failed to generate PDF',
+      detail,
+    });
   }
 }

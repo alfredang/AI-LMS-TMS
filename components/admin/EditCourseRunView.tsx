@@ -156,14 +156,18 @@ export const EditCourseRunView: React.FC = () => {
             setSsgTrainers(ssgLinks.map((link: any) => link.trainer).filter(Boolean));
 
             // Populate form fields
-            const startDate = toDateInput(run.courseStartDate ?? run.courseDates?.start);
+            const startDate = toDateInput(run.courseStartDate || run.courseDates?.start);
             setCourseStartDate(startDate);
-            setCourseEndDate(toDateInput(run.courseEndDate ?? run.courseDates?.end));
+            setCourseEndDate(toDateInput(run.courseEndDate || run.courseDates?.end));
 
-            // Opening = today, Closing = day before course start date
+            // Use SSG registration dates when present (?? avoids treating "" as missing vs ||)
+            const existingOpening = toDateInput(run.registrationOpeningDate ?? run.registrationDates?.opening);
+            const existingClosing = toDateInput(run.registrationClosingDate ?? run.registrationDates?.closing);
             const today = new Date().toISOString().split('T')[0];
-            setOpeningRegistrationDate(today);
-            if (startDate) {
+            setOpeningRegistrationDate(existingOpening || today);
+            if (existingClosing) {
+                setClosingRegistrationDate(existingClosing);
+            } else if (startDate) {
                 const dayBefore = new Date(startDate);
                 dayBefore.setDate(dayBefore.getDate() - 1);
                 setClosingRegistrationDate(dayBefore.toISOString().split('T')[0]);
@@ -182,7 +186,7 @@ export const EditCourseRunView: React.FC = () => {
             setWheelchairAccess(venue.wheelChairAccess ? OptionalSelector.YES : OptionalSelector.NO);
 
             setModeOfTraining(run.modeOfTraining ?? '1');
-            setCourseAdminEmail('sales@tertiarycourses.com.sg');
+            setCourseAdminEmail(run.courseAdminEmail ?? '');
             setCourseVacancy(run.courseVacancy?.code ?? 'A');
 
             setIsDataLoaded(true);
@@ -284,10 +288,18 @@ export const EditCourseRunView: React.FC = () => {
                 }));
             }
 
+            console.log('📦 Edit Course Run payload:', JSON.stringify(body, null, 2));
+
             const res = await fetch(
                 `/api/ssg/courses/courseRuns/${encodeURIComponent(courseRunId.trim())}?action=edit`,
                 { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
             );
+
+            const contentType = res.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                const text = await res.text();
+                throw new Error(`Server error ${res.status}: ${text.slice(0, 300)}`);
+            }
 
             const data = await res.json();
 
@@ -471,6 +483,7 @@ export const EditCourseRunView: React.FC = () => {
                                 <input type="date" value={courseStartDate} onChange={e => {
                                     setCourseStartDate(e.target.value);
                                     if (e.target.value) {
+                                        setOpeningRegistrationDate(new Date().toISOString().split('T')[0]);
                                         const dayBefore = new Date(e.target.value);
                                         dayBefore.setDate(dayBefore.getDate() - 1);
                                         setClosingRegistrationDate(dayBefore.toISOString().split('T')[0]);
@@ -554,11 +567,11 @@ export const EditCourseRunView: React.FC = () => {
                         {/* SSG-assigned trainers (from viewCourseRun response) */}
                         {ssgTrainers.length === 0 ? (
                             <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 mb-4">
-                                No trainer has been assigned to this course run in SSG yet. Use the form below to assign one.
+                                No TPG trainer has been assigned to this course run yet. Use the form below to assign one.
                             </div>
                         ) : (
                             <div className="mb-6">
-                                <h4 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">Currently Assigned Trainer</h4>
+                                <h4 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">Assigned Trainer (TPG)</h4>
                                 <div className="space-y-4">
                                     {ssgTrainers.map((t, idx) => (
                                         <div key={t.id ?? idx} className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">

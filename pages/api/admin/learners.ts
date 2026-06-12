@@ -15,7 +15,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         u.full_name,
         u.email
       FROM app_user u
-      JOIN user_role_map r ON r.user_id = u.id AND r.role = 'Learner'
     `;
 
     const params: any[] = [];
@@ -25,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params.push(`%${search}%`);
     }
 
-    query += ` ORDER BY u.full_name LIMIT 200`;
+    query += ` ORDER BY u.full_name LIMIT 10000`;
 
     const result = await pool.query(query, params);
 

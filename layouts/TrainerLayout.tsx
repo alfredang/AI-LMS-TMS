@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-
+import { useAppVersion } from '@hooks/useAppVersion';
 import { useLms } from '../contexts/LmsContext';
 import { View, TrainerPage } from '@app-types';
 import CalendarView from '../components/CalendarView';
@@ -10,49 +10,40 @@ import CreateView from '../components/CreateView';
 import { ProfilePage } from '@components/ProfilePage';
 import { CourseDetail } from '../components/CourseDetail';
 import HelpAndSupportView from '../components/HelpAndSupportView';
-import { Icon, IconName } from '../components/ui/Icon';
 import TrainerHomePage from '../components/trainer/TrainerHomePage';
 import TrainerSidebar from '../components/trainer/TrainerSidebar';
 import AssessmentGrading from '../components/trainer/AssessmentGrading';
 import PastAttendance from '../components/trainer/PastAttendance';
 import PastAssessment from '../components/trainer/PastAssessment';
 import EdToolsPage from '../components/trainer/EdToolsPage';
+import ProjectMgtToolsPage from '../components/trainer/ProjectMgtToolsPage';
+import ProblemSolvingToolsPage from '../components/trainer/ProblemSolvingToolsPage';
+import CyberSecurityToolsPage from '../components/trainer/CyberSecurityToolsPage';
 import DataAnalyticsToolsPage from '../components/trainer/DataAnalyticsToolsPage';
+import MLToolsPage from '../components/trainer/MLToolsPage';
 import FinanceToolsPage from '../components/trainer/FinanceToolsPage';
+import HRToolsPage from '../components/trainer/HRToolsPage';
 import StatToolsPage from '../components/trainer/StatToolsPage';
 import DoeToolsPage from '../components/trainer/DoeToolsPage';
 import SpcToolsPage from '../components/trainer/SpcToolsPage';
 import SustainabilityToolsPage from '../components/trainer/SustainabilityToolsPage';
+import NetworkingToolsPage from '../components/trainer/NetworkingToolsPage';
+import K8sToolsPage from '../components/trainer/K8sToolsPage';
+import BlockchainToolsPage from '../components/trainer/BlockchainToolsPage';
+import QuantumToolsPage from '../components/trainer/QuantumToolsPage';
+import DesignToolsPage from '../components/trainer/DesignToolsPage';
 import LessonDeliveryGuidePage from '../components/trainer/LessonDeliveryGuidePage';
+import TrainerGuidesPage from '../components/trainer/TrainerGuidesPage';
 import VirtualToolsPage from '../components/trainer/VirtualToolsPage';
 import AgenticAIToolsPage from '../components/trainer/AgenticAIToolsPage';
 import AssessmentGuidePage from '../components/trainer/AssessmentGuidePage';
-
-const PAGE_LABELS: Record<TrainerPage, string> = {
-  [TrainerPage.EAttendance]: 'E-Attendance',
-  [TrainerPage.AssessmentGrading]: 'Assessment Grading',
-  [TrainerPage.MyClasses]: 'My Classes',
-  [TrainerPage.PastAttendance]: 'Past Attendance',
-  [TrainerPage.PastAssessment]: 'Past Assessment',
-  [TrainerPage.TaskList]: 'Task List',
-  [TrainerPage.GenAIAuthoring]: 'GenAI Tools',
-  [TrainerPage.EdTools]: 'Ed Tools',
-  [TrainerPage.DataAnalyticsTools]: 'Data Analytics Tools',
-  [TrainerPage.FinanceTools]: 'Finance Tools',
-  [TrainerPage.StatTools]: 'Statistical Tools',
-  [TrainerPage.DoeTools]: 'DOE Tools',
-  [TrainerPage.SpcTools]: 'SPC Tools',
-  [TrainerPage.SustainabilityTools]: 'Sustainability Tools',
-  [TrainerPage.VirtualTools]: 'Virtual Tools',
-  [TrainerPage.AgenticAITools]: 'Agentic AI Tools',
-  [TrainerPage.LessonDeliveryGuide]: 'Lesson Delivery Guide',
-  [TrainerPage.AssessmentGuide]: 'Assessment Guide',
-};
+import TrainingHoursPage from '../components/trainer/TrainingHoursPage';
+import PaymentHistoryPage from '../components/trainer/PaymentHistoryPage';
 
 const TrainerLayout: React.FC = () => {
   const { currentView, trainerPage, selectedCourse } = useLms();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+  const appVersion = useAppVersion();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const renderContent = () => {
     if (currentView === View.Profile) return <ProfilePage />;
@@ -66,6 +57,8 @@ const TrainerLayout: React.FC = () => {
         return <AssessmentGrading />;
       case TrainerPage.MyClasses:
         return <CourseList />;
+      case TrainerPage.TrainingHours:
+        return <TrainingHoursPage />;
       case TrainerPage.PastAttendance:
         return <PastAttendance />;
       case TrainerPage.PastAssessment:
@@ -76,10 +69,20 @@ const TrainerLayout: React.FC = () => {
         return <CreateView />;
       case TrainerPage.EdTools:
         return <EdToolsPage />;
+      case TrainerPage.ProjectMgtTools:
+        return <ProjectMgtToolsPage />;
+      case TrainerPage.ProblemSolvingTools:
+        return <ProblemSolvingToolsPage />;
+      case TrainerPage.CyberSecurityTools:
+        return <CyberSecurityToolsPage />;
       case TrainerPage.DataAnalyticsTools:
         return <DataAnalyticsToolsPage />;
+      case TrainerPage.MLTools:
+        return <MLToolsPage />;
       case TrainerPage.FinanceTools:
         return <FinanceToolsPage />;
+      case TrainerPage.HRTools:
+        return <HRToolsPage />;
       case TrainerPage.StatTools:
         return <StatToolsPage />;
       case TrainerPage.DoeTools:
@@ -88,14 +91,30 @@ const TrainerLayout: React.FC = () => {
         return <SpcToolsPage />;
       case TrainerPage.SustainabilityTools:
         return <SustainabilityToolsPage />;
+      case TrainerPage.NetworkingTools:
+        return <NetworkingToolsPage />;
+      case TrainerPage.K8sTools:
+        return <K8sToolsPage />;
+      case TrainerPage.BlockchainTools:
+        return <BlockchainToolsPage />;
+      case TrainerPage.QuantumTools:
+        return <QuantumToolsPage />;
+      case TrainerPage.DesignTools:
+        return <DesignToolsPage />;
       case TrainerPage.VirtualTools:
         return <VirtualToolsPage />;
       case TrainerPage.AgenticAITools:
         return <AgenticAIToolsPage />;
+      case TrainerPage.TrainerGuides:
+        return <TrainerGuidesPage />;
       case TrainerPage.LessonDeliveryGuide:
-        return <LessonDeliveryGuidePage />;
+        return <LessonDeliveryGuidePage variant="physical" />;
+      case TrainerPage.VirtualClassGuide:
+        return <LessonDeliveryGuidePage variant="virtual" />;
       case TrainerPage.AssessmentGuide:
         return <AssessmentGuidePage />;
+      case TrainerPage.PaymentHistory:
+        return <PaymentHistoryPage />;
       default:
         return <TrainerHomePage />;
     }
@@ -105,59 +124,32 @@ const TrainerLayout: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-background font-sans text-on-surface">
       <Header />
 
-      {/* Sub-header: sidebar toggle + current page breadcrumb */}
-      <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700">
-        <button
-          onClick={() => {
-            setIsSidebarOpen(prev => !prev);
-            setIsDesktopSidebarOpen(prev => !prev);
-          }}
-          className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-          title="Toggle sidebar"
-        >
-          <Icon name={IconName.Menu} className="w-6 h-6" />
-        </button>
-        <h2 className="text-lg font-bold truncate">
-          {currentView === View.Profile ? 'Profile' : currentView === View.HelpAndSupport ? 'Help & Support' : selectedCourse ? selectedCourse.title : PAGE_LABELS[trainerPage]}
-        </h2>
-      </div>
-
-      {/* Mobile Sidebar Overlay */}
-      {isSidebarOpen && (
-        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">
-          <div
-            className="absolute inset-0 bg-black/50"
-            aria-hidden="true"
-            onClick={() => setIsSidebarOpen(false)}
-          />
-          <div className="relative flex flex-col w-72 max-w-[calc(100%-3rem)] h-full bg-surface shadow-xl">
-            <div className="p-4 flex justify-between items-center border-b dark:border-gray-700">
-              <h3 className="font-bold">Menu</h3>
-              <button
-                onClick={() => setIsSidebarOpen(false)}
-                className="p-2 -mr-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-              >
-                <Icon name={IconName.Close} className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <TrainerSidebar onNavigate={() => setIsSidebarOpen(false)} />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Layout Container */}
       <div className="flex flex-1">
-        {/* Desktop Sidebar */}
-        <aside className={`${isDesktopSidebarOpen ? 'hidden md:flex' : 'hidden'} w-64 flex-shrink-0 border-r border-gray-200 dark:border-slate-700 transition-all`}>
-          <div className="w-full">
-            <TrainerSidebar />
-          </div>
-        </aside>
+        {/* Sidebar: icon rail when collapsed, full panel when expanded */}
+        <div className="flex flex-shrink-0">
+          <aside className={`${isSidebarOpen ? 'w-64' : 'w-14'} bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col h-[calc(100vh-64px)] sticky top-[64px] transition-all duration-200`}>
+            {/* Toggle arrow at top */}
+            <div className={`flex ${isSidebarOpen ? 'justify-end' : 'justify-center'} px-2 py-2 border-b border-gray-200 dark:border-gray-700`}>
+              <button
+                onClick={() => setIsSidebarOpen(prev => !prev)}
+                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              >
+                <svg className={`w-5 h-5 transition-transform ${isSidebarOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+              <TrainerSidebar collapsed={!isSidebarOpen} />
+            </div>
+            {isSidebarOpen && <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>}
+          </aside>
+        </div>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-x-hidden">
+        <main className="flex-1 min-w-0 overflow-x-hidden">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             {renderContent()}
           </div>

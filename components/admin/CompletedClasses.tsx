@@ -1,5 +1,5 @@
 import { getApiUrl, getFileUrl } from '@/lib/urlHelpers';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -8,10 +8,12 @@ import { authService } from '@lib/services/authService';
 import { AdminPage } from '@app-types';
 
 interface CompletedClass {
+  id: string;
   courseRunId: string;
   courseTitle: string;
   courseCode: string;
   classStatus: string;
+  classType: string;
   digitalAttendanceId: string;
   startDate: string;
   endDate: string;
@@ -48,8 +50,16 @@ const StatCard: React.FC<{ title: string; value: string | number }> = ({ title, 
   </Card>
 );
 
+interface SyncResult {
+  courseRunId: string;
+  courseTitle: string;
+  ssgEnrolmentsFetched: number;
+  ssgEnrolmentsInserted: number;
+  errors: string[];
+}
+
 const CompletedClasses: React.FC = () => {
-  const { setAdminPage, setSelectedCourseRunId } = useLms();
+  const { setAdminPage, setSelectedCourseRunId, setEditingCourseRun, setClassListReturnTo, classListCurrentPage, setClassListCurrentPage } = useLms();
   const [completedClasses, setCompletedClasses] = useState<CompletedClass[]>([]);
   const [statistics, setStatistics] = useState<Statistics>({
     completedClassesFound: 0,
@@ -59,6 +69,16 @@ const CompletedClasses: React.FC = () => {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Sync from SSG modal state
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncInput, setSyncInput] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncResults, setSyncResults] = useState<SyncResult[] | null>(null);
+  const [syncSummary, setSyncSummary] = useState<any>(null);
+  const [syncError, setSyncError] = useState('');
+  const [syncProgress, setSyncProgress] = useState({ completed: 0, total: 0, currentId: '' });
+  const [skipExisting, setSkipExisting] = useState(true);
+
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -66,6 +86,11 @@ const CompletedClasses: React.FC = () => {
   const [courseCode, setCourseCode] = useState('');
   const [courseRunId, setCourseRunId] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState('');
+  const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'Confirmed' | 'Pending' | 'Cancelled'>('all');
+  const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External'>('all');
+  const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
+  const [selectedLearnerFilter, setSelectedLearnerFilter] = useState<'all' | 'withLearners' | 'noLearners'>('withLearners');
+  const [selectedTrainerAssignmentFilter, setSelectedTrainerAssignmentFilter] = useState<'all' | 'withTrainers' | 'noTrainers'>('all');
   const [startDateFrom, setStartDateFrom] = useState('');
   const [endDateUntil, setEndDateUntil] = useState('');
 
@@ -77,10 +102,20 @@ const CompletedClasses: React.FC = () => {
   const [debouncedStartDate, setDebouncedStartDate] = useState('');
   const [debouncedEndDate, setDebouncedEndDate] = useState('');
 
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(() => classListCurrentPage);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
+  // Track initial mount to prevent filter-reset effects from overriding the restored page
+  const isInitialMount = useRef(true);
+  // Track current page in a ref to avoid closure bugs and sync with context
+  const currentPageRef = useRef(currentPage);
+
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+    // Sync back to context so edit→return preserves the page
+    setClassListCurrentPage(currentPage);
+  }, [currentPage]);
   const ITEMS_PER_PAGE = 20;
 
   // Fetch trainers from API
@@ -109,7 +144,7 @@ const CompletedClasses: React.FC = () => {
       console.log('🔄 Fetching completed classes...');
       setLoading(true);
       const params = new URLSearchParams({
-        page: currentPage.toString(),
+        page: currentPageRef.current.toString(),
         limit: ITEMS_PER_PAGE.toString(),
         _t: Date.now().toString(),
       });
@@ -120,6 +155,11 @@ const CompletedClasses: React.FC = () => {
       if (debouncedCourseCode) params.append('courseCode', debouncedCourseCode);
       if (debouncedCourseRunId) params.append('courseRunId', debouncedCourseRunId);
       if (selectedTrainer) params.append('trainer', selectedTrainer);
+      if (selectedClassStatus !== 'all') params.append('classStatus', selectedClassStatus);
+      if (selectedClassType !== 'all') params.append('classType', selectedClassType);
+      if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
+      if (selectedLearnerFilter !== 'all') params.append('learnerFilter', selectedLearnerFilter);
+      if (selectedTrainerAssignmentFilter !== 'all') params.append('trainerAssignmentFilter', selectedTrainerAssignmentFilter);
       if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
       if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
 
@@ -164,6 +204,9 @@ const CompletedClasses: React.FC = () => {
 
   // Debounce text filter inputs (300ms) and reset page
   useEffect(() => {
+    if (isInitialMount.current) {
+      return; // Skip first run — debounced values already default to '' and page is restored from context
+    }
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
       setDebouncedCourseTitle(courseTitle);
@@ -178,13 +221,22 @@ const CompletedClasses: React.FC = () => {
 
   // Reset page immediately for non-debounced filters (dropdowns)
   useEffect(() => {
+    if (isInitialMount.current) {
+      return;
+    }
     setCurrentPage(0);
-  }, [selectedTrainer]);
+  }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter]);
+
+  // Mark initial mount as done AFTER all other mount effects have executed
+  useEffect(() => {
+    isInitialMount.current = false;
+    return () => { isInitialMount.current = true; }; // Reset for React StrictMode remount
+  }, []);
 
   // Fetch data when debounced filters or pagination change
   useEffect(() => {
     fetchCompletedClasses();
-  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, debouncedStartDate, debouncedEndDate]);
+  }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter, debouncedStartDate, debouncedEndDate]);
 
   // Date formatting function
   const formatDateInput = (value: string) => {
@@ -214,13 +266,102 @@ const CompletedClasses: React.FC = () => {
     setCourseCode('');
     setCourseRunId('');
     setSelectedTrainer('');
+    setSelectedClassStatus('all');
+    setSelectedClassType('all');
+    setSelectedCourseType('all');
+    setSelectedLearnerFilter('withLearners');
+    setSelectedTrainerAssignmentFilter('all');
     setStartDateFrom('');
     setEndDateUntil('');
     setCurrentPage(0);
   };
 
-  const handleViewDetails = (courseRunId: string) => {
-    setSelectedCourseRunId(courseRunId);
+  const parseCourseRunIds = (input: string): string[] => {
+    // Extract numeric IDs from any format: comma-separated, newline-separated, spaces, etc.
+    const ids = input.match(/\d{6,}/g) || [];
+    return [...new Set(ids)]; // deduplicate
+  };
+
+  const handleSyncFromSSG = async () => {
+    const ids = parseCourseRunIds(syncInput);
+    if (ids.length === 0) {
+      setSyncError('No valid course run IDs found. Enter numeric IDs (6+ digits).');
+      return;
+    }
+
+    setSyncing(true);
+    setSyncError('');
+    setSyncResults(null);
+    setSyncSummary(null);
+    setSyncProgress({ completed: 0, total: ids.length, currentId: '' });
+
+    const BATCH_SIZE = 5;
+    const allResults: SyncResult[] = [];
+    const allSkippedExisting: { courseRunId: string; courseTitle: string }[] = [];
+    const authToken = authService.getAuthToken();
+
+    try {
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = ids.slice(i, i + BATCH_SIZE);
+        setSyncProgress({ completed: i, total: ids.length, currentId: batch[0] });
+
+        const response = await fetch(getApiUrl(`/api/admin/sync-completed-classes?app=app1&skipExisting=${skipExisting ? '1' : '0'}`), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
+          },
+          body: JSON.stringify({ courseRunIds: batch }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          if (data.results) allResults.push(...data.results);
+          if (data.skippedExisting) allSkippedExisting.push(...data.skippedExisting);
+          setSyncResults([...allResults]);
+        } else {
+          setSyncError(data.error || `Batch failed at ID ${batch[0]}`);
+          break;
+        }
+      }
+
+      setSyncProgress({ completed: ids.length, total: ids.length, currentId: '' });
+
+      // Build combined summary
+      setSyncSummary({
+        alreadyInDb: allSkippedExisting.length,
+        pulledFromSsg: allResults.length,
+        totalCourseRuns: allResults.length,
+        totalEnrolmentsFetched: allResults.reduce((s, r) => s + r.ssgEnrolmentsFetched, 0),
+        totalEnrolmentsInserted: allResults.reduce((s, r) => s + r.ssgEnrolmentsInserted, 0),
+        skippedExisting: allSkippedExisting,
+      });
+
+      // Refresh the table
+      fetchCompletedClasses();
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Network error. Please try again.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const closeSyncModal = () => {
+    setShowSyncModal(false);
+    setSyncInput('');
+    setSyncResults(null);
+    setSyncSummary(null);
+    setSyncError('');
+    setSyncProgress({ completed: 0, total: 0, currentId: '' });
+    setSkipExisting(true);
+  };
+
+  const handleViewDetails = (classItem: any) => {
+    setEditingCourseRun(classItem);
+    setSelectedCourseRunId(classItem.courseRunId);
+    setClassListCurrentPage(currentPage);
+    setClassListReturnTo(AdminPage.CompletedClasses);
     setAdminPage(AdminPage.ClassDetail);
   };
 
@@ -243,7 +384,163 @@ const CompletedClasses: React.FC = () => {
 
   return (
     <div>
-      <h2 className="text-3xl font-bold mb-6 dark:text-white">Completed Classes</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold dark:text-white">Completed Classes</h2>
+        <Button variant="primary" size="sm" onClick={() => setShowSyncModal(true)}>
+          Sync from SSG
+        </Button>
+      </div>
+
+      {/* Sync from SSG Modal */}
+      {showSyncModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) closeSyncModal(); }}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold dark:text-white">Sync Course Runs from SSG</h3>
+                <button onClick={closeSyncModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+              </div>
+
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Enter course run IDs below (comma-separated, one per line, or any format).
+                Data will be pulled from SSG API including enrollments, sessions, attendance, and trainer info.
+                Only course runs with at least 1 enrollment will be added.
+              </p>
+
+              <textarea
+                value={syncInput}
+                onChange={(e) => setSyncInput(e.target.value)}
+                placeholder={"Enter course run IDs, e.g.:\n1322309\n1325270\n1077452"}
+                rows={8}
+                disabled={syncing}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 disabled:opacity-50"
+              />
+
+              <div className="flex justify-between items-center mt-2 mb-4">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {parseCourseRunIds(syncInput).length} unique IDs detected
+                </span>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Skip existing</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={skipExisting}
+                    onClick={() => setSkipExisting(!skipExisting)}
+                    disabled={syncing}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${skipExisting ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                      } disabled:opacity-50`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${skipExisting ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                      }`} />
+                  </button>
+                </label>
+              </div>
+
+              {syncError && (
+                <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-md mb-4 text-sm">
+                  {syncError}
+                </div>
+              )}
+
+              {/* Progress bar during sync */}
+              {syncing && syncProgress.total > 0 && (
+                <div className="mb-4">
+                  <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    <span>Syncing: {syncProgress.completed} / {syncProgress.total} course runs</span>
+                    <span>{Math.round((syncProgress.completed / syncProgress.total) * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${Math.max(2, (syncProgress.completed / syncProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    ~{Math.ceil(((syncProgress.total - syncProgress.completed) / 5) * 30)}s remaining (est.)
+                  </p>
+                </div>
+              )}
+
+              {!syncResults && !syncing && (
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={closeSyncModal}>Cancel</Button>
+                  <Button variant="primary" size="sm" onClick={handleSyncFromSSG} disabled={parseCourseRunIds(syncInput).length === 0}>
+                    Sync {parseCourseRunIds(syncInput).length} Course Runs
+                  </Button>
+                </div>
+              )}
+
+              {/* Sync Results */}
+              {syncSummary && syncResults && (
+                <div className="mt-4">
+                  <div className="grid grid-cols-4 gap-3 mb-4">
+                    <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 text-center">
+                      <p className="text-lg font-bold text-gray-500">{syncSummary.alreadyInDb || 0}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Already in DB</p>
+                    </div>
+                    <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-3 text-center">
+                      <p className="text-lg font-bold text-blue-600">{syncSummary.pulledFromSsg || syncSummary.totalCourseRuns}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Pulled from SSG</p>
+                    </div>
+                    <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-3 text-center">
+                      <p className="text-lg font-bold text-green-600">{syncSummary.totalEnrolmentsFetched}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Enrollments Found</p>
+                    </div>
+                    <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-3 text-center">
+                      <p className="text-lg font-bold text-purple-600">{syncSummary.totalEnrolmentsInserted}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">New Enrollments</p>
+                    </div>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto border dark:border-gray-700 rounded-md">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Run ID</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Course Title</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">Enrol</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {syncSummary.skippedExisting?.map((s: any) => (
+                          <tr key={`existing-${s.courseRunId}`} className="bg-gray-50/50 dark:bg-gray-700/10">
+                            <td className="px-3 py-1.5 text-gray-400 dark:text-gray-500 font-mono">{s.courseRunId}</td>
+                            <td className="px-3 py-1.5 text-gray-400 dark:text-gray-500 truncate max-w-[200px]">{s.courseTitle}</td>
+                            <td className="px-3 py-1.5 text-center text-gray-400 dark:text-gray-500">—</td>
+                            <td className="px-3 py-1.5 text-center">
+                              <span className="text-gray-400 dark:text-gray-500 text-xs">In DB</span>
+                            </td>
+                          </tr>
+                        ))}
+                        {syncResults.map((r) => (
+                          <tr key={r.courseRunId} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                            <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 font-mono">{r.courseRunId}</td>
+                            <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 truncate max-w-[200px]">{r.courseTitle}</td>
+                            <td className="px-3 py-1.5 text-center text-gray-700 dark:text-gray-300">{r.ssgEnrolmentsFetched}</td>
+                            <td className="px-3 py-1.5 text-center">
+                              {r.errors.length === 0 ? (
+                                <span className="text-green-600 text-xs font-medium">OK</span>
+                              ) : (
+                                <span className="text-red-500 text-xs" title={r.errors.join(', ')}>Error</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex justify-end mt-4">
+                    <Button variant="primary" size="sm" onClick={closeSyncModal}>Done</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -352,6 +649,75 @@ const CompletedClasses: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Status</label>
+                  <select
+                    value={selectedClassStatus}
+                    onChange={(e) => setSelectedClassStatus(e.target.value as 'all' | 'Confirmed' | 'Pending' | 'Cancelled')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Class Type</label>
+                  <select
+                    value={selectedClassType}
+                    onChange={(e) => setSelectedClassType(e.target.value as 'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="Physical">Physical</option>
+                    <option value="Virtual">Virtual</option>
+                    <option value="Hybrid">Hybrid</option>
+                    <option value="External">External</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Type</label>
+                  <select
+                    value={selectedCourseType}
+                    onChange={(e) => setSelectedCourseType(e.target.value as 'all' | 'WSQ' | 'IBF' | 'Non-WSQ')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="WSQ">WSQ</option>
+                    <option value="IBF">IBF</option>
+                    <option value="Non-WSQ">Non-WSQ</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Learners</label>
+                  <select
+                    value={selectedLearnerFilter}
+                    onChange={(e) => setSelectedLearnerFilter(e.target.value as 'all' | 'withLearners' | 'noLearners')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="withLearners">With Learners</option>
+                    <option value="noLearners">No Learners Only</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer Assignment</label>
+                  <select
+                    value={selectedTrainerAssignmentFilter}
+                    onChange={(e) => setSelectedTrainerAssignmentFilter(e.target.value as 'all' | 'withTrainers' | 'noTrainers')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  >
+                    <option value="all">All</option>
+                    <option value="withTrainers">With Trainers</option>
+                    <option value="noTrainers">No Trainers Only</option>
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date (From)</label>
                   <input
                     type="text"
@@ -388,7 +754,7 @@ const CompletedClasses: React.FC = () => {
             <Icon name={IconName.CheckCircle} className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2 dark:text-white">No completed classes found</h3>
             <p className="text-gray-500 mb-6 dark:text-gray-400">
-              {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || startDateFrom || endDateUntil
+              {searchQuery || courseTitle || courseCode || courseRunId || selectedTrainer || selectedClassStatus !== 'all' || selectedClassType !== 'all' || selectedCourseType !== 'all' || selectedLearnerFilter !== 'withLearners' || selectedTrainerAssignmentFilter !== 'all' || startDateFrom || endDateUntil
                 ? "No classes match your current search criteria."
                 : "There are no completed classes in the system yet."}
             </p>
@@ -396,35 +762,84 @@ const CompletedClasses: React.FC = () => {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <table className="divide-y divide-gray-200 dark:divide-gray-700" style={{ tableLayout: 'fixed', width: '1850px' }}>
+                <colgroup>
+                  <col style={{ width: '90px' }} />
+                  <col style={{ width: '420px' }} />
+                  <col style={{ width: '160px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '100px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '110px' }} />
+                  <col style={{ width: '80px' }} />
+                  <col style={{ width: '200px' }} />
+                  <col style={{ width: '200px' }} />
+                  <col style={{ width: '70px' }} />
+                </colgroup>
                 <thead className="bg-gray-50 dark:bg-gray-700/50">
-                  <tr className="border-b">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Run ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Title</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Course Ref Code</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Start Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">End Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Trainer</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400"># of Trainee</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">Actions</th>
+                  <tr className="border-b dark:border-gray-700">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Run ID</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Title</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Course Ref Code</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Class Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">End Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Learners</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (TPG)</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">Trainer (Local)</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
-                  {completedClasses.map((classItem, index) => (
-                    <tr key={classItem.courseRunId || index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{classItem.courseRunId}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseTitle}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.trainerName}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700 text-center dark:text-gray-200">{classItem.numOfTrainee}</td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center space-x-2">
-                          <Button size="sm" variant="ghost" onClick={() => handleViewDetails(classItem.courseRunId)}>
-                            Details
-                          </Button>
-                        </div>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {completedClasses.map((classItem: any, index) => (
+                    <tr key={classItem.courseRunId || index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                      <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm">
+                        <select
+                          value={classItem.classStatus === 'Cancelled' ? 'Cancelled' : 'auto'}
+                          onChange={async (e) => {
+                            // Two-option dropdown: "Pending/Confirmed" (auto-derived from local trainer)
+                            // or "Cancelled" (manual sticky override).
+                            const selection = e.target.value;
+                            const hasLocalTrainer = !!(classItem.assignedTrainerLocal || '').trim();
+                            const newStatus = selection === 'Cancelled'
+                              ? 'Cancelled'
+                              : (hasLocalTrainer ? 'Confirmed' : 'Pending');
+                            try {
+                              await fetch(getApiUrl('/api/admin/completed-classes'), {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: classItem.id, class_status: newStatus }),
+                              });
+                              setCompletedClasses(prev => prev.map(c => c.id === classItem.id ? { ...c, classStatus: newStatus } : c));
+                            } catch { /* silent */ }
+                          }}
+                          className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 ${classItem.classStatus === 'Confirmed' ? 'bg-green-100 text-green-800' :
+                              classItem.classStatus === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                                classItem.classStatus === 'Cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
+                                  'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                            }`}
+                        >
+                          <option value="auto">{(classItem.assignedTrainerLocal || '').trim() ? 'Confirmed' : 'Pending'}</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm">
+                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classItem.classType || 'Physical') === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (classItem.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : (classItem.classType || 'Physical') === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classItem.classType || 'Physical'}</span>
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.startDate)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{formatDate(classItem.endDate)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-center text-gray-700 dark:text-gray-200">{classItem.numOfTrainee}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.assignedTrainerTpg || <span className="text-gray-400">—</span>}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.assignedTrainerLocal || <span className="text-gray-400">—</span>}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                        <Button variant="primary" size="sm" onClick={() => handleViewDetails(classItem)}>
+                          <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                          Details
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -438,22 +853,57 @@ const CompletedClasses: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   Showing {currentPage * ITEMS_PER_PAGE + 1} to {Math.min((currentPage + 1) * ITEMS_PER_PAGE, total)} of {total} classes
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                    disabled={currentPage === 0}
-                  >
-                    Previous
+                <div className="flex items-center gap-1">
+                  {/* First */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>
+                    First
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                    disabled={currentPage >= totalPages - 1}
-                  >
+                  {/* Previous */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 0}>
+                    Prev
+                  </Button>
+
+                  {/* Page numbers */}
+                  {(() => {
+                    const pages: number[] = [];
+                    const maxVisible = 5;
+                    let start = Math.max(0, currentPage - Math.floor(maxVisible / 2));
+                    let end = Math.min(totalPages - 1, start + maxVisible - 1);
+                    if (end - start < maxVisible - 1) start = Math.max(0, end - maxVisible + 1);
+
+                    if (start > 0) pages.push(0);
+                    if (start > 1) pages.push(-1); // ellipsis
+
+                    for (let i = start; i <= end; i++) pages.push(i);
+
+                    if (end < totalPages - 2) pages.push(-2); // ellipsis
+                    if (end < totalPages - 1) pages.push(totalPages - 1);
+
+                    return pages.map((p, idx) =>
+                      p < 0 ? (
+                        <span key={`ellipsis-${idx}`} className="px-1 text-gray-400 dark:text-gray-500">...</span>
+                      ) : (
+                        <button
+                          key={p}
+                          onClick={() => setCurrentPage(p)}
+                          className={`px-3 py-1 text-sm rounded-md ${p === currentPage
+                              ? 'bg-blue-600 text-white font-semibold'
+                              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                          {p + 1}
+                        </button>
+                      )
+                    );
+                  })()}
+
+                  {/* Next */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>
                     Next
+                  </Button>
+                  {/* Last */}
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>
+                    Last
                   </Button>
                 </div>
               </div>

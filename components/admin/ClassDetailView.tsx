@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
+import { ssgFetch } from '@/lib/ssgAppState';
 
 // Helper function for status colors (matching the reference)
 const getStatusColor = (status: string) => {
@@ -42,6 +43,7 @@ interface OperationalSummary {
   trainer: string;
   startDate: string;
   endDate: string;
+  classType: string;
   mode: string;
   overallAssessment: string;
   tgsRef: string;
@@ -86,6 +88,12 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
   const [enrolmentLoading, setEnrolmentLoading] = useState(false);
   const [enrolmentError, setEnrolmentError] = useState<string | null>(null);
   const [showEnrolmentSearch, setShowEnrolmentSearch] = useState(false);
+
+  // Remove learner state
+  const [removingEmail, setRemovingEmail] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<{ name: string; email: string } | null>(null);
+  const [removeMessage, setRemoveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [submissionConflict, setSubmissionConflict] = useState<{ name: string; email: string; detail: string } | null>(null);
 
   useEffect(() => {
     const fetchClassDetails = async () => {
@@ -137,6 +145,52 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
       firstRecord: enrolmentData?.data?.[0]
     });
   }, [enrolmentData]);
+
+  // Remove learner handler
+  const handleRemoveLearner = async (email: string, force = false) => {
+    if (!classDetail) return;
+    setRemovingEmail(email);
+    setRemoveMessage(null);
+    try {
+      const res = await fetch('/api/admin/remove-enrollment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          courseRunId: classDetail.operationalSummary.courseRunUuid,
+          force,
+        }),
+      });
+      const data = await res.json();
+
+      if (res.status === 409 && data.code === 'SUBMISSION_EXISTS') {
+        // Show submission conflict dialog
+        const learner = classDetail.enrolledLearners.find(l => l.learnerEmail === email);
+        setSubmissionConflict({
+          name: learner?.learnerName || email,
+          email,
+          detail: data.message,
+        });
+        setConfirmRemove(null);
+        return;
+      }
+
+      if (!res.ok) throw new Error(data.message || 'Failed to remove learner');
+
+      // Remove learner from local state
+      setClassDetail(prev => prev ? {
+        ...prev,
+        enrolledLearners: prev.enrolledLearners.filter(l => l.learnerEmail !== email),
+      } : null);
+      setRemoveMessage({ type: 'success', text: data.message || 'Learner removed successfully.' });
+      setConfirmRemove(null);
+      setSubmissionConflict(null);
+    } catch (err) {
+      setRemoveMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove learner' });
+    } finally {
+      setRemovingEmail(null);
+    }
+  };
 
   // Helper function to calculate age group from date of birth (matching reference)
   const getAgeGroup = (dob: string): 'Above 40' | 'Below 40' | 'N/A' => {
@@ -196,7 +250,7 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
 
       console.log('📤 Enrolment search request:', searchRequest);
 
-      const response = await fetch('/api/enrolment/search', {
+      const response = await ssgFetch('/api/enrolment/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -288,6 +342,9 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
               courseCode: classDetail.operationalSummary.tgsRef,
               startDate: classDetail.operationalSummary.startDate,
               endDate: classDetail.operationalSummary.endDate,
+              classType: classDetail.operationalSummary.classType,
+              virtualMeetingLink: classDetail.operationalSummary.virtualMeetingLink,
+              virtualMeetingProvider: classDetail.operationalSummary.virtualMeetingProvider,
             });
             setAdminPage(AdminPage.EditClass);
           }}
@@ -310,7 +367,19 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
             <p className="font-semibold">{formatDate(classDetail.operationalSummary.startDate)}</p>
           </div>
           <div>
-            <p className="text-sm text-subtle">Mode</p>
+            <p className="text-sm text-subtle">Class Type</p>
+            <p className="font-semibold">
+              <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${(classDetail.operationalSummary.classType || 'Physical') === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : (classDetail.operationalSummary.classType || 'Physical') === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : (classDetail.operationalSummary.classType || 'Physical') === 'External' ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>{classDetail.operationalSummary.classType || 'Physical'}</span>
+            </p>
+          </div>
+          {classDetail.operationalSummary.virtualMeetingLink && (
+            <div>
+              <p className="text-sm text-subtle">Google Meet</p>
+              <a href={classDetail.operationalSummary.virtualMeetingLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm font-medium">{classDetail.operationalSummary.virtualMeetingLink}</a>
+            </div>
+          )}
+          <div>
+            <p className="text-sm text-subtle">Mode of Learning</p>
             <p className="font-semibold">{classDetail.operationalSummary.mode || 'Not specified'}</p>
           </div>
           <div>
@@ -414,10 +483,28 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
                       {learner.claimId || 'N/A'}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                      <Button size="sm" variant="ghost">
-                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                        Edit
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" variant="ghost">
+                          <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setRemoveMessage(null);
+                            setConfirmRemove({ name: learner.learnerName, email: learner.learnerEmail });
+                          }}
+                          disabled={removingEmail === learner.learnerEmail}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        >
+                          {removingEmail === learner.learnerEmail ? (
+                            <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-500 mr-1"></div>Removing...</>
+                          ) : (
+                            <><Icon name={IconName.Delete} className="w-4 h-4 mr-1" />Remove</>
+                          )}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -428,6 +515,72 @@ const ClassDetailView: React.FC<ClassDetailViewProps> = ({ courseRunId }) => {
           <p className="text-center text-subtle py-10">No learners are enrolled in this course yet.</p>
         )}
       </Card>
+
+      {/* Feedback message */}
+      {removeMessage && (
+        <div className={`mt-4 p-3 rounded-md text-sm flex items-center justify-between ${
+          removeMessage.type === 'success'
+            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300'
+            : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-300'
+        }`}>
+          <span>{removeMessage.text}</span>
+          <button onClick={() => setRemoveMessage(null)} className="ml-3 text-current opacity-60 hover:opacity-100">
+            <Icon name={IconName.Close} className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmRemove && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setConfirmRemove(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Remove Learner</h4>
+            <p className="text-gray-600 dark:text-gray-300 text-sm mb-1">
+              Are you sure you want to remove <strong>{confirmRemove.name}</strong> from this class?
+            </p>
+            <p className="text-gray-500 dark:text-gray-400 text-xs mb-6">
+              This will set their enrolment status to "Admin Removed". Their account will not be deleted.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setConfirmRemove(null)}>Cancel</Button>
+              <Button
+                variant="primary"
+                onClick={() => handleRemoveLearner(confirmRemove.email)}
+                disabled={removingEmail === confirmRemove.email}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {removingEmail === confirmRemove.email ? 'Removing...' : 'Remove Learner'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submission Conflict Modal — learner has assessment submissions */}
+      {submissionConflict && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSubmissionConflict(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <h4 className="text-lg font-semibold text-yellow-700 dark:text-yellow-400 mb-2">⚠️ Assessment Submissions Found</h4>
+            <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
+              {submissionConflict.detail}
+            </p>
+            <p className="text-gray-500 dark:text-gray-400 text-xs mb-6">
+              You can force-remove the learner, but their assessment submissions will remain orphaned.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setSubmissionConflict(null)}>Cancel</Button>
+              <Button
+                variant="primary"
+                onClick={() => handleRemoveLearner(submissionConflict.email, true)}
+                disabled={removingEmail === submissionConflict.email}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {removingEmail === submissionConflict.email ? 'Force Removing...' : 'Force Remove'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search Enrolment Records Section */}
       <div className="mt-8">

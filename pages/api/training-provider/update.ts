@@ -4,21 +4,18 @@ import fs from 'fs';
 import path from 'path';
 import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
+import { invalidateR2ConfigCache } from '../../../lib/r2';
+import { invalidateSmtpConfigCache } from '../../../lib/smtp';
+import { invalidateGoogleDriveFolderCache } from '../../../lib/googleDriveFolder';
+import { invalidateN8nWebhookTimeoutCache } from '../../../lib/services/n8nWebhookService';
+import { invalidateQboRedirectCache } from '../../../lib/quickbooks/qboRedirect';
+import {
+  TRAINING_PROVIDER_FOLDER_BY_FIELD,
+  trainingProviderSkipTimestampForFolder,
+} from '../../../lib/constants/trainingProviderUploadLayout';
 
-
-// Map field names to specific folder paths with your exact folder structure
-const FOLDER_MAPPING: { [key: string]: string } = {
-  'logo': 'company_logo',
-  'invoiceTemplate': 'invoice_template',
-  'receiptTemplate': 'receipt_template',
-  'certificateTemplate': 'certificate_template',
-  'proFormaInvoiceTemplate': 'pro_forma_invoice_template',
-  'ssgCertFile': 'self_signing_cert',
-  'ssgPrivateKeyFile': 'private_key',
-  'ssgApp1CertFile': 'ssg_app1_cert',
-  'ssgApp1PrivateKeyFile': 'ssg_app1_private_key',
-  'ssgApp3CertFile': 'ssg_app3_cert',
-  'ssgApp3PrivateKeyFile': 'ssg_app3_private_key'
+const FOLDER_MAPPING: { [key: string]: string } = TRAINING_PROVIDER_FOLDER_BY_FIELD as unknown as {
+  [key: string]: string;
 };
 
 // Disable body parser to handle multipart form data
@@ -122,8 +119,7 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
   // Get just the base name without extension  
   const baseName = path.basename(cleanFilename, fileExtension);
 
-  // Create clean filename — no timestamp for SSG cert/key files (cleaner DB paths)
-  const skipTimestamp = folderName === 'self_signing_cert' || folderName === 'private_key';
+  const skipTimestamp = trainingProviderSkipTimestampForFolder(folderName);
   const fileName = skipTimestamp ? `${baseName}${fileExtension}` : `${timestamp}_${baseName}${fileExtension}`;
   const filePath = path.join(uploadDir, fileName);
 
@@ -336,6 +332,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
              tp.pro_forma_template_url, tp.ssg_self_sign_cert_file, tp.ssg_private_key_file,
              tp.ssg_app1_cert_file, tp.ssg_app1_private_key_file,
              tp.ssg_app3_cert_file, tp.ssg_app3_private_key_file,
+             tp.google_service_account_json,
              au.profile_picture_url
       FROM app_user au
       LEFT JOIN training_provider tp ON tp.id = $2
@@ -396,7 +393,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { fileKey: 'ssgApp1CertFile', dbField: 'ssg_app1_cert_file', oldFile: oldFiles.ssg_app1_cert_file },
       { fileKey: 'ssgApp1PrivateKeyFile', dbField: 'ssg_app1_private_key_file', oldFile: oldFiles.ssg_app1_private_key_file },
       { fileKey: 'ssgApp3CertFile', dbField: 'ssg_app3_cert_file', oldFile: oldFiles.ssg_app3_cert_file },
-      { fileKey: 'ssgApp3PrivateKeyFile', dbField: 'ssg_app3_private_key_file', oldFile: oldFiles.ssg_app3_private_key_file }
+      { fileKey: 'ssgApp3PrivateKeyFile', dbField: 'ssg_app3_private_key_file', oldFile: oldFiles.ssg_app3_private_key_file },
+      { fileKey: 'serviceAccountKeyFile', dbField: 'google_service_account_json', oldFile: oldFiles.google_service_account_json }
     ];
 
     for (const template of templateFields) {
@@ -563,7 +561,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ssg_app3_encryption_key = $46,
             ssg_app4_client_id = $47,
             ssg_app4_client_secret = $48,
-            ssg_default_app = $49
+            ssg_default_app = $49,
+            auto_enrol_direct_applications = $50,
+            auto_generate_qb_invoice = $51,
+            sanitise_after_months = $52,
+            auto_add_learner_to_calendar = $53,
+            google_service_account_json = COALESCE($54, google_service_account_json),
+            ssg_app_count = $55,
+            ssg_app_names = $56
         WHERE id = $36
         RETURNING *
       `;
@@ -575,10 +580,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.companyAddress,
         profileData.contactPerson?.name,
         profileData.contactPerson?.tel,
-        filePaths.invoice_template_url,
-        filePaths.receipt_template_url,
-        filePaths.certificate_template_url,
-        filePaths.pro_forma_template_url,
+        filePaths.invoice_template_url || profileData.invoiceTemplateUrl || null,
+        filePaths.receipt_template_url || profileData.receiptTemplateUrl || null,
+        filePaths.certificate_template_url || profileData.certificateTemplateUrl || null,
+        filePaths.pro_forma_template_url || profileData.proFormaInvoiceTemplateUrl || null,
         filePaths.ssg_self_sign_cert_file,
         filePaths.ssg_private_key_file,
         profileData.ssgEncryptionKey,
@@ -617,7 +622,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         profileData.ssgApp3EncryptionKey ?? null,
         profileData.ssgApp4ClientId ?? null,
         profileData.ssgApp4ClientSecret ?? null,
-        profileData.ssgDefaultApp || 'app2'
+        profileData.ssgDefaultApp || 'app1',
+        profileData.adminSettings?.autoEnrolDirectApplications || false,
+        profileData.adminSettings?.autoGenerateQbInvoice || false,
+        Math.max(1, Math.min(60, parseInt(String(profileData.securitySettings?.sanitiseAfterMonths ?? 6), 10) || 6)),
+        profileData.adminSettings?.autoAddLearnerToCalendar || false,
+        filePaths.google_service_account_json || null,
+        Math.max(1, Math.min(4, parseInt(String(profileData.ssgAppCount ?? 1), 10) || 1)),
+        JSON.stringify(profileData.ssgAppNames && typeof profileData.ssgAppNames === 'object' ? profileData.ssgAppNames : {})
       ];
 
       console.log('🔍 File upload parameters being sent to database:', {
@@ -701,15 +713,76 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await autoCreateAndUpdate([
         { name: 'n8n_host1_url', value: profileData.integrations?.n8nHost1Url || null },
         { name: 'n8n_host2_url', value: profileData.integrations?.n8nHost2Url || null },
+        // Finance automation webhooks (JSON map). Keys match FINANCE_AUTOMATION_ACTIONS webhookEnvKey values.
+        { name: 'n8n_finance_webhooks_json', value: profileData.integrations?.n8nFinanceWebhooksJson || null },
+        // Webhook timeout (milliseconds). Replaces N8N_WEBHOOK_TIMEOUT_MS env.
+        { name: 'n8n_webhook_timeout_ms', value: profileData.integrations?.n8nWebhookTimeoutMs || null },
       ]);
-      // Magento
+      invalidateN8nWebhookTimeoutCache();
+      // Tertiary Courses SG (Magento storefront)
+      try {
+        await pool.query(`ALTER TABLE training_provider
+          ADD COLUMN IF NOT EXISTS tertiary_courses_sg_url text,
+          ADD COLUMN IF NOT EXISTS tertiary_courses_sg_api_key text`);
+        // One-shot rename: copy legacy magento_backend_url into new column if empty
+        await pool.query(`UPDATE training_provider
+          SET tertiary_courses_sg_url = magento_backend_url
+          WHERE tertiary_courses_sg_url IS NULL AND magento_backend_url IS NOT NULL`);
+      } catch (e) {
+        console.error('Failed to migrate Tertiary Courses SG columns:', e);
+      }
       await autoCreateAndUpdate([
-        { name: 'magento_backend_url', value: profileData.integrations?.magentoBackendUrl || null },
+        { name: 'tertiary_courses_sg_url', value: profileData.integrations?.tertiaryCoursesSgUrl || null },
+        { name: 'tertiary_courses_sg_api_key', value: profileData.integrations?.tertiaryCoursesSgApiKey || null },
       ]);
+      // Cloudflare R2 (used by Course Image Generator)
+      await autoCreateAndUpdate([
+        { name: 'r2_endpoint', value: profileData.integrations?.r2Endpoint || null },
+        { name: 'r2_access_key_id', value: profileData.integrations?.r2AccessKeyId || null },
+        { name: 'r2_secret_access_key', value: profileData.integrations?.r2SecretAccessKey || null },
+        { name: 'r2_bucket', value: profileData.integrations?.r2Bucket || null },
+        { name: 'r2_public_url', value: profileData.integrations?.r2PublicUrl || null },
+      ]);
+      // Flush in-process R2 client cache so the next upload picks up the
+      // new credentials immediately (otherwise admin would wait for the
+      // 60s TTL before changes take effect).
+      invalidateR2ConfigCache();
+      // SMTP integration. smtp_enabled is a boolean (separate ALTER); the
+      // rest are text and go through autoCreateAndUpdate. Default smtp_enabled
+      // is false so existing Gmail OAuth path stays the default.
+      try {
+        await pool.query(`
+          ALTER TABLE training_provider
+            ADD COLUMN IF NOT EXISTS smtp_enabled boolean DEFAULT false NOT NULL
+        `);
+        await pool.query(
+          `UPDATE training_provider SET smtp_enabled = $1 WHERE id = $2`,
+          [profileData.integrations?.smtpEnabled === true, trainingProviderId]
+        );
+      } catch (e) {
+        console.error('Failed to save smtp_enabled:', e);
+      }
+      await autoCreateAndUpdate([
+        { name: 'smtp_host', value: profileData.integrations?.smtpHost || null },
+        { name: 'smtp_port', value: profileData.integrations?.smtpPort ? String(profileData.integrations.smtpPort) : null },
+        { name: 'smtp_secure', value: profileData.integrations?.smtpSecure || null },
+        { name: 'smtp_auth', value: profileData.integrations?.smtpAuth || null },
+        { name: 'smtp_user', value: profileData.integrations?.smtpUser || null },
+        { name: 'smtp_password', value: profileData.integrations?.smtpPassword || null },
+        { name: 'smtp_from', value: profileData.integrations?.smtpFrom || null },
+      ]);
+      invalidateSmtpConfigCache();
       // Google Drive extras
       await autoCreateAndUpdate([
         { name: 'trainer_profile_image_url', value: profileData.integrations?.trainerProfileImageUrl || null },
+        { name: 'google_drive_folder_id', value: profileData.integrations?.googleDriveFolderId || null },
       ]);
+      invalidateGoogleDriveFolderCache();
+      // QuickBooks OAuth redirect URI override (replaces QBO_REDIRECT_URI env).
+      await autoCreateAndUpdate([
+        { name: 'qbo_oauth_redirect_uri', value: profileData.integrations?.qboRedirectUri || null },
+      ]);
+      invalidateQboRedirectCache();
       // OpenClaw / Orion
       await autoCreateAndUpdate([
         { name: 'openclaw_mode', value: profileData.integrations?.openClawMode || 'live' },
@@ -723,10 +796,67 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await autoCreateAndUpdate([
         { name: 'support_email', value: profileData.contactPerson?.email || null },
       ]);
+      // Virtual Meeting provider (validated allow-list; defaults to google_meet)
+      try {
+        const allowedVirtualMeetingProviders = ['google_meet', 'zoom', 'teams'];
+        const requested = profileData.integrations?.virtualMeetingProvider;
+        const virtualMeetingProvider = allowedVirtualMeetingProviders.includes(requested)
+          ? requested
+          : 'google_meet';
+        await pool.query(`
+          ALTER TABLE training_provider
+            ADD COLUMN IF NOT EXISTS virtual_meeting_provider text DEFAULT 'google_meet',
+            ADD COLUMN IF NOT EXISTS zoom_oauth_client_id text,
+            ADD COLUMN IF NOT EXISTS zoom_oauth_client_secret text,
+            ADD COLUMN IF NOT EXISTS zoom_oauth_redirect_uri text,
+            ADD COLUMN IF NOT EXISTS zoom_oauth_scopes text
+        `);
+        await pool.query(
+          `UPDATE training_provider
+           SET virtual_meeting_provider = $1,
+               zoom_oauth_client_id = $2,
+               zoom_oauth_client_secret = $3,
+               zoom_oauth_redirect_uri = $4,
+               zoom_oauth_scopes = $5
+           WHERE id = $6`,
+          [
+            virtualMeetingProvider,
+            profileData.integrations?.zoomClientId || null,
+            profileData.integrations?.zoomClientSecret || null,
+            profileData.integrations?.zoomRedirectUri || null,
+            profileData.integrations?.zoomScopes || null,
+            trainingProviderId
+          ]
+        );
+      } catch (e) {
+        console.warn('⚠️ virtual_meeting_provider column missing; run database/migrations/add_virtual_meeting_provider.sql');
+      }
       // Admin thresholds
       await autoCreateAndUpdate([
         { name: 'upcoming_classes_threshold_days', value: String(profileData.adminSettings?.upcomingClassesThresholdDays || 21) },
+        { name: 'certificate_attendance_threshold', value: String(profileData.adminSettings?.certificateAttendanceThreshold || 60) },
+        { name: 'gst_registration_number', value: profileData.fundingSettings?.gstRegistrationNumber || '' },
+        { name: 'cas_threshold', value: String(profileData.adminSettings?.casThreshold ?? 70) },
+        { name: 'es_threshold', value: String(profileData.adminSettings?.esThreshold ?? 40) },
+        { name: 'certificate_delivery_label', value: (profileData.adminSettings?.certificateDeliveryLabel || 'TP Course Evaluation') },
+        { name: 'certificate_delivery_link', value: (profileData.adminSettings?.certificateDeliveryLink || 'https://goo.gl/R2eumq') },
+        { name: 'feedback_form_external_link', value: (profileData.adminSettings?.feedbackFormExternalLink || '') },
       ]);
+
+      try {
+        await pool.query(`
+          ALTER TABLE training_provider
+            ADD COLUMN IF NOT EXISTS auto_import_da_from_email boolean DEFAULT false NOT NULL
+        `);
+        await pool.query(
+          `UPDATE training_provider
+              SET auto_import_da_from_email = $1
+            WHERE id = $2`,
+          [profileData.adminSettings?.autoImportDaFromEmail || false, trainingProviderId]
+        );
+      } catch (e) {
+        console.error('Failed to save auto_import_da_from_email:', e);
+      }
 
       // Handle API keys - delete existing and insert new ones (with selected model)
       console.log('🔑 Processing API keys...');

@@ -2,12 +2,12 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
 interface AdminStatistics {
-  totalLearners: number;
-  totalTrainers: number;
   ongoingClasses: number;
-  classesNext7Days: number;
-  classesNext30Days: number;
+  upcomingClasses: number;
   completedClasses: number;
+  assignedTrainersLocal: number;
+  missingTrainersLocal: number;
+  missingTrainersTPG: number;
 }
 
 export default async function handler(
@@ -30,37 +30,47 @@ export default async function handler(
 
   try {
     const statisticsQuery = `
-      SELECT 
-          -- Total unique learners
-          (SELECT COUNT(DISTINCT lp.user_id)
-           FROM learner_profile lp) AS "totalLearners",
-
-          -- Total unique trainers
-          (SELECT COUNT(DISTINCT tp.user_id)
-           FROM trainer_profile tp) AS "totalTrainers",
-
-          -- Ongoing classes
-          (SELECT COUNT(*) 
+      SELECT
+          -- Ongoing classes (excludes Cancelled)
+          (SELECT COUNT(*)
            FROM course_run cr
            WHERE cr.start_date <= CURRENT_DATE
-             AND cr.end_date >= CURRENT_DATE) AS "ongoingClasses",
+             AND cr.end_date >= CURRENT_DATE
+             AND cr.class_status IS DISTINCT FROM 'Cancelled') AS "ongoingClasses",
 
-          -- Classes starting within next 7 days
-          (SELECT COUNT(*) 
+          -- Upcoming classes: start_date > today (excludes Cancelled)
+          (SELECT COUNT(*)
            FROM course_run cr
            WHERE cr.start_date > CURRENT_DATE
-             AND cr.start_date <= CURRENT_DATE + INTERVAL '7 days') AS "classesNext7Days",
+             AND cr.class_status IS DISTINCT FROM 'Cancelled') AS "upcomingClasses",
 
-          -- Classes starting within next 30 days
-          (SELECT COUNT(*) 
+          -- Completed classes (excludes Cancelled)
+          (SELECT COUNT(*)
+           FROM course_run cr
+           WHERE cr.end_date < CURRENT_DATE
+             AND cr.class_status IS DISTINCT FROM 'Cancelled') AS "completedClasses",
+
+          -- Assigned Trainers (Local) for Upcoming Classes
+          (SELECT COUNT(*)
            FROM course_run cr
            WHERE cr.start_date > CURRENT_DATE
-             AND cr.start_date <= CURRENT_DATE + INTERVAL '30 days') AS "classesNext30Days",
+             AND cr.class_status IS DISTINCT FROM 'Cancelled'
+             AND cr.assigned_trainer_name IS NOT NULL
+             AND cr.assigned_trainer_name != '') AS "assignedTrainersLocal",
 
-          -- Completed classes
-          (SELECT COUNT(*) 
+          -- Missing Trainers (Local) for Upcoming Classes
+          (SELECT COUNT(*)
            FROM course_run cr
-           WHERE cr.end_date < CURRENT_DATE) AS "completedClasses"
+           WHERE cr.start_date > CURRENT_DATE
+             AND cr.class_status IS DISTINCT FROM 'Cancelled'
+             AND (cr.assigned_trainer_name IS NULL OR cr.assigned_trainer_name = '')) AS "missingTrainersLocal",
+
+          -- Missing Trainers (TPG) for Upcoming Classes
+          (SELECT COUNT(*)
+           FROM course_run cr
+           WHERE cr.start_date > CURRENT_DATE
+             AND cr.class_status IS DISTINCT FROM 'Cancelled'
+             AND (cr.tpg_assigned_trainer_name IS NULL OR cr.tpg_assigned_trainer_name = '')) AS "missingTrainersTPG"
     `;
 
     const result = await pool.query(statisticsQuery);
@@ -70,12 +80,12 @@ export default async function handler(
     }
 
     const statistics: AdminStatistics = {
-      totalLearners: parseInt(result.rows[0].totalLearners) || 0,
-      totalTrainers: parseInt(result.rows[0].totalTrainers) || 0,
       ongoingClasses: parseInt(result.rows[0].ongoingClasses) || 0,
-      classesNext7Days: parseInt(result.rows[0].classesNext7Days) || 0,
-      classesNext30Days: parseInt(result.rows[0].classesNext30Days) || 0,
+      upcomingClasses: parseInt(result.rows[0].upcomingClasses) || 0,
       completedClasses: parseInt(result.rows[0].completedClasses) || 0,
+      assignedTrainersLocal: parseInt(result.rows[0].assignedTrainersLocal) || 0,
+      missingTrainersLocal: parseInt(result.rows[0].missingTrainersLocal) || 0,
+      missingTrainersTPG: parseInt(result.rows[0].missingTrainersTPG) || 0,
     };
 
     res.status(200).json({

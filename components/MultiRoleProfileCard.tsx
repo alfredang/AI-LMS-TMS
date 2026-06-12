@@ -208,7 +208,7 @@ const DocumentSection: React.FC<{
                             </a>
                         )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Upload your CV and certifications to this Google Drive folder.</p>
+                    <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Add the link to your Google Drive folder containing your CV and certifications.</p>
                 </div>
             </div>
         );
@@ -680,8 +680,6 @@ export const MultiRoleProfileCard: React.FC = () => {
         } finally { setIsSaving(false); }
     };
 
-    const roleLabels = data.roles.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join(' & ');
-
     return (
         <div className="max-w-5xl mx-auto">
             {/* ===== SHARED BIO DATA ===== */}
@@ -703,7 +701,6 @@ export const MultiRoleProfileCard: React.FC = () => {
                     </div>
                     <div className="text-center sm:text-left flex-grow">
                         <h1 className="text-2xl font-bold text-on-surface">{sharedForm.name}</h1>
-                        <p className="text-subtle">{roleLabels} Profile</p>
                         <div className="flex gap-2 mt-1">
                             {data.roles.map(role => (
                                 <span key={role} className={`text-xs font-semibold px-2 py-0.5 rounded-full ${role.toLowerCase() === 'trainer' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
@@ -835,7 +832,7 @@ export const MultiRoleProfileCard: React.FC = () => {
                         {/* CV & Certifications (full width) */}
                         <section>
                             <h3 className="text-lg font-bold mb-3">CV & Supporting Document Folder</h3>
-                            <p className="text-xs text-gray-400 mb-2">Please upload your CV, ACLP certification, and other supporting documents in the Google Drive folder.</p>
+                            <p className="text-xs text-gray-400 mb-2">Please add the link to your Google Drive folder containing your CV, ACLP certification, and other supporting documents.</p>
                             <DocumentSection title="" cvUrl={trainerForm.cvUrl} cvOriginalFilename={trainerForm.cvOriginalFilename}
                                 cvFolderUrl={trainerForm.cvFolderUrl}
                                 certifications={trainerForm.certifications || []} isEditing={isEditing}
@@ -908,7 +905,7 @@ export const MultiRoleProfileCard: React.FC = () => {
 
                         <section>
                             <h3 className="text-lg font-bold mb-3">CV & Supporting Document Folder</h3>
-                            <p className="text-xs text-gray-400 mb-2">Please upload your CV, ACLP certification, and other supporting documents in the Google Drive folder.</p>
+                            <p className="text-xs text-gray-400 mb-2">Please add the link to your Google Drive folder containing your CV, ACLP certification, and other supporting documents.</p>
                             <DocumentSection title="" cvUrl={developerForm.cvUrl} cvOriginalFilename={developerForm.cvOriginalFilename}
                                 cvFolderUrl={developerForm.cvFolderUrl}
                                 certifications={developerForm.certifications || []} isEditing={isEditing}

@@ -4,17 +4,25 @@ import fs from 'fs';
 import path from 'path';
 import { cors } from '../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
+import {
+  TRAINING_PROVIDER_FOLDER_BY_FIELD,
+  trainingProviderSkipTimestampForFolder,
+} from '../../lib/constants/trainingProviderUploadLayout';
 
-// Map field names to specific folder paths with your exact folder structure
-const FOLDER_MAPPING: { [key: string]: string } = {
-  'logo': 'company_logo',
-  'invoiceTemplate': 'invoice_template',
-  'receiptTemplate': 'receipt_template',
-  'certificateTemplate': 'certificate_template',
-  'proFormaInvoiceTemplate': 'pro_forma_invoice_template',
-  'ssgCertFile': 'self_signing_cert',
-  'ssgPrivateKeyFile': 'private_key'
-};
+/** Legacy handler: only these fields are wired to DB here; paths still use same disk layout as `training-provider/update`. */
+const FOLDER_MAPPING: { [key: string]: string } = Object.fromEntries(
+  Object.entries(TRAINING_PROVIDER_FOLDER_BY_FIELD).filter(([k]) =>
+    [
+      'logo',
+      'invoiceTemplate',
+      'receiptTemplate',
+      'certificateTemplate',
+      'proFormaInvoiceTemplate',
+      'ssgCertFile',
+      'ssgPrivateKeyFile',
+    ].includes(k)
+  )
+) as { [key: string]: string };
 
 // Disable body parser to handle multipart form data
 export const config = {
@@ -117,8 +125,7 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
   // Get just the base name without extension  
   const baseName = path.basename(cleanFilename, fileExtension);
 
-  // Create clean filename — no timestamp for SSG cert/key files (cleaner DB paths)
-  const skipTimestamp = folderName === 'self_signing_cert' || folderName === 'private_key';
+  const skipTimestamp = trainingProviderSkipTimestampForFolder(folderName);
   const fileName = skipTimestamp ? `${baseName}${fileExtension}` : `${timestamp}_${baseName}${fileExtension}`;
   const filePath = path.join(uploadDir, fileName);
 
@@ -600,6 +607,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const providerUpdateResult = await pool.query(updateQuery, queryParams);
 
       console.log('✅ training_provider updated, rows affected:', providerUpdateResult.rowCount);
+
+      // Virtual Meeting provider — separate UPDATE so a pre-migration DB
+      // (column missing) doesn't break the rest of the profile save.
+      try {
+        const allowedVirtualMeetingProviders = ['google_meet', 'zoom', 'teams'];
+        const requestedVirtualMeetingProvider = profileData.integrations?.virtualMeetingProvider;
+        const virtualMeetingProvider = allowedVirtualMeetingProviders.includes(requestedVirtualMeetingProvider)
+          ? requestedVirtualMeetingProvider
+          : 'google_meet';
+        await pool.query(`
+          ALTER TABLE training_provider
+            ADD COLUMN IF NOT EXISTS virtual_meeting_provider text DEFAULT 'google_meet',
+            ADD COLUMN IF NOT EXISTS zoom_oauth_client_id text,
+            ADD COLUMN IF NOT EXISTS zoom_oauth_client_secret text
+        `);
+        await pool.query(
+          `UPDATE training_provider
+           SET virtual_meeting_provider = $1,
+               zoom_oauth_client_id = $2,
+               zoom_oauth_client_secret = $3
+           WHERE id = $4`,
+          [
+            virtualMeetingProvider,
+            profileData.integrations?.zoomClientId || null,
+            profileData.integrations?.zoomClientSecret || null,
+            trainingProviderId
+          ]
+        );
+      } catch (e) {
+        console.warn('⚠️ virtual_meeting_provider column missing; run database/migrations/add_virtual_meeting_provider.sql');
+      }
 
       // Handle API keys - delete existing and insert new ones (with selected model)
       console.log('🔑 Processing API keys...');

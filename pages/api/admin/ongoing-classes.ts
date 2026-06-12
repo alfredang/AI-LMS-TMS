@@ -25,6 +25,7 @@ const ensureJunctionTable = async () => {
         UNIQUE(course_run_id, trainer_id)
     );
   `);
+  await pool.query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS tpg_sync_status TEXT`);
 };
 
 export default async function handler(
@@ -44,6 +45,28 @@ export default async function handler(
     return;
   }
 
+  // PUT — Update class status for an ongoing class row
+  if (req.method === 'PUT') {
+    try {
+      const { id, class_status } = req.body;
+      if (!id) {
+        return res.status(400).json({ success: false, error: 'id is required' });
+      }
+      const validStatuses = ['Confirmed', 'Pending', 'Cancelled'];
+      if (!class_status || !validStatuses.includes(class_status)) {
+        return res.status(400).json({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+      }
+      await pool.query(
+        `UPDATE course_run SET class_status = $1, updated_at = NOW() WHERE id = $2`,
+        [class_status, id]
+      );
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('Error updating ongoing class status:', err);
+      return res.status(500).json({ success: false, error: 'Failed to update' });
+    }
+  }
+
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
@@ -59,6 +82,8 @@ export default async function handler(
       courseCode = '',
       courseRunId = '',
       trainer = '',
+      learnerFilter = '',
+      trainerAssignmentFilter = '',
       startDateFrom = '',
       endDateUntil = ''
     } = req.query;
@@ -75,6 +100,8 @@ export default async function handler(
       courseCode,
       courseRunId,
       trainer,
+      learnerFilter,
+      trainerAssignmentFilter,
       startDateFrom,
       endDateUntil
     });
@@ -124,23 +151,75 @@ export default async function handler(
       paramCounter++;
     }
 
-    const parseDDMMYYYY = (d: string) => { const p = d.split(/[\/\-]/); return `${p[2]}-${p[1]}-${p[0]}`; };
+    if (learnerFilter === 'withLearners') {
+      whereConditions.push(`EXISTS (SELECT 1 FROM enrollment e WHERE e.course_run_id = cr.id)`);
+    } else if (learnerFilter === 'noLearners') {
+      whereConditions.push(`NOT EXISTS (SELECT 1 FROM enrollment e WHERE e.course_run_id = cr.id)`);
+    }
+
+    const trainerAssignedSql = `(
+      EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
+      OR NULLIF(BTRIM(COALESCE(cr.assigned_trainer_name, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(cr.assigned_trainer_email, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(cr.tpg_assigned_trainer_name, '')), '') IS NOT NULL
+      OR NULLIF(BTRIM(COALESCE(cr.tpg_assigned_trainer_email, '')), '') IS NOT NULL
+    )`;
+
+    if (trainerAssignmentFilter === 'withTrainers') {
+      whereConditions.push(trainerAssignedSql);
+    } else if (trainerAssignmentFilter === 'noTrainers') {
+      whereConditions.push(`NOT ${trainerAssignedSql}`);
+    }
+
+    const classStatus = req.query.classStatus;
+    if (classStatus === 'Confirmed' || classStatus === 'Pending' || classStatus === 'Cancelled') {
+      whereConditions.push(`cr.class_status = $${paramCounter}`);
+      queryParams.push(classStatus);
+      paramCounter++;
+    } else if (classStatus === 'ActiveOnly') {
+      // Default Ongoing Classes view: hide cancelled runs. Pass
+      // classStatus=all explicitly to include cancelled classes.
+      whereConditions.push(`cr.class_status IN ('Confirmed', 'Pending')`);
+    }
+
+    const parseDDMMYYYY = (d: string) => {
+      const p = d.split(/[/-]/);
+      return `${p[2]}-${p[1]}-${p[0]}`;
+    };
+
     const isValidDate = (d: any) => {
-      if (typeof d !== 'string' || !/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(d)) return false;
-      const iso = parseDDMMYYYY(d);
-      const parsed = new Date(iso);
-      return !isNaN(parsed.getTime()) && parsed.toISOString().startsWith(iso);
+      if (typeof d !== 'string' || !/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(d)) return false;
+      const p = d.split(/[/-]/);
+      const day = parseInt(p[0], 10);
+      const month = parseInt(p[1], 10);
+      const year = parseInt(p[2], 10);
+      const date = new Date(year, month - 1, day);
+      return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
     };
 
     if (isValidDate(startDateFrom)) {
-      whereConditions.push(`cr.start_date >= $${paramCounter}`);
+      whereConditions.push(`cr.start_date::date >= $${paramCounter}`);
       queryParams.push(parseDDMMYYYY(startDateFrom as string));
       paramCounter++;
     }
 
     if (isValidDate(endDateUntil)) {
-      whereConditions.push(`cr.end_date <= $${paramCounter}`);
+      whereConditions.push(`cr.end_date::date <= $${paramCounter}`);
       queryParams.push(parseDDMMYYYY(endDateUntil as string));
+      paramCounter++;
+    }
+
+    const classType = req.query.classType;
+    if (classType === 'Physical' || classType === 'Virtual' || classType === 'Hybrid' || classType === 'External') {
+      whereConditions.push(`COALESCE(cr.class_type, 'Physical') = $${paramCounter}`);
+      queryParams.push(classType);
+      paramCounter++;
+    }
+
+    const courseType = req.query.courseType;
+    if (courseType === 'WSQ' || courseType === 'IBF' || courseType === 'Non-WSQ') {
+      whereConditions.push(`c.course_type = $${paramCounter}`);
+      queryParams.push(courseType);
       paramCounter++;
     }
 
@@ -207,19 +286,22 @@ export default async function handler(
 
     // Get the actual ongoing classes data
     const dataQuery = `
-      SELECT 
+      SELECT
+        cr.id as "id",
         cr.course_run_id as "courseRunId",
         c.title as "courseTitle",
         c.course_code as "courseCode",
         cr.class_status as "classStatus",
+        COALESCE(cr.class_type, 'Physical') as "classType",
         cr.digital_attendance_id as "digitalAttendanceId",
         cr.start_date as "startDate",
         cr.end_date as "endDate",
-        COALESCE(
-          NULLIF((SELECT STRING_AGG(trainer_name, ', ') FROM course_run_trainer WHERE course_run_id = cr.id), ''),
-          cr.assigned_trainer_name,
-          'Unassigned'
-        ) as "trainerName",
+        COALESCE(cr.assigned_trainer_name, 'Unassigned') as "trainerName",
+        cr.tpg_assigned_trainer_name as "assignedTrainerTpg",
+        cr.tpg_assigned_trainer_email as "assignedTrainerTpgEmail",
+        cr.tpg_sync_status as "tpgSyncStatus",
+        COALESCE(cr.assigned_trainer_name, '') as "assignedTrainerLocal",
+        COALESCE(cr.assigned_trainer_email, '') as "assignedTrainerLocalEmail",
         COALESCE(trainee_count.count, 0) as "numOfTrainee"
       FROM course_run cr
       JOIN course c ON cr.course_id = c.id
@@ -231,7 +313,7 @@ export default async function handler(
         GROUP BY course_run_id
       ) trainee_count ON cr.id = trainee_count.course_run_id
       WHERE ${whereClause}
-      ORDER BY cr.course_run_id DESC
+      ORDER BY cr.start_date DESC NULLS LAST, cr.end_date DESC NULLS LAST
       LIMIT $${paramCounter} OFFSET $${paramCounter + 1}
     `;
 

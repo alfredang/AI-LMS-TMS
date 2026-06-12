@@ -89,6 +89,43 @@ export class SSGCourseAPI {
   }
 
   /**
+   * Search course runs by course reference number (course code)
+   * Calls GET /courses/courseRuns/reference
+   */
+  async searchCourseRunsByCode(
+    courseReferenceNumber: string,
+    options: { page?: number; pageSize?: number; includeExpired?: boolean; uen?: string } = {}
+  ): Promise<SSGApiResponse<any>> {
+    try {
+      const { page = 0, pageSize = 40, includeExpired = false, uen } = options;
+
+      const builder = new HTTPRequestBuilder()
+        .withEndpoint(this.baseUrl, '/courses/courseRuns/reference')
+        .withMethod(HttpMethod.GET)
+        .withParam('uen', uen || this.credentials.uen || '')
+        .withParam('courseReferenceNumber', courseReferenceNumber)
+        .withParam('pageSize', String(pageSize))
+        .withParam('page', String(page))
+        .withParam('includeExpiredCourses', String(includeExpired));
+
+      if (this.credentials.certificateContent && this.credentials.privateKeyContent) {
+        builder.withCertificate(this.credentials.certificateContent, this.credentials.privateKeyContent);
+      }
+
+      const config = builder.build();
+      return await handleRequest<any>(this.httpClient, config);
+    } catch (error) {
+      return {
+        error: {
+          code: 'SEARCH_COURSE_RUNS_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        },
+        status: 0
+      };
+    }
+  }
+
+  /**
    * Add/publish course run
    * Equivalent to Python AddCourseRun class
    */
@@ -219,6 +256,118 @@ export class SSGCourseAPI {
           message: error instanceof Error ? error.message : 'Unknown error'
         },
         status: 0
+      };
+    }
+  }
+
+  /**
+   * Update ONLY the linkCourseRunTrainer for a course run.
+   * 1. Views the existing course run from SSG to get current dates/venue/etc.
+   * 2. Fails if SSG view returns no data — does not proceed with empty fields.
+   * 3. Submits a full edit payload so no existing fields are zeroed out.
+   */
+  async editCourseRunTrainerOnly(
+    runId: string,
+    runInfo: EditRunInfo,
+    includeExpired: OptionalSelector = OptionalSelector.NO
+  ): Promise<SSGApiResponse<any>> {
+    try {
+      if (!this.credentials.encryptionKey) {
+        throw new Error('Encryption key is required for editing course runs');
+      }
+
+      // Step 1 — fetch existing run data from SSG (required — fail if unavailable)
+      const viewRes = await this.viewCourseRun(runId, includeExpired);
+      // SSG returns error as {} (empty object) on success — only treat as error if it has a code/message
+      const hasViewError = viewRes.error && (viewRes.error.code || viewRes.error.message);
+      if (hasViewError || !viewRes.data) {
+        return {
+          error: {
+            code: 'VIEW_COURSE_RUN_FAILED',
+            message: `viewCourseRun failed for ${runId}: ${viewRes.error?.message || 'no data returned'}`,
+          },
+          status: viewRes.status || 0,
+        };
+      }
+      // SSG response: data.course.run (run is nested under course, not top-level)
+      const existingRun = (viewRes.data as any)?.course?.run ?? {};
+
+      console.log(`🔍 SSG view existingRun for ${runId}:`, JSON.stringify(existingRun, null, 2));
+
+      // Step 2 — replace SSG trainer list with our local trainers
+      const mergedTrainers = (runInfo.linkCourseRunTrainer || []).map(t =>
+        EditDeleteCourseRunUtils.trainerToPayload(t)
+      );
+
+      // Step 3 — build full payload using existing SSG data
+      // SSG view response uses flat date integers (courseStartDate, registrationOpeningDate)
+      // but edit payload expects nested objects (courseDates.start, registrationDates.opening)
+      // modeOfTraining may be returned as a string "1" or an object {code, description} — normalise to string code
+      const rawMode = existingRun.modeOfTraining;
+      const modeOfTraining = typeof rawMode === 'object' && rawMode !== null
+        ? rawMode.code ?? rawMode
+        : rawMode ?? '1';
+
+      // scheduleInfoType: pass through as-is if present, else use safe default
+      const scheduleInfoType = existingRun.scheduleInfoType ?? { code: '01', description: 'Description' };
+
+      const payload = {
+        course: {
+          courseReferenceNumber: runInfo.courseReferenceNumber,
+          trainingProvider: { uen: this.credentials.uen },
+          run: {
+            action: 'update',
+            registrationDates: {
+              opening: existingRun.registrationOpeningDate ?? 0,
+              closing: existingRun.registrationClosingDate ?? 0,
+            },
+            courseDates: {
+              start: existingRun.courseStartDate ?? 0,
+              end: existingRun.courseEndDate ?? 0,
+            },
+            scheduleInfoType,
+            scheduleInfo: existingRun.scheduleInfo ?? '',
+            venue: existingRun.venue ?? { block: '', street: '', floor: '', unit: '', building: '', postalCode: '', room: '', wheelChairAccess: false },
+            modeOfTraining,
+            courseAdminEmail: existingRun.courseAdminEmail ?? '',
+            courseVacancy: existingRun.courseVacancy ?? { code: 'A', description: 'Available' },
+            file: { Name: '', content: '' },
+            linkCourseRunTrainer: mergedTrainers,
+          },
+        },
+      };
+
+      console.log('🎓 Trainer-only payload for SSG API:', JSON.stringify(payload, null, 2));
+
+      const builder = new HTTPRequestBuilder()
+        .withEndpoint(this.baseUrl, `/courses/courseRuns/edit/${runId}`)
+        .withMethod(HttpMethod.POST);
+
+      if (this.credentials.certificateContent && this.credentials.privateKeyContent) {
+        builder.withCertificate(this.credentials.certificateContent, this.credentials.privateKeyContent);
+      }
+
+      switch (includeExpired) {
+        case OptionalSelector.YES:
+          builder.withParam('includeExpiredCourses', 'true');
+          break;
+        case OptionalSelector.NO:
+          builder.withParam('includeExpiredCourses', 'false');
+          break;
+      }
+
+      const encryptedPayload = Cryptography.encryptJSON(this.credentials.encryptionKey, payload);
+      builder.withBody(encryptedPayload);
+
+      const config = builder.build();
+      return await handleRequest(this.httpClient, config);
+    } catch (error) {
+      return {
+        error: {
+          code: 'EDIT_COURSE_RUN_TRAINER_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        },
+        status: 0,
       };
     }
   }
@@ -618,6 +767,13 @@ export class CourseOperations {
 
   async getCourseRun(runId: string, includeExpired?: OptionalSelector) {
     return this.api.viewCourseRun(runId, includeExpired);
+  }
+
+  async getCourseRunsByCode(
+    courseReferenceNumber: string,
+    options?: { page?: number; pageSize?: number; includeExpired?: boolean; uen?: string }
+  ) {
+    return this.api.searchCourseRunsByCode(courseReferenceNumber, options);
   }
 
   async createCourseRun(runInfo: AddRunInfo, includeExpired?: OptionalSelector) {

@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { splitTrainerList } from '@/lib/trainerInvitations';
 
 interface LearningUnitRow {
   learning_unit_id: string;
@@ -97,6 +98,7 @@ export default async function handler(
         c.funding_validity,
         c.num_of_trainers,
         c.trainers_list,
+        c.trainers_email_list,
         c.resource_links
       FROM course c
       WHERE c.id = $1
@@ -224,9 +226,8 @@ export default async function handler(
       fundingValidity: courseData.funding_validity || null,
       numOfTrainers: courseData.num_of_trainers ?? 0,
       trainersList: courseData.trainers_list || '',
-      approvedTrainers: courseData.trainers_list
-        ? String(courseData.trainers_list).split(',').map((name: string) => name.trim()).filter(Boolean)
-        : [],
+      trainersEmailList: courseData.trainers_email_list || '',
+      approvedTrainers: splitTrainerList(courseData.trainers_list),
       assessmentMethods: assessmentMethodsData ? (typeof assessmentMethodsData === 'string' ? JSON.parse(assessmentMethodsData) : assessmentMethodsData) : null,
       resourceLinks: courseData.resource_links ? (typeof courseData.resource_links === 'string' ? JSON.parse(courseData.resource_links) : courseData.resource_links) : [],
       // Convert learning units to topics format expected by the editor

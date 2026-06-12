@@ -1,9 +1,60 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLms } from '@contexts/LmsContext';
-import { View, UserRole, AdminPage, TrainerPage } from '@app-types';
+import { View, UserRole, AdminPage, TrainerPage, DeveloperPage } from '@app-types';
 import { Icon, IconName } from './ui/Icon';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getFileUrl } from '@/lib/urlHelpers';
+import AdminSearchPalette from './admin/AdminSearchPalette';
+import FinanceSearchPalette from './finance/FinanceSearchPalette';
+import TrainingProviderSearchPalette from './training-provider/TrainingProviderSearchPalette';
+
+// ── Live SGT clock ───────────────────────────────────────────────────────────
+// Two-line compact clock shown in the header next to the profile picture.
+// Renders in Asia/Singapore regardless of the browser's local timezone so
+// the display is consistent with every scheduler / log timestamp in the app.
+// Ticks every 15 seconds — we don't show seconds, so a minute-aligned tick is
+// enough and a 15s cadence makes the minute roll-over feel instant.
+const SgtClock: React.FC = () => {
+  const [now, setNow] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    const intervalId = setInterval(tick, 15_000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const { dateStr, timeStr } = useMemo(() => {
+    // Weekday + day + month in SGT, e.g. "Sat 11 Apr"
+    const dateStr = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Singapore',
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+    }).format(now);
+    // 12-hour format with AM/PM, e.g. "12:33 AM"
+    const timeStr = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Singapore',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(now);
+    return { dateStr, timeStr };
+  }, [now]);
+
+  return (
+    <div
+      className="hidden sm:flex flex-col items-end leading-tight select-none pl-1"
+      title="Current Singapore Time (GMT+8)"
+    >
+      <span className="text-[10px] font-mono text-on-surface-secondary whitespace-nowrap">
+        {dateStr}
+      </span>
+      <span className="text-[10px] font-mono font-semibold text-on-surface whitespace-nowrap">
+        {timeStr}
+      </span>
+    </div>
+  );
+};
 
 // Helper to get display name for a role
 const getRoleDisplayName = (role: UserRole): string => {
@@ -13,6 +64,7 @@ const getRoleDisplayName = (role: UserRole): string => {
     case UserRole.Developer: return 'Developer';
     case UserRole.Admin: return 'Admin';
     case UserRole.Finance: return 'Finance';
+    case UserRole.Payroll: return 'Payroll';
     case UserRole.TrainingProvider: return 'Training Provider';
     default: return role;
   }
@@ -26,6 +78,7 @@ const getRoleIcon = (role: UserRole): string => {
     case UserRole.Developer: return '💻';
     case UserRole.Admin: return '⚙️';
     case UserRole.Finance: return '💰';
+    case UserRole.Payroll: return '🧾';
     case UserRole.TrainingProvider: return '🏢';
     default: return '👤';
   }
@@ -82,6 +135,7 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const menuItems = [
     { label: profileLabel, icon: IconName.MyAccount, view: View.Profile },
     ...(role === UserRole.Learner ? [
+      { label: 'Grant Calculator', icon: IconName.Calculator, view: View.GrantCalculator },
       { label: 'Billing History', icon: IconName.DollarSign, view: View.BillingHistory },
       { label: 'Certificate History', icon: IconName.Award, view: View.CertificateHistory },
     ] : []),
@@ -120,14 +174,37 @@ const ProfileDropdown: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 };
 
 const Header: React.FC = () => {
-  const { role, userRoles, currentView, adminPage, trainerPage, handleNavigation, setAdminPage, setTrainerPage, setSelectedCourse, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile, logout } = useLms();
+  const { role, userRoles, currentView, adminPage, trainerPage, developerPage, financePage, setFinancePage, handleNavigation, setAdminPage, setTrainerPage, setDeveloperPage, setSelectedCourse, resetCreateView, resetAdminView, trainingProviderProfile, currentUserProfile, logout } = useLms();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isRoleSwitcherOpen, setIsRoleSwitcherOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const roleSwitcherRef = useRef<HTMLDivElement>(null);
 
   // Check if user has multiple roles
   const hasMultipleRoles = userRoles.length > 1;
+  const isAdmin = role === UserRole.Admin;
+  const isFinance = role === UserRole.Finance;
+  const isTrainingProvider = role === UserRole.TrainingProvider;
+  const showSearchBar = isAdmin || isFinance || isTrainingProvider;
+  const searchPlaceholder = isAdmin
+    ? 'Search functions, e.g. cancel enrolment'
+    : isFinance
+      ? 'Search functions, e.g. cancel claim'
+      : 'Search functions, e.g. company setting';
+
+  // Cmd/Ctrl+K opens the function search (admin & finance)
+  useEffect(() => {
+    if (!showSearchBar) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showSearchBar]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -148,7 +225,7 @@ const Header: React.FC = () => {
     };
   }, [isProfileOpen, isRoleSwitcherOpen]);
 
-  const classManagementPages = [AdminPage.ViewCourses, AdminPage.ViewTrainers, AdminPage.FundingValidity, AdminPage.UpcomingClasses, AdminPage.OngoingClasses, AdminPage.CompletedClasses, AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.EnrollLearners, AdminPage.AssignTrainer];
+  const classManagementPages = [AdminPage.ViewCourses, AdminPage.ViewTrainers, AdminPage.FundingValidity, AdminPage.OngoingClasses, AdminPage.UpcomingClasses, AdminPage.CompletedClasses, AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.EnrollLearners, AdminPage.AssignTrainer];
   const tpgManagementPages = [
     AdminPage.TpgDirectApplication,
     AdminPage.TpgCourseRun,
@@ -161,6 +238,9 @@ const Header: React.FC = () => {
     AdminPage.UploadDirectApplication,
     AdminPage.ViewDirectApplication,
     AdminPage.UpdateDirectApplication,
+    AdminPage.CompanyApplication,
+    AdminPage.UploadCompanyApplication,
+    AdminPage.ViewCompanyApplication,
     AdminPage.SearchCourseRuns,
     AdminPage.ViewCourseRun,
     AdminPage.EditCourseRun,
@@ -197,8 +277,9 @@ const Header: React.FC = () => {
 
   const navConfig = {
     [UserRole.Learner]: [
-      { view: View.Courses, label: 'Certificate Delivery', icon: IconName.Award, href: 'https://goo.gl/R2eumq' },
-      { view: View.Courses, label: 'TRAQOM Survey', icon: IconName.ClipboardCheck, href: 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr' },
+      { view: View.Courses, label: 'My Classes', icon: IconName.BookOpen },
+      { view: View.CertificateHistory, label: 'Certificate', icon: IconName.Award },
+      { view: View.BillingHistory, label: 'Billing', icon: IconName.DollarSign },
     ],
     [UserRole.Trainer]: [
       { view: View.Dashboard, label: 'My Classes', icon: IconName.BookOpen, trainerPage: TrainerPage.MyClasses },
@@ -207,23 +288,32 @@ const Header: React.FC = () => {
       { view: View.Dashboard, label: 'GenAI Tools', icon: IconName.Create, trainerPage: TrainerPage.GenAIAuthoring },
     ],
     [UserRole.Developer]: [
-      { view: View.Courses, label: 'Courses', icon: IconName.Courses },
-      { view: View.Create, label: 'Developer GenAI Authoring', icon: IconName.Create },
+      { view: View.Dashboard, label: 'Course Management', icon: IconName.Courses, developerPage: DeveloperPage.CourseList },
+      { view: View.Dashboard, label: 'Courseware Tools', icon: IconName.BookOpen, developerPage: DeveloperPage.CoursewareTools },
     ],
     [UserRole.Admin]: [
       { view: View.Admin, label: 'Admin Dashboard', icon: IconName.Admin, page: AdminPage.Dashboard },
       { view: View.Admin, label: 'Class Management', icon: IconName.Courses, page: AdminPage.ClassManagement },
       { view: View.Admin, label: 'TPG Management', icon: IconName.DollarSign, page: AdminPage.TpgManagement },
     ],
-    [UserRole.Finance]: [],
-    [UserRole.TrainingProvider]: []
+    [UserRole.Finance]: [
+      { view: View.Finance, label: 'Financial Dashboard', icon: IconName.DollarSign, financePage: 'dashboard' },
+      { view: View.Finance, label: 'TPG Management', icon: IconName.Settings, financePage: 'tpgManagement' },
+      { view: View.Finance, label: 'Claim Management', icon: IconName.ClipboardCheck, financePage: 'claimManagement' },
+    ],
+    [UserRole.Payroll]: [],
+    [UserRole.TrainingProvider]: [
+      { view: View.Dashboard, label: 'Training Dashboard', icon: IconName.Dashboard },
+      { view: View.Profile, label: 'Company Setting', icon: IconName.MyAccount },
+      { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
+    ]
   };
 
   const navItems = navConfig[role];
 
   return (
     <header className="bg-surface shadow-sm sticky top-0 z-30">
-      <div className="container mx-auto px-3 sm:px-4 lg:px-6">
+      <div className="w-full px-3 sm:px-4 lg:px-6">
         <div className="grid grid-cols-3 items-center h-14 sm:h-16">
           {/* Left Section: Logo + Company Name */}
           <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
@@ -237,7 +327,21 @@ const Header: React.FC = () => {
             </span>
           </div>
 
-          {/* Center Section: Navigation - Always visible */}
+          {/* Center Section: Admin & Finance get a wide search bar; other roles keep their nav. */}
+          {showSearchBar ? (
+            <div className="flex items-center justify-center px-2">
+              <button
+                onClick={() => setIsSearchOpen(true)}
+                title="Search functions (⌘K)"
+                aria-label="Search functions"
+                className="flex items-center gap-2 w-full max-w-xl px-3 sm:px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-sm font-medium text-on-surface-secondary transition-colors border border-default"
+              >
+                <Icon name={IconName.Search} className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1 text-left truncate">{searchPlaceholder}</span>
+                <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-on-surface-secondary border border-default rounded">⌘K</kbd>
+              </button>
+            </div>
+          ) : (
           <nav className="flex items-center justify-center space-x-1 sm:space-x-1.5 xl:space-x-2">
             {navItems.map(item => {
               // External link (opens in new tab)
@@ -256,11 +360,17 @@ const Header: React.FC = () => {
                 );
               }
 
-              // Trainer page navigation
+              // Role-specific page navigation
               const isTrainerItem = 'trainerPage' in item && item.trainerPage;
+              const isDeveloperItem = 'developerPage' in item && item.developerPage;
+              const isFinanceItem = 'financePage' in item && item.financePage;
               const isActive = isTrainerItem
                 ? trainerPage === item.trainerPage
-                : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
+                : isDeveloperItem
+                  ? developerPage === item.developerPage
+                  : isFinanceItem
+                    ? financePage === item.financePage
+                    : (role === UserRole.Admin && isAdminPageActive(item)) || (role !== UserRole.Admin && currentView === item.view);
 
               return (
                 <a
@@ -276,11 +386,22 @@ const Header: React.FC = () => {
                       return;
                     }
 
+                    if (isDeveloperItem) {
+                      setSelectedCourse(null);
+                      setDeveloperPage(item.developerPage);
+                      handleNavigation(View.Dashboard);
+                      return;
+                    }
+
                     if (role === UserRole.Admin && 'page' in item) {
                       if (item.page === AdminPage.Dashboard) {
                         resetAdminView();
                       }
                       setAdminPage(item.page);
+                    }
+
+                    if (role === UserRole.Finance && 'financePage' in item) {
+                      setFinancePage(item.financePage);
                     }
 
                     if (item.view === View.Create && currentView === item.view) {
@@ -290,7 +411,7 @@ const Header: React.FC = () => {
                     }
                   }}
                   className={`flex items-center justify-center space-x-1 px-2 sm:px-2.5 xl:px-3 py-2 rounded-md text-xs xl:text-sm font-medium transition-colors whitespace-nowrap ${isActive
-                    ? 'bg-primary text-white'
+                    ? 'text-primary'
                     : 'text-on-surface hover:bg-surface-elevated hover:text-primary'
                     }`}
                 >
@@ -300,6 +421,7 @@ const Header: React.FC = () => {
               );
             })}
           </nav>
+          )}
 
           {/* Right Section: Actions */}
           <div className="flex items-center justify-end space-x-1.5 sm:space-x-2">
@@ -334,9 +456,15 @@ const Header: React.FC = () => {
               </button>
               {isProfileOpen && <ProfileDropdown onClose={() => setIsProfileOpen(false)} />}
             </div>
+
+            {/* Live SGT clock — sits at the far right of the header, right-aligned */}
+            <SgtClock />
           </div>
         </div>
       </div>
+      {isAdmin && <AdminSearchPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />}
+      {isFinance && <FinanceSearchPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />}
+      {isTrainingProvider && <TrainingProviderSearchPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />}
     </header>
   );
 };

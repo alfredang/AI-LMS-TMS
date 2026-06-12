@@ -1,0 +1,101 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import pool from '../../../lib/db';
+
+/**
+ * POST /api/admin/da-toggle-field
+ *
+ * Toggles a boolean-like field on a da_application row. Used by the
+ * View DA table checkboxes (Enrol, Cal, Inv) for manual overrides.
+ *
+ * Body: { id: string (da_application.id), field: string, value: boolean }
+ *
+ * Only whitelisted fields are accepted.
+ */
+
+const FIELD_MAP: Record<string, { column: string; trueValue: string; falseValue: string | null }> = {
+  enrol: { column: 'enrolment_status', trueValue: 'Confirmed', falseValue: null },
+  calendar: { column: 'calendar_added', trueValue: 'true', falseValue: 'false' },
+  invoice: { column: 'invoice_id', trueValue: 'MANUAL', falseValue: null },
+};
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' });
+  }
+
+  const { id, field, value } = req.body || {};
+
+  if (!id || typeof id !== 'string') {
+    return res.status(400).json({ success: false, error: 'id is required' });
+  }
+  if (!field || !FIELD_MAP[field]) {
+    return res.status(400).json({ success: false, error: `Invalid field. Must be one of: ${Object.keys(FIELD_MAP).join(', ')}` });
+  }
+  if (typeof value !== 'boolean') {
+    return res.status(400).json({ success: false, error: 'value must be a boolean' });
+  }
+
+  const { column, trueValue, falseValue } = FIELD_MAP[field];
+
+  try {
+    const dbValue = value ? trueValue : falseValue;
+    
+    if (field === 'enrol') {
+        // For enrolment toggles, we must update both status and id
+        const newStatus = value ? 'Confirmed' : null;
+        // If enabling, default to 'MANUAL' if no ID. If disabling, clear it.
+        await pool.query(
+          `UPDATE da_application 
+           SET enrolment_status = $1, 
+               enrolment_id = CASE WHEN $2::boolean THEN COALESCE(enrolment_id, 'MANUAL') ELSE NULL END,
+               updated_at = NOW() 
+           WHERE id = $3`,
+          [newStatus, value, id]
+        );
+        console.log(`✅ [da-toggle-field] enrol -> status=${newStatus}, value=${value} for ${id}`);
+    } else if (field === 'invoice' && !value) {
+        const result = await pool.query(
+          `UPDATE da_application
+           SET invoice_id = NULL,
+               invoice_doc_number = NULL,
+               invoice_drive_file_id = NULL,
+               invoice_drive_web_view_link = NULL,
+               updated_at = NOW()
+           WHERE id = $1
+           RETURNING enrolment_id`,
+          [id]
+        );
+
+        const enrolmentId = result.rows[0]?.enrolment_id;
+        if (enrolmentId) {
+          await pool.query(
+            `UPDATE public.invoice_jobs
+             SET status = 'failed',
+                 drive_file_id = NULL,
+                 drive_web_view_link = NULL,
+                 last_error = 'Invoice was cleared from Direct Application admin table',
+                 updated_at = NOW()
+             WHERE LOWER(TRIM(COALESCE(enrolment_id::text, ''))) = LOWER(TRIM($1::text))
+               AND status = 'done'`,
+            [enrolmentId]
+          );
+        }
+
+        console.log(`[da-toggle-field] invoice cleared for ${id}`);
+    } else {
+        await pool.query(
+          `UPDATE da_application SET ${column} = $1, updated_at = NOW() WHERE id = $2`,
+          [dbValue, id]
+        );
+        console.log(`✅ [da-toggle-field] ${field} (${column}) = ${dbValue} for ${id}`);
+    }
+    
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('❌ da-toggle-field error:', err);
+    return res.status(500).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Internal server error',
+    });
+  }
+}

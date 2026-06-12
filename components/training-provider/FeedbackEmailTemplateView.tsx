@@ -29,6 +29,9 @@ const FeedbackEmailTemplateView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [testEmail, setTestEmail] = useState('');
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testMessage, setTestMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     fetchTemplate();
@@ -101,6 +104,17 @@ const FeedbackEmailTemplateView: React.FC = () => {
     setSubject(DEFAULT_SUBJECT);
     setBody(DEFAULT_BODY);
     setCc('');
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail.trim())) { setTestMessage({ type: 'error', text: 'Please enter a valid email address.' }); return; }
+    setIsSendingTest(true); setTestMessage(null);
+    try {
+      const res = await fetch(getApiUrl('/api/training-provider/send-test-email'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ testEmail: testEmail.trim(), subject, body, templateType: 'feedback' }) });
+      const data = await res.json();
+      setTestMessage(data.success ? { type: 'success', text: `Test email sent to ${testEmail.trim()}` } : { type: 'error', text: data.error || 'Failed to send test email.' });
+    } catch { setTestMessage({ type: 'error', text: 'Failed to send test email.' }); }
+    finally { setIsSendingTest(false); setTimeout(() => setTestMessage(null), 5000); }
   };
 
   const hasChanges = subject !== originalSubject || body !== originalBody || cc !== originalCc;
@@ -227,6 +241,17 @@ const FeedbackEmailTemplateView: React.FC = () => {
       </Card>
 
       {/* Preview */}
+      <Card>
+        <div className="p-6">
+          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Send Test Email</h4>
+          <div className="flex gap-3 items-start">
+            <input type="email" value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="Enter test email address..." className="flex-1 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <Button variant="secondary" onClick={handleSendTestEmail} disabled={isSendingTest || !testEmail.trim()}>{isSendingTest ? 'Sending...' : 'Send Test'}</Button>
+          </div>
+          {testMessage && <div className={`mt-3 p-2 rounded-md text-xs ${testMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>{testMessage.text}</div>}
+        </div>
+      </Card>
+
       <Card>
         <div className="p-6">
           <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Preview</h4>

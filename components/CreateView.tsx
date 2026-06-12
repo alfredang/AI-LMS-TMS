@@ -376,6 +376,7 @@ const CreateView: React.FC = () => {
             { label: 'Nano Banana', href: 'https://gemini.google.com/app' },
             { label: 'Microsoft Designer', href: 'https://designer.microsoft.com/' },
             { label: 'Leonardo', href: 'https://app.leonardo.ai/' },
+            { label: 'Face Swap', href: 'https://huggingface.co/spaces/alfredang/faceswap' },
         ]},
         { title: 'Video', description: 'AI video creation and editing tools for producing engaging video content.', items: [
             { label: 'Kling', href: 'https://kling.ai/' },

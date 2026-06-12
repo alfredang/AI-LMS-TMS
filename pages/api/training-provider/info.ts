@@ -43,7 +43,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.enable_default_otp,
           tp.default_otp,
           tp.color_scheme,
-          tp.force_first_password_change
+          tp.force_first_password_change,
+          tp.support_email,
+          tp.contact_tel,
+          tp.company_tel,
+          tp.company_address,
+          tp.show_lesson_plan_learner_view,
+          tp.show_certificate_delivery,
+          tp.certificate_delivery_label,
+          tp.certificate_delivery_link,
+          tp.feedback_form_enabled,
+          tp.feedback_form_external_link,
+          tp.briefing_on_assessment
         FROM training_provider_member tpm
         JOIN training_provider tp ON tpm.provider_id = tp.id
         WHERE tpm.user_id = $1
@@ -62,7 +73,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.enable_default_otp,
             tp.default_otp,
             tp.color_scheme,
-            tp.force_first_password_change
+            tp.force_first_password_change,
+            tp.support_email,
+            tp.contact_tel,
+            tp.company_tel,
+            tp.company_address,
+            tp.show_lesson_plan_learner_view,
+          tp.show_certificate_delivery,
+          tp.certificate_delivery_label,
+          tp.certificate_delivery_link,
+          tp.feedback_form_enabled,
+          tp.feedback_form_external_link,
+          tp.briefing_on_assessment
           FROM training_provider tp
           WHERE tp.id = $1
         `, [userId]);
@@ -81,7 +103,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tp.enable_default_otp,
             tp.default_otp,
             tp.color_scheme,
-            tp.force_first_password_change
+            tp.force_first_password_change,
+            tp.support_email,
+            tp.contact_tel,
+            tp.company_tel,
+            tp.company_address,
+            tp.show_lesson_plan_learner_view,
+          tp.show_certificate_delivery,
+          tp.certificate_delivery_label,
+          tp.certificate_delivery_link,
+          tp.feedback_form_enabled,
+          tp.feedback_form_external_link,
+          tp.briefing_on_assessment
           FROM provider_admin_user pau
           JOIN training_provider tp ON pau.provider_id = tp.id
           WHERE pau.user_id = $1
@@ -102,7 +135,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
         } catch (e) { /* columns don't exist */ }
         try {
-          const r = await pool.query(`SELECT magento_backend_url FROM training_provider WHERE id = $1`, [trainingProvider.id]);
+          const r = await pool.query(`SELECT n8n_finance_webhooks_json FROM training_provider WHERE id = $1`, [trainingProvider.id]);
+          if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+        } catch (e) { /* columns don't exist */ }
+        try {
+          const r = await pool.query(`SELECT tertiary_courses_sg_url, tertiary_courses_sg_api_key, magento_backend_url FROM training_provider WHERE id = $1`, [trainingProvider.id]);
+          if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+        } catch (e) { /* columns don't exist */ }
+        try {
+          const r = await pool.query(
+            `SELECT r2_endpoint, r2_access_key_id, r2_secret_access_key, r2_bucket, r2_public_url FROM training_provider WHERE id = $1`,
+            [trainingProvider.id],
+          );
           if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
         } catch (e) { /* columns don't exist */ }
 
@@ -116,6 +160,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         } catch (e) { /* columns don't exist */ }
 
+        let virtualMeetingProvider: 'google_meet' | 'zoom' | 'teams' = 'google_meet';
+        try {
+          const r = await pool.query(`SELECT virtual_meeting_provider FROM training_provider WHERE id = $1`, [trainingProvider.id]);
+          const v = r.rows[0]?.virtual_meeting_provider;
+          if (v === 'zoom' || v === 'teams') virtualMeetingProvider = v;
+        } catch (e) { /* column doesn't exist yet */ }
+
         const responseData = {
           uen: trainingProvider.uen || '',
           companyWebsite: trainingProvider.company_website || '',
@@ -128,8 +179,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           defaultOtp: trainingProvider.default_otp || '',
           colorScheme: trainingProvider.color_scheme || null,
           forceFirstPasswordChange: trainingProvider.force_first_password_change || false,
+          showLessonPlanLearnerView: trainingProvider.show_lesson_plan_learner_view || false,
+          showCertificateDelivery: trainingProvider.show_certificate_delivery || false,
+          certificateDeliveryLabel: trainingProvider.certificate_delivery_label || 'TP Course Evaluation',
+          certificateDeliveryLink: trainingProvider.certificate_delivery_link || 'https://goo.gl/R2eumq',
+      feedbackFormEnabled: trainingProvider.feedback_form_enabled || false,
+      feedbackFormExternalLink: trainingProvider.feedback_form_external_link || '',
+      briefingOnAssessment: trainingProvider.briefing_on_assessment || '',
           privacyPolicy: privacyPolicy || null,
           acceptableUsePolicy: acceptableUsePolicy || null,
+          virtualMeetingProvider,
           referenceLinks: {
             masterListUrl: refLinks.master_list_url || '',
             tertiaryTmsUrl: refLinks.tertiary_tms_url || '',
@@ -138,7 +197,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tertiaryTpmsUrl: refLinks.tertiary_tpms_url || '',
             n8nHost1Url: refLinks.n8n_host1_url || '',
             n8nHost2Url: refLinks.n8n_host2_url || '',
-            magentoBackendUrl: refLinks.magento_backend_url || '',
+            n8nFinanceWebhooksJson: refLinks.n8n_finance_webhooks_json || '',
+            tertiaryCoursesSgUrl: refLinks.tertiary_courses_sg_url || refLinks.magento_backend_url || '',
+            tertiaryCoursesSgApiKey: refLinks.tertiary_courses_sg_api_key || '',
           },
         };
 
@@ -167,15 +228,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.enable_default_otp,
           tp.default_otp,
           tp.color_scheme,
-          tp.force_first_password_change
+          tp.force_first_password_change,
+          tp.support_email,
+          tp.contact_tel,
+          tp.company_tel,
+          tp.company_address,
+          tp.show_lesson_plan_learner_view,
+          tp.show_certificate_delivery,
+          tp.certificate_delivery_label,
+          tp.certificate_delivery_link,
+          tp.feedback_form_enabled,
+          tp.feedback_form_external_link,
+          tp.briefing_on_assessment
         FROM user_role_map urm
         JOIN app_user au ON au.id = urm.user_id
         CROSS JOIN training_provider tp
-        WHERE urm.role = 'Training Provider'::user_role
+        WHERE urm.role = 'Training Provider'
         LIMIT 1;
       `);
     } catch (error) {
-      console.log('Training provider table query failed, checking for data...', error);
+      console.error('❌ Training provider table query failed:', error);
       result = { rows: [] };
     }
 
@@ -188,7 +260,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT au.id, au.profile_picture_url
         FROM user_role_map urm
         JOIN app_user au ON au.id = urm.user_id
-        WHERE urm.role = 'Training Provider'::user_role
+        WHERE urm.role = 'Training Provider'
         LIMIT 1;
       `);
 
@@ -207,6 +279,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         defaultOtp: '',
         colorScheme: null,
         forceFirstPasswordChange: false,
+        showLessonPlanLearnerView: false,
+        showCertificateDelivery: false,
+        certificateDeliveryLabel: 'TP Course Evaluation',
+        certificateDeliveryLink: 'https://goo.gl/R2eumq',
+        feedbackFormEnabled: false,
+        feedbackFormExternalLink: '',
+        briefingOnAssessment: '',
         privacyPolicy: null,
         acceptableUsePolicy: null
       };
@@ -231,10 +310,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     } catch (e) { /* columns don't exist */ }
 
+    let fallbackVirtualMeetingProvider: 'google_meet' | 'zoom' | 'teams' = 'google_meet';
+    try {
+      const r = await pool.query('SELECT virtual_meeting_provider FROM training_provider LIMIT 1');
+      const v = r.rows[0]?.virtual_meeting_provider;
+      if (v === 'zoom' || v === 'teams') fallbackVirtualMeetingProvider = v;
+    } catch (e) { /* column doesn't exist yet */ }
+
     const responseData = {
       uen: trainingProvider.uen || '',
       companyWebsite: trainingProvider.company_website || '',
       companyEmail: trainingProvider.company_email || '',
+      supportEmail: trainingProvider.support_email || trainingProvider.company_email || '',
+      contactTel: trainingProvider.contact_tel || trainingProvider.company_tel || '',
+      companyAddress: trainingProvider.company_address || '',
       companyLogoUrl: getAbsoluteImageUrl(trainingProvider.profile_picture_url),
       companyName: trainingProvider.company_name || 'Training Provider',
       companyShortname: trainingProvider.company_shortname || 'TP',
@@ -243,8 +332,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       defaultOtp: trainingProvider.default_otp || '',
       colorScheme: trainingProvider.color_scheme || null,
       forceFirstPasswordChange: trainingProvider.force_first_password_change || false,
+      showLessonPlanLearnerView: trainingProvider.show_lesson_plan_learner_view || false,
+      showCertificateDelivery: trainingProvider.show_certificate_delivery || false,
+      certificateDeliveryLabel: trainingProvider.certificate_delivery_label || 'TP Course Evaluation',
+      certificateDeliveryLink: trainingProvider.certificate_delivery_link || 'https://goo.gl/R2eumq',
+      feedbackFormEnabled: trainingProvider.feedback_form_enabled || false,
+      feedbackFormExternalLink: trainingProvider.feedback_form_external_link || '',
+      briefingOnAssessment: trainingProvider.briefing_on_assessment || '',
       privacyPolicy: fallbackPrivacyPolicy || null,
-      acceptableUsePolicy: fallbackAcceptableUsePolicy || null
+      acceptableUsePolicy: fallbackAcceptableUsePolicy || null,
+      virtualMeetingProvider: fallbackVirtualMeetingProvider
     };
 
     console.log('✅ Training provider info fetched:', responseData);
@@ -254,11 +351,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       data: responseData
     });
 
-  } catch (error) {
-    console.error('❌ Error fetching training provider info:', error);
+  } catch (error: any) {
+    console.error('❌ Error in /api/training-provider/info:', {
+      message: error.message,
+      stack: error.stack,
+      query: error.query,
+      detail: error.detail
+    });
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch training provider info'
+      error: 'Failed to fetch training provider info',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 }

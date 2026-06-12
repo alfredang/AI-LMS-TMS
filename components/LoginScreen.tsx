@@ -14,6 +14,7 @@ const getRoleDisplayName = (role: UserRole): string => {
     case UserRole.Developer: return 'Developer';
     case UserRole.Admin: return 'Admin';
     case UserRole.Finance: return 'Finance';
+    case UserRole.Payroll: return 'Payroll';
     case UserRole.TrainingProvider: return 'Training Provider';
     default: return role;
   }
@@ -27,6 +28,7 @@ const getRoleIcon = (role: UserRole): string => {
     case UserRole.Developer: return '💻';
     case UserRole.Admin: return '⚙️';
     case UserRole.Finance: return '💰';
+    case UserRole.Payroll: return '🧾';
     case UserRole.TrainingProvider: return '🏢';
     default: return '👤';
   }
@@ -39,8 +41,9 @@ interface LoginScreenProps {
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const { login, courses, trainingProviderProfile } = useLms();
 
-  const [step, setStep] = useState<'email' | 'otp' | 'password' | 'roleSelect' | 'changePassword' | 'forgotPassword'>('email');
+  const [step, setStep] = useState<'email' | 'otp' | 'password' | 'roleSelect' | 'changePassword' | 'forgotPassword' | 'profileSetup'>('email');
   const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState(''); // Pre-fill for testing
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -229,6 +232,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         console.log('OTP login successful:', result.data.user);
         const roles = result.data.roles || [result.data.role];
 
+        // Check if user needs to set up profile
+        if (result.data.requiresProfileSetup) {
+          console.log('New user requires profile setup');
+          setPendingUser(result.data.user);
+          setAvailableRoles(roles);
+          setStep('profileSetup');
+          return;
+        }
+
         // If user has multiple roles, show role selector
         if (roles.length > 1) {
           console.log('User has multiple roles:', roles);
@@ -323,6 +335,45 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       }
     } catch (err) {
       console.error('Password change error:', err);
+      setError('An unexpected error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleProfileSetup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullName.trim()) {
+      setError('Please enter your full name.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/profile-update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: pendingUser?.id,
+          profileData: { name: fullName }
+        }),
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        // Name updated, proceed with login
+        if (availableRoles.length > 1) {
+          setStep('roleSelect');
+        } else {
+          completeLogin({ ...pendingUser!, fullName }, availableRoles[0] || (pendingUser as any).role);
+        }
+      } else {
+        setError(result.error || result.message || 'Failed to update profile.');
+      }
+    } catch (err) {
+      console.error('Profile update error:', err);
       setError('An unexpected error occurred.');
     } finally {
       setIsLoading(false);
@@ -573,6 +624,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   {role === UserRole.Developer && 'Create and edit course content'}
                   {role === UserRole.Admin && 'Manage users, classes, and system settings'}
                   {role === UserRole.Finance && 'Manage grants, claims, and financial records'}
+                  {role === UserRole.Payroll && 'Manage trainer payouts and payment records'}
                   {role === UserRole.TrainingProvider && 'Manage organization and SSG integration'}
                 </p>
               </div>
@@ -655,6 +707,39 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     </form>
   );
 
+  const renderProfileSetupStep = () => (
+    <form onSubmit={handleProfileSetup} className="space-y-4">
+      <div className="text-center mb-4">
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Welcome!</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          Please enter your full name as per your NRIC/Passport. This will be used for your certificates.
+        </p>
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-sm text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
+        <input
+          type="text"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+          placeholder="e.g. John Doe"
+          required
+        />
+      </div>
+
+      <Button type="submit" variant="primary" className="w-full py-3" disabled={isLoading}>
+        {isLoading ? 'Saving...' : 'Continue'}
+      </Button>
+    </form>
+  );
+
   const renderForgotPasswordStep = () => (
     <div className="space-y-6">
       {forgotPasswordSent ? (
@@ -732,6 +817,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       return renderForgotPasswordStep();
     } else if (step === 'changePassword') {
       return renderChangePasswordStep();
+    } else if (step === 'profileSetup') {
+      return renderProfileSetupStep();
     } else if (step === 'roleSelect') {
       return renderRoleSelectStep();
     } else if (securitySettings.enableOtpLogin && step === 'otp') {

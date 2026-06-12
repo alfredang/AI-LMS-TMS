@@ -39,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cr.assigned_trainer_email,
         c.title AS course_title,
         c.course_code,
-        (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id) AS enrolled_learners
+        (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')) AS enrolled_learners
       FROM course_run cr
       JOIN course c ON c.id = cr.course_id
       WHERE cr.course_run_id = $1`,

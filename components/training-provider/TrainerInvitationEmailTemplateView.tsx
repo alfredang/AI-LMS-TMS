@@ -8,17 +8,23 @@ import {
   DEFAULT_TRAINER_INVITATION_BODY,
   DEFAULT_TRAINER_INVITATION_SUBJECT,
   renderInvitationTemplate,
+  renderInvitationHtmlEmail
 } from '@/lib/trainerInvitations';
 
 const TrainerInvitationEmailTemplateView: React.FC = () => {
   const { trainingProviderProfile } = useLms();
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [cc, setCc] = useState('');
   const [originalSubject, setOriginalSubject] = useState('');
   const [originalBody, setOriginalBody] = useState('');
+  const [originalCc, setOriginalCc] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [testEmail, setTestEmail] = useState('');
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testMessage, setTestMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     void fetchTemplate();
@@ -31,16 +37,21 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
       const data = await response.json();
       const nextSubject = data?.data?.trainerInvitationEmailSubject || DEFAULT_TRAINER_INVITATION_SUBJECT;
       const nextBody = data?.data?.trainerInvitationEmailBody || DEFAULT_TRAINER_INVITATION_BODY;
+      const nextCc = data?.data?.trainerInvitationEmailCc || '';
       setSubject(nextSubject);
       setBody(nextBody);
+      setCc(nextCc);
       setOriginalSubject(data?.data?.trainerInvitationEmailSubject || '');
       setOriginalBody(data?.data?.trainerInvitationEmailBody || '');
+      setOriginalCc(nextCc);
     } catch (error) {
       console.error('Error fetching trainer invitation email template:', error);
       setSubject(DEFAULT_TRAINER_INVITATION_SUBJECT);
       setBody(DEFAULT_TRAINER_INVITATION_BODY);
+      setCc('');
       setOriginalSubject('');
       setOriginalBody('');
+      setOriginalCc('');
     } finally {
       setIsLoading(false);
     }
@@ -56,6 +67,7 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
         body: JSON.stringify({
           trainerInvitationEmailSubject: subject,
           trainerInvitationEmailBody: body,
+          trainerInvitationEmailCc: cc,
         }),
       });
       const data = await response.json();
@@ -64,6 +76,7 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
       }
       setOriginalSubject(subject);
       setOriginalBody(body);
+      setOriginalCc(cc);
       setSaveMessage({ type: 'success', text: 'Trainer invitation email template saved successfully.' });
     } catch (error) {
       console.error('Error saving trainer invitation email template:', error);
@@ -77,43 +90,57 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
   const variables = [
     '{TRAINER_NAME}',
     '{COURSE_TITLE}',
+    '{COURSE_TYPE}',
     '{COURSE_CODE}',
     '{COURSE_RUN_ID}',
     '{START_DATE}',
     '{END_DATE}',
+    '{DURATION}',
+    '{COURSE_HOURS}',
+    '{CONFIRM_BY}',
     '{TPG_TRAINER}',
     '{COMPANY_SHORT_NAME}',
-    '{ACCEPT_URL}',
-    '{DECLINE_URL}',
+    '{ACTION_BUTTONS}',
+    '{ACCEPT_BUTTON}',
+    '{DECLINE_BUTTON}',
   ];
 
-  const previewSubject = renderInvitationTemplate(subject || DEFAULT_TRAINER_INVITATION_SUBJECT, {
+  const sampleReplacements: Record<string, string> = {
     COMPANY_SHORT_NAME: trainingProviderProfile?.companyShortname || 'Training Provider',
     TRAINER_NAME: 'Tan Woei Ming',
     COURSE_TITLE: 'Generative AI for Business',
+    COURSE_TYPE: 'Physical',
     COURSE_CODE: 'TGS-2023036653',
     COURSE_RUN_ID: '1131876',
     START_DATE: '06/04/2026',
     END_DATE: '09/04/2026',
+    DURATION: '4 days',
+    COURSE_HOURS: '32h',
+    CONFIRM_BY: '04/04/2026, 23:59 PM',
     TPG_TRAINER: 'Dr Alvin Ang Wei Hern',
-    ACCEPT_URL: 'https://ai-lms-tms.tertiaryinfo.tech/api/public/trainer-invitation/respond?token=sample&action=accept',
-    DECLINE_URL: 'https://ai-lms-tms.tertiaryinfo.tech/api/public/trainer-invitation/respond?token=sample&action=decline',
-  });
+  };
 
-  const previewBody = renderInvitationTemplate(body || DEFAULT_TRAINER_INVITATION_BODY, {
-    COMPANY_SHORT_NAME: trainingProviderProfile?.companyShortname || 'Training Provider',
-    TRAINER_NAME: 'Tan Woei Ming',
-    COURSE_TITLE: 'Generative AI for Business',
-    COURSE_CODE: 'TGS-2023036653',
-    COURSE_RUN_ID: '1131876',
-    START_DATE: '06/04/2026',
-    END_DATE: '09/04/2026',
-    TPG_TRAINER: 'Dr Alvin Ang Wei Hern',
-    ACCEPT_URL: 'Accept button URL',
-    DECLINE_URL: 'Decline button URL',
-  });
+  const previewSubject = renderInvitationTemplate(subject || DEFAULT_TRAINER_INVITATION_SUBJECT, sampleReplacements);
+  const previewBody = renderInvitationTemplate(body || DEFAULT_TRAINER_INVITATION_BODY, sampleReplacements);
+  const previewHtmlBody = renderInvitationHtmlEmail(
+    body || DEFAULT_TRAINER_INVITATION_BODY,
+    sampleReplacements,
+    '#',
+    '#'
+  );
 
-  const hasChanges = subject !== originalSubject || body !== originalBody;
+  const handleSendTestEmail = async () => {
+    if (!testEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmail.trim())) { setTestMessage({ type: 'error', text: 'Please enter a valid email address.' }); return; }
+    setIsSendingTest(true); setTestMessage(null);
+    try {
+      const res = await fetch(getApiUrl('/api/training-provider/send-test-email'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ testEmail: testEmail.trim(), subject, body, cc, templateType: 'trainer-invitation' }) });
+      const data = await res.json();
+      setTestMessage(data.success ? { type: 'success', text: `Test email sent to ${testEmail.trim()}` } : { type: 'error', text: data.error || 'Failed to send test email.' });
+    } catch { setTestMessage({ type: 'error', text: 'Failed to send test email.' }); }
+    finally { setIsSendingTest(false); setTimeout(() => setTestMessage(null), 5000); }
+  };
+
+  const hasChanges = subject !== originalSubject || body !== originalBody || cc !== originalCc;
 
   return (
     <div className="space-y-6">
@@ -185,8 +212,34 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
                   className="block w-full px-4 py-3 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono leading-relaxed resize-y"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  CC List <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  value={cc}
+                  onChange={(e) => setCc(e.target.value)}
+                  rows={2}
+                  placeholder="ops@example.com, finance@example.com"
+                  className="block w-full px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono resize-y"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Comma- or newline-separated. These addresses are CC'd on every trainer invitation (manual send, auto-escalation, and weekly sweep). Invalid entries are silently dropped.
+                </p>
+              </div>
             </div>
           )}
+        </div>
+      </Card>
+
+      <Card>
+        <div className="p-6">
+          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Send Test Email</h4>
+          <div className="flex gap-3 items-start">
+            <input type="email" value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="Enter test email address..." className="flex-1 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <Button variant="secondary" onClick={handleSendTestEmail} disabled={isSendingTest || !testEmail.trim()}>{isSendingTest ? 'Sending...' : 'Send Test'}</Button>
+          </div>
+          {testMessage && <div className={`mt-3 p-2 rounded-md text-xs ${testMessage.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>{testMessage.text}</div>}
         </div>
       </Card>
 
@@ -195,14 +248,9 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
           <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Preview</h4>
           <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden">
             <div className="px-6 py-3 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium text-gray-500 dark:text-gray-400">Subject:</span>
-                <span className="text-gray-900 dark:text-white font-medium">{previewSubject}</span>
-              </div>
+              <div className="flex items-center gap-2 text-sm"><span className="font-medium text-gray-500 dark:text-gray-400">Subject:</span><span className="text-gray-900 dark:text-white font-medium">{previewSubject}</span></div>
             </div>
-            <div className="px-6 py-5 text-sm text-gray-700 dark:text-gray-300 max-h-72 overflow-y-auto">
-              {previewBody.split('\n').map((line, index) => line.trim() ? <p key={index} className="mb-1">{line}</p> : <br key={index} />)}
-            </div>
+            <div className="px-6 py-5 text-sm max-h-96 overflow-y-auto" dangerouslySetInnerHTML={{ __html: previewHtmlBody }} />
           </div>
         </div>
       </Card>

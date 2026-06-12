@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useDeveloperCourses } from '@hooks/useDeveloperCourses';
 import { Card } from '../ui/Card';
+import { getLocalYMD } from '@/lib/dateHelpers';
 import { apiClient } from '@lib/services/apiClient';
 
 const FOUR_MONTHS_AHEAD = (date: Date) => {
@@ -33,6 +34,13 @@ const formatValidityDate = (value?: string | null) => {
   return date ? date.toLocaleDateString('en-GB') : 'N/A';
 };
 
+// Convert validity string to YYYY-MM-DD for date input
+const toDateInputValue = (value?: string | null) => {
+  const date = parseValidityDate(value);
+  if (!date) return '';
+  return getLocalYMD(date);
+};
+
 const isRenewed = (value?: string | null) => !!value && value.trim().length > 0;
 
 const displayCourseType = (value?: string | null) => {
@@ -40,10 +48,21 @@ const displayCourseType = (value?: string | null) => {
   return value || 'CASL';
 };
 
+interface EditState {
+  casScore: string;
+  esScore: string;
+  fundingValidity: string;
+}
+
 const FundingValidityView: React.FC = () => {
-  const { courses, loading, error } = useDeveloperCourses();
+  const { courses, loading, error, refetch } = useDeveloperCourses();
   const [renewingIds, setRenewingIds] = useState<Record<string, boolean>>({});
   const [renewStateOverrides, setRenewStateOverrides] = useState<Record<string, boolean>>({});
+  const [whitelistingIds, setWhitelistingIds] = useState<Record<string, boolean>>({});
+  const [whitelistStateOverrides, setWhitelistStateOverrides] = useState<Record<string, boolean>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '' });
+  const [saving, setSaving] = useState(false);
 
   const today = startOfDay(new Date());
   const fourMonthsAhead = startOfDay(FOUR_MONTHS_AHEAD(today));
@@ -72,9 +91,19 @@ const FundingValidityView: React.FC = () => {
     );
   }, [fourMonthsAhead, today, wsqCourses]);
 
-  const totalToRenew = wsqCourses.filter(course => {
+  const isRenewDateAfterToday = (course: any) => {
+    const validityDate = parseValidityDate(course.fundingValidity);
+    if (!validityDate) return false;
+    const renewDate = new Date(validityDate);
+    renewDate.setMonth(renewDate.getMonth() - 3);
+    return renewDate >= today;
+  };
+
+  const toBeRenewed = wsqCourses.filter(isRenewDateAfterToday).length;
+
+  const yetToReview = wsqCourses.filter(course => {
     const checked = renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
-    return expiringSoonIds.has(course.id) && !checked;
+    return isRenewDateAfterToday(course) && !checked;
   }).length;
 
   const handleRenewToggle = async (courseId: string, checked: boolean) => {
@@ -87,7 +116,7 @@ const FundingValidityView: React.FC = () => {
         renew: checked,
       });
     } catch (err) {
-      console.error('❌ Failed to update renewal status:', err);
+      console.error('Failed to update renewal status:', err);
       setRenewStateOverrides(prev => {
         const next = { ...prev };
         delete next[courseId];
@@ -96,6 +125,61 @@ const FundingValidityView: React.FC = () => {
       window.alert('Failed to update renewal status. Please try again.');
     } finally {
       setRenewingIds(prev => ({ ...prev, [courseId]: false }));
+    }
+  };
+
+  const handleWhitelistToggle = async (courseId: string, checked: boolean) => {
+    setWhitelistStateOverrides(prev => ({ ...prev, [courseId]: checked }));
+    setWhitelistingIds(prev => ({ ...prev, [courseId]: true }));
+
+    try {
+      await apiClient.put('/api/admin/course-whitelist-status', {
+        courseId,
+        whitelist: checked,
+      });
+    } catch (err) {
+      console.error('Failed to update whitelist status:', err);
+      setWhitelistStateOverrides(prev => {
+        const next = { ...prev };
+        delete next[courseId];
+        return next;
+      });
+      window.alert('Failed to update whitelist status. Please try again.');
+    } finally {
+      setWhitelistingIds(prev => ({ ...prev, [courseId]: false }));
+    }
+  };
+
+  const startEdit = (course: any) => {
+    setEditingId(course.id);
+    setEditState({
+      casScore: course.casScore != null ? String(course.casScore) : '',
+      esScore: course.esScore != null ? String(course.esScore) : '',
+      fundingValidity: toDateInputValue(course.fundingValidity),
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    setSaving(true);
+    try {
+      await apiClient.put('/api/admin/update-course-validity', {
+        courseId: editingId,
+        casScore: editState.casScore || null,
+        esScore: editState.esScore || null,
+        fundingValidity: editState.fundingValidity || null,
+      });
+      setEditingId(null);
+      refetch();
+    } catch (err) {
+      console.error('Failed to save:', err);
+      window.alert('Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -118,6 +202,8 @@ const FundingValidityView: React.FC = () => {
     );
   }
 
+  const inputClass = "w-full px-1.5 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
+
   return (
     <div>
       <h3 className="text-3xl font-bold dark:text-white mb-6">Funding Validity</h3>
@@ -128,12 +214,12 @@ const FundingValidityView: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-300 mt-1">WSQ Courses</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-amber-500">{expiringSoonIds.size}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Expired in 4 Months</p>
+          <p className="text-4xl font-bold text-amber-500">{toBeRenewed}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Courses To Be Renewed</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-purple-600">{totalToRenew}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">To Renew (Expired in 4 Months)</p>
+          <p className="text-4xl font-bold text-purple-600">{yetToReview}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Yet To Renew</p>
         </Card>
       </div>
 
@@ -146,14 +232,19 @@ const FundingValidityView: React.FC = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="min-w-full text-xs">
             <thead className="bg-gray-50 dark:bg-gray-900/40">
               <tr className="text-left text-gray-600 dark:text-gray-300">
-                <th className="px-6 py-3 font-semibold">Course Title</th>
-                <th className="px-6 py-3 font-semibold">Course Ref Code</th>
-                <th className="px-6 py-3 font-semibold">Course Type</th>
-                <th className="px-6 py-3 font-semibold">Validity</th>
-                <th className="px-6 py-3 font-semibold text-center">Renew</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Type</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Validity End Date</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Renew Date</th>
+                <th className="px-3 py-2 font-semibold text-right whitespace-nowrap">CAS</th>
+                <th className="px-3 py-2 font-semibold text-right whitespace-nowrap">ES</th>
+                <th className="px-3 py-2 font-semibold text-center whitespace-nowrap">Whitelist</th>
+                <th className="px-3 py-2 font-semibold text-center whitespace-nowrap">Renew</th>
+                <th className="px-3 py-2 font-semibold text-center w-20"></th>
               </tr>
             </thead>
             <tbody>
@@ -162,6 +253,7 @@ const FundingValidityView: React.FC = () => {
                 const expiringSoon = !!validityDate && validityDate >= today && validityDate <= fourMonthsAhead;
                 const expired = !!validityDate && validityDate < today;
                 const checked = renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
+                const isEditing = editingId === course.id;
 
                 return (
                   <tr
@@ -174,25 +266,105 @@ const FundingValidityView: React.FC = () => {
                           : ''
                     }`}
                   >
-                    <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{course.title}</td>
-                    <td className="px-6 py-4 text-gray-700 dark:text-gray-300">{course.courseCode || '—'}</td>
-                    <td className="px-6 py-4 text-gray-700 dark:text-gray-300">{displayCourseType(course.courseType)}</td>
-                    <td className="px-6 py-4 text-gray-700 dark:text-gray-300">
-                      <div className="flex items-center gap-3">
-                        <span>{formatValidityDate(course.fundingValidity)}</span>
-                        {expired && <span className="text-xs font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
-                        {!expired && expiringSoon && <span className="text-xs font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
-                      </div>
+                    <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
+                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.courseCode || '—'}</td>
+                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{displayCourseType(course.courseType)}</td>
+                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editState.fundingValidity}
+                          onChange={e => setEditState(s => ({ ...s, fundingValidity: e.target.value }))}
+                          className={`${inputClass} w-32`}
+                        />
+                      ) : (
+                        <>
+                          <span>{formatValidityDate(course.fundingValidity)}</span>
+                          {expired && <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
+                          {!expired && expiringSoon && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
+                        </>
+                      )}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-3 py-1.5 whitespace-nowrap">
+                      {validityDate ? (() => {
+                        const renewDate = new Date(validityDate);
+                        renewDate.setMonth(renewDate.getMonth() - 3);
+                        const isPast = renewDate < new Date();
+                        return <span className={isPast ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-300'}>{renewDate.toLocaleDateString('en-GB')}</span>;
+                      })() : '—'}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editState.casScore}
+                          onChange={e => setEditState(s => ({ ...s, casScore: e.target.value }))}
+                          className={`${inputClass} w-16 text-right`}
+                        />
+                      ) : (
+                        course.casScore != null ? course.casScore.toFixed(2) : '—'
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editState.esScore}
+                          onChange={e => setEditState(s => ({ ...s, esScore: e.target.value }))}
+                          className={`${inputClass} w-16 text-right`}
+                        />
+                      ) : (
+                        course.esScore != null ? course.esScore.toFixed(2) : '—'
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={whitelistStateOverrides[course.id] ?? !!course.whitelistStatus}
+                        disabled={!!whitelistingIds[course.id]}
+                        onChange={(e) => handleWhitelistToggle(course.id, e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                        aria-label={`Whitelist ${course.title}`}
+                      />
+                    </td>
+                    <td className="px-3 py-1.5 text-center">
                       <input
                         type="checkbox"
                         checked={checked}
                         disabled={!!renewingIds[course.id]}
                         onChange={(e) => handleRenewToggle(course.id, e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
                         aria-label={`Mark ${course.title} for renewal`}
                       />
+                    </td>
+                    <td className="px-3 py-1.5 text-center whitespace-nowrap">
+                      {isEditing ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={saveEdit}
+                            disabled={saving}
+                            className="px-2 py-0.5 text-[10px] font-medium rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                          >
+                            {saving ? '...' : 'Save'}
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            disabled={saving}
+                            className="px-2 py-0.5 text-[10px] font-medium rounded bg-gray-500 text-white hover:bg-gray-600 disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => startEdit(course)}
+                          className="px-2 py-0.5 text-[10px] font-medium rounded bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          Edit
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

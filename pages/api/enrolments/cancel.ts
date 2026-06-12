@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
+import { cancelInvoiceJobOnEnrolmentCancelled } from '../../../lib/services/invoiceJobs';
 
 /**
  * POST /api/enrolments/cancel
@@ -34,12 +36,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.warn(`⚠️ No enrollment found with enrolment_id: ${enrolmentId} (SSG cancel succeeded, but no local record to update)`);
     } else {
       console.log(`✅ Cancelled ${result.rows.length} enrollment row(s) for enrolment_id: ${enrolmentId}`);
+      try {
+        await upsertSsgEnrolmentFromLocalEnrollment(enrolmentId.trim());
+      } catch (e) {
+        console.warn('[enrolments/cancel] ssg_enrolments sync:', e);
+      }
+    }
+
+    let qbResult: { qbDeleted: boolean; warnings: string[] } = { qbDeleted: false, warnings: [] };
+    try {
+      qbResult = await cancelInvoiceJobOnEnrolmentCancelled(enrolmentId.trim());
+    } catch (e: unknown) {
+      console.warn('[enrolments/cancel] invoice job cancel:', e instanceof Error ? e.message : e);
     }
 
     return res.status(200).json({
       success: true,
       updated: result.rows.length,
       enrolmentId,
+      qbInvoiceDeleted: qbResult.qbDeleted,
+      qbWarnings: qbResult.warnings,
       message: result.rows.length === 0
         ? 'SSG cancellation succeeded but no matching local enrollment record was found'
         : `${result.rows.length} enrollment record(s) updated to Cancelled`,

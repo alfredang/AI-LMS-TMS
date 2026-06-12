@@ -56,6 +56,12 @@ const SearchPastLearners: React.FC = () => {
   const [searchedTerm, setSearchedTerm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  // Track current page in a ref for safety (future effects/listeners)
+  const currentPageRef = React.useRef(currentPage);
+
+  React.useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
 
   const itemsPerPage = 10;
   const inputClasses = "w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";

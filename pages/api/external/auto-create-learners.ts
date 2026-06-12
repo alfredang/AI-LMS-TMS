@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { triggerProformaGeneration } from '../../../lib/services/proformaInvoiceService';
 
 /**
  * External API — Auto Create Learners
@@ -130,7 +131,7 @@ async function upsertLearner(
   courseRunId: string,
   courseId: string,
   enrolment: any,
-): Promise<{ created: boolean; userId: string }> {
+): Promise<{ created: boolean; userId: string; enrollmentId: string | null }> {
   const client = await pool.connect();
 
   const enrolmentRef: string | null = enrolment?.referenceNumber ?? null;
@@ -182,6 +183,8 @@ async function upsertLearner(
       [userId],
     );
 
+    let enrollmentId: string | null = null;
+
     if (enrolmentRef) {
       const updated = await client.query(
         `UPDATE enrollment SET
@@ -197,14 +200,15 @@ async function upsertLearner(
            course_sponsorship    = COALESCE($10::public.course_sponsorship, course_sponsorship),
            raw_data              = $11,
            updated_at            = NOW()
-         WHERE enrolment_id = $12`,
+         WHERE enrolment_id = $12
+         RETURNING id`,
         [userId, courseId, courseRunId, enrolmentStatus, enrolmentDate || null,
           nric?.trim() || null, email.trim().toLowerCase(), courseRef, tpCode, sponsorship,
           JSON.stringify(enrolment), enrolmentRef],
       );
 
       if ((updated.rowCount ?? 0) === 0) {
-        await client.query(
+        const inserted = await client.query(
           `INSERT INTO enrollment (
              user_id, course_id, course_run_id,
              enrolment_date, enrolment_id, enrolment_status,
@@ -221,14 +225,18 @@ async function upsertLearner(
              training_partner_code = COALESCE(EXCLUDED.training_partner_code, enrollment.training_partner_code),
              course_sponsorship    = COALESCE(EXCLUDED.course_sponsorship, enrollment.course_sponsorship),
              raw_data              = EXCLUDED.raw_data,
-             updated_at            = NOW()`,
+             updated_at            = NOW()
+           RETURNING id`,
           [userId, courseId, courseRunId, enrolmentDate || null, enrolmentRef, enrolmentStatus,
             nric?.trim() || null, email.trim().toLowerCase(), courseRef, tpCode, sponsorship,
             JSON.stringify(enrolment)],
         );
+        enrollmentId = inserted.rows[0]?.id ?? null;
+      } else {
+        enrollmentId = updated.rows[0]?.id ?? null;
       }
     } else {
-      await client.query(
+      const upserted = await client.query(
         `INSERT INTO enrollment (
            user_id, course_id, course_run_id,
            enrolment_date, enrolment_id, enrolment_status,
@@ -245,16 +253,18 @@ async function upsertLearner(
            training_partner_code = COALESCE(EXCLUDED.training_partner_code, enrollment.training_partner_code),
            course_sponsorship    = COALESCE(EXCLUDED.course_sponsorship, enrollment.course_sponsorship),
            raw_data              = EXCLUDED.raw_data,
-           updated_at            = NOW()`,
+           updated_at            = NOW()
+         RETURNING id`,
         [userId, courseId, courseRunId, enrolmentDate || null, enrolmentRef, enrolmentStatus,
           nric?.trim() || null, email.trim().toLowerCase(), courseRef, tpCode, sponsorship,
           JSON.stringify(enrolment)],
       );
+      enrollmentId = upserted.rows[0]?.id ?? null;
     }
 
     await client.query(`UPDATE app_user SET courses_updated_at = NOW() WHERE id = $1`, [userId]);
     await client.query('COMMIT');
-    return { created, userId };
+    return { created, userId, enrollmentId };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -263,21 +273,27 @@ async function upsertLearner(
   }
 }
 
+// ── Global in-flight lock ─────────────────────────────────────────────────────
+const g = globalThis as unknown as { __createLearnersRunning?: boolean };
+if (g.__createLearnersRunning === undefined) g.__createLearnersRunning = false;
+
 // ── Main automation runner ────────────────────────────────────────────────────
 
 export async function runAutomation() {
-  await ensureAutomationTable();
-
-  // De-duplication guard: skip if already ran 3 or more times today (SGT)
-  const recent = await pool.query(
-    `SELECT COUNT(DISTINCT run_id) AS run_count
-     FROM auto_create_learner_log
-     WHERE (created_at AT TIME ZONE 'Asia/Singapore')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')::date`
-  );
-  if (Number(recent.rows[0]?.run_count) >= 3) {
-    console.log(`⏭️ auto-create-learners: skipping — already ran 3 times today (SGT)`);
-    return { runId: `skipped_${Date.now()}`, startedAt: new Date().toISOString(), processed: 0, results: [], skipped: true };
+  if (g.__createLearnersRunning) {
+    console.warn('[auto-create-learners] Another run is already in progress — skipping');
+    return { runId: '', startedAt: '', processed: 0, results: [], skipped: true };
   }
+  g.__createLearnersRunning = true;
+  try {
+    return await _runAutomationInner();
+  } finally {
+    g.__createLearnersRunning = false;
+  }
+}
+
+async function _runAutomationInner() {
+  await ensureAutomationTable();
 
   const runId = `run_${Date.now()}`;
   const startedAt = new Date().toISOString();
@@ -295,7 +311,7 @@ export async function runAutomation() {
             cr.start_date, cr.end_date
      FROM course_run cr
      JOIN course c ON c.id = cr.course_id
-     WHERE DATE(cr.start_date) = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')::date + INTERVAL '1 day'
+     WHERE cr.start_date = (NOW() AT TIME ZONE 'Asia/Singapore')::date + INTERVAL '1 day'
      ORDER BY cr.start_date ASC`,
   );
 
@@ -379,7 +395,10 @@ export async function runAutomation() {
         }
 
         try {
-          const { created } = await upsertLearner(email, name, nric, run.db_id, run.course_id, enrolment);
+          const { created, enrollmentId } = await upsertLearner(email, name, nric, run.db_id, run.course_id, enrolment);
+          if (enrollmentId) {
+            triggerProformaGeneration(enrollmentId);
+          }
           if (created) {
             logEntry.createdCount++;
             logEntry.details.push({ enrolmentRef, email, name, status: 'created', accountExists: false });
@@ -442,9 +461,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const result = await runAutomation();
-    if (result.skipped) {
-      return res.status(429).json({ success: false, error: 'Daily run limit reached (3 runs/day SGT). Try again tomorrow.' });
-    }
     return res.status(200).json({ success: true, ...result });
   } catch (err) {
     console.error('❌ auto-create-learners error:', err);

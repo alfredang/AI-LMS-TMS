@@ -19,6 +19,12 @@ build/
 config/local-settings.json
 service-account.json
 
+# Backlog (local planning file, not shared)
+.project/backlog.md
+
+# Nemo AI memory (runtime-generated)
+data/nemo-memory.md
+
 # IDE and editor files
 .vscode/
 .idea/
@@ -119,8 +125,13 @@ public/uploads/slides/*
 public/uploads/guides/*
 public/uploads/training_provider/private_key/*
 public/uploads/training_provider/self_signing_cert/*
+public/uploads/training_provider/ssg_app1_cert/*
+public/uploads/training_provider/ssg_app1_private_key/*
+public/uploads/training_provider/service_account/*
 # Claims import uploads (and any other runtime uploads)
 public/uploads/claims/*
+# Generated course banner PNGs (uploaded to R2 from there)
+public/uploads/course-banners/*
 public/uploads/**/*.pdf
 public/uploads/**/*.xlsx
 public/uploads/**/*.xls
@@ -137,4 +148,22 @@ GOOGLE_KEY_B64.txt
 CLAUDE.md
 .mcp.json
 .claude/
+!.claude/CLAUDE.md
+!.claude/skills/
+!.claude/skills/**
 .project/
+
+# Google Apps Script backups
+*.gs
+
+# n8n workflow exports (local artifacts)
+n8nworkflows/
+n8nworkflows.md/
+
+# Playwright MCP / CLI session artifacts (logs + page snapshots)
+.playwright-cli/
+.playwright-mcp/
+.version
+
+# Tenant-specific seed data (contains plaintext credentials)
+database/seeds/tertiary-software-credentials.sql

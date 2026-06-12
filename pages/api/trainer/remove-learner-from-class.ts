@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { nric, courseRunId } = req.body as { nric: string; courseRunId: string };
+  const { nric, courseRunId, force } = req.body as { nric: string; courseRunId: string; force?: boolean };
   if (!nric || !courseRunId) {
     return res.status(400).json({ success: false, error: 'nric and courseRunId are required' });
   }
@@ -32,6 +32,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       userId = lookup.rows[0]?.user_id ?? null;
     }
 
+    // Guard: refuse to remove if the learner already submitted an assessment for this run.
+    // Trainers should not be able to wipe a learner who already has work in. Pass { force: true } from admin.
+    if (!force && userId) {
+      const submissionGuard = await client.query(
+        `SELECT
+           (SELECT COUNT(*)::int FROM link_assessment_submission
+              WHERE user_id = $1 AND course_run_id = $2) AS link_count,
+           (SELECT COUNT(*)::int FROM submission s
+              JOIN enrollment e ON e.id = s.enrollment_id
+              WHERE e.user_id = $1 AND e.course_run_id = $2) AS legacy_count`,
+        [userId, courseRunId]
+      );
+      const linkCount = submissionGuard.rows[0]?.link_count ?? 0;
+      const legacyCount = submissionGuard.rows[0]?.legacy_count ?? 0;
+      if (linkCount + legacyCount > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          code: 'SUBMISSION_EXISTS',
+          error: `Cannot remove — learner has ${linkCount + legacyCount} submitted assessment file(s) for this course run. Ask an admin to override if removal is still required.`,
+        });
+      }
+    }
+
     // 1. Delete all attendance records for this learner across every session of the course run
     await client.query(
       `DELETE FROM course_attendance
@@ -42,15 +66,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [nric, courseRunId]
     );
 
-    // 2. Delete enrollment record for this course run
+    // 2. Soft-delete enrollment: mark as Admin Removed so SSG sync does not re-add the learner
     if (userId) {
       await client.query(
-        `DELETE FROM enrollment WHERE course_run_id = $1 AND user_id = $2`,
+        `UPDATE enrollment
+         SET enrolment_status = 'Admin Removed', updated_at = NOW()
+         WHERE course_run_id = $1 AND user_id = $2`,
         [courseRunId, userId]
       );
     } else if (!nric.startsWith('_uid_')) {
       await client.query(
-        `DELETE FROM enrollment WHERE course_run_id = $1 AND nric = $2`,
+        `UPDATE enrollment
+         SET enrolment_status = 'Admin Removed', updated_at = NOW()
+         WHERE course_run_id = $1 AND nric = $2`,
         [courseRunId, nric]
       );
     }

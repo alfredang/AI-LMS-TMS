@@ -283,6 +283,10 @@ export class HttpClient {
         });
       });
 
+      request.setTimeout(config.timeout || 30000, () => {
+        request.destroy(new Error(`Request timed out after ${config.timeout || 30000}ms`));
+      });
+
       request.on('error', (error) => {
         reject(new Error(`HTTPS request failed: ${error.message}`));
       });

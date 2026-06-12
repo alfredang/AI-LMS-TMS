@@ -10,6 +10,8 @@ import { extractFilenameFromPath } from '@utils/fileUtils';
 import { courseService } from '@lib/services/courseService';
 import { getApiUrl, getDownloadUrl } from '@/lib/urlHelpers';
 import { AssessmentSummarySection } from './trainer/AssessmentSummarySection';
+import { ClassPhotoUpload } from './trainer/ClassPhotoUpload';
+import QuizTakerModal from './QuizTakerModal';
 
 // --- Types (assuming these exist in your project) ---
 interface Topic {
@@ -58,6 +60,11 @@ interface Course {
     courseType: string;
     modeOfLearning: string[];
     classStatus?: string;
+    classType?: string;
+    virtualMeetingLink?: string | null;
+    virtualMeetingHostLink?: string | null;
+    virtualMeetingJoinLink?: string | null;
+    virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' | string | null;
     totalAssessments?: number;
     topics: Topic[];
     assessments?: Assessment[];
@@ -86,13 +93,54 @@ interface Course {
 // --- Utility Functions ---
 const toId = (label: string) => label.toLowerCase().replace(/ /g, '-');
 
+// Standard assessment briefing shown when a course developer hasn't set custom text.
+const DEFAULT_ASSESSMENT_BRIEFING = [
+    'Place phones & other materials under the table or on the floor',
+    'No photos or recording of assessment scripts',
+    'No discussion during assessment',
+    'Use black/blue pen for assessment [hard copies]',
+    'No usage of liquid paper or correction tape',
+    'Assessment scripts will be collected when the time is up',
+];
+
+const inferVirtualMeetingProvider = (link?: string | null): 'google_meet' | 'zoom' | 'teams' | null => {
+    if (!link) return null;
+    const normalized = link.toLowerCase();
+    if (normalized.includes('zoom.us') || normalized.includes('zoomgov.com')) return 'zoom';
+    if (normalized.includes('teams.microsoft.com') || normalized.includes('teams.live.com')) return 'teams';
+    if (normalized.includes('meet.google.com')) return 'google_meet';
+    return null;
+};
+
 // --- Reusable Components ---
-const ContentSection: React.FC<{ title?: string; children: React.ReactNode; className?: string }> = ({ title, children, className }) => (
-    <Card className={`p-6 ${className}`}>
-        {title && <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>}
-        {children}
-    </Card>
-);
+const ContentSection: React.FC<{ title?: string; children: React.ReactNode; className?: string; collapsible?: boolean; defaultOpen?: boolean }> = ({ title, children, className, collapsible = false, defaultOpen = true }) => {
+    const [open, setOpen] = useState(defaultOpen);
+    if (collapsible && title) {
+        return (
+            <Card className={`p-6 ${className}`}>
+                <button
+                    type="button"
+                    onClick={() => setOpen(prev => !prev)}
+                    className="w-full flex items-center justify-between text-left"
+                    aria-expanded={open}
+                >
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{title}</h3>
+                    <Icon
+                        name={IconName.ChevronDown}
+                        className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${open ? 'rotate-0' : '-rotate-90'}`}
+                    />
+                </button>
+                {open && <div className="mt-4">{children}</div>}
+            </Card>
+        );
+    }
+    return (
+        <Card className={`p-6 ${className}`}>
+            {title && <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">{title}</h3>}
+            {children}
+        </Card>
+    );
+};
 
 // --- Leaderboard Component ---
 // const Leaderboard: React.FC<{ course: Course }> = ({ course }) => {
@@ -264,8 +312,9 @@ const AssessmentsSection: React.FC<{
     }) || [];
 
     const hasLegacyAssessmentLink = (methodKey: string) => {
-        if (methodKey === 'writtenAssessment') return !!course.writtenAssessmentLink;
-        if (methodKey === 'practicalExam') return !!course.practicalPerformanceAssessmentLink;
+        // Written/Practical always rendered via their dedicated sections, so skip in dynamic loop
+        if (methodKey === 'writtenAssessment') return true;
+        if (methodKey === 'practicalExam') return true;
         return false;
     };
 
@@ -282,6 +331,7 @@ const AssessmentsSection: React.FC<{
     const [linkSubmissions, setLinkSubmissions] = useState<LinkSubmission[]>([]);
     const [selectedLinkFiles, setSelectedLinkFiles] = useState<Record<string, File[]>>({});
     const [isLinkUploading, setIsLinkUploading] = useState<Record<string, boolean>>({});
+    const [linkUploadSuccess, setLinkUploadSuccess] = useState<Record<string, boolean>>({});
     const [linkUploadProgress, setLinkUploadProgress] = useState<Record<string, number>>({});
     const [isLinkResubmitting, setIsLinkResubmitting] = useState<Record<string, boolean>>({});
 
@@ -409,6 +459,12 @@ const AssessmentsSection: React.FC<{
             const fileInput = document.getElementById(`link-file-upload-${assessmentType}`) as HTMLInputElement;
             if (fileInput) fileInput.value = '';
 
+            // Show "uploaded successfully" confirmation, auto-clear after 5s
+            setLinkUploadSuccess(prev => ({ ...prev, [assessmentType]: true }));
+            setTimeout(() => {
+                setLinkUploadSuccess(prev => ({ ...prev, [assessmentType]: false }));
+            }, 5000);
+
         } catch (error: any) {
             alert(`Upload failed: ${error.message || 'Please try again.'}`);
             console.error('Link submission error:', error);
@@ -467,7 +523,7 @@ const AssessmentsSection: React.FC<{
     const hasEnabledMethods = course.assessmentMethods && Object.values(course.assessmentMethods).some(m => m.enabled && m.link);
     if ((!effectiveAssessments || effectiveAssessments.length === 0) && !course.writtenAssessmentLink && !course.practicalPerformanceAssessmentLink && !hasEnabledMethods) {
         return (
-            <ContentSection title="Assessment">
+            <ContentSection title="Assessment" collapsible>
                 <div className="text-center p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border dark:border-gray-700">
                     <Icon name={IconName.ClipboardCheck} className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <h4 className="text-lg font-medium text-gray-600 dark:text-gray-300 mb-2">No Assessments Available</h4>
@@ -841,7 +897,12 @@ const AssessmentsSection: React.FC<{
     };
 
     return (
-        <ContentSection title="Assessment">
+        <ContentSection title="Assessment" collapsible>
+            {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Open the assessment link, download the questions as a Microsoft Word document (or make a Google Doc copy), fill in the answers, then submit the completed file on the LMS.
+                </p>
+            )}
             {/* Other file-based assessments (excluding Written/Practical which are shown separately with toggle) */}
             {filteredFileAssessments && filteredFileAssessments.length > 0 && (
                 <ul className="space-y-4">
@@ -866,8 +927,13 @@ const AssessmentsSection: React.FC<{
                 </ul>
             )}
 
-            {/* Written Exam - Show only when link exists AND developer has it enabled (or no assessmentMethods configured) */}
-            {course.writtenAssessmentLink && (!course.assessmentMethods || course.assessmentMethods.writtenAssessment?.enabled) && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
+            {/* Written Exam - Show when legacy link exists OR assessmentMethods has it enabled with a link */}
+            {(() => {
+                const effectiveWrittenLink = (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
+                    ? course.assessmentMethods.writtenAssessment.link
+                    // Only fall back to legacy link when assessmentMethods is not configured at all
+                    : (!course.assessmentMethods ? course.writtenAssessmentLink : null);
+                return effectiveWrittenLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || writtenPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -879,12 +945,11 @@ const AssessmentsSection: React.FC<{
                         )}
                     </div>
 
-                    {/* Show Link-based assessment */}
-                    {course.writtenAssessmentLink && (
+                    {effectiveWrittenLink && (
                         <>
                             <div className="flex items-center gap-3 mb-3">
                                 <a
-                                    href={course.writtenAssessmentLink}
+                                    href={effectiveWrittenLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
@@ -971,15 +1036,24 @@ const AssessmentsSection: React.FC<{
                                             </div>
                                         </div>
                                     )}
+                                    {linkUploadSuccess['written'] && !isLinkUploading['written'] && (
+                                        <p className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">✓ File uploaded successfully</p>
+                                    )}
                                 </div>
                             </div>
                         );
                     })()}
                 </div>
-            )}
+            );
+            })()}
 
-            {/* Practical Exam - Show only when link exists AND developer has it enabled (or no assessmentMethods configured) */}
-            {course.practicalPerformanceAssessmentLink && (!course.assessmentMethods || course.assessmentMethods.practicalExam?.enabled) && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
+            {/* Practical Exam - Show when legacy link exists OR assessmentMethods has it enabled with a link */}
+            {(() => {
+                const effectivePracticalLink = (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
+                    ? course.assessmentMethods.practicalExam.link
+                    // Only fall back to legacy link when assessmentMethods is not configured at all
+                    : (!course.assessmentMethods ? course.practicalPerformanceAssessmentLink : null);
+                return effectivePracticalLink && (userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || practicalPublished) && (
                 <div className="mt-1 p-3 bg-gray-100/60 dark:bg-gray-800/60 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                         <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -991,12 +1065,11 @@ const AssessmentsSection: React.FC<{
                         )}
                     </div>
 
-                    {/* Show Link-based assessment */}
-                    {course.practicalPerformanceAssessmentLink && (
+                    {effectivePracticalLink && (
                         <>
                             <div className="flex items-center gap-3 mb-3">
                                 <a
-                                    href={course.practicalPerformanceAssessmentLink}
+                                    href={effectivePracticalLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-3 p-3 flex-1 min-w-0 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
@@ -1083,12 +1156,16 @@ const AssessmentsSection: React.FC<{
                                             </div>
                                         </div>
                                     )}
+                                    {linkUploadSuccess['practical'] && !isLinkUploading['practical'] && (
+                                        <p className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">✓ File uploaded successfully</p>
+                                    )}
                                 </div>
                             </div>
                         );
                     })()}
                 </div>
-            )}
+            );
+            })()}
 
             {/* Dynamic Assessment Methods — ordered so Written Exam is always first */}
             {course.assessmentMethods && Object.entries(course.assessmentMethods)
@@ -1201,6 +1278,9 @@ const AssessmentsSection: React.FC<{
                                                 </div>
                                             </div>
                                         )}
+                                        {linkUploadSuccess[methodKey] && !isLinkUploading[methodKey] && (
+                                            <p className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">✓ File uploaded successfully</p>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -1212,21 +1292,38 @@ const AssessmentsSection: React.FC<{
     );
 };
 
-// --- Additional Documents Section Component ---
-const AdditionalDocumentsSection: React.FC<{ userRole: UserRole, courseRunId: string, currentUser: any }> = ({ userRole, courseRunId, currentUser }) => {
-    const [documents, setDocuments] = React.useState<any[]>([]);
+// --- Announcements Section Component ---
+type Announcement = {
+    id: string;
+    courseRunId: string;
+    title: string | null;
+    message: string | null;
+    linkUrl: string | null;
+    fileName: string | null;
+    fileUrl: string | null;
+    postedBy: string;
+    createdAt: string;
+};
+
+const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, currentUser: any }> = ({ userRole, courseRunId, currentUser }) => {
+    const [announcements, setAnnouncements] = React.useState<Announcement[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [uploading, setUploading] = React.useState(false);
+    const [composing, setComposing] = React.useState(false);
+    const [submitting, setSubmitting] = React.useState(false);
+    const [title, setTitle] = React.useState('');
+    const [message, setMessage] = React.useState('');
+    const [linkUrl, setLinkUrl] = React.useState('');
+    const [pendingFile, setPendingFile] = React.useState<File | null>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-    const fetchDocuments = React.useCallback(async () => {
+    const fetchAnnouncements = React.useCallback(async () => {
         if (!courseRunId) return;
         setLoading(true);
         try {
-            const res = await fetch(`/api/course/additional-documents?courseRunId=${courseRunId}`);
+            const res = await fetch(`/api/course/announcements?courseRunId=${courseRunId}`);
             const data = await res.json();
             if (data.success) {
-                setDocuments(data.documents);
+                setAnnouncements(data.announcements);
             }
         } catch (err) {
             console.error(err);
@@ -1236,43 +1333,63 @@ const AdditionalDocumentsSection: React.FC<{ userRole: UserRole, courseRunId: st
     }, [courseRunId]);
 
     React.useEffect(() => {
-        fetchDocuments();
-    }, [fetchDocuments]);
+        fetchAnnouncements();
+    }, [fetchAnnouncements]);
 
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files || e.target.files.length === 0) return;
-        
-        setUploading(true);
-        for (let i = 0; i < e.target.files.length; i++) {
-            const file = e.target.files[i];
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            try {
-                const res = await fetch(`/api/trainer/upload-additional-document?courseRunId=${courseRunId}&uploadedBy=${encodeURIComponent(currentUser?.name || currentUser?.email || 'Trainer')}`, {
-                    method: 'POST',
-                    body: formData
-                });
-                if (!res.ok) throw new Error('Upload failed');
-            } catch (err) {
-                console.error(err);
-                alert(`Failed to upload ${file.name}`);
-            }
-        }
-        
+    const resetComposer = () => {
+        setTitle('');
+        setMessage('');
+        setLinkUrl('');
+        setPendingFile(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setUploading(false);
-        fetchDocuments();
+        setComposing(false);
+    };
+
+    const handleSubmit = async () => {
+        const trimmedMessage = message.trim();
+        const trimmedLink = linkUrl.trim();
+
+        if (!trimmedMessage && !trimmedLink && !pendingFile) {
+            alert('Add a message, link, or file before posting.');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const formData = new FormData();
+            formData.append('courseRunId', courseRunId);
+            formData.append('postedBy', currentUser?.name || currentUser?.email || 'Trainer');
+            if (title.trim()) formData.append('title', title.trim());
+            if (trimmedMessage) formData.append('message', trimmedMessage);
+            if (trimmedLink) formData.append('linkUrl', trimmedLink);
+            if (pendingFile) formData.append('file', pendingFile);
+
+            const res = await fetch('/api/trainer/create-announcement', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Failed to post announcement');
+            }
+            resetComposer();
+            fetchAnnouncements();
+        } catch (err: any) {
+            console.error(err);
+            alert(err?.message || 'Failed to post announcement');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this document?')) return;
+        if (!confirm('Delete this announcement?')) return;
         try {
-            const res = await fetch(`/api/course/additional-documents?id=${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/course/announcements?id=${id}`, { method: 'DELETE' });
             if (res.ok) {
-                setDocuments(prev => prev.filter(d => d.id !== id));
+                setAnnouncements(prev => prev.filter(a => a.id !== id));
             } else {
-                alert('Failed to delete document');
+                alert('Failed to delete announcement');
             }
         } catch (err) {
             console.error(err);
@@ -1284,75 +1401,155 @@ const AdditionalDocumentsSection: React.FC<{ userRole: UserRole, courseRunId: st
     const isTrainerOrAdmin = userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider;
 
     return (
-        <ContentSection title="Additional Documents">
+        <ContentSection title="Announcements" collapsible>
             <div className="space-y-4">
-                {isTrainerOrAdmin && (
-                    <div className="flex justify-between items-center mb-4">
+                {isTrainerOrAdmin && !composing && (
+                    <div className="flex justify-between items-center">
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Upload personalized course materials for learners.
+                            Post messages, links, or documents that all learners in this class can see.
                         </p>
-                        <input 
-                            type="file" 
-                            multiple 
-                            ref={fileInputRef} 
-                            onChange={handleFileChange} 
-                            style={{ display: 'none' }} 
-                        />
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={uploading}
-                            className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        <button
+                            onClick={() => setComposing(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
                         >
-                            <Icon name={uploading ? IconName.Spinner : IconName.FileText} className={`w-4 h-4 ${uploading ? 'animate-spin' : ''}`} />
-                            {uploading ? 'Uploading...' : 'Upload Files'}
+                            <Icon name={IconName.Bell} className="w-4 h-4" />
+                            New Announcement
                         </button>
                     </div>
                 )}
-                
+
+                {isTrainerOrAdmin && composing && (
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3">
+                        <input
+                            type="text"
+                            value={title}
+                            onChange={e => setTitle(e.target.value)}
+                            placeholder="Title (optional)"
+                            className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <textarea
+                            value={message}
+                            onChange={e => setMessage(e.target.value)}
+                            placeholder="Write a message for your learners…"
+                            rows={4}
+                            className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <div className="flex items-center gap-2">
+                            <Icon name={IconName.Link} className="w-4 h-4 text-gray-400" />
+                            <input
+                                type="url"
+                                value={linkUrl}
+                                onChange={e => setLinkUrl(e.target.value)}
+                                placeholder="https://example.com (optional link)"
+                                className="flex-1 px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={e => setPendingFile(e.target.files?.[0] || null)}
+                                style={{ display: 'none' }}
+                            />
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="flex items-center gap-2 px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
+                            >
+                                <Icon name={IconName.FileText} className="w-4 h-4" />
+                                {pendingFile ? 'Change file' : 'Attach file'}
+                            </button>
+                            {pendingFile && (
+                                <span className="text-sm text-gray-600 dark:text-gray-300 truncate" title={pendingFile.name}>
+                                    {pendingFile.name}
+                                    <button
+                                        onClick={() => { setPendingFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                                        className="ml-2 text-red-600 hover:underline"
+                                    >
+                                        remove
+                                    </button>
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex justify-end gap-2 pt-1">
+                            <button
+                                onClick={resetComposer}
+                                disabled={submitting}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSubmit}
+                                disabled={submitting}
+                                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                {submitting && <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin" />}
+                                {submitting ? 'Posting…' : 'Post Announcement'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {loading ? (
                     <div className="flex justify-center p-8">
                         <Icon name={IconName.Spinner} className="w-8 h-8 text-blue-500 animate-spin" />
                     </div>
-                ) : documents.length === 0 ? (
+                ) : announcements.length === 0 ? (
                     <div className="text-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                        <Icon name={IconName.FileText} className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                        <p className="text-gray-600 dark:text-gray-300 font-medium">No additional documents</p>
-                        {isTrainerOrAdmin && <p className="text-sm text-gray-500 mt-1">Click "Upload Files" to add materials.</p>}
+                        <Icon name={IconName.Bell} className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                        <p className="text-gray-600 dark:text-gray-300 font-medium">No announcements yet</p>
+                        {isTrainerOrAdmin && <p className="text-sm text-gray-500 mt-1">Click "New Announcement" to post a message, link, or file.</p>}
                     </div>
                 ) : (
-                    <ul className="space-y-2">
-                        {documents.map(doc => (
-                            <li key={doc.id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:shadow-sm transition-shadow">
-                                <div className="flex items-center flex-1 min-w-0">
-                                    <Icon name={IconName.FileText} className="w-5 h-5 text-blue-500 mr-3 flex-shrink-0" />
-                                    <div className="min-w-0">
-                                        <p className="font-medium text-gray-900 dark:text-white truncate" title={doc.fileName}>{doc.fileName}</p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                            Uploaded by {doc.uploadedBy} • {new Date(doc.createdAt).toLocaleDateString()}
+                    <ul className="space-y-3">
+                        {announcements.map(a => (
+                            <li key={a.id} className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        {a.title && (
+                                            <p className="font-semibold text-gray-900 dark:text-white">{a.title}</p>
+                                        )}
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            Posted by {a.postedBy} • {new Date(a.createdAt).toLocaleString()}
                                         </p>
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-                                    <a 
-                                        href={doc.fileUrl} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        download={doc.fileName}
-                                        className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors"
-                                        title="Download"
-                                    >
-                                        <Icon name={IconName.ExternalLink} className="w-5 h-5" />
-                                    </a>
                                     {isTrainerOrAdmin && (
-                                        <button 
-                                            onClick={() => handleDelete(doc.id)}
-                                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                                        <button
+                                            onClick={() => handleDelete(a.id)}
+                                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors flex-shrink-0"
                                             title="Delete"
                                         >
                                             <Icon name={IconName.Delete} className="w-5 h-5" />
                                         </button>
                                     )}
                                 </div>
+                                {a.message && (
+                                    <p className="mt-2 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">{a.message}</p>
+                                )}
+                                {a.linkUrl && (
+                                    <a
+                                        href={a.linkUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="mt-2 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline break-all"
+                                    >
+                                        <Icon name={IconName.Link} className="w-4 h-4 flex-shrink-0" />
+                                        <span className="truncate">{a.linkUrl}</span>
+                                    </a>
+                                )}
+                                {a.fileUrl && (
+                                    <a
+                                        href={a.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        download={a.fileName || undefined}
+                                        className="mt-2 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline"
+                                    >
+                                        <Icon name={IconName.FileText} className="w-4 h-4 flex-shrink-0" />
+                                        <span className="truncate">{a.fileName || 'Attachment'}</span>
+                                        <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5 flex-shrink-0" />
+                                    </a>
+                                )}
                             </li>
                         ))}
                     </ul>
@@ -1670,13 +1867,37 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                         </div>
                     );
                 })()}
-                {/* Hide course run related information for developers and training providers */}
-                {userRole !== UserRole.Developer && userRole !== UserRole.TrainingProvider && (
+                {/* Course run fields — hide for Developer, TP, and Admin (admin views course-level, not run-level) */}
+                {userRole !== UserRole.Developer && userRole !== UserRole.TrainingProvider && userRole !== UserRole.Admin && (
                     <>
                         <DetailRow label="Course Run ID" value={course.courseRunId} />
                         <DetailRow label="Digital Attendance ID" value={course.daId || 'N/A'} />
                         <DetailRow label="Start Date" value={course.startDate ? new Date(course.startDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'} />
                         <DetailRow label="End Date" value={course.endDate ? new Date(course.endDate).toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'} />
+                        <DetailRow label="Class Type" value={
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                                course.classType === 'Virtual' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                                : course.classType === 'Hybrid' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
+                                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                            }`}>
+                                {course.classType || 'Physical'}
+                            </span>
+                        } />
+                        <DetailRow label="Class Status" value={(() => {
+                            const status = (course.classStatus || '').toLowerCase();
+                            const styleMap: Record<string, string> = {
+                                cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+                                pending:   'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+                                confirmed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                            };
+                            const style = styleMap[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+                            const label = course.classStatus || 'N/A';
+                            return (
+                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${style}`}>
+                                    {label}
+                                </span>
+                            );
+                        })()} />
                     </>
                 )}
 
@@ -1697,6 +1918,8 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                         </div>
                     </div>
                 </div>
+
+
             </div>
         </div>
     );
@@ -1713,19 +1936,21 @@ interface CourseSidebarProps {
 type NavItem = { type: 'link'; label: string; icon: IconName } | { type: 'separator' };
 
 const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingView, selectedCourse, onMobileItemClick }) => {
-    const { setTrainerPage, setSelectedCourse } = useLms();
-    const defaultActive = userRole === UserRole.Learner ? 'Learning Outcomes' : 'Lesson';
+    const { setTrainerPage, setSelectedCourse, trainingProviderProfile } = useLms();
+    const defaultActive = 'Lesson';
     const [activeItem, setActiveItem] = useState(defaultActive);
+    const showLessonPlanForLearner = !!trainingProviderProfile?.showLessonPlanLearnerView;
 
     const handleItemClick = (label: string) => {
         onSetGradingView(false);
         setActiveItem(label);
 
         let targetId = toId(label);
-        if (label === 'Lesson' || label === 'Lessons' || label === 'Learning Outcomes') targetId = 'lessons';
+        if (label === 'Lesson' || label === 'Lessons') targetId = 'lessons';
+        else if (label === 'Lesson Plan' || label === 'Learner Guide' || label === 'Learner Slides') targetId = toId('Courseware Link');
         else if (label === 'Assessment' || label === 'Assessments') targetId = 'assessments';
         else if (label === 'Certificate') targetId = 'certificate';
-        else if (label === 'Additional Documents') targetId = 'additional-documents';
+        else if (label === 'Announcements') targetId = 'announcements';
         else if (label === 'Assessment Summary Record') targetId = toId(label);
         else if (label === 'Grading') targetId = 'assessment-grading';
 
@@ -1741,13 +1966,15 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     };
 
     const learnerNavItems: NavItem[] = [
-        { type: 'link', label: "Lesson Plan", icon: IconName.BookOpen },
+        { type: 'link', label: "E-Attendance", icon: IconName.ClipboardCheck },
+        ...(showLessonPlanForLearner ? [{ type: 'link', label: "Lesson Plan", icon: IconName.BookOpen } as NavItem] : []),
         { type: 'link', label: "Learner Guide", icon: IconName.FileText },
         { type: 'link', label: "Learner Slides", icon: IconName.FileText },
-        { type: 'link', label: "Learning Outcomes", icon: IconName.BookOpen },
+        { type: 'link', label: "Lesson", icon: IconName.BookOpen },
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
+        { type: 'link', label: "Briefing on Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
-        { type: 'link', label: "Additional Documents", icon: IconName.FileText },
+        { type: 'link', label: "Announcements", icon: IconName.Bell },
         { type: 'link', label: "Certificate", icon: IconName.FileText },
     ];
 
@@ -1765,9 +1992,10 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'separator' },
         { type: 'link', label: "Lesson", icon: IconName.BookOpen },
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
+        { type: 'link', label: "Briefing on Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Grading", icon: IconName.Edit },
-        { type: 'link', label: "Additional Documents", icon: IconName.FileText },
+        { type: 'link', label: "Announcements", icon: IconName.Bell },
     ];
 
     if (userRole === UserRole.Developer || userRole === UserRole.Admin) {
@@ -1780,7 +2008,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
     if (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) {
         trainerNavItems = trainerNavItems.filter(item =>
             item.type === 'separator' ||
-            (item.label !== "TRAQOM Survey" && item.label !== "Grading")
+            (item.label !== "TRAQOM Survey" && item.label !== "Grading" && item.label !== "Briefing on Assessment")
         );
     } else if (userRole === UserRole.Trainer) {
         trainerNavItems = trainerNavItems.filter(item =>
@@ -1821,6 +2049,13 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
 // --- Topic Accordion Component ---
 const isUrl = (str: string) => /^https?:\/\//i.test(str) || /^www\./i.test(str);
 
+interface QuizResourceQuestion {
+    id: string;
+    question: string;
+    options: string[];
+    correctIndex: number;
+}
+
 interface TopicAccordionProps {
     topic: Topic;
     progress: number;
@@ -1831,10 +2066,17 @@ interface TopicAccordionProps {
     onToggleCompletion: (subtopicId: string) => void;
     completedTopics: Set<string>;
     onToggleTopicCompletion: (topicId: string) => void;
-    resourceLinks?: { id: string; topicId: string; type: string; title: string; url: string }[];
+    resourceLinks?: { id: string; topicId: string; type: string; title: string; url: string; instructions?: string; questions?: QuizResourceQuestion[] }[];
+    // Quiz-related props: when present, enable the learner-facing Take Quiz
+    // flow inside this accordion's subtopic resource rows.
+    userId?: string;
+    courseId?: string;
+    latestQuizScores?: Record<string, { score: number; total: number }>;
+    onQuizSubmitted?: (quizId: string, result: { score: number; total: number }) => void;
 }
 
-const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [] }) => {
+export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [], userId, courseId, latestQuizScores, onQuizSubmitted }) => {
+    const [openQuizId, setOpenQuizId] = React.useState<string | null>(null);
     const [isOpen, setIsOpen] = React.useState(true);
     const displayTitle = topic.title.replace('Module', 'Learning Unit');
 
@@ -1943,21 +2185,111 @@ const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookma
                                         </div>
                                         {subtopicLinks.length > 0 && (
                                             <div className="ml-11 mt-2 space-y-1.5">
-                                                {subtopicLinks.map(rl => (
-                                                    <a
-                                                        key={rl.id}
-                                                        href={rl.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline"
-                                                    >
-                                                        <Icon
-                                                            name={rl.type === 'youtube' ? IconName.Video : rl.type === 'quiz' ? IconName.FileText : rl.type === 'document' ? IconName.FileText : rl.type === 'activity' ? IconName.Award : IconName.ExternalLink}
-                                                            className="w-3.5 h-3.5 flex-shrink-0"
-                                                        />
-                                                        <span className="truncate">{rl.title || rl.url}</span>
-                                                    </a>
-                                                ))}
+                                                {subtopicLinks.map(rl => {
+                                                    // Activity resources can carry free-text instructions
+                                                    // instead of a URL. If `instructions` is set and
+                                                    // non-empty, render a non-clickable block with the
+                                                    // title + text; otherwise fall through to the normal
+                                                    // anchor-tag rendering.
+                                                    // Quiz: learners get a Take Quiz button that opens
+                                                    // the QuizTakerModal. Developers / admins / trainers
+                                                    // just see a summary badge (no taker UI — they
+                                                    // already author the quiz from CourseEditor).
+                                                    const isQuiz = rl.type === 'quiz' && Array.isArray(rl.questions) && rl.questions.length > 0;
+                                                    if (isQuiz) {
+                                                        const questions = rl.questions as QuizResourceQuestion[];
+                                                        const prev = latestQuizScores?.[rl.id] || null;
+                                                        const canTake = userRole === UserRole.Learner && !!userId && !!courseId;
+                                                        return (
+                                                            <div key={rl.id}>
+                                                                <div className="p-2 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 flex items-center justify-between gap-2">
+                                                                    <div className="flex items-center gap-2 min-w-0">
+                                                                        <Icon
+                                                                            name={IconName.FileText}
+                                                                            className="w-3.5 h-3.5 flex-shrink-0 text-green-600 dark:text-green-400"
+                                                                        />
+                                                                        <span className="text-sm font-semibold text-green-700 dark:text-green-300 truncate">
+                                                                            {rl.title || 'Quiz'}
+                                                                        </span>
+                                                                        <span className="text-[11px] text-green-600/80 dark:text-green-400/80 flex-shrink-0">
+                                                                            · {questions.length} question{questions.length === 1 ? '' : 's'}
+                                                                        </span>
+                                                                        {prev && (
+                                                                            <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-green-200 dark:bg-green-800/60 text-green-800 dark:text-green-200 flex-shrink-0">
+                                                                                Last: {prev.score}/{prev.total}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    {canTake && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setOpenQuizId(rl.id);
+                                                                            }}
+                                                                            className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
+                                                                        >
+                                                                            {prev ? 'Retake Quiz' : 'Take Quiz'}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                                {openQuizId === rl.id && canTake && (
+                                                                    <QuizTakerModal
+                                                                        title={rl.title || 'Quiz'}
+                                                                        questions={questions}
+                                                                        userId={userId!}
+                                                                        courseId={courseId!}
+                                                                        quizId={rl.id}
+                                                                        previousScore={prev}
+                                                                        onClose={() => setOpenQuizId(null)}
+                                                                        onSubmitted={(result) => {
+                                                                            onQuizSubmitted?.(rl.id, result);
+                                                                        }}
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    const hasInstructions =
+                                                        rl.type === 'activity' &&
+                                                        typeof rl.instructions === 'string' &&
+                                                        rl.instructions.trim().length > 0;
+                                                    if (hasInstructions) {
+                                                        return (
+                                                            <div
+                                                                key={rl.id}
+                                                                className="p-2 rounded-md bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800/50"
+                                                            >
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <Icon
+                                                                        name={IconName.Award}
+                                                                        className="w-3.5 h-3.5 flex-shrink-0 text-purple-600 dark:text-purple-400"
+                                                                    />
+                                                                    <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                                                                        {rl.title || 'Activity'}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                                                    {rl.instructions}
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <a
+                                                            key={rl.id}
+                                                            href={rl.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-2 text-sm text-blue-500 hover:text-blue-400 hover:underline"
+                                                        >
+                                                            <Icon
+                                                                name={rl.type === 'youtube' ? IconName.Video : rl.type === 'quiz' ? IconName.FileText : rl.type === 'document' ? IconName.FileText : rl.type === 'activity' ? IconName.Award : IconName.ExternalLink}
+                                                                className="w-3.5 h-3.5 flex-shrink-0"
+                                                            />
+                                                            <span className="truncate">{rl.title || rl.url}</span>
+                                                        </a>
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </li>
@@ -1991,7 +2323,8 @@ export const CourseDetail: React.FC = () => {
         setPendingAttendanceCourseRunId,
         setPendingGradingCourseRunId,
         currentUser,
-        role
+        role,
+        trainingProviderProfile,
     } = useLms();
 
     const handleFileDownload = (filePath: string, e?: React.MouseEvent) => {
@@ -2023,6 +2356,9 @@ export const CourseDetail: React.FC = () => {
 
     const [isGradingView, setIsGradingView] = useState(false);
     const [isLessonsOpen, setIsLessonsOpen] = useState(true);
+    // Latest quiz score per quizId for this learner on this course, used
+    // to show a "Last: 7/10" badge on the Quiz card without refetching.
+    const [latestQuizScores, setLatestQuizScores] = useState<Record<string, { score: number; total: number }>>({});
     const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
     const [isTraqomOpen, setIsTraqomOpen] = useState(false);
     const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
@@ -2088,6 +2424,37 @@ export const CourseDetail: React.FC = () => {
             }
         }
     }, [userRole, courseDetail]);
+
+    // Fetch this learner's prior quiz attempts on this course so we can show
+    // a "Last: 7/10" badge next to each Quiz resource. Only runs for learners.
+    useEffect(() => {
+        if (userRole !== UserRole.Learner) return;
+        if (!currentUser?.id || !selectedCourse?.id) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`/api/courses/quiz-attempts?userId=${currentUser.id}&courseId=${selectedCourse.id}`);
+                const data = await res.json();
+                if (cancelled || !data?.success || !Array.isArray(data.data)) return;
+                // Rows come back ordered by completed_at DESC, so the first
+                // row we see per quiz_id is already the latest attempt.
+                const latest: Record<string, { score: number; total: number }> = {};
+                for (const row of data.data) {
+                    if (!latest[row.quiz_id]) {
+                        latest[row.quiz_id] = { score: row.score, total: row.total };
+                    }
+                }
+                setLatestQuizScores(latest);
+            } catch (err) {
+                console.error('❌ CourseDetail: failed to load quiz attempts', err);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [userRole, currentUser?.id, selectedCourse?.id]);
+
+    const handleQuizSubmitted = React.useCallback((quizId: string, result: { score: number; total: number }) => {
+        setLatestQuizScores(prev => ({ ...prev, [quizId]: result }));
+    }, []);
 
     if (!selectedCourse) {
         return null;
@@ -2169,6 +2536,11 @@ export const CourseDetail: React.FC = () => {
         assessmentSummaryRecordUrl: effectiveDetail?.assessmentSummaryRecordUrl,
         writtenAssessmentLink: effectiveDetail?.writtenAssessmentLink,
         practicalPerformanceAssessmentLink: effectiveDetail?.practicalPerformanceAssessmentLink,
+        classType: (effectiveDetail as any)?.classType || selectedCourse.classType || 'Physical',
+        virtualMeetingLink: (effectiveDetail as any)?.virtualMeetingLink || selectedCourse.virtualMeetingLink || null,
+        virtualMeetingHostLink: (effectiveDetail as any)?.virtualMeetingHostLink || selectedCourse.virtualMeetingHostLink || null,
+        virtualMeetingJoinLink: (effectiveDetail as any)?.virtualMeetingJoinLink || selectedCourse.virtualMeetingJoinLink || null,
+        virtualMeetingProvider: (effectiveDetail as any)?.virtualMeetingProvider || selectedCourse.virtualMeetingProvider || null,
         fundingValidity: (effectiveDetail as any)?.fundingValidity || selectedCourse.fundingValidity || undefined,
         assessmentMethods: effectiveDetail?.assessmentMethods || undefined,
         publishedAssessmentMethods: effectiveDetail?.publishedAssessmentMethods || {},
@@ -2273,7 +2645,20 @@ export const CourseDetail: React.FC = () => {
 
     const traqomSurveyLink = 'https://ssgtraqom.qualtrics.com/jfe/form/SV_3K9i7rTJ9OLsauW?Q_CHL=qr';
     const traqomQrCodeUrl = '/qr_codes/traqom_survey_qr_code.png';
-    const certDeliveryQrCodeUrl = '/qr_codes/cert_delivery_qr_code.png';
+    // Certificate Delivery card now points to the customizable feedback form.
+    // Admin can override the URL via training_provider.feedback_form_external_link.
+    // Use whichever class identifier is available: real UUID, the TGS-* code, or course code.
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const feedbackRouteId = selectedCourse?.courseRunUuid
+        || selectedCourse?.courseRunId
+        || convertedCourse?.courseCode
+        || '';
+    const builtInFeedbackUrl = feedbackRouteId ? `${origin}/feedback/${encodeURIComponent(feedbackRouteId)}` : '';
+    const certDeliveryLink = trainingProviderProfile?.feedbackFormExternalLink
+        || builtInFeedbackUrl
+        || trainingProviderProfile?.certificateDeliveryLink
+        || 'https://goo.gl/R2eumq';
+    const certDeliveryQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(certDeliveryLink)}`;
 
     const attendanceLink = convertedCourse.daId ? `https://www.myskillsfuture.gov.sg/api/take-attendance/${convertedCourse.daId}` : null;
     // const attendanceQrCodeUrl = attendanceLink ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(attendanceLink)}` : null;
@@ -2394,13 +2779,14 @@ export const CourseDetail: React.FC = () => {
                         {/* Main Content */}
                         <main className="space-y-6">
                             {/* Back Button + Action Buttons */}
+                            {(userRole === UserRole.Developer || userRole === UserRole.Admin) && (
                             <div className="mb-6 flex justify-between items-center">
-                                {userRole !== UserRole.Trainer ? (
+                                {userRole === UserRole.Developer ? (
                                 <button
                                     onClick={handleBackToDashboard}
                                     className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white rounded-lg flex items-center gap-2"
                                 >
-                                    {userRole === UserRole.Developer ? 'Back to All Courses' : 'Back to Dashboard'}
+                                    Back to All Courses
                                 </button>
                                 ) : <div />}
                                 {!isLoading && (
@@ -2423,6 +2809,7 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                                 )}
                             </div>
+                            )}
 
                             {/* Show loading skeleton while data is being fetched */}
                             {isLoading ? (
@@ -2439,6 +2826,9 @@ export const CourseDetail: React.FC = () => {
                                                 // effectiveDetail.courseRunUuid is the UUID, selectedCourse.courseRunId is also UUID from trainer-search
                                                 const runUuid = effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '';
                                                 setPendingAttendanceCourseRunId(String(runUuid));
+                                                if (typeof window !== 'undefined' && selectedCourse) {
+                                                    try { sessionStorage.setItem('attendanceSourceCourse', JSON.stringify(selectedCourse)); } catch {}
+                                                }
                                                 setSelectedCourse(null);
                                                 setTrainerPage(TrainerPage.EAttendance);
                                             }}
@@ -2457,10 +2847,130 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
+                            {userRole === UserRole.Learner && (
+                                <div id={toId("E-Attendance")}>
+                                    <ContentSection title="E-Attendance">
+                                        {attendanceLink ? (
+                                            <a
+                                                href={attendanceLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 p-3 w-full text-left bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                            >
+                                                <Icon name={IconName.ClipboardCheck} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-900 dark:text-white">E-Attendance</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                        Open E-Attendance for Course Run {selectedCourse?.courseRunCode || selectedCourse?.courseRunId || convertedCourse.courseRunId || ''}
+                                                    </p>
+                                                </div>
+                                                <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                            </a>
+                                        ) : (
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+                                                E-Attendance link not yet available for this course run.
+                                            </p>
+                                        )}
+                                    </ContentSection>
+                                </div>
+                            )}
+
+                            {/* Virtual Meeting */}
+                            {(() => {
+                                const vmp = (
+                                    (convertedCourse as any)?.virtualMeetingProvider ||
+                                    inferVirtualMeetingProvider(convertedCourse.virtualMeetingLink) ||
+                                    ((trainingProviderProfile as any)?.integrations?.virtualMeetingProvider as 'google_meet' | 'zoom' | 'teams' | undefined) ||
+                                    'google_meet'
+                                );
+                                const providerLabel = vmp === 'zoom' ? 'Zoom' : vmp === 'teams' ? 'Microsoft Teams' : 'Google Meet';
+                                const isZoom = vmp === 'zoom';
+                                const zoomStartUrl = (convertedCourse as any)?.virtualMeetingHostLink || convertedCourse.virtualMeetingLink || '';
+                                const zoomJoinUrl = (convertedCourse as any)?.virtualMeetingJoinLink || '';
+                                const isTrainerView = userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider || userRole === UserRole.Developer;
+                                const hasVirtualMeetingLink = isZoom && isTrainerView
+                                    ? !!(zoomStartUrl || zoomJoinUrl)
+                                    : !!convertedCourse.virtualMeetingLink;
+                                return (
+                            <div id={toId("Google Meet")}>
+                                <ContentSection title={providerLabel} collapsible>
+                                    {(convertedCourse.classType === 'Virtual' || convertedCourse.classType === 'Hybrid') && hasVirtualMeetingLink ? (
+                                        isZoom && isTrainerView ? (
+                                            <div className="space-y-3">
+                                                {zoomStartUrl && (
+                                                    <a
+                                                        href={zoomStartUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                    >
+                                                        <Icon name={IconName.Video} className="w-6 h-6 text-green-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Start Zoom Meeting</p>
+                                                            <p className="text-xs text-amber-600 dark:text-amber-400 truncate">
+                                                                Trainer-only host URL. Do not share with learners.
+                                                            </p>
+                                                        </div>
+                                                        <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                    </a>
+                                                )}
+                                                {zoomJoinUrl && (
+                                                    <a
+                                                        href={zoomJoinUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                    >
+                                                        <Icon name={IconName.Video} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Join as Participant</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                                {zoomJoinUrl}
+                                                            </p>
+                                                        </div>
+                                                        <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                    </a>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <a
+                                                href={convertedCourse.virtualMeetingLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                            >
+                                                <Icon name={IconName.Video} className="w-6 h-6 text-green-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-gray-900 dark:text-white">{`Join ${providerLabel}`}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                        {convertedCourse.virtualMeetingLink}
+                                                    </p>
+                                                </div>
+                                                <Icon name={IconName.ExternalLink} className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                            </a>
+                                        )
+                                    ) : (
+                                        <div className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600">
+                                            <Icon name={IconName.Video} className="w-6 h-6 text-gray-400 flex-shrink-0" />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-gray-500 dark:text-gray-400">N/A</p>
+                                                <p className="text-xs text-gray-400 dark:text-gray-500">No virtual meeting link for this class</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <ClassPhotoUpload
+                                        courseRunUuid={effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || ''}
+                                        userRole={userRole}
+                                    />
+                                </ContentSection>
+                            </div>
+                                );
+                            })()}
+
                             {/* Courseware - grouped container for Trainer/Developer/Admin/TrainingProvider */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
                                 <div id={toId("Courseware Link")}>
-                                    <ContentSection title="Courseware">
+                                    <ContentSection title="Courseware" collapsible>
                                         <div className="space-y-3">
                                             {/* Courseware Link */}
                                             {convertedCourse.courseLink && (
@@ -2609,94 +3119,82 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Learner-only: Lesson Plan */}
+                            {/* Learner-only: Courseware (Lesson Plan, Learner Guide, Learner Slides) */}
                             {userRole !== UserRole.Trainer && userRole !== UserRole.Developer && userRole !== UserRole.Admin && userRole !== UserRole.TrainingProvider && (
-                                <div id={toId("Lesson Plan")}>
-                                    <ContentSection title="Lesson Plan">
+                                <div id={toId("Courseware Link")}>
+                                    <ContentSection title="Courseware">
                                         {!isMaterialsUnlocked ? (
                                             <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
-                                        ) : convertedCourse.lessonPlanUrl ? (
-                                            isLessonPlanExternal ? (
-                                                <a href={convertedCourse.lessonPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                    </div>
-                                                </a>
-                                            ) : (
-                                                <div onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
-                                                    </div>
-                                                </div>
-                                            )
                                         ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">No lesson plan available for this course.</p>
-                                        )}
-                                    </ContentSection>
-                                </div>
-                            )}
+                                            <div className="space-y-3">
+                                                {/* Lesson Plan (gated by Company Admin Setting) */}
+                                                {trainingProviderProfile?.showLessonPlanLearnerView && convertedCourse.lessonPlanUrl && (
+                                                    isLessonPlanExternal ? (
+                                                        <a href={convertedCourse.lessonPlanUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            </div>
+                                                        </a>
+                                                    ) : (
+                                                        <div onClick={(e) => handleFileDownload(convertedCourse.lessonPlanUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Lesson Plan</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                )}
 
-                            {/* Learner-only: Learner Guide */}
-                            {userRole !== UserRole.Trainer && userRole !== UserRole.Developer && userRole !== UserRole.Admin && userRole !== UserRole.TrainingProvider && (
-                                <div id={toId("Learner Guide")}>
-                                    <ContentSection title="Learner Guide">
-                                        {!isMaterialsUnlocked ? (
-                                            <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
-                                        ) : convertedCourse.learnerGuideUrl ? (
-                                            isLearnerGuideExternal ? (
-                                                <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                    </div>
-                                                </a>
-                                            ) : (
-                                                <div onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
-                                                    </div>
-                                                </div>
-                                            )
-                                        ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">No learner guide available for this course.</p>
-                                        )}
-                                    </ContentSection>
-                                </div>
-                            )}
+                                                {/* Learner Guide */}
+                                                {convertedCourse.learnerGuideUrl && (
+                                                    isLearnerGuideExternal ? (
+                                                        <a href={convertedCourse.learnerGuideUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            </div>
+                                                        </a>
+                                                    ) : (
+                                                        <div onClick={(e) => handleFileDownload(convertedCourse.learnerGuideUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Guide</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                )}
 
-                            {/* Learner Slides - non-trainer only */}
-                            {userRole !== UserRole.Trainer && userRole !== UserRole.Developer && userRole !== UserRole.Admin && userRole !== UserRole.TrainingProvider && (
-                                <div id={toId("Learner Slides")}>
-                                    <ContentSection title="Learner Slides">
-                                        {!isMaterialsUnlocked ? (
-                                            <p className="text-sm text-amber-600 dark:text-amber-400 italic">Available from 8:30 AM SGT on your course start date.</p>
-                                        ) : convertedCourse.slidesUrl ? (
-                                            isLearnerSlidesExternal ? (
-                                                <a href={convertedCourse.slidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
-                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
-                                                    </div>
-                                                </a>
-                                            ) : (
-                                                <div onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
-                                                    <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
-                                                    </div>
-                                                </div>
-                                            )
-                                        ) : (
-                                            <p className="text-gray-500 dark:text-gray-400">No learner slides available for this course.</p>
+                                                {/* Learner Slides */}
+                                                {convertedCourse.slidesUrl && (
+                                                    isLearnerSlidesExternal ? (
+                                                        <a href={convertedCourse.slidesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                            </div>
+                                                        </a>
+                                                    ) : (
+                                                        <div onClick={(e) => handleFileDownload(convertedCourse.slidesUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                            <Icon name={IconName.FileText} className="w-6 h-6 text-red-600 flex-shrink-0" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-gray-900 dark:text-white">Learner Slides</p>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                )}
+
+                                                {/* Empty state */}
+                                                {!convertedCourse.learnerGuideUrl && !convertedCourse.slidesUrl && !(trainingProviderProfile?.showLessonPlanLearnerView && convertedCourse.lessonPlanUrl) && (
+                                                    <p className="text-gray-500 dark:text-gray-400 text-sm">No courseware available.</p>
+                                                )}
+                                            </div>
                                         )}
                                     </ContentSection>
                                 </div>
@@ -2706,7 +3204,7 @@ export const CourseDetail: React.FC = () => {
                             <div id="lessons">
                                 <Card className="p-0 overflow-hidden">
                                     <button className="w-full text-left p-6 flex justify-between items-center" onClick={() => setIsLessonsOpen(!isLessonsOpen)} aria-expanded={isLessonsOpen}>
-                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">{role === UserRole.Learner ? 'Learning Outcomes' : 'Lesson'}</h3>
+                                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Lesson</h3>
                                         <Icon name={IconName.ChevronDown} className={`w-5 h-5 transition-transform duration-200 ${isLessonsOpen ? 'rotate-180' : ''}`} />
                                     </button>
                                     {isLessonsOpen && (
@@ -2733,6 +3231,10 @@ export const CourseDetail: React.FC = () => {
                                                         completedTopics={completedTopicsSet}
                                                         onToggleTopicCompletion={toggleTopicCompletion}
                                                         resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
+                                                        userId={currentUser?.id}
+                                                        courseId={selectedCourse?.id}
+                                                        latestQuizScores={latestQuizScores}
+                                                        onQuizSubmitted={handleQuizSubmitted}
                                                     />
                                                 );
                                             })}
@@ -2750,34 +3252,38 @@ export const CourseDetail: React.FC = () => {
                                             onClick={() => setIsTraqomOpen(!isTraqomOpen)}
                                             aria-expanded={isTraqomOpen}
                                         >
-                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Certificate & TRAQOM Survey</h3>
+                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{[
+                                                trainingProviderProfile?.showCertificateDelivery ? 'Course Feedback' : null,
+                                                'TRAQOM Survey',
+                                            ].filter(Boolean).join(' & ')}</h3>
                                             <Icon name={IconName.ChevronDown} className={`w-6 h-6 text-blue-600 flex-shrink-0 transition-transform ${isTraqomOpen ? 'rotate-180' : ''}`} />
                                         </button>
                                         {isTraqomOpen && (
                                             <div className="px-6 pb-6 border-t border-default">
-                                                <div className="pt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className={`pt-5 grid grid-cols-1 ${trainingProviderProfile?.showCertificateDelivery ? 'md:grid-cols-2' : ''} gap-4`}>
                                                                     {/* Certificate Delivery Card */}
+                                                    {trainingProviderProfile?.showCertificateDelivery && (
                                                     <div className="flex flex-col rounded-xl border border-default overflow-hidden">
-                                                        <div className="bg-blue-600 px-4 py-2.5 flex items-center gap-2">
-                                                            <Icon name={IconName.FileText} className="w-4 h-4 text-white flex-shrink-0" />
-                                                            <span className="text-sm font-semibold text-white">Certificate Delivery</span>
+                                                        <div className="bg-blue-600 px-4 py-2.5 flex items-center justify-center gap-2">
+                                                            <Icon name={IconName.ClipboardCheck} className="w-4 h-4 text-white flex-shrink-0" />
+                                                            <span className="text-sm font-semibold text-white">Course Feedback</span>
                                                         </div>
                                                         <div className="flex flex-col items-center p-5 bg-surface flex-1 justify-between gap-3">
                                                             <div className="flex flex-col items-center gap-3 w-full">
                                                                 <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
                                                                     <img
                                                                         src={certDeliveryQrCodeUrl}
-                                                                        alt="Certificate Delivery QR Code"
+                                                                        alt="Course Feedback QR Code"
                                                                         className="w-36 h-36 object-contain"
                                                                     />
                                                                 </div>
-                                                                <p className="text-sm text-on-surface-secondary text-center">Scan to receive your certificate</p>
+                                                                <p className="text-sm text-on-surface-secondary text-center">Scan to share your feedback</p>
                                                             </div>
                                                             <div className="w-full flex flex-col gap-2">
-                                                                <p className="text-xs text-on-surface-secondary break-all px-1">https://goo.gl/R2eumq</p>
+                                                                <p className="text-xs text-on-surface-secondary break-all px-1">{certDeliveryLink}</p>
                                                                 <div className="flex gap-2">
                                                                     <a
-                                                                        href="https://goo.gl/R2eumq"
+                                                                        href={certDeliveryLink}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
                                                                         className="flex-1 text-center text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 transition-colors"
@@ -2785,7 +3291,7 @@ export const CourseDetail: React.FC = () => {
                                                                         Open Link
                                                                     </a>
                                                                     <button
-                                                                        onClick={() => { navigator.clipboard.writeText('https://goo.gl/R2eumq'); alert('Link copied!'); }}
+                                                                        onClick={() => { navigator.clipboard.writeText(certDeliveryLink); alert('Link copied!'); }}
                                                                         className="px-3 py-2 text-sm font-medium border border-default rounded-lg text-on-surface hover:bg-surface-elevated transition-colors"
                                                                     >
                                                                         Copy
@@ -2797,10 +3303,11 @@ export const CourseDetail: React.FC = () => {
                                                             </div>
                                                         </div>
                                                     </div>
+                                                    )}
 
                                                     {/* TRAQOM Survey Card */}
                                                     <div className="flex flex-col rounded-xl border border-default overflow-hidden">
-                                                        <div className="bg-teal-600 px-4 py-2.5 flex items-center gap-2">
+                                                        <div className="bg-teal-600 px-4 py-2.5 flex items-center justify-center gap-2">
                                                             <Icon name={IconName.Edit} className="w-4 h-4 text-white flex-shrink-0" />
                                                             <span className="text-sm font-semibold text-white">TRAQOM Survey</span>
                                                         </div>
@@ -2839,10 +3346,27 @@ export const CourseDetail: React.FC = () => {
                                                             </div>
                                                         </div>
                                                     </div>
+
                                                 </div>
                                             </div>
                                         )}
                                     </Card>
+                                </div>
+                            )}
+
+                            {/* Briefing on Assessment — Training-Provider template, shown to learners & trainers */}
+                            {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
+                                <div id={toId("Briefing on Assessment")}>
+                                    <ContentSection title="Briefing on Assessment" collapsible defaultOpen={false}>
+                                        <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300 list-disc pl-5">
+                                            {(trainingProviderProfile?.briefingOnAssessment && trainingProviderProfile.briefingOnAssessment.trim()
+                                                ? trainingProviderProfile.briefingOnAssessment.split('\n').map(line => line.trim()).filter(Boolean)
+                                                : DEFAULT_ASSESSMENT_BRIEFING
+                                            ).map((point, idx) => (
+                                                <li key={idx}>{point}</li>
+                                            ))}
+                                        </ul>
+                                    </ContentSection>
                                 </div>
                             )}
 
@@ -2859,10 +3383,21 @@ export const CourseDetail: React.FC = () => {
                                 />
                             </div>
 
+                            {/* Assessment Summary Record — Learner view */}
+                            {userRole === UserRole.Learner && (
+                                <div id={toId("Assessment Summary Record")}>
+                                    <AssessmentSummarySection
+                                        course={convertedCourse}
+                                        userRole={userRole}
+                                        courseRunUuid={effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || ''}
+                                    />
+                                </div>
+                            )}
+
                             {/* Assessment Grading (includes Assessment Record + Grading button) */}
                             {(userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.Admin || userRole === UserRole.TrainingProvider) && (
                                 <div id={toId("Assessment Grading")}>
-                                    <ContentSection title="Assessment Grading">
+                                    <ContentSection title="Assessment Grading" collapsible>
                                         <div className="space-y-3">
                                             {convertedCourse.assessmentRecordLink && (
                                                 <a
@@ -2928,11 +3463,11 @@ export const CourseDetail: React.FC = () => {
                                 );
                             })()}
 
-                            {/* Additional Documents */}
-                            <div id={toId("Additional Documents")}>
-                                <AdditionalDocumentsSection
-                                    userRole={userRole} 
-                                    courseRunId={convertedCourse.courseRunId || selectedCourse?.courseRunId || ''} 
+                            {/* Announcements */}
+                            <div id={toId("Announcements")}>
+                                <AnnouncementsSection
+                                    userRole={userRole}
+                                    courseRunId={convertedCourse.courseRunId || selectedCourse?.courseRunId || ''}
                                     currentUser={currentUser}
                                 />
                             </div>

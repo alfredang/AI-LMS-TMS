@@ -202,12 +202,17 @@ export interface GrantRefreshRowResult {
 /**
  * Fetches grants from SSG for each enrolment reference and upserts into ssg_grants.
  * Uses the same encrypted /tpg/grants/search path as billing sync (not the legacy Cloud Run JSON API).
+ *
+ * @param ssgApp - Same values as `x-ssg-app` (e.g. `app2`). Must match the app used for grant search so encryption keys align with the mTLS cert.
  */
-export async function refreshGrantsForEnrolments(enrolmentIds: string[]): Promise<GrantRefreshRowResult[]> {
+export async function refreshGrantsForEnrolments(
+  enrolmentIds: string[],
+  ssgApp?: string
+): Promise<GrantRefreshRowResult[]> {
   const unique = Array.from(new Set(enrolmentIds.map((id) => id.trim()).filter(Boolean)));
   if (unique.length === 0) return [];
 
-  const credentials = await getSSGCredentialsService().getSSGCredentials();
+  const credentials = await getSSGCredentialsService().getSSGCredentials(undefined, ssgApp);
   if (!credentials) {
     return unique.map((enrolmentId) => ({
       enrolmentId,
@@ -228,25 +233,9 @@ export async function refreshGrantsForEnrolments(enrolmentIds: string[]): Promis
     ssgApiBaseUrl: credentials.ssgApiBaseUrl,
   };
 
-  const known = await pool.query(
-    `SELECT enrolment_id FROM ssg_enrolments WHERE enrolment_id = ANY($1::text[])`,
-    [unique]
-  );
-  const knownSet = new Set(known.rows.map((r: { enrolment_id: string }) => r.enrolment_id));
-
   const results: GrantRefreshRowResult[] = [];
 
   for (const ref of unique) {
-    if (!knownSet.has(ref)) {
-      results.push({
-        enrolmentId: ref,
-        success: false,
-        grantsUpserted: 0,
-        error: 'Enrolment not found in ssg_enrolments',
-      });
-      continue;
-    }
-
     try {
       const grantPayload = {
         grants: {
@@ -294,6 +283,126 @@ export async function refreshGrantsForEnrolments(enrolmentIds: string[]): Promis
   }
 
   return results;
+}
+
+/**
+ * Ensures `ssg_enrolments` has a row for this SSG enrolment reference so consolidated finance
+ * (`/api/finance/all-course-runs`) can join `invoice_jobs`. New enrolments often exist in
+ * `enrollment` before SSG sync populates `ssg_enrolments`.
+ */
+export async function upsertSsgEnrolmentFromLocalEnrollment(enrolmentId: string): Promise<void> {
+  const ref = (enrolmentId || '').trim();
+  if (!ref) return;
+
+  const r = await pool.query(
+    `SELECT e.enrolment_id, e.enrolment_status, e.raw_data, e.course_sponsorship,
+            e.enrolment_date::text AS enrolment_date_text,
+            u.full_name, u.email AS user_email,
+            lp.nric AS trainee_nric,
+            c.title AS course_title, c.course_code AS course_reference,
+            cr.course_run_id::text AS ssg_run_id,
+            cr.start_date AS run_start,
+            cr.end_date AS run_end
+     FROM enrollment e
+     JOIN app_user u ON u.id = e.user_id
+     LEFT JOIN learner_profile lp ON lp.user_id = e.user_id
+     JOIN course_run cr ON cr.id = e.course_run_id
+     JOIN course c ON c.id = e.course_id
+     WHERE LOWER(TRIM(COALESCE(e.enrolment_id, ''))) = LOWER(TRIM($1::text))
+     LIMIT 1`,
+    [ref]
+  );
+  const row = r.rows[0];
+  if (!row) return;
+
+  const tp = await getTrainingPartnerIdentifiers();
+
+  const fmtYmd = (d: unknown): string | null => {
+    if (!d) return null;
+    const x = d instanceof Date ? d : new Date(String(d));
+    if (Number.isNaN(x.getTime())) return null;
+    const y = x.getFullYear();
+    const m = String(x.getMonth() + 1).padStart(2, '0');
+    const day = String(x.getDate()).padStart(2, '0');
+    return `${y}${m}${day}`;
+  };
+
+  const existing = row.raw_data as Record<string, unknown> | null;
+  const exCourse = (existing?.course ?? {}) as Record<string, unknown>;
+  const exRun = (exCourse.run ?? {}) as Record<string, unknown>;
+  const runId = (exRun.id as string) || row.ssg_run_id || '';
+  let startDateStr =
+    (typeof exRun.startDate === 'string' && exRun.startDate) || fmtYmd(row.run_start) || '';
+  let endDateStr = (typeof exRun.endDate === 'string' && exRun.endDate) || fmtYmd(row.run_end) || '';
+
+  const sponsorship =
+    String(row.course_sponsorship || '').toLowerCase().includes('employer') ? 'EMPLOYER' : 'INDIVIDUAL';
+
+  const record = {
+    referenceNumber: ref,
+    status: row.enrolment_status || 'Confirmed',
+    trainee: {
+      fullName: row.full_name,
+      id: row.trainee_nric || null,
+      email: { full: row.user_email || '' },
+      sponsorshipType: sponsorship,
+      enrolmentDate: row.enrolment_date_text || null,
+    },
+    course: {
+      title: row.course_title,
+      referenceNumber: row.course_reference,
+      run: {
+        id: runId,
+        startDate: startDateStr,
+        endDate: endDateStr,
+      },
+    },
+    trainingPartner: { code: tp.code, uen: tp.uen },
+  };
+
+  const rawJson = JSON.stringify(record);
+
+  let enrolmentDateVal: Date | null = null;
+  if (row.enrolment_date_text) {
+    const d = new Date(String(row.enrolment_date_text));
+    if (!Number.isNaN(d.getTime())) enrolmentDateVal = d;
+  }
+
+  await pool.query(
+    `INSERT INTO ssg_enrolments (
+       id, enrolment_id, trainee_name, trainee_nric,
+       course_title, course_reference, course_run_id,
+       training_partner_code, enrolment_status, sponsorship_type,
+       enrolment_date, raw_data, created_date, imported_at
+     ) VALUES (
+       gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9,
+       $10::timestamptz, $11::jsonb, NOW(), NOW()
+     )
+     ON CONFLICT (enrolment_id) DO UPDATE SET
+       trainee_name = EXCLUDED.trainee_name,
+       trainee_nric = EXCLUDED.trainee_nric,
+       course_title = EXCLUDED.course_title,
+       course_reference = EXCLUDED.course_reference,
+       course_run_id = EXCLUDED.course_run_id,
+       enrolment_status = EXCLUDED.enrolment_status,
+       sponsorship_type = EXCLUDED.sponsorship_type,
+       enrolment_date = EXCLUDED.enrolment_date,
+       raw_data = EXCLUDED.raw_data,
+       imported_at = NOW()`,
+    [
+      ref,
+      row.full_name,
+      row.trainee_nric,
+      row.course_title,
+      row.course_reference,
+      runId || null,
+      tp.code,
+      row.enrolment_status,
+      sponsorship,
+      enrolmentDateVal,
+      rawJson,
+    ]
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -1,335 +1,355 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useLms } from '@contexts/LmsContext';
 import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
-import { Button } from './ui/Button';
-import { useLms } from '@contexts/LmsContext';
 
-interface Grant {
-  funding_scheme: string;
-  estimated_amount: string;
-  approved_amount: string;
-  status: string;
-}
-
-interface BillingRecord {
-  id: string;
+interface BillingRow {
+  enrollment_id: string;
   enrolment_id: string | null;
-  enrolment_status: string | null;
-  payment_status: string | null;
-  enrolment_date: string | null;
-  full_name: string;
   course_title: string;
   course_code: string | null;
-  course_fees_exclude_gst: string | null;
-  course_fees_include_gst: string | null;
-  after_normal_funding: string | null;
-  after_mces_funding: string | null;
-  is_wsq_funded: boolean;
-  is_mces_eligible: boolean;
   course_run_id: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  pro_forma_url: string | null;
-  grants: Grant[];
+  enrolment_date: string | null;
+  type: string;
+  document_url: string | null;
+  invoice_number: string | null;
+  status: 'Issued' | 'Pending';
+  /** QB invoice completed in our system (Drive and/or QBO); PDF available via /api/billing/invoice-pdf even if web view link is missing */
+  invoice_pdf_ready?: boolean;
+}
+
+interface Summary {
+  proformaCount: number;
+  invoiceCount: number;
+  receiptCount: number;
 }
 
 const formatDate = (dateStr: string | null): string => {
-  if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
-};
-
-const formatCurrency = (amount: string | null): string => {
-  if (!amount) return '-';
-  return `$${parseFloat(amount).toFixed(2)}`;
-};
-
-const getPaymentBadge = (status: string | null) => {
-  switch (status) {
-    case 'Paid':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-    case 'Unpaid':
-      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
-    default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400';
-  }
-};
-
-// ── Download handler ──────────────────────────────────────────────────────────
-// Calls /api/billing/proforma, receives a PDF blob, triggers browser download.
-
-const downloadProForma = async (record: BillingRecord): Promise<void> => {
-  const res = await fetch('/api/billing/proforma', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      enrolment_id: record.enrolment_id,
-      full_name: record.full_name,
-      course_title: record.course_title,
-      course_code: record.course_code,
-      course_fees_exclude_gst: record.course_fees_exclude_gst,
-      start_date: record.start_date,
-      grants: record.grants,
-      // Pass MCES eligibility based on grants
-      eligibility: record.is_mces_eligible ? 'above' : 'below',
-      sponsorship_type: 'Self-Sponsored', // adjust if you store this on the record
-    }),
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('en-SG', {
+    day: '2-digit', month: 'short', year: 'numeric',
   });
-
-  if (!res.ok) {
-    throw new Error('Failed to generate PDF');
-  }
-
-  // Trigger browser download
-  const blob = await res.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const orderNum = (record.enrolment_id ?? record.id).replace('#', '');
-  a.download = `ProFormaInvoice_${orderNum}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
+const typeBadgeClass = (type: string): string => {
+  switch (type) {
+    case 'Proforma Invoice':
+      return 'bg-yellow-50 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+    case 'Personal Invoice':
+      return 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
+    case 'Company Invoice':
+      return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300';
+    case 'Receipt':
+      return 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+    default:
+      return 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400';
+  }
+};
 
 const BillingHistoryView: React.FC = () => {
   const { currentUser } = useLms();
-  const [records, setRecords] = useState<BillingRecord[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [fetched, setFetched] = useState(false);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [rows, setRows] = useState<BillingRow[]>([]);
+  const [summary, setSummary] = useState<Summary>({ proformaCount: 0, invoiceCount: 0, receiptCount: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [brokenLinks, setBrokenLinks] = useState<Set<string>>(new Set());
+  const autoVerifiedKeys = useRef<Set<string>>(new Set());
 
-  const fetchBillingHistory = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!currentUser?.id) return;
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/billing/history?userId=${currentUser.id}`);
+      const res = await fetch(`/api/billing/billing-history?userId=${currentUser.id}`);
       const json = await res.json();
-      if (json.success) {
-        setRecords(json.data);
-      }
-    } catch (err) {
-      console.error('[BillingHistory] Fetch error:', err);
+      if (!json.success) throw new Error(json.error || 'Failed to load billing history');
+      setRows(json.data);
+      setSummary(json.summary);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load billing history');
     } finally {
       setLoading(false);
-      setFetched(true);
     }
   }, [currentUser?.id]);
 
   useEffect(() => {
-    fetchBillingHistory();
-  }, [fetchBillingHistory]);
+    fetchData();
+  }, [fetchData]);
 
-  const handleDownload = async (record: BillingRecord) => {
-    setDownloadingId(record.id);
-    setDownloadError(null);
-    try {
-      await downloadProForma(record);
-    } catch (err) {
-      console.error('[BillingHistory] Download error:', err);
-      setDownloadError('Failed to generate invoice. Please try again.');
-    } finally {
-      setDownloadingId(null);
-    }
-  };
+  useEffect(() => {
+    if (loading || error || rows.length === 0) return;
 
-  const paidCount = records.filter(r => r.payment_status === 'Paid').length;
-  const unpaidCount = records.filter(r => r.payment_status === 'Unpaid').length;
+    let cancelled = false;
+    const verifyLoadedDocuments = async () => {
+      let cleanedAny = false;
+
+      for (const row of rows) {
+        if (!row.document_url) continue;
+
+        const key = `${row.enrollment_id}-${row.type}-${row.document_url}`;
+        if (autoVerifiedKeys.current.has(key)) continue;
+        autoVerifiedKeys.current.add(key);
+
+        try {
+          const res = await fetch(
+            `/api/billing/verify-drive?url=${encodeURIComponent(row.document_url)}&enrollmentId=${row.enrollment_id}`
+          );
+          const json = await res.json();
+          if (!json.valid) {
+            cleanedAny = true;
+            setBrokenLinks((prev) => new Set(prev).add(`${row.enrollment_id}-${row.type}`));
+          }
+        } catch {
+          // Keep the row visible if verification is unavailable.
+        }
+      }
+
+      if (cleanedAny && !cancelled) {
+        await fetchData();
+      }
+    };
+
+    verifyLoadedDocuments();
+    return () => { cancelled = true; };
+  }, [error, fetchData, loading, rows]);
+
+  const filtered = rows.filter(r => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      r.course_title?.toLowerCase().includes(q) ||
+      r.course_code?.toLowerCase().includes(q) ||
+      r.enrolment_id?.toLowerCase().includes(q) ||
+      r.invoice_number?.toLowerCase().includes(q) ||
+      r.type?.toLowerCase().includes(q)
+    );
+  });
+
+  const cell = 'px-4 py-3 text-xs whitespace-nowrap';
+  const headerCell = 'px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap';
 
   return (
-    <div>
-      <h2 className="text-3xl font-bold mb-6">Billing History</h2>
-      <div className="grid grid-cols-1 gap-6">
+    <div className="space-y-6">
+      {/* Header */}
+      <h2 className="text-2xl font-bold text-on-surface">Billing History</h2>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="p-5">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <Icon name={IconName.FilePdf} className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-subtle">Total Invoices</p>
-                <p className="text-2xl font-bold text-on-surface">{records.length}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-5">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                <Icon name={IconName.CheckCircle} className="w-6 h-6 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-subtle">Paid</p>
-                <p className="text-2xl font-bold text-on-surface">{paidCount}</p>
-              </div>
-            </div>
-          </Card>
-          <Card className="p-5">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                <Icon name={IconName.Clock} className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-subtle">Pending</p>
-                <p className="text-2xl font-bold text-on-surface">{unpaidCount}</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Error banner */}
-        {downloadError && (
-          <div className="px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
-            {downloadError}
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-yellow-50 dark:bg-yellow-900/30 flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.FileText} className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
           </div>
-        )}
-
-        {/* Invoice Table */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold">Invoices</h3>
-            <Button
-              onClick={fetchBillingHistory}
-              disabled={loading}
-              className="!bg-primary hover:!bg-primary-hover"
-            >
-              {loading ? (
-                <span className="flex items-center space-x-2">
-                  <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin" />
-                  <span>Loading...</span>
-                </span>
-              ) : (
-                <span className="flex items-center space-x-2">
-                  <Icon name={IconName.Download} className="w-4 h-4" />
-                  <span>Refresh</span>
-                </span>
-              )}
-            </Button>
+          <div>
+            <p className="text-2xl font-bold text-on-surface">{loading ? '—' : summary.proformaCount}</p>
+            <p className="text-xs text-on-surface-secondary mt-0.5">Proforma Invoice{summary.proformaCount !== 1 ? 's' : ''}</p>
           </div>
-
-          {!fetched ? (
-            <div className="text-center py-12 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Icon name={IconName.DollarSign} className="w-24 h-24 mx-auto mb-6 text-primary" />
-              <h4 className="text-xl font-bold text-on-surface">No invoices loaded</h4>
-              <p className="mt-2 text-subtle max-w-md mx-auto">Click Refresh to load your billing history.</p>
-            </div>
-          ) : records.length === 0 ? (
-            <div className="text-center py-12 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <Icon name={IconName.DollarSign} className="w-24 h-24 mx-auto mb-6 text-primary" />
-              <h4 className="text-xl font-bold text-on-surface">No invoices yet</h4>
-              <p className="mt-2 text-subtle max-w-md mx-auto">
-                Pro forma invoices will appear here once you are enrolled in a course.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm whitespace-nowrap">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Enrolment ID</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Course Run ID</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Course</th>
-                    <th className="text-left py-3 px-4 font-semibold text-subtle">Course Date</th>
-                    <th className="text-right py-3 px-4 font-semibold text-subtle">Fee (excl. GST)</th>
-                    <th className="text-right py-3 px-4 font-semibold text-subtle">Baseline Funding</th>
-                    <th className="text-right py-3 px-4 font-semibold text-subtle">MCES / SME</th>
-                    <th className="text-right py-3 px-4 font-semibold text-subtle">Nett Payable</th>
-                    <th className="text-center py-3 px-4 font-semibold text-subtle">Payment</th>
-                    <th className="text-center py-3 px-4 font-semibold text-subtle">Status</th>
-                    <th className="text-center py-3 px-4 font-semibold text-subtle">Quotation</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.map((record) => {
-                    const baselineGrant = record.grants.find(g => g.funding_scheme === 'Baseline SkillsFuture Funding');
-                    const enhancedGrant = record.grants.find(g =>
-                      g.funding_scheme === 'Mid-Career Enhanced Subsidy' ||
-                      g.funding_scheme === 'Enhanced Training Support for SMEs' ||
-                      g.funding_scheme === 'IBF STS'
-                    );
-                    const baselineAmt = baselineGrant
-                      ? parseFloat(baselineGrant.approved_amount !== '0.00' ? baselineGrant.approved_amount : baselineGrant.estimated_amount)
-                      : 0;
-                    const enhancedAmt = enhancedGrant
-                      ? parseFloat(enhancedGrant.approved_amount !== '0.00' ? enhancedGrant.approved_amount : enhancedGrant.estimated_amount)
-                      : 0;
-                    const fee = parseFloat(record.course_fees_exclude_gst || '0');
-                    const nettPayable = fee > 0 ? fee - baselineAmt - enhancedAmt : 0;
-                    const isDownloading = downloadingId === record.id;
-
-                    return (
-                      <tr key={record.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/30">
-                        <td className="py-3 px-4 font-mono text-xs">{record.enrolment_id || '-'}</td>
-                        <td className="py-3 px-4 font-mono text-xs">{record.course_run_id || '-'}</td>
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-on-surface">{record.course_title}</div>
-                          <div className="text-xs text-subtle">{record.course_code || '-'}</div>
-                        </td>
-                        <td className="py-3 px-4 text-subtle">{formatDate(record.start_date)}</td>
-                        <td className="py-3 px-4 text-right font-mono">{formatCurrency(record.course_fees_exclude_gst)}</td>
-                        <td className="py-3 px-4 text-right font-mono text-green-600 dark:text-green-400">
-                          {baselineAmt > 0 ? `-${formatCurrency(baselineAmt.toFixed(2))}` : '-'}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono text-green-600 dark:text-green-400">
-                          {enhancedAmt > 0 ? `-${formatCurrency(enhancedAmt.toFixed(2))}` : '-'}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-semibold">
-                          {fee > 0 ? formatCurrency(nettPayable.toFixed(2)) : '-'}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${getPaymentBadge(record.payment_status)}`}>
-                            {record.payment_status || 'Unknown'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${
-                            record.enrolment_status === 'Confirmed'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                              : record.enrolment_status === 'Cancelled'
-                              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
-                          }`}>
-                            {record.enrolment_status || 'Unknown'}
-                          </span>
-                        </td>
-
-                        {/* ── Pro Forma Download ── */}
-                        <td className="py-3 px-4 text-center">
-                          <button
-                            onClick={() => handleDownload(record)}
-                            disabled={isDownloading}
-                            title="Download Pro Forma Invoice"
-                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
-                              bg-blue-50 text-blue-700 hover:bg-blue-100
-                              dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40
-                              disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isDownloading ? (
-                              <>
-                                <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
-                                <span>Generating...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
-                                <span>Pro Forma</span>
-                              </>
-                            )}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+        </Card>
+        <Card className="p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.FileText} className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-on-surface">{loading ? '—' : summary.invoiceCount}</p>
+            <p className="text-xs text-on-surface-secondary mt-0.5">Tax Invoice{summary.invoiceCount !== 1 ? 's' : ''}</p>
+          </div>
+        </Card>
+        <Card className="p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-red-50 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.ClipboardCheck} className="w-5 h-5 text-red-600 dark:text-red-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-on-surface">{loading ? '—' : summary.receiptCount}</p>
+            <p className="text-xs text-on-surface-secondary mt-0.5">Receipt{summary.receiptCount !== 1 ? 's' : ''}</p>
+          </div>
         </Card>
       </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Icon name={IconName.Search} className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-secondary pointer-events-none" />
+        <input
+          type="text"
+          placeholder="Search by course title, course code, invoice number or type..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full pl-9 pr-9 py-2.5 text-sm rounded-lg border border-default bg-surface text-on-surface placeholder:text-on-surface-secondary/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-secondary hover:text-on-surface"
+          >
+            <Icon name={IconName.Close} className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-default bg-surface-elevated">
+                <th className={headerCell}>Course Title</th>
+                <th className={headerCell}>Course Ref Code</th>
+                <th className={headerCell}>Type</th>
+                <th className={headerCell}>Invoice No.</th>
+                <th className={headerCell}>Enrollment ID</th>
+                <th className={headerCell}>Created Date</th>
+                <th className={`${headerCell} text-center`}>Status</th>
+                <th className={`${headerCell} text-center`}>Documents</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-default">
+              {loading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    {Array.from({ length: 8 }).map((_, j) => (
+                      <td key={j} className={cell}>
+                        <div className="h-3.5 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : error ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-12 text-center">
+                    <p className="text-sm text-red-500">{error}</p>
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Icon name={IconName.FileText} className="w-6 h-6 text-primary/60" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-on-surface">No billing documents found</p>
+                        <p className="text-xs text-on-surface-secondary mt-0.5">
+                          {search ? 'Try a different search term' : 'Your invoices and receipts will appear here once issued'}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((row, idx) => (
+                  <tr key={`${row.enrollment_id}-${row.type}-${idx}`} className="hover:bg-surface-elevated/50 transition-colors">
+                    {/* Course Title */}
+                    <td className={`${cell} max-w-[200px]`}>
+                      <span className="font-medium text-on-surface truncate block" title={row.course_title}>
+                        {row.course_title}
+                      </span>
+                    </td>
+                    {/* Course Ref Code */}
+                    <td className={`${cell} font-mono text-on-surface-secondary`}>
+                      {row.course_code || '—'}
+                    </td>
+                    {/* Type */}
+                    <td className={cell}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${typeBadgeClass(row.type)}`}>
+                        {row.type}
+                      </span>
+                    </td>
+                    {/* Invoice No. */}
+                    <td className={`${cell} font-mono text-on-surface-secondary`}>
+                      {row.invoice_number || '—'}
+                    </td>
+                    {/* Enrollment ID */}
+                    <td className={`${cell} font-mono text-on-surface-secondary text-[11px]`}>
+                      {row.enrolment_id || row.enrollment_id || '—'}
+                    </td>
+                    {/* Created Date */}
+                    <td className={`${cell} text-on-surface-secondary`}>
+                      {formatDate(row.enrolment_date)}
+                    </td>
+                    {/* Status */}
+                    <td className={`${cell} text-center`}>
+                      {row.status === 'Issued' ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          Issued
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-500 dark:bg-gray-700/40 dark:text-gray-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    {/* Documents */}
+                    <td className={`${cell} text-center`}>
+                      {row.document_url ||
+                      (row.type === 'Personal Invoice' && row.status === 'Issued' && row.invoice_pdf_ready) ? (
+                        brokenLinks.has(`${row.enrollment_id}-${row.type}`) ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400">
+                              <Icon name={IconName.Warning} className="w-3 h-3" />
+                              Unavailable
+                            </span>
+                            <span className="text-[10px] text-on-surface-secondary">Document may have been deleted</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-2">
+                            {row.document_url ? (
+                              <button
+                                onClick={async () => {
+                                  const key = `${row.enrollment_id}-${row.type}`;
+                                  setVerifyingId(key);
+                                  try {
+                                    const res = await fetch(
+                                      `/api/billing/verify-drive?url=${encodeURIComponent(row.document_url!)}&enrollmentId=${row.enrollment_id}`
+                                    );
+                                    const json = await res.json();
+                                    if (json.valid) {
+                                      window.open(row.document_url!, '_blank');
+                                    } else {
+                                      setBrokenLinks((prev) => new Set(prev).add(key));
+                                    }
+                                  } catch {
+                                    window.open(row.document_url!, '_blank');
+                                  } finally {
+                                    setVerifyingId(null);
+                                  }
+                                }}
+                                disabled={verifyingId === `${row.enrollment_id}-${row.type}`}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40 transition-colors disabled:opacity-60"
+                              >
+                                {verifyingId === `${row.enrollment_id}-${row.type}` ? (
+                                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-blue-700 dark:border-blue-400" />
+                                ) : (
+                                  <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
+                                )}
+                                {verifyingId === `${row.enrollment_id}-${row.type}` ? 'Checking...' : 'View'}
+                              </button>
+                            ) : null}
+
+                          </div>
+                        )
+                      ) : (
+                        <span className="text-xs text-on-surface-secondary/40">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer count */}
+        {!loading && !error && filtered.length > 0 && (
+          <div className="px-4 py-3 border-t border-default bg-surface-elevated">
+            <p className="text-xs text-on-surface-secondary">
+              Showing <span className="font-medium text-on-surface">{filtered.length}</span> document{filtered.length !== 1 ? 's' : ''}
+              {search && ` matching "${search}"`}
+            </p>
+          </div>
+        )}
+      </Card>
     </div>
   );
 };

@@ -1033,9 +1033,33 @@ export class EditDeleteCourseRunUtils {
   }
 
   /**
+   * Build a minimal payload to update ONLY the linkCourseRunTrainer field.
+   * Avoids sending empty/zero values for dates, venue, etc. that could
+   * inadvertently overwrite existing SSG data.
+   */
+  static toTrainerUpdatePayload(runInfo: EditRunInfo, uen: string): any {
+    // trainerToPayload already returns { trainer: { ... } } — no extra wrapping needed
+    const trainers = (runInfo.linkCourseRunTrainer || []).map(trainer =>
+      EditDeleteCourseRunUtils.trainerToPayload(trainer)
+    );
+    return {
+      course: {
+        courseReferenceNumber: runInfo.courseReferenceNumber,
+        trainingProvider: { uen },
+        run: {
+          action: 'update',
+          linkCourseRunTrainer: trainers,
+        },
+      },
+    };
+  }
+
+  /**
    * Convert trainer info to payload format
    */
-  private static trainerToPayload(trainer: RunTrainerEditInfo): any {
+  static trainerToPayload(trainer: RunTrainerEditInfo): any {
+    // Map internal enum values to SSG numeric codes
+    const trainerTypeCodeMap: Record<string, string> = { existing: '1', new: '2' };
     const trainerData: any = {
       // Photo is required according to working example - always include even if empty
       photo: {
@@ -1043,7 +1067,7 @@ export class EditDeleteCourseRunUtils {
         content: trainer.photoContent || ""
       },
       trainerType: {
-        code: trainer.trainerTypeCode,
+        code: trainerTypeCodeMap[trainer.trainerTypeCode] ?? trainer.trainerTypeCode,
         description: trainer.trainerTypeDescription
       }
     };

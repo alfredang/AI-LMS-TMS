@@ -4,6 +4,12 @@ import { Icon, IconName } from '../ui/Icon';
 
 const STAT_TOOLS = [
   {
+    title: 'Probability',
+    description: 'Explore probability distributions and calculate probabilities for common scenarios',
+    icon: IconName.Analytics,
+    href: 'https://alfredang.github.io/novastats/#probability',
+  },
+  {
     title: 'Descriptive',
     description: 'Summary statistics including mean, median, mode, standard deviation and more',
     icon: IconName.Analytics,
@@ -28,16 +34,16 @@ const STAT_TOOLS = [
     href: 'https://alfredang.github.io/novastats/#/hypothesis',
   },
   {
-    title: 'Chi-Square',
-    description: 'Test for independence and goodness-of-fit with chi-square analysis',
+    title: 'Confidence Interval',
+    description: 'Estimate population parameters with confidence intervals for means and proportions',
     icon: IconName.Analytics,
-    href: 'https://alfredang.github.io/novastats/#/chi-square',
+    href: 'https://alfredang.github.io/novastats/#confidence',
   },
   {
-    title: 'ANOVA',
-    description: 'Compare means across multiple groups with analysis of variance',
+    title: 'Bayesian Inference',
+    description: 'Apply Bayes theorem to update beliefs with evidence and explore posterior distributions',
     icon: IconName.Analytics,
-    href: 'https://alfredang.github.io/novastats/#/anova',
+    href: 'https://alfredang.github.io/novastats/#bayesian',
   },
 ];
 

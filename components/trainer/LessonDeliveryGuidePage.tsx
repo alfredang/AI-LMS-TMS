@@ -3,78 +3,92 @@ import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
 
 interface Step {
-  number: number;
   title: string;
   description: string;
   actor: 'trainer' | 'learner' | 'system';
   icon: IconName;
 }
 
-const STEPS: Step[] = [
+export type LessonDeliveryVariant = 'physical' | 'virtual';
+
+const PHOTO_REMARK = 'All learners must turn on their camera and show their face at all times.';
+
+const BASE_STEPS: Step[] = [
   {
-    number: 1,
     title: 'E-Attendance in AM for Learners and Trainer',
     description: 'Take electronic attendance in the morning for both learners and trainer to record participation.',
     actor: 'trainer',
     icon: IconName.ClipboardCheck,
   },
   {
-    number: 2,
     title: 'Ice Breaker and Self Introduction',
     description: 'Conduct an ice breaker activity and facilitate self introductions to build rapport among learners.',
     actor: 'trainer',
     icon: IconName.Users,
   },
   {
-    number: 3,
     title: 'Follow the Lesson Plan to Deliver the Lesson',
     description: 'Follow the lesson plan to deliver the lesson. Always contextualize the delivery to learners profile.',
     actor: 'trainer',
     icon: IconName.BookOpen,
   },
   {
-    number: 4,
     title: 'E-Attendance in PM for Learners and Trainer',
     description: 'Take electronic attendance in the afternoon for both learners and trainer to record participation.',
     actor: 'trainer',
     icon: IconName.ClipboardCheck,
   },
   {
-    number: 5,
     title: 'Get Learners to Fill Up Cert Delivery Form',
     description: 'Have learners complete the Certificate Delivery Form to ensure certificates are sent to the correct address.',
     actor: 'learner',
     icon: IconName.FileText,
   },
   {
-    number: 6,
     title: 'Get Learners to Fill Up TRAQOM Survey',
     description: 'Have learners complete the TRAQOM survey to provide feedback on the training quality.',
     actor: 'learner',
     icon: IconName.Edit,
   },
   {
-    number: 7,
     title: 'E-Attendance for Assessment',
     description: 'Take electronic attendance for the assessment session.',
     actor: 'trainer',
     icon: IconName.ClipboardCheck,
   },
   {
-    number: 8,
     title: 'Start the Assessment',
     description: 'Begin the assessment. Refer to the Assessment Guide for the detailed assessment workflow.',
     actor: 'trainer',
     icon: IconName.Award,
   },
   {
-    number: 9,
     title: 'Class Ended',
     description: 'The class has concluded. Ensure all administrative tasks are completed.',
     actor: 'system',
     icon: IconName.CheckCircle,
   },
 ];
+
+const buildSteps = (variant: LessonDeliveryVariant): (Step & { number: number })[] => {
+  const steps = [...BASE_STEPS];
+  if (variant === 'virtual') {
+    const photoStep = (after: string): Step => ({
+      title: `Take Class Photo after ${after}`,
+      description: `Take a class photo and upload to the assessment folder. ${PHOTO_REMARK}`,
+      actor: 'trainer',
+      icon: IconName.ClipboardCheck,
+    });
+    const insertAfter = (title: string, step: Step) => {
+      const idx = steps.findIndex((s) => s.title === title);
+      steps.splice(idx + 1, 0, step);
+    };
+    insertAfter('E-Attendance in AM for Learners and Trainer', photoStep('E-Attendance in AM'));
+    insertAfter('E-Attendance in PM for Learners and Trainer', photoStep('E-Attendance in PM'));
+    insertAfter('E-Attendance for Assessment', photoStep('E-Attendance for Assessment'));
+  }
+  return steps.map((s, i) => ({ ...s, number: i + 1 }));
+};
 
 const actorColors = {
   trainer: {
@@ -108,16 +122,25 @@ const actorColors = {
 
 const actorLabels = { trainer: 'Trainer', learner: 'Learner', system: 'System' };
 
-const LessonDeliveryGuidePage: React.FC = () => {
+interface LessonDeliveryGuidePageProps {
+  variant?: LessonDeliveryVariant;
+}
+
+const LessonDeliveryGuidePage: React.FC<LessonDeliveryGuidePageProps> = ({ variant = 'physical' }) => {
+  const STEPS = buildSteps(variant);
+  const heading = variant === 'virtual' ? 'Virtual Class Lesson Delivery Guide' : 'Physical Class Lesson Delivery Guide';
+  const subheading = variant === 'virtual'
+    ? 'Step-by-step visual guide on how lessons are delivered in a virtual classroom.'
+    : 'Step-by-step visual guide on how lessons are delivered in the classroom.';
   return (
     <div className="space-y-6">
       <div className="border-b border-gray-200 dark:border-gray-700 pb-5">
         <h3 className="text-2xl font-bold leading-6 text-gray-900 dark:text-white flex items-center gap-2">
           <Icon name={IconName.BookOpen} className="w-7 h-7" />
-          Lesson Delivery Guide
+          {heading}
         </h3>
         <p className="mt-2 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
-          Step-by-step visual guide on how lessons are delivered in the classroom.
+          {subheading}
         </p>
       </div>
 
