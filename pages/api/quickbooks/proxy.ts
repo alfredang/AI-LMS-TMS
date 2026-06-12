@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import { qboSendInvoice } from '../../../lib/services/qboInvoiceService';
+import { qboGetAccessTokenAndRealm, qboSendInvoice } from '../../../lib/services/qboInvoiceService';
 
 /**
  * POST /api/quickbooks/proxy
@@ -194,13 +194,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const creds = await getQBOCredentials(appOverride);
-    if (!creds) {
+    const tokenAndRealm = await qboGetAccessTokenAndRealm(appOverride);
+    if (!tokenAndRealm) {
       return res.status(500).json({ success: false, error: 'QuickBooks credentials not configured. Set Client ID, Client Secret, Refresh Token, and Realm ID in Company Settings.' });
     }
 
-    const token = await getAccessToken(creds);
-    const baseUrl = `${QBO_BASE_URL}/v3/company/${creds.realmId}`;
+    const { token, realmId } = tokenAndRealm;
+    const baseUrl = `${QBO_BASE_URL}/v3/company/${realmId}`;
     let url: string;
     let method: string = 'GET';
     let headers: Record<string, string> = {

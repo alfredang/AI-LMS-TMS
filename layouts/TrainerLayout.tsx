@@ -31,6 +31,7 @@ import NetworkingToolsPage from '../components/trainer/NetworkingToolsPage';
 import K8sToolsPage from '../components/trainer/K8sToolsPage';
 import BlockchainToolsPage from '../components/trainer/BlockchainToolsPage';
 import QuantumToolsPage from '../components/trainer/QuantumToolsPage';
+import DesignToolsPage from '../components/trainer/DesignToolsPage';
 import LessonDeliveryGuidePage from '../components/trainer/LessonDeliveryGuidePage';
 import TrainerGuidesPage from '../components/trainer/TrainerGuidesPage';
 import VirtualToolsPage from '../components/trainer/VirtualToolsPage';
@@ -98,6 +99,8 @@ const TrainerLayout: React.FC = () => {
         return <BlockchainToolsPage />;
       case TrainerPage.QuantumTools:
         return <QuantumToolsPage />;
+      case TrainerPage.DesignTools:
+        return <DesignToolsPage />;
       case TrainerPage.VirtualTools:
         return <VirtualToolsPage />;
       case TrainerPage.AgenticAITools:

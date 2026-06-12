@@ -501,8 +501,13 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
 
     // Idempotency: check if QB already has an invoice with this DocNumber before creating.
     // Prevents duplicate invoices when two concurrent processes both see qbo_invoice_id = null.
+    // IMPORTANT: verify the found invoice belongs to THIS enrolment via PrivateNote — two ENRs
+    // can share the same last-6-digit sequence (e.g. ENR-2604-046027 and ENR-2606-046027 both
+    // produce TC26-MMDD-046027) causing a DocNumber collision that would link the wrong invoice.
     const existingInv = await qboFindInvoiceByDocNumber(undefined, invoiceNo!);
-    if (existingInv?.id) {
+    const existingInvOwnsThisEnrolment = existingInv?.id &&
+      String(existingInv.raw?.PrivateNote || '').includes(enrolmentId);
+    if (existingInv?.id && existingInvOwnsThisEnrolment) {
       invoiceId = existingInv.id;
       docNumber = invoiceNo;
       await pool.query(
@@ -512,6 +517,13 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
         [jobId, invoiceId, docNumber, invoiceNo]
       );
     } else {
+      // If a DocNumber collision was detected (invoice exists but belongs to a different enrolment),
+      // force a new unique number using a salt so we don't steal another enrolment's invoice.
+      if (existingInv?.id && !existingInvOwnsThisEnrolment) {
+        console.warn(`[invoice-job] DocNumber collision for ${invoiceNo!} — invoice belongs to different enrolment. Generating new number.`);
+        invoiceNo = await reserveTmsInvoiceNo(jobId, enrolmentId, null); // null forces a fresh salt-based number
+        invoiceBody.DocNumber = invoiceNo;
+      }
       let inv;
       try {
         inv = await step('QBO create invoice', () => qboCreateInvoice(undefined, invoiceBody));

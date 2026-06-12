@@ -95,8 +95,16 @@ async function qbFindInvoiceByEnrolmentId(apps: string[], enrolmentId: string): 
       const rows = data?.QueryResponse?.Invoice;
       const list: any[] = Array.isArray(rows) ? rows : rows ? [rows] : [];
       if (list.length > 0) {
-        // Prefer the one with a positive balance; fall back to first
-        const inv = list.find((x: any) => Number(x?.Balance ?? 0) > 0) ?? list[0];
+        // Prefer the customer invoice (TC26-...) over the GRN invoice (GRN-...) — both share
+        // the same PrivateNote so the QB query can return either. Within each group, prefer
+        // positive balance (outstanding) over zero (already paid).
+        const isTc = (x: any) => String(x?.DocNumber || '').toUpperCase().startsWith('TC');
+        const hasBalance = (x: any) => Number(x?.Balance ?? 0) > 0;
+        const inv =
+          list.find((x: any) => isTc(x) && hasBalance(x)) ??
+          list.find((x: any) => isTc(x)) ??
+          list.find((x: any) => hasBalance(x)) ??
+          list[0];
         if (inv?.Id) {
           return {
             app,
@@ -378,7 +386,11 @@ export async function sfcStage1ParseMatchAndPersist(input: {
     }
 
     // Step 3 — Already applied check (DB)
-    const storedQbPaymentId = appliedQbPaymentIds.get(claimId) ?? null;
+    // sfc_import_rows tracked payment ID (from a previous apply run via this tool)
+    const sfcTrackedPaymentId = appliedQbPaymentIds.get(claimId) ?? null;
+    // ssg_claims.qb_payment_id is the source-of-truth: set by the apply step when a QB payment is created
+    const ssgClaimsPaymentId = match.existing_qb_payment_id ? String(match.existing_qb_payment_id) : null;
+    const storedQbPaymentId = sfcTrackedPaymentId ?? ssgClaimsPaymentId;
     if (alreadyAppliedSet.has(claimId) || storedQbPaymentId) {
       counts.already_applied_count++;
       await insertSfcImportRow({

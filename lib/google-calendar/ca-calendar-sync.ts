@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import pool from '../db';
 import { getGoogleCredentials } from '../google-auth/googleAuth';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
+import { calendarWritesAllowed } from '../calendar/calendarGuard';
 import * as crypto from 'crypto';
 
 function stripPrefixes(title: string): string {
@@ -113,7 +114,7 @@ export async function addCaLearnerToCalendar(
     const tpRes = await pool.query(
       `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
     );
-    if (!tpRes.rows[0]?.sync_google_calendar) return result;
+    if (!tpRes.rows[0]?.sync_google_calendar || !calendarWritesAllowed()) return result;
 
     const activeAppRes = await pool.query(
       `SELECT enrolment_id FROM company_application

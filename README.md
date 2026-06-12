@@ -97,6 +97,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **K8s Tools** — [Ubuntu Playground](https://killercoda.com/playgrounds/scenario/ubuntu), [Kubernetes Playground](https://killercoda.com/playgrounds/scenario/kubernetes)
 - **Blockchain Tools** — [Certify NFT](https://alfredang.github.io/certifynft/), [Supply Verify](https://alfredang.github.io/supplyverify/), [Hashing Tool](https://alfredang.github.io/hashgenerator/)
 - **Quantum Tools** — [Quantum Labs](https://alfredang.github.io/quantumlabs/), [IBM Composer](https://quantum.cloud.ibm.com/composer), [Quantum Programming Studio](https://quantum-circuit.com/)
+- **Design Tools** — [Logo Maker](https://alfredang.github.io/logomaker/)
 - **GenAI Tools** — Curated links across:
   - **Text**: ChatGPT, Gemini, Claude, Grok, DeepSeek, Kimi, Qwen, Perplexity
   - **Image**: Firefly, Nano Banana, Microsoft Designer, Leonardo, Face Swap

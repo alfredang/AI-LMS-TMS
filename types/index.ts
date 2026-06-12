@@ -240,6 +240,7 @@ export enum TrainerPage {
   K8sTools = 'k8sTools',
   BlockchainTools = 'blockchainTools',
   QuantumTools = 'quantumTools',
+  DesignTools = 'designTools',
   VirtualTools = 'virtualTools',
   AgenticAITools = 'agenticAITools',
   TrainingHours = 'trainingHours',

@@ -7,36 +7,17 @@ import {
   insertGrantImportBatch,
   insertGrantImportRows,
   listAlreadyAppliedGrantIds,
+  ssgEnrolmentExistsForFallback,
   ssgGrantExistsMany,
   sumAppliedReceivedByEnrolment,
   sumExpectedByEnrolmentFromSsgGrants,
 } from './grantImportDb';
 import pool from '@/lib/db';
 import { recalcAndPersistGrantPaymentRollups } from './grantImportRollup';
-
-type ProxyResponse<T = any> = { success: boolean; data?: T; error?: string; details?: unknown };
+import { qboQuery } from '@/lib/services/qboInvoiceService';
 
 function escapeQbQueryString(value: string): string {
   return value.replace(/'/g, "''");
-}
-
-async function callQbProxy(body: Record<string, any>): Promise<any> {
-  // IMPORTANT: this runs server-side. Do not use NEXT_PUBLIC_BASE_URL here because in local dev
-  // it may point to production, causing server-to-server calls to hit the wrong environment.
-  const baseUrl =
-    process.env.QBO_PROXY_BASE_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
-    'http://localhost:3000';
-  const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = (await resp.json().catch(() => null)) as ProxyResponse | null;
-  if (!resp.ok || !data?.success) {
-    throw new Error(data?.error || `QB proxy returned ${resp.status}`);
-  }
-  return data.data;
 }
 
 async function qbFindInvoiceByDocNumber(
@@ -45,12 +26,7 @@ async function qbFindInvoiceByDocNumber(
 ): Promise<{ id: string; customerRef?: string } | null> {
   const safe = escapeQbQueryString(String(docNumber || '').trim());
   if (!safe) return null;
-  const data = await callQbProxy({
-    action: 'query',
-    entity: 'invoice',
-    app,
-    query: `SELECT * FROM Invoice WHERE DocNumber = '${safe}' MAXRESULTS 1`,
-  });
+  const data = await qboQuery(app, `SELECT * FROM Invoice WHERE DocNumber = '${safe}' MAXRESULTS 1`);
   const inv = data?.QueryResponse?.Invoice;
   const row = Array.isArray(inv) ? inv[0] : inv;
   if (!row?.Id) return null;
@@ -65,13 +41,8 @@ async function qbFindInvoiceByLineDescriptionContains(
   if (!raw) return null;
   const safe = escapeQbQueryString(raw);
   try {
-    const data = await callQbProxy({
-      action: 'query',
-      entity: 'invoice',
-      app,
-      // Some QBO realms reject nested line queries; best-effort only.
-      query: `SELECT * FROM Invoice WHERE Line.Description LIKE '%${safe}%' MAXRESULTS 1`,
-    });
+    // Some QBO realms reject nested line queries; best-effort only.
+    const data = await qboQuery(app, `SELECT * FROM Invoice WHERE Line.Description LIKE '%${safe}%' MAXRESULTS 1`);
     const inv = data?.QueryResponse?.Invoice;
     const row = Array.isArray(inv) ? inv[0] : inv;
     if (!row?.Id) return null;
@@ -169,12 +140,7 @@ async function qbFindInvoiceByScanningRecentInvoices(
   const maxPages = 15;
   for (let page = 0; page < maxPages; page++) {
     const startPos = page * pageSize + 1;
-    const data = await callQbProxy({
-      action: 'query',
-      entity: 'invoice',
-      app,
-      query: `SELECT * FROM Invoice WHERE TxnDate >= '${startIso}' AND TxnDate <= '${endIso}' STARTPOSITION ${startPos} MAXRESULTS ${pageSize}`,
-    });
+    const data = await qboQuery(app, `SELECT * FROM Invoice WHERE TxnDate >= '${startIso}' AND TxnDate <= '${endIso}' STARTPOSITION ${startPos} MAXRESULTS ${pageSize}`);
     const rows = data?.QueryResponse?.Invoice;
     const arr = Array.isArray(rows) ? rows : rows ? [rows] : [];
     if (arr.length === 0) return null;
@@ -189,12 +155,7 @@ async function qbQueryPaymentsByCustomerAndDate(app: string | undefined, custome
   const safeCust = escapeQbQueryString(String(customerRef || '').trim());
   const safeDate = escapeQbQueryString(String(txnDate || '').trim());
   if (!safeCust || !safeDate) return [];
-  const data = await callQbProxy({
-    action: 'query',
-    entity: 'payment',
-    app,
-    query: `SELECT * FROM Payment WHERE CustomerRef = '${safeCust}' AND TxnDate = '${safeDate}' MAXRESULTS 200`,
-  });
+  const data = await qboQuery(app, `SELECT * FROM Payment WHERE CustomerRef = '${safeCust}' AND TxnDate = '${safeDate}' MAXRESULTS 200`);
   const rows = data?.QueryResponse?.Payment;
   return Array.isArray(rows) ? rows : rows ? [rows] : [];
 }
@@ -213,12 +174,7 @@ function paymentLinksInvoiceAndAmount(p: any, invoiceId: string, amount: number)
 async function qbQueryPaymentByRefNum(app: string | undefined, paymentRefNum: string): Promise<any | null> {
   const safe = escapeQbQueryString(String(paymentRefNum || '').trim());
   if (!safe) return null;
-  const data = await callQbProxy({
-    action: 'query',
-    entity: 'payment',
-    app,
-    query: `SELECT * FROM Payment WHERE PaymentRefNum = '${safe}' MAXRESULTS 1`,
-  });
+  const data = await qboQuery(app, `SELECT * FROM Payment WHERE PaymentRefNum = '${safe}' MAXRESULTS 1`);
   const rows = data?.QueryResponse?.Payment;
   const row = Array.isArray(rows) ? rows[0] : rows;
   return row?.Id ? row : null;
@@ -256,9 +212,15 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
   const grantIdsUnique = Array.from(
     new Set(parsed.map((r) => String(r.grantId || '').trim()).filter(Boolean))
   );
-  const ssgExistsMap = await ssgGrantExistsMany(grantIdsUnique);
-  const alreadyAppliedSet = await listAlreadyAppliedGrantIds(grantIdsUnique);
-  const appliedQbPaymentIds = await getAppliedQbPaymentIdsByGrantId(grantIdsUnique);
+  const enrolmentIdsUnique = Array.from(
+    new Set(parsed.filter((r) => r.validationStatus === 'valid' && r.enrolmentId).map((r) => String(r.enrolmentId!).trim()).filter(Boolean))
+  );
+  const [ssgExistsMap, alreadyAppliedSet, appliedQbPaymentIds, enrolmentExistsMap] = await Promise.all([
+    ssgGrantExistsMany(grantIdsUnique),
+    listAlreadyAppliedGrantIds(grantIdsUnique),
+    getAppliedQbPaymentIdsByGrantId(grantIdsUnique),
+    ssgEnrolmentExistsForFallback(enrolmentIdsUnique),
+  ]);
 
   // QB lookups are very expensive. For large uploads, defer QB checks to preview/apply.
   const qbCheckMode = String(process.env.GRANT_IMPORT_STAGE1_QB_CHECK || '').trim().toLowerCase();
@@ -289,16 +251,34 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
     const grn = row.grantId!;
     const exists = ssgExistsMap.get(grn) || { ok: false };
     if (!exists.ok) {
-      matched.push({
-        ...row,
-        matchStatus: 'unmatched',
-        matchedFmsRecordId: null,
-        existingAmount: null,
-        existingPaymentDate: null,
-        matchedQbObjectId: null,
-        duplicateFinancialTransactionIdBatchId: row.financialTransactionId ? dupMap.get(row.financialTransactionId) ?? null : null,
-      });
-      continue;
+      // GRN not in ssg_grants — try to proceed if we have a valid enrolment ID.
+      // Level 1: enrolment found in ssg_enrolments (synced from TPGateway)
+      // Level 2: enrolment not in ssg_enrolments but ID is present (not yet synced to FMS)
+      // In both cases the apply step will verify the invoice exists in QB before creating a payment.
+      const enrId = String(row.enrolmentId || '').trim();
+      if (!enrId) {
+        matched.push({
+          ...row,
+          matchStatus: 'unmatched',
+          matchedFmsRecordId: null,
+          existingAmount: null,
+          existingPaymentDate: null,
+          matchedQbObjectId: null,
+          duplicateFinancialTransactionIdBatchId: row.financialTransactionId ? dupMap.get(row.financialTransactionId) ?? null : null,
+        });
+        continue;
+      }
+      if (enrolmentExistsMap.get(enrId)) {
+        row.warnings.push({
+          field: 'grant_id',
+          message: 'Grant not in FMS (ssg_grants); matched via enrolment in ssg_enrolments',
+        });
+      } else {
+        row.warnings.push({
+          field: 'grant_id',
+          message: 'Grant and enrolment not in FMS; QB invoice will be verified during apply',
+        });
+      }
     }
 
     const alreadyAppliedLocal = alreadyAppliedSet.has(grn);

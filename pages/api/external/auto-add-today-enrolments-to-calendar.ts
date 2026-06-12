@@ -6,6 +6,7 @@ import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-
 import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { getLocalYMD } from '../../../lib/dateHelpers';
+import { calendarWritesAllowed } from '../../../lib/calendar/calendarGuard';
 
 /**
  * Scheduler endpoint: pulls today's (SGT) SSG enrolments, then for each
@@ -139,7 +140,7 @@ async function _runAutomationInner(): Promise<{
   // 3) Google Calendar client
   const tpRes = await pool.query(`SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`);
   const tpRow = tpRes.rows[0];
-  if (!tpRow?.sync_google_calendar) throw new Error('Google Calendar sync not enabled');
+  if (!tpRow?.sync_google_calendar || !calendarWritesAllowed()) throw new Error('Google Calendar sync not enabled');
   const gcred = await getGoogleCredentials(pool);
   let calendarId = 'primary';
   const calUrl = tpRow.google_calendar_url || '';

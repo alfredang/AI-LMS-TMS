@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import pool from '../db';
 import { getGoogleCredentials } from '../google-auth/googleAuth';
 import { getLocalYMD } from '../dateHelpers';
+import { calendarWritesAllowed } from './calendarGuard';
 
 const stripPrefixes = (t: string) =>
   (t || '').replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
@@ -19,7 +20,7 @@ export async function addTrainerToCalendar(courseRunId: string, trainerEmail: st
       `SELECT cr.id, cr.course_run_id, c.title AS course_title, cr.start_date, cr.end_date
        FROM course_run cr
        JOIN course c ON c.id = cr.course_id
-       WHERE cr.id = $1 OR cr.course_run_id = $1 LIMIT 1`,
+       WHERE cr.id::text = $1 OR cr.course_run_id = $1 LIMIT 1`,
       [courseRunId]
     );
 
@@ -37,7 +38,7 @@ export async function addTrainerToCalendar(courseRunId: string, trainerEmail: st
       `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
     )).rows[0];
 
-    if (!tpCalRow?.sync_google_calendar) {
+    if (!tpCalRow?.sync_google_calendar || !calendarWritesAllowed()) {
       return { success: false, addedCount: 0, message: 'Google Calendar sync is disabled' };
     }
 

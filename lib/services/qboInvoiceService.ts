@@ -219,6 +219,20 @@ async function qboFetchJson(opts: { token: string; url: string; method?: string;
   return data;
 }
 
+/**
+ * Single-source token accessor used by both qboInvoiceService functions and the QB proxy route.
+ * All callers share the same in-memory cachedToken so there is only one active refresh at a time.
+ */
+export async function qboGetAccessTokenAndRealm(
+  appOverride: string | undefined
+): Promise<{ token: string; realmId: string } | null> {
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) return null;
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  return { token, realmId: creds.realmId };
+}
+
 export async function qboQuery(appOverride: string | undefined, query: string): Promise<any> {
   const creds = await getQBOCredentials(appOverride);
   if (!creds) throw new Error('QuickBooks credentials not configured');

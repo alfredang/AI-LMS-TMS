@@ -264,7 +264,9 @@ const EventRow: React.FC<EventRowProps> = ({
   const derivedStatus: string = (event.classStatus === 'Cancelled' || event.classStatus === 'Unconfirmed')
     ? event.classStatus
     : ((event.localTrainerName || '').trim() ? 'Confirmed' : 'Pending');
-  const canInvite = !!effectiveNextTrainer && derivedStatus !== 'Cancelled' && derivedStatus !== 'Unconfirmed';
+  // Unconfirmed = trainer fell through, awaiting re-source — inviting IS allowed
+  // (it transitions the run back to Pending). Only Cancelled blocks inviting.
+  const canInvite = !!effectiveNextTrainer && derivedStatus !== 'Cancelled';
   const sessionLabel = formatSessionNumbers(event.sessionNumbers);
   const matchState = trainersMatchState(event);
 
@@ -826,11 +828,21 @@ const ViewClassByDateView: React.FC = () => {
       e.courseRunUuid === courseRunUuid ? { ...e, classStatus: newStatus } : e
     ));
     try {
-      await fetch(getApiUrl('/api/admin/upcoming-classes'), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: courseRunUuid, class_status: newStatus }),
-      });
+      if (newStatus === 'Unconfirmed') {
+        // Unconfirm is a multi-step reset (clear trainer locally + on SSG, supersede
+        // invitations) — dedicated endpoint, not the generic status PUT.
+        await fetch(getApiUrl('/api/admin/unconfirm-class'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ courseRunUuid }),
+        });
+      } else {
+        await fetch(getApiUrl('/api/admin/upcoming-classes'), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: courseRunUuid, class_status: newStatus }),
+        });
+      }
     } catch (err) {
       console.error('[ViewClassByDateView] Failed to update class status:', err);
       setToast('Failed to update class status');

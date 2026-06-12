@@ -647,6 +647,25 @@ export async function ssgGrantExists(grantId: string): Promise<{ ok: boolean; ss
   return { ok: false };
 }
 
+export async function ssgEnrolmentExistsForFallback(
+  enrolmentIds: string[]
+): Promise<Map<string, boolean>> {
+  const out = new Map<string, boolean>();
+  const ids = Array.from(new Set(enrolmentIds.map((x) => String(x || '').trim()).filter(Boolean)));
+  if (ids.length === 0) return out;
+  const r = await pool.query(
+    `SELECT enrolment_id::text AS enrolment_id
+     FROM public.ssg_enrolments
+     WHERE enrolment_id = ANY($1::text[])`,
+    [ids]
+  );
+  for (const row of r.rows) {
+    const e = String(row.enrolment_id || '').trim();
+    if (e) out.set(e, true);
+  }
+  return out;
+}
+
 export async function ssgGrantExistsMany(
   grantIds: string[]
 ): Promise<Map<string, { ok: boolean; ssgGrantRowId?: string }>> {

@@ -335,7 +335,8 @@ export async function listAlreadyAppliedSfcClaimIds(claimIds: string[]): Promise
   if (ids.length === 0) return new Set();
   const r = await pool.query(
     `SELECT DISTINCT claim_id FROM public.sfc_import_rows
-     WHERE claim_id = ANY($1::text[]) AND apply_status = 'applied'`,
+     WHERE claim_id = ANY($1::text[])
+       AND (apply_status = 'applied' OR match_status = 'already_applied')`,
     [ids]
   );
   return new Set(r.rows.map((x: any) => String(x.claim_id)));
@@ -350,9 +351,8 @@ export async function getAppliedQbPaymentIdsByClaimId(claimIds: string[]): Promi
     `SELECT DISTINCT ON (claim_id) claim_id, matched_qb_payment_id
      FROM public.sfc_import_rows
      WHERE claim_id = ANY($1::text[])
-       AND apply_status = 'applied'
        AND matched_qb_payment_id IS NOT NULL
-     ORDER BY claim_id, applied_at DESC`,
+     ORDER BY claim_id, applied_at DESC NULLS LAST`,
     [ids]
   );
   for (const row of r.rows) out.set(String(row.claim_id), String(row.matched_qb_payment_id));

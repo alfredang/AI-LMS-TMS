@@ -63,6 +63,13 @@ export interface RunOptions {
 
 /** Automation entry point. Called directly (no HTTP) by the scheduler. */
 export async function runAutomation(opts: RunOptions = {}) {
+  // ROLLBACK (calendar refactor): the automated trainer->calendar push is retired.
+  // Its purpose ("an LMS-assigned trainer is missing from the event") becomes a
+  // highlighted discrepancy (D3) the admin resolves in the review panel — see the
+  // spec. Hard no-op unless ALLOW_LEGACY_CALENDAR_RECON=true.
+  if (process.env.ALLOW_LEGACY_CALENDAR_RECON !== 'true') {
+    return { success: true, skipped: true, message: 'trainer-sync retired (folded into discrepancy review panel)' };
+  }
   const started = Date.now();
   await ensureLogTable();
 
