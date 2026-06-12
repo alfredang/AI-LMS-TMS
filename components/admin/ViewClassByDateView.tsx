@@ -3,6 +3,7 @@ import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
 import { getApiUrl } from '@lib/urlHelpers';
 import UpsertFromSsgModal from './UpsertFromSsgModal';
+import { ClassSessionsCard } from './ClassSessionsCard';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -269,6 +270,23 @@ const EventRow: React.FC<EventRowProps> = ({
   const canInvite = !!effectiveNextTrainer && derivedStatus !== 'Cancelled';
   const sessionLabel = formatSessionNumbers(event.sessionNumbers);
   const matchState = trainersMatchState(event);
+
+  // Full run schedule (all sessions grouped by day) — lazy-loaded once this row
+  // is expanded. This view is date-grouped, so the card gives the whole-run
+  // context alongside the single day shown in the row. Keyed per EventRow; the
+  // class-sessions endpoint is cheap and cached by the browser per run.
+  const [runSessions, setRunSessions] = useState<any | null>(null);
+  const [runSessionsLoading, setRunSessionsLoading] = useState(false);
+  useEffect(() => {
+    if (!expanded || runSessions !== null || runSessionsLoading) return;
+    setRunSessionsLoading(true);
+    fetch(getApiUrl(`/api/admin/class-sessions?courseRunId=${encodeURIComponent(event.courseRunUuid || event.courseRunId)}`))
+      .then((r) => r.json())
+      .then((d) => setRunSessions(d.success ? d : { sessions: [] }))
+      .catch(() => setRunSessions({ sessions: [] }))
+      .finally(() => setRunSessionsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded]);
 
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 overflow-hidden">
@@ -551,6 +569,15 @@ const EventRow: React.FC<EventRowProps> = ({
                 {inviting ? 'Sending…' : `Invite${effectiveNextTrainer ? ` ${effectiveNextTrainer}` : ' Next Trainer'}`}
               </button>
             </div>
+          </div>
+
+          {/* Full run schedule, grouped by day */}
+          <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
+            {runSessionsLoading ? (
+              <div className="text-sm text-gray-500 dark:text-gray-400">Loading sessions…</div>
+            ) : (
+              <ClassSessionsCard sessions={runSessions?.sessions || []} calendarChecked={runSessions?.calendarChecked} ssgError={runSessions?.ssgError} />
+            )}
           </div>
         </div>
       )}
