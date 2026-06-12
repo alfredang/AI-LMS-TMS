@@ -7,6 +7,7 @@ import {
   insertGrantImportBatch,
   insertGrantImportRows,
   listAlreadyAppliedGrantIds,
+  ssgEnrolmentExistsForFallback,
   ssgGrantExistsMany,
   sumAppliedReceivedByEnrolment,
   sumExpectedByEnrolmentFromSsgGrants,
@@ -256,9 +257,15 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
   const grantIdsUnique = Array.from(
     new Set(parsed.map((r) => String(r.grantId || '').trim()).filter(Boolean))
   );
-  const ssgExistsMap = await ssgGrantExistsMany(grantIdsUnique);
-  const alreadyAppliedSet = await listAlreadyAppliedGrantIds(grantIdsUnique);
-  const appliedQbPaymentIds = await getAppliedQbPaymentIdsByGrantId(grantIdsUnique);
+  const enrolmentIdsUnique = Array.from(
+    new Set(parsed.filter((r) => r.validationStatus === 'valid' && r.enrolmentId).map((r) => String(r.enrolmentId!).trim()).filter(Boolean))
+  );
+  const [ssgExistsMap, alreadyAppliedSet, appliedQbPaymentIds, enrolmentExistsMap] = await Promise.all([
+    ssgGrantExistsMany(grantIdsUnique),
+    listAlreadyAppliedGrantIds(grantIdsUnique),
+    getAppliedQbPaymentIdsByGrantId(grantIdsUnique),
+    ssgEnrolmentExistsForFallback(enrolmentIdsUnique),
+  ]);
 
   // QB lookups are very expensive. For large uploads, defer QB checks to preview/apply.
   const qbCheckMode = String(process.env.GRANT_IMPORT_STAGE1_QB_CHECK || '').trim().toLowerCase();
@@ -289,16 +296,26 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
     const grn = row.grantId!;
     const exists = ssgExistsMap.get(grn) || { ok: false };
     if (!exists.ok) {
-      matched.push({
-        ...row,
-        matchStatus: 'unmatched',
-        matchedFmsRecordId: null,
-        existingAmount: null,
-        existingPaymentDate: null,
-        matchedQbObjectId: null,
-        duplicateFinancialTransactionIdBatchId: row.financialTransactionId ? dupMap.get(row.financialTransactionId) ?? null : null,
+      // Fallback: GRN not in ssg_grants — check if the enrolment exists in ssg_enrolments.
+      // This handles enrolments whose QB invoices exist but whose grants were never synced into FMS.
+      const enrId = String(row.enrolmentId || '').trim();
+      if (!enrId || !enrolmentExistsMap.get(enrId)) {
+        matched.push({
+          ...row,
+          matchStatus: 'unmatched',
+          matchedFmsRecordId: null,
+          existingAmount: null,
+          existingPaymentDate: null,
+          matchedQbObjectId: null,
+          duplicateFinancialTransactionIdBatchId: row.financialTransactionId ? dupMap.get(row.financialTransactionId) ?? null : null,
+        });
+        continue;
+      }
+      // Enrolment found in FMS; proceed via QB invoice lookup (matchedFmsRecordId will be null).
+      row.warnings.push({
+        field: 'grant_id',
+        message: 'Grant not in FMS (ssg_grants); matched via enrolment in ssg_enrolments',
       });
-      continue;
     }
 
     const alreadyAppliedLocal = alreadyAppliedSet.has(grn);
