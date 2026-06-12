@@ -386,7 +386,11 @@ export async function sfcStage1ParseMatchAndPersist(input: {
     }
 
     // Step 3 — Already applied check (DB)
-    const storedQbPaymentId = appliedQbPaymentIds.get(claimId) ?? null;
+    // sfc_import_rows tracked payment ID (from a previous apply run via this tool)
+    const sfcTrackedPaymentId = appliedQbPaymentIds.get(claimId) ?? null;
+    // ssg_claims.qb_payment_id is the source-of-truth: set by the apply step when a QB payment is created
+    const ssgClaimsPaymentId = match.existing_qb_payment_id ? String(match.existing_qb_payment_id) : null;
+    const storedQbPaymentId = sfcTrackedPaymentId ?? ssgClaimsPaymentId;
     if (alreadyAppliedSet.has(claimId) || storedQbPaymentId) {
       counts.already_applied_count++;
       await insertSfcImportRow({
