@@ -353,49 +353,6 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         totalAssignedLocalClasses: 0,
     });
 
-    // ── Reschedule panel (inline expand under a row) ──────────────────────────
-    const [expandedRescheduleId, setExpandedRescheduleId] = useState<string | null>(null);
-    const [rescheduleForm, setRescheduleForm] = useState<{ startDate: string; trainerName: string }>({ startDate: '', trainerName: '' });
-    const [reschedulingId, setReschedulingId] = useState<string | null>(null);
-
-    const toggleReschedule = (cls: UpcomingClass) => {
-        if (expandedRescheduleId === cls.id) { setExpandedRescheduleId(null); return; }
-        setExpandedRescheduleId(cls.id);
-        setRescheduleForm({
-            startDate: cls.startDate ? getLocalYMD(new Date(cls.startDate)) : '',
-            trainerName: cls.assignedTrainerLocal || '',
-        });
-    };
-
-    const handleRescheduleSave = async (cls: UpcomingClass) => {
-        if (!rescheduleForm.startDate) { alert('Please pick a new start date.'); return; }
-        setReschedulingId(cls.id);
-        try {
-            const res = await fetch(getApiUrl('/api/admin/reschedule-class'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: cls.id, newStartDate: rescheduleForm.startDate, trainerName: rescheduleForm.trainerName || undefined }),
-            });
-            const json = await res.json();
-            if (json.success) {
-                setUpcomingClasses(prev => prev.map(c => c.id === cls.id ? {
-                    ...c,
-                    startDate: json.data.startDate,
-                    endDate: json.data.endDate,
-                    assignedTrainerLocal: json.data.assignedTrainerLocal || c.assignedTrainerLocal,
-                    assignedTrainerLocalEmail: json.data.assignedTrainerLocalEmail || c.assignedTrainerLocalEmail,
-                } : c));
-                setExpandedRescheduleId(null);
-            } else {
-                alert(json.error || 'Reschedule failed');
-            }
-        } catch (e: any) {
-            alert(e?.message || 'Reschedule failed');
-        } finally {
-            setReschedulingId(null);
-        }
-    };
-
     // Import Run modal states
     const [showImportModal, setShowImportModal] = useState(false);
     const [importRunId, setImportRunId] = useState('');
@@ -1353,8 +1310,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                     {upcomingClasses.map((classItem, index) => {
                                         const classType = classItem.classType || 'Physical';
                                         return (
-                                        <React.Fragment key={classItem.id}>
-                                        <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                        <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
                                             <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
@@ -1507,67 +1463,16 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 </div>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
-                                                <div className="flex items-center gap-2">
-                                                    <Button
-                                                        variant="primary"
-                                                        size="sm"
-                                                        onClick={() => handleEditClass(classItem)}
-                                                    >
-                                                        <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
-                                                        Edit
-                                                    </Button>
-                                                    <Button
-                                                        variant="secondary"
-                                                        size="sm"
-                                                        onClick={() => toggleReschedule(classItem)}
-                                                        title="Reschedule this class"
-                                                    >
-                                                        <Icon name={IconName.Calendar} className="w-4 h-4 mr-1" />
-                                                        Reschedule
-                                                    </Button>
-                                                </div>
+                                                <Button
+                                                    variant="primary"
+                                                    size="sm"
+                                                    onClick={() => handleEditClass(classItem)}
+                                                >
+                                                    <Icon name={IconName.Edit} className="w-4 h-4 mr-1" />
+                                                    Edit
+                                                </Button>
                                             </td>
                                         </tr>
-                                        {expandedRescheduleId === classItem.id && (
-                                            <tr className="bg-gray-50 dark:bg-gray-900/50 border-b dark:border-gray-700">
-                                                <td colSpan={14} className="px-6 py-4">
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
-                                                            <input type="text" readOnly value={classItem.courseTitle || ''} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100 dark:bg-gray-700/60 dark:border-gray-600 dark:text-gray-200 cursor-not-allowed" />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code</label>
-                                                            <input type="text" readOnly value={classItem.courseCode || ''} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100 dark:bg-gray-700/60 dark:border-gray-600 dark:text-gray-200 cursor-not-allowed" />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Run ID</label>
-                                                            <input type="text" readOnly value={classItem.courseRunId || ''} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100 dark:bg-gray-700/60 dark:border-gray-600 dark:text-gray-200 cursor-not-allowed" />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Start Date <span className="text-gray-400 font-normal">(end date shifts to keep duration)</span></label>
-                                                            <input type="date" value={rescheduleForm.startDate} onChange={(e) => setRescheduleForm(f => ({ ...f, startDate: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer</label>
-                                                            <select value={rescheduleForm.trainerName} onChange={(e) => setRescheduleForm(f => ({ ...f, trainerName: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                                                                <option value="">Select a trainer...</option>
-                                                                {trainers.map((trainer, i) => (
-                                                                    <option key={i} value={trainer.trainer_name}>{trainer.trainer_name}</option>
-                                                                ))}
-                                                            </select>
-                                                        </div>
-                                                    </div>
-                                                    <div className="mt-4 flex justify-end gap-2">
-                                                        <Button variant="secondary" size="sm" onClick={() => toggleReschedule(classItem)}>Cancel</Button>
-                                                        <Button variant="primary" size="sm" disabled={reschedulingId === classItem.id} onClick={() => handleRescheduleSave(classItem)}>
-                                                            {reschedulingId === classItem.id ? 'Saving...' : 'Save'}
-                                                        </Button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )}
-                                        </React.Fragment>
                                         );
                                     })}
                                 </tbody>

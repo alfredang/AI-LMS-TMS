@@ -151,19 +151,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(404).json({ success: false, error: 'Course run not found' });
       }
 
-      // When a class is Cancelled or Unconfirmed, remove its Google Calendar
-      // event. Best-effort / non-fatal — never let a calendar error change the
-      // result of the (already-succeeded) status update.
-      if (class_status === 'Cancelled' || class_status === 'Unconfirmed') {
-        try {
-          const { removeClassFromCalendar } = await import('../../../lib/google-calendar/da-calendar-sync');
-          const calRes = await removeClassFromCalendar(id);
-          console.log(`📅 [upcoming-classes] removeClassFromCalendar(${id}) on ${class_status}: ${calRes.message}`);
-        } catch (calErr) {
-          console.warn('[upcoming-classes] calendar removal failed (non-fatal):', calErr);
-        }
-      }
-
       return res.status(200).json({ success: true, data: result.rows[0] });
     } catch (err) {
       console.error('Error updating course run:', err);
