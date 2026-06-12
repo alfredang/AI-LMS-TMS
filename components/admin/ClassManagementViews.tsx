@@ -4747,7 +4747,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
                             <div className="mt-6">
                                 <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Learners ({reschedLearners.length})</h4>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Click ✕ to drop a learner (last-minute pull-out). Flagged learners are not moved and are removed on save.</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Click ✕ to exclude a learner (last-minute pull-out). Excluded learners are not moved and are excluded on save.</p>
                                 <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-md">
                                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
                                     <thead className="bg-gray-50 dark:bg-gray-700/50">
@@ -4767,7 +4767,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                             return (
                                                 <tr key={i} className={flagged ? 'bg-red-50 dark:bg-red-900/20 opacity-60' : ''}>
                                                     <td className="px-3 py-2">
-                                                        <div className="font-medium text-gray-900 dark:text-white">{l.learnerName}{flagged && <span className="ml-2 text-red-600 dark:text-red-400 font-semibold">(Removed)</span>}</div>
+                                                        <div className="font-medium text-gray-900 dark:text-white">{l.learnerName}{flagged && <span className="ml-2 text-red-600 dark:text-red-400 font-semibold">(Excluded)</span>}</div>
                                                         <div className="text-gray-500 dark:text-gray-400">{l.learnerEmail}</div>
                                                         {l.learnerTel && <div className="text-gray-500 dark:text-gray-400">{l.learnerTel}</div>}
                                                     </td>
