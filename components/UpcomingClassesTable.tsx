@@ -7,6 +7,7 @@ import { Icon, IconName } from './ui/Icon';
 import { AdminPage } from '@app-types';
 import { getApiUrl } from '@/lib/urlHelpers';
 import { getLocalYMD } from '@/lib/dateHelpers';
+import { ClassSessionsCard } from './admin/ClassSessionsCard';
 
 /**
  * Fixed horizontal scrollbar pinned to the bottom of the viewport.
@@ -389,6 +390,10 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     // Per-row next trainer overrides (courseRun UUID → selected trainer name)
     const [nextTrainerOverrides, setNextTrainerOverrides] = useState<Record<string, string>>({});
+    // Expandable per-class session card (courseRun UUID keyed)
+    const [expandedSessionsId, setExpandedSessionsId] = useState<Set<string>>(new Set());
+    const [sessionsCache, setSessionsCache] = useState<Record<string, any>>({});
+    const [loadingSessions, setLoadingSessions] = useState<Set<string>>(new Set());
 
     const ITEMS_PER_PAGE = 20;
     const totalUnassignedTrainers = Math.max(stats.totalClasses - stats.totalAssignedLocalClasses, 0);
@@ -479,6 +484,31 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         } finally {
             setLoading(false);
         }
+    };
+
+    // Lazy-load a class's sessions for the expandable session card.
+    const fetchClassSessions = async (courseRunUuid: string) => {
+        setLoadingSessions(prev => new Set(prev).add(courseRunUuid));
+        try {
+            const response = await fetch(getApiUrl(`/api/admin/class-sessions?courseRunId=${encodeURIComponent(courseRunUuid)}`));
+            const result = await response.json();
+            if (result.success) setSessionsCache(prev => ({ ...prev, [courseRunUuid]: result }));
+            else console.error('❌ Error fetching sessions:', result.error);
+        } catch (error) {
+            console.error('❌ Error fetching sessions:', error);
+        } finally {
+            setLoadingSessions(prev => { const c = new Set(prev); c.delete(courseRunUuid); return c; });
+        }
+    };
+
+    const toggleSessionExpand = (courseRunUuid: string) => {
+        setExpandedSessionsId(prev => {
+            const next = new Set(prev);
+            if (next.has(courseRunUuid)) { next.delete(courseRunUuid); return next; }
+            next.add(courseRunUuid);
+            if (!sessionsCache[courseRunUuid]) void fetchClassSessions(courseRunUuid);
+            return next;
+        });
     };
 
     // Fetch trainers on mount
@@ -1156,8 +1186,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                         const status = classItem.classStatus;
                                         const classType = classItem.classType || 'Physical';
                                         return (
-                                            <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                                            <React.Fragment key={index}>
+                                            <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                    <button type="button" onClick={() => toggleSessionExpand(classItem.id)} title="Show sessions for this class" className={`mr-2 inline-flex items-center justify-center w-5 h-5 rounded border align-middle transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${expandedSessionsId.has(classItem.id) ? 'bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300' : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'}`}>
+                                                        <svg className={`w-3.5 h-3.5 transition-transform ${expandedSessionsId.has(classItem.id) ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+                                                    </button>
+                                                    {classItem.courseRunId}
+                                                </td>
                                                 <td className="px-4 py-2 text-sm font-medium min-w-[350px]"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm">
@@ -1266,6 +1302,18 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                     </Button>
                                                 </td>
                                             </tr>
+                                            {expandedSessionsId.has(classItem.id) && (
+                                            <tr className="bg-gray-50 dark:bg-gray-900/40 border-b dark:border-gray-700">
+                                                <td colSpan={13} className="px-6 py-3">
+                                                    {loadingSessions.has(classItem.id) ? (
+                                                        <div className="text-sm text-gray-500 dark:text-gray-400">Loading sessions…</div>
+                                                    ) : (
+                                                        <ClassSessionsCard sessions={sessionsCache[classItem.id]?.sessions || []} calendarChecked={sessionsCache[classItem.id]?.calendarChecked} ssgError={sessionsCache[classItem.id]?.ssgError} />
+                                                    )}
+                                                </td>
+                                            </tr>
+                                            )}
+                                            </React.Fragment>
                                         );
                                     })}
                                 </tbody>
@@ -1310,8 +1358,14 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                     {upcomingClasses.map((classItem, index) => {
                                         const classType = classItem.classType || 'Physical';
                                         return (
-                                        <tr key={index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                                        <React.Fragment key={index}>
+                                        <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                                                <button type="button" onClick={() => toggleSessionExpand(classItem.id)} title="Show sessions for this class" className={`mr-2 inline-flex items-center justify-center w-5 h-5 rounded border align-middle transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${expandedSessionsId.has(classItem.id) ? 'bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300' : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'}`}>
+                                                    <svg className={`w-3.5 h-3.5 transition-transform ${expandedSessionsId.has(classItem.id) ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+                                                </button>
+                                                {classItem.courseRunId}
+                                            </td>
                                             <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm">
@@ -1473,6 +1527,18 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                 </Button>
                                             </td>
                                         </tr>
+                                        {expandedSessionsId.has(classItem.id) && (
+                                        <tr className="bg-gray-50 dark:bg-gray-900/40 border-b dark:border-gray-700">
+                                            <td colSpan={14} className="px-6 py-3">
+                                                {loadingSessions.has(classItem.id) ? (
+                                                    <div className="text-sm text-gray-500 dark:text-gray-400">Loading sessions…</div>
+                                                ) : (
+                                                    <ClassSessionsCard sessions={sessionsCache[classItem.id]?.sessions || []} calendarChecked={sessionsCache[classItem.id]?.calendarChecked} ssgError={sessionsCache[classItem.id]?.ssgError} />
+                                                )}
+                                            </td>
+                                        </tr>
+                                        )}
+                                        </React.Fragment>
                                         );
                                     })}
                                 </tbody>

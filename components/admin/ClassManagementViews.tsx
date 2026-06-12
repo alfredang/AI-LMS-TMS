@@ -223,6 +223,11 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [sessionsLoading, setSessionsLoading] = useState(false);
     const [hasExistingSessions, setHasExistingSessions] = useState(false);
     const [editingSessionIndex, setEditingSessionIndex] = useState<number | null>(null);
+    // Live Google Calendar match per session DATE (keyed YYYY-MM-DD; one event per
+    // day). Reuses /api/admin/class-sessions so this tab and the class-list cards
+    // agree. Read-only.
+    const [sessionCalByDate, setSessionCalByDate] = useState<Record<string, { calendarMatched?: boolean; calendarLink?: string | null; calendarEventDate?: string | null }>>({});
+    const [sessionCalChecked, setSessionCalChecked] = useState(false);
 
     // Multiple new sessions state instead of single
     const [showNewSessionForm, setShowNewSessionForm] = useState(false);
@@ -749,8 +754,13 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     // Helper function to convert SSG date format (YYYYMMDD) to HTML date format (YYYY-MM-DD)
     const convertSsgDateToHtml = (ssgDate: number | string): string => {
         if (!ssgDate) return '';
-        const dateStr = ssgDate.toString();
-        if (dateStr.length === 8) {
+        const dateStr = ssgDate.toString().trim();
+        // Already HTML format (YYYY-MM-DD) — pass through so an edited date keeps
+        // showing in the input (the form stores edits as YYYY-MM-DD). Without this
+        // the input blanks out after the first pick while only the table row updates.
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+        // SSG format (YYYYMMDD)
+        if (/^\d{8}$/.test(dateStr)) {
             const year = dateStr.substring(0, 4);
             const month = dateStr.substring(4, 6);
             const day = dateStr.substring(6, 8);
@@ -1479,18 +1489,17 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
             }
         };
 
-        // Show confirmation popup with the request body for review
-        const confirmMessage = `Are you sure you want to update session ${sessionToUpdate.id}?
+        // Human-readable summary of the change (no raw JSON payload).
+        const startDisp = sessionToUpdate.startDate ? formatDateForDisplay(sessionToUpdate.startDate) : 'N/A';
+        const endDisp = sessionToUpdate.endDate ? formatDateForDisplay(sessionToUpdate.endDate) : 'N/A';
+        const dateLine = startDisp === endDisp ? startDisp : `${startDisp} → ${endDisp}`;
+        const confirmMessage = `Update session S${sessionIndex + 1} (${sessionToUpdate.id}) for course run ${courseRunId}?
 
-📋 **Request Body Structure (for display):**
-\`\`\`json
-${JSON.stringify(displayRequestBody, null, 2)}
-\`\`\`
+Date:   ${dateLine}
+Time:   ${sessionToUpdate.startTime || 'N/A'} – ${sessionToUpdate.endTime || 'N/A'}
+Mode:   ${getModeLabel(sessionToUpdate.modeOfTraining)}
 
-🔍 **API Endpoint:**
-POST /api/ssg/courses/courseRuns/${courseRunId}?action=update-sessions
-
-ℹ️ This will update the session with the current form data. The actual request will be transformed by the backend to match the SSG API requirements.`;
+This pushes the change to SSG (update-sessions).`;
 
         showConfirmPopup(
             confirmMessage,
@@ -2397,6 +2406,27 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
         }
     }, [activeTab, courseRunId, courseReferenceNumber, includeExpiredSessions, specifyMonthYear, selectedMonth, selectedYear]);
 
+    // Live calendar match for the Sessions tab — keyed by session DATE (one event
+    // per day). Reuses the same endpoint as the class-list cards so both agree.
+    useEffect(() => {
+        if (!isEditMode || activeTab !== 'sessions' || !courseRunId || existingSessions.length === 0) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(getApiUrl(`/api/admin/class-sessions?courseRunId=${encodeURIComponent(courseRunId)}`));
+                const data = await res.json();
+                if (cancelled || !data?.success) return;
+                const byDate: Record<string, any> = {};
+                for (const s of (data.sessions || [])) {
+                    if (s.startDate) byDate[s.startDate] = { calendarMatched: s.calendarMatched, calendarLink: s.calendarLink, calendarEventDate: s.calendarEventDate };
+                }
+                setSessionCalByDate(byDate);
+                setSessionCalChecked(!!data.calendarChecked);
+            } catch { /* non-fatal */ }
+        })();
+        return () => { cancelled = true; };
+    }, [isEditMode, activeTab, courseRunId, existingSessions.length]);
+
     // Fetch enrolled learners when Enrollments tab is activated
     useEffect(() => {
         if (isEditMode && activeTab === 'enrollments' && courseToEdit?.id) {
@@ -3020,6 +3050,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                             <th className="text-left py-3 px-3 font-semibold">Date</th>
                                                             <th className="text-left py-3 px-3 font-semibold">Time</th>
                                                             <th className="text-left py-3 px-3 font-semibold">Mode</th>
+                                                            <th className="text-left py-3 px-3 font-semibold">Calendar</th>
                                                             <th className="text-right py-3 px-3 font-semibold"></th>
                                                         </tr>
                                                     </thead>
@@ -3030,6 +3061,14 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 <td className="py-3 px-3">{session.startDate ? formatDateForDisplay(session.startDate) : 'N/A'} - {session.endDate ? formatDateForDisplay(session.endDate) : 'N/A'}</td>
                                                                 <td className="py-3 px-3">{session.startTime || 'N/A'} - {session.endTime || 'N/A'}</td>
                                                                 <td className="py-3 px-3">{getModeLabel(session.modeOfTraining)}</td>
+                                                                <td className="py-3 px-3">
+                                                                    {(() => {
+                                                                        if (!sessionCalChecked) return <span className="text-gray-400" title="Calendar not checked — Google Calendar wasn't reachable in this environment.">—</span>;
+                                                                        const m = sessionCalByDate[convertSsgDateToHtml(session.startDate)];
+                                                                        if (m?.calendarMatched && m.calendarLink) return <a href={m.calendarLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline" title={m.calendarEventDate ? `Calendar event on ${m.calendarEventDate}` : 'Open calendar event'}>View event ↗</a>;
+                                                                        return <span className="text-amber-600 dark:text-amber-400" title="No calendar event matched on this date. Check the session date/time (from SSG) against Google Calendar, and that the event title still matches.">Not found</span>;
+                                                                    })()}
+                                                                </td>
                                                                 <td className="py-3 px-3 text-right">
                                                                     <Button variant="ghost" onClick={() => startEditingSession(index)} className="!text-blue-600 hover:!bg-blue-50" size="sm">Edit</Button>
                                                                 </td>
@@ -4634,7 +4673,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{popupConfig.title}</h3>
                             </div>
 
-                            <p className="text-gray-600 dark:text-gray-300 mb-6">{popupConfig.message}</p>
+                            <p className="text-gray-600 dark:text-gray-300 mb-6 whitespace-pre-line">{popupConfig.message}</p>
 
                             <div className="flex justify-end space-x-3">
                                 {popupConfig.type === 'confirm' ? (

@@ -306,10 +306,10 @@ export default async function handler(
       FROM course_run cr
       JOIN course c ON cr.course_id = c.id
       LEFT JOIN (
-        SELECT 
-          course_run_id, 
+        SELECT
+          course_run_id,
           COUNT(*) as count
-        FROM enrollment 
+        FROM enrollment
         GROUP BY course_run_id
       ) trainee_count ON cr.id = trainee_count.course_run_id
       WHERE ${whereClause}

@@ -6,6 +6,7 @@ import { Icon, IconName } from '../ui/Icon';
 import { useLms } from '@contexts/LmsContext';
 import { authService } from '@lib/services/authService';
 import { AdminPage } from '@app-types';
+import { ClassSessionsCard } from './ClassSessionsCard';
 
 interface OngoingClass {
   id: string;
@@ -96,6 +97,34 @@ const OngoingClasses: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(() => classListCurrentPage);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+
+  // Expandable per-class session breakdown (lazy-loaded, cached by run UUID).
+  const [expandedSessionsId, setExpandedSessionsId] = useState<Set<string>>(new Set());
+  const [sessionsCache, setSessionsCache] = useState<Record<string, any>>({});
+  const [loadingSessions, setLoadingSessions] = useState<Set<string>>(new Set());
+
+  const fetchClassSessions = async (courseRunUuid: string) => {
+    if (sessionsCache[courseRunUuid]) return;
+    setLoadingSessions(prev => new Set(prev).add(courseRunUuid));
+    try {
+      const response = await fetch(getApiUrl(`/api/admin/class-sessions?courseRunId=${encodeURIComponent(courseRunUuid)}`));
+      const result = await response.json();
+      setSessionsCache(prev => ({ ...prev, [courseRunUuid]: result.success ? result : { sessions: [] } }));
+    } catch {
+      setSessionsCache(prev => ({ ...prev, [courseRunUuid]: { sessions: [] } }));
+    } finally {
+      setLoadingSessions(prev => { const n = new Set(prev); n.delete(courseRunUuid); return n; });
+    }
+  };
+
+  const toggleSessionExpand = (courseRunUuid: string) => {
+    setExpandedSessionsId(prev => {
+      const next = new Set(prev);
+      if (next.has(courseRunUuid)) { next.delete(courseRunUuid); }
+      else { next.add(courseRunUuid); fetchClassSessions(courseRunUuid); }
+      return next;
+    });
+  };
 
   // Track initial mount to prevent filter-reset effects from overriding the restored page
   const isInitialMount = useRef(true);
@@ -576,8 +605,14 @@ const OngoingClasses: React.FC = () => {
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {ongoingClasses.map((classItem: any, index) => (
-                    <tr key={classItem.courseRunId || index} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseRunId}</td>
+                    <React.Fragment key={classItem.courseRunId || index}>
+                    <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
+                        <button type="button" onClick={() => toggleSessionExpand(classItem.id)} title="Show sessions for this class" className={`mr-2 inline-flex items-center justify-center w-5 h-5 rounded border align-middle transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 ${expandedSessionsId.has(classItem.id) ? 'bg-blue-100 border-blue-300 text-blue-700 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300' : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'}`}>
+                          <svg className={`w-3.5 h-3.5 transition-transform ${expandedSessionsId.has(classItem.id) ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+                        </button>
+                        {classItem.courseRunId}
+                      </td>
                       <td className="px-4 py-2 text-sm font-medium overflow-hidden text-ellipsis"><button type="button" onClick={() => handleViewDetails(classItem)} className="text-left text-blue-600 dark:text-blue-400 hover:underline">{classItem.courseTitle}</button></td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">{classItem.courseCode}</td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
@@ -686,6 +721,18 @@ const OngoingClasses: React.FC = () => {
                         </Button>
                       </td>
                     </tr>
+                    {expandedSessionsId.has(classItem.id) && (
+                    <tr className="bg-gray-50 dark:bg-gray-900/40 border-b dark:border-gray-700">
+                      <td colSpan={11} className="px-6 py-3">
+                        {loadingSessions.has(classItem.id) ? (
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Loading sessions…</div>
+                        ) : (
+                          <ClassSessionsCard sessions={sessionsCache[classItem.id]?.sessions || []} calendarChecked={sessionsCache[classItem.id]?.calendarChecked} ssgError={sessionsCache[classItem.id]?.ssgError} />
+                        )}
+                      </td>
+                    </tr>
+                    )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

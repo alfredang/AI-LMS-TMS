@@ -15,9 +15,7 @@ export interface CalendarClient {
  * Returns null when `sync_google_calendar` is disabled, so callers can no-op cleanly.
  * Extracted verbatim from addTrainerToCalendar / ca-/da-calendar-sync (was duplicated 3x).
  */
-export async function getCalendarClient(): Promise<CalendarClient | null> {
-  // Hard environment guard: never touch the (prod) calendar from a non-prod process.
-  if (!calendarWritesAllowed()) return null;
+async function buildCalendarClient(): Promise<CalendarClient | null> {
   const tp = (await pool.query(
     `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
   )).rows[0];
@@ -45,4 +43,20 @@ export async function getCalendarClient(): Promise<CalendarClient | null> {
   const calendar = google.calendar({ version: 'v3', auth: oauth });
 
   return { calendar, calendarId };
+}
+
+export async function getCalendarClient(): Promise<CalendarClient | null> {
+  // Hard environment guard: never WRITE to the (prod) calendar from a non-prod process.
+  if (!calendarWritesAllowed()) return null;
+  return buildCalendarClient();
+}
+
+/**
+ * Read-only calendar client. Identical to `getCalendarClient()` but **not** gated
+ * by `calendarWritesAllowed()`, because reads (events.list / events.get) are
+ * non-mutating and safe in any environment — including local dev pointed at a
+ * test calendar. Use this ONLY for reads; NEVER for insert/patch/delete.
+ */
+export async function getCalendarReadClient(): Promise<CalendarClient | null> {
+  return buildCalendarClient();
 }
