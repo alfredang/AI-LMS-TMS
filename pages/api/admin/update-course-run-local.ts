@@ -28,6 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     courseAdminEmail,
     classStatus,
     classType,
+    confirmCancellation,
   } = req.body ?? {};
 
   if (!courseRunId || String(courseRunId).trim() === '') {
@@ -35,6 +36,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Guard: never silently cancel a live class. If this edit sets status to
+    // 'Cancelled' while the run is currently 'Confirmed' or has enrollments,
+    // require an explicit confirmCancellation flag. Prevents accidental
+    // cancellation of confirmed/enrolled classes via the Edit Class form.
+    if (classStatus === 'Cancelled' && confirmCancellation !== true) {
+      const current = await pool.query(
+        `SELECT cr.class_status,
+                (SELECT COUNT(*) FROM enrollment e WHERE e.course_run_id = cr.id) AS enr_count
+           FROM course_run cr
+          WHERE cr.course_run_id = $1
+          LIMIT 1`,
+        [String(courseRunId).trim()]
+      );
+      const row = current.rows[0];
+      if (row) {
+        const isConfirmed = row.class_status === 'Confirmed';
+        const enrCount = parseInt(row.enr_count, 10) || 0;
+        if (isConfirmed || enrCount > 0) {
+          const reasons: string[] = [];
+          if (isConfirmed) reasons.push('it is Confirmed');
+          if (enrCount > 0) reasons.push(`it has ${enrCount} enrolled learner(s)`);
+          return res.status(409).json({
+            success: false,
+            error: `Cannot cancel this class because ${reasons.join(' and ')}. Re-submit with confirmCancellation: true to override.`,
+            requiresConfirmation: true,
+            currentStatus: row.class_status,
+            enrollmentCount: enrCount,
+          });
+        }
+      }
+    }
+
     const result = await pool.query(
       `UPDATE course_run
        SET start_date                = COALESCE($1, start_date),

@@ -1890,11 +1890,38 @@ This pushes the change to SSG (update-sessions).`;
                 classType: classType || undefined,
             };
 
-            const localRes = await fetch(getApiUrl('/api/admin/update-course-run-local'), {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(localBody)
-            });
+            const doLocalSave = (confirmCancellation = false) =>
+                fetch(getApiUrl('/api/admin/update-course-run-local'), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(confirmCancellation ? { ...localBody, confirmCancellation: true } : localBody)
+                });
+
+            let localRes = await doLocalSave();
+
+            // Guard: cancelling a Confirmed or enrolled class is blocked server-side
+            // (409). Ask the admin to confirm before overriding, so live classes are
+            // never cancelled by accident.
+            if (localRes.status === 409) {
+                const errorData = await localRes.json().catch(() => ({} as any));
+                if (errorData?.requiresConfirmation) {
+                    const reasons: string[] = [];
+                    if (errorData.currentStatus === 'Confirmed') reasons.push('it is Confirmed');
+                    if (errorData.enrollmentCount > 0) reasons.push(`it has ${errorData.enrollmentCount} enrolled learner(s)`);
+                    const proceed = await showConfirmPopup(
+                        `This class cannot be cancelled silently because ${reasons.join(' and ')}.\n\nAre you sure you want to cancel it?`,
+                        () => {},
+                        'Cancel Confirmed Class?',
+                        'Yes, cancel it',
+                        'Keep class'
+                    );
+                    if (!proceed) {
+                        showInfoPopup('Cancellation aborted — the class was not changed.');
+                        return;
+                    }
+                    localRes = await doLocalSave(true);
+                }
+            }
 
             if (!localRes.ok) {
                 const errorData = await localRes.json();
