@@ -336,7 +336,10 @@ export async function sfcStage1ParseMatchAndPersist(input: {
     const ssgClaimRowId = String(match.ssg_claim_row_id || '');
     const daApplicationId = match.da_application_id ? String(match.da_application_id) : null;
     const daSfcInvoiceId = match.da_sfc_invoice_id ? String(match.da_sfc_invoice_id) : null;
-    const isDa = !!(daApplicationId && String(daApplicationId).trim());
+    // Only treat as DA if the application has a main invoice already created (da_invoice_id set).
+    // Partial/phantom da_application records (application_id but no invoice) are not real DA flows
+    // and would incorrectly route the SFC payment to a non-existent SFC-CA invoice.
+    const isDa = !!(daApplicationId && String(daApplicationId).trim() && match.da_invoice_id);
 
     // Main (TC / net-fee) invoice reference
     const mainInvoiceId = match.qbo_invoice_id
