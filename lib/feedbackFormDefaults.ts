@@ -10,8 +10,8 @@ export const DEFAULT_FEEDBACK_FORM_SECTIONS: FeedbackFormSection[] = [
       { id: 'course_title', label: 'Course Title', type: 'text', required: true, autofill: 'course_title', readonly: true },
       { id: 'course_code', label: 'Course Code', type: 'text', required: true, autofill: 'course_code', readonly: true },
       { id: 'learner_name', label: "Student's Full Name", type: 'text', required: true },
-      { id: 'start_date', label: 'Class Start Date', type: 'date', autofill: 'start_date', readonly: true },
-      { id: 'end_date', label: 'Class End Date', type: 'date', autofill: 'end_date', readonly: true },
+      { id: 'start_date', label: 'Class Start Date', type: 'date', autofill: 'start_date' },
+      { id: 'end_date', label: 'Class End Date', type: 'date', autofill: 'end_date' },
     ],
   },
   {
