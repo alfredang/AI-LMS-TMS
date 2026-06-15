@@ -2,11 +2,14 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
 /**
- * GET /api/admin/sibling-course-runs?courseRunUuid=<uuid>
+ * GET /api/admin/sibling-course-runs?courseRunUuid=<uuid>&includeHistorical=<bool>
  *
  * Lists the OTHER course runs that belong to the SAME course (same course_id)
  * as the given run — used to populate the "move to another run" dropdown on the
  * Rescheduling tab. Excludes the current run. Includes an active-enrolment count.
+ *
+ * By default only returns runs starting **today or later** (you reschedule INTO a
+ * future run). Pass `includeHistorical=true` to also include past runs.
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -16,6 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!courseRunUuid) {
     return res.status(400).json({ success: false, error: 'courseRunUuid is required' });
   }
+  const includeHistorical = String(req.query.includeHistorical || '') === 'true';
 
   try {
     const result = await pool.query(
@@ -28,6 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          FROM course_run cr
         WHERE cr.course_id = (SELECT course_id FROM course_run WHERE id = $1)
           AND cr.id <> $1
+          ${includeHistorical ? '' : 'AND cr.start_date >= CURRENT_DATE'}
         ORDER BY cr.start_date ASC`,
       [courseRunUuid]
     );

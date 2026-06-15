@@ -282,6 +282,15 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     // ── Rescheduling tab (move class to another run) ──────────────────────────
     const [siblingRuns, setSiblingRuns] = useState<Array<{ id: string; courseRunId: string; startDate: string; endDate: string; classStatus: string; assignedTrainerName: string | null; enrolledCount: number }>>([]);
     const [reschedTargetRunId, setReschedTargetRunId] = useState('');
+    // Target-run picker shows future runs by default; opt in to include past runs.
+    const [reschedIncludeHistorical, setReschedIncludeHistorical] = useState(false);
+    // Opt-in: also migrate the Google Calendar (move attendees source→target). Default OFF.
+    const [reschedSyncCalendar, setReschedSyncCalendar] = useState(false);
+    // Live linked-calendar-events preview for both runs (when calendar sync is on).
+    type ReschedSess = { startDate: string | null; startTime: string | null; endTime: string | null; calendarMatched?: boolean; calendarLink?: string | null };
+    const [reschedSrcSessions, setReschedSrcSessions] = useState<{ sessions: ReschedSess[]; calendarChecked: boolean } | null>(null);
+    const [reschedTgtSessions, setReschedTgtSessions] = useState<{ sessions: ReschedSess[]; calendarChecked: boolean } | null>(null);
+    const [reschedSessionsLoading, setReschedSessionsLoading] = useState(false);
     const [reschedLearners, setReschedLearners] = useState<Array<{ learnerName: string; learnerEmail: string; learnerTel: string; company: string; sponsorship: string; paymentDetails: string; assessment: string; grantId: string; isRemoved: boolean }>>([]);
     const [reschedFlagged, setReschedFlagged] = useState<Set<string>>(new Set());
     const [reschedTrainerName, setReschedTrainerName] = useState('');
@@ -2087,13 +2096,13 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
     };
 
     // ── Rescheduling tab handlers (move class to another run) ─────────────────
-    const loadRescheduleData = async () => {
+    const loadRescheduleData = async (includeHistorical: boolean = reschedIncludeHistorical) => {
         if (!courseToEdit?.id) return;
         setReschedLoading(true);
         setReschedError(null);
         try {
             const [sibRes, lrRes] = await Promise.all([
-                fetch(`/api/admin/sibling-course-runs?courseRunUuid=${encodeURIComponent(courseToEdit.id)}`),
+                fetch(`/api/admin/sibling-course-runs?courseRunUuid=${encodeURIComponent(courseToEdit.id)}&includeHistorical=${includeHistorical}`),
                 fetch(`/api/admin/reschedule-learners?courseRunUuid=${encodeURIComponent(courseToEdit.id)}`),
             ]);
             const sibJson = await sibRes.json();
@@ -2133,6 +2142,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
                     trainerName: reschedTrainerName,
                     removedLearnerEmails: Array.from(reschedFlagged),
                     force,
+                    syncCalendar: reschedSyncCalendar,
                 }),
             });
             const json = await res.json();
@@ -2144,7 +2154,18 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
             }
             if (json.success) {
                 const s = json.summary;
-                showInfoPopup(`Rescheduled: ${s.moved} learner(s) moved, ${s.removed} removed${s.skippedConflicts?.length ? `, ${s.skippedConflicts.length} skipped (already in target run)` : ''}. Trainer on target: ${s.trainerTarget || 'none'}.`);
+                let calMsg = '';
+                if (reschedSyncCalendar) {
+                    const cal = json.calendar;
+                    if (cal?.error) calMsg = `\nCalendar update failed: ${cal.error}`;
+                    else if (cal?.target || cal?.source) {
+                        const srcPart = cal.sourceEventsRemoved
+                            ? `this run's old events removed (${cal.source?.removed ?? 0})`
+                            : `this run −${cal.source?.removed ?? 0} attendee(s)`;
+                        calMsg = `\nCalendar: target +${cal.target?.added ?? 0} attendee(s) on new events, ${srcPart}.`;
+                    }
+                }
+                showInfoPopup(`Rescheduled: ${s.moved} learner(s) moved, ${s.removed} removed${s.skippedConflicts?.length ? `, ${s.skippedConflicts.length} already in target run (removed from this run)` : ''}. Trainer on target: ${s.trainerTarget || 'none'}.${calMsg}`);
                 await loadRescheduleData();
             } else {
                 setReschedError(json.error || 'Reschedule failed');
@@ -2188,8 +2209,10 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
         if (!isEditMode || activeTab !== 'rescheduling' || !courseToEdit?.id) return;
         setReschedTargetRunId('');
         setReschedTrainerName(courseToEdit.assignedTrainerLocal || '');
+        setReschedIncludeHistorical(false);
+        setReschedSyncCalendar(false);
         if (availableTrainers.length === 0) fetchAvailableTrainers();
-        loadRescheduleData();
+        loadRescheduleData(false);
     }, [isEditMode, activeTab, courseToEdit?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Load trainers when trainer tab becomes active
@@ -2656,6 +2679,39 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
         })();
         return () => { cancelled = true; };
     }, [isEditMode, activeTab, courseRunId, existingSessions.length]);
+
+    // Rescheduling tab — live linked-calendar-events preview. When calendar sync
+    // is enabled, fetch BOTH runs' sessions (SSG live) with their live-matched
+    // Google Calendar events so the admin can see exactly which events exist and
+    // will be worked around. Source = the run being edited; target = the picked run.
+    useEffect(() => {
+        if (!isEditMode || activeTab !== 'rescheduling' || !reschedSyncCalendar) {
+            setReschedSrcSessions(null); setReschedTgtSessions(null);
+            return;
+        }
+        let cancelled = false;
+        const fetchRun = async (runId: string) => {
+            const res = await fetch(getApiUrl(`/api/admin/class-sessions?courseRunId=${encodeURIComponent(runId)}`));
+            const data = await res.json();
+            if (!data?.success) return null;
+            return { sessions: (data.sessions || []) as ReschedSess[], calendarChecked: !!data.calendarChecked };
+        };
+        (async () => {
+            setReschedSessionsLoading(true);
+            try {
+                const srcId = courseToEdit?.id || courseToEdit?.courseRunId;
+                const [src, tgt] = await Promise.all([
+                    srcId ? fetchRun(String(srcId)) : Promise.resolve(null),
+                    reschedTargetRunId ? fetchRun(String(reschedTargetRunId)) : Promise.resolve(null),
+                ]);
+                if (cancelled) return;
+                setReschedSrcSessions(src);
+                setReschedTgtSessions(tgt);
+            } catch { if (!cancelled) { setReschedSrcSessions(null); setReschedTgtSessions(null); } }
+            finally { if (!cancelled) setReschedSessionsLoading(false); }
+        })();
+        return () => { cancelled = true; };
+    }, [isEditMode, activeTab, reschedSyncCalendar, reschedTargetRunId, courseToEdit?.id]);
 
     // Fetch enrolled learners when Enrollments tab is activated
     useEffect(() => {
@@ -4894,6 +4950,13 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                 {/* Rescheduling Tab — move class to another run */}
                 {isEditMode && activeTab === 'rescheduling' && (
                     <FormSection title="Reschedule Class — move to another run">
+                        {/* Manual-TPG reminder — the move is LOCAL ONLY (no SSG/TPG enrolment integration yet) */}
+                        <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-300">
+                            <span aria-hidden className="mt-0.5">⚠️</span>
+                            <span>
+                                <strong>This moves learners + trainer in the LMS only</strong> (local enrolment{reschedSyncCalendar ? ' + Google Calendar' : ''}). It does <strong>not</strong> update SSG/TPGateway. You must still <strong>move each learner's enrolment and the trainer assignment on TPGateway manually</strong> for the new run.
+                            </span>
+                        </div>
                         {reschedLoading && (
                             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
@@ -4923,7 +4986,20 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         </option>
                                     ))}
                                 </select>
-                                {siblingRuns.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">No other runs exist for this course.</p>}
+                                {siblingRuns.length === 0 && (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                        No {reschedIncludeHistorical ? '' : 'upcoming '}runs exist for this course{reschedIncludeHistorical ? '' : ' — tick "Include past runs" to see historical ones'}.
+                                    </p>
+                                )}
+                                <label className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={reschedIncludeHistorical}
+                                        onChange={(e) => { setReschedIncludeHistorical(e.target.checked); void loadRescheduleData(e.target.checked); }}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span>Include past (historical) runs</span>
+                                </label>
                             </div>
 
                             <div className="mt-4">
@@ -4935,6 +5011,68 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     ))}
                                 </select>
                             </div>
+
+                            <div className="mt-4">
+                                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={reschedSyncCalendar}
+                                        onChange={(e) => setReschedSyncCalendar(e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <span>Also migrate Google Calendar — move learners + trainer onto the target run's events, drop them from this run's</span>
+                                </label>
+                            </div>
+
+                            {/* Live linked-calendar-events preview (only when calendar sync is on) */}
+                            {reschedSyncCalendar && (
+                                <div className="mt-4 rounded-md border border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-800/40">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <h5 className="text-sm font-semibold text-gray-900 dark:text-white">Linked Google Calendar events (live)</h5>
+                                        {reschedSessionsLoading && <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-blue-500" />}
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                                        Each session is matched live against Google Calendar (no stale cache). <strong className="text-gray-700 dark:text-gray-300">Ticking this box approves removing the old events.</strong> On save: the target run's events are created/adopted (never duplicated) with the moved learners + trainer; and if this run is left empty, its now-stale old events are deleted.
+                                    </p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {[
+                                            { label: 'This run — old events removed', sub: 'deleted if emptied, else moved-out attendees dropped', tone: 'text-red-600 dark:text-red-400', data: reschedSrcSessions },
+                                            { label: 'Target run — new events created', sub: 'created/adopted with moved learners + trainer', tone: 'text-green-600 dark:text-green-400', data: reschedTgtSessions, placeholder: !reschedTargetRunId },
+                                        ].map((col, ci) => (
+                                            <div key={ci} className="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                                                <div className="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700">
+                                                    <div className={`text-xs font-semibold ${col.tone}`}>{col.label}</div>
+                                                    <div className="text-[11px] text-gray-400">{col.sub}</div>
+                                                </div>
+                                                {col.placeholder ? (
+                                                    <div className="px-3 py-3 text-xs text-gray-400">Select a target run to preview its events.</div>
+                                                ) : !col.data ? (
+                                                    <div className="px-3 py-3 text-xs text-gray-400">{reschedSessionsLoading ? 'Loading…' : 'No session data.'}</div>
+                                                ) : col.data.sessions.length === 0 ? (
+                                                    <div className="px-3 py-3 text-xs text-gray-400">No sessions found.</div>
+                                                ) : (
+                                                    <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                                                        {col.data!.sessions.map((s, si) => (
+                                                            <li key={si} className="px-3 py-1.5 flex items-center justify-between text-xs">
+                                                                <span className="text-gray-700 dark:text-gray-300">
+                                                                    {s.startDate || '—'}{s.startTime ? ` · ${s.startTime}${s.endTime ? `–${s.endTime}` : ''}` : ''}
+                                                                </span>
+                                                                {!col.data!.calendarChecked ? (
+                                                                    <span className="text-gray-400" title="Google Calendar wasn't reachable in this environment.">not checked</span>
+                                                                ) : s.calendarMatched && s.calendarLink ? (
+                                                                    <a href={s.calendarLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">event ↗</a>
+                                                                ) : (
+                                                                    <span className="text-amber-600 dark:text-amber-400" title="No matching calendar event — one will be created/adopted on save if needed.">no event</span>
+                                                                )}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="mt-6">
                                 <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Learners ({reschedLearners.length})</h4>
@@ -5965,6 +6103,14 @@ export const AssignStudentView: React.FC = () => {
                 <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
                     Back to Dashboard
                 </Button>
+            </div>
+
+            {/* Manual-TPG reminder — assignment is LOCAL ONLY (no SSG/TPG enrolment integration yet) */}
+            <div className="mb-6 flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-300">
+                <span aria-hidden className="mt-0.5">⚠️</span>
+                <span>
+                    <strong>Adding a learner here does not create an SSG/TPG enrolment.</strong> It only records the learner in the LMS (local enrolment, attendance, proforma, calendar). You must still <strong>enrol the trainee on TPGateway manually</strong>.
+                </span>
             </div>
 
             {/* KPI Stats */}

@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { ensureClassCalendarEvent, syncClassAttendees, removeClassCalendarEvents } from '../../../lib/calendar/ensureClassCalendarEvent';
 
 /**
  * POST /api/admin/move-class-to-run
@@ -10,15 +11,25 @@ import pool from '../../../lib/db';
  *     (enrolment_status='Admin Removed') and NOT moved. Guarded against learners
  *     with submitted assessments unless { force: true }.
  *   - The remaining ACTIVE enrolments are re-pointed source -> target. Learners
- *     already enrolled in the target (UNIQUE user_id+course_run_id) are skipped
- *     and reported.
+ *     already enrolled in the target (UNIQUE user_id+course_run_id) can't be moved,
+ *     so they are soft-removed from the SOURCE (Admin Removed) and continue on the
+ *     target — the run is being vacated, so nobody is left behind. Reported as
+ *     skippedConflicts.
  *   - The trainer (trainerName, defaults to the current trainer) is set on the
  *     TARGET run (replace) and CLEARED from the SOURCE run.
  *   - The SOURCE run's class_status is left UNCHANGED.
  *
- * Does NOT touch Google Calendar.
+ * Google Calendar (opt-in via syncCalendar): after the move, reconciles BOTH runs'
+ * calendars to their new rosters — TARGET gains the moved learners + trainer (events
+ * ensured/adopted live, never duplicated), SOURCE drops them. Ticking the calendar
+ * box is the admin's EXPLICIT approval to delete now-stale events: if the SOURCE run
+ * is left with no active learners after the move, its old events are REMOVED (the
+ * migration exception to the "delete only on Cancel" rule — same spirit as the edit-
+ * session reschedule cleanup). If learners remain on the source (e.g. conflicts that
+ * couldn't move), its events are KEPT and only the moved-out attendees are dropped.
+ * Best-effort; never fails the move.
  *
- * Body: { sourceRunId, targetRunId, trainerName?, removedLearnerEmails?: string[], force?: boolean }
+ * Body: { sourceRunId, targetRunId, trainerName?, removedLearnerEmails?: string[], force?: boolean, syncCalendar?: boolean }
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -31,6 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     trainerName,
     removedLearnerEmails = [],
     force = false,
+    syncCalendar = false,
   } = req.body || {};
 
   if (!sourceRunId || !targetRunId) {
@@ -98,16 +110,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if ((upd.rowCount ?? 0) > 0) { removed++; affectedUserIds.add(userId); }
     }
 
-    // 3. Detect conflicts (learner already enrolled in target), then move the rest.
+    // 3. Conflicts: learners already enrolled in the TARGET run. The source run is
+    //    being VACATED, so they simply continue on the target and are soft-removed
+    //    from the SOURCE (Admin Removed). They can't be "moved" (the UNIQUE
+    //    user_id+course_run_id constraint forbids a second target row), but they
+    //    must NOT be left behind — otherwise the source never empties. No
+    //    submission guard here: they keep full access via the target enrolment.
     const conflictsRes = await client.query(
-      `SELECT au.email
+      `SELECT es.user_id, au.email
          FROM enrollment es JOIN app_user au ON au.id = es.user_id
         WHERE es.course_run_id = $1
           AND LOWER(COALESCE(es.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
           AND EXISTS (SELECT 1 FROM enrollment et WHERE et.user_id = es.user_id AND et.course_run_id = $2)`,
       [sourceRunId, targetRunId]
     );
+    const conflictUserIds = conflictsRes.rows.map((r) => r.user_id);
     const skippedConflicts = conflictsRes.rows.map((r) => ({ email: r.email }));
+    if (conflictUserIds.length > 0) {
+      await client.query(
+        `UPDATE enrollment SET enrolment_status = 'Admin Removed', updated_at = NOW()
+          WHERE course_run_id = $1 AND user_id = ANY($2::uuid[])`,
+        [sourceRunId, conflictUserIds]
+      );
+      for (const id of conflictUserIds) affectedUserIds.add(id);
+    }
+
+    // Move the rest (active, not already in target).
 
     const movedRes = await client.query(
       `UPDATE enrollment SET course_run_id = $2, updated_at = NOW()
@@ -170,9 +198,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query('COMMIT');
 
+    // 6. Opt-in calendar migration (best-effort; never fails the move). The DB move
+    //    changed both runs' rosters, so reconcile BOTH calendars to their new state:
+    //    - TARGET: ensure its events exist (live-match/adopt), then sync attendees to
+    //      its NEW roster (existing learners + moved-in learners + the trainer).
+    //    - SOURCE: a vacated run is now EMPTY (everyone moved out or, for conflicts,
+    //      soft-removed), so its events are stale — REMOVE them. Ticking the calendar
+    //      box is the admin's approval for this deletion (the migration exception).
+    //      The empty-check is still honored defensively: if any active learner somehow
+    //      remains, the events are KEPT and only departed attendees are dropped.
+    //    sendUpdates:'none' throughout.
+    let calendar: any = { skipped: true };
+    if (syncCalendar) {
+      calendar = {};
+      try {
+        await ensureClassCalendarEvent(targetRunId);
+        calendar.target = await syncClassAttendees(targetRunId);
+
+        const srcRemaining = (await pool.query<{ has_learner: boolean }>(
+          `SELECT EXISTS(
+             SELECT 1 FROM enrollment e
+              WHERE e.course_run_id = $1
+                AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+           ) AS has_learner`,
+          [sourceRunId]
+        )).rows[0]?.has_learner ?? false;
+
+        if (srcRemaining) {
+          calendar.source = await syncClassAttendees(sourceRunId);
+          calendar.sourceEventsRemoved = false;
+        } else {
+          calendar.source = await removeClassCalendarEvents(sourceRunId, { reason: 'class migrated to another run' });
+          calendar.sourceEventsRemoved = true;
+        }
+      } catch (e: any) {
+        calendar = { error: e?.message || String(e) };
+      }
+    }
+
     return res.status(200).json({
       success: true,
       summary: { moved, removed, skippedConflicts, trainerTarget, sourceTrainerCleared: true },
+      calendar,
     });
   } catch (err: any) {
     try { await client.query('ROLLBACK'); } catch { /* ignore */ }
