@@ -183,7 +183,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     }, [courseToEdit?.virtualMeetingProvider, trainingProviderProfile]);
 
     // Tab state for navigation
-    const [activeTab, setActiveTab] = useState<'courseRun' | 'sessions' | 'enrollments' | 'trainer' | 'assessment'>('courseRun');
+    const [activeTab, setActiveTab] = useState<'courseRun' | 'sessions' | 'enrollments' | 'trainer' | 'assessment' | 'rescheduling'>('courseRun');
     const [assessmentLinks, setAssessmentLinks] = useState<{
         courseTitle?: string | null;
         courseCode?: string | null;
@@ -278,6 +278,16 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [manualTrainerName, setManualTrainerName] = useState('');
     const [manualTrainerEmail, setManualTrainerEmail] = useState('');
     const [manualTrainerContact, setManualTrainerContact] = useState('');
+
+    // ── Rescheduling tab (move class to another run) ──────────────────────────
+    const [siblingRuns, setSiblingRuns] = useState<Array<{ id: string; courseRunId: string; startDate: string; endDate: string; classStatus: string; assignedTrainerName: string | null; enrolledCount: number }>>([]);
+    const [reschedTargetRunId, setReschedTargetRunId] = useState('');
+    const [reschedLearners, setReschedLearners] = useState<Array<{ learnerName: string; learnerEmail: string; learnerTel: string; company: string; sponsorship: string; paymentDetails: string; assessment: string; grantId: string; isRemoved: boolean }>>([]);
+    const [reschedFlagged, setReschedFlagged] = useState<Set<string>>(new Set());
+    const [reschedTrainerName, setReschedTrainerName] = useState('');
+    const [reschedLoading, setReschedLoading] = useState(false);
+    const [reschedSaving, setReschedSaving] = useState(false);
+    const [reschedError, setReschedError] = useState<string | null>(null);
     // Track all locally-assigned trainers from junction table
     const [assignedTrainersList, setAssignedTrainersList] = useState<any[]>([]);
     // Per-session trainer override state. `sessionTrainerList` is the list of
@@ -2076,6 +2086,76 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
         }
     };
 
+    // ── Rescheduling tab handlers (move class to another run) ─────────────────
+    const loadRescheduleData = async () => {
+        if (!courseToEdit?.id) return;
+        setReschedLoading(true);
+        setReschedError(null);
+        try {
+            const [sibRes, lrRes] = await Promise.all([
+                fetch(`/api/admin/sibling-course-runs?courseRunUuid=${encodeURIComponent(courseToEdit.id)}`),
+                fetch(`/api/admin/reschedule-learners?courseRunUuid=${encodeURIComponent(courseToEdit.id)}`),
+            ]);
+            const sibJson = await sibRes.json();
+            const lrJson = await lrRes.json();
+            if (sibJson.success) setSiblingRuns(sibJson.data);
+            if (lrJson.success) {
+                setReschedLearners(lrJson.data);
+                setReschedFlagged(new Set((lrJson.data || []).filter((x: any) => x.isRemoved).map((x: any) => String(x.learnerEmail).toLowerCase())));
+            }
+        } catch (e) {
+            setReschedError(e instanceof Error ? e.message : 'Failed to load rescheduling data');
+        } finally {
+            setReschedLoading(false);
+        }
+    };
+
+    const toggleReschedRemoval = (email: string) => {
+        const key = String(email).toLowerCase();
+        setReschedFlagged(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key); else next.add(key);
+            return next;
+        });
+    };
+
+    const handleRescheduleMove = async (force = false) => {
+        if (!courseToEdit?.id || !reschedTargetRunId) return;
+        setReschedSaving(true);
+        setReschedError(null);
+        try {
+            const res = await fetch('/api/admin/move-class-to-run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sourceRunId: courseToEdit.id,
+                    targetRunId: reschedTargetRunId,
+                    trainerName: reschedTrainerName,
+                    removedLearnerEmails: Array.from(reschedFlagged),
+                    force,
+                }),
+            });
+            const json = await res.json();
+            if (res.status === 409 && json.code === 'SUBMISSION_EXISTS') {
+                if (window.confirm(`${json.message}\n\nForce-remove and continue?`)) {
+                    await handleRescheduleMove(true);
+                }
+                return;
+            }
+            if (json.success) {
+                const s = json.summary;
+                showInfoPopup(`Rescheduled: ${s.moved} learner(s) moved, ${s.removed} removed${s.skippedConflicts?.length ? `, ${s.skippedConflicts.length} skipped (already in target run)` : ''}. Trainer on target: ${s.trainerTarget || 'none'}.`);
+                await loadRescheduleData();
+            } else {
+                setReschedError(json.error || 'Reschedule failed');
+            }
+        } catch (e) {
+            setReschedError(e instanceof Error ? e.message : 'Reschedule failed');
+        } finally {
+            setReschedSaving(false);
+        }
+    };
+
     // Load assessment links when the Assessment tab becomes active
     useEffect(() => {
         if (!isEditMode || activeTab !== 'assessment' || !courseToEdit?.id) return;
@@ -2102,6 +2182,15 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
         })();
         return () => { cancelled = true; };
     }, [isEditMode, activeTab, courseToEdit?.id]);
+
+    // Load rescheduling data (sibling runs + learners) when the Rescheduling tab opens
+    useEffect(() => {
+        if (!isEditMode || activeTab !== 'rescheduling' || !courseToEdit?.id) return;
+        setReschedTargetRunId('');
+        setReschedTrainerName(courseToEdit.assignedTrainerLocal || '');
+        if (availableTrainers.length === 0) fetchAvailableTrainers();
+        loadRescheduleData();
+    }, [isEditMode, activeTab, courseToEdit?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Load trainers when trainer tab becomes active
     useEffect(() => {
@@ -2606,6 +2695,15 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             ) : 'Save Changes'}
                         </Button>
                     )}
+                    {!viewOnly && isEditMode && activeTab === 'rescheduling' && (
+                        <Button
+                            onClick={() => handleRescheduleMove(false)}
+                            disabled={reschedSaving || !reschedTargetRunId || siblingRuns.length === 0}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                            {reschedSaving ? 'Rescheduling…' : 'Save / Reschedule'}
+                        </Button>
+                    )}
                     {!isEditMode && (
                         <Button onClick={() => {
                             showInfoPopup('Create mode functionality will be implemented');
@@ -2624,7 +2722,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
             {isEditMode && (
                 <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
                     <nav className="-mb-px flex space-x-8">
-                        {(['courseRun', 'sessions', 'enrollments', 'trainer', 'assessment'] as const).map(tab => (
+                        {(['courseRun', 'sessions', 'enrollments', 'trainer', 'assessment', 'rescheduling'] as const).map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
@@ -2634,7 +2732,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'
                                 }`}
                             >
-                                {tab === 'courseRun' ? 'Course Run' : tab === 'sessions' ? 'Sessions' : tab === 'enrollments' ? 'Enrolled Learners' : tab === 'trainer' ? 'Trainer' : 'Assessment'}
+                                {tab === 'courseRun' ? 'Course Run' : tab === 'sessions' ? 'Sessions' : tab === 'enrollments' ? 'Enrolled Learners' : tab === 'trainer' ? 'Trainer' : tab === 'assessment' ? 'Assessment' : 'Rescheduling'}
                             </button>
                         ))}
                     </nav>
@@ -4789,6 +4887,104 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                     These links are configured on the course (not the run). Update them in <strong>Course Management → Edit Course</strong>.
                                 </p>
                             </div>
+                        )}
+                    </FormSection>
+                )}
+
+                {/* Rescheduling Tab — move class to another run */}
+                {isEditMode && activeTab === 'rescheduling' && (
+                    <FormSection title="Reschedule Class — move to another run">
+                        {reschedLoading && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                Loading…
+                            </div>
+                        )}
+                        {!reschedLoading && (
+                          <>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Title</label>
+                                    <input readOnly disabled value={courseToEdit?.courseTitle || ''} className={`${inputClasses} ${disabledInputClasses}`} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Code</label>
+                                    <input readOnly disabled value={courseToEdit?.courseCode || ''} className={`${inputClasses} ${disabledInputClasses}`} />
+                                </div>
+                            </div>
+
+                            <div className="mt-4">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Move to Course Run *</label>
+                                <select value={reschedTargetRunId} onChange={(e) => setReschedTargetRunId(e.target.value)} className={inputClasses}>
+                                    <option value="">Select a target run…</option>
+                                    {siblingRuns.map(r => (
+                                        <option key={r.id} value={r.id}>
+                                            {r.courseRunId} · {String(r.startDate).slice(0, 10)}–{String(r.endDate).slice(0, 10)} · {r.classStatus} · {r.enrolledCount} enrolled
+                                        </option>
+                                    ))}
+                                </select>
+                                {siblingRuns.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">No other runs exist for this course.</p>}
+                            </div>
+
+                            <div className="mt-4">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer (set on target run)</label>
+                                <select value={reschedTrainerName} onChange={(e) => setReschedTrainerName(e.target.value)} className={inputClasses}>
+                                    <option value="">— No trainer —</option>
+                                    {availableTrainers.map((t: any, i: number) => (
+                                        <option key={t.user_id || i} value={t.trainer_name}>{t.trainer_name}{t.email ? ` (${t.email})` : ''}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="mt-6">
+                                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Learners ({reschedLearners.length})</h4>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Click ✕ to exclude a learner (last-minute pull-out). Excluded learners are not moved and are excluded on save.</p>
+                                <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-md">
+                                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                                    <thead className="bg-gray-50 dark:bg-gray-700/50">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Learner</th>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Company</th>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Sponsorship</th>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Payment</th>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Assessment</th>
+                                            <th className="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">Grant ID</th>
+                                            <th className="px-3 py-2 text-center font-medium text-gray-500 dark:text-gray-400">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                        {reschedLearners.map((l, i) => {
+                                            const flagged = reschedFlagged.has(String(l.learnerEmail).toLowerCase());
+                                            return (
+                                                <tr key={i} className={flagged ? 'bg-red-50 dark:bg-red-900/20 opacity-60' : ''}>
+                                                    <td className="px-3 py-2">
+                                                        <div className="font-medium text-gray-900 dark:text-white">{l.learnerName}{flagged && <span className="ml-2 text-red-600 dark:text-red-400 font-semibold">(Excluded)</span>}</div>
+                                                        <div className="text-gray-500 dark:text-gray-400">{l.learnerEmail}</div>
+                                                        {l.learnerTel && <div className="text-gray-500 dark:text-gray-400">{l.learnerTel}</div>}
+                                                    </td>
+                                                    <td className="px-3 py-2">{l.company || 'N/A'}</td>
+                                                    <td className="px-3 py-2">{l.sponsorship || 'N/A'}</td>
+                                                    <td className="px-3 py-2">{l.paymentDetails || 'N/A'}</td>
+                                                    <td className="px-3 py-2">{l.assessment || 'Pending'}</td>
+                                                    <td className="px-3 py-2 font-mono">{l.grantId || 'N/A'}</td>
+                                                    <td className="px-3 py-2 text-center">
+                                                        <button type="button" onClick={() => toggleReschedRemoval(l.learnerEmail)} title={flagged ? 'Undo removal' : 'Flag for removal'} className={flagged ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-700 font-bold'}>
+                                                            {flagged ? '↺' : '✕'}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {reschedLearners.length === 0 && (
+                                            <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-500 dark:text-gray-400">No learners enrolled.</td></tr>
+                                        )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                            </div>
+
+                            {reschedError && <div className="mt-3 text-sm text-red-600 dark:text-red-400">{reschedError}</div>}
+                          </>
                         )}
                     </FormSection>
                 )}
