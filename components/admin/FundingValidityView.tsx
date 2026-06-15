@@ -48,10 +48,16 @@ const displayCourseType = (value?: string | null) => {
   return value || 'CASL';
 };
 
+// Collapse the stored course_type into the two editable buckets. Anything that
+// isn't exactly 'WSQ' (incl. IBF / non-WSQ) is treated as Non-WSQ here.
+const normalizeCourseType = (value?: string | null): 'WSQ' | 'Non-WSQ' =>
+  value === 'WSQ' ? 'WSQ' : 'Non-WSQ';
+
 interface EditState {
   casScore: string;
   esScore: string;
   fundingValidity: string;
+  courseType: 'WSQ' | 'Non-WSQ';
 }
 
 const FundingValidityView: React.FC = () => {
@@ -61,7 +67,7 @@ const FundingValidityView: React.FC = () => {
   const [whitelistingIds, setWhitelistingIds] = useState<Record<string, boolean>>({});
   const [whitelistStateOverrides, setWhitelistStateOverrides] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '' });
+  const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '', courseType: 'WSQ' });
   const [saving, setSaving] = useState(false);
 
   const today = startOfDay(new Date());
@@ -69,7 +75,6 @@ const FundingValidityView: React.FC = () => {
 
   const wsqCourses = useMemo(() => {
     return [...(courses || [])]
-      .filter(course => course.courseType === 'WSQ')
       .sort((a, b) => {
         const left = parseValidityDate(a.fundingValidity);
         const right = parseValidityDate(b.fundingValidity);
@@ -156,6 +161,7 @@ const FundingValidityView: React.FC = () => {
       casScore: course.casScore != null ? String(course.casScore) : '',
       esScore: course.esScore != null ? String(course.esScore) : '',
       fundingValidity: toDateInputValue(course.fundingValidity),
+      courseType: normalizeCourseType(course.courseType),
     });
   };
 
@@ -167,11 +173,14 @@ const FundingValidityView: React.FC = () => {
     if (!editingId) return;
     setSaving(true);
     try {
+      const original = wsqCourses.find(c => c.id === editingId);
+      const typeChanged = editState.courseType !== normalizeCourseType(original?.courseType);
       await apiClient.put('/api/admin/update-course-validity', {
         courseId: editingId,
         casScore: editState.casScore || null,
         esScore: editState.esScore || null,
         fundingValidity: editState.fundingValidity || null,
+        ...(typeChanged ? { courseType: editState.courseType } : {}),
       });
       setEditingId(null);
       refetch();
@@ -211,7 +220,7 @@ const FundingValidityView: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card className="p-6 text-center">
           <p className="text-4xl font-bold text-blue-600">{wsqCourses.length}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">WSQ Courses</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Courses</p>
         </Card>
         <Card className="p-6 text-center">
           <p className="text-4xl font-bold text-amber-500">{toBeRenewed}</p>
@@ -226,7 +235,7 @@ const FundingValidityView: React.FC = () => {
       <Card className="dark:bg-gray-800 dark:border-gray-700">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4">
           <div>
-            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">WSQ Course Validity List</h4>
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Course Validity List</h4>
             <p className="text-sm text-gray-600 dark:text-gray-400">Sorted from earliest validity date to latest. Courses expiring within 4 months are highlighted.</p>
           </div>
         </div>
@@ -268,7 +277,20 @@ const FundingValidityView: React.FC = () => {
                   >
                     <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.courseCode || '—'}</td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{displayCourseType(course.courseType)}</td>
+                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">
+                      {isEditing ? (
+                        <select
+                          value={editState.courseType}
+                          onChange={e => setEditState(s => ({ ...s, courseType: e.target.value as 'WSQ' | 'Non-WSQ' }))}
+                          className={`${inputClass} w-24`}
+                        >
+                          <option value="WSQ">WSQ</option>
+                          <option value="Non-WSQ">Non-WSQ</option>
+                        </select>
+                      ) : (
+                        displayCourseType(course.courseType)
+                      )}
+                    </td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
                       {isEditing ? (
                         <input
@@ -375,7 +397,7 @@ const FundingValidityView: React.FC = () => {
 
         {wsqCourses.length === 0 && (
           <div className="px-6 py-10 text-center text-gray-500 dark:text-gray-400">
-            No WSQ courses found.
+            No courses found.
           </div>
         )}
       </Card>
