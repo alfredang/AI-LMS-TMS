@@ -67,7 +67,7 @@ const CalendarCell: React.FC<{ s: ClassSession; checked: boolean }> = ({ s, chec
   if (s.calendarMatched) return <span className="text-emerald-600 dark:text-emerald-400">Matched</span>;
   return (
     <span className="text-amber-600 dark:text-amber-400"
-          title="No calendar event matched on this date. Check the session date/time (from SSG) against Google Calendar, and that the event title still matches.">
+          title="No calendar event matched on this date. Matching is by DATE (+ course-run-id / title), not time — so check whether the event was moved to a different date, or its title was renamed (with the 'Course Run ID' line removed from its description).">
       Not found
     </span>
   );

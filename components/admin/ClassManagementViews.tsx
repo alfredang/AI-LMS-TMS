@@ -228,6 +228,26 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     // agree. Read-only.
     const [sessionCalByDate, setSessionCalByDate] = useState<Record<string, { calendarMatched?: boolean; calendarLink?: string | null; calendarEventDate?: string | null }>>({});
     const [sessionCalChecked, setSessionCalChecked] = useState(false);
+    // Phase 2: the session's ORIGINAL start date (YYYY-MM-DD) captured when editing
+    // begins, so a save can move the calendar event from old→new date. And the
+    // opt-in "also move the calendar event" toggle (default OFF — calendar is
+    // customer-facing, so writes are explicit).
+    const [editingOriginalStartDate, setEditingOriginalStartDate] = useState<string>('');
+    // Full snapshot of the session as it was when editing began, so the confirm
+    // dialog can show the Old → New change.
+    const [editingOriginalSession, setEditingOriginalSession] = useState<{ startDate: string; startTime: string; endTime: string; modeOfTraining: string } | null>(null);
+    const [syncCalendarOnSave, setSyncCalendarOnSave] = useState(false);
+    // Phase 2: blocking, up-front resolution prompt shown BEFORE a reschedule runs
+    // when the session's calendar event was manually moved onto a non-session date.
+    const [reschedulePrompt, setReschedulePrompt] = useState<null | {
+        eventId: string;
+        htmlLink: string | null;
+        liveDate: string;
+        oldDate: string;
+        newDate: string;
+        onChoose: (action: 'reuse' | 'replace' | 'keepNew') => void;
+        onCancel: () => void;
+    }>(null);
 
     // Multiple new sessions state instead of single
     const [showNewSessionForm, setShowNewSessionForm] = useState(false);
@@ -1368,10 +1388,30 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
         // Get SSG run data (same as add sessions)
         const runData = ssgApiResponse.data.course.run;
 
-        // Generate schedule info from course dates
-        const courseStartDateForSchedule = (runData.courseStartDate ?? runData.courseDates?.start) ? convertSsgDateToHtml(runData.courseStartDate ?? runData.courseDates?.start) : (editFormData.courseStartDate || '');
-        const courseEndDateForSchedule = (runData.courseEndDate ?? runData.courseDates?.end) ? convertSsgDateToHtml(runData.courseEndDate ?? runData.courseDates?.end) : (editFormData.courseEndDate || '');
-        const scheduleInfo = generateScheduleInfo(courseStartDateForSchedule, courseEndDateForSchedule);
+        // Existing run window (YYYY-MM-DD), from SSG run data (fallback to form).
+        const origRunStart = (runData.courseStartDate ?? runData.courseDates?.start) ? convertSsgDateToHtml(runData.courseStartDate ?? runData.courseDates?.start) : (editFormData.courseStartDate || '');
+        const origRunEnd = (runData.courseEndDate ?? runData.courseDates?.end) ? convertSsgDateToHtml(runData.courseEndDate ?? runData.courseDates?.end) : (editFormData.courseEndDate || '');
+
+        // The session's new dates (YYYY-MM-DD).
+        const sessStart = sessionToUpdate.startDate ? convertSsgDateToHtml(sessionToUpdate.startDate) : '';
+        const sessEnd = sessionToUpdate.endDate ? convertSsgDateToHtml(sessionToUpdate.endDate) : sessStart;
+
+        // SSG rejects a session outside the run window, so widen the window to cover
+        // the new session dates (the validated "Overflow rule"). YYYY-MM-DD compares
+        // lexically, so string min/max is correct.
+        const newRunStart = (sessStart && (!origRunStart || sessStart < origRunStart)) ? sessStart : origRunStart;
+        const newRunEnd = (sessEnd && (!origRunEnd || sessEnd > origRunEnd)) ? sessEnd : origRunEnd;
+        const runDatesChanged = (newRunStart !== origRunStart) || (newRunEnd !== origRunEnd);
+
+        // Calendar transparency (the calendar is ONE event per DAY): did the
+        // session's date change, and do OTHER sessions still sit on the old day?
+        const oldDate = editingOriginalStartDate;
+        const dateChanged = !!(oldDate && sessStart && oldDate !== sessStart);
+        const othersOnOldDate = dateChanged
+            ? existingSessions.filter((s: any, i: number) => i !== sessionIndex && convertSsgDateToHtml(s.startDate) === oldDate).length
+            : 0;
+
+        const scheduleInfo = generateScheduleInfo(newRunStart, newRunEnd);
 
         // Build the request body that will be sent to API (flat structure matching add/delete sessions)
         const requestBody = {
@@ -1381,8 +1421,9 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
             // Course run dates (required for proper SSG API payload) - convert YYYYMMDD to YYYY-MM-DD format
             openingRegistrationDate: (runData.registrationOpeningDate ?? runData.registrationDates?.opening) ? convertSsgDateToHtml(runData.registrationOpeningDate ?? runData.registrationDates?.opening) : (editFormData.openingRegistrationDate || ''),
             closingRegistrationDate: (runData.registrationClosingDate ?? runData.registrationDates?.closing) ? convertSsgDateToHtml(runData.registrationClosingDate ?? runData.registrationDates?.closing) : (editFormData.closingRegistrationDate || ''),
-            courseStartDate: (runData.courseStartDate ?? runData.courseDates?.start) ? convertSsgDateToHtml(runData.courseStartDate ?? runData.courseDates?.start) : (editFormData.courseStartDate || ''),
-            courseEndDate: (runData.courseEndDate ?? runData.courseDates?.end) ? convertSsgDateToHtml(runData.courseEndDate ?? runData.courseDates?.end) : (editFormData.courseEndDate || ''),
+            // Widened to encompass the session (SSG rejects sessions outside the run window).
+            courseStartDate: newRunStart,
+            courseEndDate: newRunEnd,
 
             // Schedule info (required by backend)
             scheduleInfoTypeCode: "01",
@@ -1489,82 +1530,144 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=delete-sessions
             }
         };
 
-        // Human-readable summary of the change (no raw JSON payload).
-        const startDisp = sessionToUpdate.startDate ? formatDateForDisplay(sessionToUpdate.startDate) : 'N/A';
-        const endDisp = sessionToUpdate.endDate ? formatDateForDisplay(sessionToUpdate.endDate) : 'N/A';
-        const dateLine = startDisp === endDisp ? startDisp : `${startDisp} → ${endDisp}`;
-        const confirmMessage = `Update session S${sessionIndex + 1} (${sessionToUpdate.id}) for course run ${courseRunId}?
+        // Compact confirmation summary (the dialog title already says "Update Session").
+        const fmtD = (iso: string) => {
+            if (!iso) return 'N/A';
+            const d = new Date(iso + 'T00:00:00');
+            return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+        };
+        const fmtShort = (iso: string) => {
+            const d = new Date(iso + 'T00:00:00');
+            return isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+        };
+        const fmtRange = (a: string, b: string) => {
+            const da = new Date(a + 'T00:00:00'), db = new Date(b + 'T00:00:00');
+            if (isNaN(da.getTime()) || isNaN(db.getTime())) return `${a} – ${b}`;
+            const sameMY = da.getMonth() === db.getMonth() && da.getFullYear() === db.getFullYear();
+            return sameMY
+                ? `${da.getDate()}–${db.getDate()} ${db.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`
+                : `${da.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${db.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+        };
 
-Date:   ${dateLine}
-Time:   ${sessionToUpdate.startTime || 'N/A'} – ${sessionToUpdate.endTime || 'N/A'}
-Mode:   ${getModeLabel(sessionToUpdate.modeOfTraining)}
+        const shortMode = (m: string | number) => getModeLabel(m).replace(/^\d+\s*-\s*/, '');
+        const orig = editingOriginalSession;
+        const oldLine = orig
+            ? `Old: ${fmtD(orig.startDate)} · ${orig.startTime || 'N/A'}–${orig.endTime || 'N/A'} · ${shortMode(orig.modeOfTraining)}`
+            : '';
+        const newLine = `New: ${fmtD(sessStart)} · ${sessionToUpdate.startTime || 'N/A'}–${sessionToUpdate.endTime || 'N/A'} · ${shortMode(sessionToUpdate.modeOfTraining)}`;
+        const changeBlock = oldLine ? `${oldLine}\n${newLine}` : newLine;
+        const runWarn = runDatesChanged
+            ? `\n⚠ Course run will be extended from ${fmtRange(origRunStart, origRunEnd)} to ${fmtRange(newRunStart, newRunEnd)}`
+            : '';
+        let calLine = '';
+        if (syncCalendarOnSave) {
+            if (!dateChanged) {
+                calLine = '\n📅 Calendar reconciled to current sessions';
+            } else if (othersOnOldDate > 0) {
+                calLine = `\n📅 New calendar event on ${fmtShort(sessStart)} (${fmtShort(oldDate)} kept · ${othersOnOldDate} session${othersOnOldDate === 1 ? '' : 's'})`;
+            } else {
+                calLine = `\n📅 New calendar event on ${fmtShort(sessStart)}; ${fmtShort(oldDate)}'s event removed`;
+            }
+        }
+        const confirmMessage = `Session S${sessionIndex + 1} · run ${courseRunId}\n\n${changeBlock}${runWarn}${calLine}`;
 
-This pushes the change to SSG (update-sessions).`;
-
-        showConfirmPopup(
-            confirmMessage,
-            async () => {
-
-                try {
-                    setLoading(true);
-
-                    console.log('=== UPDATE SESSION REQUEST DEBUG ===');
-                    console.log('Session to update:', sessionToUpdate);
-                    console.log('Session ID:', sessionToUpdate.id);
-                    console.log('=== SENDING REQUEST BODY (flat structure) ===');
-                    console.log(JSON.stringify(requestBody, null, 2));
-
-                    const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=false&action=update-sessions`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(requestBody)
-                    });
-
-                    console.log('=== UPDATE SESSION API RESPONSE ===');
-                    console.log('Response Status:', response.status);
-                    console.log('Response OK:', response.ok);
-
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error('Update Session API Error:', errorText);
-                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-                    }
-
-                    const data = await response.json();
-                    console.log('Update Session Success Response:', JSON.stringify(data, null, 2));
-
-                    if (response.status === 200) {
-                        // Update local state with the updated session
-                        setExistingSessions(prev => prev.map((session, index) =>
-                            index === sessionIndex ? sessionToUpdate : session
-                        ));
-                        showSuccessPopup('Session updated successfully!');
-
-                        // Cancel editing mode
-                        cancelEditingSession();
-
-                        // Optionally refresh the sessions data
-                        fetchExistingSessions();
-                    } else {
-                        throw new Error('Failed to update session: Unexpected response status');
-                    }
-
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : 'An error occurred during session update';
-                    console.error('=== UPDATE SESSION ERROR ===');
-                    console.error('Error Details:', error);
-                    console.error('Error Message:', errorMessage);
-                    showErrorPopup('Failed to update session: ' + errorMessage);
-                } finally {
-                    setLoading(false);
+        // The actual apply: SSG update → reflect local → optional calendar reconcile.
+        // `resolution` (when set) was decided UP FRONT and tells the calendar step how
+        // to handle a session event that was manually moved off its date.
+        const doApply = async (resolution?: { eventId: string; action: 'reuse' | 'replace' | 'keepNew'; newDate: string }) => {
+            try {
+                setLoading(true);
+                const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=false&action=update-sessions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody),
+                });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
                 }
-            },
-            'Update Session',
-            'Update',
-            'Cancel'
-        );
+                await response.json();
+
+                if (response.status === 200) {
+                    setExistingSessions(prev => prev.map((session, index) => index === sessionIndex ? sessionToUpdate : session));
+
+                    const extras: string[] = [];
+
+                    // Reflect into local DB so course_session mirrors SSG.
+                    try {
+                        const sresp = await fetch(`/api/ssg/courses/runs/${courseRunId}/sessions?courseCode=${encodeURIComponent(courseReferenceNumber)}`);
+                        const sdata = await sresp.json();
+                        const freshSessions = sdata?.data?.result?.sessions || [];
+                        if (freshSessions.length) {
+                            await fetch(getApiUrl('/api/admin/course-sessions/sync-from-ssg'), {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ courseRunId, sessions: freshSessions }),
+                            });
+                            extras.push('local DB synced');
+                        }
+                    } catch { extras.push('local DB sync failed'); }
+
+                    // Opt-in calendar reconcile (with any up-front resolution).
+                    if (syncCalendarOnSave) {
+                        try {
+                            const mresp = await fetch(getApiUrl('/api/admin/reconcile-run-calendar'), {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ courseRunId, resolution }),
+                            });
+                            const mdata = await mresp.json();
+                            if (mdata?.success && mdata?.status === 'ok') {
+                                extras.push(`calendar reconciled (created ${mdata.created ?? 0}, removed ${mdata.removedStale ?? 0})`);
+                            } else {
+                                extras.push(`calendar not updated (${mdata?.reason || mdata?.error || 'unknown'})`);
+                            }
+                        } catch { extras.push('calendar update failed'); }
+                    }
+
+                    showSuccessPopup('Session updated in SSG.' + (extras.length ? ' ' + extras.join(' · ') + '.' : ''));
+                    cancelEditingSession();
+                    fetchExistingSessions();
+                } else {
+                    throw new Error('Failed to update session: Unexpected response status');
+                }
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'An error occurred during session update';
+                showErrorPopup('Failed to update session: ' + errorMessage);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        // Pre-flight (READ-ONLY, before any write): if the calendar will be updated and
+        // the old date is emptying, check whether this session's event was manually
+        // moved onto a NON-session date. If so, ask the admin how to resolve it UP
+        // FRONT — nothing runs until they choose.
+        if (syncCalendarOnSave && dateChanged && othersOnOldDate === 0 && oldDate) {
+            let detect: any = null;
+            try {
+                const dr = await fetch(getApiUrl(`/api/admin/preview-session-reschedule-calendar?courseRunId=${encodeURIComponent(courseRunId)}&oldDate=${encodeURIComponent(oldDate)}`));
+                detect = await dr.json();
+            } catch { /* fall through to normal confirm */ }
+            if (detect?.found && detect.liveDate && detect.liveDate !== oldDate) {
+                const currentSessionDates = new Set(existingSessions.map((s: any) => convertSsgDateToHtml(s.startDate)));
+                if (!currentSessionDates.has(detect.liveDate)) {
+                    setReschedulePrompt({
+                        eventId: detect.eventId,
+                        htmlLink: detect.htmlLink || null,
+                        liveDate: detect.liveDate,
+                        oldDate,
+                        newDate: sessStart,
+                        onChoose: (action) => { setReschedulePrompt(null); void doApply({ eventId: detect.eventId, action, newDate: sessStart }); },
+                        onCancel: () => setReschedulePrompt(null),
+                    });
+                    return;
+                }
+            }
+        }
+
+        // Normal path — plain confirm, then apply.
+        showConfirmPopup(confirmMessage, () => { void doApply(undefined); }, 'Update Session', 'Update', 'Cancel');
     };
 
     // Function to start editing an existing session
@@ -1573,6 +1676,15 @@ This pushes the change to SSG (update-sessions).`;
 
         // Populate session data for editing
         const session = existingSessions[sessionIndex];
+        // Capture the original date (+ full snapshot) so a save can move the calendar
+        // event old→new and the confirm dialog can show the Old → New change.
+        setEditingOriginalStartDate(convertSsgDateToHtml(session.startDate));
+        setEditingOriginalSession({
+            startDate: convertSsgDateToHtml(session.startDate),
+            startTime: session.startTime || '',
+            endTime: session.endTime || '',
+            modeOfTraining: session.modeOfTraining || '',
+        });
         setSessionData({
             0: {
                 sessionId: session.id,
@@ -1599,6 +1711,8 @@ This pushes the change to SSG (update-sessions).`;
         setEditingSessionIndex(null);
         setSessionData({ 0: {} });
         setSessionCount(1);
+        setEditingOriginalStartDate('');
+        setEditingOriginalSession(null);
     };
 
     // Function to populate form data from SSG API response
@@ -3333,21 +3447,32 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                                                 </div>
                                                             </div>
 
-                                                            <div className="flex justify-end space-x-2 mt-4">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => cancelEditingSession()}
-                                                                    className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-                                                                >
-                                                                    Cancel
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => updateExistingSession(index)}
-                                                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                                                                >
-                                                                    Update Session
-                                                                </button>
+                                                            <div className="flex items-center justify-between mt-4 gap-4">
+                                                                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={syncCalendarOnSave}
+                                                                        onChange={(e) => setSyncCalendarOnSave(e.target.checked)}
+                                                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                                    />
+                                                                    <span>Also update Google Calendar (create/keep/remove the day's event to match)</span>
+                                                                </label>
+                                                                <div className="flex space-x-2 flex-shrink-0">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => cancelEditingSession()}
+                                                                        className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                                                                    >
+                                                                        Cancel
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => updateExistingSession(index)}
+                                                                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                                                    >
+                                                                        Update Session
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     ) : null}
@@ -4641,6 +4766,38 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                     </FormSection>
                 )}
             </div>
+
+            {/* Reschedule calendar-resolution modal (blocking, up-front) */}
+            {reschedulePrompt && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full border dark:border-gray-700 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Calendar event was moved manually</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                            This session's Google Calendar event was manually moved to <strong>{reschedulePrompt.liveDate}</strong>, which isn't a session date. You're rescheduling the session to <strong>{reschedulePrompt.newDate}</strong>. How should the calendar be handled?
+                            {reschedulePrompt.htmlLink && (
+                                <> <a href={reschedulePrompt.htmlLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">View the event ↗</a></>
+                            )}
+                        </p>
+                        <div className="space-y-2">
+                            <button type="button" onClick={() => reschedulePrompt.onChoose('reuse')} className="w-full text-left px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                                <div className="font-medium text-gray-900 dark:text-white">Reuse it</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">Move that event to {reschedulePrompt.newDate} (keeps its edits / attendees).</div>
+                            </button>
+                            <button type="button" onClick={() => reschedulePrompt.onChoose('replace')} className="w-full text-left px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                                <div className="font-medium text-gray-900 dark:text-white">Replace it</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">Delete that event and create a fresh one on {reschedulePrompt.newDate}.</div>
+                            </button>
+                            <button type="button" onClick={() => reschedulePrompt.onChoose('keepNew')} className="w-full text-left px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                                <div className="font-medium text-gray-900 dark:text-white">Keep it + create new</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">Leave that event where it is and create a new one on {reschedulePrompt.newDate}.</div>
+                            </button>
+                        </div>
+                        <div className="mt-4 flex justify-end">
+                            <button type="button" onClick={() => reschedulePrompt.onCancel()} className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Popup Modal */}
             {showPopup && (
