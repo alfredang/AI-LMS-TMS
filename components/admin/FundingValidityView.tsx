@@ -303,7 +303,7 @@ const FundingValidityView: React.FC = () => {
                         <>
                           <span>{formatValidityDate(course.fundingValidity)}</span>
                           {expired && course.courseType === 'WSQ' && <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
-                          {!expired && expiringSoon && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
+                          {!expired && expiringSoon && course.courseType === 'WSQ' && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
                         </>
                       )}
                     </td>
