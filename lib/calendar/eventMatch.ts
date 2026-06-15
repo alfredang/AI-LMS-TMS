@@ -20,6 +20,19 @@ export interface MatchTarget {
 }
 
 /**
+ * True if an event clearly belongs to this run — its SSG run id appears in the
+ * description or location (the "Course Run ID: <id>" line the system writes).
+ * This is the EXACT, safe signal used for destructive removal (no fuzzy title
+ * matching, so we never cancel an unrelated event). Date-independent, so it also
+ * catches an event an admin dragged off its session date.
+ */
+export function eventBelongsToRun(evt: calendar_v3.Schema$Event, courseRunId: string): boolean {
+  const id = (courseRunId || '').toLowerCase();
+  if (!id) return false;
+  return (((evt.description || '') + ' ' + (evt.location || '')).toLowerCase()).includes(id);
+}
+
+/**
  * Find the calendar event for a class on a specific date, using the canonical
  * 3-strategy match (extracted from addTrainerToCalendar). Made date-aware on
  * every strategy so it maps each session date to its own event instance:

@@ -23,13 +23,18 @@ export function triggerClassCalendarSync(courseRunId: string): void {
         [courseRunId]
       )).rows[0];
       if (!row) return;
-      const shouldHaveEvent = row.has_learner && row.class_status !== 'Cancelled';
-      if (shouldHaveEvent) {
+      // Deletion happens ONLY on a manual Cancel (class_status = 'Cancelled').
+      // A class that merely has no confirmed learners (but isn't cancelled) is
+      // left ALONE — we never delete its calendar events as a side effect of
+      // losing learners or a trainer. Reschedules remove empty days separately
+      // via reconcileRunCalendar (also UI-triggered).
+      if (row.class_status === 'Cancelled') {
+        await removeClassCalendarEvents(row.id, { reason: 'class cancelled' });
+      } else if (row.has_learner) {
         await ensureClassCalendarEvent(row.id);
         await syncClassAttendees(row.id);
-      } else {
-        await removeClassCalendarEvents(row.id, { reason: 'gated out (no learners or cancelled)' });
       }
+      // else: not cancelled + no confirmed learners → leave the calendar untouched.
     } catch { /* best-effort — never surface to the caller */ }
   })();
 }

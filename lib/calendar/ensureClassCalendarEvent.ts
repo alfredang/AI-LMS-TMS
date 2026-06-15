@@ -1,7 +1,7 @@
 import type { calendar_v3 } from 'googleapis';
 import pool from '../db';
 import { getCalendarClient } from './calendarClient';
-import { findEventOnDate, stripPrefixes } from './eventMatch';
+import { findEventOnDate, stripPrefixes, eventBelongsToRun } from './eventMatch';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
 
 /**
@@ -154,6 +154,12 @@ export interface RemoveResult { status: 'ok' | 'skipped'; removed: number; error
 
 /**
  * Remove all calendar events for a class (cancellation / last-learner-removed).
+ *
+ * Live-match based (Phase 3): removes the UNION of
+ *   (a) every event in the durable mapping (by id — caught regardless of date), and
+ *   (b) every event in the run's date window whose description/location carries the
+ *       run id (`eventBelongsToRun`) — catches events whose map row drifted or was
+ *       lost, so a cancel can't silently orphan them.
  * cancel-patches events that had attendees, hard-deletes empty ones, clears rows.
  */
 export async function removeClassCalendarEvents(courseRunId: string, _opts: { reason?: string } = {}): Promise<RemoveResult> {
@@ -165,23 +171,41 @@ export async function removeClassCalendarEvents(courseRunId: string, _opts: { re
   const { calendar, calendarId } = client;
 
   return withRunLock(run.id, async () => {
-    const rows = (await pool.query<{ event_date: string; google_event_id: string }>(
-      `SELECT event_date::text, google_event_id FROM course_run_calendar_event WHERE course_run_id = $1`,
+    // (a) Mapped event ids — removed by id, regardless of where they now live.
+    const mapped = (await pool.query<{ google_event_id: string }>(
+      `SELECT google_event_id FROM course_run_calendar_event WHERE course_run_id = $1`,
       [run.id]
     )).rows;
-    for (const row of rows) {
+    const ids = new Set<string>(mapped.map(r => r.google_event_id));
+
+    // (b) Live-match: any event in the run's window carrying the run id but NOT in
+    //     the map (a drifted / orphaned event). Best-effort; falls back to (a) only.
+    try {
+      const dates = await sessionDates(run.id, run.start_date);
+      const loBase = dates[0] || (run.start_date ? String(run.start_date).slice(0, 10) : null);
+      const hiBase = (run.end_date ? String(run.end_date).slice(0, 10) : null) || dates[dates.length - 1] || loBase;
+      if (loBase && hiBase) {
+        const lo = new Date(loBase + 'T00:00:00Z'); lo.setUTCDate(lo.getUTCDate() - 1);
+        const hi = new Date(hiBase + 'T00:00:00Z'); hi.setUTCDate(hi.getUTCDate() + 2);
+        const events = (await calendar.events.list({ calendarId, timeMin: lo.toISOString(), timeMax: hi.toISOString(), singleEvents: true, maxResults: 250 })).data.items || [];
+        for (const e of events) {
+          if (e.id && !ids.has(e.id) && eventBelongsToRun(e, run.course_run_id)) ids.add(e.id);
+        }
+      }
+    } catch { /* fall back to mapped-only removal */ }
+
+    for (const eventId of ids) {
       try {
-        const evt = await calendar.events.get({ calendarId, eventId: row.google_event_id }).then(r => r.data).catch(() => null);
-        if (evt) {
-          const hadAttendees = (evt.attendees || []).length > 0;
-          if (hadAttendees) {
-            await calendar.events.patch({ calendarId, eventId: row.google_event_id, requestBody: { status: 'cancelled' }, sendUpdates: 'none' });
+        const evt = await calendar.events.get({ calendarId, eventId }).then(r => r.data).catch(() => null);
+        if (evt && evt.status !== 'cancelled') {
+          if ((evt.attendees || []).length > 0) {
+            await calendar.events.patch({ calendarId, eventId, requestBody: { status: 'cancelled' }, sendUpdates: 'none' });
           } else {
-            await calendar.events.delete({ calendarId, eventId: row.google_event_id, sendUpdates: 'none' });
+            await calendar.events.delete({ calendarId, eventId, sendUpdates: 'none' });
           }
           out.removed++;
         }
-        await pool.query(`DELETE FROM course_run_calendar_event WHERE course_run_id = $1 AND google_event_id = $2`, [run.id, row.google_event_id]);
+        await pool.query(`DELETE FROM course_run_calendar_event WHERE course_run_id = $1 AND google_event_id = $2`, [run.id, eventId]);
       } catch (e) { out.errors++; }
     }
     return out;
