@@ -6,23 +6,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const { courseId, casScore, esScore, fundingValidity } = req.body;
+  const { courseId, casScore, esScore, fundingValidity, courseType } = req.body;
 
   if (!courseId) {
     return res.status(400).json({ message: 'courseId is required' });
   }
 
   try {
+    const setClauses = ['cas_score = $1', 'es_score = $2', 'funding_validity = $3'];
+    const params: any[] = [
+      casScore != null && casScore !== '' ? parseFloat(casScore) : null,
+      esScore != null && esScore !== '' ? parseFloat(esScore) : null,
+      fundingValidity || null,
+    ];
+
+    // Only touch course_type when an explicit, valid value is supplied — leaves
+    // existing values (incl. IBF / non-WSQ) untouched otherwise.
+    if (courseType === 'WSQ' || courseType === 'Non-WSQ') {
+      params.push(courseType);
+      setClauses.push(`course_type = $${params.length}`);
+    }
+
+    params.push(courseId);
     await pool.query(
       `UPDATE public.course
-       SET cas_score = $1, es_score = $2, funding_validity = $3, updated_at = NOW()
-       WHERE id = $4`,
-      [
-        casScore != null && casScore !== '' ? parseFloat(casScore) : null,
-        esScore != null && esScore !== '' ? parseFloat(esScore) : null,
-        fundingValidity || null,
-        courseId,
-      ]
+       SET ${setClauses.join(', ')}, updated_at = NOW()
+       WHERE id = $${params.length}`,
+      params
     );
 
     return res.status(200).json({ success: true });
