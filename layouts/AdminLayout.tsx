@@ -73,6 +73,7 @@ import SupportTicketDetailView from '../components/admin/SupportTicketDetailView
 import MasterListView from '../components/admin/MasterListView';
 import WsqScheduleSyncView from '../components/admin/WsqScheduleSyncView';
 import SoftwareCredentialsView from '../components/admin/SoftwareCredentialsView';
+import RescheduleCancelView from '../components/admin/RescheduleCancelView';
 import { UploadCompanyApplicationView, ViewCompanyApplicationView, CheckSupportingDocumentView } from '../components/admin/CompanyApplicationViews';
 
 // Management Dashboard Component
@@ -222,6 +223,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.CourseSessionTiming]: 'Course Session Timing',
   [AdminPage.SupportTickets]: 'Support Tickets',
   [AdminPage.SoftwareCredentials]: 'Software Credentials',
+  [AdminPage.RescheduleCancel]: 'Reschedule & Cancel',
   [AdminPage.SupportTicketDetail]: 'Ticket Detail',
 };
 
@@ -497,6 +499,8 @@ const AdminLayout: React.FC = () => {
         return <WsqScheduleSyncView />;
       case AdminPage.SoftwareCredentials:
         return <SoftwareCredentialsView />;
+      case AdminPage.RescheduleCancel:
+        return <RescheduleCancelView />;
       default:
         return <AdminDashboard />;
     }

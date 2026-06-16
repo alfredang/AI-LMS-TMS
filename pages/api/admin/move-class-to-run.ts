@@ -198,6 +198,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query('COMMIT');
 
+    // Did the source run end up vacated (no active learners left)? Reported always
+    // so the UI can offer to clean up the source's now-orphaned calendar events even
+    // when calendar sync was OFF for this move.
+    const sourceVacated = !((await pool.query<{ has_learner: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1 FROM enrollment e
+          WHERE e.course_run_id = $1
+            AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+       ) AS has_learner`,
+      [sourceRunId]
+    )).rows[0]?.has_learner ?? false);
+
     // 6. Opt-in calendar migration (best-effort; never fails the move). The DB move
     //    changed both runs' rosters, so reconcile BOTH calendars to their new state:
     //    - TARGET: ensure its events exist (live-match/adopt), then sync attendees to
@@ -215,16 +227,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         await ensureClassCalendarEvent(targetRunId);
         calendar.target = await syncClassAttendees(targetRunId);
 
-        const srcRemaining = (await pool.query<{ has_learner: boolean }>(
-          `SELECT EXISTS(
-             SELECT 1 FROM enrollment e
-              WHERE e.course_run_id = $1
-                AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
-           ) AS has_learner`,
-          [sourceRunId]
-        )).rows[0]?.has_learner ?? false;
-
-        if (srcRemaining) {
+        if (!sourceVacated) {
           calendar.source = await syncClassAttendees(sourceRunId);
           calendar.sourceEventsRemoved = false;
         } else {
@@ -238,7 +241,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       success: true,
-      summary: { moved, removed, skippedConflicts, trainerTarget, sourceTrainerCleared: true },
+      summary: { moved, removed, skippedConflicts, trainerTarget, sourceTrainerCleared: true, sourceVacated },
       calendar,
     });
   } catch (err: any) {

@@ -9,6 +9,7 @@ const ADMIN_ITEMS: AdminItem[] = [
   { id: AdminPage.Dashboard, page: AdminPage.Dashboard, label: 'Admin Dashboard', section: 'Admin' },
   { id: AdminPage.MasterList, page: AdminPage.MasterList, label: 'Master List', section: 'Class Management' },
 
+  { id: AdminPage.RescheduleCancel, page: AdminPage.RescheduleCancel, label: 'Reschedule & Cancel', section: 'Class Management → Classes', keywords: ['reschedule', 'cancel', 'session', 'postpone'] },
   { id: AdminPage.OngoingClasses, page: AdminPage.OngoingClasses, label: 'Ongoing Classes', section: 'Class Management → Classes' },
   { id: AdminPage.UpcomingClasses, page: AdminPage.UpcomingClasses, label: 'Upcoming Classes', section: 'Class Management → Classes' },
   { id: AdminPage.CompletedClasses, page: AdminPage.CompletedClasses, label: 'Completed Classes', section: 'Class Management → Classes' },

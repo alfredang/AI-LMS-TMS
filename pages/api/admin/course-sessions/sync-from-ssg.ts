@@ -46,7 +46,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { courseRunId, sessions } = req.body as { courseRunId?: string; sessions?: SsgSessionInput[] };
+    const { courseRunId, sessions, courseStartDate, courseEndDate } = req.body as {
+      courseRunId?: string; sessions?: SsgSessionInput[]; courseStartDate?: string; courseEndDate?: string;
+    };
 
     if (!courseRunId || typeof courseRunId !== 'string') {
       return res.status(400).json({ success: false, error: 'courseRunId is required' });
@@ -67,6 +69,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
     const courseRunUuid: string = runLookup.rows[0].id;
+
+    // Reflect the SSG run window into local course_run when provided (YYYY-MM-DD).
+    // A session reschedule may widen the run window on SSG; keep local in step so
+    // course_run.start/end never drifts from SSG (the source of truth).
+    const isYmd = (v: any) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    if (isYmd(courseStartDate) && isYmd(courseEndDate)) {
+      await pool.query(
+        `UPDATE course_run SET start_date = $2, end_date = $3, updated_at = NOW() WHERE id = $1`,
+        [courseRunUuid, courseStartDate, courseEndDate]
+      );
+    }
 
     let inserted = 0;
     let updated = 0;

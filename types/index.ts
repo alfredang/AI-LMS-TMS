@@ -141,6 +141,7 @@ export enum AdminPage {
   SchedulerSummary = 'schedulerSummary',
   WorkflowGuides = 'workflowGuides',
   SoftwareCredentials = 'softwareCredentials',
+  RescheduleCancel = 'rescheduleCancel',
   SupportTickets = 'supportTickets',
   SupportTicketDetail = 'supportTicketDetail',
   MasterList = 'masterList',

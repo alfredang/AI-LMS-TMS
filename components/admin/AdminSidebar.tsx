@@ -231,6 +231,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" icon={IconName.Dashboard} />
 
+            <NavItem page={AdminPage.RescheduleCancel} label="Reschedule & Cancel" icon={IconName.Calendar} />
+
             <NavSection title="Class Management" icon={IconName.Briefcase} collapsed={collapsed} isOpen={openSections.classManagement} onToggle={() => toggleSection('classManagement')}>
                 <NavItem page={AdminPage.MasterList} label="Master List" isSubItem />
                 <SubSection title="Classes" isOpen={openSections.cmClasses} onToggle={() => toggleSection('cmClasses')}>
