@@ -618,7 +618,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <p className="font-medium text-gray-900 group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-400">
                   {getRoleDisplayName(role)}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                   {role === UserRole.Learner && 'Access courses and track your learning progress'}
                   {role === UserRole.Trainer && 'Manage classes and grade assessments'}
                   {role === UserRole.Developer && 'Create and edit course content'}
@@ -835,7 +835,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-[#1a3a69] dark:bg-gray-900">
-      <div className="w-full max-w-md px-4">
+      <div className={`w-full px-4 ${step === 'roleSelect' ? 'max-w-lg' : 'max-w-md'}`}>
         <Card className="!p-8 sm:!p-10 !shadow-2xl dark:bg-gray-800 dark:border-gray-700">
           <div className="flex flex-col items-center text-center mb-8">
             {/* Only show logo and company name when data is loaded */}
