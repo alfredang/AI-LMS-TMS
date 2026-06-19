@@ -185,7 +185,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       triggerProformaGeneration(newEnrollmentId);
     }
     // Calendar: a new/restored confirmed learner -> ensure the event + add them.
-    triggerClassCalendarSync(courseRunUuid);
+    // OPT-IN ONLY: the admin must explicitly confirm the Google Calendar update
+    // (UI sends syncCalendar:true after a confirmation step) — never silent.
+    if (req.body?.syncCalendar === true) triggerClassCalendarSync(courseRunUuid);
 
     res.status(200).json({ success: true, message: enrollmentRestored ? 'Student re-enrolled successfully' : 'Student enrolled successfully' });
   } catch (error) {

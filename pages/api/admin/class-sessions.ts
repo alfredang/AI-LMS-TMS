@@ -5,6 +5,7 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/uti
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { getCalendarReadClient } from '../../../lib/calendar/calendarClient';
 import { findEventOnDate, eventDateIso } from '../../../lib/calendar/eventMatch';
+import { upsertRunSessions } from '../../../lib/ssg/syncRunSessions';
 
 /**
  * GET /api/admin/class-sessions?courseRunId=<uuid or SSG run id>
@@ -68,11 +69,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ssgRunId = run.course_run_id;
     let sessions: OutSession[] = [];
     let ssgError: string | null = null;
+    let ssgAuthoritative = false;   // SSG returned a definitive answer (200 or 404)
+    let ssgSessions: any[] = [];
 
-    // 1) Sessions from SSG (live) — the source of truth. Use the SAME dedicated
-    //    sessions endpoint the Edit Class → Sessions tab uses
-    //    (`/courses/runs/{runId}/sessions`, not viewCourseRun's run-detail), so the
-    //    card and the Edit tab show identical sessions.
+    // 1) Pull sessions live from SSG (same dedicated endpoint the Edit Class tab uses).
     if (ssgRunId) {
       try {
         const creds = await getSSGCredentialsService().getSSGCredentials(undefined, (req.headers['x-ssg-app'] as string) || undefined);
@@ -94,26 +94,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const httpResponse = await httpClient.request(builder.build());
 
         if (httpResponse.status === 404) {
-          // SSG: no sessions for this run — genuinely empty, not an error.
+          ssgAuthoritative = true; ssgSessions = []; // genuinely empty
         } else if (httpResponse.status !== 200) {
           throw new Error(`SSG error ${httpResponse.status}`);
         } else {
           const body: any = typeof httpResponse.data === 'string' ? JSON.parse(httpResponse.data) : httpResponse.data;
           const result = body?.data ?? body;
-          const ssgSessions: any[] = result?.sessions || result?.result?.sessions || [];
-          sessions = ssgSessions.map((s: any, i: number): OutSession => ({
-            ssgSessionId: s.id || s.sessionId || null,
-            sessionNumber: String(i + 1),
-            title: s.title || null,
-            startDate: norm(s.startDate),
-            endDate: norm(s.endDate ?? s.startDate),
-            startTime: s.startTime || null,
-            endTime: s.endTime || null,
-            modeOfTraining: modeCode(s.modeOfTraining),
-            venue: null,
-            trainerName: null,
-            attendanceTaken: false,
-          }));
+          ssgSessions = result?.sessions || result?.result?.sessions || [];
+          ssgAuthoritative = true;
         }
       } catch (e) {
         ssgError = e instanceof Error ? e.message : String(e);
@@ -122,9 +110,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ssgError = 'Course run has no SSG course_run_id';
     }
 
-    // No local fallback: SSG is the source of truth. If it can't be loaded the
-    // list stays empty (with ssgError surfaced) — same as the Edit page, which
-    // is also SSG-only. We never substitute the (possibly stale) local cache.
+    // 2) Sync-on-view: when SSG gave a definitive answer, refresh the local cache from it
+    //    (best-effort — if this fails we still display the existing local copy).
+    if (ssgAuthoritative) {
+      try { await upsertRunSessions(run.id, ssgSessions); } catch { /* keep existing local */ }
+    }
+
+    // 3) Display ALWAYS from local course_session — fresh if SSG just synced, else the
+    //    last-known local copy (graceful fallback when SSG is unreachable).
+    const localRows = (await pool.query<{ ssg_session_id: string | null; session_number: string | null; start_date: string | null; end_date: string | null; start_time: string | null; end_time: string | null; mode_of_training: string | null }>(
+      `SELECT ssg_session_id, session_number, start_date, end_date, start_time, end_time, mode_of_training
+         FROM course_session WHERE course_run_id = $1 AND COALESCE(deleted, false) = false
+        ORDER BY start_date ASC, start_time ASC`, [run.id])).rows;
+    sessions = localRows.map((r, i): OutSession => ({
+      ssgSessionId: r.ssg_session_id || null,
+      sessionNumber: r.session_number || String(i + 1),
+      title: null,
+      startDate: norm(r.start_date),
+      endDate: norm(r.end_date ?? r.start_date),
+      startTime: r.start_time || null,
+      endTime: r.end_time || null,
+      modeOfTraining: modeCode(r.mode_of_training),
+      venue: null,
+      trainerName: null,
+      attendanceTaken: false,
+    }));
+    const source: 'ssg' | 'local' = ssgAuthoritative ? 'ssg' : 'local';
 
     // Live calendar match (read-only). Never hard-fails.
     let calendarChecked = false;
@@ -144,11 +155,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
         const events = evResp.data.items || [];
         calendarChecked = true;
+        // Pin the open link to the calendar's own Google account (authuser=) so it doesn't open
+        // under the admin's personal default account and fail to resolve. Mirrors runAttendees.buildOpenUrl.
+        const acct = client.calendarId && client.calendarId.includes('@') ? client.calendarId : null;
+        const pin = (link: string | null | undefined): string | null =>
+          !link ? null : (acct ? `${link}${link.includes('?') ? '&' : '?'}authuser=${encodeURIComponent(acct)}` : link);
         for (const s of sessions) {
           if (!s.startDate) { s.calendarMatched = false; continue; }
           const ev = findEventOnDate(events, { courseRunId: ssgRunId, courseTitle: run.course_title, dateIso: s.startDate });
           s.calendarMatched = !!ev;
-          s.calendarLink = ev?.htmlLink || null;
+          s.calendarLink = pin(ev?.htmlLink || null);
           s.calendarEventDate = ev ? (eventDateIso(ev) || null) : null;
         }
       }
@@ -160,6 +176,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       success: true,
       courseRunUuid: run.id,
+      source,
       ssgError,
       calendarChecked,
       count: sessions.length,

@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
+import { mergeTaggedTrainers } from '../../../lib/trainers/taggedTrainers';
 
 interface ClassDetailsResponse {
   success: boolean;
@@ -77,6 +78,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           cr.virtual_meeting_host_link,
           cr.virtual_meeting_provider,
           cr.mode_of_learning AS mode,
+          cr.tpg_assigned_trainer_name,
+          cr.tpg_assigned_trainer_email,
           c.course_code AS tgs_ref,
           cr.course_run_id AS course_run_id,
           cr.id AS course_run_uuid
@@ -211,6 +214,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
       // Junction table may not exist yet — fall back to legacy column
     }
 
+    // Trainers who have ACCEPTED their invitation (status === 'accepted').
+    // The in-app calendar shows only these — not merely assigned trainers.
+    let acceptedTrainersRows: any[] = [];
+    try {
+      const acceptedResult = await pool.query(
+        `SELECT trainer_name, trainer_email
+         FROM trainer_invitation
+         WHERE course_run_id = $1 AND status = 'accepted'
+         ORDER BY responded_at ASC NULLS LAST, created_at ASC`,
+        [basicData.course_run_uuid]
+      );
+      acceptedTrainersRows = acceptedResult.rows;
+    } catch {
+      // trainer_invitation table may not exist yet — leave empty
+    }
+
     // Build trainer display string
     let trainerDisplay = 'Not Assigned';
     if (trainersRows.length > 0) {
@@ -251,6 +270,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           : basicData.trainer
             ? [{ trainerId: null, trainerName: basicData.trainer, trainerEmail: null }]
             : [],
+        acceptedTrainers: acceptedTrainersRows.map(t => ({
+          trainerName: t.trainer_name,
+          trainerEmail: t.trainer_email || null,
+        })),
+        // Tagged trainer list (LMS + accepted-invite + TPG), merged by email — the calendar/reschedule model.
+        taggedTrainers: mergeTaggedTrainers({
+          lms: trainersRows.map(t => ({ name: t.trainer_name, email: t.trainer_email })),
+          accepted: acceptedTrainersRows.map(t => ({ name: t.trainer_name, email: t.trainer_email })),
+          tpg: (basicData.tpg_assigned_trainer_name || '').trim() ? [{ name: basicData.tpg_assigned_trainer_name, email: basicData.tpg_assigned_trainer_email }] : [],
+        }),
         enrolledLearners: learnersResult.rows.map(row => ({
           learnerName: row.learner_name,
           learnerEmail: row.learner_email,

@@ -227,3 +227,30 @@ export function buildDeleteSessionPayload(args: BuildArgs) {
     ],
   };
 }
+
+/** Flat body for `action=delete-sessions` covering one OR many sessions (e.g. a whole day). */
+export function buildDeleteSessionsPayload(
+  args: Omit<BuildArgs, 'session'> & { sessions: EditableSession[] }
+) {
+  const { sessions, ...rest } = args;
+  const base = buildDeleteSessionPayload({ ...rest, session: sessions[0] });
+  return {
+    ...base,
+    sessions: sessions.map((s) => ({
+      action: 'delete',
+      sessionId: s.id || '',
+      startDate: s.startDate ? String(s.startDate) : '20251025',
+      endDate: s.endDate ? String(s.endDate) : '20251025',
+      startTime: s.startTime || '15:30',
+      endTime: s.endTime || '18:30',
+      modeOfTraining: s.modeOfTraining || '8',
+      sessionBlock: s.venue?.block || '12',
+      sessionStreet: s.venue?.street || 'WOODLANDS SQUARE',
+      sessionFloor: s.venue?.floor || '07',
+      sessionUnit: s.venue?.unit || '85-87',
+      sessionBuilding: s.venue?.building || 'WOODS SQUARE',
+      sessionPostalCode: s.venue?.postalCode || '737715',
+      sessionRoom: s.venue?.room || 'Tertiary Courses Training Venue',
+    })),
+  };
+}

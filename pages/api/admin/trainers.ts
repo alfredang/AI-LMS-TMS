@@ -20,12 +20,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const client = await pool.connect();
 
         try {
-            // SQL query to get all trainer names
+            // Trainer names + whether a usable NRIC is on file (boolean only — the NRIC
+            // itself is PII and not exposed here). Used to pre-guard TPG trainer assignment.
             const query = `
-                SELECT 
-                    au.full_name AS trainer_name
+                SELECT
+                    au.full_name AS trainer_name,
+                    au.email,
+                    (tp.nric IS NOT NULL AND btrim(tp.nric) <> '' AND upper(btrim(tp.nric)) <> 'NA') AS has_nric
                 FROM trainer_profile tp
-                JOIN app_user au 
+                JOIN app_user au
                     ON tp.user_id = au.id
                 ORDER BY au.full_name;
             `;

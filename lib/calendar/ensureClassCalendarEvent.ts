@@ -106,10 +106,14 @@ export async function ensureClassCalendarEvent(courseRunId: string): Promise<Ens
           [run.id, dateIso]
         )).rows[0];
         if (mapped?.google_event_id) {
-          const stillThere = events.some(e => e.id === mapped.google_event_id) ||
-            await calendar.events.get({ calendarId, eventId: mapped.google_event_id }).then(() => true).catch(() => false);
-          if (stillThere) { out.kept++; continue; }
-          // stored event vanished — drop the stale row, fall through to adopt/create
+          // NOTE: a manually-DELETED event is not a 404 — Google's events.get returns it with
+          // status:'cancelled' (and events.list excludes cancelled by default). So "get succeeded"
+          // is NOT proof it's live; we must check status !== 'cancelled', else a deleted event is
+          // wrongly "kept" and never recreated.
+          const live = events.find(e => e.id === mapped.google_event_id)
+            || await calendar.events.get({ calendarId, eventId: mapped.google_event_id }).then(r => r.data).catch(() => null);
+          if (live && live.status !== 'cancelled') { out.kept++; continue; }
+          // stored event vanished (404) or was deleted/cancelled — drop the stale row, fall through to adopt/create
           await pool.query(`DELETE FROM course_run_calendar_event WHERE course_run_id = $1 AND event_date = $2::date`, [run.id, dateIso]);
         }
 
@@ -228,14 +232,19 @@ export async function syncClassAttendees(courseRunId: string): Promise<AttendeeS
   if (!run) return { ...out, status: 'skipped', reason: 'course run not found' };
   const { calendar, calendarId } = client;
 
-  // Desired = confirmed learners + accepted trainers (lowercased emails).
+  // Desired = confirmed learners + local trainers + the TPG-assigned trainer (lowercased emails).
+  // The TPG trainer is included so the actual SSG/TPG trainer lands on the calendar even when
+  // they aren't (yet) a local course_run_trainer.
   const desiredRows = await pool.query<{ email: string }>(
     `SELECT lower(btrim(au.email)) AS email
        FROM enrollment e JOIN app_user au ON au.id = e.user_id
       WHERE e.course_run_id = $1 AND e.enrolment_status = 'Confirmed' AND nullif(btrim(au.email),'') IS NOT NULL
       UNION
      SELECT lower(btrim(t.trainer_email)) AS email
-       FROM course_run_trainer t WHERE t.course_run_id = $1 AND nullif(btrim(t.trainer_email),'') IS NOT NULL`,
+       FROM course_run_trainer t WHERE t.course_run_id = $1 AND nullif(btrim(t.trainer_email),'') IS NOT NULL
+      UNION
+     SELECT lower(btrim(cr.tpg_assigned_trainer_email)) AS email
+       FROM course_run cr WHERE cr.id = $1 AND nullif(btrim(cr.tpg_assigned_trainer_email),'') IS NOT NULL`,
     [run.id]
   );
   const desired = new Set(desiredRows.rows.map(r => r.email));
@@ -248,7 +257,8 @@ export async function syncClassAttendees(courseRunId: string): Promise<AttendeeS
   const knownRows = await pool.query<{ email: string }>(
     `SELECT lower(btrim(au.email)) AS email FROM enrollment e JOIN app_user au ON au.id=e.user_id WHERE e.course_run_id=$1 AND nullif(btrim(au.email),'') IS NOT NULL
      UNION SELECT lower(btrim(t.trainer_email)) FROM course_run_trainer t WHERE t.course_run_id=$1 AND nullif(btrim(t.trainer_email),'') IS NOT NULL
-     UNION SELECT lower(btrim(ti.trainer_email)) FROM trainer_invitation ti WHERE ti.course_run_id=$1 AND nullif(btrim(ti.trainer_email),'') IS NOT NULL`,
+     UNION SELECT lower(btrim(ti.trainer_email)) FROM trainer_invitation ti WHERE ti.course_run_id=$1 AND nullif(btrim(ti.trainer_email),'') IS NOT NULL
+     UNION SELECT lower(btrim(cr.tpg_assigned_trainer_email)) FROM course_run cr WHERE cr.id=$1 AND nullif(btrim(cr.tpg_assigned_trainer_email),'') IS NOT NULL`,
     [run.id]
   );
   const known = new Set(knownRows.rows.map(r => r.email));

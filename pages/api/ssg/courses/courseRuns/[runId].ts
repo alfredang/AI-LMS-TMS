@@ -19,10 +19,40 @@
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
+import pool from '../../../../../lib/db';
 import { getSSGCredentialsService } from '../../../../../lib/ssg/services/credentials-service';
 import { EditRunInfo, DeleteRunInfo, EditDeleteCourseRunUtils } from '../../../../../lib/ssg/models/edit-delete-course-run';
 import { OptionalSelector } from '../../../../../lib/ssg/models/course-runs';
 import { createSSGCourseAPI } from '../../../../../lib/ssg/api/course-api';
+import { pushTrainerToTpgForRun, resolveRunTrainerEditPayloads } from '../../../../../lib/ssg/pushTrainerToTpgForRun';
+
+/** Resolve the run's trainer edit-payloads (with NRIC) so a session edit can re-send them. */
+async function runTrainerPayloads(ssgRunId: string): Promise<any[] | undefined> {
+  try {
+    const uuid = (await pool.query<{ id: string }>(`SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1`, [ssgRunId])).rows[0]?.id;
+    if (!uuid) return undefined;
+    const p = await resolveRunTrainerEditPayloads(uuid);
+    return p.length ? p : undefined;
+  } catch { return undefined; }
+}
+
+/**
+ * SSG's /courses/courseRuns/edit REPLACES the run object, and our session-level payloads
+ * (add/update/delete-sessions) omit `linkCourseRunTrainer` — so SSG WIPES the run's trainer on
+ * any session op. Re-assert the locally-assigned trainer back onto TPG afterwards so a
+ * reschedule/cancel/add-session never silently drops the trainer. Best-effort; never throws.
+ */
+async function reassertTpgTrainer(ssgRunId: string): Promise<{ status: string; message?: string } | null> {
+  try {
+    const r = await pool.query<{ id: string }>(`SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1`, [ssgRunId]);
+    const uuid = r.rows[0]?.id;
+    if (!uuid) return { status: 'skipped', message: 'local run not found' };
+    const res = await pushTrainerToTpgForRun(uuid);
+    return { status: res.status, message: res.message };
+  } catch (e) {
+    return { status: 'error', message: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -226,7 +256,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('🔄 Sessions to delete:', JSON.stringify(sessionsToDelete, null, 2));
 
       // Use deleteSessionsFromCourseRun method specifically for session deletion
-      const result = await apiClient.deleteSessionsFromCourseRun(runId, runInfo, sessionsToDelete, includeExpired);
+      const delTrainers = await runTrainerPayloads(runId);
+      const result = await apiClient.deleteSessionsFromCourseRun(runId, runInfo, sessionsToDelete, includeExpired, delTrainers);
 
       if (result.error) {
         console.log('❌ SSG API error during session deletion:', result.error);
@@ -234,7 +265,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       console.log('✅ SSG API session deletion success:', result.data);
-      return res.status(200).json(result.data);
+      const tpgTrainerReassert = await reassertTpgTrainer(runId);
+      console.log('🔁 TPG trainer re-assert after session deletion:', tpgTrainerReassert);
+      return res.status(200).json({ ...result.data, tpgTrainerReassert });
 
     } else if (action === 'add-sessions') {
       // Add sessions to a course run (NOT the entire course run)
@@ -315,7 +348,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('🔄 Complete session addition run info:', JSON.stringify(sessionAddRunInfo, null, 2));
 
       // Use addSessionsToCourseRun method specifically for session addition
-      const result = await apiClient.addSessionsToCourseRun(runId, sessionAddRunInfo, includeExpired);
+      const addTrainers = await runTrainerPayloads(runId);
+      const result = await apiClient.addSessionsToCourseRun(runId, sessionAddRunInfo, includeExpired, addTrainers);
 
       if (result.error) {
         console.log('❌ SSG API error during session addition:', result.error);
@@ -323,7 +357,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       console.log('✅ SSG API session addition success:', result.data);
-      return res.status(200).json(result.data);
+      const tpgTrainerReassert = await reassertTpgTrainer(runId);
+      console.log('🔁 TPG trainer re-assert after session addition:', tpgTrainerReassert);
+      return res.status(200).json({ ...result.data, tpgTrainerReassert });
 
     } else if (action === 'update-sessions') {
       // Update sessions in a course run (NOT the entire course run)
@@ -398,8 +434,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('🔄 Complete session update run info:', JSON.stringify(sessionUpdateRunInfo, null, 2));
       console.log('🔄 Sessions to update:', JSON.stringify(sessionsToUpdate, null, 2));
 
-      // Use updateSessionsFromCourseRun method specifically for session update
-      const result = await apiClient.updateSessionsFromCourseRun(runId, sessionUpdateRunInfo, sessionsToUpdate, includeExpired);
+      // Use updateSessionsFromCourseRun method specifically for session update.
+      // Include the run's trainer(s) so SSG doesn't drop them on this edit.
+      const updTrainers = await runTrainerPayloads(runId);
+      const result = await apiClient.updateSessionsFromCourseRun(runId, sessionUpdateRunInfo, sessionsToUpdate, includeExpired, updTrainers);
 
       if (result.error) {
         console.log('❌ SSG API error during session update:', result.error);
@@ -407,7 +445,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       console.log('✅ SSG API session update success:', result.data);
-      return res.status(200).json(result.data);
+      // SSG wiped the trainer (omitted linkCourseRunTrainer) — restore it.
+      const tpgTrainerReassert = await reassertTpgTrainer(runId);
+      console.log('🔁 TPG trainer re-assert after session update:', tpgTrainerReassert);
+      return res.status(200).json({ ...result.data, tpgTrainerReassert });
 
     } else if (action === 'assign-trainer') {
       // Assign trainer to a course run

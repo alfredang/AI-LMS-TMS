@@ -185,6 +185,20 @@ async function seedDefaults() {
             api_endpoint: '/api/external/sync-trainer-to-tpg',
         },
         {
+            id: 'sync_course_run_sessions',
+            name: 'Sync Course Run Sessions (gap-fill)',
+            description: 'For each active/upcoming course run that has people (≥1 learner or a trainer) but NO local sessions, pulls its sessions from SSG into local course_session so it appears on the in-app calendar. Per-run viewing also syncs on demand; this catches runs nobody opened. Runs daily at 2:30 AM SGT.',
+            cron_expression: '30 2 * * *', // 2:30 AM SGT daily
+            api_endpoint: '/api/external/sync-course-run-sessions',
+        },
+        {
+            id: 'sync_run_trainers_from_tpg',
+            name: 'Sync Course Run Trainers from TPG',
+            description: 'For each active/upcoming course run that has people, does a live viewCourseRun and upserts the TPG-assigned trainer (handles direct add/remove on TPGateway, incl. removals). Per-run viewing already refreshes on demand; this is the grid-wide backstop for runs nobody opens. Runs daily at 2:00 AM SGT.',
+            cron_expression: '0 2 * * *', // 2:00 AM SGT daily
+            api_endpoint: '/api/external/sync-run-trainers-from-tpg',
+        },
+        {
             id: 'sync_google_calendar',
             name: 'Sync Google Calendar (Virtual Classes)',
             description: 'Checks Google Calendar for events in the next 21 days. Events with [VIRTUAL] in the title are matched to course runs — sets class_type to Virtual and stores the Google Meet link. Runs daily at 1:00 AM SGT.',

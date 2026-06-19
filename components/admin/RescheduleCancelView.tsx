@@ -19,10 +19,14 @@ import { Button } from '../ui/Button';
 import { getApiUrl } from '@/lib/urlHelpers';
 import { useLms } from '@contexts/LmsContext';
 import { useSessionReschedule } from '@/hooks/useSessionReschedule';
+import { useScheduleChangeConfirm } from '@/hooks/useScheduleChangeConfirm';
 import SessionRescheduleModal from './SessionRescheduleModal';
 import MoveClassModal from './MoveClassModal';
 import ClassPeopleModal from './ClassPeopleModal';
+import CalendarAttendeesPanel from './CalendarAttendeesPanel';
+import ProcessingOverlay from '../ui/ProcessingOverlay';
 import { convertSsgDateToHtml, getModeLabel, modeOfTrainingOptions } from '@/lib/ssg/sessionEditHelpers';
+import { TPG_MANUAL_NOTICE } from '@/lib/ssg/tpgManualNotice';
 
 interface ClassRow {
   id: string;            // course_run UUID
@@ -56,7 +60,7 @@ interface SessionsState { loading: boolean; sessions: SessionRow[]; calendarChec
 interface EditDraft { runUuid: string; sessionKey: string; startDate: string; startTime: string; endTime: string; modeOfTraining: string; syncCalendar: boolean; }
 
 type PopupType = 'confirm' | 'success' | 'error';
-interface PopupState { open: boolean; type: PopupType; title: string; message: string; confirmText: string; cancelText: string; onConfirm?: () => void; }
+interface PopupState { open: boolean; type: PopupType; title: string; message: string; confirmText: string; cancelText: string; onConfirm?: () => void; onCancel?: () => void; }
 
 // Order requested: Confirmed & Pending, Cancelled, Confirmed, Pending.
 const STATUS_TABS: { key: string; label: string }[] = [
@@ -127,6 +131,7 @@ const RescheduleCancelView: React.FC = () => {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sessionsByRun, setSessionsByRun] = useState<Record<string, SessionsState>>({});
   const [syncCalendar, setSyncCalendar] = useState(false);
+  const [notifyAttendees, setNotifyAttendees] = useState(false);
   const [busy, setBusy] = useState(false);
   const [edit, setEdit] = useState<EditDraft | null>(null);
   const [moveTarget, setMoveTarget] = useState<ClassRow | null>(null);
@@ -135,12 +140,13 @@ const RescheduleCancelView: React.FC = () => {
   const [popup, setPopup] = useState<PopupState>({ open: false, type: 'success', title: '', message: '', confirmText: 'OK', cancelText: 'Cancel' });
 
   const closePopup = () => setPopup((p) => ({ ...p, open: false }));
-  const showConfirmPopup = (message: string, onConfirm: () => void, title = 'Confirm', confirmText = 'Confirm', cancelText = 'Cancel') =>
-    setPopup({ open: true, type: 'confirm', title, message, confirmText, cancelText, onConfirm });
+  const showConfirmPopup = (message: string, onConfirm: () => void, title = 'Confirm', confirmText = 'Confirm', cancelText = 'Cancel', onCancel?: () => void) =>
+    setPopup({ open: true, type: 'confirm', title, message, confirmText, cancelText, onConfirm, onCancel });
   const showSuccessPopup = (message: string) => setPopup({ open: true, type: 'success', title: 'Success', message, confirmText: 'OK', cancelText: '' });
   const showErrorPopup = (message: string) => setPopup({ open: true, type: 'error', title: 'Error', message, confirmText: 'OK', cancelText: '' });
 
-  const { reschedulePrompt, rescheduleSession, rescheduleDay, cancelSession } = useSessionReschedule({ showConfirmPopup, showSuccessPopup, showErrorPopup, setBusy });
+  const { confirm: showStepConfirm, node: stepConfirmNode } = useScheduleChangeConfirm();
+  const { reschedulePrompt, rescheduleSession, rescheduleDay, cancelSession, cancelDay } = useSessionReschedule({ showConfirmPopup, showSuccessPopup, showErrorPopup, setBusy, showStepConfirm });
 
   // Per-day reschedule (move every session on a day to a new date).
   const [dayEdit, setDayEdit] = useState<{ runUuid: string; date: string; newDate: string; syncCalendar: boolean } | null>(null);
@@ -234,7 +240,7 @@ const RescheduleCancelView: React.FC = () => {
       session: { id: s.ssgSessionId || s.id, startDate: edit.startDate, endDate: edit.startDate, startTime: edit.startTime, endTime: edit.endTime, modeOfTraining: edit.modeOfTraining, venue: s.venue },
       originalSession: { startDate: convertSsgDateToHtml(s.startDate || ''), startTime: s.startTime || '', endTime: s.endTime || '', modeOfTraining: s.modeOfTraining ?? '' },
       allSessions: (sessionsByRun[run.id]?.sessions || []).map((x) => ({ id: x.ssgSessionId || x.id, startDate: x.startDate || '' })),
-      syncCalendar: edit.syncCalendar, sessionLabel: `S${s.sessionNumber ?? ''}`.trim(),
+      syncCalendar, notifyAttendees, sessionLabel: `S${s.sessionNumber ?? ''}`.trim(),
       onApplied: () => { setEdit(null); void loadSessions(run, true); },
     });
   };
@@ -243,7 +249,7 @@ const RescheduleCancelView: React.FC = () => {
     await cancelSession({
       courseRunId: run.courseRunId, courseReferenceNumber: run.courseCode, currentUserEmail,
       session: { id: s.ssgSessionId || s.id, startDate: convertSsgDateToHtml(s.startDate || ''), endDate: convertSsgDateToHtml(s.endDate || s.startDate || ''), startTime: s.startTime || '', endTime: s.endTime || '', modeOfTraining: s.modeOfTraining ?? '', venue: s.venue },
-      sessionLabel: `S${s.sessionNumber ?? ''}`.trim(), syncCalendar,
+      sessionLabel: `S${s.sessionNumber ?? ''}`.trim(), syncCalendar, notifyAttendees,
       onApplied: () => { void loadSessions(run, true); },
     });
   };
@@ -259,7 +265,7 @@ const RescheduleCancelView: React.FC = () => {
       });
       const j = await res.json();
       if (j?.success && j?.status === 'ok') {
-        showSuccessPopup(`Calendar synced for run ${run.courseRunId}: created ${j.created ?? 0}, adopted ${j.adopted ?? 0}, kept ${j.kept ?? 0}, removed ${j.removedStale ?? 0}.`);
+        showSuccessPopup(`Google Calendar updated — ${j.created ?? 0} event(s) created, ${j.removedStale ?? 0} removed.`);
       } else {
         showErrorPopup(`Calendar not updated: ${j?.reason || j?.error || 'unknown'}`);
       }
@@ -282,12 +288,25 @@ const RescheduleCancelView: React.FC = () => {
         startTime: s.startTime || '', endTime: s.endTime || '', modeOfTraining: s.modeOfTraining ?? '', venue: s.venue,
       })),
       allSessions: all.map((x) => ({ id: x.ssgSessionId || x.id, startDate: x.startDate || '' })),
-      syncCalendar: dayEdit.syncCalendar,
+      syncCalendar, notifyAttendees,
       onApplied: () => { setDayEdit(null); void loadSessions(run, true); },
     });
   };
 
-  const setClassStatus = async (run: ClassRow, status: 'Cancelled' | 'Confirmed') => {
+  const cancelEntireDay = async (run: ClassRow, group: { date: string; sessions: SessionRow[] }) => {
+    await cancelDay({
+      courseRunId: run.courseRunId, courseReferenceNumber: run.courseCode, currentUserEmail,
+      date: group.date,
+      sessionsOnDay: group.sessions.map((s) => ({
+        id: s.ssgSessionId || s.id, startDate: convertSsgDateToHtml(s.startDate || ''), endDate: convertSsgDateToHtml(s.endDate || s.startDate || ''),
+        startTime: s.startTime || '', endTime: s.endTime || '', modeOfTraining: s.modeOfTraining ?? '', venue: s.venue,
+      })),
+      syncCalendar, notifyAttendees,
+      onApplied: () => { setDayEdit(null); void loadSessions(run, true); },
+    });
+  };
+
+  const setClassStatus = async (run: ClassRow, status: 'Cancelled' | 'Confirmed'): Promise<boolean> => {
     try {
       setBusy(true);
       const res = await fetch(getApiUrl('/api/admin/upcoming-classes'), {
@@ -295,23 +314,46 @@ const RescheduleCancelView: React.FC = () => {
       });
       const data = await res.json();
       if (!data?.success) throw new Error(data?.error || 'Failed to update class status');
-      showSuccessPopup(status === 'Cancelled' ? 'Class cancelled.' : 'Class reactivated (Confirmed).');
       void fetchClasses();
+      return true;
     } catch (e: any) {
       showErrorPopup('Failed to update class: ' + (e?.message || 'unknown error'));
+      return false;
     } finally {
       setBusy(false);
     }
   };
 
-  const cancelEntireClass = (run: ClassRow) => showConfirmPopup(
-    `Cancel the ENTIRE class "${run.courseTitle}" (run ${run.courseRunId})?\n\nThis sets the class status to Cancelled and removes all of its Google Calendar events. Individual sessions on SSG are not deleted by this action.`,
-    () => { void setClassStatus(run, 'Cancelled'); }, 'Cancel entire class', 'Cancel class', 'Keep class',
-  );
+  // Cancel an entire class — standardized step confirm with the Notify composer
+  // (calendar removal is automatic for a class cancel, so no Sync toggle).
+  const cancelEntireClass = (run: ClassRow) => { void (async () => {
+    const dec = await showStepConfirm({
+      title: 'Cancel entire class', destructive: true, confirmLabel: 'Cancel class', cancelLabel: 'Keep class',
+      message: `Cancel the ENTIRE class "${run.courseTitle}" (run ${run.courseRunId})?\n\nThis marks the class as Cancelled and removes all its Google Calendar events. The sessions themselves aren't deleted.\n\n${TPG_MANUAL_NOTICE}`,
+      defaultSync: false, showSync: false, showAdjust: false, defaultNotify: notifyAttendees,
+      notify: { courseRunId: run.courseRunId, changeType: 'class_cancel', summary: `The class "${run.courseTitle}" (run ${run.courseRunId}) has been cancelled.` },
+    });
+    if (!dec.confirmed) return;
+    const ok = await setClassStatus(run, 'Cancelled');
+    if (!ok) return;
+    if (dec.notifyPayload) {
+      const p = dec.notifyPayload;
+      try {
+        const r = await fetch(getApiUrl('/api/admin/notify-schedule-change'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ courseRunId: run.courseRunId, changeType: 'class_cancel', summary: p.message, subject: p.subject, reason: p.reason, recipients: p.recipients }),
+        });
+        const j = await r.json();
+        showSuccessPopup(`Class cancelled.\n\n${j?.success ? `Notified ${j.sent ?? 0} attendee(s)${j.failed ? `, ${j.failed} failed` : ''}.` : `Notification failed: ${j?.error || 'unknown'}`}`);
+      } catch (err: any) { showErrorPopup('Class cancelled, but notification failed: ' + (err?.message || 'unknown error')); }
+    } else {
+      showSuccessPopup('Class cancelled.');
+    }
+  })(); };
 
   const reactivateClass = (run: ClassRow) => showConfirmPopup(
     `Reactivate "${run.courseTitle}" (run ${run.courseRunId})?\n\nThis sets the class status back to Confirmed and (if it has learners) restores its Google Calendar events.`,
-    () => { void setClassStatus(run, 'Confirmed'); }, 'Reactivate class', 'Reactivate', 'Keep cancelled',
+    () => { void (async () => { const ok = await setClassStatus(run, 'Confirmed'); if (ok) showSuccessPopup('Class reactivated (Confirmed).'); })(); }, 'Reactivate class', 'Reactivate', 'Keep cancelled',
   );
 
   const statusBadge = (status: string) => {
@@ -332,11 +374,16 @@ const RescheduleCancelView: React.FC = () => {
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Reschedule or cancel individual sessions, move a class to another run, or cancel / reactivate a whole class.</p>
       </div>
 
-      {/* Calendar sync opt-in */}
-      <div className="mb-4 flex items-start gap-2 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 text-sm">
+      {/* Calendar sync + notify opt-ins */}
+      <div className="mb-4 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 text-sm space-y-2">
+        <p className="text-xs text-gray-500 dark:text-gray-400 -mb-1">Defaults for this page — every reschedule, cancel and move uses these, and you can change either one when you confirm.</p>
         <label className="flex items-center gap-2 cursor-pointer select-none text-gray-700 dark:text-gray-300">
           <input type="checkbox" checked={syncCalendar} onChange={(e) => setSyncCalendar(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-          <span><strong>Sync Google Calendar</strong> when rescheduling / cancelling a session (move or remove the day's event). Default off — SSG + local only.</span>
+          <span><strong>Sync Google Calendar</strong> — also move or remove the matching Google Calendar event when a change is applied. Off by default.</span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer select-none text-gray-700 dark:text-gray-300">
+          <input type="checkbox" checked={notifyAttendees} onChange={(e) => setNotifyAttendees(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+          <span><strong>Notify attendees by email</strong> — open each confirmation with the email ready to send to the learners and trainer(s). Off by default; never automatic.</span>
         </label>
       </div>
 
@@ -458,7 +505,7 @@ const RescheduleCancelView: React.FC = () => {
                             <button type="button" onClick={() => reactivateClass(run)} className="px-2 py-1 rounded-md text-xs font-medium text-white bg-green-600 hover:bg-green-700 whitespace-nowrap">Reactivate</button>
                           ) : (
                             <div className="flex flex-col gap-1 items-end">
-                              <button type="button" onClick={() => setMoveTarget(run)} className="w-full px-2 py-1 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap">Reschedule Class</button>
+                              <button type="button" onClick={() => setMoveTarget(run)} className="w-full px-2 py-1 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">Move class to another course run</button>
                               <button type="button" onClick={() => cancelEntireClass(run)} className="w-full px-2 py-1 rounded-md text-xs font-medium text-white bg-red-600 hover:bg-red-700 whitespace-nowrap">Cancel Class</button>
                             </div>
                           )}
@@ -477,7 +524,7 @@ const RescheduleCancelView: React.FC = () => {
                               <div className="space-y-3">
                                 <div className="flex items-center justify-end">
                                   <button type="button" onClick={() => void syncRunCalendar(run)} disabled={calBusyRun === run.id}
-                                    title="Create any missing Google Calendar events for this run's current sessions (and sync attendees)"
+                                    title="Add Google Calendar events for any sessions that don't have one (and update attendees)"
                                     className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 whitespace-nowrap">
                                     {calBusyRun === run.id ? 'Creating…' : '🗓️ Create missing calendar events'}
                                   </button>
@@ -491,15 +538,14 @@ const RescheduleCancelView: React.FC = () => {
                                         {dayEditing ? (
                                           <div className="flex items-center gap-2">
                                             <input type="date" value={dayEdit!.newDate} onChange={(e) => setDayEdit({ ...dayEdit!, newDate: e.target.value })} className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs dark:bg-gray-700 dark:text-white" />
-                                            <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap">
-                                              <input type="checkbox" checked={dayEdit!.syncCalendar} onChange={(e) => setDayEdit({ ...dayEdit!, syncCalendar: e.target.checked })} className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                                              Sync calendar
-                                            </label>
                                             <button type="button" onClick={() => void saveDayReschedule(run, group)} className="px-2 py-1 rounded-md text-xs font-medium text-white bg-blue-600 hover:bg-blue-700">Save day</button>
                                             <button type="button" onClick={() => setDayEdit(null)} className="px-2 py-1 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
                                           </div>
                                         ) : (
-                                          <button type="button" onClick={() => setDayEdit({ runUuid: run.id, date: group.date, newDate: group.date, syncCalendar })} className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 whitespace-nowrap">Reschedule entire day</button>
+                                          <div className="flex items-center gap-2">
+                                            <button type="button" onClick={() => setDayEdit({ runUuid: run.id, date: group.date, newDate: group.date, syncCalendar })} className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 whitespace-nowrap">Reschedule entire day</button>
+                                            <button type="button" onClick={() => void cancelEntireDay(run, group)} className="px-2 py-1 rounded-md text-xs font-medium border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 whitespace-nowrap">Cancel entire day</button>
+                                          </div>
                                         )}
                                       </div>
                                       <table className="min-w-full text-sm">
@@ -525,12 +571,6 @@ const RescheduleCancelView: React.FC = () => {
                                                         <option value="">—</option>
                                                         {modeOfTrainingOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                                                       </select>
-                                                    </td>
-                                                    <td className="py-2 px-2">
-                                                      <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap">
-                                                        <input type="checkbox" checked={edit!.syncCalendar} onChange={(e) => setEdit({ ...edit!, syncCalendar: e.target.checked })} className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                                                        Sync calendar
-                                                      </label>
                                                     </td>
                                                     <td className="py-2 px-2 text-right whitespace-nowrap">
                                                       <button type="button" onClick={() => void saveReschedule(run, s)} className="px-2.5 py-1 rounded-md text-xs font-medium text-white bg-blue-600 hover:bg-blue-700">Save</button>
@@ -565,7 +605,10 @@ const RescheduleCancelView: React.FC = () => {
                                     </div>
                                   );
                                 })}
-                                <p className="text-xs text-gray-400">Sessions are read live from SSG, grouped by day. Rescheduling pushes to SSG; cancelling permanently deletes the session from SSG.</p>
+                                <p className="text-xs text-gray-400">Sessions are grouped by day. Rescheduling moves the session; cancelling permanently deletes it.</p>
+                                <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                                  <CalendarAttendeesPanel courseRunId={run.courseRunId} onChanged={() => void loadSessions(run, true)} />
+                                </div>
                               </div>
                             )}
                           </td>
@@ -594,6 +637,7 @@ const RescheduleCancelView: React.FC = () => {
         <MoveClassModal
           run={moveTarget}
           defaultSyncCalendar={syncCalendar}
+          defaultNotify={notifyAttendees}
           onClose={() => setMoveTarget(null)}
           onDone={() => {
             void fetchClasses();
@@ -615,6 +659,12 @@ const RescheduleCancelView: React.FC = () => {
       {/* Calendar-resolution modal (shared) */}
       <SessionRescheduleModal prompt={reschedulePrompt} />
 
+      {/* Standardized step confirmation (Sync + Notify toggles + email composer) */}
+      {stepConfirmNode}
+
+      {/* Pending overlay while a reschedule/cancel/sync is in flight */}
+      <ProcessingOverlay show={busy} />
+
       {/* Popup (confirm / success / error) */}
       {popup.open && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -623,7 +673,7 @@ const RescheduleCancelView: React.FC = () => {
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 whitespace-pre-line">{popup.message}</p>
             <div className="flex justify-end gap-2">
               {popup.type === 'confirm' && popup.cancelText && (
-                <button type="button" onClick={closePopup} className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">{popup.cancelText}</button>
+                <button type="button" onClick={() => { const fn = popup.onCancel; closePopup(); fn?.(); }} className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">{popup.cancelText}</button>
               )}
               <button type="button" onClick={() => { const fn = popup.onConfirm; closePopup(); if (popup.type === 'confirm' && fn) fn(); }}
                 className={`px-4 py-2 rounded-md text-white ${popup.type === 'error' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}>

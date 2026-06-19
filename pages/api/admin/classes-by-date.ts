@@ -3,6 +3,8 @@ import { google } from 'googleapis';
 import pool from '../../../lib/db';
 import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
 import { normalizeTrainerName, splitTrainerList } from '@/lib/trainerInvitations';
+import { mergeTaggedTrainers, type TaggedTrainer } from '@/lib/trainers/taggedTrainers';
+import { collectRunTaggedTrainers } from '@/lib/trainers/collectRunTrainers';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,9 @@ interface CalendarEvent {
   nextAvailableTrainerEmail: string;
   latestInvitationStatus: string;
   approvedTrainers: string[]; // course.trainers_list split — populates Next Trainer dropdown
+  acceptedTrainers: string[]; // trainers who ACCEPTED their invite (legacy; superseded by taggedTrainers)
+  taggedTrainers: TaggedTrainer[]; // merged LMS + accepted + TPG trainers with tags (calendar model)
+  noSessions?: boolean; // true = run has NO scheduled sessions (rendered as an all-day block on its start date)
   invitationPaused: boolean;
   invitationRepliesBlocked: boolean;
   trainerInvitations: Record<string, Array<{ status: string; sent_at: string; responded_at: string | null }>>;
@@ -380,6 +385,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let nextAvailableTrainerEmail = '';
       let latestInvitationStatus: string = invitations[0]?.status || '';
 
+      // Trainers who have ACCEPTED their invitation (status === 'accepted').
+      // The calendar display + "Has trainer" filter use only these — not merely
+      // assigned/invited trainers. Typically a single accepted trainer per run.
+      const acceptedTrainers = Array.from(new Set(
+        invitations
+          .filter((inv) => inv.status === 'accepted')
+          .map((inv) => (inv.trainer_name || '').trim())
+          .filter(Boolean)
+      ));
+
       const localAssignedIndexes = normalizedTrainerPool
         .map((normalized, idx) => isLocallyAssigned(normalized) ? idx : -1)
         .filter((index) => index >= 0);
@@ -461,6 +476,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (matched) displayLocal = matched;
       }
 
+      // Tagged trainer list (LMS + accepted-invite + TPG), merged by email — the calendar model.
+      const taggedTrainers = mergeTaggedTrainers({
+        lms: allLocalPairs.map((p) => ({ name: p.name, email: p.email })),
+        accepted: invitations.filter((i) => i.status === 'accepted').map((i) => ({ name: i.trainer_name, email: i.trainer_email })),
+        tpg: (row.tpg_assigned_trainer_name || '').trim() ? [{ name: row.tpg_assigned_trainer_name, email: row.tpg_assigned_trainer_email }] : [],
+      });
+
       return {
         courseRunUuid: row.course_run_uuid,
         courseRunId: row.course_run_id || '',
@@ -488,6 +510,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         nextAvailableTrainerEmail,
         latestInvitationStatus,
         approvedTrainers: trainerPool,
+        acceptedTrainers,
+        taggedTrainers,
         trainerInvitations: perTrainerInvitations,
       };
     });
@@ -561,6 +585,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         inCalendar,
       };
     });
+
+    // Runs with NO LOCAL sessions but that have PEOPLE (≥1 learner or a trainer) → emit as
+    // all-day "no sessions" blocks on their start date. We scope to people-bearing runs because
+    // most no-local-session runs are empty stubs OR have their sessions only in SSG (not synced
+    // locally) — showing all of them would be hundreds of misleading blocks. The client hides
+    // these by default (Scheduling facet). Bounded.
+    const noSessionRows = ongoingResult.rows.filter((r: any) =>
+      parseInt(r.total_sessions || '0', 10) === 0 &&
+      (parseInt(r.num_learners || '0', 10) > 0 || (r.tpg_assigned_trainer_name || '').trim() || (r.legacy_assigned_trainer_name || '').trim())
+    ).slice(0, 100);
+    const noSessionEvents = await Promise.all(noSessionRows.map(async (row: any) => {
+      const tagged = await collectRunTaggedTrainers(row.course_run_uuid);
+      const numLearners = parseInt(row.num_learners || '0', 10);
+      const hasTrainer = tagged.length > 0;
+      const derivedStatus = (row.class_status === 'Cancelled' || row.class_status === 'Unconfirmed')
+        ? row.class_status
+        : ((hasTrainer && numLearners > 0) ? 'Confirmed' : 'Pending');
+      return {
+        courseRunUuid: row.course_run_uuid, courseRunId: row.course_run_id, courseTitle: row.course_title || '', courseCode: row.course_code || '',
+        classStatus: derivedStatus, classType: row.class_type || 'Physical', invitationPaused: false, invitationRepliesBlocked: false,
+        sessionDate: String(row.start_date || '').slice(0, 10), startTime: '', endTime: '', dayNumber: 1, sessionNumbers: [],
+        allSessionDates: [], numLearners,
+        tpgTrainerName: row.tpg_assigned_trainer_name || '', tpgTrainerEmail: row.tpg_assigned_trainer_email || '',
+        localTrainerName: row.legacy_assigned_trainer_name || '', localTrainerEmail: row.legacy_assigned_trainer_email || '',
+        localTrainers: [], nextAvailableTrainer: '', nextAvailableTrainerEmail: '', latestInvitationStatus: '',
+        approvedTrainers: [], acceptedTrainers: tagged.filter((t) => t.tags.includes('accepted')).map((t) => t.name),
+        taggedTrainers: tagged, trainerInvitations: {}, noSessions: true,
+      };
+    }));
+    events.push(...noSessionEvents);
 
     return res.status(200).json({
       success: true,

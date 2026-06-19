@@ -5,7 +5,9 @@ import { Button } from '../ui/Button';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
 import { useSessionReschedule } from '@/hooks/useSessionReschedule';
+import { useScheduleChangeConfirm } from '@/hooks/useScheduleChangeConfirm';
 import SessionRescheduleModal from './SessionRescheduleModal';
+import SearchableSelect from '../ui/SearchableSelect';
 
 // Helper to safely extract local YYYY-MM-DD from a date string (avoids timezone shift bugs from .slice(0, 10) on UTC strings)
 const extractLocalDate = (dateVal: string | Date | undefined | null): string => {
@@ -16,65 +18,6 @@ const extractLocalDate = (dateVal: string | Date | undefined | null): string => 
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
-};
-
-// Searchable select dropdown component
-const SearchableSelect: React.FC<{
-    options: { value: string; label: string }[];
-    value: string;
-    onChange: (value: string) => void;
-    placeholder?: string;
-    className?: string;
-}> = ({ options, value, onChange, placeholder = '— Search or select —', className }) => {
-    const [query, setQuery] = useState('');
-    const [open, setOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
-
-    // Find selected label
-    const selectedOption = options.find(o => o.value === value);
-
-    // Close on outside click
-    useEffect(() => {
-        const handler = (e: MouseEvent) => {
-            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, []);
-
-    const filtered = query
-        ? options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()))
-        : options;
-
-    return (
-        <div ref={ref} className="relative">
-            <input
-                type="text"
-                className={className}
-                placeholder={selectedOption ? selectedOption.label : placeholder}
-                value={open ? query : (selectedOption ? selectedOption.label : '')}
-                onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(''); }}
-                onFocus={() => { setOpen(true); setQuery(''); }}
-            />
-            {open && (
-                <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">
-                    {filtered.length === 0 ? (
-                        <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 italic">No results found</div>
-                    ) : (
-                        filtered.map(o => (
-                            <div
-                                key={o.value}
-                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 ${o.value === value ? 'bg-blue-100 dark:bg-blue-900/50 font-medium' : 'text-gray-900 dark:text-gray-100'}`}
-                                onMouseDown={e => { e.preventDefault(); onChange(o.value); setQuery(''); setOpen(false); }}
-                            >
-                                {o.label}
-                            </div>
-                        ))
-                    )}
-                </div>
-            )}
-        </div>
-    );
 };
 
 // Import SSG constants for ViewCourseSessions
@@ -705,11 +648,15 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     // the SSG update/delete-session writes + opt-in calendar reconcile, also used
     // by the top-level "Reschedule & Cancel" page. Owns the calendar-resolution
     // prompt (rendered via <SessionRescheduleModal/> below).
+    // Standardized step-confirm (Sync Google Calendar + Notify attendees + email composer),
+    // shared with the calendar and the top-level "Reschedule & Cancel" page for a uniform UX.
+    const { confirm: showStepConfirm, node: stepConfirmNode } = useScheduleChangeConfirm();
     const { reschedulePrompt, rescheduleSession, rescheduleDay, cancelSession } = useSessionReschedule({
         showConfirmPopup,
         showSuccessPopup,
         showErrorPopup,
         setBusy: setLoading,
+        showStepConfirm,
     });
 
     // "Reschedule entire day" (Sessions tab) — move every session on a day to a new date.
@@ -1940,6 +1887,26 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
             setSelectedDbTrainerId('');
             setManualTrainerName('');
             setManualTrainerEmail('');
+            // Google Calendar is NOT touched automatically — ask first (parity with Add Learner).
+            if (trainerEmail) {
+                showConfirmPopup(
+                    `Add ${trainerName} to this class's Google Calendar event(s) as an attendee? No email notification is sent.`,
+                    async () => {
+                        try {
+                            const calRes = await fetch(getApiUrl('/api/admin/calendar-attendees'), {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ courseRunId: courseToEdit.courseRunId || courseToEdit.id, email: trainerEmail, action: 'add' }),
+                            });
+                            const cd = await calRes.json();
+                            if (cd?.success && cd?.status === 'ok') showSuccessPopup(`${trainerName} added to the Google Calendar event(s).`);
+                            else showErrorPopup(`Google Calendar not updated: ${cd?.reason || cd?.error || 'unknown'}`);
+                        } catch {
+                            showErrorPopup('Failed to update Google Calendar.');
+                        }
+                    },
+                    'Update Google Calendar?', 'Add to calendar', 'Skip',
+                );
+            }
         } catch (err) {
             showErrorPopup(err instanceof Error ? err.message : 'Failed to assign trainer');
         } finally {
@@ -4758,6 +4725,7 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
             {/* Reschedule calendar-resolution modal (blocking, up-front) — shared component */}
             <SessionRescheduleModal prompt={reschedulePrompt} />
+            {stepConfirmNode}
 
             {/* Popup Modal */}
             {showPopup && (
@@ -5523,6 +5491,8 @@ export const AssignStudentView: React.FC = () => {
     const [manualLearnerEmail, setManualLearnerEmail] = useState('');
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    // Confirmation gate for the Google Calendar update when adding a learner.
+    const [pendingAssign, setPendingAssign] = useState<{ run: any } | null>(null);
 
     // Unassign state
     const [enrolledLearners, setEnrolledLearners] = useState<any[]>([]);
@@ -5591,8 +5561,22 @@ export const AssignStudentView: React.FC = () => {
         fetchCourseRuns(search, classFilter);
     };
 
-    const handleAssign = async (run: any) => {
+    // Validate the form, then ask whether to also update the Google Calendar —
+    // the actual enrol + (opt-in) calendar sync happens in handleAssign after the
+    // admin confirms. Never touches the calendar silently.
+    const requestAssign = (run: any) => {
         setMessage(null);
+        if (learnerAssignMode === 'dropdown') {
+            if (!selectedLearnerId) { setMessage({ type: 'error', text: 'Please select a learner.' }); return; }
+        } else {
+            if (!manualLearnerName.trim()) { setMessage({ type: 'error', text: 'Please enter the learner name.' }); return; }
+        }
+        setPendingAssign({ run });
+    };
+
+    const handleAssign = async (run: any, syncCalendar: boolean) => {
+        setMessage(null);
+        setPendingAssign(null);
 
         let body: any;
         let displayName: string;
@@ -5602,7 +5586,7 @@ export const AssignStudentView: React.FC = () => {
                 setMessage({ type: 'error', text: 'Please select a learner.' });
                 return;
             }
-            body = { courseRunUuid: run.id, userId: selectedLearnerId };
+            body = { courseRunUuid: run.id, userId: selectedLearnerId, syncCalendar };
             const learner = availableLearners.find(l => l.user_id === selectedLearnerId);
             displayName = learner?.full_name || 'Learner';
         } else {
@@ -5610,7 +5594,7 @@ export const AssignStudentView: React.FC = () => {
                 setMessage({ type: 'error', text: 'Please enter the learner name.' });
                 return;
             }
-            body = { courseRunUuid: run.id, manualName: manualLearnerName.trim(), manualEmail: manualLearnerEmail.trim() || undefined };
+            body = { courseRunUuid: run.id, manualName: manualLearnerName.trim(), manualEmail: manualLearnerEmail.trim() || undefined, syncCalendar };
             displayName = manualLearnerName.trim();
         }
 
@@ -5623,7 +5607,7 @@ export const AssignStudentView: React.FC = () => {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to assign learner');
-            setMessage({ type: 'success', text: `"${displayName}" enrolled in ${run.courseTitle}.` });
+            setMessage({ type: 'success', text: `"${displayName}" enrolled in ${run.courseTitle}.${syncCalendar ? ' Google Calendar is being updated.' : ''}` });
             setLocalEnrollmentDeltas(prev => ({ ...prev, [run.id]: (prev[run.id] || 0) + 1 }));
             setSelectedLearnerId('');
             setManualLearnerName('');
@@ -5925,15 +5909,26 @@ export const AssignStudentView: React.FC = () => {
                                                                     </div>
                                                                 )}
 
-                                                                <div className="flex justify-end">
-                                                                    <Button
-                                                                        onClick={() => handleAssign(run)}
-                                                                        disabled={saving}
-                                                                        className="bg-green-600 hover:bg-green-700 text-white"
-                                                                    >
-                                                                        {saving ? 'Adding...' : 'Add Learner'}
-                                                                    </Button>
-                                                                </div>
+                                                                {pendingAssign?.run?.id === run.id ? (
+                                                                    <div className="rounded-md border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 p-3">
+                                                                        <p className="text-sm text-gray-800 dark:text-gray-100 mb-2">Also add this learner to the class's <strong>Google Calendar</strong> event(s)? No email notification is sent.</p>
+                                                                        <div className="flex justify-end gap-2 flex-wrap">
+                                                                            <Button onClick={() => setPendingAssign(null)} disabled={saving} className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">Cancel</Button>
+                                                                            <Button onClick={() => handleAssign(run, false)} disabled={saving} className="bg-gray-600 hover:bg-gray-700 text-white">{saving ? 'Adding…' : 'Add learner only'}</Button>
+                                                                            <Button onClick={() => handleAssign(run, true)} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white">{saving ? 'Adding…' : 'Add learner + update calendar'}</Button>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex justify-end">
+                                                                        <Button
+                                                                            onClick={() => requestAssign(run)}
+                                                                            disabled={saving}
+                                                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                                                        >
+                                                                            {saving ? 'Adding...' : 'Add Learner'}
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         )}
 

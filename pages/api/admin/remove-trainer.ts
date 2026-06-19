@@ -68,7 +68,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await syncLegacyColumns(courseRunUuid);
 
     // Calendar: trainer removed -> drop them from the event's attendees.
-    triggerClassCalendarSync(courseRunUuid);
+    // Skippable (syncCalendar:false) so callers that manage the calendar explicitly
+    // (e.g. the attendee reconcile panel) aren't overridden by a full auto-resync.
+    if (req.body?.syncCalendar !== false) triggerClassCalendarSync(courseRunUuid);
 
     return res.status(200).json({ success: true, message: 'Trainer removed successfully' });
   } catch (error) {

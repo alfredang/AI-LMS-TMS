@@ -81,6 +81,17 @@ export async function isGmailOauthConfigured(): Promise<boolean> {
   return (await loadCreds()) !== null;
 }
 
+/**
+ * RFC 2047 "encoded-word" for header values containing non-ASCII (e.g. an em dash
+ * "—" or accented course titles). Email headers must be 7-bit ASCII; the body's
+ * charset declaration does NOT apply to headers, so an un-encoded UTF-8 subject
+ * shows up mojibaked ("—" → "Ã¢Â€Â""). Pure-ASCII strings are returned unchanged.
+ */
+function encodeMimeHeaderWord(value: string): string {
+  if (/^[\x00-\x7F]*$/.test(value)) return value;
+  return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
+}
+
 export interface GmailSendOptions {
   to: string;
   subject: string;
@@ -114,7 +125,8 @@ export async function sendViaGmailOAuth(options: GmailSendOptions): Promise<Gmai
 
     const gmail = google.gmail({ version: 'v1', auth: client });
 
-    const fromHeader = options.from || `${creds.fromName} <${creds.emailUser}>`;
+    // Encode only the display-name part of From (the <email> must stay raw ASCII).
+    const fromHeader = options.from || `${encodeMimeHeaderWord(creds.fromName)} <${creds.emailUser}>`;
     const html = options.html || (options.text ? `<pre style="font-family: Arial, sans-serif; font-size: 14px; color: #333; white-space: pre-wrap;">${options.text}</pre>` : '');
 
     const headers = [
@@ -123,9 +135,10 @@ export async function sendViaGmailOAuth(options: GmailSendOptions): Promise<Gmai
     ];
     if (options.replyTo) headers.push(`Reply-To: ${options.replyTo}`);
     headers.push(
-      `Subject: ${options.subject}`,
+      `Subject: ${encodeMimeHeaderWord(options.subject)}`,
       'MIME-Version: 1.0',
       'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: 8bit',
       '',
       html,
     );

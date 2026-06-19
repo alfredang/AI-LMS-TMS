@@ -9,13 +9,22 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
 import { getApiUrl } from '@/lib/urlHelpers';
+import { type TaggedTrainer, type TrainerTag, TAG_SHORT, TAG_LABELS } from '@/lib/trainers/taggedTrainers';
 
 interface Props {
   run: { courseRunId: string; courseTitle: string; courseCode: string };
   onClose: () => void;
 }
 
-interface Trainer { trainerId: string | null; trainerName: string; trainerEmail: string | null; }
+const TAG_CHIP_CLS: Record<TrainerTag, string> = {
+  tpg: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+  accepted: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  lms: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+};
+const Chip: React.FC<{ tag: TrainerTag }> = ({ tag }) => (
+  <span title={TAG_LABELS[tag]} className={`text-[10px] uppercase px-1.5 py-0.5 rounded font-medium ${TAG_CHIP_CLS[tag]}`}>{TAG_SHORT[tag]}</span>
+);
+
 interface Learner {
   learnerName: string; learnerEmail: string; company: string; sponsorship: string;
   assessment: string; paymentDetails: string;
@@ -24,8 +33,7 @@ interface Learner {
 const ClassPeopleModal: React.FC<Props> = ({ run, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [trainerSummary, setTrainerSummary] = useState('');
+  const [taggedTrainers, setTaggedTrainers] = useState<TaggedTrainer[]>([]);
   const [learners, setLearners] = useState<Learner[]>([]);
 
   useEffect(() => {
@@ -38,9 +46,16 @@ const ClassPeopleModal: React.FC<Props> = ({ run, onClose }) => {
         const data = await res.json();
         if (cancelled) return;
         if (!data?.success) throw new Error(data?.error || 'Failed to load class details');
-        setTrainers(data.data?.trainers || []);
-        setTrainerSummary(data.data?.operationalSummary?.trainer || '');
+        setTaggedTrainers(data.data?.taggedTrainers || []);
         setLearners(data.data?.enrolledLearners || []);
+        // Freshness: refresh this run's TPG assignment live, then update the tagged list.
+        try {
+          const pr = await fetch(getApiUrl('/api/admin/pull-run-trainer'), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseRunId: run.courseRunId }),
+          });
+          const pd = await pr.json();
+          if (!cancelled && pd?.success) setTaggedTrainers(pd.taggedTrainers || []);
+        } catch { /* keep cached */ }
       } catch (e: any) {
         if (!cancelled) setError(e?.message || 'Failed to load class details');
       } finally {
@@ -49,8 +64,6 @@ const ClassPeopleModal: React.FC<Props> = ({ run, onClose }) => {
     })();
     return () => { cancelled = true; };
   }, [run.courseRunId]);
-
-  const summaryHasTrainer = trainerSummary && !/^n\/?a$/i.test(trainerSummary.trim());
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -70,22 +83,23 @@ const ClassPeopleModal: React.FC<Props> = ({ run, onClose }) => {
             <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
           ) : (
             <>
-              {/* Trainers */}
+              {/* Trainers — tagged list (TMS-LMS / Accepted Email / Assigned in TPG) */}
               <div>
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Trainer{trainers.length === 1 ? '' : 's'} ({trainers.length})</h4>
-                {trainers.length > 0 ? (
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Trainer{taggedTrainers.length === 1 ? '' : 's'} ({taggedTrainers.length})</h4>
+                {taggedTrainers.length > 0 ? (
                   <ul className="divide-y divide-gray-100 dark:divide-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
-                    {trainers.map((t, i) => (
-                      <li key={t.trainerId || i} className="px-3 py-2 text-sm flex items-center justify-between">
-                        <span className="text-gray-800 dark:text-gray-200">{t.trainerName}</span>
-                        <span className="text-gray-500 dark:text-gray-400">{t.trainerEmail || '—'}</span>
+                    {taggedTrainers.map((t, i) => (
+                      <li key={i} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-gray-800 dark:text-gray-200">{t.name}</span>
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          {t.tags.map((tag) => <Chip key={tag} tag={tag} />)}
+                          <span className="text-gray-500 dark:text-gray-400 text-xs max-w-[45%] truncate">{t.email || '—'}</span>
+                        </span>
                       </li>
                     ))}
                   </ul>
-                ) : summaryHasTrainer ? (
-                  <div className="text-sm text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2">{trainerSummary}</div>
                 ) : (
-                  <div className="text-sm text-gray-400 border border-dashed border-gray-200 dark:border-gray-700 rounded-md px-3 py-2">No trainer assigned.</div>
+                  <div className="text-sm text-gray-400 border border-dashed border-gray-200 dark:border-gray-700 rounded-md px-3 py-2">No trainer assigned (LMS / TPG / accepted invite).</div>
                 )}
               </div>
 

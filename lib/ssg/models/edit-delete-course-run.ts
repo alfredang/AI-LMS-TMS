@@ -475,7 +475,7 @@ export class EditDeleteCourseRunUtils {
   /**
    * Convert add session info to API payload - SEPARATE function for adding sessions
    */
-  static toAddSessionPayload(runInfo: EditRunInfo, uen: string): any {
+  static toAddSessionPayload(runInfo: EditRunInfo, uen: string, linkCourseRunTrainer?: any[]): any {
     console.log('🔄 Building ADD session payload with runInfo:', JSON.stringify(runInfo, null, 2));
     
     const run: any = {
@@ -585,6 +585,11 @@ export class EditDeleteCourseRunUtils {
       content: runInfo.fileContent || ""
     };
 
+    // Preserve the run's trainer(s) — SSG drops them on any run edit that omits linkCourseRunTrainer.
+    if (linkCourseRunTrainer && linkCourseRunTrainer.length) {
+      run.linkCourseRunTrainer = linkCourseRunTrainer.map((t: any) => EditDeleteCourseRunUtils.trainerToPayload(t));
+    }
+
     // Sessions - Only add sessions for session addition
     if (runInfo.sessions && runInfo.sessions.length > 0) {
       run.sessions = runInfo.sessions.map((session) => {
@@ -617,7 +622,7 @@ export class EditDeleteCourseRunUtils {
    * CRITICAL: This is for updating SESSIONS within a course run, NOT for updating the entire course run
    * The run action must be "update" and session action must be "update" with sessionId
    */
-  static toUpdateSessionPayload(runInfo: EditRunInfo, sessionsToUpdate: any[], uen: string): any {
+  static toUpdateSessionPayload(runInfo: EditRunInfo, sessionsToUpdate: any[], uen: string, linkCourseRunTrainer?: any[]): any {
     console.log('🔄 Building UPDATE session payload with runInfo:', JSON.stringify(runInfo, null, 2));
     
     const run: any = {
@@ -727,6 +732,12 @@ export class EditDeleteCourseRunUtils {
       content: runInfo.fileContent || ""
     };
 
+    // Preserve the run's trainer(s) — SSG DROPS the trainer on any run edit that omits
+    // linkCourseRunTrainer, so we must re-send them as part of the session edit.
+    if (linkCourseRunTrainer && linkCourseRunTrainer.length) {
+      run.linkCourseRunTrainer = linkCourseRunTrainer.map((t: any) => EditDeleteCourseRunUtils.trainerToPayload(t));
+    }
+
     // Sessions - Map each session for update with "update" action and sessionId
     run.sessions = sessionsToUpdate.map(session => ({
       action: "update",  // CRITICAL: Session action is "update"
@@ -823,7 +834,7 @@ export class EditDeleteCourseRunUtils {
    * CRITICAL: This is for deleting SESSIONS within a course run, NOT for deleting the entire course run
    * The run action must be "update" and session action must be "delete"
    */
-  static toDeleteSessionPayload(runInfo: EditRunInfo, sessionsToDelete: any[], uen: string): any {
+  static toDeleteSessionPayload(runInfo: EditRunInfo, sessionsToDelete: any[], uen: string, linkCourseRunTrainer?: any[]): any {
     console.log('🔄 Building DELETE session payload with runInfo:', JSON.stringify(runInfo, null, 2));
     
     const run: any = {
@@ -932,6 +943,11 @@ export class EditDeleteCourseRunUtils {
       Name: runInfo.fileName || "",
       content: runInfo.fileContent || ""
     };
+
+    // Preserve the run's trainer(s) — SSG drops them on any run edit that omits linkCourseRunTrainer.
+    if (linkCourseRunTrainer && linkCourseRunTrainer.length) {
+      run.linkCourseRunTrainer = linkCourseRunTrainer.map((t: any) => EditDeleteCourseRunUtils.trainerToPayload(t));
+    }
 
     // Sessions - Map each session for deletion with "delete" action
     run.sessions = sessionsToDelete.map(session => ({

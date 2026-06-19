@@ -28,7 +28,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               (SELECT COUNT(*) FROM enrollment e
                  WHERE e.course_run_id = cr.id
                    AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
-              ) AS enrolled_count
+              ) AS enrolled_count,
+              (SELECT COUNT(*) FROM course_session cs
+                 WHERE cs.course_run_id = cr.id AND COALESCE(cs.deleted, false) = false
+              ) AS session_count
          FROM course_run cr
         WHERE cr.course_id = (SELECT course_id FROM course_run WHERE id = $1)
           AND cr.id <> $1
@@ -45,6 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       classStatus: r.class_status,
       assignedTrainerName: r.assigned_trainer_name,
       enrolledCount: parseInt(r.enrolled_count, 10) || 0,
+      sessionCount: parseInt(r.session_count, 10) || 0,
     }));
 
     return res.status(200).json({ success: true, data });

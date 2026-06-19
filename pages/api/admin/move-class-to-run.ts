@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureClassCalendarEvent, syncClassAttendees, removeClassCalendarEvents } from '../../../lib/calendar/ensureClassCalendarEvent';
+import { pushTrainerToTpgForRun, clearTrainerOnTpgForRun } from '../../../lib/ssg/pushTrainerToTpgForRun';
 
 /**
  * POST /api/admin/move-class-to-run
@@ -43,6 +44,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     removedLearnerEmails = [],
     force = false,
     syncCalendar = false,
+    syncTrainerToTpg = false,
+    targetTrainers,        // Array<{name,email}> — LMS trainers to add to the target run
+    tpgTargetEmail,        // the ONE official trainer (TPG push / re-invite target)
   } = req.body || {};
 
   if (!sourceRunId || !targetRunId) {
@@ -148,43 +152,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const moved = movedRes.rowCount ?? 0;
     for (const r of movedRes.rows) affectedUserIds.add(r.user_id);
 
-    // 4. Trainer: set on TARGET (replace), clear on SOURCE.
-    let trainerTarget: string | null = null;
-    const tName = (trainerName ? String(trainerName).trim() : '');
-    // Always clear the source run's trainer.
+    // 4. Trainers: add the composed LMS list to TARGET, fully clear SOURCE.
+    //    targetTrainers = LMS list (many); tpgTargetEmail = the ONE official trainer.
+    const targetList: Array<{ name: string; email: string }> = Array.isArray(targetTrainers) && targetTrainers.length
+      ? targetTrainers.map((t: any) => ({ name: String(t?.name || '').trim(), email: String(t?.email || '').trim() })).filter((t: any) => t.name || t.email)
+      : (trainerName ? [{ name: String(trainerName).trim(), email: '' }] : []); // backward-compat (single)
+    const officialEmail = (tpgTargetEmail ? String(tpgTargetEmail) : (targetList[0]?.email || '')).toLowerCase().trim();
+
+    // Always clear the source run's LMS trainers (the class is leaving it).
     await client.query(`DELETE FROM course_run_trainer WHERE course_run_id = $1`, [sourceRunId]);
     await client.query(
       `UPDATE course_run SET assigned_trainer_id = NULL, assigned_trainer_name = NULL,
               assigned_trainer_email = NULL, updated_at = NOW() WHERE id = $1`,
       [sourceRunId]
     );
-    // Replace the target run's trainer.
+
+    // Replace the target run's LMS trainers with the composed list.
     await client.query(`DELETE FROM course_run_trainer WHERE course_run_id = $1`, [targetRunId]);
-    if (tName) {
-      const tRes = await client.query(
-        `SELECT au.id, au.email, au.full_name
-           FROM app_user au JOIN trainer_profile tp ON tp.user_id = au.id
-          WHERE au.full_name = $1 LIMIT 1`,
-        [tName]
+    const inserted: Array<{ id: string | null; name: string; email: string | null }> = [];
+    for (const t of targetList) {
+      const r = await client.query(
+        `SELECT au.id, au.email, au.full_name FROM app_user au
+          WHERE ($1 <> '' AND lower(au.email) = $1) OR ($2 <> '' AND lower(au.full_name) = lower($2)) LIMIT 1`,
+        [t.email.toLowerCase(), t.name]
       );
-      const tId = tRes.rows[0]?.id ?? null;
-      const tEmail = tRes.rows[0]?.email ?? null;
-      const tFull = tRes.rows[0]?.full_name ?? tName;
+      const e = { id: r.rows[0]?.id ?? null, name: r.rows[0]?.full_name ?? t.name, email: (r.rows[0]?.email ?? t.email) || null };
       await client.query(
-        `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
-         VALUES ($1, $2, $3, $4)`,
-        [targetRunId, tId, tFull, tEmail]
+        `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email) VALUES ($1, $2, $3, $4)`,
+        [targetRunId, e.id, e.name, e.email]
       );
+      inserted.push(e);
+    }
+    // Legacy scalar mirror = the official trainer (or the first added one).
+    const officialEntry = (officialEmail ? inserted.find((e) => (e.email || '').toLowerCase() === officialEmail) : null) || inserted[0] || null;
+    const trainerTarget: string | null = officialEntry?.name ?? null;
+    if (officialEntry) {
       await client.query(
-        `UPDATE course_run SET assigned_trainer_id = $1, assigned_trainer_name = $2,
-                assigned_trainer_email = $3, updated_at = NOW() WHERE id = $4`,
-        [tId, tFull, tEmail, targetRunId]
+        `UPDATE course_run SET assigned_trainer_id = $1, assigned_trainer_name = $2, assigned_trainer_email = $3, updated_at = NOW() WHERE id = $4`,
+        [officialEntry.id, officialEntry.name, officialEntry.email, targetRunId]
       );
-      trainerTarget = tFull;
     } else {
       await client.query(
-        `UPDATE course_run SET assigned_trainer_id = NULL, assigned_trainer_name = NULL,
-                assigned_trainer_email = NULL, updated_at = NOW() WHERE id = $1`,
+        `UPDATE course_run SET assigned_trainer_id = NULL, assigned_trainer_name = NULL, assigned_trainer_email = NULL, updated_at = NOW() WHERE id = $1`,
         [targetRunId]
       );
     }
@@ -239,10 +248,61 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // 7. Opt-in TPG trainer sync (best-effort; never fails the move). Push ONLY the official
+    //    (chosen) trainer to the TARGET on TPGateway, and clear the vacated SOURCE — but only
+    //    after the target assignment succeeds (no orphaning).
+    let tpgTrainer: any = { skipped: true };
+    if (syncTrainerToTpg) {
+      tpgTrainer = {};
+      if (!officialEntry?.email) {
+        tpgTrainer.target = { status: 'skipped_no_trainer', message: 'No eligible official trainer selected, so TPGateway was left unchanged.' };
+        tpgTrainer.source = { status: 'skipped_no_target', message: 'Source trainer kept on TPGateway (no official trainer assigned to the target).' };
+      } else {
+        try {
+          tpgTrainer.target = await pushTrainerToTpgForRun(targetRunId, { onlyEmail: officialEntry.email });
+        } catch (e: any) { tpgTrainer.target = { status: 'error', message: e?.message || String(e) }; }
+        if (tpgTrainer.target?.status === 'synced') {
+          try {
+            tpgTrainer.source = await clearTrainerOnTpgForRun(sourceRunId);
+          } catch (e: any) { tpgTrainer.source = { status: 'error', message: e?.message || String(e) }; }
+        } else {
+          tpgTrainer.source = { status: 'skipped_target_failed', message: 'Source trainer kept on TPGateway because the target assignment did not go through — fix the target on TPGateway, then remove the source trainer manually.' };
+        }
+      }
+    }
+
+    // 8. Invitation lifecycle (best-effort). The source is vacated, so its invitations are
+    //    void. The target either got a TPG admin-override (no invite needed) or the official
+    //    trainer must be re-invited to accept the new run.
+    let invitation: any = { skipped: true };
+    try {
+      await pool.query(
+        `UPDATE trainer_invitation SET status = 'superseded', responded_at = NOW(), updated_at = NOW()
+          WHERE course_run_id = $1 AND status IN ('accepted', 'pending')`,
+        [sourceRunId]
+      );
+      const tpgOverrode = syncTrainerToTpg && tpgTrainer?.target?.status === 'synced';
+      if (tpgOverrode) {
+        invitation = { status: 'tpg_override', message: 'Trainer finalized via TPGateway — no email invitation needed.' };
+      } else if (officialEntry) {
+        // The official trainer is LMS-assigned on the target, which the invite-sender treats as
+        // "covered" (it skips when a trainer is assigned). A true re-invite needs the move UI to
+        // mark the trainer as pending-not-assigned — KIV (trainer-unification-plan). For now we
+        // don't auto-invite; report the assigned state honestly.
+        invitation = { status: 'lms_assigned', message: 'Official trainer is assigned in the LMS on the new run. Tick "Assign on TPGateway" to finalize on TPG, or invite them from the trainer tools.' };
+      } else {
+        invitation = { status: 'none', message: 'No official trainer.' };
+      }
+    } catch (e: any) {
+      invitation = { status: 'error', message: e?.message || String(e) };
+    }
+
     return res.status(200).json({
       success: true,
       summary: { moved, removed, skippedConflicts, trainerTarget, sourceTrainerCleared: true, sourceVacated },
       calendar,
+      tpgTrainer,
+      invitation,
     });
   } catch (err: any) {
     try { await client.query('ROLLBACK'); } catch { /* ignore */ }

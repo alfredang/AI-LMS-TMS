@@ -1,11 +1,12 @@
 /**
- * Blocking, up-front modal shown when a session's Google Calendar event was
- * manually dragged off its date and the admin reschedules that session. Lets the
+ * Blocking modal shown when a session's Google Calendar event was manually dragged
+ * off its date and the admin reschedules that session WITH calendar sync on. Lets the
  * admin decide how the calendar should be handled (reuse / replace / keep+new).
  *
- * Lifted verbatim from the Edit Class → Sessions tab so both that tab and the new
- * "Reschedule & Cancel" page render the identical resolution UI. Driven by the
- * `reschedulePrompt` state from useSessionReschedule.
+ * Shared by the in-app calendar, the Edit Class → Sessions tab, and the
+ * "Reschedule & Cancel" page. Driven by the `reschedulePrompt` state from
+ * useSessionReschedule. (Notify-attendees is handled in the standardized step
+ * confirmation, not here.)
  */
 import React from 'react';
 import type { ReschedulePromptState } from '@/hooks/useSessionReschedule';
@@ -17,7 +18,7 @@ interface Props {
 const SessionRescheduleModal: React.FC<Props> = ({ prompt }) => {
   if (!prompt) return null;
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full border dark:border-gray-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Calendar event was moved manually</h3>
         <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">

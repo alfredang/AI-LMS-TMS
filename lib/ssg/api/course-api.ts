@@ -379,7 +379,8 @@ export class SSGCourseAPI {
   async addSessionsToCourseRun(
     runId: string,
     runInfo: EditRunInfo,
-    includeExpired: OptionalSelector = OptionalSelector.NO
+    includeExpired: OptionalSelector = OptionalSelector.NO,
+    linkCourseRunTrainer?: any[]
   ): Promise<SSGApiResponse<any>> {
     try {
       if (!this.credentials.encryptionKey) {
@@ -412,7 +413,7 @@ export class SSGCourseAPI {
       }
 
       // Use the specialized session addition payload transformer
-      const payload = EditDeleteCourseRunUtils.toAddSessionPayload(runInfo, this.credentials.uen);
+      const payload = EditDeleteCourseRunUtils.toAddSessionPayload(runInfo, this.credentials.uen, linkCourseRunTrainer);
       console.log('🔄 Transformed ADD SESSION payload for SSG API:', JSON.stringify(payload, null, 2));
       
       console.log('🔐 Encryption key available:', !!this.credentials.encryptionKey);
@@ -450,7 +451,8 @@ export class SSGCourseAPI {
     runId: string,
     runInfo: EditRunInfo,
     sessionsToDelete: any[],
-    includeExpired: OptionalSelector = OptionalSelector.NO
+    includeExpired: OptionalSelector = OptionalSelector.NO,
+    linkCourseRunTrainer?: any[]
   ): Promise<SSGApiResponse<any>> {
     try {
       if (!this.credentials.encryptionKey) {
@@ -483,7 +485,7 @@ export class SSGCourseAPI {
       }
 
       // Use the specialized session deletion payload transformer
-      const payload = EditDeleteCourseRunUtils.toDeleteSessionPayload(runInfo, sessionsToDelete, this.credentials.uen);
+      const payload = EditDeleteCourseRunUtils.toDeleteSessionPayload(runInfo, sessionsToDelete, this.credentials.uen, linkCourseRunTrainer);
       console.log('🔄 Transformed DELETE SESSION payload for SSG API:', JSON.stringify(payload, null, 2));
       
       console.log('🔐 Encryption key available:', !!this.credentials.encryptionKey);
@@ -521,7 +523,8 @@ export class SSGCourseAPI {
     runId: string,
     runInfo: EditRunInfo,
     sessionsToUpdate: any[],
-    includeExpired: OptionalSelector = OptionalSelector.NO
+    includeExpired: OptionalSelector = OptionalSelector.NO,
+    linkCourseRunTrainer?: any[]
   ): Promise<SSGApiResponse<any>> {
     try {
       if (!this.credentials.encryptionKey) {
@@ -554,7 +557,7 @@ export class SSGCourseAPI {
       }
 
       // Use the specialized session update payload transformer
-      const payload = EditDeleteCourseRunUtils.toUpdateSessionPayload(runInfo, sessionsToUpdate, this.credentials.uen);
+      const payload = EditDeleteCourseRunUtils.toUpdateSessionPayload(runInfo, sessionsToUpdate, this.credentials.uen, linkCourseRunTrainer);
       console.log('🔄 Transformed UPDATE SESSION payload for SSG API:', JSON.stringify(payload, null, 2));
       
       console.log('🔐 Encryption key available:', !!this.credentials.encryptionKey);
