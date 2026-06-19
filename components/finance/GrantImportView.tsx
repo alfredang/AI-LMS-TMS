@@ -116,6 +116,7 @@ const GrantImportView: React.FC = () => {
   const [rowFilter, setRowFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const fileValidationError = useMemo(() => {
     if (!file) return null;
@@ -152,8 +153,16 @@ const GrantImportView: React.FC = () => {
     }
     if (dateFrom) result = result.filter((r) => r.payment_date_parsed != null && r.payment_date_parsed >= dateFrom);
     if (dateTo) result = result.filter((r) => r.payment_date_parsed != null && r.payment_date_parsed <= dateTo);
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(
+        (r) =>
+          (r.enrolment_id && r.enrolment_id.toLowerCase().includes(q)) ||
+          (r.grant_id && r.grant_id.toLowerCase().includes(q))
+      );
+    }
     return result;
-  }, [preview, rowFilter, dateFrom, dateTo]);
+  }, [preview, rowFilter, dateFrom, dateTo, searchQuery]);
 
   /** Count of selected+ready rows in the currently-visible (date-filtered) view. */
   const selectedCount = useMemo(
@@ -181,6 +190,7 @@ const GrantImportView: React.FC = () => {
     setRowFilter('all');
     setDateFrom('');
     setDateTo('');
+    setSearchQuery('');
     setUploading(true);
     setUploadJobId(null);
     setUploadPct(0);
@@ -278,6 +288,7 @@ const GrantImportView: React.FC = () => {
     setBatchId(null);
     setDateFrom('');
     setDateTo('');
+    setSearchQuery('');
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -755,6 +766,34 @@ const GrantImportView: React.FC = () => {
                 >
                   Clear dates
                 </button>
+              )}
+            </div>
+            {/* ENR / GRN search */}
+            <div className="flex items-center gap-3 flex-wrap px-4 py-2.5 border-b border-default bg-surface-elevated/60">
+              <span className="text-[11px] font-semibold text-on-surface-secondary uppercase tracking-wider mr-1">Search:</span>
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="ENR or GRN…"
+                  className="pl-2 pr-7 py-1 rounded border border-default bg-surface text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary w-52"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-1.5 text-on-surface-secondary hover:text-on-surface"
+                    aria-label="Clear search"
+                  >
+                    <Icon name={IconName.Close} className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              {searchQuery.trim() && (
+                <span className="text-[11px] text-on-surface-secondary">
+                  {filteredRows.length} match{filteredRows.length !== 1 ? 'es' : ''}
+                </span>
               )}
             </div>
 

@@ -604,9 +604,9 @@ const CourseEditor: React.FC = () => {
         { id: 'course-details', label: 'Course Details', show: true },
         { id: 'learning-outcomes', label: 'Learning Outcomes', show: role !== UserRole.Admin },
         { id: 'courseware', label: 'Courseware', show: true },
-        { id: 'assessment-methods', label: 'Assessment Methods', show: role === UserRole.Admin || role === UserRole.Trainer || role === UserRole.Developer },
-        { id: 'approved-trainers', label: 'Approved Trainers', show: role === UserRole.Admin || role === UserRole.Developer },
         { id: 'lesson', label: 'Lesson', show: role === UserRole.Developer },
+        { id: 'assessment-methods', label: 'Assessment', show: role === UserRole.Admin || role === UserRole.Trainer || role === UserRole.Developer },
+        { id: 'approved-trainers', label: 'Approved Trainers', show: role === UserRole.Admin || role === UserRole.Developer },
         { id: 'pricing', label: 'Pricing & Funding', show: role === UserRole.Admin },
         { id: 'course-settings', label: 'Course Settings', show: true },
     ].filter(s => s.show);
@@ -2171,10 +2171,107 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         </div>
                     </CollapsibleSection>
 
+                    {role === UserRole.Developer && (
+                        <div id="section-lesson" className="scroll-mt-6">
+                          <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                            {/* Lesson header row — the save buttons are mirrored here
+                                so developers can save without scrolling back up to
+                                the top of the page after editing topics/resources. */}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleSection('lesson')}
+                                    aria-expanded={!collapsedSections.has('lesson')}
+                                    className="group flex items-center gap-2 text-left"
+                                >
+                                    <h3 className="text-xl font-bold dark:text-white">Lesson</h3>
+                                    <SectionChevron open={!collapsedSections.has('lesson')} className="group-hover:text-gray-600 dark:group-hover:text-gray-200" />
+                                </button>
+                                {!isReadOnly && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                if (allTopicsCollapsed) {
+                                                    setExpandAllSignal(s => s + 1);
+                                                    setAllTopicsCollapsed(false);
+                                                } else {
+                                                    setCollapseAllSignal(s => s + 1);
+                                                    setAllTopicsCollapsed(true);
+                                                }
+                                            }}
+                                        >
+                                            {allTopicsCollapsed ? 'Expand All Topics' : 'Collapse All Topics'}
+                                        </Button>
+                                        {!isNewCourse && (
+                                            <Button variant="outline" size="sm" onClick={() => handleSaveCourse(true)} disabled={isSaving}>
+                                                {isSaving ? <Spinner size="sm" /> : 'Save & Continue Editing'}
+                                            </Button>
+                                        )}
+                                        <Button variant="primary" size="sm" onClick={() => handleSaveCourse(false)} disabled={isSaving}>
+                                            {isSaving ? <Spinner size="sm" /> : (isNewCourse ? 'Create Course' : 'Save Changes')}
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                            {!collapsedSections.has('lesson') && (
+                            <div className="mt-4 space-y-4">
+                            {course.topics.map(topic => (
+                                <div
+                                    key={topic.id}
+                                    onDragOver={(e) => handleTopicDragOver(e, topic.id)}
+                                    onDragLeave={handleTopicDragLeave}
+                                    onDrop={(e) => handleTopicDrop(e, topic.id)}
+                                    className={`transition-opacity ${draggedTopicId === topic.id ? 'opacity-30' : ''}`}
+                                >
+                                    <div className={`h-2 transition-all duration-200 ${dropTargetTopicId === topic.id ? 'border-t-4 border-primary' : 'border-t-0'}`}></div>
+                                    <EditableTopicAccordion
+                                        topic={topic}
+                                        onUpdateTitle={updateTopicTitle}
+                                        onDelete={deleteTopic}
+                                        onAddSubtopic={addSubtopic}
+                                        onUpdateSubtopic={updateSubtopic}
+                                        onDeleteSubtopic={deleteSubtopic}
+                                        onSelfDragStart={(e) => handleTopicDragStart(e, topic.id)}
+                                        onSelfDragEnd={handleTopicDragEnd}
+                                        draggedSubtopic={draggedSubtopic}
+                                        dropTargetSubtopic={dropTargetSubtopic}
+                                        onSubtopicDragStart={handleSubtopicDragStart}
+                                        onSubtopicDrop={handleSubtopicDrop}
+                                        onSubtopicDropAtEnd={handleSubtopicDropAtEnd}
+                                        onSubtopicDragOver={handleSubtopicDragOver}
+                                        onSubtopicDragLeave={handleSubtopicDragLeave}
+                                        onSubtopicDragEnd={handleSubtopicDragEnd}
+                                        isSubtopicDragging={!!draggedSubtopic}
+                                        resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
+                                        onAddResourceLink={addResourceLink}
+                                        onUpdateResourceLink={updateResourceLink}
+                                        onUpdateResourceLinkQuiz={updateResourceLinkQuiz}
+                                        onDeleteResourceLink={deleteResourceLink}
+                                        onReorderResourceLink={reorderResourceLink}
+                                        onMoveResourceLink={moveResourceLink}
+                                        draggedResourceLinkId={draggedResourceLinkId}
+                                        onResourceLinkDragStart={(id: string) => setDraggedResourceLinkId(id)}
+                                        onResourceLinkDragEnd={() => setDraggedResourceLinkId(null)}
+                                        collapseSignal={collapseAllSignal}
+                                        expandSignal={expandAllSignal}
+                                    />
+                                </div>
+                            ))}
+                            <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 dark:!border-gray-600 hover:!border-primary !text-subtle hover:!text-primary">
+                                + Add Learning Unit
+                            </Button>
+                            </div>
+                            )}
+                          </Card>
+                        </div>
+                    )}
+
                     {(role === UserRole.Admin || role === UserRole.Trainer || role === UserRole.Developer) && (
                     <CollapsibleSection
                         id="assessment-methods"
-                        title="Assessment Methods"
+                        title="Assessment"
                         collapsible={isDeveloperView}
                         collapsed={collapsedSections.has('assessment-methods')}
                         onToggle={toggleSection}
@@ -2303,101 +2400,6 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 </div>
                             </div>
                         </CollapsibleSection>
-                    )}
-
-                    {role === UserRole.Developer && (
-                        <div id="section-lesson" className="space-y-4 scroll-mt-6">
-                            {/* Lesson header row — the save buttons are mirrored here
-                                so developers can save without scrolling back up to
-                                the top of the page after editing topics/resources. */}
-                            <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-                                <button
-                                    type="button"
-                                    onClick={() => toggleSection('lesson')}
-                                    aria-expanded={!collapsedSections.has('lesson')}
-                                    className="group flex items-center gap-2 text-left"
-                                >
-                                    <h3 className="text-xl font-bold">Lesson</h3>
-                                    <SectionChevron open={!collapsedSections.has('lesson')} className="group-hover:text-gray-600 dark:group-hover:text-gray-200" />
-                                </button>
-                                {!isReadOnly && (
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                                if (allTopicsCollapsed) {
-                                                    setExpandAllSignal(s => s + 1);
-                                                    setAllTopicsCollapsed(false);
-                                                } else {
-                                                    setCollapseAllSignal(s => s + 1);
-                                                    setAllTopicsCollapsed(true);
-                                                }
-                                            }}
-                                        >
-                                            {allTopicsCollapsed ? 'Expand All Topics' : 'Collapse All Topics'}
-                                        </Button>
-                                        {!isNewCourse && (
-                                            <Button variant="outline" size="sm" onClick={() => handleSaveCourse(true)} disabled={isSaving}>
-                                                {isSaving ? <Spinner size="sm" /> : 'Save & Continue Editing'}
-                                            </Button>
-                                        )}
-                                        <Button variant="primary" size="sm" onClick={() => handleSaveCourse(false)} disabled={isSaving}>
-                                            {isSaving ? <Spinner size="sm" /> : (isNewCourse ? 'Create Course' : 'Save Changes')}
-                                        </Button>
-                                    </div>
-                                )}
-                            </div>
-                            {!collapsedSections.has('lesson') && (
-                            <>
-                            {course.topics.map(topic => (
-                                <div
-                                    key={topic.id}
-                                    onDragOver={(e) => handleTopicDragOver(e, topic.id)}
-                                    onDragLeave={handleTopicDragLeave}
-                                    onDrop={(e) => handleTopicDrop(e, topic.id)}
-                                    className={`transition-opacity ${draggedTopicId === topic.id ? 'opacity-30' : ''}`}
-                                >
-                                    <div className={`h-2 transition-all duration-200 ${dropTargetTopicId === topic.id ? 'border-t-4 border-primary' : 'border-t-0'}`}></div>
-                                    <EditableTopicAccordion
-                                        topic={topic}
-                                        onUpdateTitle={updateTopicTitle}
-                                        onDelete={deleteTopic}
-                                        onAddSubtopic={addSubtopic}
-                                        onUpdateSubtopic={updateSubtopic}
-                                        onDeleteSubtopic={deleteSubtopic}
-                                        onSelfDragStart={(e) => handleTopicDragStart(e, topic.id)}
-                                        onSelfDragEnd={handleTopicDragEnd}
-                                        draggedSubtopic={draggedSubtopic}
-                                        dropTargetSubtopic={dropTargetSubtopic}
-                                        onSubtopicDragStart={handleSubtopicDragStart}
-                                        onSubtopicDrop={handleSubtopicDrop}
-                                        onSubtopicDropAtEnd={handleSubtopicDropAtEnd}
-                                        onSubtopicDragOver={handleSubtopicDragOver}
-                                        onSubtopicDragLeave={handleSubtopicDragLeave}
-                                        onSubtopicDragEnd={handleSubtopicDragEnd}
-                                        isSubtopicDragging={!!draggedSubtopic}
-                                        resourceLinks={resourceLinks.filter(rl => topic.subtopics.some(st => st.id === rl.topicId))}
-                                        onAddResourceLink={addResourceLink}
-                                        onUpdateResourceLink={updateResourceLink}
-                                        onUpdateResourceLinkQuiz={updateResourceLinkQuiz}
-                                        onDeleteResourceLink={deleteResourceLink}
-                                        onReorderResourceLink={reorderResourceLink}
-                                        onMoveResourceLink={moveResourceLink}
-                                        draggedResourceLinkId={draggedResourceLinkId}
-                                        onResourceLinkDragStart={(id: string) => setDraggedResourceLinkId(id)}
-                                        onResourceLinkDragEnd={() => setDraggedResourceLinkId(null)}
-                                        collapseSignal={collapseAllSignal}
-                                        expandSignal={expandAllSignal}
-                                    />
-                                </div>
-                            ))}
-                            <Button variant="ghost" onClick={addTopic} className="w-full !py-3 !text-lg !font-semibold border-2 border-dashed !border-gray-300 dark:!border-gray-600 hover:!border-primary !text-subtle hover:!text-primary">
-                                + Add Learning Unit
-                            </Button>
-                            </>
-                            )}
-                        </div>
                     )}
 
                     {(role === UserRole.Admin) && (
