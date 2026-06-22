@@ -3,7 +3,7 @@ import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 
-const ALL_ROLES = ['Learner', 'Trainer', 'Admin', 'Developer', 'Training Provider'];
+const ALL_ROLES = ['Learner', 'Trainer', 'Admin', 'Developer', 'Finance', 'Training Provider'];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -86,6 +86,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `INSERT INTO public.developer_profile (user_id, tel, developer_type)
          VALUES ($1, 'N/A', 'N/A')
          ON CONFLICT (user_id) DO NOTHING`,
+        [userId]
+      );
+    }
+    if (rolesToAssign.includes('Finance')) {
+      await client.query(
+        `INSERT INTO public.finance_profile (user_id, tel) VALUES ($1, 'N/A') ON CONFLICT (user_id) DO NOTHING`,
         [userId]
       );
     }
