@@ -1,13 +1,16 @@
 /**
- * MoveClassModal — move a whole class's learners + trainer onto another existing
- * run of the SAME course (the "reschedule to a different run" flow), surfaced
- * inside the top-level Reschedule & Cancel page. Reuses the existing endpoints:
- *   GET  /api/admin/sibling-course-runs   (target-run picker)
- *   GET  /api/admin/reschedule-learners   (learner list, incl. removed)
- *   POST /api/admin/move-class-to-run      (the move; LOCAL DB + opt-in calendar)
+ * MoveClassModal — move a whole class's learners + trainer onto another existing run of the SAME
+ * course, surfaced inside the top-level Reschedule & Cancel page. Uses the "Adjust attendees"
+ * reconcile-table format: one row per source person with Learner / Trainer / TPG / Calendar.
  *
- * SSG/TPG enrolment + trainer re-assignment is NOT done here (KIV) — the warning
- * banner makes that explicit.
+ *   GET  /api/admin/sibling-course-runs       (target-run picker)
+ *   GET  /api/admin/calendar-attendees        (source roster — merged learners + trainers + TPG)
+ *   POST /api/admin/move-class-to-run         (the move; preserves enrollment rows + enrolment_id)
+ *
+ * Learner/Trainer ticked = MOVE that person (via move-class-to-run, which keeps the enrollment +
+ * its SSG ref) — NOT a new enrollment. TPG = the one official trainer on TPGateway. Calendar =
+ * include on the destination's events (unticking removes them after the move's calendar migration).
+ * SSG/TPG learner enrolment is still NOT done here (KIV) — the banner makes that explicit.
  */
 import React, { useEffect, useState } from 'react';
 import { Button } from '../ui/Button';
@@ -15,30 +18,24 @@ import { getApiUrl } from '@/lib/urlHelpers';
 import NotifyComposer, { type NotifyPayload } from './NotifyComposer';
 import SearchableSelect from '../ui/SearchableSelect';
 import { TPG_MANUAL_NOTICE, TPG_MANUAL_NOTICE_ENROLMENTS_ONLY } from '@/lib/ssg/tpgManualNotice';
-import { type TrainerTag, TAG_SHORT, TAG_LABELS } from '@/lib/trainers/taggedTrainers';
-
-interface CarryTrainer { name: string; email: string; hasNric: boolean; tags?: TrainerTag[]; }
-const TAG_CHIP_CLS: Record<TrainerTag, string> = {
-  tpg: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-  accepted: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  lms: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-};
-const Chip: React.FC<{ tag: TrainerTag }> = ({ tag }) => (
-  <span title={TAG_LABELS[tag]} className={`text-[10px] uppercase px-1.5 py-0.5 rounded font-medium ${TAG_CHIP_CLS[tag]}`}>{TAG_SHORT[tag]}</span>
-);
+import { applyAttendeeDiffs, emptyAttendeeDiffs } from '@/lib/calendar/attendeeDiffs';
+import { verifyRunCalendarAttendees, describeVerify } from '@/lib/calendar/verifyAttendees';
 
 interface SiblingRun {
   id: string; courseRunId: string; startDate: string; endDate: string;
   classStatus: string; assignedTrainerName: string | null; enrolledCount: number; sessionCount?: number;
 }
 
-/** YYYY-MM-DD in local TZ. Parses the full ISO value so SGT-midnight dates that the
- * API serialized to UTC don't render one day early (matches the rest of the app). */
+/** Source roster person (subset of /api/admin/calendar-attendees `people`). */
+interface MovePerson { email: string; name: string | null; isLearner: boolean; isTrainer: boolean; isTpgTrainer: boolean; }
+interface DraftRow { moveLearner: boolean; moveTrainer: boolean; onTpg: boolean; onCalendar: boolean; }
+
+/** YYYY-MM-DD in local TZ (matches the rest of the app — avoids the UTC off-by-one). */
 const ymd = (s: string) => {
   const d = new Date(s);
   return isNaN(d.getTime()) ? String(s).slice(0, 10) : d.toLocaleDateString('en-CA');
 };
-interface Learner { learnerName: string; learnerEmail: string; isRemoved?: boolean; is_removed?: boolean; enrolment_status?: string; }
+const keyOf = (e: string) => (e || '').toLowerCase();
 
 interface Props {
   run: { id: string; courseRunId: string; courseTitle: string; courseCode: string; assignedTrainerLocal?: string; assignedTrainerTpg?: string };
@@ -55,13 +52,9 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
   const [siblings, setSiblings] = useState<SiblingRun[]>([]);
   const [includeHistorical, setIncludeHistorical] = useState(false);
   const [targetRunId, setTargetRunId] = useState('');
-  // Carry list = trainers to add to the target run at the LMS level. One is the "official"
-  // (TPG-assigned / invite target), keyed by email.
-  const [carry, setCarry] = useState<CarryTrainer[]>([]);
-  const [officialEmail, setOfficialEmail] = useState('');
-  const [learners, setLearners] = useState<Learner[]>([]);
+  const [people, setPeople] = useState<MovePerson[]>([]);
+  const [draft, setDraft] = useState<Record<string, DraftRow>>({});
   const [trainers, setTrainers] = useState<{ trainer_name: string; email?: string; has_nric?: boolean }[]>([]);
-  const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [syncCalendar, setSyncCalendar] = useState(defaultSyncCalendar);
   const [syncTrainerTpg, setSyncTrainerTpg] = useState(true);
   const [notifyAttendees, setNotifyAttendees] = useState(!!defaultNotify);
@@ -82,78 +75,81 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
       setLoading(true);
       await loadSiblings(false);
       try {
-        const lr = await fetch(getApiUrl(`/api/admin/reschedule-learners?courseRunUuid=${encodeURIComponent(run.id)}`));
-        const ld = await lr.json();
-        if (ld?.success) setLearners((ld.data || []).filter((l: Learner) => !(l.isRemoved ?? l.is_removed)));
-      } catch { /* non-fatal */ }
-      let trainersList: Array<{ trainer_name: string; email?: string; has_nric?: boolean }> = [];
-      try {
         const tr = await fetch(getApiUrl('/api/admin/trainers'));
         const td = await tr.json();
-        if (td?.success) { trainersList = td.data?.trainers || []; setTrainers(trainersList); }
+        if (td?.success) setTrainers(td.data?.trainers || []);
       } catch { /* non-fatal */ }
-      // Prefill the carry list from the source run's CURRENT trainers (tagged), so the existing
-      // trainers carry over by default; the admin can add/remove and pick the official one.
       try {
-        const dr = await fetch(getApiUrl(`/api/admin/class-details?courseRunId=${encodeURIComponent(run.courseRunId)}`));
-        const dd = await dr.json();
-        const tagged: Array<{ name: string; email: string | null; tags?: TrainerTag[] }> = dd?.data?.taggedTrainers || [];
-        const findNric = (name: string, email: string | null) => {
-          const byEmail = email ? trainersList.find((t) => (t.email || '').toLowerCase() === email.toLowerCase()) : undefined;
-          const byName = trainersList.find((t) => t.trainer_name === name);
-          return !!((byEmail?.has_nric) ?? (byName?.has_nric));
-        };
-        const init: CarryTrainer[] = tagged.map((t) => ({ name: t.name, email: t.email || '', hasNric: findNric(t.name, t.email), tags: t.tags }));
-        setCarry(init);
-        const tpgOne = tagged.find((t) => t.tags?.includes('tpg'));
-        setOfficialEmail((tpgOne?.email) || init.find((c) => c.email && c.hasNric)?.email || init.find((c) => c.email)?.email || '');
+        const r = await fetch(getApiUrl(`/api/admin/calendar-attendees?courseRunId=${encodeURIComponent(run.courseRunId)}`));
+        const d = await r.json();
+        const all: MovePerson[] = (d?.people || []).filter((p: MovePerson) => p.isLearner || p.isTrainer);
+        setPeople(all);
+        const dr: Record<string, DraftRow> = {};
+        for (const p of all) dr[keyOf(p.email)] = { moveLearner: p.isLearner, moveTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onCalendar: true };
+        setDraft(dr);
       } catch { /* non-fatal */ }
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run.id]);
 
-  const toggleExclude = (email: string) => {
-    setExcluded((prev) => { const n = new Set(prev); if (n.has(email)) n.delete(email); else n.add(email); return n; });
-  };
+  const draftOf = (p: MovePerson): DraftRow => draft[keyOf(p.email)] || { moveLearner: p.isLearner, moveTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onCalendar: true };
+  const hasNric = (email: string) => !!trainers.find((t) => (t.email || '').toLowerCase() === keyOf(email))?.has_nric;
 
-  const addCarry = (key: string) => {
-    const t = trainers.find((x) => (x.email || '') === key || x.trainer_name === key);
-    if (!t) return;
-    const e = (t.email || '').toLowerCase();
-    setCarry((prev) => {
-      if (prev.some((c) => (e && (c.email || '').toLowerCase() === e) || c.name === t.trainer_name)) return prev;
-      return [...prev, { name: t.trainer_name, email: t.email || '', hasNric: !!t.has_nric }];
+  const toggle = (p: MovePerson, field: 'moveLearner' | 'moveTrainer' | 'onCalendar') => {
+    setDraft((prev) => {
+      const k = keyOf(p.email);
+      const cur = prev[k] || draftOf(p);
+      const next = { ...cur, [field]: !cur[field] };
+      if (field === 'moveTrainer' && !next.moveTrainer) next.onTpg = false; // can't be the TPG trainer if not carried
+      return { ...prev, [k]: next };
     });
   };
-  const removeCarry = (idx: number) => setCarry((prev) => {
-    const n = [...prev];
-    const [r] = n.splice(idx, 1);
-    if (r && officialEmail && (r.email || '') === officialEmail) setOfficialEmail('');
-    return n;
-  });
+  // TPG = ONE official trainer; ticking one unticks the rest and implies the person is carried.
+  const toggleTpg = (p: MovePerson) => {
+    setDraft((prev) => {
+      const k = keyOf(p.email);
+      const cur = prev[k] || draftOf(p);
+      const turningOn = !cur.onTpg;
+      const next: Record<string, DraftRow> = {};
+      for (const [kk, v] of Object.entries(prev)) next[kk] = turningOn ? { ...v, onTpg: false } : v;
+      next[k] = { ...cur, onTpg: turningOn, moveTrainer: turningOn ? true : cur.moveTrainer };
+      return next;
+    });
+  };
+  // Add a trainer who isn't on the source roster (carried onto the destination at the LMS level).
+  const addTrainer = (key: string) => {
+    const t = trainers.find((x) => (x.email || '') === key || x.trainer_name === key);
+    if (!t) return;
+    const k = keyOf(t.email || t.trainer_name);
+    setPeople((prev) => prev.some((p) => keyOf(p.email || p.name || '') === k) ? prev : [...prev, { email: t.email || '', name: t.trainer_name, isLearner: false, isTrainer: false, isTpgTrainer: false }]);
+    setDraft((prev) => ({ ...prev, [k]: { moveLearner: false, moveTrainer: true, onTpg: false, onCalendar: true } }));
+  };
 
-  // The official trainer (TPG / invite target) must have a usable NRIC for a TPG assignment.
-  const officialTrainer = officialEmail ? carry.find((c) => (c.email || '') === officialEmail) : undefined;
-  const officialEligible = !!officialTrainer?.hasNric;
-  const tpgBlocked = syncTrainerTpg && (!officialTrainer || !officialEligible);
+  const movingTrainers = people.filter((p) => draftOf(p).moveTrainer);
+  const official = people.find((p) => draftOf(p).onTpg) || null;
+  const officialEligible = !!official && hasNric(official.email);
+  const tpgBlocked = syncTrainerTpg && movingTrainers.length > 0 && (!official || !officialEligible);
 
-  // Add-trainer options = trainers not already in the carry list.
   const addOptions = trainers
-    .filter((t) => !carry.some((c) => (t.email && c.email && c.email.toLowerCase() === t.email.toLowerCase()) || c.name === t.trainer_name))
+    .filter((t) => !people.some((p) => (t.email && p.email && keyOf(p.email) === keyOf(t.email)) || p.name === t.trainer_name))
     .map((t) => ({ value: t.email || t.trainer_name, label: `${t.trainer_name}${t.email ? ` (${t.email})` : ''}${t.has_nric === false ? ' — no NRIC' : ''}` }));
 
   const doMove = async (force: boolean) => {
     setSaving(true);
     try {
+      const targetTrainers = people.filter((p) => draftOf(p).moveTrainer).map((p) => ({ name: p.name || p.email, email: p.email }));
+      const removedLearnerEmails = people.filter((p) => p.isLearner && !draftOf(p).moveLearner).map((p) => keyOf(p.email));
+      const calendarExclude = people.filter((p) => { const d = draftOf(p); return (d.moveLearner || d.moveTrainer) && !d.onCalendar; }).map((p) => p.email);
+
       const res = await fetch(getApiUrl('/api/admin/move-class-to-run'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceRunId: run.id,
           targetRunId,
-          targetTrainers: carry.map((c) => ({ name: c.name, email: c.email })),
-          tpgTargetEmail: officialEmail || undefined,
-          removedLearnerEmails: Array.from(excluded),
+          targetTrainers,
+          tpgTargetEmail: official?.email || undefined,
+          removedLearnerEmails,
           force,
           syncCalendar,
           syncTrainerToTpg: syncTrainerTpg,
@@ -181,24 +177,44 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
           calMsg = `\nCalendar: new run +${cal.target?.added ?? 0}, original run ${srcPart}.`;
         }
       }
+      // Per-person calendar exclusions: the move migrates everyone onto the new run's events when Sync
+      // is on; remove the people whose Calendar box was unticked (runs after — finds the new event via
+      // the durable mapping, so it isn't missed by events.list propagation lag).
+      let layerMsg = '';
+      if (syncCalendar && calendarExclude.length) {
+        try {
+          const r = await applyAttendeeDiffs(targetRunId, targetRunId, { ...emptyAttendeeDiffs(), gcalRemove: calendarExclude });
+          layerMsg = `\nCalendar: kept ${calendarExclude.length} person(s) off the new run's events (${r.ok} applied${r.fail ? `, ${r.fail} failed` : ''}).`;
+        } catch { layerMsg = '\nCalendar: could not apply the per-person calendar exclusions.'; }
+      }
+      // Don't report done until the new run's calendar reflects the final state — the people kept on
+      // calendar are present and the unticked ones are gone. The migration adds the whole roster first,
+      // so an early peek can look wrong; this poll waits for it to settle (saving stays true meanwhile).
+      let verifyMsg = '';
+      if (syncCalendar) {
+        const present = people.filter((p) => { const d = draftOf(p); return (d.moveLearner || d.moveTrainer) && d.onCalendar; }).map((p) => p.email);
+        const v = await verifyRunCalendarAttendees(targetRunId, { present, absent: calendarExclude });
+        const vline = describeVerify(v);
+        if (vline) verifyMsg = '\n' + vline;
+      }
       let tpgMsg = '';
       if (syncTrainerTpg && json.tpgTrainer && !json.tpgTrainer.skipped) {
         const tgt = json.tpgTrainer.target, src = json.tpgTrainer.source;
-        const describeTarget = (r: any) => {
-          switch (r?.status) {
+        const describeTarget = (rr: any) => {
+          switch (rr?.status) {
             case 'synced': return 'trainer assigned ✓';
             case 'skipped_no_trainer': return 'not assigned (no trainer selected)';
             case 'skipped_no_nric': return 'NOT assigned — trainer has no NRIC on file';
             case 'no_tpg_profile': return 'NOT assigned — trainer has no SSG TP profile';
-            default: return `NOT assigned — ${r?.message || 'error'}`;
+            default: return `NOT assigned — ${rr?.message || 'error'}`;
           }
         };
-        const describeSource = (r: any) => {
-          switch (r?.status) {
+        const describeSource = (rr: any) => {
+          switch (rr?.status) {
             case 'synced': return 'old trainer removed ✓';
             case 'skipped_no_trainer': case 'skipped_no_target': return 'old trainer kept';
             case 'skipped_target_failed': return 'old trainer KEPT (new run assign failed)';
-            default: return `error — ${r?.message || 'unknown'}`;
+            default: return `error — ${rr?.message || 'unknown'}`;
           }
         };
         tpgMsg = `\n\nTPGateway — new run: ${describeTarget(tgt)}; original run: ${describeSource(src)}.`;
@@ -206,14 +222,12 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
           tpgMsg += `\n⚠️ Trainer was NOT set on the new run in TPGateway — please set it there manually. The original run's trainer was left in place.`;
         }
       }
-      const summaryMsg = `Moved ${s.moved ?? 0} learner(s)${s.removed ? `, ${s.removed} removed` : ''}${s.skippedConflicts?.length ? `, ${s.skippedConflicts.length} already in target (removed from this run)` : ''}. Trainer on target: ${s.trainerTarget || 'none'}.${calMsg}${tpgMsg}`;
+      const summaryMsg = `Moved ${s.moved ?? 0} learner(s)${s.removed ? `, ${s.removed} removed` : ''}${s.skippedConflicts?.length ? `, ${s.skippedConflicts.length} already in target (removed from this run)` : ''}. Trainer on target: ${s.trainerTarget || 'none'}.${calMsg}${layerMsg}${verifyMsg}${tpgMsg}${syncCalendar ? '\n\n↻ Refresh Google Calendar to see the change — it can take a moment to update.' : ''}`;
       onDone();
       onClose();
 
       const orphanApplicable = !syncCalendar && !!s.sourceVacated;
 
-      // Send the (composed, if available) class-reschedule notification. Manual: the
-      // admin opted in via the checkbox + composed the email before confirming the move.
       const sendNotify = async (): Promise<string> => {
         if (!notifyAttendees) return '';
         const sib = siblings.find((r) => r.id === targetRunId);
@@ -246,7 +260,7 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
             } finally { onDone(); }
           },
           'Remove orphaned calendar events?', 'Remove old events', 'Keep them',
-          () => showSuccessPopup(preface), // skipping orphan removal still shows the move + notify result
+          () => showSuccessPopup(preface),
         );
       };
 
@@ -260,12 +274,16 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
     }
   };
 
+  const cell = (on: boolean, checked: boolean, onChange: () => void, disabled = false, title?: string) =>
+    on ? <input type="checkbox" checked={checked} disabled={saving || disabled} onChange={onChange} className="h-3.5 w-3.5 align-middle" title={title} />
+       : <span className="text-[10px] text-gray-300 dark:text-gray-600">—</span>;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full border dark:border-gray-700 max-h-[90vh] overflow-auto">
         <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Reschedule class to another run</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Move class to another run</h3>
             <p className="text-xs text-gray-500 dark:text-gray-400">{run.courseTitle} · {run.courseCode} · run {run.courseRunId}</p>
           </div>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">×</button>
@@ -298,48 +316,74 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
                 {siblings.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">No {includeHistorical ? '' : 'upcoming '}runs for this course{includeHistorical ? '' : ' — tick "Include past runs"'}.</p>}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainers on the new run (TMS-LMS)</label>
-                <div className="border border-gray-200 dark:border-gray-700 rounded-md divide-y divide-gray-100 dark:divide-gray-800">
-                  {carry.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-gray-400">No trainers — add one below, or move with no trainer.</div>
-                  ) : carry.map((t, i) => (
-                    <div key={(t.email || t.name) + i} className="flex items-center gap-2 px-3 py-2 text-sm">
-                      <label className="flex items-center gap-1 cursor-pointer shrink-0" title={!t.email ? 'No email — cannot be the official trainer' : (syncTrainerTpg && !t.hasNric) ? 'No NRIC on file — not eligible for TPGateway' : 'Official trainer (on TPGateway)'}>
-                        <input type="radio" name="official-trainer" checked={!!t.email && officialEmail === t.email} disabled={!t.email || (syncTrainerTpg && !t.hasNric)} onChange={() => setOfficialEmail(t.email)} className="h-4 w-4 text-blue-600 focus:ring-blue-500 disabled:opacity-40" />
-                        <span className="text-[10px] uppercase text-gray-500 dark:text-gray-400">official</span>
-                      </label>
-                      <span className="flex-1 min-w-0 truncate text-gray-800 dark:text-gray-200">{t.name}</span>
-                      {t.tags?.map((tag) => <Chip key={tag} tag={tag} />)}
-                      {!t.hasNric && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">no NRIC</span>}
-                      <span className="text-gray-500 dark:text-gray-400 text-xs max-w-[30%] truncate">{t.email || '—'}</span>
-                      <button type="button" onClick={() => removeCarry(i)} className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded px-1.5 shrink-0" title="Remove from list">×</button>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-2">
-                  <SearchableSelect options={addOptions} value="" onChange={addCarry} placeholder="Add a trainer…"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white" />
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Pick the <strong>official</strong> trainer (assigned on TPGateway / re-invited). The rest get TMS-LMS access only.</p>
+              {/* Sync options — set these first; they enable the matching columns in the table below. */}
+              <div className="space-y-2 rounded-md border border-gray-200 dark:border-gray-700 p-3">
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  <input type="checkbox" checked={syncCalendar} onChange={(e) => setSyncCalendar(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                  <span>Also update Google Calendar (move attendees to the new run's events; remove this run's if it's left empty) — enables the <strong>Calendar</strong> column</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  <input type="checkbox" checked={syncTrainerTpg} onChange={(e) => setSyncTrainerTpg(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                  <span>Set the <strong>official</strong> trainer on TPGateway (added to the new run, cleared from the original run) — enables the <strong>TPG</strong> column. Needs the trainer's NRIC + SSG profile.</span>
+                </label>
+                {tpgBlocked && (
+                  <div className="ml-6 text-xs text-red-600 dark:text-red-400">
+                    ⚠️ {official ? `${official.name || official.email} has no NRIC on file` : 'No official trainer selected (tick the TPG box for one)'} — pick an eligible official or untick this. The move can still proceed (LMS only).
+                  </div>
+                )}
+                {syncTrainerTpg && !tpgBlocked && official && (
+                  <div className="ml-6 text-xs text-gray-500 dark:text-gray-400">{official.name || official.email} will be set as the trainer on TPGateway for the new run; the original run&apos;s trainer is cleared.</div>
+                )}
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                <input type="checkbox" checked={syncCalendar} onChange={(e) => setSyncCalendar(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span>Also update Google Calendar (move attendees to the new run's events; remove this run's if it's left empty)</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                <input type="checkbox" checked={syncTrainerTpg} onChange={(e) => setSyncTrainerTpg(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span>Set the <strong>official</strong> trainer on TPGateway (added to the new run, cleared from the original run). Needs the trainer's NRIC + SSG profile.</span>
-              </label>
-              {tpgBlocked && (
-                <div className="-mt-2 ml-6 text-xs text-red-600 dark:text-red-400">
-                  ⚠️ {officialTrainer ? `${officialTrainer.name} has no NRIC on file` : 'No eligible official trainer selected'} — pick an eligible official above or untick this. The move can still proceed (LMS only).
+              {/* Unified "Adjust attendees" roster table for the move */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">People to move</label>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+                  Ticked people move to the new run (keeping their existing enrolment). <strong>Untick to drop someone</strong> —
+                  they aren't moved and are removed from the original run, which is being vacated. <strong>TPG</strong> = the one
+                  official trainer on TPGateway. <strong>Calendar</strong> = include on the new run's events.
+                </p>
+                <div className="rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                      <tr>
+                        <th className="text-left px-2 py-1 font-medium">Person</th>
+                        <th className="text-center px-1 py-1 font-medium w-16">Learner</th>
+                        <th className="text-center px-1 py-1 font-medium w-16">Trainer</th>
+                        <th className={`text-center px-1 py-1 font-medium w-14 ${syncTrainerTpg ? '' : 'opacity-40'}`}>TPG</th>
+                        <th className={`text-center px-1 py-1 font-medium w-20 ${syncCalendar ? '' : 'opacity-40'}`}>Calendar</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {people.length === 0 ? (
+                        <tr><td colSpan={5} className="px-3 py-3 text-sm text-gray-400">No learners or trainers on this run.</td></tr>
+                      ) : people.map((p, i) => {
+                        const d = draftOf(p);
+                        const isTrainerRow = p.isTrainer || d.moveTrainer;
+                        const nric = hasNric(p.email);
+                        return (
+                          <tr key={p.email || p.name || i} className="align-middle">
+                            <td className="px-2 py-1.5">
+                              <div className="text-gray-800 dark:text-gray-100 truncate max-w-[15rem]" title={p.email}>{p.name || p.email}</div>
+                              {p.name && <div className="text-[10px] text-gray-400 truncate max-w-[15rem]">{p.email || '—'}{isTrainerRow && !nric && <span className="ml-1 text-amber-600 dark:text-amber-400">· no NRIC</span>}</div>}
+                            </td>
+                            <td className="px-1 py-1.5 text-center">{cell(p.isLearner, d.moveLearner, () => toggle(p, 'moveLearner'), false, 'Move this learner')}</td>
+                            <td className="px-1 py-1.5 text-center">{cell(isTrainerRow, d.moveTrainer, () => toggle(p, 'moveTrainer'), false, 'Carry this trainer')}</td>
+                            <td className="px-1 py-1.5 text-center">{cell(isTrainerRow, d.onTpg, () => toggleTpg(p), !syncTrainerTpg || !nric, !syncTrainerTpg ? 'Turn on "Set the official trainer on TPGateway" above to choose' : (!nric ? 'No NRIC — not eligible for TPGateway' : 'Official trainer on TPGateway'))}</td>
+                            <td className="px-1 py-1.5 text-center">{cell(true, d.onCalendar, () => toggle(p, 'onCalendar'), !syncCalendar, !syncCalendar ? 'Turn on "Also update Google Calendar" above to adjust' : 'Include on the new run\'s Google Calendar events')}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-              {syncTrainerTpg && !tpgBlocked && officialTrainer && (
-                <div className="-mt-2 ml-6 text-xs text-gray-500 dark:text-gray-400">{officialTrainer.name} will be set as the trainer on TPGateway for the new run; the original run&apos;s trainer is cleared.</div>
-              )}
+                <div className="mt-2">
+                  <SearchableSelect options={addOptions} value="" onChange={addTrainer} placeholder="Add a trainer not on this run…"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white" />
+                </div>
+              </div>
+
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
                 <input type="checkbox" checked={notifyAttendees} onChange={(e) => setNotifyAttendees(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                 <span>Notify attendees by email — review &amp; edit the email and choose recipients below; sent after you confirm the move (never automatic)</span>
@@ -353,25 +397,6 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
                   <p className="text-xs text-gray-500 dark:text-gray-400">Select the new run above to set up the email.</p>
                 )
               )}
-
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Learners ({learners.length})</h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Untick a learner to exclude them from the move (e.g. a last-minute pull-out).</p>
-                <div className="border border-gray-200 dark:border-gray-700 rounded-md max-h-48 overflow-auto divide-y divide-gray-100 dark:divide-gray-800">
-                  {learners.length === 0 ? (
-                    <div className="px-3 py-3 text-sm text-gray-400">No active learners on this run.</div>
-                  ) : learners.map((l) => {
-                    const email = (l.learnerEmail || '').toLowerCase();
-                    const included = !excluded.has(email);
-                    return (
-                      <label key={email} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer">
-                        <input type="checkbox" checked={included} onChange={() => toggleExclude(email)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                        <span className={included ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 line-through'}>{l.learnerName} <span className="text-gray-400">({l.learnerEmail})</span></span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
             </>
           )}
         </div>
@@ -380,7 +405,7 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <button type="button" disabled={saving || !targetRunId || tpgBlocked} onClick={() => void doMove(false)}
             className="px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
-            {saving ? 'Rescheduling…' : 'Reschedule Class'}
+            {saving ? 'Moving…' : 'Move class'}
           </button>
         </div>
       </div>

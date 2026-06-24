@@ -170,6 +170,19 @@ async function findRunEvents(
     const ev = findEventOnDate(all, { courseRunId: run.course_run_id, courseTitle: run.title, dateIso: d });
     if (ev?.id) byId.set(ev.id, ev);
   }
+  // Also resolve via the durable mapping with events.get (immediately consistent). events.list LAGS for
+  // just-created/moved events — e.g. right after a reschedule's calendar reconcile — so a staged attendee
+  // removal would otherwise miss the new event and silently no-op (the "everyone stays on the calendar" bug).
+  try {
+    const mapped = (await pool.query<{ google_event_id: string }>(
+      `SELECT google_event_id FROM course_run_calendar_event WHERE course_run_id = $1`, [run.id]
+    )).rows;
+    for (const m of mapped) {
+      if (!m.google_event_id || byId.has(m.google_event_id)) continue;
+      const ev = await calendar.events.get({ calendarId, eventId: m.google_event_id }).then((r) => r.data).catch(() => null);
+      if (ev?.id && ev.status !== 'cancelled') byId.set(ev.id, ev);
+    }
+  } catch { /* mapping is a best-effort supplement to the live match */ }
   return [...byId.values()];
 }
 
@@ -265,7 +278,12 @@ export async function listRunAttendees(courseRunId: string): Promise<ListAttende
   const run = await loadRunInfo(courseRunId);
   if (!run) return { status: 'skipped', reason: 'Course run not found', writesEnabled, courseRunUuid: null, events: [], people: [] };
   const client = await getCalendarReadClient();
-  if (!client) return { status: 'skipped', reason: 'Google Calendar sync is disabled', writesEnabled, courseRunUuid: run.id, events: [], people: [] };
+  if (!client) {
+    // Calendar unavailable, but the merged LMS roster (learners/trainers/TPG) is calendar-independent —
+    // still return `people` (with onGcal=false) so callers like the move flow get the roster.
+    const people = await buildReconPeople(run.id, []).catch(() => []);
+    return { status: 'skipped', reason: 'Google Calendar sync is disabled', writesEnabled, courseRunUuid: run.id, events: [], people };
+  }
 
   try {
     const events = await findRunEvents(client.calendar, client.calendarId, run);

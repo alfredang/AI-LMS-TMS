@@ -10,7 +10,7 @@ import { getApiUrl } from '@/lib/urlHelpers';
  * override the reschedule's auto-reconcile (the "Sync auto-adds, then Adjust overrides" rule).
  */
 export interface AttendeeDiffs {
-  learnerAdd: Array<{ email: string; userId: string | null }>;
+  learnerAdd: Array<{ email: string; userId: string | null; name?: string | null }>;
   learnerRemove: Array<{ email: string }>;
   trainerAdd: Array<{ email: string; name: string | null; userId: string | null }>;
   trainerRemove: Array<{ email: string; junctionId: string | null }>;
@@ -43,7 +43,13 @@ export async function applyAttendeeDiffs(
   // 1) LMS removals → 2) LMS adds → 3) TPG clear/push → 4) calendar removes/adds (last so it wins).
   for (const p of d.learnerRemove) { const j = await post('/api/admin/remove-enrollment', { email: p.email, courseRunId: lmsRunId }); tally(!!j?.success, `learner- ${p.email}`); }
   for (const p of d.trainerRemove) { const j = await post('/api/admin/remove-trainer', { courseRunUuid: lmsRunId, junctionId: p.junctionId, syncCalendar: false }); tally(!!j?.success, `trainer- ${p.email}`); }
-  for (const p of d.learnerAdd) { const j = await post('/api/admin/assign-student', { courseRunUuid: lmsRunId, userId: p.userId, syncCalendar: false }); tally(!!j?.success, `learner+ ${p.email}`); }
+  for (const p of d.learnerAdd) {
+    // Existing TMS user → assign by userId; brand-new (no userId) → manual mode (name + optional email).
+    const body = p.userId
+      ? { courseRunUuid: lmsRunId, userId: p.userId, syncCalendar: false }
+      : { courseRunUuid: lmsRunId, manualName: p.name || p.email, manualEmail: p.email || undefined, syncCalendar: false };
+    const j = await post('/api/admin/assign-student', body); tally(!!j?.success, `learner+ ${p.email || p.name}`);
+  }
   for (const p of d.trainerAdd) { const j = await post('/api/admin/update-trainer-info', { courseRunUuid: lmsRunId, courseRunId, trainerName: p.name || p.email, trainerEmail: p.email, trainerId: p.userId || undefined }); tally(!!(j?.success ?? !j?.error), `trainer+ ${p.email}`); }
   if (d.tpgClear) { const j = await post('/api/admin/run-trainer-tpg', { courseRunId: lmsRunId, action: 'clear' }); tally(!!j?.success, 'tpg-clear'); }
   if (d.tpgPush) { const j = await post('/api/admin/run-trainer-tpg', { courseRunId: lmsRunId, action: 'push', email: d.tpgPush.email }); tally(!!j?.success, `tpg+ ${d.tpgPush.email}`); }

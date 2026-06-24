@@ -81,6 +81,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           cr.tpg_assigned_trainer_name,
           cr.tpg_assigned_trainer_email,
           c.course_code AS tgs_ref,
+          cr.class_status AS class_status,
           cr.course_run_id AS course_run_id,
           cr.id AS course_run_uuid
       FROM course_run cr
@@ -242,6 +243,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
       success: true,
       data: {
         courseTitle: basicData.course_title,
+        classStatus: basicData.class_status || null,
         operationalSummary: {
           trainer: trainerDisplay,
           startDate: basicData.start_date,

@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import { getApiUrl } from '@/lib/urlHelpers';
 import { applyAttendeeDiffs } from '@/lib/calendar/attendeeDiffs';
+import { verifyRunCalendarAttendees, describeVerify } from '@/lib/calendar/verifyAttendees';
 import {
   buildUpdateSessionsPayload,
   buildDeleteSessionPayload,
@@ -120,14 +121,56 @@ const fmtRange = (a: string, b: string) => {
     : `${da.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${db.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
 };
 
+/**
+ * Turn an SSG error response body into a readable message. SSG returns 200-with-error-body OR a
+ * non-2xx with `{ code, message, details: [{ field, message }], errorId }`. The raw JSON dump is
+ * useless to a non-technical admin — surface the human `details[].message` and explain the common
+ * "Course Run already exist" case (SSG already has another run of this course on those dates; often
+ * a sign its dates differ from ours — verify on TPGateway).
+ */
+/** Shown on the success popup after a Google-Calendar-affecting action — the GCal view lags a live write. */
+const CAL_REFRESH_HINT = '↻ Refresh Google Calendar to see the change — it can take a moment to update.';
+
+function friendlySsgError(status: number, text: string): string {
+  try {
+    const j = JSON.parse(text);
+    const details = Array.isArray(j?.details) ? j.details.map((d: any) => d?.message).filter(Boolean) : [];
+    const core = (details.join(' ') || j?.message || text || `HTTP ${status}`).trim();
+    if (/already exist/i.test(core)) {
+      return `${core}\n\nTPGateway already has another run of this course on that date, so it won't accept the change. Check that run's dates on TPGateway, or pick a different date.`;
+    }
+    return core;
+  } catch {
+    return text || `HTTP ${status}`;
+  }
+}
+
 /** Apply the confirm step's STAGED attendee/roster/TPG/calendar changes (after the reschedule). */
-async function applyStagedAttendees(courseRunId: string, dec: StepConfirmResult, baseMsg: string): Promise<string> {
+async function applyStagedAttendees(
+  courseRunId: string, dec: StepConfirmResult, baseMsg: string, busy?: (b: boolean) => void,
+): Promise<string> {
   if (!dec.attendeeDiffs) return baseMsg;
   try {
+    busy?.(true); // keep the processing overlay up through apply + the settle poll below
     const r = await applyAttendeeDiffs(courseRunId, dec.attendeeRunUuid, dec.attendeeDiffs);
-    return `${baseMsg}\n\nAttendees: applied ${r.ok}${r.fail ? `, ${r.fail} failed (${r.fails.join(', ')})` : ''}.`;
+    let line = `Attendees: applied ${r.ok}${r.fail ? `, ${r.fail} failed (${r.fails.join(', ')})` : ''}.`;
+    // Don't declare done until the calendar actually reflects the override: the people we added
+    // are present and the people we removed are gone (the reconcile briefly adds the whole roster
+    // first, so an early read can look "wrong"). See verifyRunCalendarAttendees.
+    const v = await verifyRunCalendarAttendees(courseRunId, {
+      present: dec.attendeeDiffs.gcalAdd, absent: dec.attendeeDiffs.gcalRemove,
+    });
+    const vline = describeVerify(v);
+    if (vline) line += ' ' + vline;
+    // Calendar refresh hint — only if the reconcile (sync) path didn't already append it (baseMsg) and
+    // the staged adjust itself touched the calendar.
+    const stagedTouchedCal = (dec.attendeeDiffs.gcalAdd.length + dec.attendeeDiffs.gcalRemove.length) > 0;
+    const hint = (!dec.sync && stagedTouchedCal) ? `\n\n${CAL_REFRESH_HINT}` : '';
+    return `${baseMsg}\n\n${line}${hint}`;
   } catch (e) {
     return `${baseMsg}\n\n⚠ Attendee changes failed: ${e instanceof Error ? e.message : 'error'}`;
+  } finally {
+    busy?.(false);
   }
 }
 
@@ -241,7 +284,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
         const response = await fetch(`/api/ssg/courses/courseRuns/${p.courseRunId}?includeExpiredCourses=false&action=update-sessions`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody),
         });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}, message: ${await response.text()}`);
+        if (!response.ok) throw new Error(friendlySsgError(response.status, await response.text()));
         const updBody = await response.json().catch(() => null);
 
         const extras: string[] = [];
@@ -275,7 +318,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
         }
 
         p.onApplied?.();
-        return 'Class rescheduled.' + (extras.length ? ' ' + extras.join(' · ') + '.' : '');
+        return 'Class rescheduled.' + (extras.length ? ' ' + extras.join(' · ') + '.' : '') + (sync ? '\n\n' + CAL_REFRESH_HINT : '');
       } catch (error) {
         cb.showErrorPopup("Couldn't reschedule: " + (error instanceof Error ? error.message : 'something went wrong'));
         return null;
@@ -325,7 +368,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
       if (!res.ok) return;
       const baseMsg = await doApply(dec.sync, res.resolution);
       if (baseMsg == null) return;
-      const msg = await applyStagedAttendees(p.courseRunId, dec, baseMsg);
+      const msg = await applyStagedAttendees(p.courseRunId, dec, baseMsg, busy);
       if (dec.notifyPayload) { const nr = await sendNotify(p.courseRunId, p.changeType, dec.notifyPayload); cb.showSuccessPopup(`${msg}\n\n${nr}`); }
       else cb.showSuccessPopup(msg);
       return;
@@ -441,7 +484,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
         const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=false&action=delete-sessions`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody),
         });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}, message: ${await response.text()}`);
+        if (!response.ok) throw new Error(friendlySsgError(response.status, await response.text()));
         await response.json();
 
         const extras: string[] = [];
@@ -466,7 +509,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
         }
 
         args.onApplied?.();
-        return 'Session cancelled.' + (extras.length ? ' ' + extras.join(' · ') + '.' : '');
+        return 'Session cancelled.' + (extras.length ? ' ' + extras.join(' · ') + '.' : '') + (sync ? '\n\n' + CAL_REFRESH_HINT : '');
       } catch (error) {
         cb.showErrorPopup("Couldn't cancel the session: " + (error instanceof Error ? error.message : 'something went wrong'));
         return null;
@@ -493,7 +536,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
         if (!dec.confirmed) return;
         const baseMsg = await doDelete(dec.sync);
         if (baseMsg == null) return;
-        const msg = await applyStagedAttendees(courseRunId, dec, baseMsg);
+        const msg = await applyStagedAttendees(courseRunId, dec, baseMsg, busy);
         if (dec.notifyPayload) { const nr = await sendNotify(courseRunId, 'session_cancel', dec.notifyPayload); cb.showSuccessPopup(`${msg}\n\n${nr}`); }
         else cb.showSuccessPopup(msg);
       })();
@@ -532,7 +575,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
         const response = await fetch(`/api/ssg/courses/courseRuns/${courseRunId}?includeExpiredCourses=false&action=delete-sessions`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody),
         });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}, message: ${await response.text()}`);
+        if (!response.ok) throw new Error(friendlySsgError(response.status, await response.text()));
         await response.json();
 
         const extras: string[] = [];
@@ -557,7 +600,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
         }
 
         args.onApplied?.();
-        return `${n} session${n === 1 ? '' : 's'} cancelled.` + (extras.length ? ' ' + extras.join(' · ') + '.' : '');
+        return `${n} session${n === 1 ? '' : 's'} cancelled.` + (extras.length ? ' ' + extras.join(' · ') + '.' : '') + (sync ? '\n\n' + CAL_REFRESH_HINT : '');
       } catch (error) {
         cb.showErrorPopup("Couldn't cancel the day: " + (error instanceof Error ? error.message : 'something went wrong'));
         return null;
@@ -584,7 +627,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
         if (!dec.confirmed) return;
         const baseMsg = await doDelete(dec.sync);
         if (baseMsg == null) return;
-        const msg = await applyStagedAttendees(courseRunId, dec, baseMsg);
+        const msg = await applyStagedAttendees(courseRunId, dec, baseMsg, busy);
         if (dec.notifyPayload) { const nr = await sendNotify(courseRunId, 'day_cancel', dec.notifyPayload); cb.showSuccessPopup(`${msg}\n\n${nr}`); }
         else cb.showSuccessPopup(msg);
       })();

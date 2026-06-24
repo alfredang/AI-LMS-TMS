@@ -2,6 +2,34 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { triggerClassCalendarSync } from '@lib/calendar/triggerClassCalendarSync';
 
+/**
+ * Keep class_status in step with reality, synchronously — mirrors the derive that classes-by-date
+ * already persists lazily on calendar load: a run with no trainer (or no learners) can't be Confirmed.
+ * Doing it here makes the revert IMMEDIATE (the modal/list no longer needs a reload to show Pending);
+ * the eventual state is identical to before, only the timing changes. Only the auto-managed
+ * Pending/Confirmed states are touched — Cancelled/Unconfirmed/Completed are left alone.
+ */
+async function syncClassStatus(courseRunUuid: string) {
+  const r = await pool.query<{ has_trainer: boolean; has_learner: boolean; class_status: string }>(
+    `SELECT
+       (EXISTS(SELECT 1 FROM course_run_trainer t WHERE t.course_run_id = cr.id)
+         OR cr.assigned_trainer_id IS NOT NULL
+         OR nullif(btrim(cr.assigned_trainer_name), '') IS NOT NULL
+         OR nullif(btrim(cr.tpg_assigned_trainer_email), '') IS NOT NULL) AS has_trainer,
+       EXISTS(SELECT 1 FROM enrollment e WHERE e.course_run_id = cr.id
+                AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')) AS has_learner,
+       cr.class_status
+     FROM course_run cr WHERE cr.id = $1`,
+    [courseRunUuid]
+  );
+  const row = r.rows[0];
+  if (!row || !['Pending', 'Confirmed'].includes(row.class_status)) return;
+  const next = row.has_trainer && row.has_learner ? 'Confirmed' : 'Pending';
+  if (next !== row.class_status) {
+    await pool.query(`UPDATE course_run SET class_status = $1, updated_at = NOW() WHERE id = $2`, [next, courseRunUuid]);
+  }
+}
+
 /** Sync legacy single-trainer columns on course_run with the first trainer from the junction table */
 async function syncLegacyColumns(courseRunUuid: string) {
   const first = await pool.query(
@@ -64,8 +92,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log(`🗑️ Removed all trainers from course run ${courseRunUuid}`);
     }
 
-    // Sync the legacy columns
+    // Sync the legacy columns + recompute class_status immediately (so removing the last trainer
+    // reverts Confirmed → Pending right away, not only on the next calendar grid recompute).
     await syncLegacyColumns(courseRunUuid);
+    await syncClassStatus(courseRunUuid);
 
     // Calendar: trainer removed -> drop them from the event's attendees.
     // Skippable (syncCalendar:false) so callers that manage the calendar explicitly

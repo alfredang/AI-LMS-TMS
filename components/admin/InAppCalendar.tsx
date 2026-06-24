@@ -312,36 +312,12 @@ const InAppCalendar: React.FC = () => {
       const r = await fetch(getApiUrl(`/api/admin/class-details?courseRunId=${encodeURIComponent(m.run.courseRunId)}`));
       const d = (await r.json())?.data;
       setEventModal((prev) => (prev && prev.run.courseRunId === m.run.courseRunId)
-        ? { ...prev, taggedTrainers: d?.taggedTrainers || prev.taggedTrainers, learners: d?.enrolledLearners || prev.learners }
+        ? { ...prev, run: { ...prev.run, classStatus: d?.classStatus || prev.run.classStatus }, taggedTrainers: d?.taggedTrainers || prev.taggedTrainers, learners: d?.enrolledLearners || prev.learners }
         : prev);
     } catch { /* keep */ }
   }, []);
 
   // Quick "assign a TPG-only trainer into the LMS" from the modal's Trainers list (confirm-gated).
-  const assignTrainerInLms = useCallback((t: TaggedTrainer) => {
-    const m = eventModalRef.current;
-    if (!m || !t.email) return;
-    showConfirmPopup(
-      `Add ${t.name} as a trainer for this class? (They're currently only on TPGateway.)`,
-      async () => {
-        try {
-          const res = await fetch(getApiUrl('/api/admin/update-trainer-info'), {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ courseRunUuid: m.run.courseRunUuid, courseRunId: m.run.courseRunId, trainerName: t.name, trainerEmail: t.email }),
-          });
-          const d = await res.json();
-          if (!res.ok) throw new Error(d?.error || 'Failed to add trainer');
-          showSuccessPopup(`${t.name} added as a trainer.`);
-          await refreshModalDetails();
-          if (range) void fetchRange(range.start, range.end);
-        } catch (e) {
-          showErrorPopup(e instanceof Error ? e.message : "Couldn't add the trainer");
-        }
-      },
-      'Add trainer', 'Add', 'Cancel',
-    );
-  }, [refreshModalDetails, range, fetchRange]);
-
   const handleEventClick = useCallback((arg: EventClickArg) => {
     const props: any = arg.event.extendedProps;
     if (props?.kind === 'runDay') void openEventModal(props as ClassDayEvent);
@@ -704,11 +680,6 @@ const InAppCalendar: React.FC = () => {
                           <li key={i} className="px-3 py-1.5 flex items-center justify-between gap-2">
                             <span className="min-w-0 truncate text-gray-800 dark:text-gray-200">{t.name}</span>
                             <span className="flex items-center gap-1.5 shrink-0">
-                              {t.tags.includes('tpg') && !t.tags.includes('lms') && t.email && (
-                                <button type="button" onClick={() => assignTrainerInLms(t)}
-                                  className="text-[11px] px-1.5 py-0.5 rounded bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap"
-                                  title="This trainer is only on TPGateway — add them to this class too">Add to class</button>
-                              )}
                               {t.tags.map((tag) => <TrainerTagChip key={tag} tag={tag} />)}
                               <span className="text-gray-500 dark:text-gray-400 text-xs max-w-[40%] truncate">{t.email || '—'}</span>
                             </span>
@@ -806,6 +777,7 @@ const InAppCalendar: React.FC = () => {
                   <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
                     <CalendarAttendeesPanel
                       courseRunId={eventModal.run.courseRunId}
+                      calendarSync={syncCalendar}
                       onChanged={() => { void refreshModalDetails(); if (range) void fetchRange(range.start, range.end); }}
                     />
                   </div>

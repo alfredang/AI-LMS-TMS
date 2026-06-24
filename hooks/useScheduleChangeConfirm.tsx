@@ -107,7 +107,7 @@ export function useScheduleChangeConfirm() {
             <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">Update who's on this class across the system, TPGateway and Google Calendar. Saved when you confirm — after the move, so it takes priority over the automatic calendar update. Applies to the <strong>whole class</strong> (all its days), not just the day you're moving.</p>
             {state.adjust && (
               <div className="mt-3 rounded-md border border-gray-200 dark:border-gray-700 p-3">
-                <CalendarAttendeesPanel courseRunId={state.args.notify.courseRunId} staged onStagedChange={onStagedChange} />
+                <CalendarAttendeesPanel courseRunId={state.args.notify.courseRunId} staged calendarSync={state.args.showSync !== false && state.sync} onStagedChange={onStagedChange} />
               </div>
             )}
           </div>

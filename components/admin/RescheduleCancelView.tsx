@@ -607,7 +607,7 @@ const RescheduleCancelView: React.FC = () => {
                                 })}
                                 <p className="text-xs text-gray-400">Sessions are grouped by day. Rescheduling moves the session; cancelling permanently deletes it.</p>
                                 <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                                  <CalendarAttendeesPanel courseRunId={run.courseRunId} onChanged={() => void loadSessions(run, true)} />
+                                  <CalendarAttendeesPanel courseRunId={run.courseRunId} calendarSync={syncCalendar} onChanged={() => { void loadSessions(run, true); void fetchClasses(); }} />
                                 </div>
                               </div>
                             )}

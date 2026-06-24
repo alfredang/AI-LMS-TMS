@@ -58,12 +58,20 @@ export function findEventOnDate(
         ((evt.description || '') + ' ' + (evt.location || '')).toLowerCase().includes(runIdLower))
     : undefined;
 
+  // The fuzzy fallbacks (title) MUST NOT grab an event that explicitly belongs to a DIFFERENT run —
+  // otherwise two same-course runs on the same day cross-contaminate (run B with no event of its own
+  // would adopt/show run A's event + attendees). Only fuzzy-match events with no run id, or our run id.
+  const notAnotherRun = (evt: calendar_v3.Schema$Event): boolean => {
+    const er = extractEventRunId(evt);
+    return er === null || er === runIdLower;
+  };
+
   // 2) title substring, on the target date
   if (!match) {
     match = events.find(evt => {
       const s = stripPrefixes(evt.summary || '').toLowerCase();
       const titleMatch = s.includes(strippedTitle) || strippedTitle.includes(s);
-      return eventDateIso(evt) === dateIso && titleMatch;
+      return eventDateIso(evt) === dateIso && titleMatch && notAnotherRun(evt);
     });
   }
 
@@ -73,10 +81,21 @@ export function findEventOnDate(
       const s = stripPrefixes(evt.summary || '').toLowerCase();
       const evtWords = s.split(/\s+/).filter(w => w.length > 2);
       const overlap = evtWords.filter(w => titleWords.has(w));
-      return eventDateIso(evt) === dateIso &&
+      return eventDateIso(evt) === dateIso && notAnotherRun(evt) &&
         overlap.length >= Math.ceil(titleWords.size * 0.6);
     });
   }
 
   return match;
+}
+
+/**
+ * The SSG run id written into an event's description ("Course Run ID: <id>"), lowercased, or null
+ * if absent. Used to keep the fuzzy title match from claiming another run's event (same-course,
+ * same-day clash). Tolerant of the location too.
+ */
+export function extractEventRunId(evt: calendar_v3.Schema$Event): string | null {
+  const text = (evt.description || '') + ' ' + (evt.location || '');
+  const m = text.match(/course\s*run\s*id\s*:?\s*([a-z0-9-]+)/i);
+  return m ? m[1].toLowerCase() : null;
 }
