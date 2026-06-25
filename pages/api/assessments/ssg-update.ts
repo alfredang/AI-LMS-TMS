@@ -1,6 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
+import { checkAssessmentEligibility } from '../../../lib/services/enrolmentEligibility';
+import { checkAttendanceGate } from '../../../lib/services/learnerAttendance';
 import crypto from 'crypto';
 
 /**
@@ -22,6 +24,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     assessmentDate,
     grade,
     score,
+    courseRunId,
+    traineeId,
   } = req.body;
 
   if (!referenceNumber || !action) {
@@ -29,6 +33,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Guard (only when the caller supplies run + trainee identifiers): never update an assessment
+    // (→ SSG keeps/issues an SOA) for a cancelled class or a cancelled/withdrawn enrolment. The
+    // Update view sends courseRunId + traineeId for exactly this. 'void' is always allowed — voiding
+    // a record for a cancelled learner is corrective, not an issuance.
+    if (action === 'update' && courseRunId && traineeId) {
+      const eligibility = await checkAssessmentEligibility({
+        ssgCourseRunId: String(courseRunId),
+        traineeId: String(traineeId),
+      });
+      if (!eligibility.eligible) {
+        console.log(`⏭️ Skipping assessment update for ${traineeFullName || traineeId} (run ${courseRunId}) — ${eligibility.reason}`);
+        return res.status(200).json({
+          success: true,
+          skipped: true,
+          reason: `Skipped — ${eligibility.reason}.`,
+          classStatus: eligibility.classStatus,
+          enrolmentStatus: eligibility.enrolmentStatus,
+        });
+      }
+
+      // Attendance gate: block when below the configured requirement; fail-open when unavailable.
+      const attGate = await checkAttendanceGate(String(courseRunId), String(traineeId));
+      if (attGate.blocked) {
+        console.log(`⏭️ Skipping assessment update for ${traineeFullName || traineeId} (run ${courseRunId}) — attendance ${attGate.percent}% < ${attGate.threshold}%`);
+        return res.status(200).json({
+          success: true,
+          skipped: true,
+          reason: `Skipped — attendance ${attGate.percent}% is below the ${attGate.threshold}% requirement.`,
+          attendancePercent: attGate.percent,
+          attendanceThreshold: attGate.threshold,
+        });
+      }
+    }
+
     const credentials = await getSSGCredentialsService().getSSGCredentials(undefined, (req.headers['x-ssg-app'] as string) || undefined);
     if (!credentials) {
       return res.status(500).json({ success: false, error: 'SSG credentials not found' });

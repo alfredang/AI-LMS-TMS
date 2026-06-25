@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import { checkAssessmentEligibility } from '../../../lib/services/enrolmentEligibility';
+import { checkAttendanceGate } from '../../../lib/services/learnerAttendance';
 import crypto from 'crypto';
 
 /**
@@ -50,6 +51,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         reason: `Skipped — ${eligibility.reason}.`,
         classStatus: eligibility.classStatus,
         enrolmentStatus: eligibility.enrolmentStatus,
+      });
+    }
+
+    // Guard: block when attendance is below the configured requirement. Fail-open when attendance can't
+    // be determined yet (never block on missing data). Source is the LMS record (QR + manual marks).
+    const attGate = await checkAttendanceGate(String(courseRunId), String(traineeId));
+    if (attGate.blocked) {
+      console.log(`⏭️ Skipping assessment create for ${traineeFullName} (run ${courseRunId}) — attendance ${attGate.percent}% < ${attGate.threshold}%`);
+      return res.status(200).json({
+        success: true,
+        skipped: true,
+        reason: `Skipped — attendance ${attGate.percent}% is below the ${attGate.threshold}% requirement.`,
+        attendancePercent: attGate.percent,
+        attendanceThreshold: attGate.threshold,
       });
     }
 

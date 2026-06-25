@@ -6,6 +6,7 @@ import { Icon, IconName } from '../ui/Icon';
 import { getApiUrl } from '@/lib/urlHelpers';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
+import AttendanceChecker from './AttendanceChecker';
 
 // Helper functions for consistent styling
 const getStatusColor = (status: string) => {
@@ -673,6 +674,7 @@ export const SubmitAssessmentView: React.FC = () => {
                                 ID Type: {getIdType(traineeId)}
                             </p>
                         )}
+                        <AttendanceChecker courseRunId={courseRunId} traineeId={traineeId} />
                     </div>
                     <div>
                         <label htmlFor="submit-trainee-name" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
@@ -858,6 +860,9 @@ export const UpdateAssessmentView: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [apiResult, setApiResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
+    // Course run + trainee — used for the attendance check and the cancelled-class/enrolment guard.
+    const [courseRunId, setCourseRunId] = useState<string>('');
+    const [traineeId, setTraineeId] = useState<string>('');
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -888,6 +893,8 @@ export const UpdateAssessmentView: React.FC = () => {
                     assessmentDate: action === 'update' ? assessmentDate.trim() : undefined,
                     grade: grade.trim() || undefined,
                     score: score.trim() || undefined,
+                    courseRunId: courseRunId.trim() || undefined,
+                    traineeId: traineeId.trim() || undefined,
                 })
             });
 
@@ -899,7 +906,7 @@ export const UpdateAssessmentView: React.FC = () => {
                 return;
             }
 
-            setApiResult(data.data);
+            setApiResult(data.skipped ? { skipped: true, reason: data.reason } : data.data);
         } catch (err) {
             console.error('❌ Error updating assessment:', err);
             setError(err instanceof Error ? err.message : 'Failed to update assessment');
@@ -917,6 +924,8 @@ export const UpdateAssessmentView: React.FC = () => {
         setTraineeFullName('');
         setSkillCode('');
         setAssessmentDate('');
+        setCourseRunId('');
+        setTraineeId('');
         setApiResult(null);
         setError(null);
     };
@@ -964,6 +973,37 @@ export const UpdateAssessmentView: React.FC = () => {
                             <option value="update">Update</option>
                             <option value="void">Void</option>
                         </select>
+                    </div>
+
+                    {/* Course run + trainee — drives the attendance check and the cancelled-class / cancelled-enrolment guard */}
+                    <div>
+                        <label htmlFor="update-course-run-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Course Run ID <span className="text-xs font-normal text-gray-400">(for attendance + cancelled guard)</span>
+                        </label>
+                        <input
+                            id="update-course-run-id"
+                            type="text"
+                            value={courseRunId}
+                            onChange={(e) => setCourseRunId(e.target.value)}
+                            placeholder="e.g. 1131904"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="update-trainee-id" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            Trainee ID (NRIC/FIN) <span className="text-xs font-normal text-gray-400">(for attendance + cancelled guard)</span>
+                        </label>
+                        <input
+                            id="update-trainee-id"
+                            type="text"
+                            value={traineeId}
+                            onChange={(e) => setTraineeId(e.target.value)}
+                            placeholder="e.g. S1234567A"
+                            className={inputClasses}
+                            disabled={isSubmitting}
+                        />
+                        <AttendanceChecker courseRunId={courseRunId} traineeId={traineeId} />
                     </div>
 
                     {/* Fields for update action only */}
@@ -1122,6 +1162,16 @@ export const UpdateAssessmentView: React.FC = () => {
                             </div>
                             <div className="pl-7 space-y-1">
                                 <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+                            </div>
+                        </div>
+                    ) : apiResult?.skipped ? (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Icon name={IconName.X} className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                <h4 className="font-semibold text-amber-900 dark:text-amber-200">Assessment update skipped — not sent to SSG</h4>
+                            </div>
+                            <div className="pl-7 space-y-1">
+                                <p className="text-sm text-amber-800 dark:text-amber-300">{apiResult.reason || 'The class or enrolment is cancelled.'}</p>
                             </div>
                         </div>
                     ) : (
