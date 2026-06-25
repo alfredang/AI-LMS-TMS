@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { autoShareLearnerMaterialsWithEnrolled } from '../../../lib/google-drive/drive-helpers';
 
 const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback';
 
@@ -322,6 +323,16 @@ async function _runAutomationInner() {
 
                     // Brief delay between emails to avoid rate limits
                     await sleep(1000);
+                }
+
+                // Grant the enrolled learners Viewer access to this course's learner materials (slides,
+                // learner guide, lesson plan) so the Google links open without "request access". Runs on
+                // the class start day, before the 08:30 LMS materials unlock. Idempotent + non-blocking.
+                try {
+                    const shared = await autoShareLearnerMaterialsWithEnrolled(run.db_uuid);
+                    console.log(`[auto-send-courseware-attendance] ${run.course_run_id}: shared ${shared.files} material(s) with ${shared.emails} email(s) (${shared.grants} grants)`);
+                } catch (shareErr: any) {
+                    console.warn(`[auto-send-courseware-attendance] learner material share failed for ${run.course_run_id}: ${shareErr.message}`);
                 }
 
             } catch (runErr: any) {

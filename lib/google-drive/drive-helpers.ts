@@ -156,6 +156,95 @@ export async function autoShareCourseResourcesWithTrainer(
     }
 }
 
+/**
+ * Auto-share a course run's LEARNER materials — learner slides, learner guide, lesson plan — with a
+ * set of learner emails as Viewer (read-only). Mirrors autoShareCourseResourcesWithTrainer for the
+ * learner side. Idempotent + non-blocking. NOTE: a per-email Drive grant only resolves for Google
+ * accounts (gmail / Workspace); a non-Google email gets a pending share that never activates (logged,
+ * harmless). The org Google account (Company Settings OAuth) must be able to manage the files.
+ */
+export async function autoShareLearnerMaterials(
+    courseRunId: string,
+    emails: string[]
+): Promise<{ files: number; grants: number }> {
+    const out = { files: 0, grants: 0 };
+    const cleanEmails = Array.from(new Set(
+        (emails || []).map(e => (e || '').trim().toLowerCase()).filter(e => e.includes('@'))
+    ));
+    if (cleanEmails.length === 0) return out;
+    try {
+        const course = (await pool.query(
+            `SELECT c.slides_url, c.learner_guide_url, c.lesson_plan_url
+               FROM course_run cr JOIN course c ON c.id = cr.course_id
+              WHERE cr.id::text = $1 OR cr.course_run_id = $1
+              LIMIT 1`,
+            [courseRunId]
+        )).rows[0];
+        if (!course) return out;
+
+        const fileTargets = ([
+            { url: course.slides_url, label: 'learner slides' },
+            { url: course.learner_guide_url, label: 'learner guide' },
+            { url: course.lesson_plan_url, label: 'lesson plan' },
+        ] as { url: string | null; label: string }[])
+            .filter(l => l.url && l.url.includes('google.com'))
+            .map(l => ({ fileId: extractGoogleFileId(l.url!), label: l.label }))
+            .filter((t): t is { fileId: string; label: string } => !!t.fileId);
+        if (fileTargets.length === 0) return out;
+        out.files = fileTargets.length;
+
+        const drive = await getDriveClient();
+        for (const t of fileTargets) {
+            for (const email of cleanEmails) {
+                await shareGoogleFileWithUser(drive, t.fileId, email, `${t.label} (learner)`);
+                out.grants++;
+            }
+        }
+    } catch (error: any) {
+        console.warn(`⚠️ autoShareLearnerMaterials error (non-blocking): ${error.message}`);
+    }
+    return out;
+}
+
+/**
+ * Share a run's learner materials with EVERY currently-enrolled learner (confirmed/active) — their
+ * account email, secondary email, AND the enrollment's recorded email (covers corporate-vs-personal
+ * duplicate accounts, so whichever Google account they open it with works). Used by the class-day
+ * courseware cron. Non-blocking.
+ */
+export async function autoShareLearnerMaterialsWithEnrolled(
+    courseRunId: string
+): Promise<{ files: number; grants: number; emails: number }> {
+    try {
+        const run = (await pool.query(
+            `SELECT id FROM course_run WHERE id::text = $1 OR course_run_id = $1 LIMIT 1`,
+            [courseRunId]
+        )).rows[0];
+        if (!run) return { files: 0, grants: 0, emails: 0 };
+
+        const rows = (await pool.query<{ email: string }>(
+            `SELECT DISTINCT lower(btrim(email)) AS email FROM (
+               SELECT au.email FROM enrollment e JOIN app_user au ON au.id = e.user_id
+                 WHERE e.course_run_id = $1 AND lower(coalesce(e.enrolment_status,'')) NOT IN ('admin removed','cancelled','withdrawn')
+               UNION ALL
+               SELECT au.secondary_email FROM enrollment e JOIN app_user au ON au.id = e.user_id
+                 WHERE e.course_run_id = $1 AND lower(coalesce(e.enrolment_status,'')) NOT IN ('admin removed','cancelled','withdrawn')
+               UNION ALL
+               SELECT e.email FROM enrollment e
+                 WHERE e.course_run_id = $1 AND lower(coalesce(e.enrolment_status,'')) NOT IN ('admin removed','cancelled','withdrawn')
+             ) t WHERE nullif(btrim(email),'') IS NOT NULL AND email LIKE '%@%'`,
+            [run.id]
+        )).rows;
+
+        const emails = rows.map(r => r.email);
+        const res = await autoShareLearnerMaterials(courseRunId, emails);
+        return { ...res, emails: emails.length };
+    } catch (error: any) {
+        console.warn(`⚠️ autoShareLearnerMaterialsWithEnrolled error (non-blocking): ${error.message}`);
+        return { files: 0, grants: 0, emails: 0 };
+    }
+}
+
 // ── In-Memory Folder Cache ───────────────────────────────────────────────────
 
 /**
