@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { generateAndUploadCertificate } from '../../../lib/services/certificateService';
+import { checkCertificateEligibility } from '../../../lib/services/enrolmentEligibility';
 
 /**
  * POST /api/certificates/send
@@ -75,6 +76,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     for (const learner of enrolRes.rows) {
       try {
+        // Guard: do not issue a certificate for a cancelled class or a
+        // cancelled/withdrawn enrolment. Skip this learner, continue the rest.
+        const eligibility = await checkCertificateEligibility(learner.enrolment_id);
+        if (!eligibility.eligible) {
+          results.push({ name: learner.learner_name, status: 'skipped', error: `Skipped — ${eligibility.reason}` });
+          continue;
+        }
+
         // Generate certificate (uploads to Drive, saves URL in enrollment)
         const certificateUrl = await generateAndUploadCertificate(learner.enrolment_id, pool, learner.learner_name);
 

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
+import { checkAssessmentEligibility } from '../../../lib/services/enrolmentEligibility';
 import crypto from 'crypto';
 
 /**
@@ -31,6 +32,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Guard: never push an assessment (→ SSG issues an SOA) for a cancelled
+    // class or a cancelled/withdrawn enrolment. Straight-through: this is a
+    // silent skip (HTTP 200, skipped:true), NOT an error — the caller may be an
+    // unattended external system that should keep processing the rest of its
+    // batch. See enrolmentEligibility.ts.
+    const eligibility = await checkAssessmentEligibility({
+      ssgCourseRunId: String(courseRunId),
+      enrolmentReferenceNumber: enrolmentReferenceNumber,
+      traineeId: String(traineeId),
+    });
+    if (!eligibility.eligible) {
+      console.log(`⏭️ Skipping assessment create for ${traineeFullName} (run ${courseRunId}) — ${eligibility.reason}`);
+      return res.status(200).json({
+        success: true,
+        skipped: true,
+        reason: `Skipped — ${eligibility.reason}.`,
+        classStatus: eligibility.classStatus,
+        enrolmentStatus: eligibility.enrolmentStatus,
+      });
+    }
+
     const credentials = await getSSGCredentialsService().getSSGCredentials(undefined, (req.headers['x-ssg-app'] as string) || undefined);
     if (!credentials) {
       return res.status(500).json({ success: false, error: 'SSG credentials not found' });
