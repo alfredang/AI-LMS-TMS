@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { checkAssessmentEligibility } from '../../../lib/services/enrolmentEligibility';
 import crypto from 'crypto';
 
 interface BulkItem {
@@ -19,7 +20,7 @@ interface BulkItem {
 interface BulkResult {
   enrolmentReferenceNumber: string;
   traineeFullName: string;
-  status: 'success' | 'error';
+  status: 'success' | 'error' | 'skipped';
   assessmentReferenceNumber?: string;
   createdOn?: string;
   updatedOn?: string;
@@ -64,6 +65,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     for (let i = 0; i < items.length; i++) {
       const item: BulkItem = items[i];
+
+      // Guard: silently exclude cancelled classes / cancelled enrolments from
+      // the SSG push (straight-through — never blocks the batch, just skips the
+      // ineligible learner). Done before the rate-limit delay so skips are cheap.
+      const eligibility = await checkAssessmentEligibility({
+        ssgCourseRunId: String(item.courseRunId),
+        enrolmentReferenceNumber: item.enrolmentReferenceNumber,
+        traineeId: String(item.traineeId || ''),
+      });
+      if (!eligibility.eligible) {
+        console.log(`⏭️ Skipping assessment for ${item.enrolmentReferenceNumber} (${item.traineeFullName}) — ${eligibility.reason}`);
+        results.push({
+          enrolmentReferenceNumber: item.enrolmentReferenceNumber,
+          traineeFullName: item.traineeFullName,
+          status: 'skipped',
+          error: `Skipped — ${eligibility.reason}`,
+        });
+        continue;
+      }
 
       // Add delay between requests (skip first)
       if (i > 0) {
@@ -191,10 +211,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const successCount = results.filter(r => r.status === 'success').length;
     const errorCount = results.filter(r => r.status === 'error').length;
+    const skippedCount = results.filter(r => r.status === 'skipped').length;
 
     return res.status(200).json({
       success: true,
-      summary: { total: items.length, success: successCount, error: errorCount },
+      summary: { total: items.length, success: successCount, error: errorCount, skipped: skippedCount },
       results,
     });
 

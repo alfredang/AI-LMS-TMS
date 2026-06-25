@@ -246,6 +246,13 @@ async function seedDefaults() {
             api_endpoint: '/api/external/sync-ssg-enrolments',
         },
         {
+            id: 'reconcile_enrolment_cancellations',
+            name: 'Reconcile Enrolment Cancellations',
+            description: 'For active local enrolments on recently-ended or near-future course runs, pulls the current status from TPGateway and writes cancellations/withdrawals back to the local enrolment record. Closes the gap where a learner cancels on TPG but the local status stays Confirmed (which previously let cancelled learners through assessment/certificate guards). Read-mostly: only propagates cancellations, never reactivates. Default 05:00 SGT daily.',
+            cron_expression: '0 5 * * *', // 5:00 AM SGT daily
+            api_endpoint: '/api/external/reconcile-enrolment-cancellations',
+        },
+        {
             id: 'auto_add_today_enrolments_to_calendar',
             name: 'Auto Add Today\'s Enrolments to Calendar',
             description: 'Pulls today\'s (SGT) enrolments from SSG, and for each Confirmed enrolment whose class has a matching Google Calendar event but whose learner email is not yet an attendee, adds the email to the event. Runs every 3 hours.',
@@ -364,6 +371,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('sync_ssg_enrolments', async () => {
             const { runAutomation } = await import('../../pages/api/external/sync-ssg-enrolments');
+            return runAutomation();
+        });
+        directHandlers.set('reconcile_enrolment_cancellations', async () => {
+            const { runAutomation } = await import('../../pages/api/external/reconcile-enrolment-cancellations');
             return runAutomation();
         });
         directHandlers.set('auto_add_today_enrolments_to_calendar', async () => {
