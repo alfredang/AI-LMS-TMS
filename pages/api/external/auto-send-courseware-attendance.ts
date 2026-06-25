@@ -3,7 +3,7 @@ import { google } from 'googleapis';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
-import { autoShareLearnerMaterialsWithEnrolled } from '../../../lib/google-drive/drive-helpers';
+import { autoShareLearnerMaterials } from '../../../lib/google-drive/drive-helpers';
 
 const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback';
 
@@ -325,12 +325,13 @@ async function _runAutomationInner() {
                     await sleep(1000);
                 }
 
-                // Grant the enrolled learners Viewer access to this course's learner materials (slides,
-                // learner guide, lesson plan) so the Google links open without "request access". Runs on
-                // the class start day, before the 08:30 LMS materials unlock. Idempotent + non-blocking.
+                // Make this course's learner materials (slides, learner guide, lesson plan) viewable by
+                // "anyone with the link" so the Google links open for every learner — including those who
+                // use a non-Google company email. Runs on the class start day, before the 08:30 LMS
+                // materials unlock. Idempotent + non-blocking.
                 try {
-                    const shared = await autoShareLearnerMaterialsWithEnrolled(run.db_uuid);
-                    console.log(`[auto-send-courseware-attendance] ${run.course_run_id}: shared ${shared.files} material(s) with ${shared.emails} email(s) (${shared.grants} grants)`);
+                    const shared = await autoShareLearnerMaterials(run.db_uuid);
+                    console.log(`[auto-send-courseware-attendance] ${run.course_run_id}: set ${shared.files} material(s) to anyone-with-link`);
                 } catch (shareErr: any) {
                     console.warn(`[auto-send-courseware-attendance] learner material share failed for ${run.course_run_id}: ${shareErr.message}`);
                 }

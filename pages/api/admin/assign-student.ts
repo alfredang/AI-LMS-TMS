@@ -190,16 +190,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // (UI sends syncCalendar:true after a confirmation step) — never silent.
     if (req.body?.syncCalendar === true) triggerClassCalendarSync(courseRunUuid);
 
-    // Grant this learner Viewer access to the course's learner materials (slides / guide / lesson plan)
-    // so the Google links open without "request access". Idempotent + non-blocking; skips placeholder
-    // (manual, no-email) accounts which aren't Google accounts.
-    if (userEmail && !userEmail.toLowerCase().endsWith('@manual.entry')) {
-      try {
-        const shared = await autoShareLearnerMaterials(courseRunUuid, [userEmail]);
-        console.log(`[assign-student] shared ${shared.files} material(s) with ${userEmail} (${shared.grants} grants)`);
-      } catch (e) {
-        console.warn('[assign-student] learner material share failed (non-blocking):', e instanceof Error ? e.message : e);
-      }
+    // Make the course's learner materials (slides / guide / lesson plan) viewable by anyone with the
+    // link, so this learner (incl. non-Google company-email logins) can open them. Course-level +
+    // idempotent + non-blocking.
+    try {
+      const shared = await autoShareLearnerMaterials(courseRunUuid);
+      console.log(`[assign-student] set ${shared.files} learner material(s) to anyone-with-link`);
+    } catch (e) {
+      console.warn('[assign-student] learner material share failed (non-blocking):', e instanceof Error ? e.message : e);
     }
 
     res.status(200).json({ success: true, message: enrollmentRestored ? 'Student re-enrolled successfully' : 'Student enrolled successfully' });
