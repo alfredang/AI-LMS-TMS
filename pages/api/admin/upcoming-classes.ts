@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { normalizeTrainerName, splitTrainerList } from '@/lib/trainerInvitations';
 import { triggerClassCalendarSync } from '@lib/calendar/triggerClassCalendarSync';
+import { cancelEnrolmentForLearnerOnRun } from '@lib/ssg/mutateEnrolmentForLearner';
 
 interface UpcomingClass {
   id: string;
@@ -157,7 +158,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // still has confirmed learners). Fire-and-forget; never blocks the response.
       if (class_status) triggerClassCalendarSync(id);
 
-      return res.status(200).json({ success: true, data: result.rows[0] });
+      // TPGateway enrolments — OPT-IN ONLY (UI sends cancelEnrolmentsOnTpg:true after a
+      // confirm step). Never automatic: cancelling a class can cancel every active learner's
+      // TPG enrolment, but only when the admin explicitly ticks it (same stance as trainers).
+      // Clears the local enrolment_id on success so a future reactivation can re-enrol.
+      let tpgEnrolments: any = { skipped: true };
+      if (class_status === 'Cancelled' && req.body?.cancelEnrolmentsOnTpg === true) {
+        tpgEnrolments = { cancelled: [] as any[] };
+        const learners = await pool.query<{ user_id: string; email: string | null }>(
+          `SELECT e.user_id, COALESCE(au.email, e.email) AS email
+             FROM enrollment e LEFT JOIN app_user au ON au.id = e.user_id
+            WHERE e.course_run_id = $1
+              AND e.enrolment_id IS NOT NULL AND e.enrolment_id <> ''
+              AND LOWER(COALESCE(e.enrolment_status,'')) NOT IN ('admin removed','cancelled','withdrawn')`,
+          [id]
+        );
+        for (const l of learners.rows) {
+          try {
+            const r = await cancelEnrolmentForLearnerOnRun(id, { userId: l.user_id });
+            if (r.status === 'synced' && r.enrolmentRef) {
+              await pool.query(
+                `UPDATE enrollment SET enrolment_id = NULL, updated_at = NOW()
+                  WHERE user_id = $1 AND course_run_id = $2 AND enrolment_id = $3`,
+                [l.user_id, id, r.enrolmentRef]
+              );
+            }
+            tpgEnrolments.cancelled.push({ userId: l.user_id, email: l.email, status: r.status, message: r.message });
+          } catch (e: any) {
+            tpgEnrolments.cancelled.push({ userId: l.user_id, email: l.email, status: 'error', message: e?.message || String(e) });
+          }
+        }
+      }
+
+      return res.status(200).json({ success: true, data: result.rows[0], tpgEnrolments });
     } catch (err) {
       console.error('Error updating course run:', err);
       return res.status(500).json({ success: false, error: 'Failed to update' });

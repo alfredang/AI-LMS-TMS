@@ -5493,6 +5493,8 @@ export const AssignStudentView: React.FC = () => {
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     // Confirmation gate for the Google Calendar update when adding a learner.
     const [pendingAssign, setPendingAssign] = useState<{ run: any } | null>(null);
+    // Opt-in: also create the learner's enrolment on SSG/TPGateway (hits real SSG; off by default).
+    const [enrolTpgOnAssign, setEnrolTpgOnAssign] = useState(false);
 
     // Unassign state
     const [enrolledLearners, setEnrolledLearners] = useState<any[]>([]);
@@ -5586,7 +5588,7 @@ export const AssignStudentView: React.FC = () => {
                 setMessage({ type: 'error', text: 'Please select a learner.' });
                 return;
             }
-            body = { courseRunUuid: run.id, userId: selectedLearnerId, syncCalendar };
+            body = { courseRunUuid: run.id, userId: selectedLearnerId, syncCalendar, syncEnrolmentToTpg: enrolTpgOnAssign };
             const learner = availableLearners.find(l => l.user_id === selectedLearnerId);
             displayName = learner?.full_name || 'Learner';
         } else {
@@ -5594,7 +5596,7 @@ export const AssignStudentView: React.FC = () => {
                 setMessage({ type: 'error', text: 'Please enter the learner name.' });
                 return;
             }
-            body = { courseRunUuid: run.id, manualName: manualLearnerName.trim(), manualEmail: manualLearnerEmail.trim() || undefined, syncCalendar };
+            body = { courseRunUuid: run.id, manualName: manualLearnerName.trim(), manualEmail: manualLearnerEmail.trim() || undefined, syncCalendar, syncEnrolmentToTpg: enrolTpgOnAssign };
             displayName = manualLearnerName.trim();
         }
 
@@ -5607,11 +5609,20 @@ export const AssignStudentView: React.FC = () => {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to assign learner');
-            setMessage({ type: 'success', text: `"${displayName}" enrolled in ${run.courseTitle}.${syncCalendar ? ' Google Calendar is being updated.' : ''}` });
+            const tpg = data.tpgEnrolment;
+            const tpgNote = !tpg ? ''
+                : tpg.status === 'synced' ? ' Enrolled on TPGateway ✓'
+                : tpg.status === 'already_enrolled' ? ' (already on TPGateway)'
+                : tpg.status === 'skipped_no_nric' ? ' ⚠️ Not sent to TPGateway — no NRIC on file.'
+                : tpg.status === 'skipped_no_dob' ? ' ⚠️ Not sent to TPGateway — no date of birth on file.'
+                : tpg.status === 'skipped_no_phone' ? ' ⚠️ Not sent to TPGateway — no phone number on file.'
+                : ` ⚠️ TPGateway enrolment failed: ${tpg.message}`;
+            setMessage({ type: 'success', text: `"${displayName}" enrolled in ${run.courseTitle}.${syncCalendar ? ' Google Calendar is being updated.' : ''}${tpgNote}` });
             setLocalEnrollmentDeltas(prev => ({ ...prev, [run.id]: (prev[run.id] || 0) + 1 }));
             setSelectedLearnerId('');
             setManualLearnerName('');
             setManualLearnerEmail('');
+            setEnrolTpgOnAssign(false);
             // Refresh enrolled list if viewing unassign tab
             if (activeTab === 'unassign') fetchEnrolledLearners(run.id);
         } catch (err) {
@@ -5912,6 +5923,10 @@ export const AssignStudentView: React.FC = () => {
                                                                 {pendingAssign?.run?.id === run.id ? (
                                                                     <div className="rounded-md border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 p-3">
                                                                         <p className="text-sm text-gray-800 dark:text-gray-100 mb-2">Also add this learner to the class's <strong>Google Calendar</strong> event(s)? No email notification is sent.</p>
+                                                                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 mb-2 cursor-pointer select-none">
+                                                                            <input type="checkbox" checked={enrolTpgOnAssign} onChange={e => setEnrolTpgOnAssign(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                                                            <span>Also enrol on <strong>TPGateway</strong> (creates the SSG enrolment — needs the learner's NRIC). Off by default.</span>
+                                                                        </label>
                                                                         <div className="flex justify-end gap-2 flex-wrap">
                                                                             <Button onClick={() => setPendingAssign(null)} disabled={saving} className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">Cancel</Button>
                                                                             <Button onClick={() => handleAssign(run, false)} disabled={saving} className="bg-gray-600 hover:bg-gray-700 text-white">{saving ? 'Adding…' : 'Add learner only'}</Button>

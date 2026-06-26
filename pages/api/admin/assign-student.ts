@@ -5,6 +5,7 @@ import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdent
 import { triggerProformaGeneration } from '../../../lib/services/proformaInvoiceService';
 import { triggerClassCalendarSync } from '@lib/calendar/triggerClassCalendarSync';
 import { autoShareLearnerMaterials } from '@lib/google-drive/drive-helpers';
+import { pushEnrolmentToSsgForLearner } from '@lib/ssg/pushEnrolmentToSsgForLearner';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -200,7 +201,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.warn('[assign-student] learner material share failed (non-blocking):', e instanceof Error ? e.message : e);
     }
 
-    res.status(200).json({ success: true, message: enrollmentRestored ? 'Student re-enrolled successfully' : 'Student enrolled successfully' });
+    // Push the enrolment to SSG/TPGateway — OPT-IN ONLY (UI sends syncEnrolmentToTpg:true after a
+    // confirmation step). Skips when no NRIC; idempotent when already enrolled. Hits REAL SSG, so it
+    // never runs by default. Non-blocking — the local enrolment already committed above.
+    let tpgEnrolment: Awaited<ReturnType<typeof pushEnrolmentToSsgForLearner>> | undefined;
+    if (req.body?.syncEnrolmentToTpg === true) {
+      try {
+        tpgEnrolment = await pushEnrolmentToSsgForLearner(courseRunUuid, { userId: resolvedUserId, email: userEmail });
+        console.log(`[assign-student] TPG enrolment: ${tpgEnrolment.status} — ${tpgEnrolment.message}`);
+      } catch (e) {
+        tpgEnrolment = { status: 'error', message: e instanceof Error ? e.message : 'Unknown error' };
+      }
+    }
+
+    res.status(200).json({ success: true, message: enrollmentRestored ? 'Student re-enrolled successfully' : 'Student enrolled successfully', tpgEnrolment });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error assigning student:', error);

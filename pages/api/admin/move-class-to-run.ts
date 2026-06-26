@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureClassCalendarEvent, syncClassAttendees, removeClassCalendarEvents } from '../../../lib/calendar/ensureClassCalendarEvent';
 import { pushTrainerToTpgForRun, clearTrainerOnTpgForRun } from '../../../lib/ssg/pushTrainerToTpgForRun';
+import { repointEnrolmentToRunForLearner, cancelEnrolmentForLearnerOnRun } from '../../../lib/ssg/mutateEnrolmentForLearner';
 
 /**
  * POST /api/admin/move-class-to-run
@@ -45,6 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     force = false,
     syncCalendar = false,
     syncTrainerToTpg = false,
+    syncEnrolmentToTpg = false,  // opt-in: re-point moved learners + cancel removed on TPGateway
     targetTrainers,        // Array<{name,email}> — LMS trainers to add to the target run
     tpgTargetEmail,        // the ONE official trainer (TPG push / re-invite target)
   } = req.body || {};
@@ -78,6 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await client.query('BEGIN');
 
     const affectedUserIds = new Set<string>();
+    const removedUserIds = new Set<string>();   // soft-removed on SOURCE → cancel on TPG (opt-in)
 
     // 2. Soft-remove flagged learners on the SOURCE run (drop-outs). Not moved.
     let removed = 0;
@@ -111,7 +114,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           WHERE user_id = $1 AND course_run_id = $2`,
         [userId, sourceRunId]
       );
-      if ((upd.rowCount ?? 0) > 0) { removed++; affectedUserIds.add(userId); }
+      if ((upd.rowCount ?? 0) > 0) { removed++; affectedUserIds.add(userId); removedUserIds.add(userId); }
     }
 
     // 3. Conflicts: learners already enrolled in the TARGET run. The source run is
@@ -136,7 +139,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           WHERE course_run_id = $1 AND user_id = ANY($2::uuid[])`,
         [sourceRunId, conflictUserIds]
       );
-      for (const id of conflictUserIds) affectedUserIds.add(id);
+      for (const id of conflictUserIds) { affectedUserIds.add(id); removedUserIds.add(id); }
     }
 
     // Move the rest (active, not already in target).
@@ -150,7 +153,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [sourceRunId, targetRunId]
     );
     const moved = movedRes.rowCount ?? 0;
-    for (const r of movedRes.rows) affectedUserIds.add(r.user_id);
+    const movedUserIds: string[] = [];
+    for (const r of movedRes.rows) { affectedUserIds.add(r.user_id); movedUserIds.push(r.user_id); }
 
     // 4. Trainers: add the composed LMS list to TARGET, fully clear SOURCE.
     //    targetTrainers = LMS list (many); tpgTargetEmail = the ONE official trainer.
@@ -271,6 +275,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // 7b. Opt-in TPG enrolment sync (best-effort; never fails the move). Re-point each
+    //     moved learner to the TARGET run (action Update — SSG ref preserved) and Cancel
+    //     each removed/conflict learner on the SOURCE. Only learners with a stored
+    //     enrolment_id are touched (others were never on TPG → skipped). On a successful
+    //     cancel we clear the local enrolment_id so a future re-add can re-create on TPG.
+    //     Mirrors the trainer opt-in; default OFF.
+    let tpgEnrolment: any = { skipped: true };
+    if (syncEnrolmentToTpg) {
+      tpgEnrolment = { repointed: [], cancelled: [] };
+      for (const uid of movedUserIds) {
+        try {
+          const r = await repointEnrolmentToRunForLearner(targetRunId, { userId: uid }, { sourceRunUuid: sourceRunId });
+          tpgEnrolment.repointed.push({ userId: uid, status: r.status, message: r.message });
+        } catch (e: any) {
+          tpgEnrolment.repointed.push({ userId: uid, status: 'error', message: e?.message || String(e) });
+        }
+      }
+      for (const uid of Array.from(removedUserIds)) {
+        try {
+          const r = await cancelEnrolmentForLearnerOnRun(sourceRunId, { userId: uid });
+          if (r.status === 'synced' && r.enrolmentRef) {
+            await pool.query(
+              `UPDATE enrollment SET enrolment_id = NULL, updated_at = NOW()
+                WHERE user_id = $1 AND course_run_id = $2 AND enrolment_id = $3`,
+              [uid, sourceRunId, r.enrolmentRef]
+            );
+          }
+          tpgEnrolment.cancelled.push({ userId: uid, status: r.status, message: r.message });
+        } catch (e: any) {
+          tpgEnrolment.cancelled.push({ userId: uid, status: 'error', message: e?.message || String(e) });
+        }
+      }
+    }
+
     // 8. Invitation lifecycle (best-effort). The source is vacated, so its invitations are
     //    void. The target either got a TPG admin-override (no invite needed) or the official
     //    trainer must be re-invited to accept the new run.
@@ -302,6 +340,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       summary: { moved, removed, skippedConflicts, trainerTarget, sourceTrainerCleared: true, sourceVacated },
       calendar,
       tpgTrainer,
+      tpgEnrolment,
       invitation,
     });
   } catch (err: any) {

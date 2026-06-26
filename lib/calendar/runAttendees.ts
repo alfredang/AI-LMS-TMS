@@ -45,6 +45,8 @@ export interface ReconPerson {
   isLearner: boolean;                // active enrollment on this run
   isTrainer: boolean;                // course_run_trainer on this run (local LMS trainer)
   isTpgTrainer: boolean;             // this run's tpg_assigned_trainer (SSG/TPG) — may not be local yet
+  isTpgLearner: boolean;             // learner has a TPGateway enrolment on this run (enrolment_id stored)
+  tpgEnrolEligible: boolean;         // learner has NRIC + DOB + phone — SSG can accept an enrolment
   lmsStatus: string | null;          // enrolment_status for learners
   junctionId: string | null;         // course_run_trainer.id (for trainer removal)
   onGcal: boolean;
@@ -197,18 +199,23 @@ async function buildReconPeople(runUuid: string, events: calendar_v3.Schema$Even
   const put = (rawEmail: string, patch: Partial<ReconPerson>) => {
     const k = (rawEmail || '').toLowerCase();
     if (!k) return;
-    const ex = map.get(k) || { email: rawEmail, name: null, isLearner: false, isTrainer: false, isTpgTrainer: false, lmsStatus: null, junctionId: null, onGcal: false, gcalOnCount: 0, responseStatus: null, userId: null, canAddLearner: false, canAddTrainer: false };
+    const ex = map.get(k) || { email: rawEmail, name: null, isLearner: false, isTrainer: false, isTpgTrainer: false, isTpgLearner: false, tpgEnrolEligible: false, lmsStatus: null, junctionId: null, onGcal: false, gcalOnCount: 0, responseStatus: null, userId: null, canAddLearner: false, canAddTrainer: false };
     map.set(k, { ...ex, ...patch, email: ex.email || rawEmail, name: patch.name ?? ex.name });
   };
 
-  const learners = (await pool.query<{ email: string; name: string | null; status: string | null; user_id: string }>(
-    `SELECT lower(btrim(au.email)) AS email, au.full_name AS name, e.enrolment_status AS status, au.id AS user_id
-       FROM enrollment e JOIN app_user au ON au.id = e.user_id
+  const learners = (await pool.query<{ email: string; name: string | null; status: string | null; user_id: string; enrolment_id: string | null; tpg_eligible: boolean }>(
+    `SELECT lower(btrim(au.email)) AS email, au.full_name AS name, e.enrolment_status AS status, au.id AS user_id, e.enrolment_id,
+            (COALESCE(NULLIF(btrim(e.nric), ''), lp.nric) IS NOT NULL
+             AND lp.dob IS NOT NULL
+             AND NULLIF(btrim(lp.tel), '') IS NOT NULL) AS tpg_eligible
+       FROM enrollment e
+       JOIN app_user au ON au.id = e.user_id
+       LEFT JOIN learner_profile lp ON lp.user_id = e.user_id
       WHERE e.course_run_id = $1 AND nullif(btrim(au.email),'') IS NOT NULL
         AND lower(coalesce(e.enrolment_status,'')) NOT IN ('admin removed','cancelled','withdrawn')`,
     [runUuid]
   )).rows;
-  for (const l of learners) put(l.email, { name: l.name, isLearner: true, lmsStatus: l.status, userId: l.user_id });
+  for (const l of learners) put(l.email, { name: l.name, isLearner: true, lmsStatus: l.status, userId: l.user_id, isTpgLearner: !!(l.enrolment_id && String(l.enrolment_id).trim()), tpgEnrolEligible: !!l.tpg_eligible });
 
   const trainers = (await pool.query<{ junction_id: string; email: string; name: string | null; user_id: string | null }>(
     `SELECT id AS junction_id, lower(btrim(trainer_email)) AS email, trainer_name AS name, trainer_id AS user_id

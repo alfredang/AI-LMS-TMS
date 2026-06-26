@@ -1,14 +1,16 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { cancelEnrolmentForLearnerOnRun } from '../../../lib/ssg/mutateEnrolmentForLearner';
 
-// POST { email, courseRunId }
-// Removes a learner from a course run.
+// POST { email, courseRunId, force?, cancelOnTpg? }
+// Removes a learner from a course run. When cancelOnTpg is true (opt-in, confirm-gated
+// in the UI — hits REAL SSG), also cancels their TPGateway enrolment if they have one.
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
-  const { email, courseRunId, force } = req.body as { email: string; courseRunId: string; force?: boolean };
+  const { email, courseRunId, force, cancelOnTpg } = req.body as { email: string; courseRunId: string; force?: boolean; cancelOnTpg?: boolean };
 
   if (!email || !courseRunId) {
     return res.status(400).json({ success: false, message: 'email and courseRunId are required' });
@@ -71,9 +73,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await client.query('COMMIT');
 
+    // Opt-in TPGateway cancel (best-effort; never fails the removal). Only when the admin
+    // explicitly ticked it AND a row was actually removed. Clears the local enrolment_id on
+    // success so a future re-add can re-create on TPG.
+    let tpgEnrolment: any = { skipped: true };
+    if (cancelOnTpg === true && (result.rowCount ?? 0) > 0) {
+      try {
+        const r = await cancelEnrolmentForLearnerOnRun(courseRunId, { email });
+        if (r.status === 'synced' && r.enrolmentRef) {
+          await pool.query(
+            `UPDATE enrollment SET enrolment_id = NULL, updated_at = NOW()
+              WHERE user_id = $1 AND course_run_id = $2 AND enrolment_id = $3`,
+            [userId, courseRunId, r.enrolmentRef]
+          );
+        }
+        tpgEnrolment = { status: r.status, message: r.message };
+      } catch (e: any) {
+        tpgEnrolment = { status: 'error', message: e?.message || String(e) };
+      }
+    }
+
     return res.status(200).json({
       success: true,
       removed: result.rowCount ?? 0,
+      tpgEnrolment,
       message: result.rowCount ? 'Learner removed from course run.' : 'Learner was not enrolled — nothing to remove.',
     });
   } catch (error) {

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { getApiUrl } from '@/lib/urlHelpers';
 import { type AttendeeDiffs, applyAttendeeDiffs } from '@/lib/calendar/attendeeDiffs';
 import SearchableSelect from '../ui/SearchableSelect';
+import { HelpTip } from '../ui/HelpTip';
 
 /**
  * Shared "Calendar attendees" panel.
@@ -25,7 +26,7 @@ interface RunAttendee { email: string; displayName: string | null; responseStatu
 interface RunEventAttendees { eventId: string; htmlLink: string | null; openUrl: string | null; date: string | null; summary: string | null; attendees: RunAttendee[]; }
 interface ReconPerson {
   email: string; name: string | null;
-  isLearner: boolean; isTrainer: boolean; isTpgTrainer: boolean; lmsStatus: string | null; junctionId: string | null;
+  isLearner: boolean; isTrainer: boolean; isTpgTrainer: boolean; isTpgLearner: boolean; tpgEnrolEligible: boolean; lmsStatus: string | null; junctionId: string | null;
   onGcal: boolean; gcalOnCount: number; responseStatus: string | null;
   userId: string | null; canAddLearner: boolean; canAddTrainer: boolean;
 }
@@ -51,7 +52,7 @@ interface Props {
   calendarSync?: boolean;
 }
 
-interface DraftState { isLearner: boolean; isTrainer: boolean; onTpg: boolean; onGcal: boolean; }
+interface DraftState { isLearner: boolean; isTrainer: boolean; onTpg: boolean; onTpgLearner: boolean; onGcal: boolean; }
 
 const RSVP_META: Record<string, { label: string; cls: string }> = {
   accepted: { label: 'Accepted', cls: 'text-green-600 dark:text-green-400' },
@@ -111,7 +112,7 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
           const dr: Record<string, DraftState> = {};
           for (const p of (d.people || [])) {
             const desired = p.isLearner || p.isTrainer || p.isTpgTrainer;
-            dr[rowKey(p)] = { isLearner: p.isLearner, isTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onGcal: desired ? true : p.onGcal };
+            dr[rowKey(p)] = { isLearner: p.isLearner, isTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onTpgLearner: p.isTpgLearner, onGcal: desired ? true : p.onGcal };
           }
           setDraft(dr); setMode('reconcile');
         }
@@ -147,7 +148,7 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
 
   const openReconcile = () => {
     const d: Record<string, DraftState> = {};
-    for (const p of people) d[rowKey(p)] = { isLearner: p.isLearner, isTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onGcal: p.onGcal };
+    for (const p of people) d[rowKey(p)] = { isLearner: p.isLearner, isTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onTpgLearner: p.isTpgLearner, onGcal: p.onGcal };
     setDraft(d); setMsg(null); setConfirming(null); setLocalSync(calendarSync); setMode('reconcile');
   };
 
@@ -158,12 +159,12 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
     const k = keyOf(email || name || '');
     if (!k) return;
     setPeople((prev) => prev.some((p) => keyOf(p.email || p.name || '') === k) ? prev : [...prev, {
-      email: email || '', name: name || null, isLearner: false, isTrainer: false, isTpgTrainer: false,
+      email: email || '', name: name || null, isLearner: false, isTrainer: false, isTpgTrainer: false, isTpgLearner: false, tpgEnrolEligible: false,
       lmsStatus: null, junctionId: null, onGcal: false, gcalOnCount: 0, responseStatus: null,
       userId, canAddLearner: role === 'learner', canAddTrainer: role === 'trainer',
     }]);
     setDraft((prev) => ({ ...prev, [k]: {
-      isLearner: role === 'learner', isTrainer: role === 'trainer', onTpg: false, onGcal: calendarSync && !!email,
+      isLearner: role === 'learner', isTrainer: role === 'trainer', onTpg: false, onTpgLearner: false, onGcal: calendarSync && !!email,
     } }));
   };
   const addTrainerFromPool = (key: string) => { const t = trainerPool.find((x) => x.user_id === key); if (t) addPersonRow('trainer', t.email || '', t.trainer_name, t.user_id); };
@@ -178,6 +179,7 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
   const diffs = useMemo(() => {
     const learnerAdd: ReconPerson[] = [], learnerRemove: ReconPerson[] = [];
     const trainerAdd: ReconPerson[] = [], trainerRemove: ReconPerson[] = [];
+    const learnerTpgEnrol: ReconPerson[] = [], learnerTpgCancel: ReconPerson[] = [];
     const gcalAdd: string[] = [], gcalRemove: string[] = [];
     for (const p of people) {
       const d = draft[rowKey(p)];
@@ -186,6 +188,12 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
       if (p.isLearner && !d.isLearner) learnerRemove.push(p);
       if (!p.isTrainer && d.isTrainer) trainerAdd.push(p);
       if (p.isTrainer && !d.isTrainer) trainerRemove.push(p);
+      // Learner TPG enrolment — only while they STAY a learner (removal handles its own TPG cancel
+      // via learnerRemove.cancelTpg, so exclude removed learners here to avoid a double-cancel).
+      if (d.isLearner) {
+        if (!p.isTpgLearner && d.onTpgLearner && p.tpgEnrolEligible) learnerTpgEnrol.push(p);
+        if (p.isTpgLearner && !d.onTpgLearner) learnerTpgCancel.push(p);
+      }
       // Calendar diff. In STAGED mode a reschedule/move sync re-adds the desired roster to the NEW
       // event, so an exclusion must be an explicit remove even when the person isn't on the CURRENT
       // event (the 29->30 re-add bug); desired people default to ON (see load), so only a deliberate
@@ -205,18 +213,20 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
     const tpgChanged = (curOfficial?.email.toLowerCase() || null) !== (tgtOfficial?.email.toLowerCase() || null);
     const tpgPush = tpgChanged && tgtOfficial ? tgtOfficial : null;
     const tpgClear = tpgChanged && !tgtOfficial;
-    return { learnerAdd, learnerRemove, trainerAdd, trainerRemove, gcalAdd, gcalRemove, tpgPush, tpgClear };
+    return { learnerAdd, learnerRemove, trainerAdd, trainerRemove, learnerTpgEnrol, learnerTpgCancel, gcalAdd, gcalRemove, tpgPush, tpgClear };
   }, [people, draft, staged, effectiveCalendarSync, events.length]);
-  const diffCount = diffs.learnerAdd.length + diffs.learnerRemove.length + diffs.trainerAdd.length + diffs.trainerRemove.length + diffs.gcalAdd.length + diffs.gcalRemove.length + (diffs.tpgPush ? 1 : 0) + (diffs.tpgClear ? 1 : 0);
+  const diffCount = diffs.learnerAdd.length + diffs.learnerRemove.length + diffs.trainerAdd.length + diffs.trainerRemove.length + diffs.learnerTpgEnrol.length + diffs.learnerTpgCancel.length + diffs.gcalAdd.length + diffs.gcalRemove.length + (diffs.tpgPush ? 1 : 0) + (diffs.tpgClear ? 1 : 0);
 
   // Serializable form — used to apply (standalone) and to emit upward (staged).
   const serialized: AttendeeDiffs = useMemo(() => ({
     learnerAdd: diffs.learnerAdd.map((p) => ({ email: p.email, userId: p.userId, name: p.name })),
-    learnerRemove: diffs.learnerRemove.map((p) => ({ email: p.email })),
+    learnerRemove: diffs.learnerRemove.map((p) => ({ email: p.email, cancelTpg: p.isTpgLearner })),
     trainerAdd: diffs.trainerAdd.map((p) => ({ email: p.email, name: p.name, userId: p.userId })),
     trainerRemove: diffs.trainerRemove.map((p) => ({ email: p.email, junctionId: p.junctionId })),
     tpgPush: diffs.tpgPush ? { email: diffs.tpgPush.email } : null,
     tpgClear: diffs.tpgClear,
+    learnerTpgEnrol: diffs.learnerTpgEnrol.map((p) => ({ email: p.email, userId: p.userId })),
+    learnerTpgCancel: diffs.learnerTpgCancel.map((p) => ({ email: p.email, userId: p.userId })),
     gcalAdd: diffs.gcalAdd,
     gcalRemove: diffs.gcalRemove,
   }), [diffs]);
@@ -227,7 +237,7 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
   const toggle = (p: ReconPerson, field: 'isLearner' | 'isTrainer' | 'onGcal') => {
     setDraft((prev) => {
       const k = rowKey(p);
-      const cur = prev[k] || { isLearner: p.isLearner, isTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onGcal: p.onGcal };
+      const cur = prev[k] || { isLearner: p.isLearner, isTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onTpgLearner: p.isTpgLearner, onGcal: p.onGcal };
       const next = { ...cur, [field]: !cur[field] };
       // Unticking the local Trainer role also drops them from TPG (can't be the TPG trainer without being a trainer).
       if (field === 'isTrainer' && !next.isTrainer) next.onTpg = false;
@@ -239,12 +249,23 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
   const toggleTpg = (p: ReconPerson) => {
     setDraft((prev) => {
       const k = rowKey(p);
-      const cur = prev[k] || { isLearner: p.isLearner, isTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onGcal: p.onGcal };
+      const cur = prev[k] || { isLearner: p.isLearner, isTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onTpgLearner: p.isTpgLearner, onGcal: p.onGcal };
       const turningOn = !cur.onTpg;
       const next: Record<string, DraftState> = {};
       for (const [kk, v] of Object.entries(prev)) next[kk] = turningOn ? { ...v, onTpg: false } : v;
       next[k] = { ...cur, onTpg: turningOn, isTrainer: turningOn ? true : cur.isTrainer };
       return next;
+    });
+  };
+
+  // Learner TPG is PER-PERSON (independent of the single official trainer): tick = enrol on TPG,
+  // untick = cancel. Independent from onTpg, so a person who is both learner AND trainer can be on
+  // TPG in both senses.
+  const toggleTpgLearner = (p: ReconPerson) => {
+    setDraft((prev) => {
+      const k = rowKey(p);
+      const cur = prev[k] || { isLearner: p.isLearner, isTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onTpgLearner: p.isTpgLearner, onGcal: p.onGcal };
+      return { ...prev, [k]: { ...cur, onTpgLearner: !cur.onTpgLearner } };
     });
   };
 
@@ -287,7 +308,12 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
   const noCalEvent = !staged && events.length === 0;
   const canEditCalendar = effectiveCalendarSync && !noCalEvent;
 
-  const draftOf = (p: ReconPerson): DraftState => draft[rowKey(p)] || { isLearner: p.isLearner, isTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onGcal: p.onGcal };
+  const draftOf = (p: ReconPerson): DraftState => draft[rowKey(p)] || { isLearner: p.isLearner, isTrainer: p.isTrainer, onTpg: p.isTpgTrainer, onTpgLearner: p.isTpgLearner, onGcal: p.onGcal };
+
+  // A disabled checkbox is rendered as a clearly DARKER grey filled box (appearance-none) so the
+  // "can't change this" state is obvious — native disabled checkboxes are too faint to notice.
+  const cbClass = (disabled: boolean, checked: boolean) =>
+    `h-3.5 w-3.5 align-middle ${disabled ? 'cursor-not-allowed' : ''} ${disabled && !checked ? 'appearance-none rounded-[3px] bg-gray-400 dark:bg-gray-500 border border-gray-500 dark:border-gray-400' : ''}`;
 
   const lmsCell = (p: ReconPerson, role: 'learner' | 'trainer') => {
     const d = draftOf(p);
@@ -296,21 +322,38 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
     const field = role === 'learner' ? 'isLearner' : 'isTrainer';
     const drafted = role === 'learner' ? d.isLearner : d.isTrainer;
     if (!isOn && !canAdd) {
-      return <span className="text-[10px] text-gray-300 dark:text-gray-600" title={`Not a ${role} in the system — can't add here`}>—</span>;
+      return <span className="text-[11px] text-gray-400 dark:text-gray-500" title={`Not a ${role} in the system — can't add here`}>—</span>;
     }
+    const disabled = !writesEnabled || busy;
     return (
-      <input type="checkbox" disabled={!writesEnabled || busy} checked={drafted} onChange={() => toggle(p, field)}
-        className="h-3.5 w-3.5 align-middle" title={isOn ? (role === 'learner' ? (p.lmsStatus || 'learner') : 'trainer') : `Add as ${role}`} />
+      <input type="checkbox" disabled={disabled} checked={drafted} onChange={() => toggle(p, field)}
+        className={cbClass(disabled, drafted)} title={isOn ? (role === 'learner' ? (p.lmsStatus || 'learner') : 'trainer') : `Add as ${role}`} />
     );
   };
 
-  const tpgCell = (p: ReconPerson) => {
+  // TPG Trainer column — the single OFFICIAL trainer on TPGateway (must be / become a local trainer).
+  const tpgTrainerCell = (p: ReconPerson) => {
     const d = draftOf(p);
-    const eligible = d.isTrainer || p.isTpgTrainer || p.canAddTrainer; // must be (becoming) a trainer to be on TPG
-    if (!eligible) return <span className="text-[10px] text-gray-300 dark:text-gray-600" title="Only a trainer can be set on TPGateway">—</span>;
+    const eligible = d.isTrainer || p.isTpgTrainer || p.canAddTrainer;
+    if (!eligible) return <span className="text-[11px] text-gray-400 dark:text-gray-500" title="Only a trainer can be the official on TPGateway">—</span>;
+    const disabled = !writesEnabled || busy;
     return (
-      <input type="checkbox" disabled={!writesEnabled || busy} checked={d.onTpg} onChange={() => toggleTpg(p)}
-        className="h-3.5 w-3.5 align-middle" title={p.isTpgTrainer ? 'Trainer on TPGateway' : 'Set as the trainer on TPGateway'} />
+      <input type="checkbox" disabled={disabled} checked={d.onTpg} onChange={() => toggleTpg(p)}
+        className={cbClass(disabled, d.onTpg)} title={p.isTpgTrainer ? 'Official trainer on TPGateway' : 'Set as the official trainer on TPGateway'} />
+    );
+  };
+
+  // TPG Learner column — this learner's own SSG enrolment (tick = enrol, untick = cancel).
+  const tpgLearnerCell = (p: ReconPerson) => {
+    const d = draftOf(p);
+    if (!d.isLearner) return <span className="text-[11px] text-gray-400 dark:text-gray-500" title="Only a learner can be enrolled on TPGateway">—</span>;
+    const interactive = p.isTpgLearner || p.tpgEnrolEligible; // already enrolled (untick) OR has NRIC+DOB+phone (tick)
+    const title = p.isTpgLearner ? 'Enrolled on TPGateway — untick to cancel'
+      : (p.tpgEnrolEligible ? 'Tick to enrol on TPGateway' : 'Missing NRIC / DOB / phone — add them in View Learners to enrol');
+    const disabled = !writesEnabled || busy || !interactive;
+    return (
+      <input type="checkbox" disabled={disabled} checked={d.onTpgLearner} onChange={() => toggleTpgLearner(p)}
+        className={cbClass(disabled, d.onTpgLearner)} title={title} />
     );
   };
 
@@ -361,6 +404,18 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
           {people.length === 0 ? (
             <p className="text-xs text-gray-400 dark:text-gray-500">No people found for this class.</p>
           ) : (
+            <>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+              Tick to add/keep, untick to remove
+              <HelpTip>
+                Each column is independent:
+                <br /><strong>Learner / LMS</strong> &amp; <strong>Trainer / LMS</strong> — the local roster.
+                <br /><strong>Learner / TPG</strong> — this learner&apos;s own SSG enrolment (tick to enrol, untick to cancel). Needs NRIC + DOB + phone — edit in <strong>View Learners</strong> if the box is disabled.
+                <br /><strong>Trainer / TPG</strong> — the single <strong>official</strong> trainer on SSG (ticking one unticks the rest; implies the LMS Trainer role).
+                <br /><strong>Calendar / Google</strong> — who&apos;s on the Google Calendar event(s).
+                <br />Changes to Learner / Trainer / TPG apply to the whole class; Calendar is per event (day). Removing a learner who is on TPG also cancels their TPG enrolment.
+              </HelpTip>
+            </p>
             <div className="rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
               <table className="min-w-full text-xs">
                 <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
@@ -368,7 +423,8 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
                     <th className="text-left px-2 py-1 font-medium">Person</th>
                     <th className="text-center px-1 py-1 font-medium w-16">Learner<span className="block text-[9px] font-normal text-gray-400 dark:text-gray-500">LMS</span></th>
                     <th className="text-center px-1 py-1 font-medium w-16">Trainer<span className="block text-[9px] font-normal text-gray-400 dark:text-gray-500">LMS</span></th>
-                    <th className="text-center px-1 py-1 font-medium w-14">TPG<span className="block text-[9px] font-normal text-gray-400 dark:text-gray-500">SSG</span></th>
+                    <th className="text-center px-1 py-1 font-medium w-16">Learner<span className="block text-[9px] font-normal text-gray-400 dark:text-gray-500">TPG</span></th>
+                    <th className="text-center px-1 py-1 font-medium w-16">Trainer<span className="block text-[9px] font-normal text-gray-400 dark:text-gray-500">TPG</span></th>
                     <th className={`text-center px-1 py-1 font-medium w-20 ${canEditCalendar ? '' : 'opacity-40'}`}>Calendar<span className="block text-[9px] font-normal text-gray-400 dark:text-gray-500">Google</span></th>
                   </tr>
                 </thead>
@@ -385,15 +441,20 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
                               <span className={`shrink-0 px-1 py-0.5 rounded text-[9px] font-semibold ${p.isTrainer ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}
                                 title={p.isTrainer ? 'Trainer on TPGateway (also added here)' : 'Trainer on TPGateway — not added here yet; tick Trainer to add'}>TPG{p.isTrainer ? '' : '!'}</span>
                             )}
+                            {p.isTpgLearner && (
+                              <span className="shrink-0 px-1 py-0.5 rounded text-[9px] font-semibold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                                title="Enrolled on TPGateway">TPG</span>
+                            )}
                           </div>
                           {p.name && <div className="text-[10px] text-gray-400 truncate max-w-[15rem]">{p.email}</div>}
                         </td>
                         <td className="px-1 py-1.5 text-center">{lmsCell(p, 'learner')}</td>
                         <td className="px-1 py-1.5 text-center">{lmsCell(p, 'trainer')}</td>
-                        <td className="px-1 py-1.5 text-center">{tpgCell(p)}</td>
+                        <td className="px-1 py-1.5 text-center">{tpgLearnerCell(p)}</td>
+                        <td className="px-1 py-1.5 text-center">{tpgTrainerCell(p)}</td>
                         <td className="px-1 py-1.5">
                           <div className="flex flex-col items-center justify-center leading-tight">
-                            <input type="checkbox" disabled={!writesEnabled || busy || !canEditCalendar} checked={d.onGcal && canEditCalendar} onChange={() => toggle(p, 'onGcal')} title={!effectiveCalendarSync ? "Turn on 'Sync Google Calendar' to adjust the calendar" : noCalEvent ? "No calendar event yet — use 'Create missing calendar events' first" : undefined} className="h-3.5 w-3.5 align-middle" />
+                            <input type="checkbox" disabled={!writesEnabled || busy || !canEditCalendar} checked={d.onGcal && canEditCalendar} onChange={() => toggle(p, 'onGcal')} title={!effectiveCalendarSync ? "Turn on 'Sync Google Calendar' to adjust the calendar" : noCalEvent ? "No calendar event yet — use 'Create missing calendar events' first" : undefined} className={cbClass(!writesEnabled || busy || !canEditCalendar, d.onGcal && canEditCalendar)} />
                             {p.onGcal && events.length > 1 && p.gcalOnCount < events.length ? (
                               <span className="text-[9px] mt-0.5 text-amber-600 dark:text-amber-400" title={`On ${p.gcalOnCount} of ${events.length} days — ticking adds them to all days`}>{p.gcalOnCount}/{events.length} days</span>
                             ) : rsvp && <span className={`text-[9px] mt-0.5 ${rsvp.cls}`}>{rsvp.label}</span>}
@@ -405,6 +466,7 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
                 </tbody>
               </table>
             </div>
+            </>
           )}
 
           {/* Add someone not on the run yet — pick from the global pool (search) or enter manually. */}
@@ -450,7 +512,10 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
                   </div>
                 </>
               )}
-              <p className="text-[10px] text-gray-400 dark:text-gray-500">Trainer-add auto-confirms the class &amp; shares courseware; tick TPG to set on TPGateway. New learner/trainer is created locally (no SSG enrolment yet).</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                Adding someone new
+                <HelpTip side="left">Adds someone not on the run. New people are created in the <strong>LMS only</strong> — to put them on SSG afterwards, tick <strong>Learner / TPG</strong> or <strong>Trainer / TPG</strong>. Adding a trainer auto-confirms the class &amp; shares courseware.</HelpTip>
+              </p>
             </div>
           )}
 
@@ -462,12 +527,14 @@ const CalendarAttendeesPanel: React.FC<Props> = ({ courseRunId, onChanged, class
             <div className="mt-3 rounded border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 p-2">
               <p className="text-xs font-medium text-gray-800 dark:text-gray-100 mb-1">Apply these changes? No emails are sent.</p>
               <ul className="text-[11px] text-gray-700 dark:text-gray-200 list-disc pl-4 mb-2 space-y-0.5">
-                {diffs.learnerRemove.map((p) => <li key={`lr-${p.email}`}>Remove <strong>{p.email}</strong> as a learner</li>)}
+                {diffs.learnerRemove.map((p) => <li key={`lr-${p.email}`}>Remove <strong>{p.email}</strong> as a learner{p.isTpgLearner ? <span className="text-amber-600 dark:text-amber-400"> — and cancel their TPGateway enrolment</span> : ''}</li>)}
                 {diffs.trainerRemove.map((p) => <li key={`tr-${p.email}`}>Remove <strong>{p.email}</strong> as a trainer</li>)}
                 {diffs.learnerAdd.map((p) => <li key={`la-${p.email || p.name}`}>Add <strong>{p.email || p.name}</strong> as a learner</li>)}
                 {diffs.trainerAdd.map((p) => <li key={`ta-${p.email || p.name}`}>Add <strong>{p.email || p.name}</strong> as a trainer</li>)}
                 {diffs.tpgClear && <li key="tpg-clear">Remove the trainer on TPGateway</li>}
                 {diffs.tpgPush && <li key="tpg-push">Set <strong>{diffs.tpgPush.email}</strong> as the trainer on TPGateway</li>}
+                {diffs.learnerTpgEnrol.map((p) => <li key={`lte-${p.email}`}>Enrol <strong>{p.email}</strong> on TPGateway</li>)}
+                {diffs.learnerTpgCancel.map((p) => <li key={`ltc-${p.email}`}><span className="text-amber-600 dark:text-amber-400">Cancel <strong>{p.email}</strong>&apos;s TPGateway enrolment</span></li>)}
                 {diffs.gcalRemove.map((e) => <li key={`gr-${e}`}>Remove <strong>{e}</strong> from Google Calendar</li>)}
                 {diffs.gcalAdd.map((e) => <li key={`ga-${e}`}>Add <strong>{e}</strong> to Google Calendar</li>)}
               </ul>

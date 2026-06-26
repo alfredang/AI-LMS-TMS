@@ -48,6 +48,11 @@ const ViewLearners: React.FC = () => {
 
   // Detail modal
   const [detailLearner, setDetailLearner] = useState<Learner | null>(null);
+  // Edit (NRIC / DOB / phone — the fields SSG enrolment needs)
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailForm, setDetailForm] = useState<{ nric: string; dob: string; tel: string }>({ nric: '', dob: '', tel: '' });
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   // Status confirmation
   const [showStatusConfirmation, setShowStatusConfirmation] = useState(false);
@@ -129,6 +134,45 @@ const ViewLearners: React.FC = () => {
       console.error('Error fetching learners:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Open the detail modal straight into edit mode. Pass a learner to open from the table row;
+  // omit to edit the already-open detailLearner.
+  const startEditDetails = (learner?: Learner) => {
+    const l = learner ?? detailLearner;
+    if (!l) return;
+    setDetailError(null);
+    setDetailForm({
+      nric: l.nric || '',
+      dob: l.dob ? String(l.dob).slice(0, 10) : '',  // YYYY-MM-DD (no TZ shift)
+      tel: l.telephone || '',
+    });
+    if (learner) setDetailLearner(learner);
+    setEditingDetails(true);
+  };
+
+  // Save NRIC / DOB / phone via the shared profile-update endpoint (writes learner_profile).
+  const saveDetails = async () => {
+    if (!detailLearner) return;
+    setSavingDetails(true); setDetailError(null);
+    try {
+      const res = await fetch(getApiUrl('/api/profile-update'), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: detailLearner.user_id, profileData: {
+          nric: detailForm.nric.trim() || null, dob: detailForm.dob || null, tel: detailForm.tel.trim(),
+        } }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || data?.details || 'Failed to save');
+      const updated: Learner = { ...detailLearner, nric: detailForm.nric.trim() || null, dob: detailForm.dob || null, telephone: detailForm.tel.trim() || null };
+      setDetailLearner(updated);
+      setLearners((prev) => prev.map((l) => l.user_id === updated.user_id ? updated : l));
+      setEditingDetails(false);
+    } catch (e: any) {
+      setDetailError(e?.message || 'Failed to save');
+    } finally {
+      setSavingDetails(false);
     }
   };
 
@@ -277,6 +321,9 @@ const ViewLearners: React.FC = () => {
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm">
                         <div className="flex items-center gap-1">
+                          <button onClick={() => startEditDetails(learner)} className="text-gray-400 hover:text-blue-600 p-1" title="Edit NRIC / DOB / phone">
+                            <Icon name={IconName.Edit} className="w-4 h-4" />
+                          </button>
                           {(learner.account_status || '').toLowerCase() === 'active' ? (
                             <button onClick={() => handleStatusChange(learner, 'inactive')} className="text-red-500 hover:text-red-700 p-1" title="Deactivate">
                               <Icon name={IconName.Close} className="w-4 h-4" />
@@ -339,10 +386,40 @@ const ViewLearners: React.FC = () => {
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">Learner Details</h3>
-                <button onClick={() => setDetailLearner(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                  <Icon name={IconName.Close} className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {!editingDetails && (
+                    <button onClick={() => startEditDetails()} className="text-xs px-2.5 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Edit NRIC / DOB / phone</button>
+                  )}
+                  <button onClick={() => { setDetailLearner(null); setEditingDetails(false); setDetailError(null); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <Icon name={IconName.Close} className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
+              {editingDetails ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">NRIC / FIN</label>
+                    <input type="text" value={detailForm.nric} onChange={(e) => setDetailForm((f) => ({ ...f, nric: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white" placeholder="e.g. S1234567A" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Date of Birth</label>
+                    <input type="date" value={detailForm.dob} onChange={(e) => setDetailForm((f) => ({ ...f, dob: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Phone</label>
+                    <input type="tel" value={detailForm.tel} onChange={(e) => setDetailForm((f) => ({ ...f, tel: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white" placeholder="e.g. 81234567" />
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">SSG requires all three to enrol a learner on TPGateway.</p>
+                  {detailError && <p className="text-xs text-red-600 dark:text-red-400">{detailError}</p>}
+                  <div className="flex gap-2 justify-end pt-1">
+                    <Button variant="ghost" onClick={() => { setEditingDetails(false); setDetailError(null); }} disabled={savingDetails}>Cancel</Button>
+                    <Button onClick={saveDetails} disabled={savingDetails} className="bg-blue-600 hover:bg-blue-700 text-white">{savingDetails ? 'Saving…' : 'Save'}</Button>
+                  </div>
+                </div>
+              ) : (
               <div className="space-y-3">
                 {[
                   ['Name', detailLearner.learner_name],
@@ -365,6 +442,7 @@ const ViewLearners: React.FC = () => {
                   </div>
                 ))}
               </div>
+              )}
             </div>
           </div>
         </div>

@@ -26,7 +26,6 @@ import {
   type EditableSession,
   type RunFormOverrides,
 } from '@/lib/ssg/sessionEditHelpers';
-import { TPG_MANUAL_NOTICE } from '@/lib/ssg/tpgManualNotice';
 import type { ScheduleChangeType } from '@/lib/notifications/scheduleChangeEmail';
 import type { StepConfirmArgs, StepConfirmResult } from '@/hooks/useScheduleChangeConfirm';
 import type { NotifyPayload } from '@/components/admin/NotifyComposer';
@@ -422,7 +421,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
     const { origRunStart, origRunEnd, newRunStart, newRunEnd, runDatesChanged } = computeRunWindow(runData, args.overrides || {}, sessStart, args.session.endDate ? convertSsgDateToHtml(args.session.endDate) : sessStart);
     const runWarn = runDatesChanged ? `\n⚠ Course run will be extended from ${fmtRange(origRunStart, origRunEnd)} to ${fmtRange(newRunStart, newRunEnd)}` : '';
     void othersOnOldDate; // calendar impact is computed in runUpdate (reactive to the Sync toggle)
-    const confirmMessage = `${args.sessionLabel ? args.sessionLabel + ' · ' : ''}run ${args.courseRunId}\n\n${oldLine ? oldLine + '\n' : ''}${newLine}${runWarn}\n\n${TPG_MANUAL_NOTICE}`;
+    const confirmMessage = `${args.sessionLabel ? args.sessionLabel + ' · ' : ''}run ${args.courseRunId}\n\n${oldLine ? oldLine + '\n' : ''}${newLine}${runWarn}`;
 
     await runUpdate({
       courseRunId: args.courseRunId, courseReferenceNumber: args.courseReferenceNumber, currentUserEmail: args.currentUserEmail,
@@ -451,7 +450,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
     const { origRunStart, origRunEnd, newRunStart, newRunEnd, runDatesChanged } = computeRunWindow(runData, args.overrides || {}, args.newDate, args.newDate);
     const runWarn = runDatesChanged ? `\n⚠ Course run will be extended from ${fmtRange(origRunStart, origRunEnd)} to ${fmtRange(newRunStart, newRunEnd)}` : '';
     const n = args.sessionsOnDay.length;
-    const confirmMessage = `Move the whole day · run ${args.courseRunId}\n\n${n} session${n === 1 ? '' : 's'}: ${fmtD(args.oldDate)} → ${fmtD(args.newDate)}${runWarn}\n\n${TPG_MANUAL_NOTICE}`;
+    const confirmMessage = `Move the whole day · run ${args.courseRunId}\n\n${n} session${n === 1 ? '' : 's'}: ${fmtD(args.oldDate)} → ${fmtD(args.newDate)}${runWarn}`;
 
     await runUpdate({
       courseRunId: args.courseRunId, courseReferenceNumber: args.courseReferenceNumber, currentUserEmail: args.currentUserEmail,
@@ -522,7 +521,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
       ? "Removes that day's Google Calendar event if no other sessions remain that day."
       : "Google Calendar won't be changed.";
     const summary = `The session on ${dateLabel} has been cancelled.`;
-    const warning = `${sessionLabel ? sessionLabel + ' · ' : ''}${dateLabel}\n\n⚠️ This permanently deletes the session and can't be undone.\n\n${TPG_MANUAL_NOTICE}`;
+    const warning = `${sessionLabel ? sessionLabel + ' · ' : ''}${dateLabel}\n\n⚠️ This permanently deletes the session and can't be undone.`;
 
     // Standardized single confirm (warning + Sync/Notify toggles + composer).
     if (cb.showStepConfirm) {
@@ -613,7 +612,7 @@ export function useSessionReschedule(cb: PopupCallbacks) {
       ? "Removes that day's Google Calendar event."
       : "Google Calendar won't be changed.";
     const summary = `All ${n} session${n === 1 ? '' : 's'} on ${fmtD(date)} have been cancelled.`;
-    const warning = `${fmtD(date)} · ${n} session${n === 1 ? '' : 's'}\n\n⚠️ This permanently deletes all ${n} session${n === 1 ? '' : 's'} on this day and can't be undone.\n\n${TPG_MANUAL_NOTICE}`;
+    const warning = `${fmtD(date)} · ${n} session${n === 1 ? '' : 's'}\n\n⚠️ This permanently deletes all ${n} session${n === 1 ? '' : 's'} on this day and can't be undone.`;
 
     // Standardized single confirm (warning + Sync/Notify toggles + composer).
     if (cb.showStepConfirm) {

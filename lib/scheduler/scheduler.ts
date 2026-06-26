@@ -199,6 +199,13 @@ async function seedDefaults() {
             api_endpoint: '/api/external/sync-run-trainers-from-tpg',
         },
         {
+            id: 'sync_enrolment_ids',
+            name: 'Sync Learner Enrolment IDs from TPG',
+            description: 'SSG → LMS backstop: for each current/upcoming run, reconciles local enrollment.enrolment_id against SSG (links the live TPGateway reference, clears stale ones). enrolment_id ONLY — never adds/removes learners or changes roster status. Per-action reconciliation already runs on enrol/move/cancel; this catches enrolments changed directly on TPGateway. Runs daily at 3:30 AM SGT.',
+            cron_expression: '30 3 * * *', // 3:30 AM SGT daily
+            api_endpoint: '/api/external/sync-enrolment-ids',
+        },
+        {
             id: 'sync_google_calendar',
             name: 'Sync Google Calendar (Virtual Classes)',
             description: 'Checks Google Calendar for events in the next 21 days. Events with [VIRTUAL] in the title are matched to course runs — sets class_type to Virtual and stores the Google Meet link. Runs daily at 1:00 AM SGT.',

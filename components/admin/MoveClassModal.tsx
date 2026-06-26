@@ -17,7 +17,7 @@ import { Button } from '../ui/Button';
 import { getApiUrl } from '@/lib/urlHelpers';
 import NotifyComposer, { type NotifyPayload } from './NotifyComposer';
 import SearchableSelect from '../ui/SearchableSelect';
-import { TPG_MANUAL_NOTICE, TPG_MANUAL_NOTICE_ENROLMENTS_ONLY } from '@/lib/ssg/tpgManualNotice';
+import { HelpTip } from '@components/ui/HelpTip';
 import { applyAttendeeDiffs, emptyAttendeeDiffs } from '@/lib/calendar/attendeeDiffs';
 import { verifyRunCalendarAttendees, describeVerify } from '@/lib/calendar/verifyAttendees';
 
@@ -57,6 +57,7 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
   const [trainers, setTrainers] = useState<{ trainer_name: string; email?: string; has_nric?: boolean }[]>([]);
   const [syncCalendar, setSyncCalendar] = useState(defaultSyncCalendar);
   const [syncTrainerTpg, setSyncTrainerTpg] = useState(true);
+  const [syncEnrolmentTpg, setSyncEnrolmentTpg] = useState(false);  // opt-in, default OFF — hits real SSG
   const [notifyAttendees, setNotifyAttendees] = useState(!!defaultNotify);
   const [notifyPayload, setNotifyPayload] = useState<NotifyPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,6 +154,7 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
           force,
           syncCalendar,
           syncTrainerToTpg: syncTrainerTpg,
+          syncEnrolmentToTpg: syncEnrolmentTpg,
         }),
       });
       const json = await res.json();
@@ -222,7 +224,23 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
           tpgMsg += `\n⚠️ Trainer was NOT set on the new run in TPGateway — please set it there manually. The original run's trainer was left in place.`;
         }
       }
-      const summaryMsg = `Moved ${s.moved ?? 0} learner(s)${s.removed ? `, ${s.removed} removed` : ''}${s.skippedConflicts?.length ? `, ${s.skippedConflicts.length} already in target (removed from this run)` : ''}. Trainer on target: ${s.trainerTarget || 'none'}.${calMsg}${layerMsg}${verifyMsg}${tpgMsg}${syncCalendar ? '\n\n↻ Refresh Google Calendar to see the change — it can take a moment to update.' : ''}`;
+      let tpgEnrMsg = '';
+      if (syncEnrolmentTpg && json.tpgEnrolment && !json.tpgEnrolment.skipped) {
+        const rep = json.tpgEnrolment.repointed || [];
+        const can = json.tpgEnrolment.cancelled || [];
+        const tally = (arr: any[]) => ({
+          ok: arr.filter((x: any) => x.status === 'synced').length,
+          skip: arr.filter((x: any) => x.status === 'skipped_no_enrolment_id').length,
+          err: arr.filter((x: any) => x.status === 'error' || x.status === 'not_found').length,
+        });
+        const r = tally(rep), c = tally(can);
+        const parts: string[] = [];
+        if (rep.length) parts.push(`re-pointed ${r.ok}/${rep.length}${r.skip ? ` (${r.skip} not on TPG)` : ''}${r.err ? ` ⚠️ ${r.err} failed` : ''}`);
+        if (can.length) parts.push(`cancelled ${c.ok}/${can.length}${c.skip ? ` (${c.skip} not on TPG)` : ''}${c.err ? ` ⚠️ ${c.err} failed` : ''}`);
+        if (parts.length) tpgEnrMsg = `\n\nTPGateway enrolments — ${parts.join('; ')}.`;
+        if (r.err || c.err) tpgEnrMsg += `\n⚠️ Some enrolments did not sync to TPGateway — check and fix them there manually.`;
+      }
+      const summaryMsg = `Moved ${s.moved ?? 0} learner(s)${s.removed ? `, ${s.removed} removed` : ''}${s.skippedConflicts?.length ? `, ${s.skippedConflicts.length} already in target (removed from this run)` : ''}. Trainer on target: ${s.trainerTarget || 'none'}.${calMsg}${layerMsg}${verifyMsg}${tpgMsg}${tpgEnrMsg}${syncCalendar ? '\n\n↻ Refresh Google Calendar to see the change — it can take a moment to update.' : ''}`;
       onDone();
       onClose();
 
@@ -290,9 +308,15 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
         </div>
 
         <div className="p-5 space-y-4">
-          <div className="flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-300">
-            <span>{syncTrainerTpg ? TPG_MANUAL_NOTICE_ENROLMENTS_ONLY : TPG_MANUAL_NOTICE}</span>
-          </div>
+          {!(syncTrainerTpg && syncEnrolmentTpg) && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-300">
+              <span>⚠️ {!syncTrainerTpg && !syncEnrolmentTpg
+                ? 'The trainer and learner enrolments won’t change on TPGateway — tick the options below to update them automatically, or change them on TPGateway manually after.'
+                : syncTrainerTpg
+                  ? 'Learner enrolments won’t change on TPGateway — tick the option below to update them automatically, or change them on TPGateway manually after. (The trainer is updated.)'
+                  : 'The trainer won’t change on TPGateway — tick the option below to update it automatically, or change it on TPGateway manually after. (Learner enrolments are updated.)'}</span>
+            </div>
+          )}
 
           {loading ? (
             <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2"><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> Loading…</div>
@@ -320,11 +344,13 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
               <div className="space-y-2 rounded-md border border-gray-200 dark:border-gray-700 p-3">
                 <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
                   <input type="checkbox" checked={syncCalendar} onChange={(e) => setSyncCalendar(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                  <span>Also update Google Calendar (move attendees to the new run's events; remove this run's if it's left empty) — enables the <strong>Calendar</strong> column</span>
+                  <span>Also update Google Calendar</span>
+                  <HelpTip>Moves attendees to the new run&apos;s events, and removes this run&apos;s events if it&apos;s left empty. Enables the <strong>Calendar</strong> column below.</HelpTip>
                 </label>
                 <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
                   <input type="checkbox" checked={syncTrainerTpg} onChange={(e) => setSyncTrainerTpg(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                  <span>Set the <strong>official</strong> trainer on TPGateway (added to the new run, cleared from the original run) — enables the <strong>TPG</strong> column. Needs the trainer's NRIC + SSG profile.</span>
+                  <span>Update the <strong>official</strong> trainer on TPGateway</span>
+                  <HelpTip>Adds the official trainer to the new run and clears them from the original run. Enables the <strong>TPG</strong> column below. Needs the trainer&apos;s NRIC + SSG profile.</HelpTip>
                 </label>
                 {tpgBlocked && (
                   <div className="ml-6 text-xs text-red-600 dark:text-red-400">
@@ -334,6 +360,11 @@ const MoveClassModal: React.FC<Props> = ({ run, defaultSyncCalendar, defaultNoti
                 {syncTrainerTpg && !tpgBlocked && official && (
                   <div className="ml-6 text-xs text-gray-500 dark:text-gray-400">{official.name || official.email} will be set as the trainer on TPGateway for the new run; the original run&apos;s trainer is cleared.</div>
                 )}
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  <input type="checkbox" checked={syncEnrolmentTpg} onChange={(e) => setSyncEnrolmentTpg(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                  <span>Update learner <strong>enrolments</strong> on TPGateway</span>
+                  <HelpTip>Re-points moved learners to the new run and cancels removed ones — directly on live SSG. Only learners already enrolled on TPGateway are affected. (A day/session reschedule, by contrast, never changes enrolments.)</HelpTip>
+                </label>
               </div>
 
               {/* Unified "Adjust attendees" roster table for the move */}

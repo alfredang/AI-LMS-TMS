@@ -19,6 +19,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin, { Draggable } from '@fullcalendar/interaction';
+import { HelpTip } from '@components/ui/HelpTip';
 import type { EventClickArg, EventInput, DatesSetArg } from '@fullcalendar/core';
 import { getApiUrl } from '@/lib/urlHelpers';
 import { useLms } from '@contexts/LmsContext';
@@ -633,7 +634,10 @@ const InAppCalendar: React.FC = () => {
           eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
         />
       </div>
-      <p className="text-xs text-gray-400">Drag a day to reschedule it, or click a class to see details and move single sessions (use a session's <strong>date picker</strong> to reach another month). By default this shows classes that are <strong>going ahead</strong> (confirmed, with a trainer, learners and scheduled dates). Each filter narrows the view; <strong>Show all</strong> shows everything.</p>
+      <p className="text-xs text-gray-400 flex items-center gap-1">
+        How to use this calendar
+        <HelpTip>Drag a day to reschedule it, or click a class to see details and move single sessions (use a session&apos;s <strong>date picker</strong> to reach another month). By default this shows classes that are <strong>going ahead</strong> (confirmed, with a trainer, learners and scheduled dates). Each filter narrows the view; <strong>Show all</strong> shows everything.</HelpTip>
+      </p>
       <p className="text-xs text-gray-400 leading-relaxed">
         <span className="font-medium text-gray-500 dark:text-gray-300">Sync Google Calendar</span>: also move/remove the matching Google Calendar event when you apply a change (off = SSG/LMS only).{' '}
         <span className="font-medium text-gray-500 dark:text-gray-300">Notify attendees</span>: offered inside each reschedule/cancel confirmation — tick it there to review &amp; edit the email and pick which attendees receive it. Both only ever act on your explicit confirmation — never automatically.
@@ -709,7 +713,10 @@ const InAppCalendar: React.FC = () => {
                         className="text-xs px-2 py-1 rounded-md border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 whitespace-nowrap"
                         title="Add Google Calendar events for any sessions that don't have one (and update attendees)">{creatingEvents ? 'Creating…' : '🗓️ Create missing calendar events'}</button>
                     </div>
-                    <p className="text-xs text-gray-400 mb-2">Drag a session (or the whole-day row) onto a day to reschedule — or use the <strong>date picker</strong> on a day or session to move it to any month · ✕ cancels.</p>
+                    <p className="text-xs text-gray-400 mb-2 flex items-center gap-1">
+                      How to move sessions
+                      <HelpTip>Drag a session (or the whole-day row) onto a day to reschedule — or use the <strong>date picker</strong> on a day or session to move it to any month · ✕ cancels.</HelpTip>
+                    </p>
                     {sessionGroups.length === 0 ? (
                       <div className="text-sm text-gray-400">No sessions found.</div>
                     ) : (
@@ -770,7 +777,10 @@ const InAppCalendar: React.FC = () => {
                         ))}
                       </div>
                     )}
-                    <p className="text-xs text-gray-400 mt-2">Shows the LMS (local) trainer/enrolment. Rescheduling pushes to SSG; cancelling deletes the session from SSG.</p>
+                    <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                      About this panel
+                      <HelpTip side="left">Shows the LMS (local) trainer/enrolment. Rescheduling pushes the session to SSG; cancelling deletes the session from SSG. (Enrolments stay on the run — see the move flow to change those.)</HelpTip>
+                    </p>
                   </div>
 
                   {/* Google Calendar attendees — view + confirmation-gated adjust */}

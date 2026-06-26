@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         lp.employment_status,
         lp.nationality,
         lp.ethnicity,
-        lp.dob,
+        to_char(lp.dob, 'YYYY-MM-DD') AS dob,  -- plain date string; a raw date column serializes as UTC and drifts a day in SGT (corrupts the edit round-trip)
         (SELECT e.course_sponsorship FROM enrollment e WHERE e.user_id = au.id AND e.course_sponsorship IS NOT NULL ORDER BY e.created_at DESC LIMIT 1) AS sponsorship_type
       FROM app_user au
       LEFT JOIN learner_profile lp ON lp.user_id = au.id

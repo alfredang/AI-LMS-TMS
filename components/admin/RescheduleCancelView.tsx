@@ -25,8 +25,8 @@ import MoveClassModal from './MoveClassModal';
 import ClassPeopleModal from './ClassPeopleModal';
 import CalendarAttendeesPanel from './CalendarAttendeesPanel';
 import ProcessingOverlay from '../ui/ProcessingOverlay';
+import { HelpTip } from '../ui/HelpTip';
 import { convertSsgDateToHtml, getModeLabel, modeOfTrainingOptions } from '@/lib/ssg/sessionEditHelpers';
-import { TPG_MANUAL_NOTICE } from '@/lib/ssg/tpgManualNotice';
 
 interface ClassRow {
   id: string;            // course_run UUID
@@ -306,19 +306,20 @@ const RescheduleCancelView: React.FC = () => {
     });
   };
 
-  const setClassStatus = async (run: ClassRow, status: 'Cancelled' | 'Confirmed'): Promise<boolean> => {
+  const setClassStatus = async (run: ClassRow, status: 'Cancelled' | 'Confirmed', opts?: { cancelEnrolmentsOnTpg?: boolean }): Promise<any | null> => {
     try {
       setBusy(true);
       const res = await fetch(getApiUrl('/api/admin/upcoming-classes'), {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: run.id, class_status: status }),
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: run.id, class_status: status, cancelEnrolmentsOnTpg: opts?.cancelEnrolmentsOnTpg === true }),
       });
       const data = await res.json();
       if (!data?.success) throw new Error(data?.error || 'Failed to update class status');
       void fetchClasses();
-      return true;
+      return data;
     } catch (e: any) {
       showErrorPopup('Failed to update class: ' + (e?.message || 'unknown error'));
-      return false;
+      return null;
     } finally {
       setBusy(false);
     }
@@ -329,13 +330,21 @@ const RescheduleCancelView: React.FC = () => {
   const cancelEntireClass = (run: ClassRow) => { void (async () => {
     const dec = await showStepConfirm({
       title: 'Cancel entire class', destructive: true, confirmLabel: 'Cancel class', cancelLabel: 'Keep class',
-      message: `Cancel the ENTIRE class "${run.courseTitle}" (run ${run.courseRunId})?\n\nThis marks the class as Cancelled and removes all its Google Calendar events. The sessions themselves aren't deleted.\n\n${TPG_MANUAL_NOTICE}`,
+      message: `Cancel the ENTIRE class "${run.courseTitle}" (run ${run.courseRunId})?\n\nThis marks the class as Cancelled and removes all its Google Calendar events. The sessions themselves aren't deleted.`,
       defaultSync: false, showSync: false, showAdjust: false, defaultNotify: notifyAttendees,
+      cancelTpgEnrolments: { default: false },
       notify: { courseRunId: run.courseRunId, changeType: 'class_cancel', summary: `The class "${run.courseTitle}" (run ${run.courseRunId}) has been cancelled.` },
     });
     if (!dec.confirmed) return;
-    const ok = await setClassStatus(run, 'Cancelled');
-    if (!ok) return;
+    const data = await setClassStatus(run, 'Cancelled', { cancelEnrolmentsOnTpg: dec.cancelEnrolmentsOnTpg });
+    if (!data) return;
+    let tpgMsg = '';
+    if (dec.cancelEnrolmentsOnTpg && data.tpgEnrolments && !data.tpgEnrolments.skipped) {
+      const arr = data.tpgEnrolments.cancelled || [];
+      const ok = arr.filter((x: any) => x.status === 'synced').length;
+      const err = arr.filter((x: any) => x.status === 'error').length;
+      tpgMsg = `\nTPGateway: cancelled ${ok}/${arr.length} learner enrolment(s)${err ? ` ⚠️ ${err} failed — check TPGateway` : ''}.`;
+    }
     if (dec.notifyPayload) {
       const p = dec.notifyPayload;
       try {
@@ -344,10 +353,10 @@ const RescheduleCancelView: React.FC = () => {
           body: JSON.stringify({ courseRunId: run.courseRunId, changeType: 'class_cancel', summary: p.message, subject: p.subject, reason: p.reason, recipients: p.recipients }),
         });
         const j = await r.json();
-        showSuccessPopup(`Class cancelled.\n\n${j?.success ? `Notified ${j.sent ?? 0} attendee(s)${j.failed ? `, ${j.failed} failed` : ''}.` : `Notification failed: ${j?.error || 'unknown'}`}`);
+        showSuccessPopup(`Class cancelled.${tpgMsg}\n\n${j?.success ? `Notified ${j.sent ?? 0} attendee(s)${j.failed ? `, ${j.failed} failed` : ''}.` : `Notification failed: ${j?.error || 'unknown'}`}`);
       } catch (err: any) { showErrorPopup('Class cancelled, but notification failed: ' + (err?.message || 'unknown error')); }
     } else {
-      showSuccessPopup('Class cancelled.');
+      showSuccessPopup(`Class cancelled.${tpgMsg}`);
     }
   })(); };
 
@@ -376,7 +385,10 @@ const RescheduleCancelView: React.FC = () => {
 
       {/* Calendar sync + notify opt-ins */}
       <div className="mb-4 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 text-sm space-y-2">
-        <p className="text-xs text-gray-500 dark:text-gray-400 -mb-1">Defaults for this page — every reschedule, cancel and move uses these, and you can change either one when you confirm.</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 -mb-1 flex items-center gap-1">
+          Page defaults
+          <HelpTip>Every reschedule, cancel and move on this page uses these settings — you can still change either one when you confirm an action.</HelpTip>
+        </p>
         <label className="flex items-center gap-2 cursor-pointer select-none text-gray-700 dark:text-gray-300">
           <input type="checkbox" checked={syncCalendar} onChange={(e) => setSyncCalendar(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
           <span><strong>Sync Google Calendar</strong> — also move or remove the matching Google Calendar event when a change is applied. Off by default.</span>
@@ -605,7 +617,10 @@ const RescheduleCancelView: React.FC = () => {
                                     </div>
                                   );
                                 })}
-                                <p className="text-xs text-gray-400">Sessions are grouped by day. Rescheduling moves the session; cancelling permanently deletes it.</p>
+                                <p className="text-xs text-gray-400 flex items-center gap-1">
+                                  Sessions by day
+                                  <HelpTip>Rescheduling moves the session to a new date; cancelling permanently deletes it from the schedule and SSG.</HelpTip>
+                                </p>
                                 <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
                                   <CalendarAttendeesPanel courseRunId={run.courseRunId} calendarSync={syncCalendar} onChanged={() => { void loadSessions(run, true); void fetchClasses(); }} />
                                 </div>
