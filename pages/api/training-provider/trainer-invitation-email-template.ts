@@ -12,7 +12,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const result = await pool.query(
         `SELECT trainer_invitation_email_subject,
                 trainer_invitation_email_body,
-                trainer_invitation_email_cc
+                trainer_invitation_email_cc,
+                trainer_invitation_reply_to,
+                trainer_exhausted_alert_recipients
          FROM training_provider LIMIT 1`
       );
       const row = result.rows[0] || {};
@@ -22,6 +24,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           trainerInvitationEmailSubject: row.trainer_invitation_email_subject || '',
           trainerInvitationEmailBody: row.trainer_invitation_email_body || '',
           trainerInvitationEmailCc: row.trainer_invitation_email_cc || '',
+          trainerInvitationReplyTo: row.trainer_invitation_reply_to || '',
+          trainerExhaustedAlertRecipients: row.trainer_exhausted_alert_recipients || '',
         },
       });
     } catch (error) {
@@ -36,23 +40,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         trainerInvitationEmailSubject,
         trainerInvitationEmailBody,
         trainerInvitationEmailCc,
+        trainerInvitationReplyTo,
+        trainerExhaustedAlertRecipients,
       } = req.body;
       if (typeof trainerInvitationEmailSubject !== 'string' || typeof trainerInvitationEmailBody !== 'string') {
         return res.status(400).json({ success: false, error: 'trainerInvitationEmailSubject and trainerInvitationEmailBody must be strings' });
       }
-      // CC is optional — accept empty string, null, or undefined as "no CC"
-      const ccValue: string | null =
-        typeof trainerInvitationEmailCc === 'string' && trainerInvitationEmailCc.trim().length > 0
-          ? trainerInvitationEmailCc.trim()
-          : null;
+      // Optional fields — blank/undefined means "unset" (NULL).
+      const blankToNull = (v: unknown): string | null =>
+        typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+      const ccValue = blankToNull(trainerInvitationEmailCc);
+      const replyToValue = blankToNull(trainerInvitationReplyTo);
+      const alertRecipientsValue = blankToNull(trainerExhaustedAlertRecipients);
 
       await ensureTrainerInvitationTemplateColumns((sql, params) => pool.query(sql, params));
       await pool.query(
         `UPDATE training_provider
            SET trainer_invitation_email_subject = $1,
                trainer_invitation_email_body = $2,
-               trainer_invitation_email_cc = $3`,
-        [trainerInvitationEmailSubject, trainerInvitationEmailBody, ccValue]
+               trainer_invitation_email_cc = $3,
+               trainer_invitation_reply_to = $4,
+               trainer_exhausted_alert_recipients = $5`,
+        [trainerInvitationEmailSubject, trainerInvitationEmailBody, ccValue, replyToValue, alertRecipientsValue]
       );
       return res.status(200).json({ success: true, message: 'Trainer invitation email template updated successfully' });
     } catch (error) {

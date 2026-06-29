@@ -16,9 +16,13 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [cc, setCc] = useState('');
+  const [replyTo, setReplyTo] = useState('');
+  const [alertRecipients, setAlertRecipients] = useState('');
   const [originalSubject, setOriginalSubject] = useState('');
   const [originalBody, setOriginalBody] = useState('');
   const [originalCc, setOriginalCc] = useState('');
+  const [originalReplyTo, setOriginalReplyTo] = useState('');
+  const [originalAlertRecipients, setOriginalAlertRecipients] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -38,20 +42,30 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
       const nextSubject = data?.data?.trainerInvitationEmailSubject || DEFAULT_TRAINER_INVITATION_SUBJECT;
       const nextBody = data?.data?.trainerInvitationEmailBody || DEFAULT_TRAINER_INVITATION_BODY;
       const nextCc = data?.data?.trainerInvitationEmailCc || '';
+      const nextReplyTo = data?.data?.trainerInvitationReplyTo || '';
+      const nextAlert = data?.data?.trainerExhaustedAlertRecipients || '';
       setSubject(nextSubject);
       setBody(nextBody);
       setCc(nextCc);
+      setReplyTo(nextReplyTo);
+      setAlertRecipients(nextAlert);
       setOriginalSubject(data?.data?.trainerInvitationEmailSubject || '');
       setOriginalBody(data?.data?.trainerInvitationEmailBody || '');
       setOriginalCc(nextCc);
+      setOriginalReplyTo(nextReplyTo);
+      setOriginalAlertRecipients(nextAlert);
     } catch (error) {
       console.error('Error fetching trainer invitation email template:', error);
       setSubject(DEFAULT_TRAINER_INVITATION_SUBJECT);
       setBody(DEFAULT_TRAINER_INVITATION_BODY);
       setCc('');
+      setReplyTo('');
+      setAlertRecipients('');
       setOriginalSubject('');
       setOriginalBody('');
       setOriginalCc('');
+      setOriginalReplyTo('');
+      setOriginalAlertRecipients('');
     } finally {
       setIsLoading(false);
     }
@@ -68,6 +82,8 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
           trainerInvitationEmailSubject: subject,
           trainerInvitationEmailBody: body,
           trainerInvitationEmailCc: cc,
+          trainerInvitationReplyTo: replyTo,
+          trainerExhaustedAlertRecipients: alertRecipients,
         }),
       });
       const data = await response.json();
@@ -77,6 +93,8 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
       setOriginalSubject(subject);
       setOriginalBody(body);
       setOriginalCc(cc);
+      setOriginalReplyTo(replyTo);
+      setOriginalAlertRecipients(alertRecipients);
       setSaveMessage({ type: 'success', text: 'Trainer invitation email template saved successfully.' });
     } catch (error) {
       console.error('Error saving trainer invitation email template:', error);
@@ -140,7 +158,8 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
     finally { setIsSendingTest(false); setTimeout(() => setTestMessage(null), 5000); }
   };
 
-  const hasChanges = subject !== originalSubject || body !== originalBody || cc !== originalCc;
+  const hasChanges = subject !== originalSubject || body !== originalBody || cc !== originalCc
+    || replyTo !== originalReplyTo || alertRecipients !== originalAlertRecipients;
 
   return (
     <div className="space-y-6">
@@ -225,6 +244,36 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Comma- or newline-separated. These addresses are CC'd on every trainer invitation (manual send, auto-escalation, and weekly sweep). Invalid entries are silently dropped.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Reply-To <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={replyTo}
+                  onChange={(e) => setReplyTo(e.target.value)}
+                  placeholder="trainer.assignment@example.com"
+                  className="block w-full px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Where trainer replies to invitation / accept / decline emails are sent. Leave blank to use the company email.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Exhausted-list Alert Recipients <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  value={alertRecipients}
+                  onChange={(e) => setAlertRecipients(e.target.value)}
+                  rows={2}
+                  placeholder="ms.tan@example.com, angss@tertiaryinfotech.com"
+                  className="block w-full px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono resize-y"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Alerted once when a course run's whole approved-trainer list has declined and none accepted (needs manual assignment). Comma- or newline-separated. Leave blank to disable the alert.
                 </p>
               </div>
             </div>

@@ -23,8 +23,10 @@ import {
   DEFAULT_TRAINER_INVITATION_BODY,
   DEFAULT_TRAINER_INVITATION_SUBJECT,
   ensureTpgTrainerColumns,
+  ensureExhaustedAlertColumn,
   ensureTrainerInvitationTable,
   ensureTrainerInvitationTemplateColumns,
+  formatDateLabel,
   normalizeTrainerName,
   parseCcList,
   renderInvitationHtmlEmail,
@@ -46,17 +48,21 @@ export interface TrainingProviderEmailConfig {
   trainer_invitation_email_subject?: string | null;
   trainer_invitation_email_body?: string | null;
   trainer_invitation_email_cc?: string | null;
+  trainer_invitation_reply_to?: string | null;
+  trainer_exhausted_alert_recipients?: string | null;
 }
 
 export type TrainerInvitationSendStatus =
   | 'sent'
   | 'skipped_no_approved_trainers'
   | 'skipped_all_invited'
+  | 'skipped_already_assigned'
   | 'skipped_no_email'
   | 'skipped_already_pending'
   | 'skipped_class_not_found'
   | 'skipped_paused'
   | 'skipped_no_learners'
+  | 'exhausted_alert_sent'
   | 'error';
 
 export interface TrainerInvitationSendResult {
@@ -74,12 +80,16 @@ export interface TrainerInvitationSendResult {
  * null if OAuth is not yet configured.
  */
 export async function loadTrainingProviderEmailConfig(): Promise<TrainingProviderEmailConfig | null> {
+  // Idempotent — guarantees the reply-to / exhausted-alert columns exist before
+  // they're SELECTed (the sweep calls this before any other ensure).
+  await ensureTrainerInvitationTemplateColumns((sql) => pool.query(sql));
   const res = await pool.query(
     `SELECT email_user, company_email, company_name, company_shortname,
             support_email, contact_tel, company_tel,
             google_client_id, google_client_secret, google_refresh_token,
             trainer_invitation_email_subject, trainer_invitation_email_body,
-            trainer_invitation_email_cc
+            trainer_invitation_email_cc, trainer_invitation_reply_to,
+            trainer_exhausted_alert_recipients
      FROM training_provider
      LIMIT 1`
   );
@@ -105,9 +115,10 @@ async function sendGmail(
   oauth2Client.setCredentials({ refresh_token: tp.google_refresh_token });
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
+  const replyTo = (tp.trainer_invitation_reply_to || '').trim() || tp.company_email || tp.email_user;
   const headers = [
     `From: ${tp.company_shortname || tp.company_name || 'Training Provider'} <${tp.email_user}>`,
-    `Reply-To: ${tp.company_email || tp.email_user}`,
+    `Reply-To: ${replyTo}`,
     `To: ${to}`,
   ];
   if (ccList && ccList.length > 0) {
@@ -490,6 +501,15 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
 
   console.log(`📨 Trainer invitation ${allowResend ? '(resend) ' : ''}sent to ${nextTrainerName} (${trainer.email}) for course run ${classRow.course_run_id}`);
 
+  // Re-arm the exhausted-list alert: a fresh invitation means the run is no
+  // longer exhausted, so a future exhaustion is allowed to alert again.
+  try {
+    await ensureExhaustedAlertColumn((sql) => pool.query(sql));
+    await pool.query(`UPDATE course_run SET exhausted_alert_sent_at = NULL WHERE id = $1`, [courseRunUuid]);
+  } catch (e) {
+    console.error('⚠️ [trainerInvitationSender] failed to re-arm exhausted alert:', e);
+  }
+
   // A reset (Unconfirmed) class re-enters the invite pipeline: flip it back to
   // Pending once an invitation actually goes out. Central here so every caller
   // (admin manual send, auto-sweep, on-decline escalation) gets it.
@@ -507,4 +527,110 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
     trainerEmail: trainer.email,
     message: `Invitation sent to ${nextTrainerName}`,
   };
+}
+
+export type ExhaustedAlertResult =
+  | 'sent'
+  | 'skipped_not_exhausted'
+  | 'skipped_already_alerted'
+  | 'skipped_no_recipients'
+  | 'skipped_no_oauth'
+  | 'skipped_run_not_found'
+  | 'error';
+
+/**
+ * Alert the trainer-assignment owners (Ms Tan + See Shiang, per config) when a
+ * course run's approved-trainer list is **exhausted** — every approved trainer
+ * who maps to an account has DECLINED and none accepted, with no trainer
+ * assigned. The course now needs manual intervention.
+ *
+ * Safe / idempotent by design:
+ *   - Sends only when the run is genuinely exhausted (all declined, none
+ *     pending/accepted, no assignment) — NOT merely "everyone currently invited".
+ *   - Sends **once** per exhaustion (course_run.exhausted_alert_sent_at), and
+ *     re-arms when a fresh invitation later goes out (see sender above).
+ *   - No-ops when no recipients are configured (trainer_exhausted_alert_recipients).
+ *
+ * Call it at every exhaustion point (decline-cascade + Mon/Thu sweep) whenever
+ * the cascade returns `skipped_all_invited`; this function decides whether to act.
+ */
+export async function sendExhaustedListAlert(
+  courseRunUuid: string,
+  tpIn?: TrainingProviderEmailConfig | null
+): Promise<{ status: ExhaustedAlertResult; message?: string; recipients?: string[] }> {
+  try {
+    await ensureExhaustedAlertColumn((sql) => pool.query(sql));
+
+    const tp = tpIn || (await loadTrainingProviderEmailConfig());
+    if (!tp) return { status: 'skipped_no_oauth', message: 'Gmail OAuth not configured' };
+
+    const recipients = parseCcList(tp.trainer_exhausted_alert_recipients);
+    if (recipients.length === 0) {
+      return { status: 'skipped_no_recipients', message: 'No exhausted-alert recipients configured' };
+    }
+
+    // Load run + course + assignment + invitation tallies in one go.
+    const r = await pool.query(
+      `SELECT cr.id, cr.course_run_id, cr.start_date, cr.end_date,
+              cr.exhausted_alert_sent_at,
+              c.title AS course_title, c.course_code, c.trainers_list,
+              (SELECT COUNT(*) FROM course_run_trainer crt WHERE crt.course_run_id = cr.id) AS local_cnt,
+              (SELECT COUNT(*) FROM trainer_invitation ti WHERE ti.course_run_id = cr.id) AS inv_total,
+              (SELECT COUNT(*) FROM trainer_invitation ti WHERE ti.course_run_id = cr.id AND ti.status IN ('pending','accepted')) AS inv_open,
+              (SELECT COUNT(*) FROM trainer_invitation ti WHERE ti.course_run_id = cr.id AND ti.status IN ('declined','blocked')) AS inv_declined
+         FROM course_run cr JOIN course c ON c.id = cr.course_id
+        WHERE cr.id = $1 LIMIT 1`,
+      [courseRunUuid]
+    );
+    const run = r.rows[0];
+    if (!run) return { status: 'skipped_run_not_found' };
+
+    // Dedupe: already alerted for this exhaustion episode.
+    if (run.exhausted_alert_sent_at) {
+      return { status: 'skipped_already_alerted' };
+    }
+
+    // True exhaustion: no trainer assigned, at least one invitation sent, and
+    // none of them are still pending/accepted (i.e. all declined/blocked).
+    const exhausted =
+      Number(run.local_cnt) === 0 &&
+      Number(run.inv_total) > 0 &&
+      Number(run.inv_open) === 0 &&
+      Number(run.inv_declined) > 0;
+    if (!exhausted) return { status: 'skipped_not_exhausted' };
+
+    const fmt = (v: any) => formatDateLabel(v);
+    const subject = `⚠ Trainer needed — invite list exhausted: ${run.course_title} (${run.course_run_id})`;
+    const declinedList = splitTrainerList(run.trainers_list).map((n) => `&bull; ${n}`).join('<br/>');
+    const htmlBody = `
+<div style="font-family:Arial,sans-serif;font-size:14px;color:#1f2937;line-height:1.6;">
+  <p><strong>Action needed:</strong> every approved trainer for this course run has declined the invitation, and no trainer is assigned. The automatic cascade has no one left to invite.</p>
+  <table style="border-collapse:collapse;margin:12px 0;">
+    <tr><td style="padding:2px 12px 2px 0;color:#6b7280;">Course</td><td style="padding:2px 0;"><strong>${run.course_title}</strong></td></tr>
+    <tr><td style="padding:2px 12px 2px 0;color:#6b7280;">Course code</td><td style="padding:2px 0;">${run.course_code || 'N/A'}</td></tr>
+    <tr><td style="padding:2px 12px 2px 0;color:#6b7280;">Course run ID</td><td style="padding:2px 0;">${run.course_run_id || 'N/A'}</td></tr>
+    <tr><td style="padding:2px 12px 2px 0;color:#6b7280;">Dates</td><td style="padding:2px 0;">${fmt(run.start_date)} &rarr; ${fmt(run.end_date)}</td></tr>
+  </table>
+  <p style="color:#6b7280;margin:8px 0 2px;">Approved trainers (all invited / declined):</p>
+  <p style="margin:0 0 12px;">${declinedList || '<em>none configured</em>'}</p>
+  <p><strong>Next step:</strong> add or reorder approved trainers for this course, assign a trainer manually, or reschedule/cancel the run.</p>
+  <div style="border-top:1px solid #e5e7eb;padding-top:12px;margin-top:20px;">
+    <p style="margin:0;font-size:12px;color:#94a3b8;font-style:italic;">Automated alert from the TMS trainer-assignment workflow.</p>
+  </div>
+</div>`;
+
+    try {
+      // Reuse the same Gmail sender; recipients go in the To line.
+      await sendGmail(tp, recipients[0], subject, htmlBody, recipients.slice(1));
+    } catch (err) {
+      return { status: 'error', message: err instanceof Error ? err.message : 'Gmail send failed', recipients };
+    }
+
+    await pool.query(`UPDATE course_run SET exhausted_alert_sent_at = NOW() WHERE id = $1`, [courseRunUuid]);
+    console.log(`🚨 [exhausted-alert] sent for course_run=${courseRunUuid} (${run.course_run_id}) to ${recipients.join(', ')}`);
+    return { status: 'sent', recipients };
+  } catch (err) {
+    console.error('❌ [exhausted-alert] failed:', err);
+    return { status: 'error', message: err instanceof Error ? err.message : String(err) };
+  }
 }

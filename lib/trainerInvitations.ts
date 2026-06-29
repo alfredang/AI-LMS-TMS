@@ -233,6 +233,22 @@ export async function ensureTrainerInvitationTemplateColumns(query: (sql: string
   // CC list for the decline acknowledgement email sent to the trainer
   // after they click Decline. NULL means "no CC".
   await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_decline_email_cc TEXT`);
+  // Reply-To override for ALL trainer emails (invitation + accept/decline acks).
+  // When NULL/blank, falls back to company_email then email_user (legacy behaviour).
+  // Dr Ang's requirement: trainer replies should reach the assignment owner.
+  await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_invitation_reply_to TEXT`);
+  // Recipients (comma/semicolon/newline list) for the "invite list exhausted"
+  // alert — sent once when every approved trainer for a run has declined and
+  // none accepted. NULL/blank means the alert is disabled (no email sent).
+  await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_exhausted_alert_recipients TEXT`);
+}
+
+// Dedupe column for the exhausted-list alert: set when an alert fires for a run,
+// cleared whenever a fresh invitation later goes out (so a re-exhausted run can
+// re-alert). Kept separate from the template columns so the invite sender can
+// ensure it cheaply.
+export async function ensureExhaustedAlertColumn(query: (sql: string, params?: any[]) => Promise<any>) {
+  await query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS exhausted_alert_sent_at TIMESTAMPTZ`);
 }
 
 /**

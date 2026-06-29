@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import {
   loadTrainingProviderEmailConfig,
   sendNextTrainerInvitationForCourseRun,
+  sendExhaustedListAlert,
   TrainerInvitationSendResult,
 } from '../../../lib/trainerInvitationSender';
 
@@ -193,6 +194,23 @@ async function _runAutomationInner(): Promise<AutomationSummary> {
         errors++;
       } else {
         skipped++;
+        // This run was eligible (no local trainer) yet the cascade had no one
+        // left to invite → possibly exhausted (all declined). The alert helper
+        // verifies the true exhausted condition, dedupes, and no-ops without
+        // recipients configured.
+        if (result.status === 'skipped_all_invited') {
+          const alert = await sendExhaustedListAlert(row.id, tp);
+          if (alert.status === 'sent') {
+            console.log(`🚨 [auto-send-trainer-invitations] exhausted-alert sent for course_run=${row.id}`);
+            await insertLogRow(runId, {
+              status: 'exhausted_alert_sent',
+              courseRunUuid: row.id,
+              courseRunId: result.courseRunId,
+              courseTitle: result.courseTitle,
+              message: `Invite list exhausted — alerted ${(alert.recipients || []).join(', ')}`,
+            });
+          }
+        }
       }
     } catch (err) {
       errors++;

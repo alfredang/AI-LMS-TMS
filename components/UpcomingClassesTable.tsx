@@ -261,6 +261,25 @@ interface UpcomingClass {
     calendarNameMismatch: boolean;
     attendanceScore: number | null;
     trainersList: string;
+    invitationOutcome?: {
+        state: 'accepted' | 'pending' | 'exhausted' | 'open' | 'none';
+        pendingTrainer: string;
+        pendingSince: string | null;
+        acceptedTrainer: string;
+        acceptedAt: string | null;
+        declinedCount: number;
+        resolvableCount: number;
+        listCount: number;
+    };
+    attentionIssue?: 'exhausted' | 'no_lms' | 'no_tpg' | null;
+    invitationChain?: Array<{
+        name: string;
+        resolved: boolean;
+        assigned: boolean;
+        status: string;
+        sentAt: string | null;
+        respondedAt: string | null;
+    }>;
     virtualMeetingLink?: string;
     virtualMeetingHostLink?: string;
     virtualMeetingProvider?: string;
@@ -352,7 +371,20 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         totalPendingClasses: 0,
         totalAssignedTpgClasses: 0,
         totalAssignedLocalClasses: 0,
+        totalNeedsAttention: 0,
+        attentionNoLms: 0,
+        attentionNoLmsWithTpg: 0,
+        attentionNoTpg: 0,
+        attentionExhausted: 0,
     });
+    // Trainer-invite triage: when on, show only runs that need attention
+    // (no trainer + approaching start, or invite list exhausted).
+    const [attentionOnly, setAttentionOnly] = useState(false);
+    // Optional drill-down to one issue type (banner chips): all | no_lms | no_tpg | exhausted.
+    const [attentionType, setAttentionType] = useState<'all' | 'no_lms' | 'no_tpg' | 'exhausted'>('all');
+    // "Approaching start" window for the needs-attention count/filter (days).
+    // Default 7; adjustable in the advanced filter. Clamped server-side 1..365.
+    const [atRiskDays, setAtRiskDays] = useState(7);
 
     // Import Run modal states
     const [showImportModal, setShowImportModal] = useState(false);
@@ -451,6 +483,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             if (selectedCourseType !== 'all') params.append('courseType', selectedCourseType);
             if (selectedLearnerFilter !== 'all') params.append('learnerFilter', selectedLearnerFilter);
             if (selectedTrainerAssignmentFilter !== 'all') params.append('trainerAssignmentFilter', selectedTrainerAssignmentFilter);
+            if (attentionOnly) {
+                params.append('attentionFilter', 'needsAttention');
+                if (attentionType !== 'all') params.append('attentionType', attentionType);
+            }
+            params.append('atRiskDays', String(atRiskDays || 7));
             params.append('thresholdDays', getUpcomingThresholdDays());
             if (debouncedStartDate) params.append('startDateFrom', debouncedStartDate);
             if (debouncedEndDate) params.append('endDateUntil', debouncedEndDate);
@@ -474,6 +511,11 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         totalPendingClasses: result.data.stats.totalPendingClasses ?? 0,
                         totalAssignedTpgClasses: result.data.stats.totalAssignedTpgClasses ?? 0,
                         totalAssignedLocalClasses: result.data.stats.totalAssignedLocalClasses ?? 0,
+                        totalNeedsAttention: result.data.stats.totalNeedsAttention ?? 0,
+                        attentionNoLms: result.data.stats.attentionNoLms ?? 0,
+                        attentionNoLmsWithTpg: result.data.stats.attentionNoLmsWithTpg ?? 0,
+                        attentionNoTpg: result.data.stats.attentionNoTpg ?? 0,
+                        attentionExhausted: result.data.stats.attentionExhausted ?? 0,
                     });
                 }
             } else {
@@ -549,7 +591,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             return;
         }
         setCurrentPage(0);
-    }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter, selectedUpcomingWindow, debouncedCustomUpcomingWindowDays]);
+    }, [selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter, attentionOnly, attentionType, selectedUpcomingWindow, debouncedCustomUpcomingWindowDays]);
 
     // Mark initial mount as done AFTER all other mount effects have executed
     useEffect(() => {
@@ -560,7 +602,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     // Fetch data when debounced filters or pagination change
     useEffect(() => {
         fetchUpcomingClasses();
-    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter, selectedUpcomingWindow, debouncedCustomUpcomingWindowDays, debouncedStartDate, debouncedEndDate]);
+    }, [currentPage, debouncedSearch, debouncedCourseTitle, debouncedCourseCode, debouncedCourseRunId, selectedTrainer, selectedClassStatus, selectedClassType, selectedCourseType, selectedLearnerFilter, selectedTrainerAssignmentFilter, attentionOnly, attentionType, atRiskDays, selectedUpcomingWindow, debouncedCustomUpcomingWindowDays, debouncedStartDate, debouncedEndDate]);
 
     // Auto-refresh when the tab becomes visible again. Common flow: admin
     // sends an invitation, switches to email to test, then comes back — this
@@ -612,6 +654,8 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
         setSelectedCourseType('all');
         setSelectedLearnerFilter('withLearners');
         setSelectedTrainerAssignmentFilter('all');
+        setAttentionOnly(false);
+        setAttentionType('all');
         setSelectedUpcomingWindow('30');
         setCustomUpcomingWindowDays('');
         setDebouncedCustomUpcomingWindowDays('');
@@ -644,6 +688,58 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     const formatDate = (dateString: string) => {
         if (!dateString) return 'N/A';
         return new Date(dateString).toLocaleDateString('en-GB');
+    };
+
+    const daysSince = (dateString: string | null | undefined): number | null => {
+        if (!dateString) return null;
+        const t = new Date(dateString).getTime();
+        if (Number.isNaN(t)) return null;
+        return Math.floor((Date.now() - t) / 86400000);
+    };
+
+    // At-a-glance invite outcome badge (the per-trainer list/history lives in
+    // Edit → Trainer Management; this is just the cross-run triage signal).
+    const renderInvitationOutcome = (classItem: UpcomingClass) => {
+        const outcome = classItem.invitationOutcome;
+        if (!outcome) return null;
+        let badge: { label: string; cls: string; title?: string } | null = null;
+        if (outcome.state === 'accepted') {
+            const when = outcome.acceptedAt ? ` · ${formatDate(outcome.acceptedAt)}` : '';
+            const who = outcome.acceptedTrainer ? `: ${outcome.acceptedTrainer}` : '';
+            badge = {
+                label: `Accepted${who}${when}`,
+                cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+                title: outcome.acceptedAt ? `Trainer accepted on ${formatDate(outcome.acceptedAt)}` : 'Trainer assigned',
+            };
+        }
+        else if (outcome.state === 'pending') {
+            const d = daysSince(outcome.pendingSince);
+            const since = d === null ? '' : ` · ${d}d`;
+            badge = { label: `Pending: ${outcome.pendingTrainer || 'trainer'}${since}`, cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', title: 'Awaiting this trainer’s response. Open Edit → Trainer Management for the full list.' };
+        }
+        else if (outcome.state === 'exhausted') badge = { label: `All declined (${outcome.declinedCount}) — needs action`, cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300', title: 'Every approved trainer with an account has declined. Add/reorder trainers or assign manually.' };
+        else if (outcome.state === 'open') badge = { label: 'Not yet invited', cls: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' };
+        else badge = { label: 'No approved trainers', cls: 'bg-gray-100 text-gray-500 dark:bg-gray-700/60 dark:text-gray-400', title: 'This course has no approved-trainer list configured.' };
+
+        // Subtle triage tag on flagged rows. 'exhausted' is already conveyed by
+        // the red "All declined" badge, so only tag no_lms / no_tpg.
+        const issue = classItem.attentionIssue;
+        const hasTpgName = !!(classItem.assignedTrainerTpg || '').trim();
+        const issueTag = issue === 'no_lms'
+            ? (hasTpgName
+                ? { label: '⚠ Not in LMS · TPG set', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300', title: `Trainer is on TPG (${classItem.assignedTrainerTpg}) but not assigned in the LMS — just assign them in Edit → Trainer Management to confirm + grant access.` }
+                : { label: '⚠ Not in LMS', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300', title: 'No trainer assigned anywhere — class shows Pending and no trainer can access the run.' })
+            : issue === 'no_tpg'
+            ? { label: '⚠ Not in TPG', cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', title: 'Assigned in the LMS but not pushed to TPG/SSG.' }
+            : null;
+
+        if (!badge && !issueTag) return null;
+        return (
+            <span className="inline-flex flex-wrap items-center gap-1">
+                {badge && <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${badge.cls}`} title={badge.title}>{badge.label}</span>}
+                {issueTag && <span className={`inline-flex px-1.5 py-0.5 text-[11px] font-semibold rounded ${issueTag.cls}`} title={issueTag.title}>{issueTag.label}</span>}
+            </span>
+        );
     };
 
     const handleImportRun = async () => {
@@ -1068,6 +1164,46 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             </select>
                                         </div>
 
+                                        {/* Trainer-invite triage toggle: runs needing attention
+                                            (no trainer + approaching start, or invite list exhausted). */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trainer Invites</label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setAttentionOnly(v => !v)}
+                                                className={`w-full px-3 py-2 rounded-md text-sm font-medium border flex items-center justify-center gap-1.5 transition-colors ${
+                                                    attentionOnly
+                                                        ? 'bg-red-600 border-red-600 text-white hover:bg-red-700'
+                                                        : stats.totalNeedsAttention > 0
+                                                            ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-700 dark:text-red-300'
+                                                            : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'
+                                                }`}
+                                                title={`Show only runs needing trainer attention: no LMS-assigned trainer + starting within ${atRiskDays} day(s), or the invite list is exhausted (all declined). TPG-only assignments are included because the trainer still can't access the run.`}
+                                            >
+                                                <span aria-hidden>⚠</span>
+                                                <span>{attentionOnly ? 'Showing: Needs attention' : 'Needs attention'}</span>
+                                                {stats.totalNeedsAttention > 0 && (
+                                                    <span className={`ml-0.5 px-1.5 rounded-full text-xs font-bold ${attentionOnly ? 'bg-white text-red-700' : 'bg-red-600 text-white'}`}>{stats.totalNeedsAttention}</span>
+                                                )}
+                                            </button>
+                                            <div className="flex items-center gap-1.5 mt-1.5">
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">Approaching start within</span>
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={365}
+                                                    value={atRiskDays}
+                                                    onChange={(e) => {
+                                                        const n = parseInt(e.target.value, 10);
+                                                        setAtRiskDays(Number.isFinite(n) ? Math.min(Math.max(n, 1), 365) : 7);
+                                                    }}
+                                                    className="w-14 px-1.5 py-0.5 border border-gray-300 rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                                    title="Days-to-start window that counts as 'needs attention' when no trainer is assigned"
+                                                />
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">days</span>
+                                            </div>
+                                        </div>
+
                                         {/* Upcoming Window Filter */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Upcoming Window</label>
@@ -1136,6 +1272,64 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                         {actionMessage.text}
                     </div>
                 )}
+                {stats.totalNeedsAttention > 0 && (() => {
+                    const chips = [
+                        { type: 'no_lms' as const, label: 'Not in LMS', count: stats.attentionNoLms },
+                        { type: 'no_tpg' as const, label: 'Not in TPG', count: stats.attentionNoTpg },
+                        { type: 'exhausted' as const, label: 'List exhausted', count: stats.attentionExhausted },
+                    ];
+                    return (
+                    <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 dark:border-red-700/60 dark:bg-red-900/20">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="flex items-start gap-2.5">
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-600 text-white text-sm font-bold" aria-hidden>⚠</span>
+                                <div>
+                                    <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+                                        {stats.totalNeedsAttention} class{stats.totalNeedsAttention === 1 ? '' : 'es'} need trainer attention
+                                    </p>
+                                    <p className="text-xs text-red-600 dark:text-red-300">
+                                        No LMS trainer + starting within {atRiskDays} day{atRiskDays === 1 ? '' : 's'}, assigned in LMS but not pushed to TPG, or the invite list is exhausted (all declined).
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => { setAttentionOnly(v => !v); setAttentionType('all'); }}
+                                className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
+                                    attentionOnly
+                                        ? 'bg-white text-red-700 border border-red-300 hover:bg-red-50 dark:bg-gray-800 dark:text-red-300 dark:border-red-700'
+                                        : 'bg-red-600 text-white hover:bg-red-700'
+                                }`}
+                            >
+                                {attentionOnly ? 'Show all classes' : 'Review them →'}
+                            </button>
+                        </div>
+                        <div className="mt-2.5 flex flex-wrap gap-2 pl-9">
+                            {chips.map(ch => {
+                                const active = attentionOnly && attentionType === ch.type;
+                                const disabled = ch.count === 0;
+                                return (
+                                    <button
+                                        key={ch.type}
+                                        type="button"
+                                        disabled={disabled}
+                                        onClick={() => { setAttentionOnly(true); setAttentionType(active ? 'all' : ch.type); }}
+                                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                                            disabled ? 'border-gray-200 text-gray-400 dark:border-gray-700 dark:text-gray-600 cursor-default'
+                                            : active ? 'border-red-600 bg-red-600 text-white'
+                                            : 'border-red-300 bg-white text-red-700 hover:bg-red-100 dark:bg-gray-800 dark:border-red-700 dark:text-red-300'
+                                        }`}
+                                        title={disabled ? `No "${ch.label}" classes` : active ? 'Showing this type — click to show all attention types' : `Show only "${ch.label}" classes`}
+                                    >
+                                        <span>{ch.label}</span>
+                                        <span className={`rounded-full px-1.5 text-[11px] font-bold ${active ? 'bg-white text-red-700' : disabled ? 'bg-gray-100 text-gray-400 dark:bg-gray-700' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>{ch.count}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    );
+                })()}
                 {loading && upcomingClasses.length > 0 && (
                     <div className="mb-3 inline-flex items-center rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                         <div className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-blue-300 border-t-blue-700 dark:border-blue-700 dark:border-t-blue-200" />
@@ -1487,14 +1681,15 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                     <span className="text-gray-400 text-xs italic">—</span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 dark:text-gray-200">
-                                                <div className="flex items-center gap-2">
+                                            <td className="px-4 py-2 align-top text-sm text-gray-700 dark:text-gray-200">
+                                                <div className="flex flex-col gap-1.5">
                                                     <Button
                                                         variant="secondary"
                                                         size="sm"
                                                         onClick={() => handleSendTrainerInvitation(classItem)}
                                                         disabled={!(nextTrainerOverrides[classItem.id] || classItem.nextAvailableTrainer) || sendingInvitationFor === classItem.id}
                                                         title={classItem.latestInvitationStatus === 'pending' ? 'Resend invitation (overwrites the previous pending one)' : 'Send trainer invitation'}
+                                                        className="self-start"
                                                     >
                                                         {sendingInvitationFor === classItem.id ? (
                                                             <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
@@ -1505,15 +1700,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                                             </>
                                                         )}
                                                     </Button>
-                                                    {(classItem.latestInvitationStatus === 'accepted' || classItem.latestInvitationStatus === 'declined' || classItem.latestInvitationStatus === 'blocked' || classItem.latestInvitationStatus === 'pending') && (
-                                                        <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
-                                                            classItem.latestInvitationStatus === 'accepted' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                                            : (classItem.latestInvitationStatus === 'declined' || classItem.latestInvitationStatus === 'blocked') ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                                                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                                                            }`}>
-                                                            {classItem.latestInvitationStatus === 'blocked' ? 'Declined' : classItem.latestInvitationStatus.charAt(0).toUpperCase() + classItem.latestInvitationStatus.slice(1)}
-                                                        </span>
-                                                    )}
+                                                    {renderInvitationOutcome(classItem)}
                                                 </div>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">

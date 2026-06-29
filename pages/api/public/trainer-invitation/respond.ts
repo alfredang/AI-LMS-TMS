@@ -13,7 +13,7 @@ import {
   DEFAULT_TRAINER_DECLINE_SUBJECT,
   DEFAULT_TRAINER_DECLINE_BODY,
 } from '@/lib/trainerInvitations';
-import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSender';
+import { sendNextTrainerInvitationForCourseRun, sendExhaustedListAlert } from '@/lib/trainerInvitationSender';
 import { getGoogleCredentials } from '@/lib/google-auth/googleAuth';
 import { pushTrainerToTpgForRun } from '@/lib/ssg/pushTrainerToTpgForRun';
 import { calendarWritesAllowed } from '@/lib/calendar/calendarGuard';
@@ -58,9 +58,10 @@ async function sendFollowUpEmail(
     oauth2Client.setCredentials({ refresh_token: tp.google_refresh_token });
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
+    const replyTo = (tp.trainer_invitation_reply_to || '').trim() || tp.company_email || tp.email_user;
     const headers = [
       `From: ${tp.company_shortname || tp.company_name || 'Training Provider'} <${tp.email_user}>`,
-      `Reply-To: ${tp.company_email || tp.email_user}`,
+      `Reply-To: ${replyTo}`,
       `To: ${trainerEmail}`,
     ];
     if (ccList && ccList.length > 0) {
@@ -103,6 +104,13 @@ async function sendNextTrainerInvitation(courseRunUuid: string, tp: any) {
       console.log(
         `ℹ️  [auto-escalation] course_run=${courseRunUuid} → ${result.status}: ${result.message}`
       );
+      // No one left to invite → the list may be exhausted (all declined).
+      // sendExhaustedListAlert verifies the true exhausted condition, dedupes,
+      // and no-ops if no recipients are configured.
+      if (result.status === 'skipped_all_invited') {
+        const alert = await sendExhaustedListAlert(courseRunUuid, tp);
+        console.log(`🚨 [auto-escalation] exhausted-alert for course_run=${courseRunUuid} → ${alert.status}`);
+      }
     }
   } catch (e) {
     console.error('❌ [auto-escalation] Failed to auto-send next trainer invitation:', e);
@@ -383,6 +391,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           `✅ [trainer-invitation/respond] course_run_trainer ${row?.was_inserted ? 'INSERTED' : 'UPDATED'} ` +
           `id=${row?.id} for course_run=${invitation.course_run_id}`
         );
+
+        // #4: confirm the class immediately on accept. Matches the lazy derive
+        // in upcoming-classes (trainer + learners → Confirmed) but without
+        // waiting for an admin page load. Never overrides a Cancelled run.
+        const confRes = await pool.query(
+          `UPDATE course_run SET class_status = 'Confirmed', updated_at = NOW()
+            WHERE id = $1 AND class_status <> 'Cancelled'
+              AND EXISTS (SELECT 1 FROM enrollment e WHERE e.course_run_id = $1)
+            RETURNING id`,
+          [invitation.course_run_id]
+        );
+        if (confRes.rowCount && confRes.rowCount > 0) {
+          console.log(`✅ [trainer-invitation/respond] class_status → Confirmed for course_run=${invitation.course_run_id}`);
+        }
         // Auto-push to SSG TPG so admin doesn't need a separate "Bulk TPG
         // Assign" click. Isolated try/catch — TPG failure is recorded on
         // course_run.tpg_sync_status and never breaks the trainer's accept.
@@ -593,7 +615,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               google_client_id, google_client_secret, google_refresh_token,
               trainer_accept_email_subject, trainer_accept_email_body, trainer_accept_email_cc,
               trainer_decline_email_subject, trainer_decline_email_body, trainer_decline_email_cc,
-              trainer_invitation_email_subject, trainer_invitation_email_body, trainer_invitation_email_cc
+              trainer_invitation_email_subject, trainer_invitation_email_body, trainer_invitation_email_cc,
+              trainer_invitation_reply_to
        FROM training_provider LIMIT 1`
     );
     const tp = tpResult.rows[0];

@@ -26,6 +26,17 @@ interface UpcomingClass {
   latestInvitationTrainer: string;
   numOfTrainee: number;
   trainersList?: string;
+  invitationOutcome?: {
+    state: 'accepted' | 'pending' | 'exhausted' | 'open' | 'none';
+    pendingTrainer: string;
+    pendingSince: string | null;
+    acceptedTrainer: string;
+    acceptedAt: string | null;
+    declinedCount: number;
+    resolvableCount: number;
+    listCount: number;
+  };
+  attentionIssue?: 'exhausted' | 'no_lms' | 'no_tpg' | null;
   courseType?: string;
   classType?: string;
   invitationPaused?: boolean;
@@ -335,6 +346,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       filters.push(`NOT ${trainerAssignedSql}`);
     }
 
+    // ── "Needs attention" triage predicate (trainer-invite tracking) ──────────
+    // A run needs attention when it has NO LMS-assigned trainer AND either:
+    //   (a) it is approaching its start date (within atRiskDays), OR
+    //   (b) its invite list is exhausted — invitations were sent but every one
+    //       was declined (none pending/accepted).
+    //
+    // "Assigned in LMS" = a course_run_trainer row (the access-granting local
+    // assignment written on accept / manual local-assign). A TPG-only trainer
+    // name is deliberately NOT enough: the class still shows Pending and the
+    // trainer cannot open the trainer page for the run until they are assigned
+    // in the LMS — so those runs SHOULD surface here even though TPG has a name.
+    // (This is why we use lmsAssignedSql, not the broad trainerAssignedSql.)
+    // Drives both the persistent count badge and the optional attentionFilter.
+    // atRiskDays is clamped 1..365 (default 7).
+    const atRiskDays = Math.min(Math.max(parseInt(String(req.query.atRiskDays || ''), 10) || 7, 1), 365);
+    // "Assigned in LMS" = course_run_trainer row (grants trainer-page access).
+    const lmsAssignedSql = `EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)`;
+    // "Assigned in TPG" = a tpg_assigned_trainer name/email is present.
+    const tpgAssignedSql = `(NULLIF(BTRIM(COALESCE(${tpgNameExpr}, '')), '') IS NOT NULL OR NULLIF(BTRIM(COALESCE(${tpgEmailExpr}, '')), '') IS NOT NULL)`;
+    // A run "should be in TPG" unless it's an External class or has no SSG run id.
+    const tpgApplicableSql = `(COALESCE(cr.class_type, '') <> 'External' AND NULLIF(BTRIM(COALESCE(cr.course_run_id, '')), '') IS NOT NULL)`;
+    const withinWindowSql = `cr.start_date <= CURRENT_DATE + (${atRiskDays} * INTERVAL '1 day')`;
+    // Three mutually-exclusive trainer-assignment issue types (all leave a class
+    // effectively unstaffed), used by the count breakdown + attentionFilter:
+    //   • exhausted  — invites sent, all declined, no LMS trainer (any date)
+    //   • no_lms     — no LMS trainer, approaching start (incl. manual-TPG-only)
+    //   • no_tpg     — assigned in LMS but never pushed to TPG, approaching start
+    const exhaustedSql = hasInvitationTable
+      ? `(NOT ${lmsAssignedSql}
+          AND EXISTS (SELECT 1 FROM trainer_invitation ti WHERE ti.course_run_id = cr.id)
+          AND NOT EXISTS (SELECT 1 FROM trainer_invitation ti WHERE ti.course_run_id = cr.id AND ti.status IN ('pending','accepted')))`
+      : `false`;
+    const noLmsSql = `(NOT ${lmsAssignedSql} AND ${withinWindowSql} AND NOT ${exhaustedSql})`;
+    const noTpgSql = `(${lmsAssignedSql} AND NOT ${tpgAssignedSql} AND ${tpgApplicableSql} AND ${withinWindowSql})`;
+    const needsAttentionSql = `(${exhaustedSql} OR ${noLmsSql} OR ${noTpgSql})`;
+    if (req.query.attentionFilter === 'needsAttention') {
+      // Optional drill-down to one issue type (the banner chips).
+      const at = String(req.query.attentionType || '');
+      if (at === 'no_lms') filters.push(noLmsSql);
+      else if (at === 'no_tpg') filters.push(noTpgSql);
+      else if (at === 'exhausted') filters.push(exhaustedSql);
+      else filters.push(needsAttentionSql);
+    }
+
     if (classStatus === 'Confirmed' || classStatus === 'Pending' || classStatus === 'Cancelled') {
       filters.push(`cr.class_status = $${paramIndex}`);
       params.push(classStatus);
@@ -515,6 +570,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           JOIN course c ON cr.course_id = c.id
           ${whereClause}
         `,
+      params
+    );
+
+    // Persistent "needs attention" count over the SAME base filters (so the
+    // badge shows a total even when the attentionFilter toggle is OFF). When
+    // the toggle is ON, whereClause already carries the predicate — the extra
+    // AND is harmless (idempotent).
+    const attentionCountResult = await pool.query(
+      hasHaving
+        ? `SELECT
+             COUNT(*) FILTER (WHERE sub.attn) AS c,
+             COUNT(*) FILTER (WHERE sub.no_lms) AS no_lms,
+             COUNT(*) FILTER (WHERE sub.no_lms AND sub.has_tpg) AS no_lms_with_tpg,
+             COUNT(*) FILTER (WHERE sub.no_tpg) AS no_tpg,
+             COUNT(*) FILTER (WHERE sub.exhausted) AS exhausted
+           FROM (
+             SELECT cr.id,
+                    ${needsAttentionSql} AS attn,
+                    ${noLmsSql} AS no_lms,
+                    ${tpgAssignedSql} AS has_tpg,
+                    ${noTpgSql} AS no_tpg,
+                    ${exhaustedSql} AS exhausted
+             FROM course_run cr
+             JOIN course c ON cr.course_id = c.id
+             LEFT JOIN enrollment e ON e.course_run_id = cr.id
+             ${whereClause}
+             GROUP BY cr.id
+             ${havingClause}
+           ) sub`
+        : `SELECT
+             COUNT(DISTINCT cr.id) FILTER (WHERE ${needsAttentionSql}) AS c,
+             COUNT(DISTINCT cr.id) FILTER (WHERE ${noLmsSql}) AS no_lms,
+             COUNT(DISTINCT cr.id) FILTER (WHERE ${noLmsSql} AND ${tpgAssignedSql}) AS no_lms_with_tpg,
+             COUNT(DISTINCT cr.id) FILTER (WHERE ${noTpgSql}) AS no_tpg,
+             COUNT(DISTINCT cr.id) FILTER (WHERE ${exhaustedSql}) AS exhausted
+           FROM course_run cr
+           JOIN course c ON cr.course_id = c.id
+           ${whereClause}`,
       params
     );
 
@@ -705,6 +798,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
+      // ── Invitation outcome + ordered chain (trainer-invite tracking) ──────────
+      // Answers the four tracking questions in one derived shape:
+      //   accepted | pending (at whom, since when) | exhausted (all resolvable
+      //   declined) | open (resolvable trainers still un-invited) | none.
+      // "resolvable" = an approved name that maps to a real app_user account
+      // (has an email via nameToEmail). Dead/unresolvable names are ignored for
+      // the exhausted test, matching the agreed definition.
+      const latestInvByName = (norm: string) =>
+        invitations.find((entry) => normalizeTrainerName(entry.trainer_name) === norm);
+      // Count approved trainers whose latest invitation was declined/blocked.
+      const declinedCount = normalizedTrainerPool.filter((n) => {
+        const inv = n ? latestInvByName(n) : undefined;
+        return !!inv && (inv.status === 'declined' || inv.status === 'blocked');
+      }).length;
+
+      // Pending = the most recent still-open invitation (invitations are DESC by created_at).
+      const pendingInv = invitations.find((i) => i.status === 'pending');
+      // Resolvable, not-yet-assigned approved names.
+      const resolvableNorms = normalizedTrainerPool.filter(
+        (n) => !!n && nameToEmail.has(n) && !isLocallyAssigned(n)
+      );
+      const everyResolvableDeclined = resolvableNorms.length > 0 && resolvableNorms.every((n) => {
+        const inv = latestInvByName(n);
+        return inv && (inv.status === 'declined' || inv.status === 'blocked');
+      });
+      // outcomeState/invitationOutcome are computed below, once the effective
+      // trainer-assignment signals (hasLocalTrainer/hasTpgTrainer/...) are known.
+
       // Derive class status: Confirmed if ANY trainer signal is present
       // (junction-table local trainer, legacy course_run.assigned_trainer_name,
       // or tpg_assigned_trainer_name), else Pending. 'Cancelled' is sticky.
@@ -732,6 +853,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const hasLegacyLocalTrainer = !!effectiveLegacyTrainer;
       const hasTpgTrainer = !!effectiveTpgTrainer;
       const hasLearners = Number(row.num_of_trainee) > 0;
+
+      // Invitation outcome: an actual trainer assignment (local/TPG/legacy) or an
+      // accepted invitation → 'accepted'; else pending / exhausted / open / none.
+      const hasAcceptedSignal =
+        hasLocalTrainer || hasTpgTrainer || hasLegacyLocalTrainer ||
+        invitations.some((i) => i.status === 'accepted');
+      let outcomeState: 'accepted' | 'pending' | 'exhausted' | 'open' | 'none';
+      if (hasAcceptedSignal) outcomeState = 'accepted';
+      else if (pendingInv) outcomeState = 'pending';
+      else if (everyResolvableDeclined) outcomeState = 'exhausted';
+      else if (resolvableNorms.length > 0) outcomeState = 'open';
+      else outcomeState = 'none';
+
+      // Who accepted + when (for the Accepted badge). Prefer the accepted
+      // invitation (a real "trainer clicked Accept" event with responded_at);
+      // fall back to the local/TPG/legacy trainer name (manual assignments have
+      // no accept timestamp).
+      const acceptedInv = invitations.find((i) => i.status === 'accepted');
+      const invitationOutcome = {
+        state: outcomeState,
+        pendingTrainer: pendingInv?.trainer_name || '',
+        pendingSince: pendingInv?.created_at || null,
+        acceptedTrainer: acceptedInv?.trainer_name || allLocalPairs[0]?.name || effectiveTpgTrainer || effectiveLegacyTrainer || '',
+        acceptedAt: acceptedInv?.responded_at || null,
+        declinedCount,
+        resolvableCount: resolvableNorms.length,
+        listCount: trainerPool.length,
+      };
+
+      // Per-run triage issue (mirrors the SQL needsAttention breakdown) for
+      // labeling the row: 'exhausted' | 'no_lms' | 'no_tpg' | null.
+      const startMs = row.start_date ? new Date(row.start_date).getTime() : NaN;
+      const daysToStart = Number.isNaN(startMs) ? Infinity : Math.ceil((startMs - Date.now()) / 86400000);
+      const withinWindow = daysToStart <= atRiskDays;
+      const tpgAssignedRaw = !!rawTpgTrainer || !!((row.assigned_trainer_tpg_email || '').toString().trim());
+      const tpgApplicable = (row.class_type || '') !== 'External' && !!((row.course_run_id || '').toString().trim());
+      let attentionIssue: 'exhausted' | 'no_lms' | 'no_tpg' | null = null;
+      if (outcomeState === 'exhausted') attentionIssue = 'exhausted';
+      else if (!hasLocalTrainer && withinWindow) attentionIssue = 'no_lms';
+      else if (hasLocalTrainer && !tpgAssignedRaw && tpgApplicable && withinWindow) attentionIssue = 'no_tpg';
       const derivedStatus = (row.class_status === 'Cancelled' || row.class_status === 'Unconfirmed' || row.class_status === 'Confirmed')
         ? row.class_status
         : ((hasLocalTrainer || hasLegacyLocalTrainer || hasTpgTrainer) && hasLearners ? 'Confirmed' : 'Pending');
@@ -764,6 +925,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         numOfTrainee: parseInt(row.num_of_trainee || '0', 10),
         trainersList: row.trainers_list || '',
         trainerInvitations: perTrainerInvitation,
+        invitationOutcome,
+        attentionIssue,
         courseType: row.course_type || '',
         classType: row.class_type || 'Physical',
         invitationPaused: !!row.invitation_paused,
@@ -826,6 +989,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           totalPendingClasses: parseInt(stats.total_pending_classes || '0', 10),
           totalAssignedTpgClasses: parseInt(stats.total_assigned_tpg_classes || '0', 10),
           totalAssignedLocalClasses: parseInt(stats.total_assigned_local_classes || '0', 10),
+          totalNeedsAttention: parseInt(attentionCountResult.rows[0]?.c || '0', 10),
+          attentionNoLms: parseInt(attentionCountResult.rows[0]?.no_lms || '0', 10),
+          attentionNoLmsWithTpg: parseInt(attentionCountResult.rows[0]?.no_lms_with_tpg || '0', 10),
+          attentionNoTpg: parseInt(attentionCountResult.rows[0]?.no_tpg || '0', 10),
+          attentionExhausted: parseInt(attentionCountResult.rows[0]?.exhausted || '0', 10),
         }
       }
     });
