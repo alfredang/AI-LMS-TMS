@@ -1263,6 +1263,16 @@ interface BulkAssessmentResult {
     error?: string;
 }
 
+const BRAILLE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const BrailleSpinner: React.FC = () => {
+    const [i, setI] = useState(0);
+    useEffect(() => {
+        const t = setInterval(() => setI((x) => (x + 1) % BRAILLE_FRAMES.length), 80);
+        return () => clearInterval(t);
+    }, []);
+    return <span className="font-mono" aria-hidden>{BRAILLE_FRAMES[i]}</span>;
+};
+
 export const BulkUpdateAssessmentView: React.FC = () => {
     const [rows, setRows] = useState<BulkAssessmentRow[]>([]);
     const [parseError, setParseError] = useState<string | null>(null);
@@ -1271,7 +1281,45 @@ export const BulkUpdateAssessmentView: React.FC = () => {
     const [results, setResults] = useState<BulkAssessmentResult[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [summary, setSummary] = useState<{ total: number; success: number; error: number } | null>(null);
+    const [savingMapping, setSavingMapping] = useState(false);
+    const [mappingMsg, setMappingMsg] = useState<string | null>(null);
+    const [fillingSkillCodes, setFillingSkillCodes] = useState(false);
     const pasteRef = useRef<HTMLTextAreaElement>(null);
+
+    // Auto-fill each row's Skill Code from the saved course→skill-code mapping, but ONLY where the
+    // pasted row didn't already carry one (a pasted skill code always overrides the mapping).
+    const fillSkillCodesFromMapping = async (newRows: BulkAssessmentRow[]): Promise<BulkAssessmentRow[]> => {
+        const needCodes = Array.from(new Set(
+            newRows.filter(r => !r.skillCode?.trim() && r.courseCode?.trim()).map(r => r.courseCode.trim())
+        ));
+        if (needCodes.length === 0) return newRows;
+        try {
+            const resp = await fetch(`/api/admin/course-skill-codes?course_codes=${encodeURIComponent(needCodes.join(','))}`);
+            const data = await resp.json();
+            const map: Record<string, string> = data?.map || {};
+            return newRows.map(r => (!r.skillCode?.trim() && map[r.courseCode?.trim()])
+                ? { ...r, skillCode: map[r.courseCode.trim()] } : r);
+        } catch { return newRows; }
+    };
+
+    // Persist the current rows' course → skill-code pairs so future pastes auto-fill them.
+    const saveSkillCodeMapping = async () => {
+        const pairs = new Map<string, string>();
+        for (const r of rows) {
+            const cc = r.courseCode?.trim(); const sc = r.skillCode?.trim();
+            if (cc && sc) pairs.set(cc, sc);  // last non-empty per course wins
+        }
+        if (pairs.size === 0) { setMappingMsg('No course + skill-code pairs to save (fill in a Skill Code first).'); return; }
+        setSavingMapping(true); setMappingMsg(null);
+        try {
+            const items = Array.from(pairs.entries()).map(([course_code, skill_code]) => ({ course_code, skill_code }));
+            const resp = await fetch('/api/admin/course-skill-codes', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }),
+            });
+            const data = await resp.json();
+            setMappingMsg(data?.success ? `Saved skill code for ${data.saved} course(s) — future pastes auto-fill.` : (data?.error || 'Save failed'));
+        } catch { setMappingMsg('Save failed'); } finally { setSavingMapping(false); }
+    };
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
     const cellInputClasses = "w-full px-1.5 py-1 text-xs bg-white border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white";
@@ -1284,7 +1332,7 @@ export const BulkUpdateAssessmentView: React.FC = () => {
     };
 
     // Parse on paste, then clear the textarea
-    const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
         e.preventDefault();
         const text = e.clipboardData.getData('text');
         if (!text.trim()) return;
@@ -1335,11 +1383,15 @@ export const BulkUpdateAssessmentView: React.FC = () => {
             return;
         }
 
-        setRows(prev => [...prev, ...parsed]);
+        setFillingSkillCodes(true);
+        const filled = await fillSkillCodesFromMapping(parsed).finally(() => setFillingSkillCodes(false));
+        const autoFilled = filled.filter((r, i) => r.skillCode?.trim() && !parsed[i].skillCode?.trim()).length;
+        setRows(prev => [...prev, ...filled]);
         setParseError(badRows.length > 0
             ? `Parsed ${parsed.length} rows. Skipped ${badRows.length} row(s) with insufficient columns.`
             : null
         );
+        setMappingMsg(autoFilled > 0 ? `Auto-filled Skill Code for ${autoFilled} row(s) from the saved mapping.` : null);
         setResults([]);
         setSummary(null);
     };
@@ -1442,6 +1494,11 @@ export const BulkUpdateAssessmentView: React.FC = () => {
                 />
 
                 <div className="flex items-center gap-3 mt-3">
+                    {fillingSkillCodes && (
+                        <span className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-1.5">
+                            <BrailleSpinner /> Pulling skill codes from SSG…
+                        </span>
+                    )}
                     {rows.length > 0 && (
                         <>
                             <Button onClick={handleClear} variant="outline" disabled={isSubmitting}>
@@ -1465,7 +1522,7 @@ export const BulkUpdateAssessmentView: React.FC = () => {
             {/* Parsed Table with all columns + editable inputs */}
             {rows.length > 0 && results.length === 0 && (
                 <Card className="p-6 mb-6">
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-4">
                             <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">
                                 {rows.length} Enrolment{rows.length !== 1 ? 's' : ''} to Process
@@ -1476,11 +1533,25 @@ export const BulkUpdateAssessmentView: React.FC = () => {
                             >
                                 {showAdvanced ? 'Hide' : 'Show'} advanced fields
                             </button>
+                            <button
+                                onClick={saveSkillCodeMapping}
+                                disabled={savingMapping || isSubmitting}
+                                title="Save each course's Skill Code so future pastes auto-fill it"
+                                className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                            >
+                                {savingMapping ? 'Saving…' : 'Save skill codes for these courses'}
+                            </button>
                         </div>
                         <Button onClick={handleSubmit} disabled={isSubmitting}>
                             {isSubmitting ? 'Submitting...' : `Submit All (${rows.length})`}
                         </Button>
                     </div>
+                    {mappingMsg && <p className="text-xs text-blue-600 dark:text-blue-400 mb-2">{mappingMsg}</p>}
+                    {rows.filter(r => !r.skillCode?.trim()).length > 0 && (
+                        <p className="text-xs text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded px-2 py-1.5 mb-3">
+                            ⚠️ {rows.filter(r => !r.skillCode?.trim()).length} row(s) have no Skill Code — none was found for their course. Enter it manually below before submitting (then "Save skill codes for these courses" so it auto-fills next time).
+                        </p>
+                    )}
 
                     <div className="overflow-x-auto">
                         <table className="text-sm border-collapse whitespace-nowrap">
