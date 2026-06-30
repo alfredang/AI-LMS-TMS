@@ -531,6 +531,7 @@ export const SubmitAssessmentView: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
+    const [paymentWarning, setPaymentWarning] = useState<string | null>(null);
 
     const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -559,6 +560,7 @@ export const SubmitAssessmentView: React.FC = () => {
         setIsSubmitting(true);
         setError(null);
         setResult(null);
+        setPaymentWarning(null);
 
         try {
             const response = await fetch('/api/assessments/ssg-create', {
@@ -588,6 +590,7 @@ export const SubmitAssessmentView: React.FC = () => {
             }
 
             setResult(data.data);
+            setPaymentWarning(data.paymentWarning || null);
         } catch (err) {
             console.error('❌ Error submitting assessment:', err);
             setError(err instanceof Error ? err.message : 'Failed to submit assessment');
@@ -833,6 +836,15 @@ export const SubmitAssessmentView: React.FC = () => {
                         </div>
                     )}
 
+                    {paymentWarning && (
+                        <div className="mt-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2">
+                                <Icon name={IconName.X} className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">{paymentWarning}</p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Raw Response (collapsible) */}
                     {/* <details className="mt-4">
                         <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
@@ -860,6 +872,7 @@ export const UpdateAssessmentView: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [apiResult, setApiResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
+    const [paymentWarning, setPaymentWarning] = useState<string | null>(null);
     // Course run + trainee — used for the attendance check and the cancelled-class/enrolment guard.
     const [courseRunId, setCourseRunId] = useState<string>('');
     const [traineeId, setTraineeId] = useState<string>('');
@@ -879,6 +892,7 @@ export const UpdateAssessmentView: React.FC = () => {
         setIsSubmitting(true);
         setError(null);
         setApiResult(null);
+        setPaymentWarning(null);
 
         try {
             const response = await fetch('/api/assessments/ssg-update', {
@@ -907,6 +921,7 @@ export const UpdateAssessmentView: React.FC = () => {
             }
 
             setApiResult(data.skipped ? { skipped: true, reason: data.reason } : data.data);
+            if (!data.skipped && data.paymentWarning) setPaymentWarning(data.paymentWarning);
         } catch (err) {
             console.error('❌ Error updating assessment:', err);
             setError(err instanceof Error ? err.message : 'Failed to update assessment');
@@ -1199,6 +1214,15 @@ export const UpdateAssessmentView: React.FC = () => {
                         </div>
                     )}
 
+                    {paymentWarning && (
+                        <div className="mt-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
+                            <div className="flex items-center gap-2">
+                                <Icon name={IconName.X} className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">{paymentWarning}</p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Raw Response (collapsible) */}
                     <details className="mt-4">
                         <summary className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
@@ -1261,6 +1285,7 @@ interface BulkAssessmentResult {
     createdOn?: string;
     updatedOn?: string;
     error?: string;
+    paymentWarning?: string;
 }
 
 const BRAILLE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -1719,7 +1744,7 @@ export const BulkUpdateAssessmentView: React.FC = () => {
                                     <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Status</th>
                                     <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Assessment Ref #</th>
                                     <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Date</th>
-                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Error</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Error / Warning</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1735,7 +1760,10 @@ export const BulkUpdateAssessmentView: React.FC = () => {
                                         </td>
                                         <td className="p-2 font-mono text-xs">{r.assessmentReferenceNumber || '-'}</td>
                                         <td className="p-2 text-xs">{r.createdOn ? `${r.createdOn}${r.updatedOn ? ` (updated ${r.updatedOn})` : ''}` : '-'}</td>
-                                        <td className="p-2 text-xs text-red-600 dark:text-red-400">{r.error || ''}</td>
+                                        <td className="p-2 text-xs">
+                                            {r.error && <span className="text-red-600 dark:text-red-400">{r.error}</span>}
+                                            {r.paymentWarning && <span className="text-amber-600 dark:text-amber-400 block mt-0.5">⚠ {r.paymentWarning}</span>}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

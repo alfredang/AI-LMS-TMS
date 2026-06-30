@@ -3,6 +3,7 @@ import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import { checkAssessmentEligibility } from '../../../lib/services/enrolmentEligibility';
 import { checkAttendanceGate } from '../../../lib/services/learnerAttendance';
+import { pushFeeCollectionToTpg } from '../../../lib/ssg/pushFeeCollectionToTpg';
 import crypto from 'crypto';
 
 /**
@@ -155,7 +156,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    return res.status(200).json({ success: true, data: parsed?.data ?? parsed });
+    // On a Pass result, best-effort set Full Payment on TPGateway (7-day window).
+    // Failure is non-blocking — graded as a warning in the response.
+    let paymentWarning: string | undefined;
+    if (result === 'Pass' && enrolmentReferenceNumber?.trim()) {
+      const feeResult = await pushFeeCollectionToTpg(enrolmentReferenceNumber.trim());
+      if (feeResult.status === 'error') {
+        paymentWarning = `TPG payment status could not be updated: ${feeResult.message}`;
+      }
+    }
+
+    return res.status(200).json({ success: true, data: parsed?.data ?? parsed, ...(paymentWarning && { paymentWarning }) });
 
   } catch (error) {
     console.error('❌ Create assessment error:', error);

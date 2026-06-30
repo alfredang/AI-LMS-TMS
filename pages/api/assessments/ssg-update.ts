@@ -3,6 +3,8 @@ import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import { checkAssessmentEligibility } from '../../../lib/services/enrolmentEligibility';
 import { checkAttendanceGate } from '../../../lib/services/learnerAttendance';
+import { pushFeeCollectionToTpg } from '../../../lib/ssg/pushFeeCollectionToTpg';
+import pool from '../../../lib/db';
 import crypto from 'crypto';
 
 /**
@@ -144,7 +146,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    return res.status(200).json({ success: true, data: parsed?.data ?? parsed });
+    // On a Pass result, best-effort set Full Payment on TPGateway (7-day window).
+    // Requires courseRunId + traineeId to look up the enrolment reference number.
+    let paymentWarning: string | undefined;
+    if (action === 'update' && result === 'Pass' && courseRunId && traineeId) {
+      try {
+        const enrResult = await pool.query<{ enrolment_id: string }>(
+          `SELECT e.enrolment_id
+           FROM enrollment e
+           JOIN app_user au ON au.id = e.user_id
+           JOIN course_run cr ON cr.id = e.course_run_id
+           WHERE cr.course_run_id = $1
+             AND au.nric = $2
+             AND e.enrolment_id IS NOT NULL
+             AND e.enrolment_status NOT IN ('Cancelled', 'Withdrawn', 'Rejected')
+           LIMIT 1`,
+          [String(courseRunId), String(traineeId)]
+        );
+        const enrolmentRef = enrResult.rows[0]?.enrolment_id;
+        const feeResult = await pushFeeCollectionToTpg(enrolmentRef);
+        if (feeResult.status === 'error') {
+          paymentWarning = `TPG payment status could not be updated: ${feeResult.message}`;
+        }
+      } catch (feeErr) {
+        const msg = feeErr instanceof Error ? feeErr.message : String(feeErr);
+        console.warn(`⚠️ [ssg-update fee lookup] ${msg}`);
+        paymentWarning = `TPG payment status lookup failed: ${msg}`;
+      }
+    }
+
+    return res.status(200).json({ success: true, data: parsed?.data ?? parsed, ...(paymentWarning && { paymentWarning }) });
 
   } catch (error) {
     console.error('❌ Update assessment error:', error);

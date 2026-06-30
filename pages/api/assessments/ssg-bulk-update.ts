@@ -4,6 +4,7 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/uti
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { checkAssessmentEligibility } from '../../../lib/services/enrolmentEligibility';
 import { refreshSkillCode } from '../../../lib/ssg/courseSkillCode';
+import { pushFeeCollectionToTpg } from '../../../lib/ssg/pushFeeCollectionToTpg';
 import crypto from 'crypto';
 
 interface BulkItem {
@@ -26,6 +27,7 @@ interface BulkResult {
   createdOn?: string;
   updatedOn?: string;
   error?: string;
+  paymentWarning?: string;
 }
 
 interface SubmitCtx {
@@ -125,6 +127,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
   const { items } = req.body as { items: BulkItem[] };
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ success: false, error: 'items array is required' });
@@ -165,7 +168,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       try {
         const o = await submitAssessment(item, item.skillCode, ctx);
-        results.push({
+        const bulkResult: BulkResult = {
           enrolmentReferenceNumber: item.enrolmentReferenceNumber,
           traineeFullName: item.traineeFullName,
           status: o.status,
@@ -173,9 +176,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           createdOn: o.createdOn,
           updatedOn: o.updatedOn,
           error: o.error,
-        });
-        if (o.status === 'success') console.log(`✅ Assessment for ${item.enrolmentReferenceNumber}: ${o.assessmentReferenceNumber}`);
-        else console.error(`❌ Assessment error for ${item.enrolmentReferenceNumber}: ${o.error}`);
+        };
+        if (o.status === 'success') {
+          console.log(`✅ Assessment for ${item.enrolmentReferenceNumber}: ${o.assessmentReferenceNumber}`);
+          // On Pass, best-effort set Full Payment on TPGateway (7-day window).
+          if (item.result === 'Pass' && item.enrolmentReferenceNumber) {
+            const feeResult = await pushFeeCollectionToTpg(item.enrolmentReferenceNumber);
+            if (feeResult.status === 'error') {
+              bulkResult.paymentWarning = `TPG payment status could not be updated: ${feeResult.message}`;
+            }
+          }
+        } else {
+          console.error(`❌ Assessment error for ${item.enrolmentReferenceNumber}: ${o.error}`);
+        }
+        results.push(bulkResult);
       } catch (err) {
         results.push({ enrolmentReferenceNumber: item.enrolmentReferenceNumber, traineeFullName: item.traineeFullName, status: 'error', error: err instanceof Error ? err.message : 'Unknown error' });
       }
@@ -197,7 +211,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         try {
           const retry = await submitAssessment(it, newCode, ctx);
           if (retry.status === 'success') {
-            results[idx] = {
+            const repairedResult: BulkResult = {
               enrolmentReferenceNumber: it.enrolmentReferenceNumber,
               traineeFullName: it.traineeFullName,
               status: 'success',
@@ -206,6 +220,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               updatedOn: retry.updatedOn,
             };
             console.log(`🔧 Self-repaired ${it.enrolmentReferenceNumber} with skill code ${newCode}`);
+            if (it.result === 'Pass' && it.enrolmentReferenceNumber) {
+              const feeResult = await pushFeeCollectionToTpg(it.enrolmentReferenceNumber);
+              if (feeResult.status === 'error') {
+                repairedResult.paymentWarning = `TPG payment status could not be updated: ${feeResult.message}`;
+              }
+            }
+            results[idx] = repairedResult;
           } else if (retry.error) {
             results[idx].error = retry.error;   // surface the post-repair error instead of the stale one
           }
