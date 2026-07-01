@@ -299,8 +299,9 @@ export function useSessionReschedule(cb: PopupCallbacks) {
           if (fresh.length) {
             await fetch(getApiUrl('/api/admin/course-sessions/sync-from-ssg'), {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              // Also reflect the (possibly widened) run window so local course_run never drifts from SSG.
-              body: JSON.stringify({ courseRunId: p.courseRunId, sessions: fresh, courseStartDate: newRunStart, courseEndDate: newRunEnd }),
+              // sync-from-ssg re-derives course_run.start/end from these sessions (MIN/MAX),
+              // so the run window tracks the actual schedule — no need to pass it here.
+              body: JSON.stringify({ courseRunId: p.courseRunId, sessions: fresh }),
             });
           }
         } catch { extras.push('could not refresh the view'); }

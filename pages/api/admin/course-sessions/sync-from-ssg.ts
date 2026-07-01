@@ -46,8 +46,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { courseRunId, sessions, courseStartDate, courseEndDate } = req.body as {
-      courseRunId?: string; sessions?: SsgSessionInput[]; courseStartDate?: string; courseEndDate?: string;
+    const { courseRunId, sessions } = req.body as {
+      courseRunId?: string; sessions?: SsgSessionInput[];
     };
 
     if (!courseRunId || typeof courseRunId !== 'string') {
@@ -69,17 +69,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
     const courseRunUuid: string = runLookup.rows[0].id;
-
-    // Reflect the SSG run window into local course_run when provided (YYYY-MM-DD).
-    // A session reschedule may widen the run window on SSG; keep local in step so
-    // course_run.start/end never drifts from SSG (the source of truth).
-    const isYmd = (v: any) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
-    if (isYmd(courseStartDate) && isYmd(courseEndDate)) {
-      await pool.query(
-        `UPDATE course_run SET start_date = $2, end_date = $3, updated_at = NOW() WHERE id = $1`,
-        [courseRunUuid, courseStartDate, courseEndDate]
-      );
-    }
 
     let inserted = 0;
     let updated = 0;
@@ -164,6 +153,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
       softDeleted = sd.rowCount || 0;
     }
+
+    // Re-derive the run window from the ACTIVE (non-deleted) sessions we just synced,
+    // instead of reflecting SSG's course window. SSG only ever WIDENS its run window to
+    // cover a moved session, so trusting it leaves course_run.start/end stale when the
+    // first session moves later or the last moves earlier / is cancelled. The date-keyed
+    // cron jobs + the courseware gate read these scalars, so we keep them equal to
+    // MIN/MAX of the live session dates — matching the nightly upsertRunSessions heal
+    // (lib/ssg/syncRunSessions.ts), so the reschedule path and the heal never disagree.
+    // NOTE: course_session.start_date is stored raw from SSG as compact YYYYMMDD (e.g.
+    // '20260421'), so we normalise each to a real date before MIN/MAX (dashed ISO is also
+    // handled defensively). Skipped when a run has no parseable active sessions.
+    await pool.query(
+      `UPDATE course_run cr
+       SET start_date = sub.min_start,
+           end_date   = sub.max_start,
+           updated_at = NOW()
+       FROM (
+         SELECT MIN(d) AS min_start, MAX(d) AS max_start
+         FROM (
+           SELECT CASE
+                    WHEN start_date ~ '^[0-9]{8}$'                   THEN to_date(start_date, 'YYYYMMDD')
+                    WHEN start_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN start_date::date
+                  END AS d
+           FROM course_session
+           WHERE course_run_id = $1 AND deleted = false
+         ) t
+         WHERE d IS NOT NULL
+       ) sub
+       WHERE cr.id = $1
+         AND sub.min_start IS NOT NULL
+         AND (cr.start_date IS DISTINCT FROM sub.min_start
+              OR cr.end_date IS DISTINCT FROM sub.max_start)`,
+      [courseRunUuid]
+    );
 
     // Trigger DA applicant calendar sync (non-blocking background task)
     // Ensures any confirmed DA applicants are added to these new sessions.
