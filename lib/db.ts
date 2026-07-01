@@ -19,10 +19,21 @@ const pool = new Pool({
       ? { rejectUnauthorized: false }
       : false,
 
-  // Connection pool settings
+  // Connection pool settings.
+  // Previously idleTimeoutMillis=10s with no keepAlive meant every ~30s poll / Coolify
+  // health check opened a BRAND-NEW physical connection (the "Connected to PostgreSQL
+  // database" log every 30s), and idle connections crossing the 6433→5432 Docker NAT
+  // could be silently dropped ("connection terminated unexpectedly"). Keep connections
+  // warm and alive so the app reuses them instead of re-handshaking through load windows
+  // (e.g. the daily dump). idleTimeout↑ and keepAlive are paired on purpose: the longer
+  // idle life is kept healthy by the keepalive probes (first probe after 10s), so idle
+  // connections don't go stale across the NAT. (max and connectionTimeoutMillis left at
+  // their prior values — this iteration isolates the churn fix.)
   max: 30,
-  idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 15000,
+  idleTimeoutMillis: 60_000,           // was 10_000 — reuse warm connections instead of tearing them down between polls
+  connectionTimeoutMillis: 15_000,
+  keepAlive: true,                     // NEW — TCP keepalive so the NAT doesn't silently drop idle connections
+  keepAliveInitialDelayMillis: 10_000, // NEW — first keepalive probe after 10s idle (inside typical NAT timeouts)
 });
 
 // Test connection
