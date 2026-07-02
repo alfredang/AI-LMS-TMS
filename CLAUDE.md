@@ -61,3 +61,33 @@ npm run db:migrate
 
 - ~40 tables. Full schema: `database/01-schema.sql`.
 - **Trainer assignment has two representations that must stay consistent:** `course_run_trainer` junction (canonical, many-to-many) and legacy scalars `assigned_trainer_id` / `tpg_assigned_trainer_id` on `course_run`. Writes update both.
+
+## Production ops (prod host = same box as the DB)
+
+**Architecture invariant:** only the LMS app connects to the database; **every other system (OpenClaw agents — Kael/Jarvis/Orion — Hermes, other tenant apps) exchanges data via the HTTPS API (443), never the DB directly.** Keep it that way — it's what makes DB network-hardening safe.
+
+### DB connectivity outage runbook ("Checking your session…" hangs forever)
+Symptom: homepage HTML loads, but `/api/health` hangs ~15s and the app logs `Connection terminated due to connection timeout` on every query. **The DB is fine; the app can't reach it.**
+- **Root cause seen 2026-07-01:** a UFW `DENY` on the DB ports (6433/5432/5439) blocked the app **container's hairpin path** to the DB. Key gotcha: **UFW does NOT filter Docker-published ports from the internet** (Docker's DNAT bypasses UFW's INPUT), **but it DOES break the container→host-public-IP hairpin** (that path goes through INPUT). So a UFW DENY on a DB port secures nothing yet causes an outage.
+- **Fix:** `ufw insert 1 allow from 10.0.0.0/8 to any port 6433 proto tcp` (+ 5432/5439). **Never put a plain `DENY` on the DB ports.**
+- Or run `/loop`-style `/lms-fix-db`. Health canary: `/api/health` — but it currently returns HTTP **200 even when the DB is down**, so parse the JSON `database` field, not the status code.
+
+### DB network security (the correct layer)
+- Internet access to the DB is blocked at the **Docker layer** via `DOCKER-USER` (script `/usr/local/sbin/lms-db-firewall.sh`, persisted by `lms-db-firewall.service`), allowing internal `10/172.16` + an admin IP allowlist (`/etc/lms-db-allowed-ips.txt`). UFW cannot do this (bypassed by Docker).
+- **Admin/DBA DB access is via SSH tunnel** (works from any IP; roaming-safe): `./scratch/db-tunnel.sh` → connect tools to `127.0.0.1:15432`. Do not re-expose the DB to the internet.
+- **Never hardcode a DB connection string with a password** in any file — use `DATABASE_URL` from `.env.local` (gitignored). A live cred leaked via tracked `scratch/*` before; `scratch/` is now gitignored and a `PreToolUse` hook blocks the pattern.
+
+## API security policy (forward-looking — apply to all new work)
+
+- **Every data-mutating `pages/api/**` route MUST authenticate and authorize the caller** (`requireRole`/`getAuthedUser`) before any INSERT/UPDATE/DELETE/ALTER. No exceptions for admin/finance/ssg routes.
+- Never `console.log` passwords, hashes, or tokens. Never ship an auth secret with a fallback default.
+- Parameterize SQL with `$n`; only interpolate identifiers from server-defined allowlists.
+- Detailed live findings + the phased remediation plan are in the **gitignored** `.claude/security-findings.md` (this repo is public — do not paste them into tracked files).
+
+## Project tooling (`.claude/`)
+
+- **Skills:** `/lms-health-check` (health/liveness/perf + known auto-fix), `/lms-security-scan` (TLS, headers, DB exposure, firewall integrity, secret hygiene).
+- **Agents:** `lms-monitor` (scheduled health/perf/log monitor + DB auto-fix), `lms-security-scanner` (posture scan). Both sanitized; infra specifics come from env in the gitignored `.claude/settings.local.json`.
+- **Commands:** `/lms-status` (quick snapshot), `/lms-fix-db` (outage runbook).
+- **Hook:** `PreToolUse(Bash)` guard blocks `DROP/TRUNCATE` and writing inline DB creds to files (`.claude/hooks/guard-prod-db.sh`).
+- **Ops env** (host/container/domain) lives in gitignored `.claude/settings.local.json`; sanitized tooling is pushed, secrets/infra are not.

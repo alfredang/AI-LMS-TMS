@@ -147,10 +147,16 @@ GOOGLE_KEY_B64.txt
 # Visibility (managed by /toggle-visibility)
 CLAUDE.md
 .mcp.json
-.claude/
+# Exclude .claude CONTENTS (use /* not / so specific children can be re-included)
+.claude/*
 !.claude/CLAUDE.md
 !.claude/skills/
-!.claude/skills/**
+# Shareable project tooling (sanitized — no secrets/infra specifics)
+!.claude/agents/
+!.claude/commands/
+!.claude/hooks/
+!.claude/settings.json
+# Private (stay ignored): .claude/settings.local.json, .claude/security-findings.md, .claude/scheduled_tasks.lock
 .project/
 
 # Google Apps Script backups
@@ -167,3 +173,6 @@ n8nworkflows.md/
 
 # Tenant-specific seed data (contains plaintext credentials)
 database/seeds/tertiary-software-credentials.sql
+
+# Personal ad-hoc scripts — never commit (contained live DB creds; see incident 2026-07-01)
+scratch/

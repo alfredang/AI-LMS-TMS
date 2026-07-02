@@ -1735,8 +1735,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             </div>
                         </Card>
 
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                            <h3 className="text-xl font-bold mb-4">Lesson</h3>
+                        <CollapsibleSection
+                            id="lesson"
+                            title="Lesson"
+                            collapsible={isDeveloperView}
+                            collapsed={collapsedSections.has('lesson')}
+                            onToggle={toggleSection}
+                        >
                             <div className="space-y-4">
                                 {course.topics?.length ? course.topics.map(topic => (
                                     <TopicAccordion
@@ -1759,7 +1764,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     <div className="text-gray-500 dark:text-gray-400">No lessons available.</div>
                                 )}
                             </div>
-                        </Card>
+                        </CollapsibleSection>
 
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Assessment Links</h3>
