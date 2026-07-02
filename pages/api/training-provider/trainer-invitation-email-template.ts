@@ -14,7 +14,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 trainer_invitation_email_body,
                 trainer_invitation_email_cc,
                 trainer_invitation_reply_to,
-                trainer_exhausted_alert_recipients
+                trainer_exhausted_alert_recipients,
+                trainer_invitation_min_lead_days
          FROM training_provider LIMIT 1`
       );
       const row = result.rows[0] || {};
@@ -26,6 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           trainerInvitationEmailCc: row.trainer_invitation_email_cc || '',
           trainerInvitationReplyTo: row.trainer_invitation_reply_to || '',
           trainerExhaustedAlertRecipients: row.trainer_exhausted_alert_recipients || '',
+          trainerInvitationMinLeadDays: row.trainer_invitation_min_lead_days ?? 1,
         },
       });
     } catch (error) {
@@ -42,6 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         trainerInvitationEmailCc,
         trainerInvitationReplyTo,
         trainerExhaustedAlertRecipients,
+        trainerInvitationMinLeadDays,
       } = req.body;
       if (typeof trainerInvitationEmailSubject !== 'string' || typeof trainerInvitationEmailBody !== 'string') {
         return res.status(400).json({ success: false, error: 'trainerInvitationEmailSubject and trainerInvitationEmailBody must be strings' });
@@ -52,6 +55,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const ccValue = blankToNull(trainerInvitationEmailCc);
       const replyToValue = blankToNull(trainerInvitationReplyTo);
       const alertRecipientsValue = blankToNull(trainerExhaustedAlertRecipients);
+      // Min lead days: coerce to a non-negative integer, clamp [0, 365], default 1.
+      const rawLead = Number(trainerInvitationMinLeadDays);
+      const minLeadValue = Number.isFinite(rawLead) ? Math.min(Math.max(Math.trunc(rawLead), 0), 365) : 1;
 
       await ensureTrainerInvitationTemplateColumns((sql, params) => pool.query(sql, params));
       await pool.query(
@@ -60,8 +66,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                trainer_invitation_email_body = $2,
                trainer_invitation_email_cc = $3,
                trainer_invitation_reply_to = $4,
-               trainer_exhausted_alert_recipients = $5`,
-        [trainerInvitationEmailSubject, trainerInvitationEmailBody, ccValue, replyToValue, alertRecipientsValue]
+               trainer_exhausted_alert_recipients = $5,
+               trainer_invitation_min_lead_days = $6`,
+        [trainerInvitationEmailSubject, trainerInvitationEmailBody, ccValue, replyToValue, alertRecipientsValue, minLeadValue]
       );
       return res.status(200).json({ success: true, message: 'Trainer invitation email template updated successfully' });
     } catch (error) {

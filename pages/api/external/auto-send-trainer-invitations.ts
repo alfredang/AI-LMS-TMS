@@ -38,6 +38,7 @@ interface AutomationSummary {
   runId: string;
   startedAt: string;
   windowDays: number;
+  minLeadDays: number;
   totalEligible: number;
   sent: number;
   skipped: number;
@@ -111,6 +112,25 @@ async function getWindowDays(): Promise<number> {
   return DEFAULT_WINDOW_DAYS;
 }
 
+/**
+ * Minimum lead time (days) before class start for the sweep to still invite,
+ * configured on the Training Provider settings. The lower bound of the eligibility
+ * window is start_date >= today + this value. Default 1 = skip same-day starts
+ * (only invite for tomorrow onward) so trainers have time to accept and prepare.
+ */
+async function getMinLeadDays(): Promise<number> {
+  try {
+    const res = await pool.query<{ trainer_invitation_min_lead_days: number | null }>(
+      `SELECT trainer_invitation_min_lead_days FROM training_provider ORDER BY id LIMIT 1`
+    );
+    const n = res.rows[0]?.trainer_invitation_min_lead_days;
+    if (typeof n === 'number' && n >= 0) return n;
+  } catch {
+    // Column/table may not exist yet on first boot — fall back to default.
+  }
+  return 1;
+}
+
 // ── Global in-flight lock ─────────────────────────────────────────────────────
 const g = globalThis as unknown as { __trainerInvitationsRunning?: boolean };
 if (g.__trainerInvitationsRunning === undefined) g.__trainerInvitationsRunning = false;
@@ -118,7 +138,7 @@ if (g.__trainerInvitationsRunning === undefined) g.__trainerInvitationsRunning =
 export async function runAutomation(): Promise<AutomationSummary> {
   if (g.__trainerInvitationsRunning) {
     console.warn('[auto-send-trainer-invitations] Another run is already in progress — skipping');
-    return { runId: '', startedAt: '', windowDays: 0, totalEligible: 0, sent: 0, skipped: 0, errors: 0, results: [] };
+    return { runId: '', startedAt: '', windowDays: 0, minLeadDays: 0, totalEligible: 0, sent: 0, skipped: 0, errors: 0, results: [] };
   }
   g.__trainerInvitationsRunning = true;
   try {
@@ -133,9 +153,12 @@ async function _runAutomationInner(): Promise<AutomationSummary> {
 
   const runId = `trainer_invite_${Date.now()}`;
   const startedAt = new Date().toISOString();
+  // Ensure the min-lead column exists before we read it (idempotent).
+  await pool.query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_invitation_min_lead_days INTEGER DEFAULT 1`);
   const windowDays = await getWindowDays();
+  const minLeadDays = await getMinLeadDays();
 
-  console.log(`📨 [auto-send-trainer-invitations] starting ${runId} — window: next ${windowDays} days`);
+  console.log(`📨 [auto-send-trainer-invitations] starting ${runId} — window: ${minLeadDays}–${windowDays} days ahead`);
 
   // Preload training provider config once so we don't refetch per row.
   const tp = await loadTrainingProviderEmailConfig();
@@ -148,11 +171,13 @@ async function _runAutomationInner(): Promise<AutomationSummary> {
   // Ensure invitation_paused column exists (idempotent)
   await pool.query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_paused BOOLEAN DEFAULT false`);
 
+  // Lower bound = today + minLeadDays (default 1 → excludes same-day starts so the
+  // trainer has time to respond/prepare). Upper bound = today + windowDays.
   const eligibleRes = await pool.query(
     `SELECT cr.id
      FROM course_run cr
-     WHERE cr.start_date >= (NOW() AT TIME ZONE 'Asia/Singapore')::date
-       AND cr.start_date <= (NOW() AT TIME ZONE 'Asia/Singapore')::date + ($1::int * INTERVAL '1 day')
+     WHERE cr.start_date >= (NOW() AT TIME ZONE 'Asia/Singapore')::date + ($1::int * INTERVAL '1 day')
+       AND cr.start_date <= (NOW() AT TIME ZONE 'Asia/Singapore')::date + ($2::int * INTERVAL '1 day')
        AND COALESCE(cr.invitation_paused, false) = false
        AND NOT EXISTS (
          SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id
@@ -161,7 +186,7 @@ async function _runAutomationInner(): Promise<AutomationSummary> {
          SELECT 1 FROM enrollment e WHERE e.course_run_id = cr.id AND e.enrolment_status = 'Confirmed'
        )
      ORDER BY cr.start_date ASC`,
-    [windowDays]
+    [minLeadDays, windowDays]
   );
 
   const results: TrainerInvitationSendResult[] = [];
@@ -230,6 +255,7 @@ async function _runAutomationInner(): Promise<AutomationSummary> {
     runId,
     startedAt,
     windowDays,
+    minLeadDays,
     totalEligible: eligibleRes.rows.length,
     sent,
     skipped,

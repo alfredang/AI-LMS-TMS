@@ -241,6 +241,10 @@ export async function ensureTrainerInvitationTemplateColumns(query: (sql: string
   // alert — sent once when every approved trainer for a run has declined and
   // none accepted. NULL/blank means the alert is disabled (no email sent).
   await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_exhausted_alert_recipients TEXT`);
+  // Minimum lead time (days) before class start for the auto-invite cron to still
+  // send. The cron's lower bound is start_date >= today + this value. Default 1 =
+  // exclude same-day starts (invite only for tomorrow onward); 0 = allow same-day.
+  await query(`ALTER TABLE training_provider ADD COLUMN IF NOT EXISTS trainer_invitation_min_lead_days INTEGER DEFAULT 1`);
 }
 
 // Dedupe column for the exhausted-list alert: set when an alert fires for a run,

@@ -18,11 +18,13 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
   const [cc, setCc] = useState('');
   const [replyTo, setReplyTo] = useState('');
   const [alertRecipients, setAlertRecipients] = useState('');
+  const [minLeadDays, setMinLeadDays] = useState<number>(1);
   const [originalSubject, setOriginalSubject] = useState('');
   const [originalBody, setOriginalBody] = useState('');
   const [originalCc, setOriginalCc] = useState('');
   const [originalReplyTo, setOriginalReplyTo] = useState('');
   const [originalAlertRecipients, setOriginalAlertRecipients] = useState('');
+  const [originalMinLeadDays, setOriginalMinLeadDays] = useState<number>(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -44,16 +46,19 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
       const nextCc = data?.data?.trainerInvitationEmailCc || '';
       const nextReplyTo = data?.data?.trainerInvitationReplyTo || '';
       const nextAlert = data?.data?.trainerExhaustedAlertRecipients || '';
+      const nextLead = typeof data?.data?.trainerInvitationMinLeadDays === 'number' ? data.data.trainerInvitationMinLeadDays : 1;
       setSubject(nextSubject);
       setBody(nextBody);
       setCc(nextCc);
       setReplyTo(nextReplyTo);
       setAlertRecipients(nextAlert);
+      setMinLeadDays(nextLead);
       setOriginalSubject(data?.data?.trainerInvitationEmailSubject || '');
       setOriginalBody(data?.data?.trainerInvitationEmailBody || '');
       setOriginalCc(nextCc);
       setOriginalReplyTo(nextReplyTo);
       setOriginalAlertRecipients(nextAlert);
+      setOriginalMinLeadDays(nextLead);
     } catch (error) {
       console.error('Error fetching trainer invitation email template:', error);
       setSubject(DEFAULT_TRAINER_INVITATION_SUBJECT);
@@ -61,11 +66,13 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
       setCc('');
       setReplyTo('');
       setAlertRecipients('');
+      setMinLeadDays(1);
       setOriginalSubject('');
       setOriginalBody('');
       setOriginalCc('');
       setOriginalReplyTo('');
       setOriginalAlertRecipients('');
+      setOriginalMinLeadDays(1);
     } finally {
       setIsLoading(false);
     }
@@ -84,6 +91,7 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
           trainerInvitationEmailCc: cc,
           trainerInvitationReplyTo: replyTo,
           trainerExhaustedAlertRecipients: alertRecipients,
+          trainerInvitationMinLeadDays: minLeadDays,
         }),
       });
       const data = await response.json();
@@ -95,6 +103,7 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
       setOriginalCc(cc);
       setOriginalReplyTo(replyTo);
       setOriginalAlertRecipients(alertRecipients);
+      setOriginalMinLeadDays(minLeadDays);
       setSaveMessage({ type: 'success', text: 'Trainer invitation email template saved successfully.' });
     } catch (error) {
       console.error('Error saving trainer invitation email template:', error);
@@ -159,7 +168,8 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
   };
 
   const hasChanges = subject !== originalSubject || body !== originalBody || cc !== originalCc
-    || replyTo !== originalReplyTo || alertRecipients !== originalAlertRecipients;
+    || replyTo !== originalReplyTo || alertRecipients !== originalAlertRecipients
+    || minLeadDays !== originalMinLeadDays;
 
   return (
     <div className="space-y-6">
@@ -274,6 +284,24 @@ const TrainerInvitationEmailTemplateView: React.FC = () => {
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Alerted once when a course run's whole approved-trainer list has declined and none accepted (needs manual assignment). Comma- or newline-separated. Leave blank to disable the alert.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Minimum Lead Time (days)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={minLeadDays}
+                  onChange={(e) => setMinLeadDays(Math.min(365, Math.max(0, Math.trunc(Number(e.target.value) || 0))))}
+                  className="block w-32 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-900 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  The automatic sweep only invites trainers for classes starting at least this many days from today.
+                  <strong> 1</strong> (default) skips same-day starts — invites go out for tomorrow onward; <strong>0</strong> allows same-day.
+                  Only affects the automatic sweep; manual sends from Upcoming Classes are unaffected.
                 </p>
               </div>
             </div>
