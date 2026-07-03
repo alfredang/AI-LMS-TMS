@@ -22,6 +22,15 @@ export function findTier(numLearners: number, tiers: PayoutTier[]): PayoutTier |
   return null;
 }
 
+// Canonical payout formula: fee × learners × percent, rounded to cents.
+// Returns 0 if any driver is non-positive. Use this everywhere a payout is
+// computed from an explicit percent (manual/non-WSQ classes), so the math
+// lives in exactly one place.
+export function payoutAmount(numLearners: number, courseFee: number, percent: number): number {
+  if (numLearners <= 0 || courseFee <= 0 || percent <= 0) return 0;
+  return Math.round(courseFee * numLearners * percent) / 100;
+}
+
 export function estimatedPayout(
   numLearners: number,
   courseFee: number,
@@ -30,8 +39,7 @@ export function estimatedPayout(
   if (numLearners <= 0 || courseFee <= 0) return { tier: null, amount: 0 };
   const tier = findTier(numLearners, tiers);
   if (!tier) return { tier: null, amount: 0 };
-  const amount = Math.round(courseFee * numLearners * tier.percent) / 100;
-  return { tier, amount };
+  return { tier, amount: payoutAmount(numLearners, courseFee, tier.percent) };
 }
 
 export function validateTiers(tiers: PayoutTier[]): string | null {

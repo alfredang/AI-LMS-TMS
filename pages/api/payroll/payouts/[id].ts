@@ -80,8 +80,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (actual_payout !== undefined) {
+      const a = actual_payout === null || actual_payout === '' ? null : Number(actual_payout);
+      if (a !== null && (Number.isNaN(a) || a < 0)) {
+        return res.status(400).json({ success: false, error: 'actual_payout must be 0 or more' });
+      }
       sets.push(`actual_payout = $${i++}`);
-      params.push(actual_payout === null || actual_payout === '' ? null : Number(actual_payout));
+      params.push(a);
     }
     if (status !== undefined) {
       sets.push(`status = $${i++}`);

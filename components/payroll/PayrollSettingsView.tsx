@@ -421,9 +421,10 @@ const PayrollSettingsView: React.FC = () => {
             className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
           />
           <span>
-            Saving these tiers will <strong>auto-update all pending payouts</strong> to the
-            new rates. Payouts already marked <em>Completed</em> or <em>Cancelled</em> are
-            left untouched (they reflect what was actually paid).
+            Saving these tiers will <strong>auto-update all pending payouts</strong> — both
+            WSQ and non-WSQ classes — to the new rates. Payouts already marked{' '}
+            <em>Completed</em> or <em>Cancelled</em> are left untouched (they reflect what was
+            actually paid).
           </span>
         </div>
       </section>

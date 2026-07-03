@@ -138,6 +138,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       FROM trainer_payout tp
       JOIN course_run cr ON cr.id = tp.course_run_id
       WHERE cr.end_date >= date_trunc('year', CURRENT_DATE)::date
+        -- Match the list's visibility rules so the cards never count a class
+        -- that isn't listable (e.g. a run cancelled at the class level, or 0 learners).
+        AND (cr.class_status::text = 'Confirmed' OR tp.status = 'completed')
+        AND tp.num_learners > 0
     `;
     const ov = (await pool.query(overviewQuery)).rows[0] || {};
     const overview = {
@@ -150,9 +154,90 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       cancelledCount: Number(ov.cancelled_count) || 0,
     };
 
+    // --- Non-WSQ (manual) classes ----------------------------------------
+    // Hand-entered non-funded classes live in their own table and are merged
+    // into the same list, tagged source:'manual'. They are NOT window-filtered
+    // (they're intentionally curated and may have no dates), so they always show.
+    const manual = await pool.query(`
+      SELECT
+        id,
+        class_title,
+        course_code,
+        trainer_id,
+        trainer_name,
+        start_date::text   AS start_date,
+        end_date::text     AS end_date,
+        num_learners,
+        course_fee,
+        tier_percent,
+        estimated_payout,
+        actual_payout,
+        status,
+        payment_date::text AS payment_date,
+        remark,
+        updated_at
+      FROM payroll_manual_class
+      ORDER BY end_date DESC NULLS LAST, created_at DESC
+    `);
+
+    const manualRows = manual.rows.map((m) => ({
+      id: m.id,
+      source: 'manual' as const,
+      course_run_id: m.id, // synthetic per-class key (used by the class filter)
+      course_run_code: null,
+      course_title: m.class_title,
+      course_code: m.course_code,
+      start_date: m.start_date,
+      end_date: m.end_date,
+      trainer_id: m.trainer_id,
+      trainer_name: m.trainer_name,
+      num_learners: m.num_learners,
+      course_fee: m.course_fee,
+      tier_percent: m.tier_percent,
+      estimated_payout: m.estimated_payout,
+      actual_payout: m.actual_payout,
+      status: m.status,
+      payment_date: m.payment_date,
+      remark: m.remark,
+      updated_at: m.updated_at,
+    }));
+
+    // Combined overview: WSQ (YTD) + all non-WSQ classes.
+    const mo = (
+      await pool.query(`
+        SELECT
+          COUNT(*)::int                                                              AS total_classes,
+          COALESCE(SUM(estimated_payout) FILTER (WHERE status = 'pending'), 0)::float8 AS pending_amount,
+          COUNT(*) FILTER (WHERE status = 'pending')::int                            AS pending_count,
+          COUNT(*) FILTER (WHERE status = 'completed')::int                          AS completed_count,
+          COALESCE(SUM(actual_payout) FILTER (WHERE status = 'completed'), 0)::float8  AS completed_amount,
+          COUNT(*) FILTER (WHERE status = 'cancelled')::int                          AS cancelled_count
+        FROM payroll_manual_class
+      `)
+    ).rows[0] || {};
+
+    overview.totalClasses += Number(mo.total_classes) || 0;
+    overview.pendingCount += Number(mo.pending_count) || 0;
+    overview.pendingAmount += Number(mo.pending_amount) || 0;
+    overview.completedCount += Number(mo.completed_count) || 0;
+    overview.completedAmount += Number(mo.completed_amount) || 0;
+    overview.cancelledCount += Number(mo.cancelled_count) || 0;
+    overview.totalAmount = overview.pendingAmount; // outstanding = all pending
+
+    // Merge and order by end_date DESC (undated rows last).
+    const wsqRows = list.rows.map((r) => ({ ...r, source: 'wsq' as const }));
+    const payouts = [...wsqRows, ...manualRows].sort((a, b) => {
+      const ae = a.end_date || '';
+      const be = b.end_date || '';
+      if (ae && be) return be.localeCompare(ae);
+      if (ae) return -1;
+      if (be) return 1;
+      return 0;
+    });
+
     return res.status(200).json({
       success: true,
-      data: { payouts: list.rows, tiers, overview },
+      data: { payouts, tiers, overview },
     });
   } catch (err: any) {
     console.error('payroll/payouts GET failed', err);

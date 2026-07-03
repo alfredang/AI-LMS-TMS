@@ -4,6 +4,7 @@ import { PayoutRow } from './PayoutEditDialog';
 import { authHeader } from '@lib/auth/authHeader';
 import { fmtDate } from '@lib/payroll/formatDate';
 import DateRangeCell from '../ui/DateRangeCell';
+import { NonWsqTag, NON_WSQ_ROW, NON_WSQ_ACCENT } from './shared';
 
 const fmtCurrency = (n: number | string | null | undefined) => {
   if (n === null || n === undefined || n === '') return '-';
@@ -201,8 +202,17 @@ const TrainerPayoutDialog: React.FC<Props> = ({ trainerName, rows, onClose, onSa
   };
 
   const save = async () => {
-    setSaving(true);
     setError(null);
+    // Block the whole save if any row has a negative/invalid actual payout.
+    const bad = dirtyRows.find((r) => {
+      const a = drafts[r.id].actual;
+      return a !== '' && !(Number(a) >= 0);
+    });
+    if (bad) {
+      setError(`Actual payout must be 0 or more (check "${bad.course_title || bad.course_code || 'a class'}").`);
+      return;
+    }
+    setSaving(true);
     // Save each dirty row independently: one row failing must not silently abort the
     // rest. Successful rows are persisted/reset; failures are collected and reported.
     let savedCount = 0;
@@ -210,7 +220,12 @@ const TrainerPayoutDialog: React.FC<Props> = ({ trainerName, rows, onClose, onSa
     for (const r of dirtyRows) {
       const d = drafts[r.id];
       try {
-        const res = await fetch(`/api/payroll/payouts/${r.id}`, {
+        // Route to the right table: non-WSQ rows live in payroll_manual_class.
+        const endpoint =
+          r.source === 'manual'
+            ? `/api/payroll/manual-classes/${r.id}`
+            : `/api/payroll/payouts/${r.id}`;
+        const res = await fetch(endpoint, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...authHeader() },
           body: JSON.stringify({
@@ -337,12 +352,25 @@ const TrainerPayoutDialog: React.FC<Props> = ({ trainerName, rows, onClose, onSa
                   return (
                     <tr
                       key={r.id}
-                      className="border-t border-default align-middle even:bg-gray-50/50 dark:even:bg-slate-700/20"
+                      className={`border-t border-default align-middle ${
+                        r.source === 'manual'
+                          ? NON_WSQ_ROW
+                          : 'even:bg-gray-50/50 dark:even:bg-slate-700/20'
+                      }`}
                     >
-                      <td className="px-3 py-2 max-w-[15rem]">
-                        <div className="font-medium truncate" title={r.course_title || ''}>{r.course_title || '-'}</div>
+                      <td
+                        className={`px-3 py-2 max-w-[15rem] ${
+                          r.source === 'manual' ? `border-l-2 ${NON_WSQ_ACCENT}` : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-medium truncate" title={r.course_title || ''}>{r.course_title || '-'}</span>
+                          {r.source === 'manual' && <NonWsqTag />}
+                        </div>
                         <div className="text-[11px] text-on-surface-secondary font-mono truncate">
-                          {r.course_code || '-'} · {r.course_run_code || '-'}
+                          {r.source === 'manual'
+                            ? (r.course_code || 'Non-WSQ class')
+                            : `${r.course_code || '-'} · ${r.course_run_code || '-'}`}
                         </div>
                       </td>
                       <td className="px-2 py-2 whitespace-nowrap text-on-surface-secondary">{fmtDate(r.start_date)}</td>
@@ -386,6 +414,7 @@ const TrainerPayoutDialog: React.FC<Props> = ({ trainerName, rows, onClose, onSa
                           <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm text-on-surface-secondary">$</span>
                           <input
                             type="number"
+                            min="0"
                             step="0.01"
                             inputMode="decimal"
                             value={d.actual}
