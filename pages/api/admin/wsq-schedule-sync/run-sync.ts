@@ -301,6 +301,74 @@ async function runInBackground(
   );
 }
 
+// ── Start a sync job (shared by the manual endpoint and the daily cron) ────────
+
+export type StartWsqSyncResult =
+  | { started: true; jobId: number; totalItems: number }
+  | { started: false; reason: 'already_running'; jobId: number }
+  | { started: false; reason: 'not_configured'; message: string };
+
+/**
+ * Create a wsq_sync_job and process `items` in the background (fire-and-forget).
+ * Shared by the manual POST handler and the daily cron (auto-sync-wsq-schedule).
+ * Idempotent per-item (processItem skips runs that already exist), and blocks if
+ * another job is already running.
+ */
+export async function startWsqSyncJob(
+  items: SubmitItem[],
+  triggeredBy: 'user' | 'cron',
+  ssgApp?: string,
+): Promise<StartWsqSyncResult> {
+  // Auto-expire jobs stuck in "running" for more than 15 minutes — from a
+  // previous process killed mid-sync (redeploy, crash, etc.).
+  await pool.query(
+    `UPDATE wsq_sync_job
+       SET status = 'failed', completed_at = NOW(),
+           summary = 'Interrupted — server restarted or redeployed'
+     WHERE status = 'running' AND started_at < NOW() - INTERVAL '15 minutes'`,
+  ).catch(() => {});
+
+  // Block if a fresh job is already running.
+  const existing = await pool.query(
+    `SELECT id FROM wsq_sync_job WHERE status = 'running' ORDER BY started_at DESC LIMIT 1`,
+  );
+  if (existing.rows.length > 0) {
+    return { started: false, reason: 'already_running', jobId: existing.rows[0].id };
+  }
+
+  // Load SSG credentials.
+  let ssgBaseUrl = 'https://api.ssg-wsg.sg';
+  let companyEmail = 'enquiry@tertiaryinfotech.com';
+  const creds = await getSSGCredentialsService().getSSGCredentials(undefined, ssgApp);
+  if (!creds)                return { started: false, reason: 'not_configured', message: 'SSG credentials not configured' };
+  if (!creds.encryptionKey)  return { started: false, reason: 'not_configured', message: 'SSG encryption key missing' };
+  if (!creds.certificateContent || !creds.privateKeyContent) {
+    return { started: false, reason: 'not_configured', message: 'SSG certificate/key missing' };
+  }
+  const credentials: SSGCredentials = creds;
+  ssgBaseUrl = creds.ssgApiBaseUrl || ssgBaseUrl;
+  try {
+    const tpRow = await pool.query<{ company_email: string }>(`SELECT company_email FROM training_provider LIMIT 1`);
+    if (tpRow.rows[0]?.company_email) companyEmail = tpRow.rows[0].company_email;
+  } catch { /* keep default */ }
+
+  // Create job row + process in the background (survives the caller returning).
+  const jobResult = await pool.query<{ id: number }>(
+    `INSERT INTO wsq_sync_job (total_items, triggered_by) VALUES ($1, $2) RETURNING id`,
+    [items.length, triggeredBy],
+  );
+  const jobId = jobResult.rows[0].id;
+
+  void runInBackground(jobId, items, credentials, ssgBaseUrl, companyEmail).catch(async (e) => {
+    await pool.query(
+      `UPDATE wsq_sync_job SET status = 'failed', completed_at = NOW(), summary = $1 WHERE id = $2`,
+      [`Fatal error: ${e?.message || e}`, jobId],
+    ).catch(() => {});
+  });
+
+  return { started: true, jobId, totalItems: items.length };
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -316,61 +384,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'items array is required' });
   }
 
-  // Auto-expire jobs stuck in "running" for more than 15 minutes — these are
-  // from a previous process that was killed mid-sync (redeploy, crash, etc.).
-  await pool.query(
-    `UPDATE wsq_sync_job
-       SET status = 'failed', completed_at = NOW(),
-           summary = 'Interrupted — server restarted or redeployed'
-     WHERE status = 'running' AND started_at < NOW() - INTERVAL '15 minutes'`,
-  ).catch(() => {});
-
-  // Block if a fresh job is already running
-  const existing = await pool.query(
-    `SELECT id FROM wsq_sync_job WHERE status = 'running' ORDER BY started_at DESC LIMIT 1`,
-  );
-  if (existing.rows.length > 0) {
-    return res.status(409).json({ error: 'A sync is already running', job_id: existing.rows[0].id });
+  const result = await startWsqSyncJob(items, triggeredBy, (req.headers['x-ssg-app'] as string) || undefined);
+  if (result.started) {
+    return res.status(200).json({ job_id: result.jobId, total_items: result.totalItems });
   }
-
-  // Load SSG credentials
-  let credentials: SSGCredentials;
-  let ssgBaseUrl = 'https://api.ssg-wsg.sg';
-  let companyEmail = 'enquiry@tertiaryinfotech.com';
-  try {
-    const credsSvc = getSSGCredentialsService();
-    const creds = await credsSvc.getSSGCredentials(
-      undefined, (req.headers['x-ssg-app'] as string) || undefined,
-    );
-    if (!creds)                                       return res.status(503).json({ error: 'SSG credentials not configured' });
-    if (!creds.encryptionKey)                         return res.status(503).json({ error: 'SSG encryption key missing' });
-    if (!creds.certificateContent || !creds.privateKeyContent)
-                                                      return res.status(503).json({ error: 'SSG certificate/key missing' });
-    credentials = creds;
-    ssgBaseUrl = creds.ssgApiBaseUrl || ssgBaseUrl;
-  } catch (e: any) {
-    return res.status(500).json({ error: 'Failed to load SSG credentials', message: e?.message });
+  if (result.reason === 'already_running') {
+    return res.status(409).json({ error: 'A sync is already running', job_id: result.jobId });
   }
-  try {
-    const tpRow = await pool.query<{ company_email: string }>(`SELECT company_email FROM training_provider LIMIT 1`);
-    if (tpRow.rows[0]?.company_email) companyEmail = tpRow.rows[0].company_email;
-  } catch { /* keep default */ }
-
-  // Create job row
-  const jobResult = await pool.query<{ id: number }>(
-    `INSERT INTO wsq_sync_job (total_items, triggered_by) VALUES ($1, $2) RETURNING id`,
-    [items.length, triggeredBy],
-  );
-  const jobId = jobResult.rows[0].id;
-
-  // Respond immediately — client polls job-status for progress
-  res.status(200).json({ job_id: jobId, total_items: items.length });
-
-  // Process everything in the background; client can close the tab safely
-  void runInBackground(jobId, items, credentials, ssgBaseUrl, companyEmail).catch(async (e) => {
-    await pool.query(
-      `UPDATE wsq_sync_job SET status = 'failed', completed_at = NOW(), summary = $1 WHERE id = $2`,
-      [`Fatal error: ${e?.message || e}`, jobId],
-    ).catch(() => {});
-  });
+  return res.status(503).json({ error: result.message });
 }

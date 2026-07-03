@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { sgtToday } from '../../../lib/wsqScheduleSync';
 
 type MagentoSchedule = {
   raw: string;
@@ -118,6 +119,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const forceRefresh = req.query.refresh === '1';
+  // include_past: also show past-dated schedules/runs (the "Show past classes"
+  // toggle) so failed syncs for yesterday-and-earlier can be reviewed / retried.
+  const includePast = req.query.include_past === '1' || req.query.include_past === 'true';
 
   let magento: MagentoResponse;
   try {
@@ -131,10 +135,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  // Today in YYYY-MM-DD (UTC — matches to_char() output from the DB query)
-  const today = new Date().toISOString().slice(0, 10);
+  // "Today" in Asia/Singapore — the single reference date for hiding past-dated
+  // schedules (matches the crons + the UI toggle). include_past shows them anyway.
+  const today = sgtToday();
 
-  // Load local WSQ runs (only those ending today or in the future)
+  // Load local WSQ runs (only those ending today or in the future, unless include_past)
   const localResult = await pool.query<LocalRun>(
     `SELECT c.id AS course_id, c.course_code, c.title,
             to_char(c.ssg_wsq_support_from, 'YYYY-MM-DD') AS wsq_support_from,
@@ -146,11 +151,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
        FROM course c
        LEFT JOIN course_run cr ON cr.course_id = c.id
             AND cr.is_deleted = false
-            AND cr.end_date >= $1::date
+            AND ($2 OR cr.end_date >= $1::date)
             AND cr.course_run_id NOT LIKE 'STAGED-%'
       WHERE c.course_code LIKE 'TGS-%'
       ORDER BY c.course_code, cr.start_date NULLS LAST`,
-    [today],
+    [today, includePast],
   );
 
   // Index local rows by course_code, carrying the support period from the course row
@@ -193,10 +198,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         countUnparsed++;
         return [{ source: 'magento' as const, raw: s.raw, start_date: s.course_start_date, end_date: s.course_end_date, status: 'unparsed' as const }];
       }
-      // Hide schedules that have already ended or already started —
-      // SSG rejects runs whose start date is in the past.
-      if (s.course_end_date < today) return [];
-      if (s.course_start_date && s.course_start_date < today) return [];
+      // Hide schedules that have already ended or already started (SSG rejects a
+      // past start date) — unless include_past is set (to review/retry past ones).
+      if (!includePast) {
+        if (s.course_end_date < today) return [];
+        if (s.course_start_date && s.course_start_date < today) return [];
+      }
       // Normalise Magento dates to YYYY-MM-DD (strip any trailing time component).
       // DB dates come from to_char() so are already clean strings.
       const mStart = s.course_start_date?.slice(0, 10) ?? null;
@@ -288,6 +295,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   return res.status(200).json({
     generated_at: magento.generated_at,
     magento_count: magento.count,
+    today,
+    include_past: includePast,
     counts: {
       synced: countSynced,
       missing_in_ssg: countMissing,

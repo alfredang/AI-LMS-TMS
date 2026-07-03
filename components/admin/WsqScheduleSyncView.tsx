@@ -24,6 +24,8 @@ type CourseGroup = {
 type ApiResponse = {
   generated_at: string;
   magento_count: number;
+  today?: string;              // server "today" in SGT — reference date for the past-classes toggle
+  include_past?: boolean;
   counts: { synced: number; missing_in_ssg: number; extra_in_ssg: number; unparsed: number };
   courses: CourseGroup[];
   cached: string | null;
@@ -69,6 +71,18 @@ type SharedJob = {
   triggered_by: 'user' | 'cron';
 };
 
+type CronLog = {
+  id: number;
+  created_at: string;
+  cron: 'daily_fresh' | 'weekly_blocked';
+  status: 'started' | 'nothing_to_do' | 'already_running' | 'error';
+  considered: number | null;
+  skipped_previously_failed: number | null;
+  mms_courses: number | null;
+  job_id: number | null;
+  message: string | null;
+};
+
 const STATUS_LABEL: Record<SyncStatus, string> = {
   synced: '✓ Synced',
   missing_in_ssg: '⚠ Missing in SSG',
@@ -89,18 +103,27 @@ const WsqScheduleSyncView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('missing_in_ssg');
   const [search, setSearch] = useState('');
+  // Show past-dated classes (yesterday & earlier). Off by default — hides failed
+  // syncs for classes whose dates have passed AND prevents retrying them.
+  const [showPast, setShowPast] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
   const [allJobs, setAllJobs] = useState<SharedJob[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [cronLogs, setCronLogs] = useState<CronLog[]>([]);
+  const [cronLogOpen, setCronLogOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = async (refresh = false) => {
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch(`/api/admin/wsq-schedule-sync${refresh ? '?refresh=1' : ''}`);
+      const params = new URLSearchParams();
+      if (refresh) params.set('refresh', '1');
+      if (showPast) params.set('include_past', '1');
+      const qs = params.toString();
+      const resp = await fetch(`/api/admin/wsq-schedule-sync${qs ? `?${qs}` : ''}`);
       const json = await resp.json();
       if (!resp.ok) {
         setError(json as ApiError);
@@ -115,7 +138,9 @@ const WsqScheduleSyncView: React.FC = () => {
     }
   };
 
-  useEffect(() => { void load(false); }, []);
+  // Reload on mount and whenever the past-classes toggle changes (server filters
+  // by include_past). load() reads showPast from closure.
+  useEffect(() => { void load(false); }, [showPast]); // eslint-disable-line react-hooks/exhaustive-deps
 
 const stopPolling = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -127,6 +152,15 @@ const stopPolling = useCallback(() => {
       if (!resp.ok) return;
       const jobs: SharedJob[] = await resp.json();
       if (Array.isArray(jobs)) setAllJobs(jobs);
+    } catch { /* ignore */ }
+  }, []);
+
+  const fetchCronLogs = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/admin/wsq-sync-cron-logs?limit=30');
+      if (!resp.ok) return;
+      const json = await resp.json();
+      if (json?.success && Array.isArray(json.data)) setCronLogs(json.data);
     } catch { /* ignore */ }
   }, []);
 
@@ -148,6 +182,7 @@ const stopPolling = useCallback(() => {
   useEffect(() => {
     const check = async () => {
       await fetchJobs();
+      await fetchCronLogs();
       setAllJobs((prev) => {
         if (prev[0]?.status === 'running') startPolling();
         return prev;
@@ -155,7 +190,7 @@ const stopPolling = useCallback(() => {
     };
     void check();
     return stopPolling;
-  }, [fetchJobs, startPolling, stopPolling]);
+  }, [fetchJobs, fetchCronLogs, startPolling, stopPolling]);
 
   // Most-recent error per "course_code|start_date" across all completed jobs.
   // Oldest jobs processed first so newer runs overwrite older ones.
@@ -172,6 +207,12 @@ const stopPolling = useCallback(() => {
     }
     return map;
   }, [allJobs]);
+
+  // Reference "today" (SGT) from the server, and a filter that hides failure lines
+  // for classes whose start date has already passed — unless "Show past" is on.
+  const today = data?.today || '';
+  const visibleFailures = (failures: ItemResult[]) =>
+    (showPast || !today) ? failures : failures.filter((f) => !f.start_date || f.start_date >= today);
 
   const filtered = useMemo(() => {
     if (!data) return [];
@@ -226,11 +267,17 @@ const stopPolling = useCallback(() => {
   const collapseAll = () => setExpanded(new Set());
 
   const syncToSSG = async (items: { course_code: string; start_date: string; end_date: string }[], label: string) => {
-    if (items.length === 0) {
-      setNotice('No missing schedules to sync.');
+    // Only sync/retry past-dated classes when "Show past classes" is on. This gates
+    // Retry-All + per-course + per-row retries at the action level — a safety net in
+    // case stale (past-included) data is briefly present during a toggle reload.
+    const eligible = (showPast || !today) ? items : items.filter((it) => it.start_date >= today);
+    if (eligible.length === 0) {
+      setNotice(items.length > 0 && !showPast
+        ? 'Those are past-dated classes — enable "Show past classes" to sync/retry them.'
+        : 'No missing schedules to sync.');
       return;
     }
-    if (!confirm(`Submit ${items.length} missing course run(s) to SSG (${label})?\n\nRuns in SSG/TPGateway using session timing templates and default venue details. You can close this page — the sync continues on the server.`)) return;
+    if (!confirm(`Submit ${eligible.length} missing course run(s) to SSG (${label})?\n\nRuns in SSG/TPGateway using session timing templates and default venue details. You can close this page — the sync continues on the server.`)) return;
 
     setSyncing(true);
     setNotice(null);
@@ -238,7 +285,7 @@ const stopPolling = useCallback(() => {
       const resp = await fetch('/api/admin/wsq-schedule-sync/run-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, triggered_by: 'user' }),
+        body: JSON.stringify({ items: eligible, triggered_by: 'user' }),
       });
       const json = await resp.json();
       if (resp.status === 409) {
@@ -292,7 +339,7 @@ const stopPolling = useCallback(() => {
         <div>
           <h1 className="text-2xl font-bold text-on-surface">WSQ Schedule Sync</h1>
           <p className="text-sm text-on-surface-secondary mt-1 max-w-3xl">
-            Compares upcoming course dates on the Tertiary Courses storefront against course runs in SSG/TPGateway. Past-dated schedules are hidden. Use &quot;Sync to SSG&quot; to submit missing runs directly to SSG using session timing templates and default venue details.
+            Compares upcoming course dates on the Tertiary Courses storefront against course runs in SSG/TPGateway. Past-dated schedules are hidden by default — enable &quot;Show past classes&quot; to review and retry them. Use &quot;Sync to SSG&quot; to submit missing runs directly to SSG using session timing templates and default venue details.
           </p>
         </div>
         <div className="flex gap-2">
@@ -353,7 +400,7 @@ const stopPolling = useCallback(() => {
             <div className="divide-y divide-default max-h-[32rem] overflow-y-auto border-t border-default">
               {allJobs.map((job) => {
                 const isRunning = job.status === 'running';
-                const failures: ItemResult[] = Array.isArray(job.failures) ? job.failures : [];
+                const failures: ItemResult[] = visibleFailures(Array.isArray(job.failures) ? job.failures : []);
                 const jobHasFailures = failures.length > 0;
                 const statusCls = isRunning ? 'text-blue-600 dark:text-blue-400'
                   : (job.status === 'failed' || jobHasFailures) ? 'text-red-600 dark:text-red-400'
@@ -424,12 +471,51 @@ const stopPolling = useCallback(() => {
       )}
 
 
+      {/* ── Cron Activity (daily-fresh + weekly-blocked run log) ──────────────── */}
+      {cronLogs.length > 0 && (
+        <div className="rounded-md border border-default overflow-hidden">
+          <button
+            onClick={() => setCronLogOpen((o) => !o)}
+            className="w-full px-4 py-2 flex items-center justify-between text-sm bg-surface-elevated hover:bg-surface text-on-surface"
+          >
+            <span className="font-medium flex items-center gap-2">
+              Cron Activity
+              <span className="text-xs text-on-surface-secondary font-normal">({cronLogs.length} recent run{cronLogs.length !== 1 ? 's' : ''})</span>
+            </span>
+            <span>{cronLogOpen ? '▾' : '▸'}</span>
+          </button>
+          {cronLogOpen && (
+            <div className="divide-y divide-default max-h-80 overflow-y-auto border-t border-default text-xs">
+              {cronLogs.map((l) => (
+                <div key={l.id} className="px-4 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-mono text-on-surface-secondary">{new Date(l.created_at).toLocaleString()}</span>
+                  <span className={`px-1.5 py-0.5 rounded ${l.cron === 'weekly_blocked' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'}`}>
+                    {l.cron === 'weekly_blocked' ? 'Weekly retry' : 'Daily fresh'}
+                  </span>
+                  <span className={`font-medium ${l.status === 'error' ? 'text-red-600 dark:text-red-400' : l.status === 'started' ? 'text-green-600 dark:text-green-400' : 'text-on-surface-secondary'}`}>
+                    {l.status}
+                  </span>
+                  {l.considered != null && <span className="text-on-surface-secondary">{l.considered} considered</span>}
+                  {l.skipped_previously_failed ? <span className="text-on-surface-secondary">{l.skipped_previously_failed} skipped (prev-failed)</span> : null}
+                  {l.job_id != null && <span className="text-on-surface-secondary">job #{l.job_id}</span>}
+                  {l.message && <span className="text-on-surface-secondary italic truncate max-w-[320px]" title={l.message}>{l.message}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {data && (
         <>
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <span className="text-on-surface-secondary">Generated: <span className="text-on-surface">{new Date(data.generated_at).toLocaleString()}</span></span>
             <span className="text-on-surface-secondary">Magento courses: <span className="text-on-surface">{data.magento_count}</span></span>
             {data.cached && <span className="text-xs text-on-surface-secondary">(cached at {new Date(data.cached).toLocaleTimeString()})</span>}
+            <label className="ml-auto flex items-center gap-1.5 text-xs text-on-surface-secondary cursor-pointer select-none whitespace-nowrap" title="Show classes whose dates are yesterday or earlier — enables reviewing and retrying past-dated failed syncs.">
+              <input type="checkbox" checked={showPast} onChange={(e) => setShowPast(e.target.checked)} className="accent-primary" />
+              Show past classes
+            </label>
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">

@@ -192,6 +192,22 @@ async function seedDefaults() {
             api_endpoint: '/api/external/sync-course-run-sessions',
         },
         {
+            id: 'auto_sync_wsq_schedule',
+            name: 'Auto Sync WSQ Schedule to SSG (fresh)',
+            description: 'Daily: pulls the WSQ course schedule from MMS (Tertiary Courses SG) and PUBLISHES FRESH missing course runs to SSG/TPGateway. Skips schedules that have failed before (eligibility failures are retried weekly; other errors need a developer), skips runs that already exist / have no local course or session-timing template, and skips past-dated schedules. Publishes REAL TPGateway runs with the default venue and no human review, so it ships DISABLED — enable here once the MMS feed is verified. Runs daily at 2:00 AM SGT.',
+            cron_expression: '0 2 * * *', // 2:00 AM SGT daily
+            api_endpoint: '/api/external/auto-sync-wsq-schedule',
+            default_enabled: false,
+        },
+        {
+            id: 'auto_retry_wsq_blocked',
+            name: 'Retry Blocked WSQ Schedules (weekly)',
+            description: 'Weekly (Sunday, off-peak): retries ONLY future WSQ schedules whose last SSG failure was an eligibility block (not eligible / outside course support period) — these are resolved by an external approval process, so a gentle once-a-week retry helps. Does NOT retry other error types (those are likely submission bugs needing developer investigation). Publishes REAL TPGateway runs, so it ships DISABLED — enable here once verified. Runs Sundays at 4:00 AM SGT.',
+            cron_expression: '0 4 * * 0', // 4:00 AM SGT every Sunday (off-peak)
+            api_endpoint: '/api/external/auto-retry-wsq-blocked',
+            default_enabled: false,
+        },
+        {
             id: 'sync_run_trainers_from_tpg',
             name: 'Sync Course Run Trainers from TPG',
             description: 'For each active/upcoming course run that has people, does a live viewCourseRun and upserts the TPG-assigned trainer (handles direct add/remove on TPGateway, incl. removals). Per-run viewing already refreshes on demand; this is the grid-wide backstop for runs nobody opens. Runs daily at 2:00 AM SGT.',
@@ -351,6 +367,14 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         directHandlers.set('sync_course_run_dates', async () => {
             const { runDateSync } = await import('../../pages/api/external/sync-course-run-dates');
             return runDateSync();
+        });
+        directHandlers.set('auto_sync_wsq_schedule', async () => {
+            const { runAutoSyncWsqSchedule } = await import('../../pages/api/external/auto-sync-wsq-schedule');
+            return runAutoSyncWsqSchedule();
+        });
+        directHandlers.set('auto_retry_wsq_blocked', async () => {
+            const { runAutoRetryWsqBlocked } = await import('../../pages/api/external/auto-retry-wsq-blocked');
+            return runAutoRetryWsqBlocked();
         });
         directHandlers.set('upcoming_course_runs', async () => {
             const { runUpcomingCourseRuns } = await import('../../pages/api/external/upcoming-course-runs');
