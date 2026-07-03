@@ -294,19 +294,26 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">
-                  Start Date
-                </label>
-                <DateRangeCell singleDate standalone value={startDate} onChange={setStartDate} />
+            <div>
+              <label className="block text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">
+                Class Dates
+              </label>
+              <div className="flex items-center gap-2 border border-default rounded-md px-2.5 min-h-[38px] bg-white dark:bg-slate-700 focus-within:ring-2 focus-within:ring-primary/30">
+                <Icon name={IconName.Calendar} className="w-4 h-4 text-on-surface-secondary flex-shrink-0" />
+                <DateRangeCell
+                  compact
+                  value={startDate && endDate && startDate !== endDate ? `${startDate}~${endDate}` : (startDate || '')}
+                  onChange={(v) => {
+                    if (!v) { setStartDate(''); setEndDate(''); }
+                    else if (v.includes('~')) { const [s, e] = v.split('~'); setStartDate(s); setEndDate(e); }
+                    else { setStartDate(v); setEndDate(v); } // same day → one-day class
+                  }}
+                  placeholder="Select date range"
+                />
               </div>
-              <div>
-                <label className="block text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">
-                  End Date
-                </label>
-                <DateRangeCell singleDate standalone value={endDate} onChange={setEndDate} />
-              </div>
+              <p className="text-[10px] text-on-surface-secondary mt-1">
+                Pick a start and end day (tap the same day twice for a one-day class).
+              </p>
             </div>
           </div>
 

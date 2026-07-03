@@ -358,7 +358,7 @@ const PayoutListView: React.FC = () => {
           className="inline-flex items-center gap-1.5 h-9 pl-3 pr-4 text-sm font-semibold bg-primary text-white rounded-lg shadow-sm shadow-primary/30 ring-1 ring-inset ring-white/10 hover:opacity-90 active:scale-[0.98] transition flex-shrink-0"
         >
           <Icon name={IconName.Plus} className="w-4 h-4" />
-          Add non-WSQ class
+          Add Non-WSQ class
         </button>
       </div>
 
