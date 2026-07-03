@@ -9,34 +9,50 @@ import {
 import { invalidatePayrollFlagCache } from '@lib/payroll/featureFlag';
 import { requireRole } from '@lib/auth/requireRole';
 
+// Re-derive tier_percent + estimated_payout for every PENDING row, from the new
+// tier ladder. Applies to both WSQ payouts (trainer_payout) and non-WSQ classes
+// (payroll_manual_class) — tiers govern both. Completed/Cancelled rows are left
+// untouched (they reflect what was actually paid). Rows are only written when a
+// value actually changes (IS DISTINCT FROM), so the returned count is accurate.
+async function recomputePendingForTable(
+  client: import('pg').PoolClient,
+  table: 'trainer_payout' | 'payroll_manual_class',
+  tiers: PayoutTier[]
+): Promise<number> {
+  const pending = await client.query(
+    `SELECT id, num_learners, course_fee FROM ${table} WHERE status = 'pending' FOR UPDATE`
+  );
+  let updated = 0;
+  for (const row of pending.rows) {
+    const numLearners = Number(row.num_learners) || 0;
+    const courseFee = Number(row.course_fee) || 0;
+    const { tier, amount } = estimatedPayout(numLearners, courseFee, tiers);
+    const tierPercent = tier?.percent ?? 0;
+    const r = await client.query(
+      `UPDATE ${table}
+          SET tier_percent = $1,
+              estimated_payout = $2,
+              updated_at = NOW()
+        WHERE id = $3
+          AND status = 'pending'
+          AND (tier_percent IS DISTINCT FROM $1
+            OR estimated_payout IS DISTINCT FROM $2)`,
+      [tierPercent, amount, row.id]
+    );
+    updated += r.rowCount || 0;
+  }
+  return updated;
+}
+
+// `table` is a server-defined literal (never user input) — safe to interpolate.
 async function recomputePendingPayouts(tiers: PayoutTier[]): Promise<number> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const pending = await client.query(
-      `SELECT id, num_learners, course_fee FROM trainer_payout WHERE status = 'pending' FOR UPDATE`
-    );
-    let updated = 0;
-    for (const row of pending.rows) {
-      const numLearners = Number(row.num_learners) || 0;
-      const courseFee = Number(row.course_fee) || 0;
-      const { tier, amount } = estimatedPayout(numLearners, courseFee, tiers);
-      const tierPercent = tier?.percent ?? 0;
-      const r = await client.query(
-        `UPDATE trainer_payout
-            SET tier_percent = $1,
-                estimated_payout = $2,
-                updated_at = NOW()
-          WHERE id = $3
-            AND status = 'pending'
-            AND (tier_percent IS DISTINCT FROM $1
-              OR estimated_payout IS DISTINCT FROM $2)`,
-        [tierPercent, amount, row.id]
-      );
-      updated += r.rowCount || 0;
-    }
+    const wsq = await recomputePendingForTable(client, 'trainer_payout', tiers);
+    const manual = await recomputePendingForTable(client, 'payroll_manual_class', tiers);
     await client.query('COMMIT');
-    return updated;
+    return wsq + manual;
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;

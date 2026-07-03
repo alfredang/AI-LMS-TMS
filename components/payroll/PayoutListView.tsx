@@ -2,98 +2,46 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Icon, IconName } from '../ui/Icon';
 import PayoutEditDialog, { PayoutRow } from './PayoutEditDialog';
 import TrainerPayoutDialog from './TrainerPayoutDialog';
+import ManualClassDialog, { ManualClass } from './ManualClassDialog';
 import { PayoutTier } from '@lib/payroll/calculate';
 import { authHeader } from '@lib/auth/authHeader';
 import { fmtDate } from '@lib/payroll/formatDate';
 import DateRangeCell from '../ui/DateRangeCell';
-
-const fmtCurrency = (n: number | string | null | undefined) => {
-  if (n === null || n === undefined || n === '') return '-';
-  const v = typeof n === 'string' ? Number(n) : n;
-  if (Number.isNaN(v)) return '-';
-  return v.toLocaleString('en-SG', { style: 'currency', currency: 'SGD' });
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: 'Pending',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-};
-
-const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
-  const cls =
-    status === 'completed'
-      ? 'bg-green-100 text-green-700 ring-green-600/20 dark:bg-green-900/40 dark:text-green-300'
-      : status === 'cancelled'
-      ? 'bg-gray-100 text-gray-600 ring-gray-500/20 dark:bg-slate-700 dark:text-gray-300'
-      : 'bg-amber-100 text-amber-700 ring-amber-600/20 dark:bg-amber-900/40 dark:text-amber-300';
-  const dot =
-    status === 'completed' ? 'bg-green-500' : status === 'cancelled' ? 'bg-gray-400' : 'bg-amber-500';
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset ${cls}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-      {STATUS_LABEL[status] || status}
-    </span>
-  );
-};
+import {
+  fmtCurrency,
+  StatusBadge,
+  StatCard,
+  LoadingRow,
+  OPTION_CLASS,
+  NonWsqTag,
+  NON_WSQ_ROW,
+  NON_WSQ_ROW_HOVER,
+  NON_WSQ_ACCENT,
+} from './shared';
 
 type StatusFilter = 'all' | 'pending' | 'completed' | 'cancelled';
+type SourceFilter = 'all' | 'wsq' | 'manual';
 
-const StatCard: React.FC<{
-  label: string;
-  value: string;
-  sub?: string;
-  iconName: IconName;
-  tone?: 'amber' | 'green' | 'blue' | 'gray' | 'rose' | 'violet';
-}> = ({ label, value, sub, iconName, tone = 'blue' }) => {
-  const tones = {
-    amber: {
-      icon: 'bg-amber-100 text-amber-600 ring-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400',
-      value: 'text-amber-700 dark:text-amber-300',
-      glow: 'from-amber-500/[0.10]',
-    },
-    green: {
-      icon: 'bg-green-100 text-green-600 ring-green-500/20 dark:bg-green-500/15 dark:text-green-400',
-      value: 'text-green-700 dark:text-green-300',
-      glow: 'from-green-500/[0.10]',
-    },
-    blue: {
-      icon: 'bg-sky-100 text-sky-600 ring-sky-500/20 dark:bg-sky-500/15 dark:text-sky-400',
-      value: 'text-sky-700 dark:text-sky-300',
-      glow: 'from-sky-500/[0.10]',
-    },
-    rose: {
-      icon: 'bg-rose-100 text-rose-600 ring-rose-500/20 dark:bg-rose-500/15 dark:text-rose-400',
-      value: 'text-rose-700 dark:text-rose-300',
-      glow: 'from-rose-500/[0.10]',
-    },
-    violet: {
-      icon: 'bg-violet-100 text-violet-600 ring-violet-500/20 dark:bg-violet-500/15 dark:text-violet-400',
-      value: 'text-violet-700 dark:text-violet-300',
-      glow: 'from-violet-500/[0.12]',
-    },
-    gray: {
-      icon: 'bg-gray-100 text-gray-500 ring-gray-400/20 dark:bg-slate-600/30 dark:text-gray-400',
-      value: 'text-gray-600 dark:text-gray-300',
-      glow: 'from-gray-500/[0.06]',
-    },
-  }[tone];
-  return (
-    <div className={`relative overflow-hidden rounded-xl border border-default bg-gradient-to-br ${tones.glow} to-transparent bg-white dark:bg-slate-800/80 p-4 shadow-sm transition-shadow hover:shadow-md`}>
-      <div className="flex items-center gap-3">
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ring-inset ${tones.icon}`}>
-          <Icon name={iconName} className="w-5 h-5" />
-        </div>
-        <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-wider text-on-surface-secondary font-semibold">{label}</div>
-          <div className={`text-2xl font-bold leading-tight truncate tabular-nums ${tones.value}`} title={value}>{value}</div>
-          {sub && <div className="text-[11px] text-on-surface-secondary mt-0.5">{sub}</div>}
-        </div>
-      </div>
-      <Icon name={iconName} className="absolute -right-3 -bottom-3 w-20 h-20 opacity-[0.04] pointer-events-none" />
-    </div>
-  );
-};
+const isManual = (r: PayoutRow) => r.source === 'manual';
+
+// Map a merged (manual) payout row back to the ManualClass shape the dialog edits.
+const toManualClass = (r: PayoutRow): ManualClass => ({
+  id: r.id,
+  class_title: r.course_title || '',
+  course_code: r.course_code ?? null,
+  trainer_id: r.trainer_id || null,
+  trainer_name: r.trainer_name || '',
+  start_date: r.start_date ?? null,
+  end_date: r.end_date ?? null,
+  num_learners: Number(r.num_learners) || 0,
+  course_fee: r.course_fee,
+  tier_percent: r.tier_percent,
+  estimated_payout: r.estimated_payout,
+  actual_payout: r.actual_payout,
+  status: r.status,
+  payment_date: r.payment_date,
+  remark: r.remark,
+});
 
 // Compact, low-emphasis stat used for the secondary "Selected window" strip.
 const CompactStat: React.FC<{
@@ -112,25 +60,7 @@ const CompactStat: React.FC<{
   </div>
 );
 
-const LoadingRow: React.FC<{ colSpan: number }> = ({ colSpan }) => (
-  <tr>
-    <td colSpan={colSpan} className="px-3 py-16">
-      <div className="flex flex-col items-center justify-center gap-3 text-on-surface-secondary">
-        <div className="relative">
-          <div className="w-10 h-10 rounded-full border-2 border-primary/20" />
-          <div className="absolute inset-0 w-10 h-10 rounded-full border-2 border-transparent border-t-primary animate-spin" />
-        </div>
-        <p className="text-sm font-medium">Loading payouts…</p>
-      </div>
-    </td>
-  </tr>
-);
-
 const PAGE_SIZE = 20;
-
-// Native <option> elements ignore the parent's theme, so set an explicit
-// background/text so the open dropdown popup matches the dark UI (no grey).
-const OPTION_CLASS = 'bg-white text-gray-900 dark:bg-slate-800 dark:text-white';
 
 const PayoutListView: React.FC = () => {
   const [rows, setRows] = useState<PayoutRow[]>([]);
@@ -148,8 +78,11 @@ const PayoutListView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<PayoutRow | null>(null);
+  const [editingManual, setEditingManual] = useState<ManualClass | null>(null);
+  const [creatingManual, setCreatingManual] = useState(false);
   const [months, setMonths] = useState(2);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [search, setSearch] = useState('');
   const [trainerFilter, setTrainerFilter] = useState<string>('all');
   const [classFilter, setClassFilter] = useState<string>('all');
@@ -159,8 +92,11 @@ const PayoutListView: React.FC = () => {
   const [trainerModal, setTrainerModal] = useState<{ name: string; ids: Set<string> } | null>(null);
   const [page, setPage] = useState(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // silent = refresh data (incl. the server-computed overview totals) without the
+  // full-table loading spinner. Used after an inline edit so the Overview cards
+  // re-sync without a jarring flash over the list.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const r = await fetch(`/api/payroll/payouts?months=${months}`, {
@@ -174,7 +110,7 @@ const PayoutListView: React.FC = () => {
     } catch (e: any) {
       setError(e?.message || 'Failed to load');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [months]);
 
@@ -183,16 +119,41 @@ const PayoutListView: React.FC = () => {
   }, [load]);
 
   // Dropdown option lists, built from all loaded rows so they stay stable across filtering.
+  // Resolve a stable per-trainer key. WSQ rows carry a real trainer_id; manually
+  // added non-WSQ rows don't (free-text name), so they'd split into their own
+  // group. Map name→id from rows that DO have an id, so a manual row for the same
+  // person merges into that trainer's group instead of forming a duplicate.
+  const nameToId = useMemo(() => {
+    const m = new Map<string, string>();
+    rows.forEach((r) => {
+      if (r.trainer_id && r.trainer_name) {
+        const n = r.trainer_name.trim().toLowerCase();
+        if (n && !m.has(n)) m.set(n, r.trainer_id);
+      }
+    });
+    return m;
+  }, [rows]);
+
+  const trainerKey = useCallback(
+    (r: PayoutRow) => {
+      if (r.trainer_id) return `id:${r.trainer_id}`;
+      const n = (r.trainer_name || '').trim().toLowerCase();
+      const mapped = n ? nameToId.get(n) : undefined;
+      return mapped ? `id:${mapped}` : `name:${n}`;
+    },
+    [nameToId]
+  );
+
   const trainerOptions = useMemo(() => {
     const map = new Map<string, string>();
     rows.forEach((r) => {
-      const id = r.trainer_id || `name:${r.trainer_name || ''}`;
+      const id = trainerKey(r);
       if (!map.has(id)) map.set(id, r.trainer_name || '(Unnamed trainer)');
     });
     return Array.from(map.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [rows]);
+  }, [rows, trainerKey]);
 
   const classOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -209,16 +170,17 @@ const PayoutListView: React.FC = () => {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [rows]);
 
-  const filtered = useMemo(() => {
+  // Rows matching every filter EXCEPT the status pill. The status-pill counts are
+  // derived from this set (so each pill shows how many of that status match the
+  // other active filters), and the final `filtered` just applies the status pill
+  // on top — so the pill counts stay sensible instead of collapsing to the picked one.
+  const baseFiltered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const from = startFrom || null;
     const to = startTo || null;
     return rows.filter((r) => {
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-      if (trainerFilter !== 'all') {
-        const id = r.trainer_id || `name:${r.trainer_name || ''}`;
-        if (id !== trainerFilter) return false;
-      }
+      if (sourceFilter !== 'all' && (r.source || 'wsq') !== sourceFilter) return false;
+      if (trainerFilter !== 'all' && trainerKey(r) !== trainerFilter) return false;
       if (classFilter !== 'all' && r.course_run_id !== classFilter) return false;
       if (from || to) {
         const sd = r.start_date ? r.start_date.slice(0, 10) : null;
@@ -231,7 +193,12 @@ const PayoutListView: React.FC = () => {
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q));
     });
-  }, [rows, statusFilter, search, trainerFilter, classFilter, startFrom, startTo]);
+  }, [rows, sourceFilter, search, trainerFilter, classFilter, startFrom, startTo, trainerKey]);
+
+  const filtered = useMemo(
+    () => (statusFilter === 'all' ? baseFiltered : baseFiltered.filter((r) => r.status === statusFilter)),
+    [baseFiltered, statusFilter]
+  );
 
   // Consolidated totals per trainer (across all of that trainer's filtered classes).
   const grouped = useMemo(() => {
@@ -248,7 +215,7 @@ const PayoutListView: React.FC = () => {
       }
     >();
     filtered.forEach((r) => {
-      const key = r.trainer_id || `name:${r.trainer_name || ''}`;
+      const key = trainerKey(r);
       let g = map.get(key);
       if (!g) {
         g = {
@@ -269,7 +236,7 @@ const PayoutListView: React.FC = () => {
     });
     // Sort alphabetically by trainer name so a specific person is easy to find.
     return Array.from(map.values()).sort((a, b) => a.trainer_name.localeCompare(b.trainer_name));
-  }, [filtered]);
+  }, [filtered, trainerKey]);
 
   // Rows for the open trainer modal. Membership is fixed to the ids captured at open
   // time (so changing a class's status mid-edit can't make it vanish), but the data is
@@ -282,6 +249,7 @@ const PayoutListView: React.FC = () => {
   const hasExtraFilters =
     trainerFilter !== 'all' ||
     classFilter !== 'all' ||
+    sourceFilter !== 'all' ||
     startFrom !== '' ||
     startTo !== '' ||
     search.trim() !== '';
@@ -289,6 +257,7 @@ const PayoutListView: React.FC = () => {
   const clearFilters = useCallback(() => {
     setTrainerFilter('all');
     setClassFilter('all');
+    setSourceFilter('all');
     setStartFrom('');
     setStartTo('');
     setSearch('');
@@ -310,45 +279,46 @@ const PayoutListView: React.FC = () => {
 
   useEffect(() => {
     setPage(0);
-  }, [statusFilter, search, months, trainerFilter, classFilter, startFrom, startTo, groupByTrainer]);
+  }, [statusFilter, sourceFilter, search, months, trainerFilter, classFilter, startFrom, startTo, groupByTrainer]);
 
   // Close the trainer modal if none of its classes remain (e.g. after a data reload).
   useEffect(() => {
     if (trainerModal && trainerModalRows.length === 0) setTrainerModal(null);
   }, [trainerModal, trainerModalRows.length]);
 
-  // Windowed stats for the "Selected window" card row — derived from the loaded rows
-  // (which the server already scoped to the chosen month window).
+  // "Selected window" card row + status-pill counts — both derived from baseFiltered
+  // (the current filters minus the status pill) so they agree with each other and
+  // with the table, and don't collapse to zero when a single status is selected.
   const windowStats = useMemo(() => {
     const sum = (xs: PayoutRow[], key: 'actual_payout' | 'estimated_payout') =>
       xs.reduce((acc, r) => {
         const v = Number(r[key] ?? 0);
         return acc + (Number.isFinite(v) ? v : 0);
       }, 0);
-    const pending = rows.filter((r) => r.status === 'pending');
-    const completed = rows.filter((r) => r.status === 'completed');
-    const cancelled = rows.filter((r) => r.status === 'cancelled');
+    const pending = baseFiltered.filter((r) => r.status === 'pending');
+    const completed = baseFiltered.filter((r) => r.status === 'completed');
+    const cancelled = baseFiltered.filter((r) => r.status === 'cancelled');
     const pendingAmount = sum(pending, 'estimated_payout');
     return {
-      totalAmount: pendingAmount, // outstanding still owed, within the window
-      totalClasses: rows.length,
+      totalAmount: pendingAmount, // outstanding still owed, within the current filters
+      totalClasses: baseFiltered.length,
       pendingCount: pending.length,
       pendingAmount,
       completedCount: completed.length,
       completedAmount: sum(completed, 'actual_payout'),
       cancelledCount: cancelled.length,
     };
-  }, [rows]);
+  }, [baseFiltered]);
 
   const counts = useMemo(() => {
-    const c = { all: rows.length, pending: 0, completed: 0, cancelled: 0 } as Record<StatusFilter, number>;
-    rows.forEach((r) => {
+    const c = { all: baseFiltered.length, pending: 0, completed: 0, cancelled: 0 } as Record<StatusFilter, number>;
+    baseFiltered.forEach((r) => {
       if (r.status === 'pending') c.pending++;
       else if (r.status === 'completed') c.completed++;
       else if (r.status === 'cancelled') c.cancelled++;
     });
     return c;
-  }, [rows]);
+  }, [baseFiltered]);
 
   const FilterPill: React.FC<{ value: StatusFilter; label: string }> = ({ value, label }) => {
     const active = statusFilter === value;
@@ -369,7 +339,7 @@ const PayoutListView: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-white shadow-lg shadow-primary/20 flex-shrink-0">
             <Icon name={IconName.DollarSign} className="w-6 h-6" />
@@ -377,16 +347,30 @@ const PayoutListView: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold leading-tight">Trainer Payouts</h1>
             <p className="text-sm text-on-surface-secondary mt-0.5">
-              Set each trainer&apos;s actual payout and mark it as paid.
+              Set each trainer&apos;s actual payout and mark it as paid. WSQ classes appear
+              automatically; non-WSQ classes are added by hand and tagged.
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-xs uppercase tracking-wider text-on-surface-secondary font-medium">Within the last</label>
+        {/* Primary action — pinned top-right */}
+        <button
+          onClick={() => setCreatingManual(true)}
+          className="inline-flex items-center gap-1.5 h-9 pl-3 pr-4 text-sm font-semibold bg-primary text-white rounded-lg shadow-sm shadow-primary/30 ring-1 ring-inset ring-white/10 hover:opacity-90 active:scale-[0.98] transition flex-shrink-0"
+        >
+          <Icon name={IconName.Plus} className="w-4 h-4" />
+          Add non-WSQ class
+        </button>
+      </div>
+
+      {/* Window + refresh controls */}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 h-9 pl-3 pr-1.5 border border-default rounded-lg bg-white dark:bg-slate-800">
+          <span className="text-[11px] uppercase tracking-wider text-on-surface-secondary font-medium whitespace-nowrap">Last</span>
           <select
             value={months}
             onChange={(e) => setMonths(Number(e.target.value))}
-            className="h-9 border border-default rounded-lg px-2.5 text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            aria-label="Window: within the last"
+            className="h-8 bg-transparent pr-1 text-sm font-medium focus:outline-none cursor-pointer"
           >
             <option className={OPTION_CLASS} value={1}>1 month</option>
             <option className={OPTION_CLASS} value={2}>2 months</option>
@@ -394,14 +378,15 @@ const PayoutListView: React.FC = () => {
             <option className={OPTION_CLASS} value={6}>6 months</option>
             <option className={OPTION_CLASS} value={12}>12 months</option>
           </select>
-          <button
-            onClick={load}
-            className="inline-flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium bg-primary text-white rounded-lg shadow-sm shadow-primary/20 hover:opacity-90 active:scale-[0.98] transition"
-          >
-            <Icon name={IconName.Sync} className="w-4 h-4" />
-            Refresh
-          </button>
         </div>
+        <button
+          onClick={load}
+          title="Refresh"
+          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-sm font-medium border border-default rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface-secondary transition"
+        >
+          <Icon name={IconName.Sync} className="w-4 h-4" />
+          <span className="hidden md:inline">Refresh</span>
+        </button>
       </div>
 
       {/* Summary: prominent all-time overview + compact selected-window detail */}
@@ -410,7 +395,7 @@ const PayoutListView: React.FC = () => {
       <div className="space-y-2.5">
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-semibold text-on-surface">Overview</h2>
-          <span className="text-xs text-on-surface-secondary">Since 1 Jan {new Date().getFullYear()} · not affected by the window filter</span>
+          <span className="text-xs text-on-surface-secondary">WSQ since 1 Jan {new Date().getFullYear()} + all non-WSQ · not affected by the window filter</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard
@@ -455,7 +440,7 @@ const PayoutListView: React.FC = () => {
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-semibold text-on-surface">Selected window</h2>
           <span className="text-xs text-on-surface-secondary">
-            Last {months} month{months === 1 ? '' : 's'} · matches the list below
+            Last {months} month{months === 1 ? '' : 's'} (WSQ) + all non-WSQ, within your active filters
           </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px rounded-xl border border-default bg-gray-200 dark:bg-slate-700 overflow-hidden shadow-sm">
@@ -542,6 +527,17 @@ const PayoutListView: React.FC = () => {
               className="w-full h-9 border border-default rounded-md pl-8 pr-2 text-sm bg-white dark:bg-slate-700/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
+
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value as SourceFilter)}
+            aria-label="Filter by course type"
+            className="h-9 border border-default rounded-md px-2 text-sm bg-white dark:bg-slate-700/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option className={OPTION_CLASS} value="all">All types</option>
+            <option className={OPTION_CLASS} value="wsq">WSQ only</option>
+            <option className={OPTION_CLASS} value="manual">Non-WSQ only</option>
+          </select>
 
           <select
             value={trainerFilter}
@@ -631,7 +627,7 @@ const PayoutListView: React.FC = () => {
             )}
           </thead>
           <tbody>
-            {loading && <LoadingRow colSpan={groupByTrainer ? 5 : 10} />}
+            {loading && <LoadingRow colSpan={groupByTrainer ? 5 : 10} label="Loading payouts…" />}
             {!loading && totalItems === 0 && (
               <tr>
                 <td colSpan={groupByTrainer ? 5 : 10} className="px-3 py-12 text-center">
@@ -639,8 +635,8 @@ const PayoutListView: React.FC = () => {
                     <Icon name={IconName.DollarSign} className="w-10 h-10 opacity-30" />
                     {rows.length === 0 ? (
                       <>
-                        <p className="text-sm font-medium">No completed classes in this window</p>
-                        <p className="text-xs">Payouts appear automatically once a class ends.</p>
+                        <p className="text-sm font-medium">No classes in this window</p>
+                        <p className="text-xs">WSQ payouts appear automatically once a class is confirmed and has ended. Use “Add non-WSQ class” to add a non-funded class.</p>
                       </>
                     ) : (
                       <>
@@ -654,17 +650,26 @@ const PayoutListView: React.FC = () => {
             )}
 
             {!loading && !groupByTrainer &&
-              pageRows.map((r) => (
+              pageRows.map((r) => {
+                const manual = isManual(r);
+                return (
                 <tr
                   key={r.id}
-                  onClick={() => setEditing(r)}
-                  title="Click to edit this payout"
-                  className="group border-t border-default even:bg-gray-50/40 dark:even:bg-slate-900/20 hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors cursor-pointer"
+                  onClick={() => (manual ? setEditingManual(toManualClass(r)) : setEditing(r))}
+                  title={manual ? 'Click to edit this non-WSQ class' : 'Click to edit this payout'}
+                  className={`group border-t border-default transition-colors cursor-pointer ${
+                    manual
+                      ? `${NON_WSQ_ROW} ${NON_WSQ_ROW_HOVER}`
+                      : 'even:bg-gray-50/40 dark:even:bg-slate-900/20 hover:bg-primary/5 dark:hover:bg-primary/10'
+                  }`}
                 >
-                  <td className="px-3 py-2.5 max-w-[20rem] border-l-2 border-transparent group-hover:border-primary">
-                    <div className="font-medium truncate" title={r.course_title || ''}>{r.course_title || '-'}</div>
+                  <td className={`px-3 py-2.5 max-w-[20rem] border-l-2 ${manual ? NON_WSQ_ACCENT : 'border-transparent group-hover:border-primary'}`}>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-medium truncate" title={r.course_title || ''}>{r.course_title || '-'}</span>
+                      {manual && <NonWsqTag />}
+                    </div>
                     <div className="text-[11px] text-on-surface-secondary font-mono truncate">
-                      {r.course_code || '-'} · {r.course_run_code || '-'}
+                      {manual ? (r.course_code || 'Non-WSQ class') : `${r.course_code || '-'} · ${r.course_run_code || '-'}`}
                     </div>
                   </td>
                   <td className="px-3 py-2.5 max-w-[14rem] truncate uppercase" title={r.trainer_name || ''}>
@@ -681,10 +686,14 @@ const PayoutListView: React.FC = () => {
                     {r.remark || '-'}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
 
             {!loading && groupByTrainer &&
-              pageGroups.map((g) => (
+              pageGroups.map((g) => {
+                const manualCount = g.rows.filter(isManual).length;
+                const wsqCount = g.rows.length - manualCount;
+                return (
                 <tr
                   key={g.key}
                   onClick={() => setTrainerModal({ name: g.trainer_name, ids: new Set(g.rows.map((r) => r.id)) })}
@@ -698,14 +707,27 @@ const PayoutListView: React.FC = () => {
                         className="w-4 h-4 flex-shrink-0 -rotate-90 text-on-surface-secondary transition-colors group-hover:text-primary"
                       />
                       <span className="truncate uppercase" title={g.trainer_name}>{g.trainer_name}</span>
+                      {manualCount > 0 && (
+                        <NonWsqTag title={`${manualCount} non-WSQ class${manualCount === 1 ? '' : 'es'}`}>
+                          {manualCount} Non-WSQ
+                        </NonWsqTag>
+                      )}
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{g.rows.length}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    {g.rows.length}
+                    {manualCount > 0 && (
+                      <div className="text-[10px] font-normal text-on-surface-secondary">
+                        {wsqCount} WSQ · {manualCount} non-WSQ
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{g.learners}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(g.estimated)}</td>
                   <td className="px-3 py-2.5 text-right font-semibold text-primary tabular-nums">{fmtCurrency(g.actual)}</td>
                 </tr>
-              ))}
+                );
+              })}
           </tbody>
         </table>
 
@@ -749,7 +771,9 @@ const PayoutListView: React.FC = () => {
         <TrainerPayoutDialog
           trainerName={trainerModal.name}
           rows={trainerModalRows}
-          onClose={() => setTrainerModal(null)}
+          // Refresh the server-computed Overview totals once the consolidated
+          // editor closes (rows are updated in place live; the cards catch up here).
+          onClose={() => { setTrainerModal(null); load(true); }}
           onSaved={(updated) =>
             setRows((rs) => rs.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)))
           }
@@ -764,6 +788,27 @@ const PayoutListView: React.FC = () => {
           onSaved={(updated) => {
             setRows((rs) => rs.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
             setEditing(null);
+            load(true); // re-sync Overview cards after the edit (silent, no flash)
+          }}
+        />
+      )}
+
+      {(creatingManual || editingManual) && (
+        <ManualClassDialog
+          initial={editingManual}
+          tiers={tiers}
+          onClose={() => {
+            setCreatingManual(false);
+            setEditingManual(null);
+          }}
+          onSaved={() => {
+            setCreatingManual(false);
+            setEditingManual(null);
+            load(true); // re-fetch so the merged list + overview reflect the change
+          }}
+          onDeleted={() => {
+            setEditingManual(null);
+            load(true);
           }}
         />
       )}
