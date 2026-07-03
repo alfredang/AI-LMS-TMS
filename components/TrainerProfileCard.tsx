@@ -890,13 +890,10 @@ export const TrainerProfileCard: React.FC<{
                         body: JSON.stringify({ sourceUrl: profileImageLink.trim() }),
                     });
 
-                    if (!response.ok) {
-                        throw new Error(`Profile image URL import failed: ${response.statusText}`);
-                    }
-
-                    const result = await response.json();
-                    if (!result.success) {
-                        throw new Error(result.error || 'Profile image URL import failed');
+                    // statusText is empty over HTTP/2 (prod behind Traefik) — read the JSON body for the real reason.
+                    const result = await response.json().catch(() => null);
+                    if (!response.ok || !result?.success) {
+                        throw new Error(result?.error || `Profile image URL import failed (HTTP ${response.status})`);
                     }
 
                     currentUploadedPath = result.data.fileUrl;
@@ -936,13 +933,11 @@ export const TrainerProfileCard: React.FC<{
                         body: uploadFormData
                     });
 
-                    if (!response.ok) {
-                        throw new Error(`Profile picture upload failed: ${response.statusText}`);
-                    }
-
-                    const result = await response.json();
-                    if (!result.success) {
-                        throw new Error(result.error || 'Profile picture upload failed');
+                    // NOTE: response.statusText is empty over HTTP/2 (prod is behind Traefik),
+                    // so read the JSON body — the API returns the real reason in `error`.
+                    const result = await response.json().catch(() => null);
+                    if (!response.ok || !result?.success) {
+                        throw new Error(result?.error || `Profile picture upload failed (HTTP ${response.status})`);
                     }
 
                     console.log('✅ Profile picture uploaded successfully:', result.data);

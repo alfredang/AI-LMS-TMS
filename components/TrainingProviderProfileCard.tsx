@@ -1815,7 +1815,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             </p>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainre Profile Image Folder</label>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainer Profile Image Folder</label>
                                             {isEditing ? (
                                                 <input
                                                     type="text"

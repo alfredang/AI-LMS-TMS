@@ -258,13 +258,10 @@ export const AdminProfileCard: React.FC<{ profile: AdminProfile }> = ({ profile 
                         body: uploadFormData
                     });
 
-                    if (!response.ok) {
-                        throw new Error(`Upload failed: ${response.statusText}`);
-                    }
-
-                    const result = await response.json();
-                    if (!result.success) {
-                        throw new Error(result.error || 'Upload failed');
+                    // statusText is empty over HTTP/2 (prod behind Traefik) — read the JSON body for the real reason.
+                    const result = await response.json().catch(() => null);
+                    if (!response.ok || !result?.success) {
+                        throw new Error(result?.error || `Upload failed (HTTP ${response.status})`);
                     }
 
                     console.log('✅ Admin profile picture uploaded successfully:', result.data);

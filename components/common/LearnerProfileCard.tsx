@@ -290,13 +290,11 @@ export const LearnerProfileCard: React.FC<{
                         body: JSON.stringify({ sourceUrl: profileImageLink.trim() }),
                     });
 
-                    if (!response.ok) {
-                        throw new Error(`Image URL import failed: ${response.statusText}`);
-                    }
-
-                    const result = await response.json();
-                    if (!result.success) {
-                        throw new Error(result.error || 'Image URL import failed');
+                    // NOTE: response.statusText is empty over HTTP/2 (prod is behind Traefik),
+                    // so read the JSON body — the API returns the real reason in `error`.
+                    const result = await response.json().catch(() => null);
+                    if (!response.ok || !result?.success) {
+                        throw new Error(result?.error || `Image URL import failed (HTTP ${response.status})`);
                     }
 
                     currentUploadedPath = result.data.fileUrl;
@@ -343,13 +341,11 @@ export const LearnerProfileCard: React.FC<{
                         body: uploadFormData
                     });
 
-                    if (!response.ok) {
-                        throw new Error(`Upload failed: ${response.statusText}`);
-                    }
-
-                    const result = await response.json();
-                    if (!result.success) {
-                        throw new Error(result.error || 'Upload failed');
+                    // NOTE: response.statusText is empty over HTTP/2 (prod is behind Traefik),
+                    // so read the JSON body — the API returns the real reason in `error`.
+                    const result = await response.json().catch(() => null);
+                    if (!response.ok || !result?.success) {
+                        throw new Error(result?.error || `Upload failed (HTTP ${response.status})`);
                     }
 
                     console.log('✅ Profile picture uploaded successfully:', result.data);

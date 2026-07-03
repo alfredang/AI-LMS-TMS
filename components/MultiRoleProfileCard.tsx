@@ -513,9 +513,9 @@ export const MultiRoleProfileCard: React.FC = () => {
             const uploadFile = async (role: string, type: string, file: File) => {
                 const fd = new FormData(); fd.append('file', file); fd.append('originalFilename', file.name);
                 const res = await fetch(getUploadUrl(role, type), { method: 'POST', body: fd });
-                if (!res.ok) throw new Error(`Upload failed: ${res.statusText}`);
-                const r = await res.json();
-                if (!r.success) throw new Error(r.error || 'Upload failed');
+                // statusText is empty over HTTP/2 (prod behind Traefik) — read the JSON body for the real reason.
+                const r = await res.json().catch(() => null);
+                if (!res.ok || !r?.success) throw new Error(r?.error || `Upload failed (HTTP ${res.status})`);
                 return r.data;
             };
 
@@ -532,9 +532,9 @@ export const MultiRoleProfileCard: React.FC = () => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sourceUrl: profileImageLink.trim() })
                 });
-                if (!response.ok) throw new Error(`Profile image URL import failed: ${response.statusText}`);
-                const result = await response.json();
-                if (!result.success) throw new Error(result.error || 'Profile image URL import failed');
+                // statusText is empty over HTTP/2 (prod behind Traefik) — read the JSON body for the real reason.
+                const result = await response.json().catch(() => null);
+                if (!response.ok || !result?.success) throw new Error(result?.error || `Profile image URL import failed (HTTP ${response.status})`);
                 newProfilePicUrl = result.data.fileUrl.startsWith('http') ? stripBaseUrl(result.data.fileUrl) || result.data.fileUrl : result.data.fileUrl;
                 setProfileImageLink(newProfilePicUrl);
             } else if (selectedProfilePictureFile) {
