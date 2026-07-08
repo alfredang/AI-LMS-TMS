@@ -12,12 +12,46 @@ import pool from '../../../lib/db';
  *   limit        page size (default 500, max 1000)
  *   course_code  exact course_code filter
  *   search       ILIKE match on title or course_code
+ *   fields       comma-separated subset of columns to return (from the allow-list
+ *                below). Omit for the full row. Lets lightweight consumers (e.g. an
+ *                n8n AI-agent search tool) fetch only what they need and skip the
+ *                heavy description/outline/outcomes text.
  *
  * Trainer selection (1 trainer per course): among the course's runs that have a
  * trainer, prefer a TPG-assigned trainer; otherwise take the latest assigned
  * (local) trainer. "Latest" = most recent run by start_date, then updated_at.
  * Name/email prefer the TPG value, falling back to the local assignment.
  */
+
+// Output field name -> SQL select expression. Identifiers come ONLY from this
+// server-defined allow-list (never from the raw query string).
+const FIELD_MAP: Record<string, string> = {
+  course_id: 'c.id AS course_id',
+  title: 'c.title',
+  course_code: 'c.course_code',
+  domain: 'c.domain',
+  course_type: 'c.course_type',
+  trainer_name: 't.trainer_name',
+  trainer_email: 't.trainer_email',
+  courseware_link: 'c.courseware_link',
+  course_fee: 'c.course_fee',
+  course_fees_include_gst: 'c.course_fees_include_gst',
+  course_fees_exclude_gst: 'c.course_fees_exclude_gst',
+  after_normal_funding: 'c.after_normal_funding',
+  after_mces_funding: 'c.after_mces_funding',
+  tax_percent: 'c.tax_percent',
+  training_hours: 'c.training_hours',
+  assessment_hours: 'c.assessment_hours',
+  num_of_days: 'c.num_of_days',
+  course_link: 'c.course_link',
+  brochure_link: 'c.brochure_link',
+  learner_slides_url: 'c.slides_url AS learner_slides_url',
+  skillsfuture_link: 'c.skillsfuture_link',
+  sf_for_business_link: 'c.sf_for_business_link',
+  description: 'c.description',
+  course_outline: 'c.course_outline',
+  learning_outcomes: 'c.learning_outcomes',
+};
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -43,6 +77,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const courseCode = (req.query.course_code as string | undefined)?.trim() || '';
     const search = (req.query.search as string | undefined)?.trim() || '';
 
+    // Build the SELECT list from the allow-list. Requested fields that aren't in
+    // FIELD_MAP are ignored; if none are valid, fall back to the full row.
+    const requestedFields = (req.query.fields as string | undefined)?.trim() || '';
+    const picked = requestedFields
+      ? requestedFields.split(',').map((f) => f.trim()).filter((f) => FIELD_MAP[f])
+      : [];
+    const selectClause = (picked.length > 0 ? picked : Object.keys(FIELD_MAP))
+      .map((f) => FIELD_MAP[f])
+      .join(',\n         ');
+
     const conditions: string[] = [];
     const params: (string | number)[] = [];
     let idx = 1;
@@ -59,31 +103,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const dataResult = await pool.query(
       `SELECT
-         c.id              AS course_id,
-         c.title,
-         c.course_code,
-         c.domain,
-         c.course_type,
-         t.trainer_name,
-         t.trainer_email,
-         c.courseware_link,
-         c.course_fee,
-         c.course_fees_include_gst,
-         c.course_fees_exclude_gst,
-         c.after_normal_funding,
-         c.after_mces_funding,
-         c.tax_percent,
-         c.training_hours,
-         c.assessment_hours,
-         c.num_of_days,
-         c.course_link,
-         c.brochure_link,
-         c.slides_url      AS learner_slides_url,
-         c.skillsfuture_link,
-         c.sf_for_business_link,
-         c.description,
-         c.course_outline,
-         c.learning_outcomes
+         ${selectClause}
        FROM course c
        LEFT JOIN LATERAL (
          SELECT
