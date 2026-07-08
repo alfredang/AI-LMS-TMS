@@ -101,6 +101,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
+    // Rank the best match first when searching (exact code, exact title, title
+    // prefix, then A–Z) so a single-result lookup returns the most relevant row.
+    // Uses a separate params list so the COUNT query — which reuses `params` for
+    // its WHERE — isn't affected by the extra ranking term.
+    const dataParams: (string | number)[] = [...params];
+    let orderClause = 'c.title ASC';
+    if (search) {
+      dataParams.push(search); // raw term for ranking
+      const r = idx++;
+      orderClause =
+        `(LOWER(c.course_code) = LOWER($${r})) DESC, ` +
+        `(LOWER(c.title) = LOWER($${r})) DESC, ` +
+        `(c.title ILIKE $${r} || '%') DESC, ` +
+        `c.title ASC`;
+    }
+
     const dataResult = await pool.query(
       `SELECT
          ${selectClause}
@@ -118,9 +134,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          LIMIT 1
        ) t ON true
        ${where}
-       ORDER BY c.title ASC
+       ORDER BY ${orderClause}
        LIMIT $${idx++} OFFSET $${idx++}`,
-      [...params, limit, offset]
+      [...dataParams, limit, offset]
     );
 
     const countResult = await pool.query(
