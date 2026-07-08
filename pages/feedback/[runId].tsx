@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import type { FeedbackFormField, FeedbackFormSection } from '../../types';
+import { getLocalYMD } from '../../lib/dateHelpers';
 
 interface RunContext {
   course_run_id: string;
@@ -20,7 +21,10 @@ interface TemplatePayload {
   run_context: RunContext | null;
 }
 
-const fmtDate = (v: string | null) => (v ? new Date(v).toISOString().slice(0, 10) : '');
+// Course run dates are stored as Asia/Singapore midnight (e.g. 2026-07-08 00:00 SGT =
+// "2026-07-07T16:00:00.000Z"). Format the calendar day in Singapore time — toISOString()
+// would render the UTC day and shift the date back by one.
+const fmtDate = (v: string | null) => (v ? getLocalYMD(v) : '');
 
 const StarIcon: React.FC<{ className?: string; filled?: boolean }> = ({ className, filled }) => (
   <svg
