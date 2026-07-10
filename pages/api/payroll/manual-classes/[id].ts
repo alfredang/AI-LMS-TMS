@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
 import { payoutAmount } from '@lib/payroll/calculate';
 import { requireRole } from '@lib/auth/requireRole';
+import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
 
 const numOrNull = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v));
 
@@ -9,11 +10,23 @@ const SELECT_COLS = `
   id, class_title, course_code, trainer_id, trainer_name,
   start_date::text  AS start_date,
   end_date::text    AS end_date,
+  class_dates,
   num_learners, course_fee, tier_percent, estimated_payout, actual_payout,
   status,
   payment_date::text AS payment_date,
   remark, created_at, updated_at
 `;
+
+// Normalize a "YYYY-MM-DD,..." list → sorted unique + derived min/max.
+function normalizeClassDates(raw: any): { classDates: string | null; startDate: string | null; endDate: string | null } {
+  const dates = String(raw || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
+  const uniq = Array.from(new Set(dates)).sort();
+  if (uniq.length === 0) return { classDates: null, startDate: null, endDate: null };
+  return { classDates: uniq.join(','), startDate: uniq[0], endDate: uniq[uniq.length - 1] };
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const authed = await requireRole(req, res, ['payroll', 'admin']);
@@ -42,6 +55,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
+  await ensureClassDatesColumn();
+
   const {
     class_title,
     course_code,
@@ -49,6 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     trainer_name,
     start_date,
     end_date,
+    class_dates,
     num_learners,
     course_fee,
     tier_percent,
@@ -115,8 +131,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (course_code !== undefined) set('course_code', course_code ? String(course_code).trim() : null);
     if (trainer_id !== undefined) set('trainer_id', trainer_id || null);
     if (trainer_name !== undefined) set('trainer_name', String(trainer_name).trim());
-    if (start_date !== undefined) set('start_date', start_date || null);
-    if (end_date !== undefined) set('end_date', end_date || null);
+    // An explicit date list wins and derives start/end; otherwise fall back to
+    // the individual start_date/end_date fields.
+    if (class_dates !== undefined) {
+      const cd = normalizeClassDates(class_dates);
+      set('class_dates', cd.classDates);
+      set('start_date', cd.startDate);
+      set('end_date', cd.endDate);
+    } else {
+      if (start_date !== undefined) set('start_date', start_date || null);
+      if (end_date !== undefined) set('end_date', end_date || null);
+    }
     if (newLearners !== undefined) set('num_learners', newLearners);
     if (newFee !== undefined) set('course_fee', newFee);
     if (newPercent !== undefined) set('tier_percent', newPercent);

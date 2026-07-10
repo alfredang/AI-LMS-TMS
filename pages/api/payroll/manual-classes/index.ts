@@ -7,6 +7,7 @@ import {
   PayoutTier,
 } from '@lib/payroll/calculate';
 import { requireRole } from '@lib/auth/requireRole';
+import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
 
 async function loadTiers(): Promise<PayoutTier[]> {
   try {
@@ -26,15 +27,32 @@ const SELECT_COLS = `
   id, class_title, course_code, trainer_id, trainer_name,
   start_date::text  AS start_date,
   end_date::text    AS end_date,
+  class_dates,
   num_learners, course_fee, tier_percent, estimated_payout, actual_payout,
   status,
   payment_date::text AS payment_date,
   remark, created_at, updated_at
 `;
 
+// Non-consecutive class dates: normalize a "YYYY-MM-DD,YYYY-MM-DD,..." string to
+// a sorted unique list, and derive the min/max stored on start_date/end_date.
+function normalizeClassDates(raw: any): { classDates: string | null; startDate: string | null; endDate: string | null } {
+  if (raw === undefined) return { classDates: undefined as any, startDate: undefined as any, endDate: undefined as any };
+  const dates = String(raw || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
+  const uniq = Array.from(new Set(dates)).sort();
+  if (uniq.length === 0) return { classDates: null, startDate: null, endDate: null };
+  return { classDates: uniq.join(','), startDate: uniq[0], endDate: uniq[uniq.length - 1] };
+}
+
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const authed = await requireRole(req, res, ['payroll', 'admin']);
   if (!authed) return;
+
+  await ensureClassDatesColumn();
 
   if (req.method === 'GET') {
     try {
@@ -88,6 +106,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         trainer_name,
         start_date,
         end_date,
+        class_dates,
         num_learners,
         course_fee,
         tier_percent,
@@ -96,6 +115,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         payment_date,
         remark,
       } = req.body || {};
+
+      // When an explicit date list is given, it wins and derives start/end.
+      const cd = normalizeClassDates(class_dates);
+      const hasCd = cd.classDates !== undefined;
+      const finalClassDates = hasCd ? cd.classDates : null;
+      const finalStart = hasCd ? cd.startDate : (start_date || null);
+      const finalEnd = hasCd ? cd.endDate : (end_date || null);
 
       if (!class_title || !String(class_title).trim()) {
         return res.status(400).json({ success: false, error: 'class_title is required' });
@@ -138,18 +164,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const r = await pool.query(
         `INSERT INTO payroll_manual_class
-            (class_title, course_code, trainer_id, trainer_name, start_date, end_date,
+            (class_title, course_code, trainer_id, trainer_name, start_date, end_date, class_dates,
              num_learners, course_fee, tier_percent, estimated_payout, actual_payout,
              status, payment_date, remark, created_by, updated_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$16)
          RETURNING ${SELECT_COLS}`,
         [
           String(class_title).trim(),
           course_code ? String(course_code).trim() : null,
           trainer_id || null,
           String(trainer_name).trim(),
-          start_date || null,
-          end_date || null,
+          finalStart,
+          finalEnd,
+          finalClassDates,
           learners,
           fee,
           percent,
