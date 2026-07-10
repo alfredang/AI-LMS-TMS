@@ -4,6 +4,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { detectIdType } from '@/lib/utils/id-type';
 import { useLms } from '@contexts/LmsContext';
+import { AdminPage } from '@app-types';
 import { ssgFetch } from '@/lib/ssgAppState';
 
 // Enums based on the Python constants
@@ -34,8 +35,29 @@ interface Course {
 
 interface CourseRun {
   course_run_id: string;
+  start_date?: string; // YYYY-MM-DD — used to build the Company Application row
   // Add other properties as needed
 }
+
+// Employer option from /api/admin/list-employers (distinct companies already
+// seen in Company Applications). Selecting one routes this enrolment through
+// the Company Application pipeline so it appears in View Company Application.
+interface EmployerOption {
+  id: string;
+  employerUen: string;
+  employerOrgName: string;
+  employerContactName: string;
+  employerContactDesignation: string;
+  employerContactEmail: string;
+  employerContactPhone: string;
+  source: 'qb' | 'history' | 'both';
+}
+
+// Sentinel dropdown value for entering a brand-new employer by hand.
+const NEW_EMPLOYER_KEY = '__new__';
+
+// Trainee Identity Type options accepted by the Company Application pipeline.
+const IDENTITY_TYPE_OPTIONS = ['Singapore Citizen', 'Singapore Permanent Resident'];
 
 interface Learner {
   id: string;
@@ -77,29 +99,55 @@ interface EnrolmentFormData {
   employerCountryCode?: string;
   employerPhoneNumber?: string;
 
+  // Company Application extras — only used when an employer is picked from the
+  // dropdown (routes through the Company Application pipeline).
+  employerOrgName?: string;
+  employerContactDesignation?: string;
+  traineeIdentityType?: string;
+  traineeHighestQualification?: string;
+
   // Training Partner Info
   trainingPartnerUen: string;
   trainingPartnerCode: string;
 }
 
+// Default form values, reused by the initial state and the various resets so
+// the Company Application fields don't drift out of sync.
+const buildInitialFormData = (uen?: string): EnrolmentFormData => ({
+  courseReferenceNumber: '',
+  courseRunId: '',
+  traineeFeesCollectionStatus: CollectionStatus.PENDING_PAYMENT,
+  traineeIdType: IdTypeSummary.NRIC,
+  traineeId: '',
+  traineeFullName: '',
+  traineeDateOfBirth: '',
+  traineeEmailAddress: '',
+  traineeContactNumberCountryCode: '+65',
+  traineeContactNumberPhoneNumber: '',
+  traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
+  employerCountryCode: '+65',
+  employerOrgName: '',
+  employerContactDesignation: '',
+  traineeIdentityType: IDENTITY_TYPE_OPTIONS[0],
+  traineeHighestQualification: '',
+  trainingPartnerUen: uen || '',
+  trainingPartnerCode: uen ? `${uen}-01` : '',
+});
+
 const EnrollLearners: React.FC = () => {
-  const { trainingProviderProfile } = useLms();
-  const [formData, setFormData] = useState<EnrolmentFormData>({
-    courseReferenceNumber: '',
-    courseRunId: '',
-    traineeFeesCollectionStatus: CollectionStatus.PENDING_PAYMENT,
-    traineeIdType: IdTypeSummary.NRIC,
-    traineeId: '',
-    traineeFullName: '',
-    traineeDateOfBirth: '',
-    traineeEmailAddress: '',
-    traineeContactNumberCountryCode: '+65',
-    traineeContactNumberPhoneNumber: '',
-    traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
-    employerCountryCode: '+65',
-    trainingPartnerUen: trainingProviderProfile?.uen || '',
-    trainingPartnerCode: trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : ''
-  });
+  const { trainingProviderProfile, setAdminPage } = useLms();
+  const [formData, setFormData] = useState<EnrolmentFormData>(
+    buildInitialFormData(trainingProviderProfile?.uen)
+  );
+
+  // Employer dropdown (Company Application) state.
+  const [employers, setEmployers] = useState<EmployerOption[]>([]);
+  const [loadingEmployers, setLoadingEmployers] = useState(false);
+  // '' = nothing chosen yet (show the company search); an employer id = existing
+  // company picked (auto-fills); NEW_EMPLOYER_KEY = entering a new company by hand.
+  // Only used when sponsorship is EMPLOYER.
+  const [selectedEmployerKey, setSelectedEmployerKey] = useState('');
+  const [employerSearch, setEmployerSearch] = useState('');
 
   // Course management state
   const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
@@ -153,6 +201,9 @@ const EnrollLearners: React.FC = () => {
     sponsorshipType?: string;
     feesCollectionStatus?: string;
     submittedAt?: string;
+    // Company Application path only
+    companyApplication?: boolean;
+    employerOrgName?: string;
   }
   const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
   const ENROLMENT_DRAFT_KEY = 'enrolment_submission_draft';
@@ -441,6 +492,66 @@ const EnrollLearners: React.FC = () => {
     }
   };
 
+  // Load the list of employers already seen in Company Applications.
+  const fetchEmployers = async () => {
+    setLoadingEmployers(true);
+    try {
+      const res = await fetch('/api/admin/list-employers');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.employers)) setEmployers(data.employers);
+    } catch {
+      // Non-critical — the admin can still pick "Add new employer".
+    } finally {
+      setLoadingEmployers(false);
+    }
+  };
+
+  // Employer picker (shown under EMPLOYER sponsorship). Picking an existing
+  // company auto-fills its details; NEW_EMPLOYER_KEY blanks them for manual
+  // entry. Sponsorship type — not this — decides Company Application routing.
+  const handleEmployerSelect = (key: string) => {
+    setSelectedEmployerKey(key);
+    setEmployerSearch('');
+    setErrors([]);
+
+    if (key === NEW_EMPLOYER_KEY) {
+      setFormData(prev => ({
+        ...prev,
+        employerOrgName: '',
+        employerUen: '',
+        employerFullName: '',
+        employerContactDesignation: '',
+        employerEmailAddress: '',
+        employerCountryCode: '+65',
+        employerPhoneNumber: '',
+      }));
+      return;
+    }
+
+    const employer = employers.find(e => e.id === key);
+    if (!employer) return;
+    setFormData(prev => ({
+      ...prev,
+      employerOrgName: employer.employerOrgName,
+      employerUen: employer.employerUen,
+      employerFullName: employer.employerContactName,
+      employerContactDesignation: employer.employerContactDesignation,
+      employerEmailAddress: employer.employerContactEmail,
+      employerCountryCode: '+65',
+      employerPhoneNumber: employer.employerContactPhone,
+    }));
+  };
+
+  // "Can't find it?" — switch to manual new-employer entry.
+  const handleAddNewEmployer = () => handleEmployerSelect(NEW_EMPLOYER_KEY);
+
+  // Back to the company search (clears the chosen/typed employer).
+  const handleChangeEmployer = () => {
+    setSelectedEmployerKey('');
+    setEmployerSearch('');
+  };
+
   // Handle going back to search from adding learner
   const handleBackToSearch = () => {
     setIsAddingLearner(false);
@@ -464,9 +575,10 @@ const EnrollLearners: React.FC = () => {
     }));
   };
 
-  // Fetch courses when component mounts
+  // Fetch courses and employers when component mounts
   useEffect(() => {
     fetchAvailableCourses();
+    fetchEmployers();
   }, []);
 
   // Fetch course runs when course reference number changes
@@ -748,8 +860,125 @@ const EnrollLearners: React.FC = () => {
     };
   };
 
+  // DD/MM/YYYY or YYYY-MM-DD → DD-MM-YYYY (the format the Company Application
+  // pipeline validates against).
+  const toDdMmYyyy = (value: string): string => {
+    if (!value) return '';
+    const v = value.trim();
+    const ymd = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (ymd) return `${ymd[3].padStart(2, '0')}-${ymd[2].padStart(2, '0')}-${ymd[1]}`;
+    const dmy = v.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if (dmy) return `${dmy[1].padStart(2, '0')}-${dmy[2].padStart(2, '0')}-${dmy[3]}`;
+    return v;
+  };
+
+  // Company Application path: build a single row keyed by the CA Excel column
+  // names and POST it to the same endpoint the Excel upload uses, so the full
+  // pipeline (SSG enrol → grant → calendar → native enrolment → invoice) runs
+  // and the learner shows up in View Company Application. No Excel required.
+  const handleCompanyApplicationSubmit = async () => {
+    const newErrors: string[] = [];
+
+    const course = availableCourses.find(c => c.courseCode === formData.courseReferenceNumber);
+    const run = availableCourseRuns.find(r => r.course_run_id === formData.courseRunId);
+    const courseTitle = course?.title || '';
+    const startDate = run?.start_date ? toDdMmYyyy(run.start_date) : '';
+
+    if (!courseTitle) newErrors.push('Select the course from the "Available Courses" dropdown so the Company Application can resolve its title.');
+    if (!startDate) newErrors.push('Select the course run from the "Available Course Runs" dropdown so the Company Application can resolve its start date.');
+    if (!formData.traineeId.trim()) newErrors.push('Trainee NRIC/FIN is required.');
+    if (!formData.traineeFullName.trim()) newErrors.push('Trainee Full Name is required.');
+    if (!formData.traineeDateOfBirth.trim()) newErrors.push('Trainee Date of Birth is required.');
+    if (!formData.traineeEmailAddress.trim()) newErrors.push('Trainee Email is required.');
+    if (!formData.traineeContactNumberPhoneNumber.trim()) newErrors.push('Trainee Phone Number is required.');
+    if (!formData.employerOrgName?.trim()) newErrors.push('Employer Organization Name is required.');
+    if (!formData.employerUen?.trim()) newErrors.push('Employer UEN is required.');
+    if (!formData.employerFullName?.trim()) newErrors.push('Employer Contact Name is required.');
+    if (!formData.employerContactDesignation?.trim()) newErrors.push('Employer Contact Designation is required.');
+    if (!formData.employerPhoneNumber?.trim()) newErrors.push('Employer Contact Telephone is required.');
+    if (!formData.employerEmailAddress?.trim()) newErrors.push('Employer Contact Email is required.');
+
+    if (newErrors.length > 0) {
+      setErrors(newErrors);
+      setWarnings([]);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    const row: Record<string, string> = {
+      'Course Title*': courseTitle,
+      'Course Start Date (DD-MM-YYYY)*': startDate,
+      'Trainee Identity Type*': formData.traineeIdentityType || '',
+      'Trainee FULL Name as on government ID*': formData.traineeFullName,
+      'Trainee ID Type*': formData.traineeIdType,
+      'Trainee NRIC/FIN Number*': formData.traineeId,
+      'Date of Birth* (DD-MM-YYYY)': toDdMmYyyy(formData.traineeDateOfBirth),
+      'Trainee Company email Address*': formData.traineeEmailAddress,
+      'Trainee Mobile Phone Number*': formData.traineeContactNumberPhoneNumber,
+      'Trainee Highest Qualification*': formData.traineeHighestQualification || '',
+      'Employer Organization Name*': formData.employerOrgName || '',
+      'Employer UEN*': formData.employerUen || '',
+      'Employer Contact Name*': formData.employerFullName || '',
+      'Employer Contact Designation*': formData.employerContactDesignation || '',
+      'Employer Contact Telephone No.*': formData.employerPhoneNumber || '',
+      'Employer Contact Email Address*': formData.employerEmailAddress || '',
+    };
+
+    setIsSubmitting(true);
+    setErrors([]);
+    setWarnings([]);
+    try {
+      const response = await fetch('/api/admin/upload-company-applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: [row] }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        // Row-level validation issues from companyApplicationValidator.
+        if (Array.isArray(data?.validationErrors) && data.validationErrors.length > 0) {
+          const msgs = data.validationErrors.flatMap((v: any) =>
+            (v.issues || []).map((issue: string) => issue)
+          );
+          setErrors(msgs.length ? msgs : [data?.message || 'The enrolment could not be validated.']);
+        } else {
+          setErrors([data?.message || `Failed to submit (${response.status})`]);
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      setSubmissionResult({
+        success: true,
+        companyApplication: true,
+        traineeName: formData.traineeFullName,
+        traineeId: formData.traineeId,
+        traineeIdType: formData.traineeIdType,
+        traineeEmail: formData.traineeEmailAddress,
+        courseReferenceNumber: formData.courseReferenceNumber,
+        courseRunId: formData.courseRunId,
+        sponsorshipType: SponsorshipType.EMPLOYER,
+        employerOrgName: formData.employerOrgName,
+        submittedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('Company Application submit failed:', err);
+      setErrors(['Network error while submitting the Company Application enrolment. Please try again.']);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Employer picked from the dropdown → Company Application pipeline.
+    if (isCompanyApplication) {
+      await handleCompanyApplicationSubmit();
+      return;
+    }
 
     if (!validateForm()) {
       return;
@@ -840,22 +1069,7 @@ const EnrollLearners: React.FC = () => {
           }
         }
 
-        setFormData({
-          courseReferenceNumber: '',
-          courseRunId: '',
-          traineeFeesCollectionStatus: CollectionStatus.PENDING_PAYMENT,
-          traineeIdType: IdTypeSummary.NRIC,
-          traineeId: '',
-          traineeFullName: '',
-          traineeDateOfBirth: '',
-          traineeEmailAddress: '',
-          traineeContactNumberCountryCode: '+65',
-          traineeContactNumberPhoneNumber: '',
-          traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
-          employerCountryCode: '+65',
-          trainingPartnerUen: trainingProviderProfile?.uen || '',
-          trainingPartnerCode: trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : ''
-        });
+        setFormData(buildInitialFormData(trainingProviderProfile?.uen));
       } else {
         const errorMessages: string[] =
           (typeof parsed?.error === 'string' ? [parsed.error] : null) ||
@@ -897,33 +1111,91 @@ const EnrollLearners: React.FC = () => {
   };
 
   const isEmployerSponsored = formData.traineeSponsorshipType === SponsorshipType.EMPLOYER;
+  // Employer sponsorship = Company Application: runs the full CA pipeline and
+  // appears in View Company Application.
+  const isCompanyApplication = isEmployerSponsored;
+
+  // Client-side company search over the merged QB + history list.
+  const filteredEmployers = (() => {
+    const q = employerSearch.trim().toLowerCase();
+    if (!q) return [];
+    return employers
+      .filter(e =>
+        e.employerOrgName.toLowerCase().includes(q) ||
+        e.employerUen.toLowerCase().includes(q)
+      )
+      .slice(0, 30);
+  })();
 
   const resetForm = () => {
     localStorage.removeItem(ENROLMENT_DRAFT_KEY);
     setSubmissionResult(null);
-    setFormData({
-      courseReferenceNumber: '',
-      courseRunId: '',
-      traineeFeesCollectionStatus: CollectionStatus.PENDING_PAYMENT,
-      traineeIdType: IdTypeSummary.NRIC,
-      traineeId: '',
-      traineeFullName: '',
-      traineeDateOfBirth: '',
-      traineeEmailAddress: '',
-      traineeContactNumberCountryCode: '+65',
-      traineeContactNumberPhoneNumber: '',
-      traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
-      employerCountryCode: '+65',
-      trainingPartnerUen: trainingProviderProfile?.uen || '',
-      trainingPartnerCode: trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : ''
-    });
+    setFormData(buildInitialFormData(trainingProviderProfile?.uen));
     setErrors([]);
     setWarnings([]);
     setSelectedLearner(null);
     setIsAddingLearner(false);
+    setSelectedEmployerKey('');
+    setEmployerSearch('');
     setSearchQuery('');
     setSearchResults([]);
   };
+
+  if (submissionResult?.companyApplication) {
+    return (
+      <div className="max-w-3xl mx-auto p-6">
+        <Card>
+          <div className="p-6 border-b dark:border-gray-700 flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Company Application Submitted</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                Enrolment is processing in the background
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-6">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-200">
+              <span className="font-semibold">{submissionResult.traineeName}</span> is being enrolled under{' '}
+              <span className="font-semibold">{submissionResult.employerOrgName}</span> via TPGateway. The system will
+              automatically run enrolment → grant lookup → calendar → invoice, then the learner will appear in{' '}
+              <span className="font-semibold">View Company Application</span> with live status.
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {[
+                { label: 'Trainee Name', value: submissionResult.traineeName },
+                { label: 'Trainee ID', value: submissionResult.traineeId },
+                { label: 'Employer', value: submissionResult.employerOrgName },
+                { label: 'Course Ref No.', value: submissionResult.courseReferenceNumber },
+                { label: 'Course Run ID', value: submissionResult.courseRunId },
+                { label: 'Sponsorship', value: submissionResult.sponsorshipType },
+              ].map(({ label, value }) => (
+                <div key={label} className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{label}</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white break-all">{value || 'N/A'}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2 border-t dark:border-gray-700 flex flex-col sm:flex-row gap-3">
+              <Button onClick={() => setAdminPage(AdminPage.ViewCompanyApplication)} className="flex-1">
+                Go to View Company Application
+              </Button>
+              <Button onClick={resetForm} variant="outline" className="flex-1">
+                Enrol Another Learner
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   if (submissionResult) {
     const formatDateTime = (iso?: string) => {
@@ -1460,6 +1732,9 @@ const EnrollLearners: React.FC = () => {
                 )}
               </div>
 
+              {/* Sponsorship type — the single control. EMPLOYER = Company
+                  Application (runs the full CA pipeline, shows in View
+                  Company Application). INDIVIDUAL = plain enrolment. */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Trainee Sponsorship Type <span className="text-red-500">*</span>
@@ -1473,10 +1748,189 @@ const EnrollLearners: React.FC = () => {
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
+                {isCompanyApplication && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    This learner will be enrolled as a Company Application and appear in View Company Application.
+                  </p>
+                )}
               </div>
 
-              {/* Conditional Employer Fields */}
-              {isEmployerSponsored && (
+              {/* Company Application details — shown for EMPLOYER sponsorship. */}
+              {isCompanyApplication && (
+                <div className="space-y-4 mb-6">
+                  <h3 className="text-md font-semibold text-gray-800 dark:text-white">Employer Details</h3>
+
+                  {/* Find the company first; add a new one only if it isn't listed. */}
+                  {selectedEmployerKey === '' ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Find Company
+                      </label>
+                      <input
+                        type="text"
+                        value={employerSearch}
+                        onChange={(e) => setEmployerSearch(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
+                        placeholder="Search company by name or UEN…"
+                        className={inputClasses}
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {loadingEmployers ? 'Loading companies…' : 'Searches QuickBooks + past applications.'}
+                      </p>
+
+                      {employerSearch.trim() && (
+                        <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                          {filteredEmployers.length === 0 ? (
+                            <p className="p-3 text-sm text-gray-500 dark:text-gray-400">No matching company found — use "Add a new employer" below.</p>
+                          ) : (
+                            filteredEmployers.map(emp => (
+                              <button
+                                key={emp.id}
+                                type="button"
+                                onClick={() => handleEmployerSelect(emp.id)}
+                                className="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                              >
+                                <span className="block text-sm font-medium text-gray-900 dark:text-white">{emp.employerOrgName || '(no name)'}</span>
+                                <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                  {emp.employerUen ? `UEN ${emp.employerUen}` : 'From QuickBooks — UEN needed'}
+                                </span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleAddNewEmployer}
+                        className="mt-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        + Can't find it? Add a new employer
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3 rounded-md bg-gray-100 dark:bg-gray-700/40 px-3 py-2">
+                      <span className="text-sm text-gray-700 dark:text-gray-200">
+                        {selectedEmployerKey === NEW_EMPLOYER_KEY
+                          ? 'Entering a new employer'
+                          : <>Selected: <span className="font-semibold">{formData.employerOrgName || '(company)'}</span></>}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleChangeEmployer}
+                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  )}
+
+                  {selectedEmployerKey !== '' && (
+                  <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Trainee Identity Type <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.traineeIdentityType || ''}
+                      onChange={(e) => handleInputChange('traineeIdentityType', e.target.value)}
+                      className={inputClasses}
+                    >
+                      {IDENTITY_TYPE_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Determines the SSG grant the employer is eligible for.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Employer Organization Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.employerOrgName || ''}
+                        onChange={(e) => handleInputChange('employerOrgName', e.target.value)}
+                        placeholder="e.g., Acme Pte Ltd"
+                        className={inputClasses}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Employer UEN <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.employerUen || ''}
+                        onChange={(e) => handleInputChange('employerUen', e.target.value)}
+                        placeholder="e.g., 201000372W"
+                        className={inputClasses}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Employer Contact Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.employerFullName || ''}
+                        onChange={(e) => handleInputChange('employerFullName', e.target.value)}
+                        placeholder="e.g., Stephen Chua"
+                        className={inputClasses}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Employer Contact Designation <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.employerContactDesignation || ''}
+                        onChange={(e) => handleInputChange('employerContactDesignation', e.target.value)}
+                        placeholder="e.g., HR Manager"
+                        className={inputClasses}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Employer Contact Email <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={formData.employerEmailAddress || ''}
+                        onChange={(e) => handleInputChange('employerEmailAddress', e.target.value)}
+                        placeholder="hr@acme.com"
+                        className={inputClasses}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Employer Contact Telephone <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.employerPhoneNumber || ''}
+                        onChange={(e) => handleInputChange('employerPhoneNumber', e.target.value)}
+                        placeholder="98765432"
+                        className={inputClasses}
+                      />
+                    </div>
+                  </div>
+                  </>
+                  )}
+                </div>
+              )}
+
+              {/* Dead branch retained intentionally minimal: EMPLOYER now always
+                  means Company Application (rendered above), so this never shows. */}
+              {false && (
                 <div className="space-y-4">
                   <h3 className="text-md font-semibold text-gray-800 dark:text-white">Employer Details</h3>
 
@@ -1582,7 +2036,7 @@ const EnrollLearners: React.FC = () => {
               )}
 
               {/* Optional Employer Fields for Individual Sponsorship */}
-              {!isEmployerSponsored && (
+              {!isCompanyApplication && !isEmployerSponsored && (
                 <div className="space-y-4">
                   <div>
                     <label className="flex items-center space-x-2">
@@ -1699,15 +2153,18 @@ const EnrollLearners: React.FC = () => {
             </div>
           </div>
 
-          {/* Preview Request Body */}
-          <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Preview Request Body</h2>
-            <div className="bg-white p-4 rounded border dark:bg-gray-800 dark:border-gray-700">
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto dark:text-gray-300">
-                {JSON.stringify(buildPayload(), null, 2)}
-              </pre>
+          {/* Preview Request Body — hidden for Company Applications (which use a
+              different payload shape submitted to the CA pipeline). */}
+          {!isCompanyApplication && (
+            <div className="bg-gray-50 p-6 rounded-lg dark:bg-gray-700/30">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 dark:text-white">Preview Request Body</h2>
+              <div className="bg-white p-4 rounded border dark:bg-gray-800 dark:border-gray-700">
+                <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto dark:text-gray-300">
+                  {JSON.stringify(buildPayload(), null, 2)}
+                </pre>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Submit Button */}
           <div className="flex justify-end space-x-4">
@@ -1715,21 +2172,9 @@ const EnrollLearners: React.FC = () => {
               type="button"
               onClick={() => {
                 if (confirm('Are you sure you want to clear all fields?')) {
-                  setFormData({
-                    courseReferenceNumber: '',
-                    courseRunId: '',
-                    traineeFeesCollectionStatus: CollectionStatus.PENDING_PAYMENT,
-                    traineeIdType: IdTypeSummary.NRIC,
-                    traineeId: '',
-                    traineeFullName: '',
-                    traineeDateOfBirth: '',
-                    traineeEmailAddress: '',
-                    traineeContactNumberCountryCode: '+65',
-                    traineeContactNumberPhoneNumber: '',
-                    traineeSponsorshipType: SponsorshipType.INDIVIDUAL,
-                    trainingPartnerUen: trainingProviderProfile?.uen || '',
-                    trainingPartnerCode: trainingProviderProfile?.uen ? `${trainingProviderProfile.uen}-01` : ''
-                  });
+                  setFormData(buildInitialFormData(trainingProviderProfile?.uen));
+                  setSelectedEmployerKey('');
+                  setEmployerSearch('');
                   setShowOptionalFields({
                     feeDiscount: false,
                     traineeAreaCode: false,
@@ -1755,7 +2200,9 @@ const EnrollLearners: React.FC = () => {
               disabled={isSubmitting}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed dark:bg-blue-500 dark:hover:bg-blue-600"
             >
-              {isSubmitting ? 'Creating Enrolment...' : 'Create Enrolment'}
+              {isSubmitting
+                ? (isCompanyApplication ? 'Submitting Company Application...' : 'Creating Enrolment...')
+                : (isCompanyApplication ? 'Enrol as Company Application' : 'Create Enrolment')}
             </button>
           </div>
         </form>
