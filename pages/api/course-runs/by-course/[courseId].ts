@@ -15,11 +15,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Query to get all course runs for a specific course (excluding deleted ones)
     const courseRuns = await pool.query(
-      `SELECT 
-        course_run_id
-      FROM 
+      `SELECT
+        course_run_id,
+        start_date::text AS start_date
+      FROM
         course_run
-      WHERE 
+      WHERE
         course_id = $1
         AND (is_deleted IS NULL OR is_deleted = false)
       ORDER BY course_run_id DESC`,
