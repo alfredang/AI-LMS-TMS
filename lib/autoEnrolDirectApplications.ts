@@ -358,7 +358,8 @@ async function loadSsgContext(): Promise<SSGContext> {
 async function ssgEncryptedPost(
   ctx: SSGContext,
   path: string,
-  payload: unknown
+  payload: unknown,
+  timeoutMs?: number
 ): Promise<any> {
   const cipher = crypto.createCipheriv('aes-256-cbc', ctx.encKey, IV);
   let encrypted = cipher.update(JSON.stringify(payload), 'utf8', 'base64');
@@ -368,6 +369,9 @@ async function ssgEncryptedPost(
     .withEndpoint(ctx.ssgBaseUrl, path)
     .withMethod(HttpMethod.POST)
     .withBody(encrypted);
+
+  // Override the default 30s cap for slow endpoints (e.g. create-enrolment).
+  if (timeoutMs) builder.withTimeout(timeoutMs);
 
   if (ctx.credentials?.certificateContent && ctx.credentials?.privateKeyContent) {
     builder.withCertificate(ctx.credentials.certificateContent, ctx.credentials.privateKeyContent);
@@ -826,30 +830,52 @@ export async function processDirectApplication(
   // Step 1: SSG enrolment (skip if already enrolled)
   let enrolmentReference: string | null = row.enrolment_id || null;
   if (!enrolmentReference) {
+    const ctx = sharedCtx || (await loadSsgContext());
+    const payload = buildEnrolmentPayload(row, ctx.uen, ctx.tpCode);
+
+    // Search SSG for an enrolment that may already exist for this trainee+run.
+    // Recovers BOTH the "duplicate" response and the timeout/orphan case where
+    // SSG created the enrolment but the create response was slow/lost. A dead
+    // (cancelled/withdrawn/rejected) enrolment is not adopted as a fresh success.
+    const recoverExistingEnrolment = async (): Promise<string | null> => {
+      try {
+        const p = payload as any;
+        const searchResult = await searchEnrolment({
+          enrolment: {
+            course: p.enrolment.course,
+            trainee: p.enrolment.trainee,
+            trainingPartner: p.enrolment.trainingPartner,
+          },
+          parameters: { page: 0, pageSize: 10 },
+        } as any);
+        const dead = ['cancelled', 'withdrawn', 'rejected'];
+        if (
+          searchResult.success &&
+          searchResult.referenceNumber &&
+          !dead.includes(String(searchResult.enrolmentStatus || '').toLowerCase())
+        ) {
+          return searchResult.referenceNumber;
+        }
+      } catch (searchErr) {
+        console.warn(`⚠️  auto-enrol [${applicationId}]: recovery search failed:`, searchErr instanceof Error ? searchErr.message : searchErr);
+      }
+      return null;
+    };
+
     try {
-      const ctx = sharedCtx || (await loadSsgContext());
-      const payload = buildEnrolmentPayload(row, ctx.uen, ctx.tpCode);
-      const parsed = await ssgEncryptedPost(ctx, '/tpg/enrolments', payload);
+      // SSG create-enrolment routinely exceeds the default 30s and aborts even
+      // though SSG created the record — give it 60s (mirrors /api/enrolment/create).
+      const parsed = await ssgEncryptedPost(ctx, '/tpg/enrolments', payload, 60000);
       console.log(`📦 auto-enrol [${applicationId}]:`, JSON.stringify(parsed));
 
       const errMsg = hasSsgError(parsed);
       if (errMsg) {
         if (errMsg.toLowerCase().includes('duplicate')) {
           console.log(`ℹ️  auto-enrol [${applicationId}]: Duplicate detected in SSG, searching for existing enrolment...`);
-          const p = payload as any;
-          const searchPayload = {
-            enrolment: {
-              course: p.enrolment.course,
-              trainee: p.enrolment.trainee,
-              trainingPartner: p.enrolment.trainingPartner
-            },
-            parameters: { page: 0, pageSize: 10 }
-          };
-
-          const searchResult = await searchEnrolment(searchPayload as any);
-          if (searchResult.success && searchResult.referenceNumber) {
-            console.log(`✅ auto-enrol [${applicationId}]: Recovered duplicate enrolment reference: ${searchResult.referenceNumber}`);
-            enrolmentReference = searchResult.referenceNumber;
+          const recovered = await recoverExistingEnrolment();
+          if (recovered) {
+            console.log(`✅ auto-enrol [${applicationId}]: Recovered duplicate enrolment reference: ${recovered}`);
+            enrolmentReference = recovered;
           } else {
             throw new Error(`Duplicate record found, but search failed to recover reference`);
           }
@@ -870,15 +896,29 @@ export async function processDirectApplication(
         auto_enrol_status: 'enroled',
       });
     } catch (err) {
-      await markFailed(appId, 'enrolment', err);
-      return {
-        id: appId,
-        applicationId,
-        success: false,
-        finalStatus: 'failed',
-        error: err instanceof Error ? err.message : String(err),
-        failedStep: 'enrolment',
-      };
+      // Timeout / network / 5xx — SSG may have created the enrolment anyway.
+      // Recover it before giving up so we don't orphan a live enrolment and so
+      // the downstream calendar/invoice/email steps still run.
+      const recovered = await recoverExistingEnrolment();
+      if (recovered) {
+        console.log(`✅ auto-enrol [${applicationId}]: Recovered enrolment after failed create: ${recovered}`);
+        enrolmentReference = recovered;
+        await updateRow(appId, {
+          enrolment_id: enrolmentReference,
+          enrolment_status: 'Confirmed',
+          auto_enrol_status: 'enroled',
+        });
+      } else {
+        await markFailed(appId, 'enrolment', err);
+        return {
+          id: appId,
+          applicationId,
+          success: false,
+          finalStatus: 'failed',
+          error: err instanceof Error ? err.message : String(err),
+          failedStep: 'enrolment',
+        };
+      }
     }
   } else {
     console.log(`ℹ️  auto-enrol [${applicationId}] enrolment already exists: ${enrolmentReference}`);
