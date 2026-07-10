@@ -45,8 +45,15 @@ export class HTTPRequestBuilder {
   private method: HttpMethod = HttpMethod.GET;
   private cert?: string;
   private key?: string;
+  private timeout: number = 30000;
 
   constructor() {}
+
+  /** Override the default 30s request timeout (ms). */
+  withTimeout(ms: number): HTTPRequestBuilder {
+    if (Number.isFinite(ms) && ms > 0) this.timeout = ms;
+    return this;
+  }
 
   withEndpoint(endpoint: string, directArgument: string = ''): HTTPRequestBuilder {
     if (!endpoint || typeof endpoint !== 'string') {
@@ -141,7 +148,7 @@ export class HTTPRequestBuilder {
       url,
       headers: this.headers,
       body: this.body,
-      timeout: 30000, // 30 seconds default timeout
+      timeout: this.timeout, // default 30s; override via withTimeout()
       cert: this.cert,
       key: this.key
     };
