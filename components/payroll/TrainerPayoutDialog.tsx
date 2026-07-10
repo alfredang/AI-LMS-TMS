@@ -362,6 +362,7 @@ const TrainerPayoutDialog: React.FC<Props> = ({ trainerName, rows, onClose, onSa
                         className={`px-3 py-2 max-w-[15rem] ${
                           r.source === 'manual' ? `border-l-2 ${NON_WSQ_ACCENT}` : ''
                         }`}
+                        title={r.course_title || ''}
                       >
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="font-medium truncate" title={r.course_title || ''}>{r.course_title || '-'}</span>

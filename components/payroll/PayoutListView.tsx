@@ -82,6 +82,13 @@ const PayoutListView: React.FC = () => {
   const [editingManual, setEditingManual] = useState<ManualClass | null>(null);
   const [creatingManual, setCreatingManual] = useState(false);
   const [months, setMonths] = useState(2);
+  // Window mode: 'month' shows a single calendar month (default, matches monthly
+  // payroll cycles); 'range' is the rolling "last N months".
+  const [windowMode, setWindowMode] = useState<'month' | 'range'>('month');
+  const [month, setMonth] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [search, setSearch] = useState('');
@@ -100,7 +107,8 @@ const PayoutListView: React.FC = () => {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const r = await fetch(`/api/payroll/payouts?months=${months}`, {
+      const windowQuery = windowMode === 'month' ? `month=${month}` : `months=${months}`;
+      const r = await fetch(`/api/payroll/payouts?${windowQuery}`, {
         headers: { ...authHeader() },
       });
       const j = await r.json();
@@ -113,11 +121,26 @@ const PayoutListView: React.FC = () => {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [months]);
+  }, [months, month, windowMode]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Month-picker helpers (used when windowMode === 'month').
+  const currentMonthStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  const monthLabel = (() => {
+    const [y, m] = month.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('en-SG', { month: 'long', year: 'numeric' });
+  })();
+  const shiftMonth = (delta: number) => {
+    const [y, m] = month.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  };
 
   // Dropdown option lists, built from all loaded rows so they stay stable across filtering.
   // Resolve a stable per-trainer key. WSQ rows carry a real trainer_id; manually
@@ -280,7 +303,7 @@ const PayoutListView: React.FC = () => {
 
   useEffect(() => {
     setPage(0);
-  }, [statusFilter, sourceFilter, search, months, trainerFilter, classFilter, startFrom, startTo, groupByTrainer]);
+  }, [statusFilter, sourceFilter, search, months, month, windowMode, trainerFilter, classFilter, startFrom, startTo, groupByTrainer]);
 
   // Close the trainer modal if none of its classes remain (e.g. after a data reload).
   useEffect(() => {
@@ -364,22 +387,60 @@ const PayoutListView: React.FC = () => {
       </div>
 
       {/* Window + refresh controls */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 h-9 pl-3 pr-1.5 border border-default rounded-lg bg-white dark:bg-slate-800">
-          <span className="text-[11px] uppercase tracking-wider text-on-surface-secondary font-medium whitespace-nowrap">Last</span>
-          <select
-            value={months}
-            onChange={(e) => setMonths(Number(e.target.value))}
-            aria-label="Window: within the last"
-            className="h-8 bg-transparent pr-1 text-sm font-medium focus:outline-none cursor-pointer"
-          >
-            <option className={OPTION_CLASS} value={1}>1 month</option>
-            <option className={OPTION_CLASS} value={2}>2 months</option>
-            <option className={OPTION_CLASS} value={3}>3 months</option>
-            <option className={OPTION_CLASS} value={6}>6 months</option>
-            <option className={OPTION_CLASS} value={12}>12 months</option>
-          </select>
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Month vs rolling-range mode */}
+        <div className="flex h-9 rounded-lg border border-default overflow-hidden">
+          {(['month', 'range'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setWindowMode(m)}
+              className={`px-3 text-sm font-medium transition ${
+                windowMode === m
+                  ? 'bg-primary text-white'
+                  : 'bg-white dark:bg-slate-800 text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+              }`}
+            >
+              {m === 'month' ? 'Month' : 'Range'}
+            </button>
+          ))}
         </div>
+
+        {windowMode === 'month' ? (
+          <div className="flex items-center h-9 border border-default rounded-lg bg-white dark:bg-slate-800 overflow-hidden">
+            <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="w-8 h-full flex items-center justify-center text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700 text-lg leading-none">‹</button>
+            <span className="text-sm font-semibold min-w-[8rem] text-center px-1">{monthLabel}</span>
+            <button
+              onClick={() => shiftMonth(1)}
+              disabled={month >= currentMonthStr}
+              aria-label="Next month"
+              className="w-8 h-full flex items-center justify-center text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700 text-lg leading-none disabled:opacity-30 disabled:cursor-not-allowed"
+            >›</button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 h-9 pl-3 pr-1.5 border border-default rounded-lg bg-white dark:bg-slate-800">
+            <span className="text-[11px] uppercase tracking-wider text-on-surface-secondary font-medium whitespace-nowrap">Last</span>
+            <select
+              value={months}
+              onChange={(e) => setMonths(Number(e.target.value))}
+              aria-label="Window: within the last"
+              className="h-8 bg-transparent pr-1 text-sm font-medium focus:outline-none cursor-pointer"
+            >
+              <option className={OPTION_CLASS} value={1}>1 month</option>
+              <option className={OPTION_CLASS} value={2}>2 months</option>
+              <option className={OPTION_CLASS} value={3}>3 months</option>
+              <option className={OPTION_CLASS} value={6}>6 months</option>
+              <option className={OPTION_CLASS} value={12}>12 months</option>
+            </select>
+          </div>
+        )}
+        {windowMode === 'month' && month !== currentMonthStr && (
+          <button
+            onClick={() => setMonth(currentMonthStr)}
+            className="h-9 px-3 text-sm font-medium border border-default rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface-secondary transition"
+          >
+            This month
+          </button>
+        )}
         <button
           onClick={load}
           title="Refresh"
@@ -441,7 +502,7 @@ const PayoutListView: React.FC = () => {
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-semibold text-on-surface">Selected window</h2>
           <span className="text-xs text-on-surface-secondary">
-            Last {months} month{months === 1 ? '' : 's'} (WSQ) + all non-WSQ, within your active filters
+            {windowMode === 'month' ? `${monthLabel} (WSQ)` : `Last ${months} month${months === 1 ? '' : 's'} (WSQ)`} + all non-WSQ, within your active filters
           </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px rounded-xl border border-default bg-gray-200 dark:bg-slate-700 overflow-hidden shadow-sm">
@@ -664,7 +725,10 @@ const PayoutListView: React.FC = () => {
                       : 'even:bg-gray-50/40 dark:even:bg-slate-900/20 hover:bg-primary/5 dark:hover:bg-primary/10'
                   }`}
                 >
-                  <td className={`px-3 py-2.5 max-w-[20rem] border-l-2 ${manual ? NON_WSQ_ACCENT : 'border-transparent group-hover:border-primary'}`}>
+                  <td
+                    className={`px-3 py-2.5 max-w-[20rem] border-l-2 ${manual ? NON_WSQ_ACCENT : 'border-transparent group-hover:border-primary'}`}
+                    title={r.course_title || ''}
+                  >
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className="font-medium truncate" title={r.course_title || ''}>{r.course_title || '-'}</span>
                       {manual && <NonWsqTag />}
