@@ -331,13 +331,44 @@ export async function pullRunTpgTrainer(courseRunUuid: string): Promise<PullTrai
       return { ok: false, tpg: null, changed: false, error: viewRes.error.message || 'viewCourseRun failed' };
     }
     const trainers: any[] = viewRes?.data?.course?.run?.linkCourseRunTrainer || [];
-    const first = trainers.map((e) => {
+    const parsed = trainers.map((e) => {
       const t = e.trainer || e;
       return { name: pickField(t, ['name', 'trainerName', 'fullName']), email: pickField(t, ['email', 'emailAddress', 'trainerEmail']) };
-    }).find((m) => m.name || m.email) || null;
+    }).filter((m) => m.name || m.email);
 
-    const newName = first?.name || null;
-    const newEmail = first?.email || null;
+    // A run can legitimately carry MORE THAN ONE trainer on TPGateway, but this
+    // cache holds a single name. SSG does not guarantee a stable order, so a
+    // naive "first" pick made this column flip between co-trainers night to
+    // night (looked like a random reassignment). Choose deterministically:
+    //   1) prefer the SSG trainer that matches the LMS assignment (so the TPG
+    //      column reflects who was assigned in the LMS, and never flips)
+    //   2) else keep the currently-cached trainer if still on the run (stable
+    //      for TPG-only runs with no LMS assignment)
+    //   3) else fall back to the first listed
+    const norm = (s: string | null | undefined) => (s || '').trim().toLowerCase();
+    const curName = norm(cr.tpg_assigned_trainer_name);
+
+    let chosen: { name: string; email: string } | null = null;
+
+    if (parsed.length > 1) {
+      // Only need the LMS roster to DISAMBIGUATE multiple SSG trainers.
+      const lms = await pool.query<{ trainer_name: string | null; trainer_email: string | null }>(
+        `SELECT trainer_name, trainer_email FROM course_run_trainer WHERE course_run_id = $1`,
+        [courseRunUuid]
+      );
+      const lmsEmails = new Set(lms.rows.map((r) => norm(r.trainer_email)).filter(Boolean));
+      const lmsNames = new Set(lms.rows.map((r) => norm(r.trainer_name)).filter(Boolean));
+      chosen = parsed.find((m) =>
+        (m.email && lmsEmails.has(norm(m.email))) || (m.name && lmsNames.has(norm(m.name)))
+      ) || null;
+    }
+
+    if (!chosen && curName) chosen = parsed.find((m) => norm(m.name) === curName) || null;
+    if (!chosen) chosen = parsed[0] || null;
+
+    const first = chosen;
+    const newName = chosen?.name || null;
+    const newEmail = chosen?.email || null;
     const changed = (cr.tpg_assigned_trainer_name || null) !== (newName || null);
     if (changed) {
       await pool.query(
