@@ -14,6 +14,7 @@ export interface PayoutRow {
   course_code?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  class_dates?: string | null; // manual (non-WSQ) classes only
   trainer_id: string;
   trainer_name?: string | null;
   num_learners: number;

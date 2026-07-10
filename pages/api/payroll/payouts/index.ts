@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
 import { estimatedPayout, DEFAULT_PAYOUT_TIERS, PayoutTier } from '@lib/payroll/calculate';
 import { requireRole } from '@lib/auth/requireRole';
+import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
 
 async function loadTiers(): Promise<PayoutTier[]> {
   try {
@@ -158,6 +159,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Hand-entered non-funded classes live in their own table and are merged
     // into the same list, tagged source:'manual'. They are NOT window-filtered
     // (they're intentionally curated and may have no dates), so they always show.
+    await ensureClassDatesColumn();
     const manual = await pool.query(`
       SELECT
         id,
@@ -167,6 +169,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         trainer_name,
         start_date::text   AS start_date,
         end_date::text     AS end_date,
+        class_dates,
         num_learners,
         course_fee,
         tier_percent,
@@ -189,6 +192,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       course_code: m.course_code,
       start_date: m.start_date,
       end_date: m.end_date,
+      class_dates: m.class_dates,
       trainer_id: m.trainer_id,
       trainer_name: m.trainer_name,
       num_learners: m.num_learners,

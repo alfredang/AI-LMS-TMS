@@ -6,7 +6,7 @@ import ManualClassDialog, { ManualClass } from './ManualClassDialog';
 import { PayoutTier } from '@lib/payroll/calculate';
 import { authHeader } from '@lib/auth/authHeader';
 import { fmtDate } from '@lib/payroll/formatDate';
-import DateRangeCell from '../ui/DateRangeCell';
+import DateRangeCell, { parseMultiDates, collapseMultiDates } from '../ui/DateRangeCell';
 import {
   fmtCurrency,
   StatusBadge,
@@ -33,6 +33,7 @@ const toManualClass = (r: PayoutRow): ManualClass => ({
   trainer_name: r.trainer_name || '',
   start_date: r.start_date ?? null,
   end_date: r.end_date ?? null,
+  class_dates: r.class_dates ?? null,
   num_learners: Number(r.num_learners) || 0,
   course_fee: r.course_fee,
   tier_percent: r.tier_percent,
@@ -675,7 +676,19 @@ const PayoutListView: React.FC = () => {
                   <td className="px-3 py-2.5 max-w-[14rem] truncate uppercase" title={r.trainer_name || ''}>
                     {r.trainer_name || '-'}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-on-surface-secondary">{fmtDate(r.start_date)}</td>
+                  {(() => {
+                    const label = r.class_dates
+                      ? collapseMultiDates(parseMultiDates(r.class_dates))
+                      : fmtDate(r.start_date);
+                    return (
+                      <td
+                        className="px-3 py-2.5 max-w-[12rem] truncate text-on-surface-secondary"
+                        title={label}
+                      >
+                        {label}
+                      </td>
+                    );
+                  })()}
                   <td className="px-3 py-2.5 text-right tabular-nums">{r.num_learners}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(r.course_fee)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(r.estimated_payout)}</td>

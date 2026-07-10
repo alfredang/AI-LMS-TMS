@@ -13,6 +13,7 @@ export interface ManualClass {
   trainer_name: string;
   start_date: string | null;
   end_date: string | null;
+  class_dates: string | null; // comma-separated ISO dates (supports non-consecutive)
   num_learners: number;
   course_fee: number | string;
   tier_percent: number | string;
@@ -76,8 +77,29 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
   const [classTitle, setClassTitle] = useState(initial?.class_title ?? '');
   const [courseCode, setCourseCode] = useState(initial?.course_code ?? '');
   const [trainerName, setTrainerName] = useState(initial?.trainer_name ?? '');
-  const [startDate, setStartDate] = useState(initial?.start_date ?? '');
-  const [endDate, setEndDate] = useState(initial?.end_date ?? '');
+  // Class dates as a comma-separated ISO list (supports non-consecutive days).
+  // Falls back to expanding the legacy start_date..end_date range for old rows.
+  const initialClassDates = (() => {
+    if (initial?.class_dates && initial.class_dates.trim()) return initial.class_dates.trim();
+    const s = initial?.start_date, e = initial?.end_date;
+    if (!s) return '';
+    if (!e || e === s) return s;
+    const out: string[] = [];
+    let cur = s; let guard = 0;
+    while (cur <= e && guard++ < 3660) {
+      out.push(cur);
+      const [y, m, d] = cur.split('-').map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      dt.setUTCDate(dt.getUTCDate() + 1);
+      cur = dt.toISOString().slice(0, 10);
+    }
+    return out.join(',');
+  })();
+  const [classDates, setClassDates] = useState(initialClassDates);
+  // Derived min/max — stored on start_date/end_date for sorting + compatibility.
+  const sortedDates = classDates ? classDates.split(',').map((x) => x.trim()).filter(Boolean).sort() : [];
+  const startDate = sortedDates[0] || '';
+  const endDate = sortedDates[sortedDates.length - 1] || '';
   const [numLearners, setNumLearners] = useState<string>(
     initial ? String(initial.num_learners ?? '') : ''
   );
@@ -112,8 +134,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
       classTitle: initial?.class_title ?? '',
       courseCode: initial?.course_code ?? '',
       trainerName: initial?.trainer_name ?? '',
-      startDate: initial?.start_date ?? '',
-      endDate: initial?.end_date ?? '',
+      classDates: initialClassDates,
       numLearners: initial ? String(initial.num_learners ?? '') : '',
       courseFee: initial ? String(initial.course_fee ?? '') : '',
       tierPercent: initial ? String(initial.tier_percent ?? '') : '',
@@ -126,8 +147,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
       classTitle !== orig.classTitle ||
       courseCode !== orig.courseCode ||
       trainerName !== orig.trainerName ||
-      startDate !== orig.startDate ||
-      endDate !== orig.endDate ||
+      classDates !== orig.classDates ||
       numLearners !== orig.numLearners ||
       courseFee !== orig.courseFee ||
       tierPercent !== orig.tierPercent ||
@@ -136,7 +156,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
       paymentDate !== orig.paymentDate ||
       remark !== orig.remark
     );
-  }, [classTitle, courseCode, trainerName, startDate, endDate, numLearners, courseFee, tierPercent, actual, status, paymentDate, remark, initial]);
+  }, [classTitle, courseCode, trainerName, classDates, numLearners, courseFee, tierPercent, actual, status, paymentDate, remark, initial, initialClassDates]);
 
   const requestClose = () => {
     if (saving) return;
@@ -166,13 +186,13 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
     if (!trainerName.trim()) return setError('Trainer name is required.');
     if (Number(tierPercent) < 0 || Number(tierPercent) > 100) return setError('Tier % must be between 0 and 100.');
     if (actual !== '' && !(Number(actual) >= 0)) return setError('Actual payout must be 0 or more.');
-    if (startDate && endDate && endDate < startDate) return setError('End date must be on or after the start date.');
 
     setSaving(true);
     const body = {
       class_title: classTitle.trim(),
       course_code: courseCode.trim() || null,
       trainer_name: trainerName.trim(),
+      class_dates: classDates || null,
       start_date: startDate || null,
       end_date: endDate || null,
       num_learners: numLearners === '' ? 0 : Number(numLearners),
@@ -302,17 +322,14 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
                 <Icon name={IconName.Calendar} className="w-4 h-4 text-on-surface-secondary flex-shrink-0" />
                 <DateRangeCell
                   compact
-                  value={startDate && endDate && startDate !== endDate ? `${startDate}~${endDate}` : (startDate || '')}
-                  onChange={(v) => {
-                    if (!v) { setStartDate(''); setEndDate(''); }
-                    else if (v.includes('~')) { const [s, e] = v.split('~'); setStartDate(s); setEndDate(e); }
-                    else { setStartDate(v); setEndDate(v); } // same day → one-day class
-                  }}
-                  placeholder="Select date range"
+                  multi
+                  value={classDates}
+                  onChange={setClassDates}
+                  placeholder="Select dates"
                 />
               </div>
               <p className="text-[10px] text-on-surface-secondary mt-1">
-                Pick a start and end day (tap the same day twice for a one-day class).
+                Pick single days, or use “Add range” for consecutive dates — non-consecutive dates (e.g. 1, 3, 5 Jul) are fine.
               </p>
             </div>
           </div>
