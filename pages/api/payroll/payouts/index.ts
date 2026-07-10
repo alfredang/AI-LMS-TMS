@@ -25,6 +25,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const months = Math.max(1, Math.min(24, parseInt((req.query.months as string) || '2')));
+    // Month mode (?month=YYYY-MM) shows a single calendar month (capped at
+    // today), for monthly payroll cycles; otherwise the rolling "last N months".
+    const monthParam = typeof req.query.month === 'string' && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : null;
+    // Shared end_date window clause. $1 carries either the month string or N.
+    const dateBoundSql = monthParam
+      ? `cr.end_date >= ($1 || '-01')::date
+         AND cr.end_date <= LEAST((($1 || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date, CURRENT_DATE)`
+      : `cr.end_date <= CURRENT_DATE
+         AND cr.end_date >= (CURRENT_DATE - ($1 || ' months')::interval)`;
+    const dateBoundParam = monthParam || String(months);
     const tiers = await loadTiers();
 
     // Find every (course_run, trainer) pair for runs whose end_date is within the last N months
@@ -47,12 +57,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN course c ON c.id = cr.course_id
       INNER JOIN course_run_trainer crt ON crt.course_run_id = cr.id
       WHERE cr.end_date IS NOT NULL
-        AND cr.end_date <= CURRENT_DATE
-        AND cr.end_date >= (CURRENT_DATE - ($1 || ' months')::interval)
+        AND ${dateBoundSql}
         AND cr.class_status::text = 'Confirmed'
         AND crt.trainer_id IS NOT NULL
     `;
-    const candidates = await pool.query(candidatesQuery, [String(months)]);
+    const candidates = await pool.query(candidatesQuery, [dateBoundParam]);
 
     // Materialize on read: insert any (course_run, trainer) pair that doesn't yet have a
     // payout row. Skip classes with no enrolled learners — there is nothing to pay out.
@@ -86,6 +95,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
     }
 
+    // A payout stays visible/payable only while its trainer is STILL assigned to
+    // the class (course_run_trainer). Payouts are materialized once and frozen, so
+    // without this a trainer removed/reassigned off a class keeps their payout,
+    // and the new trainer gets a second one. Gating PENDING payouts on the current
+    // assignment makes "reassign the trainer on the class" flow through to payroll
+    // automatically — no manual cleanup. Already-paid (completed) rows are kept for
+    // the record regardless.
+    const stillAssignedSql = `(
+      tp.status <> 'pending'
+      OR EXISTS (
+        SELECT 1 FROM course_run_trainer crt2
+         WHERE crt2.course_run_id = tp.course_run_id AND crt2.trainer_id = tp.trainer_id
+      )
+    )`;
+
     // Return all payout rows (joined) for runs in the window
     const listQuery = `
       SELECT
@@ -113,13 +137,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN course_run_trainer crt
              ON crt.course_run_id = tp.course_run_id AND crt.trainer_id = tp.trainer_id
       LEFT JOIN app_user au ON au.id = tp.trainer_id
-      WHERE cr.end_date >= (CURRENT_DATE - ($1 || ' months')::interval)
-        AND cr.end_date <= CURRENT_DATE
+      WHERE ${dateBoundSql}
         AND (cr.class_status::text = 'Confirmed' OR tp.status = 'completed')
         AND tp.num_learners > 0
+        AND ${stillAssignedSql}
       ORDER BY cr.end_date DESC, c.course_code ASC
     `;
-    const list = await pool.query(listQuery, [String(months)]);
+    const list = await pool.query(listQuery, [dateBoundParam]);
 
     // Year-to-date overview for the summary cards — independent of the selected
     // window (which only filters the table list). Scoped to classes whose end_date
@@ -140,9 +164,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       JOIN course_run cr ON cr.id = tp.course_run_id
       WHERE cr.end_date >= date_trunc('year', CURRENT_DATE)::date
         -- Match the list's visibility rules so the cards never count a class
-        -- that isn't listable (e.g. a run cancelled at the class level, or 0 learners).
+        -- that isn't listable (e.g. a run cancelled at the class level, or 0 learners,
+        -- or a pending payout whose trainer is no longer assigned to the class).
         AND (cr.class_status::text = 'Confirmed' OR tp.status = 'completed')
         AND tp.num_learners > 0
+        AND ${stillAssignedSql}
     `;
     const ov = (await pool.query(overviewQuery)).rows[0] || {};
     const overview = {
