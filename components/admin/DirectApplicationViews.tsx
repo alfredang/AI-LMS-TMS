@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -582,16 +583,18 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isCancelling, setIsCancelling] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [isEnrolling, setIsEnrolling] = useState(false);
     // [ARCHIVED] const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
     const [isAddingToCal, setIsAddingToCal] = useState(false);
     const [isGeneratingInv, setIsGeneratingInv] = useState(false);
     const [isSendingInvoiceEmail, setIsSendingInvoiceEmail] = useState(false);
-    const [isSyncingEnrol, setIsSyncingEnrol] = useState(false);
-    const [isSyncingGrants, setIsSyncingGrants] = useState(false);
-    const [isSyncingCal, setIsSyncingCal] = useState(false);
     const [showPii, setShowPii] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
+    // Single "Sync / Reconcile" control replaces the old Recover Enrolment IDs /
+    // Sync Enrolment / Sync Grants / Sync Calendar buttons — it runs all four in
+    // sequence. syncAllStep drives the spinner label so the admin sees progress.
+    const [isSyncingAll, setIsSyncingAll] = useState(false);
+    const [syncAllStep, setSyncAllStep] = useState('');
     const [emailToggleOn, setEmailToggleOn] = useState(false);
     const [emailToggleSaving, setEmailToggleSaving] = useState(false);
     const [invoiceEmailCc, setInvoiceEmailCc] = useState('');
@@ -988,37 +991,52 @@ export const ViewDirectApplicationView: React.FC = () => {
         }
     };
 
-    const handleSyncGrants = async () => {
-        setIsSyncingGrants(true);
-        try {
-            const res = await fetch('/api/admin/da-sync-grants', { method: 'POST' });
-            const json = await res.json();
-            if (json.success) { alert(`Grants synced: ${json.totalGrantsUpserted} grant(s) across ${json.runsProcessed} course run(s).`); fetchApplications(); }
-            else alert(`Sync failed: ${json.error}`);
-        } catch { alert('Sync grants failed.'); }
-        finally { setIsSyncingGrants(false); }
-    };
+    // Runs the four reconcile steps in sequence, tolerating per-step failure so a
+    // later step still runs if an earlier one errors. One confirmation, one summary.
+    //   1. Recover Enrolment IDs — live SSG search for MANUAL/placeholder rows
+    //   2. Sync Enrolment        — fill enrolment_id from the local enrollment table
+    //   3. Sync Grants           — pull grants from SSG into ssg_grants
+    //   4. Sync Calendar         — reconcile the calendar_added flag
+    const handleSyncAll = async () => {
+        if (!window.confirm(
+            'Run full sync for ALL applications?\n\n' +
+            '1. Recover enrolment IDs (live SSG search for MANUAL records)\n' +
+            '2. Reconcile enrolments from the local records\n' +
+            '3. Pull grants from SSG\n' +
+            '4. Update Google Calendar flags\n\nContinue?'
+        )) return;
 
-    const handleSyncEnrolment = async () => {
-        setIsSyncingEnrol(true);
-        try {
-            const res = await fetch('/api/admin/da-sync-enrolment', { method: 'POST' });
-            const json = await res.json();
-            if (json.success) { alert(`Sync complete: ${json.enrolmentsMatched} enrolment(s) matched, ${json.grantsMatched} grant(s) matched.`); fetchApplications(); }
-            else alert(`Sync failed: ${json.error}`);
-        } catch { alert('Sync enrolment failed.'); }
-        finally { setIsSyncingEnrol(false); }
-    };
+        setIsSyncingAll(true);
+        const lines: string[] = [];
+        const runStep = async (
+            label: string, url: string, summarise: (j: any) => string,
+        ) => {
+            setSyncAllStep(label);
+            try {
+                const res = await fetch(url, { method: 'POST' });
+                const json = await res.json();
+                if (json.success) lines.push(`✓ ${label}: ${summarise(json)}`);
+                else lines.push(`✗ ${label}: ${json.error || 'failed'}`);
+            } catch (err) {
+                lines.push(`✗ ${label}: ${err instanceof Error ? err.message : 'request failed'}`);
+            }
+        };
 
-    const handleSyncCalendar = async () => {
-        setIsSyncingCal(true);
         try {
-            const res = await fetch('/api/admin/da-sync-calendar', { method: 'POST' });
-            const json = await res.json();
-            if (json.success) { alert(`Sync complete: ${json.checked} checked, ${json.matched} already in calendar.`); fetchApplications(); }
-            else alert(`Sync failed: ${json.error}`);
-        } catch { alert('Sync calendar failed.'); }
-        finally { setIsSyncingCal(false); }
+            await runStep('Recover enrolment IDs', '/api/admin/da-live-ssg-recovery',
+                j => `found ${j.summary?.found ?? 0}, missing ${j.summary?.notFound ?? 0}, errors ${j.summary?.errors ?? 0}`);
+            await runStep('Sync enrolment', '/api/admin/da-sync-enrolment',
+                j => `${j.enrolmentsMatched ?? 0} enrolment(s), ${j.grantsMatched ?? 0} grant(s) matched`);
+            await runStep('Sync grants', '/api/admin/da-sync-grants',
+                j => `${j.totalGrantsUpserted ?? 0} grant(s) across ${j.runsProcessed ?? 0} run(s)`);
+            await runStep('Sync calendar', '/api/admin/da-sync-calendar',
+                j => `${j.checked ?? 0} checked, ${j.matched ?? 0} already in calendar`);
+            alert('Sync complete:\n\n' + lines.join('\n'));
+            fetchApplications();
+        } finally {
+            setSyncAllStep('');
+            setIsSyncingAll(false);
+        }
     };
 
     const [showPageModal, setShowPageModal] = useState(false);
@@ -1069,15 +1087,24 @@ export const ViewDirectApplicationView: React.FC = () => {
         finally { setIsCancelling(false); }
     };
 
-    const handleDeleteRows = async () => {
+    // Called by the DeleteConfirmModal's Confirm button.
+    const confirmDelete = async () => {
         if (selectedIds.size === 0) return;
-        if (!window.confirm(`Are you sure you want to permanently delete ${selectedIds.size} application(s)?`)) return;
         setIsDeleting(true);
         try {
             const response = await fetch('/api/admin/delete-da-applications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ applicationIds: Array.from(selectedIds) }) });
             const result = await response.json();
-            if (result.success) { alert(`Successfully deleted ${result.deleted} application(s).`); setSelectedIds(new Set()); fetchApplications(); }
-            else throw new Error(result.error);
+            if (!response.ok || !result.success) throw new Error(result.error || `Request failed (${response.status})`);
+            let msg = `Deleted ${result.deleted} application(s) (any linked enrolment/grant/invoice was cancelled).`;
+            if (result.failedCount > 0) {
+                const firstErr = Array.isArray(result.results) ? result.results.find((r: any) => !r.deleted && r.error)?.error : null;
+                msg += `\n${result.failedCount} left in place${firstErr ? ` — ${firstErr}` : ''}.`;
+            }
+            if (Array.isArray(result.warnings) && result.warnings.length > 0) msg += `\n\n` + result.warnings.join('\n');
+            setDeleteConfirmOpen(false);
+            alert(msg);
+            setSelectedIds(new Set());
+            fetchApplications();
         } catch (err) { alert(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown error'}`); }
         finally { setIsDeleting(false); }
     };
@@ -1297,60 +1324,36 @@ export const ViewDirectApplicationView: React.FC = () => {
                             </p>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
-                            <button onClick={handleEnrolment} disabled={isEnrolling || selectedIds.size === 0} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed">
-                                {isEnrolling ? 'Enrolling...' : 'Enrol to SSG'}
+                            <button onClick={handleEnrolment} disabled={isEnrolling || selectedIds.size === 0} className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 shadow-sm shadow-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                {isEnrolling ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />Enrolling...</> : <><Icon name={IconName.Users} className="w-3.5 h-3.5 mr-1.5" />Enrol to SSG</>}
                             </button>
-                            <button onClick={handleAddToCalendar} disabled={isAddingToCal || selectedIds.size === 0} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed">
-                                {isAddingToCal ? 'Adding...' : 'Add to Calendar'}
+                            <button onClick={handleAddToCalendar} disabled={isAddingToCal || selectedIds.size === 0} className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                {isAddingToCal ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />Adding...</> : <><Icon name={IconName.Calendar} className="w-3.5 h-3.5 mr-1.5" />Add to Calendar</>}
                             </button>
                             <button
                                 onClick={handleGenerateInvoice}
                                 disabled={isGeneratingInv || selectedIds.size === 0}
-                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed"
+                                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-amber-600 hover:bg-amber-700 shadow-sm shadow-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 title="Run the QuickBooks invoice pipeline for the selected rows without emailing the learner"
                             >
-                                {isGeneratingInv ? 'Generating...' : 'Generate Invoice'}
+                                {isGeneratingInv ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />Generating...</> : <><Icon name={IconName.FileText} className="w-3.5 h-3.5 mr-1.5" />Generate Invoice</>}
                             </button>
                             <button
                                 onClick={handleSendInvoiceEmail}
                                 disabled={isSendingInvoiceEmail || selectedIds.size === 0}
-                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed"
+                                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 title="Send selected generated tax invoice emails to learners"
                             >
-                                {isSendingInvoiceEmail ? 'Sending...' : 'Send Invoice Email'}
+                                {isSendingInvoiceEmail ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />Sending...</> : <><Icon name={IconName.Mail} className="w-3.5 h-3.5 mr-1.5" />Send Invoice Email</>}
                             </button>
                             <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
                             <button
-                                onClick={async () => {
-                                    if (!window.confirm('This will perform a live search across SSG for all records marked as MANUAL. Proceed?')) return;
-                                    setIsSyncing(true);
-                                    try {
-                                        const response = await fetch('/api/admin/da-live-ssg-recovery', { method: 'POST' });
-                                        const result = await response.json();
-                                        if (result.success) {
-                                            alert(`Recovery complete! Found: ${result.summary.found}, Missing: ${result.summary.notFound}, Errors: ${result.summary.errors}`);
-                                            fetchApplications();
-                                        } else throw new Error(result.error);
-                                    } catch (err) {
-                                        alert(`Recovery failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-                                    } finally {
-                                        setIsSyncing(false);
-                                    }
-                                }}
-                                disabled={isSyncing}
-                                className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:bg-purple-400"
-                                title="Perform live SSG search for MANUAL records to recover real enrolment IDs"
+                                onClick={handleSyncAll}
+                                disabled={isSyncingAll}
+                                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-purple-600 hover:bg-purple-700 shadow-sm shadow-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                title="Reconcile all applications against SSG & Google Calendar: recover enrolment IDs, sync enrolments, pull grants, and update calendar flags"
                             >
-                                {isSyncing ? 'Recovering...' : 'Recover Enrolment IDs'}
-                            </button>
-                            <button onClick={handleSyncEnrolment} disabled={isSyncingEnrol} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-green-500 text-green-700 dark:text-green-300 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
-                                {isSyncingEnrol ? 'Syncing...' : 'Sync Enrolment'}
-                            </button>
-                            <button onClick={handleSyncGrants} disabled={isSyncingGrants} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-purple-500 text-purple-700 dark:text-purple-300 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed">
-                                {isSyncingGrants ? 'Syncing...' : 'Sync Grants'}
-                            </button>
-                            <button onClick={handleSyncCalendar} disabled={isSyncingCal} className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed">
-                                {isSyncingCal ? 'Syncing...' : 'Sync Calendar'}
+                                {isSyncingAll ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />{syncAllStep ? `${syncAllStep}...` : 'Syncing...'}</> : <><Icon name={IconName.Sync} className="w-3.5 h-3.5 mr-1.5" />Sync</>}
                             </button>
                         </div>
                     </div>
@@ -1433,12 +1436,31 @@ export const ViewDirectApplicationView: React.FC = () => {
                                 <button onClick={handleCancelEnrolment} disabled={isCancelling || isDeleting} className="inline-flex items-center px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-red-400">
                                     {isCancelling ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1.5" />Cancelling...</> : 'Cancel Enrolment'}
                                 </button>
-                                <button onClick={handleDeleteRows} disabled={isDeleting || isCancelling} className="inline-flex items-center px-3 py-1.5 text-sm bg-gray-700 text-white rounded hover:bg-gray-800 disabled:bg-gray-400">
-                                    {isDeleting ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1.5" />Deleting...</> : 'Delete Row'}
+                                <button onClick={() => setDeleteConfirmOpen(true)} disabled={isDeleting || isCancelling} className="inline-flex items-center px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-red-400">
+                                    <Icon name={IconName.Delete} className="w-3.5 h-3.5 mr-1.5" />
+                                    Delete Selected
                                 </button>
                             </>
                         )}
                     </div>
+
+                    {deleteConfirmOpen && (
+                        <DeleteConfirmModal
+                            rows={applications.filter(app => selectedIds.has(app.application_id))}
+                            entityLabel="Direct Application"
+                            isDeleting={isDeleting}
+                            onConfirm={confirmDelete}
+                            onClose={() => setDeleteConfirmOpen(false)}
+                            description={<>For rows with an Enrolment ID this <strong className="text-red-700 dark:text-red-300">cancels the live TPGateway enrolment</strong>, removes its grant, and voids the QBO invoices (main tax / SFC / grant) — only when no other application shares them — then deletes the record. A shared invoice is flagged for manual adjustment in QuickBooks.</>}
+                            columns={[
+                                { header: 'Name', className: 'font-semibold text-gray-900 dark:text-gray-100 max-w-[160px] truncate', render: (r: any) => r.trainee_name || '(unnamed)' },
+                                { header: 'Course', className: 'max-w-[200px] truncate', render: (r: any) => r.course_title || '-' },
+                                { header: 'Course Ref', className: 'font-mono text-[11px] whitespace-nowrap', render: (r: any) => r.course_reference_number || '-' },
+                                { header: 'Enrolment', className: 'font-mono text-[11px] whitespace-nowrap', render: (r: any) => r.enrolment_id || '-' },
+                                { header: 'Invoice', className: 'font-mono text-[11px] whitespace-nowrap', render: (r: any) => r.invoice_doc_number || r.invoice_no || '-' },
+                            ]}
+                        />
+                    )}
 
                     {paginatedApplications.length > 0 ? (
                         <>
