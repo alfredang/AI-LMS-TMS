@@ -189,11 +189,11 @@ async function loadSsgContext(): Promise<SSGContext> {
   };
 }
 
-async function ssgEncryptedPost(ctx: SSGContext, path: string, payload: unknown): Promise<any> {
+async function ssgEncryptedPost(ctx: SSGContext, path: string, payload: unknown, timeoutMs?: number): Promise<any> {
   let lastErr: unknown;
   for (let attempt = 1; attempt <= MAX_SSG_RETRY_ATTEMPTS; attempt++) {
     try {
-      return await ssgEncryptedPostOnce(ctx, path, payload);
+      return await ssgEncryptedPostOnce(ctx, path, payload, timeoutMs);
     } catch (err) {
       lastErr = err;
       if (attempt === MAX_SSG_RETRY_ATTEMPTS || !isTransientSsgError(err)) throw err;
@@ -208,7 +208,7 @@ async function ssgEncryptedPost(ctx: SSGContext, path: string, payload: unknown)
   throw lastErr;
 }
 
-async function ssgEncryptedPostOnce(ctx: SSGContext, path: string, payload: unknown): Promise<any> {
+async function ssgEncryptedPostOnce(ctx: SSGContext, path: string, payload: unknown, timeoutMs?: number): Promise<any> {
   const cipher = crypto.createCipheriv('aes-256-cbc', ctx.encKey, IV);
   let encrypted = cipher.update(JSON.stringify(payload), 'utf8', 'base64');
   encrypted += cipher.final('base64');
@@ -217,6 +217,9 @@ async function ssgEncryptedPostOnce(ctx: SSGContext, path: string, payload: unkn
     .withEndpoint(ctx.ssgBaseUrl, path)
     .withMethod(HttpMethod.POST)
     .withBody(encrypted);
+
+  // Override the default 30s cap for slow endpoints (e.g. create-enrolment).
+  if (timeoutMs) builder.withTimeout(timeoutMs);
 
   if (ctx.credentials.certificateContent && ctx.credentials.privateKeyContent) {
     builder.withCertificate(ctx.credentials.certificateContent, ctx.credentials.privateKeyContent);
@@ -601,6 +604,9 @@ export async function processCompanyApplication(
   let caRecord = buildCompanyApplicationRecord(row, run, enrolmentReference);
 
   if (!enrolmentReference) {
+    // Captured just before the create call so the catch can search SSG for an
+    // enrolment it may have created even though the create request timed out.
+    let recoveryPayload: any = null;
     try {
       const ctx = sharedCtx || (await loadSsgContext());
 
@@ -658,7 +664,10 @@ export async function processCompanyApplication(
 
       console.log('📦 Company SSG payload check:', JSON.stringify(payload, null, 2));
 
-      const parsed = await ssgEncryptedPost(ctx, '/tpg/enrolments', payload);
+      // SSG create-enrolment routinely exceeds the default 30s and aborts even
+      // though SSG created the record — give it 60s (mirrors /api/enrolment/create).
+      recoveryPayload = payload;
+      const parsed = await ssgEncryptedPost(ctx, '/tpg/enrolments', payload, 60000);
       const errMsg = hasSsgError(parsed);
 
       if (errMsg) {
@@ -699,13 +708,51 @@ export async function processCompanyApplication(
 
       caRecord = buildCompanyApplicationRecord(row, run, enrolmentReference);
     } catch (err) {
-      await markFailed(appId, 'enrolment', err);
-      enrolmentError = err instanceof Error ? err.message : String(err);
+      // Timeout / network — SSG may have created the enrolment anyway. Search
+      // for it and adopt an existing (non-cancelled) reference before failing,
+      // so the row isn't parked at 'failed' with a live orphan enrolment.
+      let recovered: string | null = null;
+      if (recoveryPayload) {
+        try {
+          const p = recoveryPayload;
+          const searchResult = await searchEnrolment({
+            enrolment: {
+              course: p.enrolment.course,
+              trainee: p.enrolment.trainee,
+              trainingPartner: p.enrolment.trainingPartner,
+            },
+            parameters: { page: 0, pageSize: 10 },
+          } as any);
+          const dead = ['cancelled', 'withdrawn', 'rejected'];
+          if (
+            searchResult.success &&
+            searchResult.referenceNumber &&
+            !dead.includes(String(searchResult.enrolmentStatus || '').toLowerCase())
+          ) {
+            recovered = searchResult.referenceNumber;
+          }
+        } catch (searchErr) {
+          console.warn('[company auto-enrol] recovery search failed:', searchErr instanceof Error ? searchErr.message : searchErr);
+        }
+      }
 
-      console.error('[company auto-enrol] enrolment failed:', {
-        companyApplicationId: appId,
-        error: enrolmentError,
-      });
+      if (recovered) {
+        console.log(`✅ [company auto-enrol] recovered enrolment after failed create: ${recovered}`);
+        enrolmentReference = recovered;
+        await updateCompanyRow(appId, {
+          enrolment_id: enrolmentReference,
+          enrolment_status: 'Confirmed',
+        });
+        caRecord = buildCompanyApplicationRecord(row, run, enrolmentReference);
+      } else {
+        await markFailed(appId, 'enrolment', err);
+        enrolmentError = err instanceof Error ? err.message : String(err);
+
+        console.error('[company auto-enrol] enrolment failed:', {
+          companyApplicationId: appId,
+          error: enrolmentError,
+        });
+      }
     }
   }
 

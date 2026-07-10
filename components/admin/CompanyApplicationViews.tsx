@@ -1261,8 +1261,10 @@ const DeleteConfirmModal: React.FC<{
                 </span>
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
-                Only the <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 font-mono text-[11px] text-gray-700 dark:text-gray-300">company_application</code> record is removed.
-                The LMS enrolment, QBO invoice, and Drive files <strong className="text-gray-800 dark:text-gray-200">stay in place</strong> and must be cleaned manually if needed.
+                For rows with an Enrolment ID this <strong className="text-red-700 dark:text-red-300">cancels the live TPGateway enrolment</strong>,
+                removes its grant, and voids the QBO invoice (only when no other learner shares it), then deletes the row.
+                A <strong className="text-gray-800 dark:text-gray-200">consolidated invoice</strong> shared with other learners is
+                <strong className="text-gray-800 dark:text-gray-200"> not</strong> voided — you'll be told to adjust it manually in QuickBooks.
               </p>
             </div>
           </div>
@@ -1597,7 +1599,17 @@ export const ViewCompanyApplicationView: React.FC = () => {
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Request failed (${res.status})`);
       }
-      setDeleteMessage(`Deleted ${data.deleted} row${data.deleted === 1 ? '' : 's'}.`);
+      const parts: string[] = [`Deleted ${data.deleted} row${data.deleted === 1 ? '' : 's'} (any linked enrolment/grant/invoice was cancelled).`];
+      if (data.failedCount > 0) {
+        const firstErr = Array.isArray(data.results)
+          ? data.results.find((r: any) => !r.deleted && r.error)?.error
+          : null;
+        parts.push(`${data.failedCount} row${data.failedCount === 1 ? '' : 's'} left in place${firstErr ? ` — ${firstErr}` : ''}.`);
+      }
+      if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+        parts.push(...data.warnings);
+      }
+      setDeleteMessage(parts.join(' '));
       setSelectedIds(new Set());
       setDeleteConfirmOpen(false);
       void reloadRows();
