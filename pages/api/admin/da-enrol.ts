@@ -60,8 +60,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         continue;
       }
 
+      let payload: any = null;
       try {
-        const payload = buildEnrolmentPayload(app, uen, tp.code);
+        payload = buildEnrolmentPayload(app, uen, tp.code);
 
         const cipher = crypto.createCipheriv('aes-256-cbc', encKey, iv);
         let encryptedPayload = cipher.update(JSON.stringify(payload), 'utf8', 'base64');
@@ -70,7 +71,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const builder = new HTTPRequestBuilder()
           .withEndpoint(ssgBaseUrl, '/tpg/enrolments')
           .withMethod(HttpMethod.POST)
-          .withBody(encryptedPayload);
+          .withBody(encryptedPayload)
+          // SSG create-enrolment routinely exceeds the default 30s and aborts even
+          // though SSG created the record — give it 60s (mirrors /api/enrolment/create).
+          .withTimeout(60000);
 
         if (credentials.certificateContent && credentials.privateKeyContent) {
           builder.withCertificate(credentials.certificateContent, credentials.privateKeyContent);
@@ -203,11 +207,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         results.push({ application_id: applicationId, success: true });
 
       } catch (err) {
-        results.push({
-          application_id: applicationId,
-          success: false,
-          error: err instanceof Error ? err.message : 'Unknown error',
-        });
+        // Timeout / network — SSG may have created the enrolment anyway. Search
+        // for it and adopt an existing (non-cancelled) reference before failing,
+        // so we don't orphan a live enrolment or report a false failure.
+        let recovered: string | null = null;
+        if (payload) {
+          try {
+            const searchResult = await searchEnrolment({
+              enrolment: {
+                course: payload.enrolment.course,
+                trainee: payload.enrolment.trainee,
+                trainingPartner: payload.enrolment.trainingPartner,
+              },
+              parameters: { page: 0, pageSize: 10 },
+            } as any);
+            const dead = ['cancelled', 'withdrawn', 'rejected'];
+            if (
+              searchResult.success &&
+              searchResult.referenceNumber &&
+              !dead.includes(String(searchResult.enrolmentStatus || '').toLowerCase())
+            ) {
+              recovered = searchResult.referenceNumber;
+            }
+          } catch (searchErr) {
+            console.warn(`⚠️ da-enrol [${applicationId}]: recovery search failed:`, searchErr instanceof Error ? searchErr.message : searchErr);
+          }
+        }
+
+        if (recovered) {
+          console.log(`✅ da-enrol [${applicationId}]: recovered enrolment after failed create: ${recovered}`);
+          await pool.query(
+            `UPDATE da_application SET enrolment_id = $1, auto_enrol_status = 'enroled', enrolment_status = 'Confirmed', updated_at = NOW() WHERE application_id = $2`,
+            [recovered, applicationId]
+          );
+          results.push({ application_id: applicationId, success: true });
+        } else {
+          results.push({
+            application_id: applicationId,
+            success: false,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          });
+        }
       }
     }
 
