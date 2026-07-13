@@ -6,7 +6,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const { courseId, casScore, esScore, fundingValidity, courseType } = req.body;
+  const { courseId, casScore, esScore, fundingValidity, courseType, newCourseCode } = req.body;
 
   if (!courseId) {
     return res.status(400).json({ message: 'courseId is required' });
@@ -25,6 +25,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (courseType === 'WSQ' || courseType === 'Non-WSQ') {
       params.push(courseType);
       setClauses.push(`course_type = $${params.length}`);
+    }
+
+    // Only touch new_course_code when the field is present in the request body,
+    // so callers that don't manage it leave the existing value untouched. An
+    // empty string clears it back to NULL.
+    if (newCourseCode !== undefined) {
+      const trimmed = typeof newCourseCode === 'string' ? newCourseCode.trim() : newCourseCode;
+      params.push(trimmed ? trimmed : null);
+      setClauses.push(`new_course_code = $${params.length}`);
     }
 
     params.push(courseId);
