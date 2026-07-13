@@ -58,6 +58,7 @@ interface EditState {
   esScore: string;
   fundingValidity: string;
   courseType: 'WSQ' | 'Non-WSQ';
+  newCourseCode: string;
 }
 
 const FundingValidityView: React.FC = () => {
@@ -67,7 +68,7 @@ const FundingValidityView: React.FC = () => {
   const [whitelistingIds, setWhitelistingIds] = useState<Record<string, boolean>>({});
   const [whitelistStateOverrides, setWhitelistStateOverrides] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '', courseType: 'WSQ' });
+  const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '', courseType: 'WSQ', newCourseCode: '' });
   const [saving, setSaving] = useState(false);
 
   const today = startOfDay(new Date());
@@ -162,6 +163,7 @@ const FundingValidityView: React.FC = () => {
       esScore: course.esScore != null ? String(course.esScore) : '',
       fundingValidity: toDateInputValue(course.fundingValidity),
       courseType: normalizeCourseType(course.courseType),
+      newCourseCode: course.newCourseCode || '',
     });
   };
 
@@ -180,6 +182,7 @@ const FundingValidityView: React.FC = () => {
         casScore: editState.casScore || null,
         esScore: editState.esScore || null,
         fundingValidity: editState.fundingValidity || null,
+        newCourseCode: editState.newCourseCode.trim(),
         ...(typeChanged ? { courseType: editState.courseType } : {}),
       });
       setEditingId(null);
@@ -245,7 +248,8 @@ const FundingValidityView: React.FC = () => {
             <thead className="bg-gray-50 dark:bg-gray-900/40">
               <tr className="text-left text-gray-600 dark:text-gray-300">
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code (New)</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code (Old)</th>
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Type</th>
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Validity End Date</th>
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Renew Date</th>
@@ -276,6 +280,19 @@ const FundingValidityView: React.FC = () => {
                     }`}
                   >
                     <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
+                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editState.newCourseCode}
+                          onChange={e => setEditState(s => ({ ...s, newCourseCode: e.target.value }))}
+                          placeholder="New ref code"
+                          className={`${inputClass} w-36`}
+                        />
+                      ) : (
+                        course.newCourseCode || '—'
+                      )}
+                    </td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.courseCode || '—'}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">
                       {isEditing ? (

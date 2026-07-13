@@ -257,6 +257,7 @@ export interface Course {
   id: string;
   title: string;
   courseCode: string;
+  newCourseCode?: string;
   courseDuration: number;
   trainingHours: number;
   assessmentHours: number;

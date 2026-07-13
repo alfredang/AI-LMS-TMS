@@ -14,6 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.id AS course_id,
           c.title AS course_title,
           c.course_code,
+          c.new_course_code,
           c.tsc_title,
           c.tsc_code,
           c.course_type,
@@ -48,7 +49,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const courses = result.rows.map((row: any) => ({
       id: row.course_id,
       title: row.course_title,
-      courseCode: row.course_code || '', 
+      courseCode: row.course_code || '',
+      newCourseCode: row.new_course_code || '',
       courseDuration: (row.training_hours || 0) + (row.assessment_hours || 0),
       trainingHours: row.training_hours || 0,
       assessmentHours: row.assessment_hours || 0,
