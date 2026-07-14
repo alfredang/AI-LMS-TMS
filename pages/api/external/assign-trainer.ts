@@ -1,149 +1,200 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { pushTrainerToTpgForRun, clearTrainerOnTpgForRun } from '../../../lib/ssg/pushTrainerToTpgForRun';
+import { patchRunAttendee } from '../../../lib/calendar/runAttendees';
 
 /**
- * External API — Assign Trainer to Course Run
- *
  * POST /api/external/assign-trainer
  *
- * Headers:
- *   x-api-key: <EXTERNAL_API_KEY_FOR_CLAWDBOT>
+ * Assign or unassign a trainer on a course run, affecting LMS + SSG/TPGateway + Google Calendar.
  *
- * Body (JSON):
- *   {
- *     "course_run_id": "1334264",
- *     "trainer_email": "angch@tertiaryinfotech.com",
- *     "trainer_name": "Dr. Alfred Ang"  (optional — resolved from app_user if omitted)
- *   }
+ * Commit ordering:
+ *   ASSIGN:   LMS INSERT first (SSG push reads trainer data from course_run_trainer)
+ *             → SSG/TPG trainer push (if sync_tpg and is_official)
+ *             → GCal add (best-effort last)
+ *   UNASSIGN: SSG/TPG clear FIRST (reads current DB state before LMS row is removed)
+ *             → LMS DELETE
+ *             → GCal remove (best-effort last)
+ *
+ * Body:
+ * {
+ *   run_id:         string,      // SSG run ID (e.g. "TGS-123456-01") or internal UUID
+ *   trainer_email:  string,
+ *   trainer_name?:  string,      // required for assign if trainer not in LMS
+ *   action:         'assign' | 'unassign',
+ *   is_official?:   boolean,     // default true — the official TPGateway trainer (only one per run)
+ *   sync_tpg?:      boolean,     // default true — push/clear on SSG/TPGateway
+ *   sync_calendar?: boolean,     // default true — add/remove from GCal events
+ *   notes?:         string
+ * }
+ *
+ * Response (assign):
+ * {
+ *   success: true,
+ *   lms:      { assigned: true, junction_id: '<uuid>', is_official: boolean },
+ *   tpg:      { status: 'synced'|'skipped'|..., message: string },
+ *   calendar: { status: 'ok'|'skipped', changed?: number }
+ * }
+ *
+ * Response (unassign):
+ * {
+ *   success: true,
+ *   tpg:      { status: 'synced'|'skipped'|..., message: string },
+ *   lms:      { removed: true },
+ *   calendar: { status: 'ok'|'skipped', changed?: number }
+ * }
+ *
+ * Headers: x-api-key: <EXTERNAL_API_KEY_FOR_CLAWDBOT>
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // CORS headers for external callers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
   const apiKey = req.headers['x-api-key'];
   const validKey = process.env.EXTERNAL_API_KEY_FOR_CLAWDBOT;
   if (!validKey) return res.status(500).json({ success: false, error: 'API key not configured on server' });
   if (!apiKey || apiKey !== validKey) return res.status(401).json({ success: false, error: 'Invalid or missing API key' });
 
-  const { course_run_id, trainer_email, trainer_name } = req.body ?? {};
+  const {
+    run_id,
+    trainer_email,
+    trainer_name,
+    action,
+    is_official = true,
+    sync_tpg = true,
+    sync_calendar = true,
+    notes,
+  } = (req.body || {}) as {
+    run_id?: string;
+    trainer_email?: string;
+    trainer_name?: string;
+    action?: string;
+    is_official?: boolean;
+    sync_tpg?: boolean;
+    sync_calendar?: boolean;
+    notes?: string;
+  };
 
-  if (!course_run_id) {
-    return res.status(400).json({ success: false, error: 'Missing required field: course_run_id' });
+  if (!run_id?.trim()) return res.status(400).json({ success: false, error: 'run_id is required' });
+  if (!trainer_email?.trim()) return res.status(400).json({ success: false, error: 'trainer_email is required' });
+  if (action !== 'assign' && action !== 'unassign') {
+    return res.status(400).json({ success: false, error: "action must be 'assign' or 'unassign'" });
   }
-  if (!trainer_email) {
-    return res.status(400).json({ success: false, error: 'Missing required field: trainer_email' });
-  }
+
+  const emailNorm = trainer_email.trim().toLowerCase();
 
   try {
-    // Look up the course run by SSG course_run_id
-    const crResult = await pool.query(
-      `SELECT id, course_run_id FROM course_run WHERE course_run_id = $1`,
-      [String(course_run_id)]
-    );
-    if (crResult.rows.length === 0) {
-      return res.status(404).json({ success: false, error: `Course run ${course_run_id} not found` });
-    }
-    const courseRunUuid = crResult.rows[0].id;
+    const runRow = (await pool.query(
+      `SELECT id FROM course_run WHERE course_run_id = $1 OR id::text = $1 LIMIT 1`,
+      [run_id.trim()]
+    )).rows[0];
+    if (!runRow) return res.status(404).json({ success: false, error: `Run ${run_id} not found in LMS` });
+    const runUuid = runRow.id as string;
 
-    // Resolve trainer from app_user + trainer_profile
-    const emailLower = trainer_email.trim().toLowerCase();
-    let resolvedTrainerId: string | null = null;
-    let resolvedTrainerName: string = trainer_name || '';
-
-    const trainerLookup = await pool.query(
-      `SELECT au.id, au.full_name FROM app_user au
-       JOIN trainer_profile tp ON tp.user_id = au.id
-       WHERE LOWER(au.email) = $1 OR LOWER(au.secondary_email) = $1
-       LIMIT 1`,
-      [emailLower]
-    );
-
-    if (trainerLookup.rows.length > 0) {
-      resolvedTrainerId = trainerLookup.rows[0].id;
-      if (!resolvedTrainerName) {
-        resolvedTrainerName = trainerLookup.rows[0].full_name;
+    if (action === 'assign') {
+      if (!trainer_name?.trim()) {
+        // Try to resolve name from DB before requiring it
+        const userRow = (await pool.query(
+          `SELECT full_name FROM app_user WHERE LOWER(email) = $1 LIMIT 1`, [emailNorm]
+        )).rows[0];
+        if (!userRow?.full_name) {
+          return res.status(400).json({ success: false, error: 'trainer_name is required when trainer is not in the LMS' });
+        }
       }
-    } else if (!resolvedTrainerName) {
-      return res.status(404).json({
-        success: false,
-        error: `Trainer with email ${trainer_email} not found. Provide trainer_name to auto-create.`,
-      });
+      return await handleAssign({ runUuid, emailNorm, trainer_name, is_official, sync_tpg, sync_calendar, notes, res });
+    } else {
+      return await handleUnassign({ runUuid, emailNorm, sync_tpg, sync_calendar, notes, res });
     }
-
-    // Auto-create trainer if not found but name is provided
-    if (!resolvedTrainerId && resolvedTrainerName) {
-      const newUser = await pool.query(
-        `INSERT INTO app_user (email, full_name, account_status)
-         VALUES ($1, $2, 'active')
-         ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name
-         RETURNING id`,
-        [trainer_email.trim(), resolvedTrainerName.trim()]
-      );
-      resolvedTrainerId = newUser.rows[0].id;
-      await pool.query(
-        `INSERT INTO trainer_profile (user_id, tel, trainer_type, status)
-         VALUES ($1, '', 'non-ACLP', 'Active')
-         ON CONFLICT (user_id) DO NOTHING`,
-        [resolvedTrainerId]
-      );
-    }
-
-    // Remove existing trainers from junction table for this course run (full reassignment)
-    await pool.query(
-      `DELETE FROM course_run_trainer WHERE course_run_id = $1`,
-      [courseRunUuid]
-    );
-
-    // Insert new trainer into junction table
-    await pool.query(
-      `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
-       VALUES ($1, $2, $3, $4)`,
-      [courseRunUuid, resolvedTrainerId, resolvedTrainerName, trainer_email.trim()]
-    );
-
-    // Update legacy columns on course_run
-    await pool.query(
-      `UPDATE course_run
-       SET assigned_trainer_id = $1,
-           assigned_trainer_name = $2,
-           assigned_trainer_email = $3,
-           updated_at = NOW()
-       WHERE id = $4`,
-      [resolvedTrainerId, resolvedTrainerName, trainer_email.trim(), courseRunUuid]
-    );
-
-    // Auto-confirm if pending AND has at least one learner enrolled
-    await pool.query(
-      `UPDATE course_run
-       SET class_status = 'Confirmed', updated_at = NOW()
-       WHERE id = $1 AND class_status = 'Pending'
-         AND EXISTS (SELECT 1 FROM enrollment e WHERE e.course_run_id = $1)`,
-      [courseRunUuid]
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: `Trainer ${resolvedTrainerName} (${trainer_email}) assigned to course run ${course_run_id}`,
-      data: {
-        course_run_id,
-        course_run_uuid: courseRunUuid,
-        trainer_id: resolvedTrainerId,
-        trainer_name: resolvedTrainerName,
-        trainer_email: trainer_email.trim(),
-      },
-    });
-  } catch (error) {
-    console.error('assign-trainer error:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+  } catch (err: any) {
+    console.error('[external/assign-trainer] error:', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Unexpected error' });
   }
+}
+
+async function handleAssign({
+  runUuid, emailNorm, trainer_name, is_official, sync_tpg, sync_calendar, notes, res,
+}: { runUuid: string; emailNorm: string; trainer_name?: string; is_official: boolean; sync_tpg: boolean; sync_calendar: boolean; notes?: string; res: NextApiResponse }) {
+  const userRow = (await pool.query(
+    `SELECT id, full_name, email FROM app_user WHERE LOWER(email) = $1 LIMIT 1`, [emailNorm]
+  )).rows[0];
+  const trainerId = userRow?.id ?? null;
+  const resolvedName = userRow?.full_name ?? trainer_name ?? emailNorm;
+  const resolvedEmail = userRow?.email ?? emailNorm;
+
+  console.log(`[external/assign-trainer] ASSIGN ${emailNorm} to run ${runUuid}${notes ? ` (${notes})` : ''}`);
+
+  // Step 1: LMS — upsert into course_run_trainer (SSG push reads from this table)
+  await pool.query(
+    `DELETE FROM course_run_trainer WHERE course_run_id = $1 AND LOWER(COALESCE(trainer_email, '')) = $2`,
+    [runUuid, emailNorm]
+  );
+  const junctionRes = (await pool.query(
+    `INSERT INTO course_run_trainer (course_run_id, trainer_id, trainer_name, trainer_email)
+     VALUES ($1, $2, $3, $4) RETURNING id`,
+    [runUuid, trainerId, resolvedName, resolvedEmail]
+  )).rows[0];
+
+  if (is_official) {
+    await pool.query(
+      `UPDATE course_run SET assigned_trainer_id = $1, assigned_trainer_name = $2,
+              assigned_trainer_email = $3, updated_at = NOW() WHERE id = $4`,
+      [trainerId, resolvedName, resolvedEmail, runUuid]
+    );
+  }
+  const lms = { assigned: true, junction_id: junctionRes.id as string, is_official };
+
+  // Step 2: SSG/TPG push (only the official trainer goes to TPGateway)
+  let tpg: any = { status: 'skipped', message: !sync_tpg ? 'sync_tpg disabled' : 'is_official is false — only the official trainer is pushed to TPGateway' };
+  if (sync_tpg && is_official) {
+    tpg = await pushTrainerToTpgForRun(runUuid, { onlyEmail: resolvedEmail });
+  }
+
+  // Step 3: GCal add (best-effort last)
+  let calendar: any = { status: 'skipped', message: 'sync_calendar disabled' };
+  if (sync_calendar) {
+    calendar = await patchRunAttendee(runUuid, resolvedEmail, 'add');
+  }
+
+  return res.status(200).json({ success: true, lms, tpg, calendar });
+}
+
+async function handleUnassign({
+  runUuid, emailNorm, sync_tpg, sync_calendar, notes, res,
+}: { runUuid: string; emailNorm: string; sync_tpg: boolean; sync_calendar: boolean; notes?: string; res: NextApiResponse }) {
+  const junctionRow = (await pool.query(
+    `SELECT id, trainer_email FROM course_run_trainer WHERE course_run_id = $1 AND LOWER(COALESCE(trainer_email, '')) = $2 LIMIT 1`,
+    [runUuid, emailNorm]
+  )).rows[0];
+  if (!junctionRow) {
+    return res.status(404).json({ success: false, error: `${emailNorm} is not assigned as a trainer on this run` });
+  }
+
+  console.log(`[external/assign-trainer] UNASSIGN ${emailNorm} from run ${runUuid}${notes ? ` (${notes})` : ''}`);
+
+  // Step 1: SSG/TPG clear FIRST (course_run_trainer row still exists — readable by clearTrainerOnTpgForRun)
+  let tpg: any = { status: 'skipped', message: 'sync_tpg disabled' };
+  if (sync_tpg) {
+    tpg = await clearTrainerOnTpgForRun(runUuid);
+  }
+
+  // Step 2: LMS DELETE after TPG
+  await pool.query(`DELETE FROM course_run_trainer WHERE id = $1`, [junctionRow.id]);
+  await pool.query(
+    `UPDATE course_run SET assigned_trainer_id = NULL, assigned_trainer_name = NULL,
+            assigned_trainer_email = NULL, updated_at = NOW()
+      WHERE id = $1 AND LOWER(COALESCE(assigned_trainer_email, '')) = $2`,
+    [runUuid, emailNorm]
+  );
+  const lms = { removed: true };
+
+  // Step 3: GCal remove (best-effort last)
+  let calendar: any = { status: 'skipped', message: 'sync_calendar disabled' };
+  if (sync_calendar) {
+    calendar = await patchRunAttendee(runUuid, emailNorm, 'remove');
+  }
+
+  return res.status(200).json({ success: true, tpg, lms, calendar });
 }

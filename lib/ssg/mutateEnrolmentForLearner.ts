@@ -267,3 +267,59 @@ export async function cancelEnrolmentForLearnerOnRun(
     return { status: 'error', message: err?.message || 'Unknown error', action: 'Cancel' };
   }
 }
+
+/**
+ * Re-point a learner's SSG enrolment from source run to target run,
+ * calling BEFORE the local LMS move (enrollment.course_run_id still = sourceRunUuid).
+ *
+ * Unlike repointEnrolmentToRunForLearner (which expects enrollment already on target UUID),
+ * this resolves the enrolment on the SOURCE run and updates it to point at the target SSG
+ * run ID. Use this when TPG must be committed before local state is changed.
+ */
+export async function repointEnrolmentPreMove(
+  sourceRunUuid: string,
+  targetRunUuid: string,
+  learner: { userId?: string | null; email?: string | null }
+): Promise<EnrolmentMutateResult> {
+  try {
+    const row = await resolveLearnerEnrolmentOnRun(sourceRunUuid, learner);
+    if (!row) {
+      return { status: 'not_found', message: 'No enrolment found for this learner on the current run', action: 'Update' };
+    }
+
+    const targetRunRow = (await pool.query<{ ssg_run_id: string }>(
+      `SELECT course_run_id AS ssg_run_id FROM course_run WHERE id = $1 LIMIT 1`,
+      [targetRunUuid]
+    )).rows[0];
+    if (!targetRunRow) {
+      return { status: 'not_found', message: `Target run UUID ${targetRunUuid} not found in LMS`, action: 'Update' };
+    }
+    const targetSsgRunId = targetRunRow.ssg_run_id;
+
+    // Try the stored ref first
+    if (row.enrolment_id) {
+      const r = await postEnrolmentDetailsAction(row.enrolment_id, 'Update', targetSsgRunId);
+      if (r.ok) {
+        return { status: 'synced', message: `Re-pointed on TPGateway to ${targetSsgRunId} (${row.enrolment_id})`, action: 'Update', enrolmentRef: row.enrolment_id, ssgStatus: r.status };
+      }
+      if (!isStaleRefError(r.message)) {
+        return { status: 'error', message: r.message, action: 'Update', enrolmentRef: row.enrolment_id, ssgStatus: r.status };
+      }
+    }
+
+    // Stored ref missing or stale — reconcile against SSG truth on the source run
+    const liveRef = await findActiveEnrolmentRefOnRun(row, row.ssg_run_id);
+    if (!liveRef) {
+      return { status: 'skipped_no_enrolment_id', message: 'No active TPGateway enrolment found (none stored locally or found on SSG)', action: 'Update' };
+    }
+    const r2 = await postEnrolmentDetailsAction(liveRef, 'Update', targetSsgRunId);
+    if (!r2.ok) {
+      return { status: 'error', message: r2.message, action: 'Update', enrolmentRef: liveRef, ssgStatus: r2.status };
+    }
+    // Heal local ref so future operations have the correct reference
+    await pool.query(`UPDATE enrollment SET enrolment_id = $1, updated_at = NOW() WHERE id = $2`, [liveRef, row.enrolment_uuid]);
+    return { status: 'synced', message: `Re-pointed on TPGateway to ${targetSsgRunId} (${liveRef}; ref reconciled from SSG)`, action: 'Update', enrolmentRef: liveRef, ssgStatus: r2.status };
+  } catch (err: any) {
+    return { status: 'error', message: err?.message || 'Unknown error', action: 'Update' };
+  }
+}
