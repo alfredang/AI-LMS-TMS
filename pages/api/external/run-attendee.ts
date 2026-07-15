@@ -84,18 +84,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const emailNorm = email.trim().toLowerCase();
 
+  // Coerce boolean fields — JSON string "false" must not be truthy
+  const syncTpg = req.body?.sync_tpg !== false && req.body?.sync_tpg !== 'false';
+  const syncCalendar = req.body?.sync_calendar !== false && req.body?.sync_calendar !== 'false';
+
   try {
     const runRow = (await pool.query(
-      `SELECT id, course_run_id FROM course_run WHERE course_run_id = $1 OR id::text = $1 LIMIT 1`,
+      `SELECT id, course_id, course_run_id, class_status, end_date FROM course_run WHERE course_run_id = $1 OR id::text = $1 LIMIT 1`,
       [run_id.trim()]
     )).rows[0];
     if (!runRow) return res.status(404).json({ success: false, error: `Run ${run_id} not found in LMS` });
     const runUuid = runRow.id as string;
+    const courseId = runRow.course_id as string;
+
+    // Guard (ADD only): refuse enrolment into cancelled or past runs
+    if (action === 'add') {
+      if (String(runRow.class_status || '').toLowerCase() === 'cancelled') {
+        return res.status(409).json({ success: false, error: `Run ${run_id} has been cancelled and cannot accept new enrolments` });
+      }
+      if (runRow.end_date && new Date(runRow.end_date) < new Date(new Date().toISOString().slice(0, 10))) {
+        return res.status(409).json({ success: false, error: `Run ${run_id} ended on ${String(runRow.end_date).slice(0,10)} — adding learners to a past run is not allowed` });
+      }
+    }
 
     if (action === 'add') {
-      return await handleAdd({ runUuid, emailNorm, sync_tpg, sync_calendar, notes, res });
+      return await handleAdd({ runUuid, courseId, emailNorm, syncTpg, syncCalendar, notes, res });
     } else {
-      return await handleDrop({ runUuid, emailNorm, sync_tpg, sync_calendar, notes, res });
+      return await handleDrop({ runUuid, emailNorm, syncTpg, syncCalendar, notes, res });
     }
   } catch (err: any) {
     console.error('[external/run-attendee] error:', err);
@@ -104,8 +119,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }
 
 async function handleAdd({
-  runUuid, emailNorm, sync_tpg, sync_calendar, notes, res,
-}: { runUuid: string; emailNorm: string; sync_tpg: boolean; sync_calendar: boolean; notes?: string; res: NextApiResponse }) {
+  runUuid, courseId, emailNorm, syncTpg, syncCalendar, notes, res,
+}: { runUuid: string; courseId: string; emailNorm: string; syncTpg: boolean; syncCalendar: boolean; notes?: string; res: NextApiResponse }) {
   // Look up app_user (learner may not have an LMS account — external learners are enrolled by email)
   const userRow = (await pool.query(
     `SELECT id FROM app_user WHERE LOWER(email) = $1 LIMIT 1`,
@@ -114,7 +129,7 @@ async function handleAdd({
   const userId = userRow?.id ?? null;
 
   // Guard: already actively enrolled
-  const existing = (await pool.query(
+  const activeRow = (await pool.query(
     `SELECT id FROM enrollment
       WHERE course_run_id = $1
         AND (user_id = $2 OR LOWER(COALESCE(email, '')) = $3)
@@ -122,30 +137,50 @@ async function handleAdd({
       LIMIT 1`,
     [runUuid, userId, emailNorm]
   )).rows[0];
-  if (existing) {
+  if (activeRow) {
     return res.status(409).json({ success: false, error: `${emailNorm} is already actively enrolled in this run` });
   }
 
-  // Step 1: LMS enrollment INSERT (must exist before SSG push)
-  const insertRes = (await pool.query(
-    `INSERT INTO enrollment (id, course_run_id, user_id, email, created_at, updated_at)
-     VALUES (gen_random_uuid(), $1, $2, $3, NOW(), NOW())
-     RETURNING id`,
+  // Step 1: LMS enrollment INSERT or REACTIVATE (re-adding a previously-removed learner)
+  // Check for an existing removed/cancelled row to avoid duplicate-row issues.
+  const removedRow = (await pool.query(
+    `SELECT id FROM enrollment
+      WHERE course_run_id = $1
+        AND (user_id = $2 OR LOWER(COALESCE(email, '')) = $3)
+      ORDER BY updated_at DESC LIMIT 1`,
     [runUuid, userId, emailNorm]
   )).rows[0];
-  const lms = { enrolled: true, enrollment_id: insertRes.id as string };
 
-  console.log(`[external/run-attendee] ADD ${emailNorm} to run ${runUuid}${notes ? ` (${notes})` : ''}`);
+  let enrollmentId: string;
+  if (removedRow) {
+    // Reactivate — clear the removed status
+    await pool.query(
+      `UPDATE enrollment SET enrolment_status = NULL, updated_at = NOW() WHERE id = $1`,
+      [removedRow.id]
+    );
+    enrollmentId = removedRow.id as string;
+  } else {
+    const insertRes = (await pool.query(
+      `INSERT INTO enrollment (id, course_id, course_run_id, user_id, email, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), NOW())
+       RETURNING id`,
+      [courseId, runUuid, userId, emailNorm]
+    )).rows[0];
+    enrollmentId = insertRes.id as string;
+  }
+  const lms = { enrolled: true, enrollment_id: enrollmentId, reactivated: !!removedRow };
+
+  console.log(`[external/run-attendee] ADD ${emailNorm} to run ${runUuid}${removedRow ? ' (reactivated)' : ''}${notes ? ` (${notes})` : ''}`);
 
   // Step 2: SSG/TPG enrolment push (best-effort — LMS is already updated)
   let tpg: any = { status: 'skipped', message: 'sync_tpg disabled' };
-  if (sync_tpg) {
+  if (syncTpg) {
     tpg = await pushEnrolmentToSsgForLearner(runUuid, { userId, email: emailNorm });
   }
 
   // Step 3: GCal add (best-effort last)
   let calendar: any = { status: 'skipped', message: 'sync_calendar disabled' };
-  if (sync_calendar) {
+  if (syncCalendar) {
     calendar = await patchRunAttendee(runUuid, emailNorm, 'add');
   }
 
@@ -153,11 +188,11 @@ async function handleAdd({
 }
 
 async function handleDrop({
-  runUuid, emailNorm, sync_tpg, sync_calendar, notes, res,
-}: { runUuid: string; emailNorm: string; sync_tpg: boolean; sync_calendar: boolean; notes?: string; res: NextApiResponse }) {
+  runUuid, emailNorm, syncTpg, syncCalendar, notes, res,
+}: { runUuid: string; emailNorm: string; syncTpg: boolean; syncCalendar: boolean; notes?: string; res: NextApiResponse }) {
   // Find the active enrollment (need enrolment_id for TPG cancel)
   const enrolRow = (await pool.query(
-    `SELECT e.id, e.enrolment_id
+    `SELECT e.id, e.enrolment_id, e.user_id
        FROM enrollment e
        LEFT JOIN app_user u ON u.id = e.user_id
       WHERE e.course_run_id = $1
@@ -170,11 +205,33 @@ async function handleDrop({
     return res.status(404).json({ success: false, error: `No active enrollment found for ${emailNorm} on this run` });
   }
 
+  // Advisory: assessment submissions guard (mirrors move-class behaviour)
+  const userId = enrolRow.user_id as string | null;
+  if (userId) {
+    const guard = (await pool.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM link_assessment_submission WHERE user_id = $1 AND course_run_id = $2) AS link_count,
+         (SELECT COUNT(*)::int FROM submission s JOIN enrollment e ON e.id = s.enrollment_id
+            WHERE e.user_id = $1 AND e.course_run_id = $2) AS legacy_count`,
+      [userId, runUuid]
+    )).rows[0];
+    const subCount = (guard?.link_count ?? 0) + (guard?.legacy_count ?? 0);
+    if (subCount > 0) {
+      return res.status(409).json({
+        success: false,
+        code: 'SUBMISSION_EXISTS',
+        email: emailNorm,
+        message: `Cannot drop ${emailNorm} — they have ${subCount} submitted assessment file(s) on this run. These submissions cannot be moved. Confirm this is acceptable before proceeding with force: true.`,
+        submission_count: subCount,
+      });
+    }
+  }
+
   console.log(`[external/run-attendee] DROP ${emailNorm} from run ${runUuid}${notes ? ` (${notes})` : ''}`);
 
   // Step 1: SSG/TPG cancel FIRST (enrollment row still exists — enrolment_id readable)
   let tpg: any = { status: 'skipped', message: 'sync_tpg disabled' };
-  if (sync_tpg) {
+  if (syncTpg) {
     tpg = await cancelEnrolmentForLearnerOnRun(runUuid, { email: emailNorm });
     if (tpg.status === 'error') {
       return res.status(422).json({
@@ -195,7 +252,7 @@ async function handleDrop({
 
   // Step 3: GCal remove (best-effort last)
   let calendar: any = { status: 'skipped', message: 'sync_calendar disabled' };
-  if (sync_calendar) {
+  if (syncCalendar) {
     calendar = await patchRunAttendee(runUuid, emailNorm, 'remove');
   }
 

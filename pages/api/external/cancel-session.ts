@@ -60,6 +60,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     sync_calendar?: boolean;
   };
 
+  // Coerce boolean fields — JSON string "false" must not be truthy
+  const syncCalendar = req.body?.sync_calendar !== false && req.body?.sync_calendar !== 'false';
+
   if (!run_id?.trim()) return res.status(400).json({ success: false, error: 'run_id is required' });
   if (!session_id?.trim()) return res.status(400).json({ success: false, error: 'session_id is required' });
 
@@ -69,10 +72,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       id: string; course_run_id: string; course_code: string; admin_email: string | null;
     }>(
       `SELECT cr.id, cr.course_run_id, c.course_code,
-              COALESCE(cr.course_admin_email, tp.contact_email) AS admin_email
+              cr.course_admin_email AS admin_email
          FROM course_run cr
          JOIN course c ON c.id = cr.course_id
-         LEFT JOIN training_provider tp ON tp.id = c.training_provider_id
         WHERE cr.course_run_id = $1 OR cr.id::text = $1 LIMIT 1`,
       [run_id.trim()]
     )).rows[0];
@@ -85,15 +87,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 2. Resolve session from local DB
     const sessRow = (await pool.query<{
-      ssg_session_id: string; start_date: string; end_date: string | null;
+      id: string; ssg_session_id: string; start_date: string; end_date: string | null;
       start_time: string | null; end_time: string | null; mode_of_training: string | null; venue: any;
     }>(
-      `SELECT ssg_session_id, start_date::text, end_date::text, start_time, end_time, mode_of_training, venue
+      `SELECT id, ssg_session_id, start_date::text, end_date::text, start_time, end_time, mode_of_training, venue
          FROM course_session WHERE course_run_id = $1 AND ssg_session_id = $2 AND COALESCE(deleted, false) = false
         LIMIT 1`,
       [runUuid, session_id.trim()]
     )).rows[0];
     if (!sessRow) return res.status(404).json({ success: false, error: `Session ${session_id} not found on run ${run_id}` });
+
+    // Item 13: warn if session is in the past and has attendance records
+    let past_session_warning: string | undefined;
+    const sessStartDate = sessRow.start_date ? String(sessRow.start_date).slice(0, 10) : '';
+    if (sessStartDate && sessStartDate < new Date().toISOString().slice(0, 10)) {
+      const attRow = (await pool.query(
+        `SELECT COUNT(*)::int AS cnt FROM course_attendance WHERE session_id = $1`,
+        [sessRow.id]
+      )).rows[0];
+      if ((attRow?.cnt ?? 0) > 0) {
+        past_session_warning = `Session ${session_id} on ${sessStartDate} is in the past and has ${attRow.cnt} attendance record(s). Deleting it will permanently remove this attendance data.`;
+      }
+    }
 
     // 3. Get SSG credentials and create API client
     const credentials = await getSSGCredentialsService().getSSGCredentials();
@@ -104,8 +119,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 4. Fetch live run data from SSG (needed for venue/registration fields in the delete payload)
     const runDataRes = await apiClient.viewCourseRun(ssgRunId, OptionalSelector.YES);
-    if (runDataRes.error) {
-      return res.status(502).json({ success: false, error: `Failed to fetch run data from SSG: ${runDataRes.error.message}` });
+    const rdErr = runDataRes.error;
+    if (rdErr && (rdErr.code || rdErr.message || rdErr.details?.length)) {
+      const em = rdErr.message || rdErr.details?.[0]?.message || rdErr.code || JSON.stringify(rdErr);
+      return res.status(502).json({ success: false, error: `Failed to fetch run data from SSG: ${em}` });
+    }
+    if (!runDataRes.data) {
+      return res.status(502).json({ success: false, error: 'SSG returned no run data — the run may not exist in SSG' });
     }
     const runData = (runDataRes.data as any)?.course?.run || {};
 
@@ -134,16 +154,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ssgResult = await apiClient.deleteSessionsFromCourseRun(
       ssgRunId, runInfo as EditRunInfo, sessionsArr, OptionalSelector.YES, trainerPayloads
     );
-    if (ssgResult.error) {
+    const ssgErr2 = ssgResult.error;
+    if (ssgErr2 && (ssgErr2.code || ssgErr2.message || ssgErr2.details?.length)) {
       return res.status(ssgResult.status || 502).json({
         success: false,
-        error: `SSG session delete failed: ${ssgResult.error.message || JSON.stringify(ssgResult.error)}`,
+        error: `SSG session delete failed: ${ssgErr2.message || ssgErr2.details?.[0]?.message || ssgErr2.code}`,
         step: 'ssg',
       });
     }
 
     // 7. Sync local DB from SSG (soft-deletes the cancelled session locally)
     const lmsSync = await fetchAndSyncRunSessions(runUuid);
+
+    // Item 12: check if this was the last active session on the run
+    const remainingRow = (await pool.query(
+      `SELECT COUNT(*)::int AS cnt FROM course_session WHERE course_run_id = $1 AND COALESCE(deleted, false) = false`,
+      [runUuid]
+    )).rows[0];
+    const was_last_session = (remainingRow?.cnt ?? 0) === 0;
 
     // 8. Re-assert trainer (SSG wipes trainer on any session edit)
     let tpgTrainer: any = { status: 'skipped', message: 'no trainer assigned' };
@@ -156,7 +184,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 9. GCal reconcile (best-effort last — removes stale session-day events)
     let calendar: any = { status: 'skipped', message: 'sync_calendar disabled' };
-    if (sync_calendar) {
+    if (syncCalendar) {
       try {
         calendar = await reconcileRunCalendar(runUuid);
       } catch (e: any) {
@@ -167,6 +195,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       success: true,
       session_id: session_id.trim(),
+      was_last_session,
+      ...(past_session_warning ? { past_session_warning } : {}),
       ssg: { status: 'ok', data: ssgResult.data },
       lms_sync: { ok: lmsSync.ok, upserted: lmsSync.upserted, error: lmsSync.error },
       tpg_trainer: tpgTrainer,

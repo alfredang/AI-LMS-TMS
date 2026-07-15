@@ -71,10 +71,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     sync_calendar?: boolean;
   };
 
+  // Coerce boolean fields — JSON string "false" must not be truthy
+  const syncCalendar = req.body?.sync_calendar !== false && req.body?.sync_calendar !== 'false';
+
   if (!run_id?.trim()) return res.status(400).json({ success: false, error: 'run_id is required' });
   if (!session_id?.trim()) return res.status(400).json({ success: false, error: 'session_id is required' });
-  if (!new_date?.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(new_date.trim())) {
+  const dateTrimmed = new_date?.trim() ?? '';
+  if (!dateTrimmed || !/^\d{4}-\d{2}-\d{2}$/.test(dateTrimmed)) {
     return res.status(400).json({ success: false, error: 'new_date is required (YYYY-MM-DD)' });
+  }
+  // Logical date validation — catches impossible dates like 2026-02-30
+  const parsedDate = new Date(dateTrimmed + 'T00:00:00Z');
+  if (isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== dateTrimmed) {
+    return res.status(400).json({ success: false, error: `new_date "${dateTrimmed}" is not a valid calendar date` });
   }
 
   try {
@@ -83,10 +92,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       id: string; course_run_id: string; course_code: string; admin_email: string | null;
     }>(
       `SELECT cr.id, cr.course_run_id, c.course_code,
-              COALESCE(cr.course_admin_email, tp.contact_email) AS admin_email
+              cr.course_admin_email AS admin_email
          FROM course_run cr
          JOIN course c ON c.id = cr.course_id
-         LEFT JOIN training_provider tp ON tp.id = c.training_provider_id
         WHERE cr.course_run_id = $1 OR cr.id::text = $1 LIMIT 1`,
       [run_id.trim()]
     )).rows[0];
@@ -118,25 +126,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 4. Fetch live run data from SSG (needed for venue, registration dates in the payload)
     const runDataRes = await apiClient.viewCourseRun(ssgRunId, OptionalSelector.YES);
-    if (runDataRes.error) {
-      return res.status(502).json({ success: false, error: `Failed to fetch run data from SSG: ${runDataRes.error.message}` });
+    const ssgErr = runDataRes.error;
+    if (ssgErr && (ssgErr.code || ssgErr.message || ssgErr.details?.length)) {
+      const errMsg = ssgErr.message || ssgErr.details?.[0]?.message || ssgErr.code || JSON.stringify(ssgErr);
+      return res.status(502).json({ success: false, error: `Failed to fetch run data from SSG: ${errMsg}` });
+    }
+    if (!runDataRes.data) {
+      return res.status(502).json({ success: false, error: 'SSG returned no run data — the run may not exist in SSG' });
     }
     const runData = (runDataRes.data as any)?.course?.run || {};
 
-    // 5. Compute widened run window (SSG rejects sessions outside the run window)
-    const { newRunStart, newRunEnd } = computeRunWindow(runData, {}, new_date.trim(), new_date.trim());
+    // 5. Derive original dates and check for no-op / past date
+    const origStart = sessRow.start_date ? String(sessRow.start_date).slice(0, 10) : '';
+    const origEnd   = sessRow.end_date   ? String(sessRow.end_date).slice(0, 10)   : origStart;
+    const newStartTime = new_start_time?.trim() || sessRow.start_time || '';
+    const newEndTime   = new_end_time?.trim()   || sessRow.end_time   || '';
+
+    // No-op guard: same date and same times as current session
+    if (
+      dateTrimmed === origStart &&
+      (!new_start_time || newStartTime === (sessRow.start_time || '')) &&
+      (!new_end_time   || newEndTime   === (sessRow.end_time   || ''))
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: `Session is already scheduled for ${dateTrimmed} with the same times — no change would be made`,
+      });
+    }
+
+    // Past date: warn in response (not a hard block — SSG decides)
+    const pastDateWarning = parsedDate < new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z')
+      ? `new_date ${dateTrimmed} is in the past — TPGateway may reject this`
+      : null;
+
+    // Fix multi-day session: preserve the span (endDate offset = origEnd - origStart days)
+    const spanMs = origEnd && origStart && origEnd !== origStart
+      ? new Date(origEnd + 'T00:00:00Z').getTime() - new Date(origStart + 'T00:00:00Z').getTime()
+      : 0;
+    const newEndDate = spanMs > 0
+      ? new Date(parsedDate.getTime() + spanMs).toISOString().slice(0, 10)
+      : dateTrimmed;
+
+    // Compute widened run window (SSG rejects sessions outside the run window)
+    const { newRunStart, newRunEnd } = computeRunWindow(runData, {}, dateTrimmed, newEndDate);
 
     // 6. Build session object (preserve existing time/mode/venue if not overridden)
-    const origStart = sessRow.start_date ? String(sessRow.start_date).slice(0, 10) : '';
-    const origEnd = sessRow.end_date ? String(sessRow.end_date).slice(0, 10) : origStart;
-    const newEndDate = origEnd === origStart ? new_date.trim() : new_date.trim(); // single-day: same; multi-day keep same offset handled below
-
     const sessionObj = {
       id: sessRow.ssg_session_id,
-      startDate: new_date.trim(),
+      startDate: dateTrimmed,
       endDate: newEndDate,
-      startTime: new_start_time?.trim() || sessRow.start_time || '',
-      endTime: new_end_time?.trim() || sessRow.end_time || '',
+      startTime: newStartTime,
+      endTime: newEndTime,
       modeOfTraining: sessRow.mode_of_training || '1',
       venue: sessRow.venue || undefined,
     };
@@ -155,16 +195,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 8. Include trainer payloads so SSG doesn't wipe on session edit
     const trainerPayloads = await resolveRunTrainerEditPayloads(runUuid).catch(() => undefined);
 
-    console.log(`[external/reschedule-session] ${session_id} on ${ssgRunId}: ${origStart} → ${new_date}`);
+    console.log(`[external/reschedule-session] ${session_id} on ${ssgRunId}: ${origStart} → ${dateTrimmed}${spanMs > 0 ? ` (multi-day, end: ${newEndDate})` : ''}`);
 
     // 9. Call SSG
     const ssgResult = await apiClient.updateSessionsFromCourseRun(
       ssgRunId, runInfo as EditRunInfo, sessionsArr, OptionalSelector.YES, trainerPayloads
     );
-    if (ssgResult.error) {
+    const ssgUpdateErr = ssgResult.error;
+    if (ssgUpdateErr && (ssgUpdateErr.code || ssgUpdateErr.message || ssgUpdateErr.details?.length)) {
       return res.status(ssgResult.status || 502).json({
         success: false,
-        error: `SSG session update failed: ${ssgResult.error.message || JSON.stringify(ssgResult.error)}`,
+        error: `SSG session update failed: ${ssgUpdateErr.message || ssgUpdateErr.details?.[0]?.message || ssgUpdateErr.code}`,
         step: 'ssg',
       });
     }
@@ -183,7 +224,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 12. GCal reconcile (best-effort last)
     let calendar: any = { status: 'skipped', message: 'sync_calendar disabled' };
-    if (sync_calendar) {
+    if (syncCalendar) {
       try {
         calendar = await reconcileRunCalendar(runUuid);
       } catch (e: any) {
@@ -194,7 +235,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       success: true,
       session_id: session_id.trim(),
-      new_date: new_date.trim(),
+      new_date: dateTrimmed,
+      new_end_date: newEndDate !== dateTrimmed ? newEndDate : undefined,
+      ...(pastDateWarning ? { past_date_warning: pastDateWarning } : {}),
       ssg: { status: 'ok', data: ssgResult.data },
       lms_sync: { ok: lmsSync.ok, upserted: lmsSync.upserted, error: lmsSync.error },
       tpg_trainer: tpgTrainer,

@@ -52,7 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     ]);
 
     const canExecute = lms.canApprove;
-    const warnings: string[] = [];
+    const warnings: string[] = [...(lms.warnings ?? [])];
     if (cal && cal.blockers.length > 0) {
       warnings.push(...cal.blockers.map((b: string) => `Calendar: ${b}`));
     }

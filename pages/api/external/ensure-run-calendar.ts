@@ -46,6 +46,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     )).rows[0];
     if (!runRow) return res.status(404).json({ success: false, error: `Run ${run_id} not found in LMS` });
 
+    // Item 21: refuse to create a calendar event for a run with no sessions — the event would have no dates
+    const sessionCount = (await pool.query(
+      `SELECT COUNT(*)::int AS cnt FROM course_session WHERE course_run_id = $1 AND COALESCE(deleted, false) = false`,
+      [runRow.id]
+    )).rows[0]?.cnt ?? 0;
+    if (sessionCount === 0) {
+      return res.status(422).json({
+        success: false,
+        error: `Run ${run_id} has no active sessions — sync sessions from SSG first (POST /api/admin/sync-run-sessions or wait for the nightly cron), then call this endpoint again.`,
+      });
+    }
+
     const result = await ensureClassCalendarEvent(runRow.id);
     return res.status(200).json({ success: true, ...result });
   } catch (err: any) {

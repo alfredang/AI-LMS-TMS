@@ -74,14 +74,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     sync_calendar?: boolean;
   };
 
+  // Coerce boolean fields — JSON string "false" must not be truthy
+  const syncCalendar = req.body?.sync_calendar !== false && req.body?.sync_calendar !== 'false';
+
   if (!run_id?.trim()) return res.status(400).json({ success: false, error: 'run_id is required' });
-  if (!from_date?.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(from_date.trim())) {
+  const fromTrimmed = from_date?.trim() ?? '';
+  const toTrimmed   = to_date?.trim()   ?? '';
+  if (!fromTrimmed || !/^\d{4}-\d{2}-\d{2}$/.test(fromTrimmed)) {
     return res.status(400).json({ success: false, error: 'from_date is required (YYYY-MM-DD)' });
   }
-  if (!to_date?.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(to_date.trim())) {
+  if (!toTrimmed || !/^\d{4}-\d{2}-\d{2}$/.test(toTrimmed)) {
     return res.status(400).json({ success: false, error: 'to_date is required (YYYY-MM-DD)' });
   }
-  if (from_date.trim() === to_date.trim()) {
+  // Logical date validation — catches impossible dates like 2026-02-30
+  const parsedFrom = new Date(fromTrimmed + 'T00:00:00Z');
+  const parsedTo   = new Date(toTrimmed   + 'T00:00:00Z');
+  if (isNaN(parsedFrom.getTime()) || parsedFrom.toISOString().slice(0, 10) !== fromTrimmed) {
+    return res.status(400).json({ success: false, error: `from_date "${fromTrimmed}" is not a valid calendar date` });
+  }
+  if (isNaN(parsedTo.getTime()) || parsedTo.toISOString().slice(0, 10) !== toTrimmed) {
+    return res.status(400).json({ success: false, error: `to_date "${toTrimmed}" is not a valid calendar date` });
+  }
+  if (fromTrimmed === toTrimmed) {
     return res.status(400).json({ success: false, error: 'from_date and to_date must differ' });
   }
 
@@ -91,10 +105,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       id: string; course_run_id: string; course_code: string; admin_email: string | null;
     }>(
       `SELECT cr.id, cr.course_run_id, c.course_code,
-              COALESCE(cr.course_admin_email, tp.contact_email) AS admin_email
+              cr.course_admin_email AS admin_email
          FROM course_run cr
          JOIN course c ON c.id = cr.course_id
-         LEFT JOIN training_provider tp ON tp.id = c.training_provider_id
         WHERE cr.course_run_id = $1 OR cr.id::text = $1 LIMIT 1`,
       [run_id.trim()]
     )).rows[0];
@@ -116,14 +129,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           AND start_date::date = $2::date
           AND COALESCE(deleted, false) = false
         ORDER BY start_time ASC`,
-      [runUuid, from_date.trim()]
+      [runUuid, fromTrimmed]
     )).rows;
 
     if (sessRows.length === 0) {
       return res.status(404).json({
         success: false,
-        error: `No active sessions found on ${from_date} for run ${run_id}`,
+        error: `No active sessions found on ${fromTrimmed} for run ${run_id}`,
       });
+    }
+
+    // Warnings (advisory — do not block)
+    const warnings: string[] = [];
+
+    // Item 22: to_date < from_date — moving sessions to an earlier date narrows the run window
+    if (parsedTo < parsedFrom) {
+      warnings.push(`to_date (${toTrimmed}) is earlier than from_date (${fromTrimmed}) — moving sessions to an earlier date may compress the run window. Verify other sessions are not affected.`);
+    }
+
+    // Item 11: to_date already has sessions — potential double booking
+    const toDateSessions = (await pool.query(
+      `SELECT COUNT(*)::int AS cnt FROM course_session
+        WHERE course_run_id = $1 AND start_date::date = $2::date AND COALESCE(deleted, false) = false`,
+      [runUuid, toTrimmed]
+    )).rows[0];
+    if ((toDateSessions?.cnt ?? 0) > 0) {
+      warnings.push(`to_date ${toTrimmed} already has ${toDateSessions.cnt} session(s) scheduled for this run — moving sessions there will create multiple sessions on the same day. Confirm this is intended.`);
     }
 
     // 3. Get SSG credentials and create API client
@@ -135,26 +166,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 4. Fetch live run data from SSG
     const runDataRes = await apiClient.viewCourseRun(ssgRunId, OptionalSelector.YES);
-    if (runDataRes.error) {
-      return res.status(502).json({ success: false, error: `Failed to fetch run data from SSG: ${runDataRes.error.message}` });
+    const rdErr = runDataRes.error;
+    if (rdErr && (rdErr.code || rdErr.message || rdErr.details?.length)) {
+      const em = rdErr.message || rdErr.details?.[0]?.message || rdErr.code || JSON.stringify(rdErr);
+      return res.status(502).json({ success: false, error: `Failed to fetch run data from SSG: ${em}` });
+    }
+    if (!runDataRes.data) {
+      return res.status(502).json({ success: false, error: 'SSG returned no run data — the run may not exist in SSG' });
     }
     const runData = (runDataRes.data as any)?.course?.run || {};
 
     // 5. Compute date offset for multi-day sessions (from_date → to_date)
-    const fromMs = new Date(from_date.trim() + 'T00:00:00Z').getTime();
-    const toMs = new Date(to_date.trim() + 'T00:00:00Z').getTime();
-    const daysDiffMs = toMs - fromMs;
+    const daysDiffMs = parsedTo.getTime() - parsedFrom.getTime();
 
     // 6. Build session objects (preserve existing time/mode/venue unless overridden)
     const sessionObjects = sessRows.map((s) => {
-      const origStart = s.start_date ? String(s.start_date).slice(0, 10) : from_date.trim();
+      const origStart = s.start_date ? String(s.start_date).slice(0, 10) : fromTrimmed;
       const origEnd = s.end_date ? String(s.end_date).slice(0, 10) : origStart;
       const newEndDate = origEnd === origStart
-        ? to_date.trim()
+        ? toTrimmed
         : new Date(new Date(origEnd + 'T00:00:00Z').getTime() + daysDiffMs).toISOString().slice(0, 10);
       return {
         id: s.ssg_session_id,
-        startDate: to_date.trim(),
+        startDate: toTrimmed,
         endDate: newEndDate,
         startTime: new_start_time?.trim() || s.start_time || '',
         endTime: new_end_time?.trim() || s.end_time || '',
@@ -182,16 +216,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const trainerPayloads = await resolveRunTrainerEditPayloads(runUuid).catch(() => undefined);
 
-    console.log(`[external/reschedule-day] ${ssgRunId}: ${from_date} → ${to_date} (${sessRows.length} sessions)`);
+    console.log(`[external/reschedule-day] ${ssgRunId}: ${fromTrimmed} → ${toTrimmed} (${sessRows.length} sessions)`);
 
     // 9. Call SSG
     const ssgResult = await apiClient.updateSessionsFromCourseRun(
       ssgRunId, runInfo as EditRunInfo, sessionsArr, OptionalSelector.YES, trainerPayloads
     );
-    if (ssgResult.error) {
+    const ssgErr2 = ssgResult.error;
+    if (ssgErr2 && (ssgErr2.code || ssgErr2.message || ssgErr2.details?.length)) {
       return res.status(ssgResult.status || 502).json({
         success: false,
-        error: `SSG session update failed: ${ssgResult.error.message || JSON.stringify(ssgResult.error)}`,
+        error: `SSG session update failed: ${ssgErr2.message || ssgErr2.details?.[0]?.message || ssgErr2.code}`,
         step: 'ssg',
       });
     }
@@ -210,7 +245,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 12. GCal reconcile (best-effort last)
     let calendar: any = { status: 'skipped', message: 'sync_calendar disabled' };
-    if (sync_calendar) {
+    if (syncCalendar) {
       try {
         calendar = await reconcileRunCalendar(runUuid);
       } catch (e: any) {
@@ -220,9 +255,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       success: true,
-      from_date: from_date.trim(),
-      to_date: to_date.trim(),
+      from_date: fromTrimmed,
+      to_date: toTrimmed,
       sessions_moved: sessRows.length,
+      ...(warnings.length ? { warnings } : {}),
       ssg: { status: 'ok', data: ssgResult.data },
       lms_sync: { ok: lmsSync.ok, upserted: lmsSync.upserted, error: lmsSync.error },
       tpg_trainer: tpgTrainer,

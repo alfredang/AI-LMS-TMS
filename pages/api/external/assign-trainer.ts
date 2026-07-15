@@ -78,6 +78,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     notes?: string;
   };
 
+  // Coerce boolean fields — JSON string "false" must not be truthy
+  const syncTpg = req.body?.sync_tpg !== false && req.body?.sync_tpg !== 'false';
+  const syncCalendar = req.body?.sync_calendar !== false && req.body?.sync_calendar !== 'false';
+
   if (!run_id?.trim()) return res.status(400).json({ success: false, error: 'run_id is required' });
   if (!trainer_email?.trim()) return res.status(400).json({ success: false, error: 'trainer_email is required' });
   if (action !== 'assign' && action !== 'unassign') {
@@ -104,9 +108,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(400).json({ success: false, error: 'trainer_name is required when trainer is not in the LMS' });
         }
       }
-      return await handleAssign({ runUuid, emailNorm, trainer_name, is_official, sync_tpg, sync_calendar, notes, res });
+      return await handleAssign({ runUuid, emailNorm, trainer_name, is_official, syncTpg, syncCalendar, notes, res });
     } else {
-      return await handleUnassign({ runUuid, emailNorm, sync_tpg, sync_calendar, notes, res });
+      return await handleUnassign({ runUuid, emailNorm, syncTpg, syncCalendar, notes, res });
     }
   } catch (err: any) {
     console.error('[external/assign-trainer] error:', err);
@@ -115,14 +119,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }
 
 async function handleAssign({
-  runUuid, emailNorm, trainer_name, is_official, sync_tpg, sync_calendar, notes, res,
-}: { runUuid: string; emailNorm: string; trainer_name?: string; is_official: boolean; sync_tpg: boolean; sync_calendar: boolean; notes?: string; res: NextApiResponse }) {
+  runUuid, emailNorm, trainer_name, is_official, syncTpg, syncCalendar, notes, res,
+}: { runUuid: string; emailNorm: string; trainer_name?: string; is_official: boolean; syncTpg: boolean; syncCalendar: boolean; notes?: string; res: NextApiResponse }) {
   const userRow = (await pool.query(
-    `SELECT id, full_name, email FROM app_user WHERE LOWER(email) = $1 LIMIT 1`, [emailNorm]
+    `SELECT u.id, u.full_name, u.email,
+            EXISTS(SELECT 1 FROM user_role_map WHERE user_id = u.id AND role = 'Learner') AS is_learner
+     FROM app_user u WHERE LOWER(u.email) = $1 LIMIT 1`, [emailNorm]
   )).rows[0];
   const trainerId = userRow?.id ?? null;
   const resolvedName = userRow?.full_name ?? trainer_name ?? emailNorm;
   const resolvedEmail = userRow?.email ?? emailNorm;
+
+  // Item 17: warn if assigning a Learner-role account as trainer
+  const learnerRoleWarning = userRow?.is_learner
+    ? `${emailNorm} has the 'Learner' role in the LMS. Verify this is the correct account before proceeding.`
+    : undefined;
 
   console.log(`[external/assign-trainer] ASSIGN ${emailNorm} to run ${runUuid}${notes ? ` (${notes})` : ''}`);
 
@@ -147,23 +158,29 @@ async function handleAssign({
   const lms = { assigned: true, junction_id: junctionRes.id as string, is_official };
 
   // Step 2: SSG/TPG push (only the official trainer goes to TPGateway)
-  let tpg: any = { status: 'skipped', message: !sync_tpg ? 'sync_tpg disabled' : 'is_official is false — only the official trainer is pushed to TPGateway' };
-  if (sync_tpg && is_official) {
+  let tpg: any = { status: 'skipped', message: !syncTpg ? 'sync_tpg disabled' : 'is_official is false — only the official trainer is pushed to TPGateway' };
+  if (syncTpg && is_official) {
     tpg = await pushTrainerToTpgForRun(runUuid, { onlyEmail: resolvedEmail });
   }
 
   // Step 3: GCal add (best-effort last)
   let calendar: any = { status: 'skipped', message: 'sync_calendar disabled' };
-  if (sync_calendar) {
+  if (syncCalendar) {
     calendar = await patchRunAttendee(runUuid, resolvedEmail, 'add');
   }
 
-  return res.status(200).json({ success: true, lms, tpg, calendar });
+  return res.status(200).json({
+    success: true,
+    lms,
+    tpg,
+    calendar,
+    ...(learnerRoleWarning ? { warning: learnerRoleWarning } : {}),
+  });
 }
 
 async function handleUnassign({
-  runUuid, emailNorm, sync_tpg, sync_calendar, notes, res,
-}: { runUuid: string; emailNorm: string; sync_tpg: boolean; sync_calendar: boolean; notes?: string; res: NextApiResponse }) {
+  runUuid, emailNorm, syncTpg, syncCalendar, notes, res,
+}: { runUuid: string; emailNorm: string; syncTpg: boolean; syncCalendar: boolean; notes?: string; res: NextApiResponse }) {
   const junctionRow = (await pool.query(
     `SELECT id, trainer_email FROM course_run_trainer WHERE course_run_id = $1 AND LOWER(COALESCE(trainer_email, '')) = $2 LIMIT 1`,
     [runUuid, emailNorm]
@@ -176,7 +193,7 @@ async function handleUnassign({
 
   // Step 1: SSG/TPG clear FIRST (course_run_trainer row still exists — readable by clearTrainerOnTpgForRun)
   let tpg: any = { status: 'skipped', message: 'sync_tpg disabled' };
-  if (sync_tpg) {
+  if (syncTpg) {
     tpg = await clearTrainerOnTpgForRun(runUuid);
   }
 
@@ -192,7 +209,7 @@ async function handleUnassign({
 
   // Step 3: GCal remove (best-effort last)
   let calendar: any = { status: 'skipped', message: 'sync_calendar disabled' };
-  if (sync_calendar) {
+  if (syncCalendar) {
     calendar = await patchRunAttendee(runUuid, emailNorm, 'remove');
   }
 

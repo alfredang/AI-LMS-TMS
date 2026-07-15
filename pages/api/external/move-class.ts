@@ -83,10 +83,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     notes?: string;
   };
 
+  // Coerce boolean fields — JSON string "false" must not be truthy
+  const syncTpg = req.body?.sync_tpg !== false && req.body?.sync_tpg !== 'false';
+  const syncCalendar = req.body?.sync_calendar !== false && req.body?.sync_calendar !== 'false';
+
   if (!source_run_id?.trim()) return res.status(400).json({ success: false, error: 'source_run_id is required' });
   if (!target_run_id?.trim()) return res.status(400).json({ success: false, error: 'target_run_id is required' });
   if (source_run_id.trim() === target_run_id.trim()) {
     return res.status(400).json({ success: false, error: 'source_run_id and target_run_id must differ' });
+  }
+
+  // Item 20: reject non-array drop_emails early — silently treating a string as empty would confuse callers
+  if (req.body?.drop_emails != null && !Array.isArray(req.body?.drop_emails)) {
+    return res.status(400).json({ success: false, error: 'drop_emails must be an array of email strings' });
   }
 
   const dropEmails = (Array.isArray(drop_emails) ? drop_emails : [])
@@ -194,6 +203,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `SELECT id, full_name, email FROM app_user WHERE LOWER(email) = $1 LIMIT 1`,
         [trainerEmailNorm]
       )).rows[0];
+      // Item 15: trainer email provided but not in LMS and no name given — cannot assign anonymously
+      if (!trRow && !trainer_name) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          error: `Trainer ${trainerEmailNorm} not found in LMS. Provide trainer_name to assign them by name, or create their account first.`,
+        });
+      }
       resolvedTrainerId = trRow?.id ?? null;
       resolvedTrainerName = trRow?.full_name ?? trainer_name ?? null;
       resolvedTrainerEmail = trRow?.email ?? trainerEmailNorm;
@@ -245,7 +262,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 5. SSG/TPG enrolment re-point (post-transaction; LMS enrollment now points to target)
     let tpgEnrolment: any = { skipped: true };
-    if (sync_tpg) {
+    if (syncTpg) {
       tpgEnrolment = { repointed: [] as any[], cancelled: [] as any[] };
       for (const uid of movedUserIds) {
         try {
@@ -267,7 +284,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 6. SSG/TPG trainer push to target + clear from source
     let tpgTrainer: any = { skipped: true };
-    if (sync_tpg && resolvedTrainerEmail) {
+    if (syncTpg && resolvedTrainerEmail) {
       tpgTrainer = {} as any;
       try {
         tpgTrainer.target = await pushTrainerToTpgForRun(targetUuid, { onlyEmail: resolvedTrainerEmail });
@@ -287,7 +304,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 7. GCal sync (best-effort last)
     let calendar: any = { skipped: true };
-    if (sync_calendar) {
+    if (syncCalendar) {
       calendar = {} as any;
       try {
         await ensureClassCalendarEvent(targetUuid);

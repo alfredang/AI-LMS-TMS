@@ -23,6 +23,7 @@ type QueryFn = (sql: string, params?: any[]) => Promise<{ rows: any[] }>;
 export interface LmsReadinessResult {
   canApprove: boolean;
   blockers: string[];
+  warnings: string[];
   lms: {
     current_enrolment_found: boolean;
     target_in_lms: boolean;
@@ -30,6 +31,7 @@ export interface LmsReadinessResult {
     target_not_cancelled: boolean;
     has_sessions: boolean;
     no_conflict: boolean;
+    same_run: boolean;
   };
 }
 
@@ -43,6 +45,7 @@ export async function checkLmsReadiness(
   query: QueryFn
 ): Promise<LmsReadinessResult> {
   const blockers: string[] = [];
+  const warnings: string[] = [];
   const lms = {
     current_enrolment_found: false,
     target_in_lms: false,
@@ -50,11 +53,19 @@ export async function checkLmsReadiness(
     target_not_cancelled: false,
     has_sessions: false,
     no_conflict: false,
+    same_run: false,
   };
 
   if (!rr.current_run_id || !rr.target_run_id) {
     blockers.push('Request is missing a current or target run id — cannot auto-move (manual move required).');
-    return { canApprove: false, blockers, lms };
+    return { canApprove: false, blockers, warnings, lms };
+  }
+
+  // Guard: same source and target run — no move possible
+  if (rr.current_run_id === rr.target_run_id) {
+    lms.same_run = true;
+    blockers.push('current_run_id and target_run_id are the same — the learner is already on this run, no move is needed.');
+    return { canApprove: false, blockers, warnings, lms };
   }
 
   const runs = (await query(
@@ -118,7 +129,39 @@ export async function checkLmsReadiness(
     if (!lms.no_conflict) blockers.push('Learner is already enrolled in the target run.');
   }
 
-  return { canApprove: blockers.length === 0, blockers, lms };
+  // Advisory: assessment submissions on the source run (not a blocker, but agent should warn user)
+  if (curUuid) {
+    const subs = await query(
+      `SELECT (
+         (SELECT COUNT(*)::int FROM link_assessment_submission las
+            LEFT JOIN app_user u ON u.id = las.user_id
+           WHERE (LOWER(u.email) = LOWER($1) OR LOWER(COALESCE(las.user_id::text,'')) = LOWER($1))
+             AND las.course_run_id = $2)
+         + (SELECT COUNT(*)::int FROM submission s JOIN enrollment e ON e.id = s.enrollment_id
+              LEFT JOIN app_user u ON u.id = e.user_id
+             WHERE (LOWER(u.email) = LOWER($1) OR LOWER(e.email) = LOWER($1))
+               AND e.course_run_id = $2)
+       ) AS total`,
+      [rr.learner_email, curUuid]
+    );
+    const subCount = Number(subs.rows[0]?.total ?? 0);
+    if (subCount > 0) {
+      warnings.push(`Learner has ${subCount} assessment submission(s) on the source run. Moving them will not transfer these submissions — they stay associated with the source run.`);
+    }
+  }
+
+  // Advisory: target run end_date is in the past
+  if (tgtUuid) {
+    const past = await query(
+      `SELECT end_date < CURRENT_DATE AS is_past FROM course_run WHERE id = $1`,
+      [tgtUuid]
+    );
+    if (past.rows[0]?.is_past) {
+      warnings.push(`Target run ended before today. SSG/TPGateway may reject an enrolment re-point to a completed run.`);
+    }
+  }
+
+  return { canApprove: blockers.length === 0, blockers, warnings, lms };
 }
 
 // ── Calendar readiness ────────────────────────────────────────────────────────
@@ -247,7 +290,8 @@ export async function executeRescheduleFlow(
     result.tpg_enrolment_ref = tpgResult.enrolmentRef ?? null;
     result.tpg_note = tpgResult.message;
 
-    if (tpgResult.status !== 'synced') {
+    // skipped_no_enrolment_id = learner has no TPG enrolment; LMS move should still proceed
+    if (tpgResult.status !== 'synced' && tpgResult.status !== 'skipped_no_enrolment_id') {
       result.error = `TPG repoint failed (${tpgResult.status}): ${tpgResult.message}`;
       return result; // Hard stop — nothing local has changed, safe to retry
     }
@@ -270,6 +314,17 @@ export async function executeRescheduleFlow(
       return result;
     }
     const enrolId = enrolRow.rows[0].id as string;
+    // Remove any stale inactive enrollment in the target run to avoid a unique-key collision
+    // (can happen when a learner was previously removed from the target run).
+    await query(
+      `DELETE FROM enrollment
+        WHERE course_run_id = $1
+          AND id <> $2
+          AND (user_id = (SELECT user_id FROM enrollment WHERE id = $2 LIMIT 1)
+               OR LOWER(COALESCE(email, '')) = LOWER($3))
+          AND LOWER(COALESCE(enrolment_status, '')) IN ('admin removed', 'cancelled', 'withdrawn')`,
+      [targetRunUuid, enrolId, rr.learner_email]
+    );
     await query(
       `UPDATE enrollment SET course_run_id = $1, updated_at = NOW() WHERE id = $2`,
       [targetRunUuid, enrolId]
