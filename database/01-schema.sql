@@ -1307,6 +1307,7 @@ CREATE TABLE public.course (
     title text,
     image_url text,
     course_code text,
+    new_course_code text,
     tsc_title text,
     tsc_code text,
     tsc_knowledge text,
