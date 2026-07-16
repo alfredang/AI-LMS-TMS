@@ -939,11 +939,30 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
     console.error('[bulkProcessCompanyApplications] invoice generation crashed (non-fatal):', err);
   }
 
-  // Invoice email is NOT auto-sent here. After this pipeline finishes,
-  // admin verifies supporting documents on Check Supporting Document, then
-  // clicks "Send Invoice Email" on View Company Application to release the
-  // consolidated tax invoice to the employer. Verification, invoice
-  // generation, and email sending are fully decoupled.
+  // Auto-send the consolidated invoice email IF the master switch is ON. The
+  // switch (training_provider.ca_auto_send_invoice_email) is checked inside the
+  // send helper and fails closed (switch OFF → nothing sent, "held in test
+  // mode"). Per product decision, this automatic send does NOT wait for
+  // supporting-doc verification (skipDocVerification: true) — unlike the manual
+  // "Send Invoice Email" button, which still enforces it. Idempotent: the send
+  // helper atomically claims invoice_sent_at, so a later manual click won't
+  // double-send. Non-fatal — a send failure never breaks enrolment.
+  try {
+    const { sendCompanyApplicationInvoiceEmails } = await import('./quickbooks/sendCompanyApplicationInvoiceEmails');
+    const emailSummary = await sendCompanyApplicationInvoiceEmails(uniqueIds, { skipDocVerification: true });
+    if (emailSummary.toggleDisabled) {
+      console.log('[bulkProcessCompanyApplications] invoice email auto-send skipped — master switch OFF (held in test mode)');
+    } else {
+      console.log(
+        `[bulkProcessCompanyApplications] invoice email auto-send — sent ${emailSummary.sent}, alreadySent ${emailSummary.skippedAlreadySent}, missingEmail ${emailSummary.skippedMissingEmail}, noInvoice ${emailSummary.skippedNoInvoice}, failed ${emailSummary.failed}`
+      );
+      if (emailSummary.failed > 0) {
+        console.warn('[bulkProcessCompanyApplications] invoice email failures:', emailSummary.failures);
+      }
+    }
+  } catch (err) {
+    console.error('[bulkProcessCompanyApplications] invoice email auto-send crashed (non-fatal):', err);
+  }
 
   // Flip final per-row status. Rows still at 'pending' get classified by
   // what actually landed in the DB. Rows already 'failed' (set by markFailed

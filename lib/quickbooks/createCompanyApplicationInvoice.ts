@@ -7,9 +7,12 @@
  *   2..N+1. One negative line per grant scheme (Baseline / MCES / SMEs / etc.)
  *      with grant refs listed in description. Out of Scope.
  *
- * Customer is resolved by `DisplayName = employer_org_name`. Customer must
- * already exist in QuickBooks — we throw rather than auto-create so the
- * employer's address / contact details aren't half-populated.
+ * Customer is resolved by `DisplayName = employer_org_name`. If the employer
+ * genuinely isn't in QuickBooks yet (after alias / exact / UEN / fuzzy lookup),
+ * we AUTO-CREATE the customer — richly populated from the application's employer
+ * details (company name / contact / email / phone) so it isn't a bare shell —
+ * and persist a UEN→DisplayName alias so future runs match instantly. An
+ * *ambiguous* fuzzy match still throws (we won't risk creating a duplicate).
  *
  * Terms depend on prior QBO invoice history with this employer:
  *   - returning customer (≥1 prior invoice) → 30 Days Term
@@ -36,6 +39,7 @@ import {
   qboFindInvoiceByDocNumberLike,
   qboFindItemByName,
   qboFindItemBySku,
+  qboFindOrCreateCompanyCustomer,
   qboFindTermByName,
   qboGetDefaultInvoiceEmailFields,
   qboQuery,
@@ -441,6 +445,9 @@ async function searchQboCustomer(query: string): Promise<{ id: string; displayNa
 async function resolveEmployerCustomerRef(opts: {
   employerOrgName: string;
   employerUen: string;
+  employerContactEmail?: string;
+  employerContactName?: string;
+  employerContactPhone?: string;
 }): Promise<string> {
   const name = (opts.employerOrgName || '').trim();
   const uen = (opts.employerUen || '').trim();
@@ -516,8 +523,47 @@ async function resolveEmployerCustomerRef(opts: {
     );
   }
 
-  // fuzzy.kind === 'none' — include the top weak candidates (score < threshold)
-  // so the admin can see what's actually in QBO instead of guessing.
+  // fuzzy.kind === 'none' — the employer genuinely isn't in QuickBooks yet.
+  // Auto-create the customer so the consolidated invoice can still be generated
+  // instead of failing. Populated richly from the application's employer details
+  // (company name / contact / email / phone) so it isn't a bare shell. A UEN
+  // alias is persisted so the next run for this employer matches via step 0.
+  //
+  // NOTE: this reverses the old "throw rather than auto-create" behaviour — see
+  // the file header. We only reach here after exhaustive lookup AND a non-
+  // ambiguous fuzzy result, so the risk of creating a duplicate is low; a
+  // typo'd employer name would still create a slightly-wrong customer, which is
+  // the accepted trade-off for auto-generating the invoice.
+  if (name) {
+    try {
+      const newCustomerId = await qboFindOrCreateCompanyCustomer(undefined, {
+        displayName: name,
+        companyName: name,
+        email: opts.employerContactEmail,
+        phone: opts.employerContactPhone,
+        contactName: opts.employerContactName,
+      });
+      console.log(`[ca-invoice] Auto-created QBO customer for new employer "${name}" (UEN ${uen || '—'}) → id ${newCustomerId}`);
+      if (uen) {
+        try {
+          await upsertEmployerQboAlias({
+            employerUen: uen,
+            qboDisplayName: name,
+            note: `Auto-created QBO customer from CA enrolment for "${name}"`,
+          });
+        } catch (err) {
+          console.warn('[ca-invoice] Failed to persist alias after auto-create (non-fatal):', err instanceof Error ? err.message : err);
+        }
+      }
+      return newCustomerId;
+    } catch (createErr) {
+      console.error('[ca-invoice] Auto-create of QBO customer failed — falling back to not-found error:', createErr instanceof Error ? createErr.message : createErr);
+      // fall through to the not-found throw so the group is surfaced for rescue
+    }
+  }
+
+  // Auto-create unavailable (no employer name) or failed — surface the original
+  // not-found error with the top weak candidates so the admin can act.
   const hints = fuzzy.topCandidates.length > 0
     ? ` Closest names in QBO (all below confidence threshold): ${fuzzy.topCandidates.map((c, i) => `${i + 1}. "${c.displayName}" (score ${c.score})`).join('; ')}.`
     : '';
@@ -552,6 +598,10 @@ export interface CreateCaInvoiceInput {
   employerOrgName: string;
   employerUen: string;
   employerContactEmail: string;
+  // Used only to richly populate a NEW QBO customer when the employer isn't in
+  // QuickBooks yet (auto-create path). Ignored when the customer already exists.
+  employerContactName?: string;
+  employerContactPhone?: string;
 
   courseTitle: string;
   courseReferenceNumber: string;
@@ -801,6 +851,9 @@ export async function createCompanyApplicationInvoice(
   const customerRef = await resolveEmployerCustomerRef({
     employerOrgName: input.employerOrgName,
     employerUen: input.employerUen,
+    employerContactEmail: input.employerContactEmail,
+    employerContactName: input.employerContactName,
+    employerContactPhone: input.employerContactPhone,
   });
 
   // Pick the term based on whether this employer has any prior QBO invoice.
@@ -1025,6 +1078,8 @@ export async function generateInvoicesForApplications(
        ca.employer_org_name,
        ca.employer_uen,
        ca.employer_contact_email,
+       ca.employer_contact_name,
+       ca.employer_contact_phone,
        ca.course_reference_number,
        ca.course_run_id,
        ca.course_start_date,
@@ -1211,6 +1266,8 @@ export async function generateInvoicesForApplications(
         employerOrgName: String(first.employer_org_name || '').trim(),
         employerUen: String(first.employer_uen || '').trim(),
         employerContactEmail: String(first.employer_contact_email || '').trim(),
+        employerContactName: String(first.employer_contact_name || '').trim(),
+        employerContactPhone: String(first.employer_contact_phone || '').trim(),
         courseTitle: String(first.db_course_title || '').trim(),
         courseReferenceNumber: String(first.course_reference_number || '').trim(),
         courseRunId: String(first.course_run_id || '').trim(),

@@ -726,6 +726,61 @@ export async function qboFindOrCreateCustomerByDisplayName(appOverride: string |
   return String(cust.Id);
 }
 
+/**
+ * Find a QB customer by exact DisplayName, creating it — richly populated — if
+ * not found. Used by the Company Application invoice flow to auto-create a
+ * brand-new employer so the consolidated invoice can still generate. Populates
+ * CompanyName / email / phone / contact person from the application's employer
+ * details so the created customer isn't a bare shell.
+ *
+ * Only non-empty fields are written to the POST body. Returns the customer Id.
+ */
+export async function qboFindOrCreateCompanyCustomer(
+  appOverride: string | undefined,
+  opts: {
+    displayName: string;
+    companyName?: string;
+    email?: string;
+    phone?: string;
+    contactName?: string;
+  }
+): Promise<string> {
+  const displayName = (opts.displayName || '').trim();
+  if (!displayName) throw new Error('qboFindOrCreateCompanyCustomer: displayName is required');
+
+  const safe = displayName.replace(/'/g, "''");
+  const data = await qboQuery(appOverride, `SELECT * FROM Customer WHERE DisplayName = '${safe}' MAXRESULTS 1`);
+  const existing = data?.QueryResponse?.Customer?.[0];
+  if (existing?.Id) return String(existing.Id);
+
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/customer?minorversion=${MINOR_VERSION}`;
+
+  const body: Record<string, any> = { DisplayName: displayName };
+  const companyName = (opts.companyName || '').trim();
+  if (companyName) body.CompanyName = companyName;
+  const email = (opts.email || '').trim();
+  if (email) body.PrimaryEmailAddr = { Address: email };
+  const phone = (opts.phone || '').trim();
+  if (phone) body.PrimaryPhone = { FreeFormNumber: phone };
+  const contactName = (opts.contactName || '').trim();
+  if (contactName) {
+    // QBO stores the contact person separately from the company. Split on the
+    // first space so "Jane Tan Wei" → GivenName "Jane", FamilyName "Tan Wei".
+    const parts = contactName.split(/\s+/);
+    body.GivenName = parts[0];
+    if (parts.length > 1) body.FamilyName = parts.slice(1).join(' ');
+  }
+
+  const created = await qboFetchJson({ token, url, method: 'POST', body });
+  const cust = created?.Customer ?? created;
+  if (!cust?.Id) throw new Error('QBO customer create returned no Id');
+  return String(cust.Id);
+}
+
 export async function qboFindOrCreateCustomerByEmail(appOverride: string | undefined, email: string, displayName: string): Promise<string> {
   const safeEmail = email.replace(/'/g, "''");
   const q = `SELECT * FROM Customer WHERE PrimaryEmailAddr = '${safeEmail}'`;
