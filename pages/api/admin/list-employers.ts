@@ -85,9 +85,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 3. QuickBooks customers (best-effort — if QBO isn't configured, we still
     //    return the history list rather than failing the dropdown).
+    //    QBO caps a single Customer query at 1000 rows and orders by Id ascending,
+    //    so a realm with >1000 customers would silently drop the NEWEST ones
+    //    (highest Id) — exactly the just-created employer an admin is looking for.
+    //    Page through with STARTPOSITION until a short page comes back.
     try {
-      const data = await qboQuery(undefined, 'SELECT * FROM Customer WHERE Active = true MAXRESULTS 1000');
-      const customers: any[] = data?.QueryResponse?.Customer || [];
+      const PAGE = 1000;
+      const customers: any[] = [];
+      let startPosition = 1;
+      // Hard stop at 50k customers so a QBO quirk can never spin forever.
+      for (let guard = 0; guard < 50; guard++) {
+        const data = await qboQuery(
+          undefined,
+          `SELECT * FROM Customer WHERE Active = true STARTPOSITION ${startPosition} MAXRESULTS ${PAGE}`
+        );
+        const batch: any[] = data?.QueryResponse?.Customer || [];
+        if (batch.length === 0) break;
+        customers.push(...batch);
+        if (batch.length < PAGE) break;
+        startPosition += PAGE;
+      }
       for (const c of customers) {
         const name = String(c.DisplayName || c.CompanyName || '').trim();
         if (!name) continue;
