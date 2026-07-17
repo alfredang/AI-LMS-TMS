@@ -7,6 +7,21 @@ import { Icon, IconName } from '../ui/Icon';
 import { ConfirmPopup } from './ConfirmPopup';
 import SupportingDocsModal from './SupportingDocsModal';
 
+// Shape returned by GET /api/admin/list-employers (QBO customers ∪ CA history ∪
+// UEN alias map). `source` tells us where the record came from: 'qb'/'both' means
+// it exists as a QuickBooks customer (invoice can generate); 'history' means it's
+// only in our application history and is NOT in QBO yet.
+interface EmployerLookupOption {
+  id: string;
+  employerUen: string;
+  employerOrgName: string;
+  employerContactName: string;
+  employerContactDesignation: string;
+  employerContactEmail: string;
+  employerContactPhone: string;
+  source: 'qb' | 'history' | 'both';
+}
+
 export const COMPANY_APPLICATION_COLUMNS = [
   'Course Title*',
   'Course Start Date (DD-MM-YYYY)*',
@@ -1393,6 +1408,13 @@ export const ViewCompanyApplicationView: React.FC = () => {
   const [showStuckOnly, setShowStuckOnly] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // "Is this company already in QuickBooks?" lookup shown under the info banner.
+  // An employer must be a QBO customer before the consolidated invoice can be
+  // generated, so admins can check here before enrolling under a new company.
+  const [qbCompanyQuery, setQbCompanyQuery] = useState('');
+  const [qbEmployers, setQbEmployers] = useState<EmployerLookupOption[]>([]);
+  const [qbEmployersLoading, setQbEmployersLoading] = useState(false);
+  const [qbEmployersError, setQbEmployersError] = useState<string | null>(null);
   const [showPii, setShowPii] = useState(false);
   const [isRunningPipeline, setIsRunningPipeline] = useState(false);
   const [pipelineMessage, setPipelineMessage] = useState<string | null>(null);
@@ -1894,6 +1916,44 @@ export const ViewCompanyApplicationView: React.FC = () => {
     void reloadRows();
   }, []);
 
+  // Load the merged employer list once (QBO customers ∪ CA history) for the
+  // "check if a company is in QuickBooks" lookup. Best-effort — the tab still
+  // works if this fails.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setQbEmployersLoading(true);
+      setQbEmployersError(null);
+      try {
+        const res = await fetch('/api/admin/list-employers');
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok && Array.isArray(data.employers)) {
+          setQbEmployers(data.employers as EmployerLookupOption[]);
+        } else {
+          setQbEmployersError(data?.message || 'Failed to load companies');
+        }
+      } catch (e: any) {
+        if (!cancelled) setQbEmployersError(e?.message || 'Failed to load companies');
+      } finally {
+        if (!cancelled) setQbEmployersLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Client-side filter over the loaded employer list (name or UEN substring).
+  const qbCompanyMatches = useMemo(() => {
+    const q = qbCompanyQuery.trim().toLowerCase();
+    if (!q) return [];
+    return qbEmployers
+      .filter(e =>
+        e.employerOrgName.toLowerCase().includes(q) ||
+        e.employerUen.toLowerCase().includes(q)
+      )
+      .slice(0, 30);
+  }, [qbCompanyQuery, qbEmployers]);
+
   // Auto-refresh polling removed — was reloading rows every 5s while any row
   // was in-progress, which the admin found disruptive. Refresh is now manual
   // via the Refresh button (or Retry Selected, which reloads on completion).
@@ -2053,6 +2113,81 @@ export const ViewCompanyApplicationView: React.FC = () => {
       </div>
 
       <CaEmailToggleBanner />
+
+      {/* QuickBooks company lookup — check BEFORE enrolling whether an employer
+          is already a QBO customer. A company that isn't in QuickBooks yet
+          (source 'history') will make the consolidated invoice fail until it's
+          created there, so this lets admins catch it up front. */}
+      <Card className="p-6 mb-6">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.Building} className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">Check if a company is in QuickBooks</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              A company must already be a QuickBooks customer for its consolidated invoice to generate. Search before enrolling under it.
+            </p>
+          </div>
+        </div>
+        <div className="relative mt-3">
+          <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            id="search-qb-company"
+            type="text"
+            value={qbCompanyQuery}
+            onChange={(e) => setQbCompanyQuery(e.target.value)}
+            placeholder="Search company name or UEN…"
+            className={`${inputClasses} pl-9`}
+          />
+        </div>
+
+        {qbEmployersLoading && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Loading companies from QuickBooks…</p>
+        )}
+        {qbEmployersError && (
+          <p className="text-xs text-red-500 mt-2">Couldn’t load companies: {qbEmployersError}</p>
+        )}
+
+        {qbCompanyQuery.trim() && !qbEmployersLoading && (
+          qbCompanyMatches.length > 0 ? (
+            <ul className="mt-3 max-h-64 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+              {qbCompanyMatches.map((e) => {
+                const inQb = e.source === 'qb' || e.source === 'both';
+                return (
+                  <li key={e.id} className="px-3 py-2 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{e.employerOrgName}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {e.employerUen ? `UEN ${e.employerUen}` : 'No UEN on record'}
+                        {e.employerContactEmail ? ` · ${e.employerContactEmail}` : ''}
+                      </p>
+                    </div>
+                    {inQb ? (
+                      <span className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                        <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5" />
+                        In QuickBooks
+                      </span>
+                    ) : (
+                      <span
+                        className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                        title="Only in application history — not a QuickBooks customer yet. Add it in QuickBooks before enrolling or the invoice will fail."
+                      >
+                        <Icon name={IconName.Warning} className="w-3.5 h-3.5" />
+                        Not in QuickBooks
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+              No company matches “{qbCompanyQuery.trim()}”. If this is a new company, add it in QuickBooks first — otherwise its consolidated invoice will fail when you enrol under it.
+            </div>
+          )
+        )}
+      </Card>
 
       <Card className="p-6 mb-6">
         <div className="flex flex-col md:flex-row gap-4 items-end">
