@@ -12,6 +12,7 @@ import {
 import { fetchAndSyncRunSessions } from '../../../lib/ssg/syncRunSessions';
 import { pushTrainerToTpgForRun, resolveRunTrainerEditPayloads } from '../../../lib/ssg/pushTrainerToTpgForRun';
 import { reconcileRunCalendar } from '../../../lib/calendar/reconcileRunCalendar';
+import { checkSiblingRunDateConflicts } from '../../../lib/rescheduleHelpers';
 
 /**
  * POST /api/external/reschedule-session
@@ -35,6 +36,10 @@ import { reconcileRunCalendar } from '../../../lib/calendar/reconcileRunCalendar
  *   success: true,
  *   session_id: string,
  *   new_date: string,
+ *   sibling_run_conflict?: [{ course_run_id: string, matched_dates: string[] }],
+ *     // advisory only — another active run of the SAME course already has a session on
+ *     // one of the new date(s). The move still executes; surface this to the user and
+ *     // ask whether they meant to consolidate into that run instead.
  *   ssg: { status: 'ok', ... },
  *   lms_sync: { ok: boolean, upserted?: number },
  *   tpg_trainer: { status: string, message?: string },
@@ -89,9 +94,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // 1. Resolve run from DB
     const runRow = (await pool.query<{
-      id: string; course_run_id: string; course_code: string; admin_email: string | null;
+      id: string; course_id: string; course_run_id: string; course_code: string; admin_email: string | null;
     }>(
-      `SELECT cr.id, cr.course_run_id, c.course_code,
+      `SELECT cr.id, cr.course_id, cr.course_run_id, c.course_code,
               cr.course_admin_email AS admin_email
          FROM course_run cr
          JOIN course c ON c.id = cr.course_id
@@ -101,6 +106,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!runRow) return res.status(404).json({ success: false, error: `Run ${run_id} not found in LMS` });
 
     const runUuid = runRow.id;
+    const courseId = runRow.course_id;
     const ssgRunId = runRow.course_run_id;
     const courseReferenceNumber = runRow.course_code;
     const adminEmail = runRow.admin_email || 'admin@tia.sg';
@@ -170,6 +176,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Compute widened run window (SSG rejects sessions outside the run window)
     const { newRunStart, newRunEnd } = computeRunWindow(runData, {}, dateTrimmed, newEndDate);
 
+    // Advisory: does another active run of the SAME course already have a session on the
+    // new date(s)? Soft warning only — does not block the move.
+    const siblingRunConflicts = await checkSiblingRunDateConflicts(
+      courseId, runUuid, [dateTrimmed, newEndDate], (sql, params) => pool.query(sql, params)
+    );
+
     // 6. Build session object (preserve existing time/mode/venue if not overridden)
     const sessionObj = {
       id: sessRow.ssg_session_id,
@@ -238,6 +250,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       new_date: dateTrimmed,
       new_end_date: newEndDate !== dateTrimmed ? newEndDate : undefined,
       ...(pastDateWarning ? { past_date_warning: pastDateWarning } : {}),
+      ...(siblingRunConflicts.length ? { sibling_run_conflict: siblingRunConflicts } : {}),
       ssg: { status: 'ok', data: ssgResult.data },
       lms_sync: { ok: lmsSync.ok, upserted: lmsSync.upserted, error: lmsSync.error },
       tpg_trainer: tpgTrainer,

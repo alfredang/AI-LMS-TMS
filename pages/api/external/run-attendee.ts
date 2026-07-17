@@ -47,6 +47,8 @@ import { patchRunAttendee } from '../../../lib/calendar/runAttendees';
  *   { success: false, error: string, step: 'tpg'|'lms'|'calendar', ... }
  *   On DROP: if tpg.status === 'error', the SSG cancel failed — lms and calendar steps were skipped.
  *   On ADD:  if lms fails (duplicate, run not found), no TPG or GCal action was taken.
+ *   On ADD:  404 if the email has no LMS account — enrollment.user_id is NOT NULL, so there is
+ *            no email-only/external-learner enrolment path. Create the account first.
  *
  * Headers: x-api-key: <EXTERNAL_API_KEY_FOR_CLAWDBOT>
  */
@@ -121,12 +123,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 async function handleAdd({
   runUuid, courseId, emailNorm, syncTpg, syncCalendar, notes, res,
 }: { runUuid: string; courseId: string; emailNorm: string; syncTpg: boolean; syncCalendar: boolean; notes?: string; res: NextApiResponse }) {
-  // Look up app_user (learner may not have an LMS account — external learners are enrolled by email)
+  // enrollment.user_id is NOT NULL with a FK to app_user — the learner must already have
+  // an LMS account before they can be added to a run (no email-only enrolment path exists).
   const userRow = (await pool.query(
     `SELECT id FROM app_user WHERE LOWER(email) = $1 LIMIT 1`,
     [emailNorm]
   )).rows[0];
-  const userId = userRow?.id ?? null;
+  if (!userRow) {
+    return res.status(404).json({
+      success: false,
+      error: `${emailNorm} has no LMS account — create the account first, then add them as an attendee.`,
+    });
+  }
+  const userId = userRow.id;
 
   // Guard: already actively enrolled
   const activeRow = (await pool.query(

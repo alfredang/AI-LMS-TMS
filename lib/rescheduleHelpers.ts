@@ -20,6 +20,47 @@ import { repointEnrolmentPreMove } from './ssg/mutateEnrolmentForLearner';
 
 type QueryFn = (sql: string, params?: any[]) => Promise<{ rows: any[] }>;
 
+// ── Sibling-run date-collision check (session/day reschedule) ─────────────────
+
+export interface SiblingRunConflict {
+  course_run_id: string;
+  matched_dates: string[]; // YYYY-MM-DD
+}
+
+/**
+ * Exact-date-match check: does any OTHER active run of the same course already have a
+ * session on one of the dates a session/day reschedule is about to move onto?
+ * Soft warning only — the caller still executes the move and surfaces this so the agent
+ * can ask the user whether they meant to consolidate into that sibling run instead.
+ */
+export async function checkSiblingRunDateConflicts(
+  courseId: string,
+  excludeRunUuid: string,
+  datesYmd: string[], // YYYY-MM-DD
+  query: QueryFn
+): Promise<SiblingRunConflict[]> {
+  const datesCompact = [...new Set(datesYmd.map((d) => d.replace(/-/g, '')))];
+  if (datesCompact.length === 0) return [];
+
+  const rows = await query(
+    `SELECT cr2.course_run_id, array_agg(DISTINCT cs2.start_date ORDER BY cs2.start_date) AS matched_dates
+       FROM course_session cs2
+       JOIN course_run cr2 ON cr2.id = cs2.course_run_id
+      WHERE cr2.course_id = $1
+        AND cr2.id <> $2
+        AND cs2.start_date = ANY($3::text[])
+        AND COALESCE(cs2.deleted, false) = false
+        AND LOWER(COALESCE(cr2.class_status::text, '')) <> 'cancelled'
+      GROUP BY cr2.course_run_id`,
+    [courseId, excludeRunUuid, datesCompact]
+  );
+
+  return rows.rows.map((r: any) => ({
+    course_run_id: r.course_run_id as string,
+    matched_dates: (r.matched_dates as string[]).map((d) => `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`),
+  }));
+}
+
 export interface LmsReadinessResult {
   canApprove: boolean;
   blockers: string[];

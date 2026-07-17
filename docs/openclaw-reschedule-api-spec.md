@@ -96,9 +96,12 @@ If the user already specified sync flags (e.g. `sync_tpg: false`) in their origi
 | Drop learner | enrollment soft-removed | enrolment cancelled | attendee removed |
 | Assign trainer | trainer record added | official trainer updated | attendee added |
 | Unassign trainer | trainer record removed | official trainer cleared | attendee removed |
+| Move class (all learners + trainer) | enrollments re-pointed, trainer moved | enrolments re-pointed/cancelled, trainer moved | events synced on both runs |
 | Session reschedule | session cache updated | session date changed + trainer re-asserted | event updated |
 | Day reschedule | session cache updated | session dates changed + trainer re-asserted | events updated |
 | Cancel session/day | session removed | session deleted + trainer re-asserted | event removed |
+
+**After-the-fact advisory — sibling run date conflict:** `POST /session` and `POST /day` both return an optional `sibling_run_conflict` field when the move lands a session on a date another active run of the *same course* already has a session on. This is discovered only after the move executes (it does not block the operation). When present, tell the user in plain language — e.g. "Heads up: this new date now overlaps with another run of the same course (run TGS-...-02) that's already scheduled that day. Did you mean to consolidate into that run instead, using `/move-class`?" — and let them decide whether to follow up.
 
 ---
 
@@ -189,6 +192,7 @@ Add or drop a single learner on a run across LMS + TPGateway + GCal.
 
 **ADD:**
 - 409 if run is cancelled or past its end date.
+- 404 if the email has no LMS account. There is no email-only/external-learner enrolment path — `enrollment.user_id` is required, so the learner's account must exist first.
 - Re-adding a previously-removed learner reactivates their existing record (`lms.reactivated: true`) rather than creating a duplicate.
 
 ```json
@@ -330,11 +334,15 @@ Reschedule a single session to a new date. Commit order: SSG → LMS sync → GC
 - 400 if `new_date` is not a valid calendar date (e.g. `2026-02-30`).
 - Response includes `past_date_warning` (string) if `new_date` is in the past — TPGateway may reject.
 - Multi-day sessions: end date shifts by the same offset. Response includes `new_end_date` when it differs from `new_date`.
+- Response includes `sibling_run_conflict` (array, optional) if another active run of the same course already has a session on the new date(s). Advisory only — the move still executes. See Confirmation Protocol above for how to relay this.
 
 ```json
 {
   "session_id": "TGS-123456-01-S001",
   "new_date":   "2026-09-15",
+  "sibling_run_conflict": [
+    { "course_run_id": "TGS-123456-02", "matched_dates": ["2026-09-15"] }
+  ],
   "ssg":        { "status": "ok" },
   "lms_sync":   { "ok": true, "upserted": 3 },
   "tpg_trainer":{ "status": "synced" },
@@ -362,6 +370,7 @@ Reschedule all sessions on `from_date` to `to_date`. Same commit order as `/sess
 - 404 if no active sessions exist on `from_date`.
 - 400 if either date is not a valid calendar date.
 - Response includes `warnings[]` for: `to_date < from_date` (compresses run window); `to_date` already has sessions for this run (double-booking risk). These are advisory — the operation still proceeds.
+- Response includes `sibling_run_conflict` (array, optional) if another active run of the same course already has a session on any of the new date(s). Advisory only — the move still executes. See Confirmation Protocol above.
 - `new_start_time` / `new_end_time` optional — applied to all sessions on the day.
 
 ```json
@@ -370,6 +379,9 @@ Reschedule all sessions on `from_date` to `to_date`. Same commit order as `/sess
   "to_date":   "2026-08-11",
   "sessions_moved": 2,
   "warnings": [],
+  "sibling_run_conflict": [
+    { "course_run_id": "TGS-123456-02", "matched_dates": ["2026-08-11"] }
+  ],
   "ssg": { "status": "ok" },
   "lms_sync": { "ok": true },
   "tpg_trainer": { "status": "synced" },
@@ -488,7 +500,7 @@ Use for manual GCal recovery when `calendar_synced: false` after a reschedule.
 |------|------|
 | 400 | Missing required field; invalid or impossible date (`2026-02-30`); same-date no-op; `drop_emails` not an array; `trainer_email` not in LMS without `trainer_name` |
 | 401 | Invalid or missing `x-api-key` |
-| 404 | Run, session, learner, or trainer not found |
+| 404 | Run, session, learner, or trainer not found; email has no LMS account (`POST /run-attendee` add) |
 | 409 | Already enrolled; `SUBMISSION_EXISTS` — assessment submissions block drop/move (see `submission_count`) |
 | 422 | Step execution failed (inspect `step` field); run has no sessions (ensure-calendar) |
 | 500 | Server error; API key not configured server-side |
