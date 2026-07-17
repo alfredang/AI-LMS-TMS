@@ -91,7 +91,7 @@ function mapRow(row: any) {
     pax: parseInt(row.pax, 10) || 0,
     attendance_code: row.digital_attendance_id || null,
     e_attendance_url: row.digital_attendance_id
-      ? `${(process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '')}/e-attendance/${row.course_run_id}`
+      ? `https://www.myskillsfuture.gov.sg/api/take-attendance/${row.digital_attendance_id}`
       : null,
     google_meet_url: null,
     venue: buildVenueString(row),
