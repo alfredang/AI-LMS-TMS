@@ -276,6 +276,7 @@ POST /api/external/auto-create-learners   # Auto-create learner accounts
 POST /api/external/sync-course-run-dates  # Sync dates with SSG
 GET  /api/external/backfill-enrollments   # Preview enrollment backfill
 POST /api/external/backfill-enrollments   # Execute enrollment backfill
+POST /api/external/create-course-run      # Create a new course run (+ sessions) and submit to SSG
 ```
 
 ### Authentication

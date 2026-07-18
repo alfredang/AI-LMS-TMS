@@ -15,8 +15,12 @@ import pool from '../../../lib/db';
  *   status          — filter by class_status (Confirmed | Pending | Cancelled | Reschedule)
  *   from            — start_date >= this date (YYYY-MM-DD)
  *   to              — start_date <= this date (YYYY-MM-DD)
+ *   include_sessions — "true" to nest each run's sessions (morning/afternoon etc.)
  *   limit           — max rows (default 100, max 500)
  *   offset          — pagination offset (default 0)
+ *
+ * When include_sessions=true each run gains a `sessions` array:
+ *   [{ session_id, session_number, title, start_date, end_date, start_time, end_time, mode_of_training }]
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -99,6 +103,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
        LIMIT $${idx++} OFFSET $${idx++}`,
       [...params, limit, offset]
     );
+
+    // Optionally nest each run's sessions (single query for all returned runs).
+    const includeSessions = String(req.query.include_sessions ?? '').toLowerCase() === 'true';
+    if (includeSessions && result.rows.length > 0) {
+      const runUuids = result.rows.map((r) => r.course_run_uuid);
+      const sessionsRes = await pool.query(
+        `SELECT course_run_id AS run_uuid,
+                id AS session_id, session_number, title,
+                start_date, end_date, start_time, end_time, mode_of_training
+           FROM course_session
+          WHERE course_run_id = ANY($1::uuid[]) AND COALESCE(deleted, false) = false
+          ORDER BY start_date NULLS LAST, start_time NULLS LAST, session_number NULLS LAST`,
+        [runUuids]
+      );
+      const byRun = new Map<string, unknown[]>();
+      for (const s of sessionsRes.rows) {
+        const { run_uuid, ...rest } = s;
+        if (!byRun.has(run_uuid)) byRun.set(run_uuid, []);
+        byRun.get(run_uuid)!.push(rest);
+      }
+      for (const r of result.rows) {
+        r.sessions = byRun.get(r.course_run_uuid) ?? [];
+      }
+    }
 
     const countResult = await pool.query(
       `SELECT COUNT(*)::int AS total

@@ -1161,13 +1161,16 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
                 numOfTrainers: selectedApprovedTrainers.length,
                 trainersList: selectedApprovedTrainers.join(' | '),
-                // Sync assessmentMethods links to legacy columns so view mode always shows latest
-                writtenAssessmentLink: (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
-                    ? course.assessmentMethods.writtenAssessment.link
-                    : (writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || null) : null),
-                practicalPerformanceAssessmentLink: (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
-                    ? course.assessmentMethods.practicalExam.link
-                    : (practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || null) : null),
+                // Sync assessmentMethods links to legacy columns so view mode always shows latest.
+                // A disabled method clears its legacy column, otherwise the stale link keeps showing.
+                writtenAssessmentLink: course.assessmentMethods?.writtenAssessment?.enabled
+                    ? (course.assessmentMethods.writtenAssessment.link
+                        || (writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || null) : null))
+                    : null,
+                practicalPerformanceAssessmentLink: course.assessmentMethods?.practicalExam?.enabled
+                    ? (course.assessmentMethods.practicalExam.link
+                        || (practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || null) : null))
+                    : null,
                 assessmentMethods: course.assessmentMethods || null,
                 // Drop rows that have no payload at all. Activity-type rows
                 // can use instructions instead of a URL; Quiz-type rows can
@@ -1769,22 +1772,18 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Assessment Links</h3>
                             <div className="space-y-4">
-                                <LinkField label="Written Exam" value={
-                                    (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
-                                        ? course.assessmentMethods.writtenAssessment.link
-                                        : course.writtenAssessmentLink
-                                } />
-                                <LinkField label="Practical Exam" value={
-                                    (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
-                                        ? course.assessmentMethods.practicalExam.link
-                                        : course.practicalPerformanceAssessmentLink
-                                } />
-                                {course.assessmentMethods && Object.entries(course.assessmentMethods).map(([key, method]) => {
+                                {(Object.keys(ASSESSMENT_METHOD_LABELS) as AssessmentMethodKey[]).map((key) => {
+                                    const method = course.assessmentMethods?.[key];
                                     if (!method?.enabled) return null;
-                                    if (key === 'writtenAssessment') return null;
-                                    if (key === 'practicalExam') return null;
-                                    return <LinkField key={key} label={ASSESSMENT_METHOD_LABELS[key as AssessmentMethodKey]} value={method.link} />;
+                                    // Legacy columns may still hold the link for older courses saved before per-method links
+                                    const legacyLink = key === 'writtenAssessment' ? course.writtenAssessmentLink
+                                        : key === 'practicalExam' ? course.practicalPerformanceAssessmentLink
+                                        : null;
+                                    return <LinkField key={key} label={ASSESSMENT_METHOD_LABELS[key]} value={method.link || legacyLink} />;
                                 })}
+                                {!Object.values(course.assessmentMethods || {}).some(m => m?.enabled) && (
+                                    <div className="text-gray-500 dark:text-gray-400">No assessment methods selected.</div>
+                                )}
                             </div>
                         </Card>
                     </div>
