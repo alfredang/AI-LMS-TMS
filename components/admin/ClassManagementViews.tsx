@@ -9010,7 +9010,7 @@ export const MailerliteSyncLogView: React.FC = () => {
           : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300'}`}>
           {runResult.enabled
             ? <>✅ Done — <strong>{runResult.submitted}</strong> of <strong>{runResult.totalCandidates}</strong> new learner email(s) submitted{runResult.failed > 0 && <>, <strong>{runResult.failed}</strong> failed</>}.</>
-            : <>⚠️ Skipped — MailerLite is not configured (MAILERLITE_API_KEY / MAILERLITE_GROUP_ID).</>
+            : <>⚠️ Skipped — MailerLite is not configured. Set the API Key and Group ID under <strong>Company Settings → Integrations → MailerLite</strong>.</>
           }
         </div>
       )}

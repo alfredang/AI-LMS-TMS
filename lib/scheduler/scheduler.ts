@@ -300,7 +300,7 @@ async function seedDefaults() {
         {
             id: 'sync_learners_to_mailerlite',
             name: 'Sync Learner Emails to MailerLite',
-            description: 'Daily: submits NEW learner emails (active accounts, gov.sg addresses always excluded) to the MailerLite subscriber group configured via MAILERLITE_API_KEY / MAILERLITE_GROUP_ID. Already-synced emails are tracked in mailerlite_synced_email and skipped, so each run only pushes learners added since the last one. Tenants without MailerLite configured log a skipped run. Runs daily at 3:00 AM SGT.',
+            description: 'Daily: submits NEW learner emails (active accounts, gov.sg addresses always excluded) to the MailerLite subscriber group configured under Company Settings → Integrations → MailerLite (env vars MAILERLITE_API_KEY / MAILERLITE_GROUP_ID as fallback). Already-synced emails are tracked in mailerlite_synced_email and skipped, so each run only pushes learners added since the last one. Tenants without MailerLite configured log a skipped run. Runs daily at 3:00 AM SGT.',
             cron_expression: '0 3 * * *', // 3:00 AM SGT daily
             api_endpoint: '/api/external/sync-learners-to-mailerlite',
         },

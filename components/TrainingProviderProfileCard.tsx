@@ -298,6 +298,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isOpenClawIntegrationOpen, setIsOpenClawIntegrationOpen] = useState(false);
     const [isTertiaryCoursesSgIntegrationOpen, setIsTertiaryCoursesSgIntegrationOpen] = useState(false);
     const [isN8nIntegrationOpen, setIsN8nIntegrationOpen] = useState(false);
+    const [isMailerliteIntegrationOpen, setIsMailerliteIntegrationOpen] = useState(false);
     const [isR2IntegrationOpen, setIsR2IntegrationOpen] = useState(false);
     const [isSmtpIntegrationOpen, setIsSmtpIntegrationOpen] = useState(false);
     const [isSmtpHowToOpen, setIsSmtpHowToOpen] = useState(false);
@@ -2767,6 +2768,51 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                 ) : (
                                                     <p className="text-sm text-on-surface truncate">
                                                         {(formData.integrations as any)[key] || 'Not Set'}
+                                                    </p>
+                                                )}
+                                                {helpText && <p className="text-[10px] text-on-surface-secondary mt-1">{helpText}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                    )}
+                    </div>
+
+                            {/* MailerLite Configuration */}
+                    <div>
+                    {renderIntegrationPanelHeader('MailerLite', isMailerliteIntegrationOpen, () => setIsMailerliteIntegrationOpen(prev => !prev))}
+                    {isMailerliteIntegrationOpen && (
+                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                                <div className="p-3 bg-surface rounded-md border border-default">
+                                    <div className="space-y-3">
+                                        {[
+                                            { key: 'mailerliteApiKey' as const, label: 'API Key', placeholder: 'MailerLite API token', secret: true, helpText: 'Used by the daily "Sync Learner Emails to MailerLite" scheduled task. Replaces MAILERLITE_API_KEY env var.' },
+                                            { key: 'mailerliteGroupId' as const, label: 'Subscriber Group ID', placeholder: 'e.g. 97171109342873057', secret: false, helpText: 'The MailerLite group new learner emails are subscribed to (e.g. the Singapore group). Replaces MAILERLITE_GROUP_ID env var.' },
+                                        ].map(({ key, label, placeholder, secret, helpText }) => (
+                                            <div key={key}>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                                {isEditing ? (
+                                                    <input
+                                                        type="text"
+                                                        value={(formData.integrations as any)[key] || ''}
+                                                        onChange={(e) =>
+                                                            setFormData((prev) => ({
+                                                                ...prev,
+                                                                integrations: {
+                                                                    ...prev.integrations,
+                                                                    [key]: e.target.value,
+                                                                },
+                                                            }))
+                                                        }
+                                                        className={inputClasses}
+                                                        placeholder={placeholder}
+                                                    />
+                                                ) : (
+                                                    <p className="text-sm text-on-surface truncate">
+                                                        {(formData.integrations as any)[key]
+                                                            ? (secret ? '••••••••' + String((formData.integrations as any)[key]).slice(-4) : (formData.integrations as any)[key])
+                                                            : 'Not Set'}
                                                     </p>
                                                 )}
                                                 {helpText && <p className="text-[10px] text-on-surface-secondary mt-1">{helpText}</p>}

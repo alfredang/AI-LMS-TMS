@@ -9,9 +9,12 @@ import pool from '../../../lib/db';
  * ─────────────────────────────────────────────────────────────────────────────
  *
  * FLOW:
- *   1. Tenant gate: requires MAILERLITE_API_KEY and MAILERLITE_GROUP_ID env
- *      vars. Either missing → single 'skipped' log row + return (other
- *      tenants without a MailerLite account are unaffected).
+ *   1. Tenant gate: reads the MailerLite API key + group id from
+ *      training_provider.mailerlite_api_key / mailerlite_group_id (set under
+ *      Company Settings → Integrations → MailerLite), falling back to the
+ *      MAILERLITE_API_KEY / MAILERLITE_GROUP_ID env vars. Either missing →
+ *      single 'skipped' log row + return (other tenants without a MailerLite
+ *      account are unaffected).
  *   2. Select active learner emails (role = Learner, account_status = active)
  *      that are NOT yet recorded in mailerlite_synced_email.
  *      Government addresses (*gov.sg) are ALWAYS excluded.
@@ -170,8 +173,19 @@ async function _runInner(): Promise<SyncSummary> {
   await ensureTables();
 
   const runId = `mailerlite_${Date.now()}`;
-  const apiKey = process.env.MAILERLITE_API_KEY;
-  const groupId = process.env.MAILERLITE_GROUP_ID;
+
+  // DB config first (Company Settings → Integrations → MailerLite), env fallback.
+  let apiKey = '';
+  let groupId = '';
+  try {
+    const tp = await pool.query(
+      `SELECT mailerlite_api_key, mailerlite_group_id FROM training_provider LIMIT 1`
+    );
+    apiKey = String(tp.rows[0]?.mailerlite_api_key ?? '').trim();
+    groupId = String(tp.rows[0]?.mailerlite_group_id ?? '').trim();
+  } catch { /* columns don't exist yet — fall through to env */ }
+  apiKey = apiKey || process.env.MAILERLITE_API_KEY || '';
+  groupId = groupId || process.env.MAILERLITE_GROUP_ID || '';
 
   if (!apiKey || !groupId) {
     const summary: SyncSummary = {
@@ -181,7 +195,7 @@ async function _runInner(): Promise<SyncSummary> {
       submitted: 0,
       failed: 0,
       status: 'skipped',
-      message: 'MAILERLITE_API_KEY / MAILERLITE_GROUP_ID not configured for this tenant',
+      message: 'MailerLite API key / group id not configured (Company Settings → Integrations → MailerLite)',
     };
     await insertLogRow(summary);
     console.log(`📧 [mailerlite-sync] ${runId} skipped — MailerLite not configured`);
