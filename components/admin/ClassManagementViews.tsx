@@ -8909,6 +8909,159 @@ export const AutoSanitiseDataLogView: React.FC = () => {
   );
 };
 
+// ── MailerLite Sync Log ──────────────────────────────────────────────────────
+
+interface MailerliteSyncLogRow {
+  id: number;
+  run_id: string;
+  created_at: string;
+  total_candidates: number;
+  submitted_count: number;
+  error_count: number;
+  status: string;
+  message: string | null;
+}
+
+export const MailerliteSyncLogView: React.FC = () => {
+  const { setAdminPage } = useLms();
+  const [logs, setLogs] = useState<MailerliteSyncLogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<{ totalCandidates: number; submitted: number; failed: number; enabled: boolean } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/mailerlite-sync-logs?limit=200');
+      const json = await res.json();
+      if (json.success) setLogs(json.data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchLogs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRunNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    setRunError(null);
+    try {
+      const { authService } = await import('@lib/services/authService');
+      const authToken = authService.getAuthToken();
+      const res = await fetch('/api/admin/run-mailerlite-sync', {
+        method: 'POST',
+        headers: { ...(authToken && { Authorization: `Bearer ${authToken}` }) },
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Run failed');
+      setRunResult({
+        totalCandidates: json.totalCandidates,
+        submitted: json.submitted,
+        failed: json.failed,
+        enabled: json.enabled,
+      });
+      await fetchLogs();
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : 'Failed to run');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const statusBadge = (status: string) => {
+    let cls: string;
+    if (status === 'success') cls = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    else if (status === 'error') cls = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    else if (status === 'skipped') cls = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
+    else cls = 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+        {status}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-3xl font-bold">MailerLite Sync Log</h2>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleRunNow} disabled={running || loading}>
+            {running ? 'Running…' : 'Run Once'}
+          </Button>
+          <Button variant="ghost" onClick={fetchLogs} disabled={loading || running}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button variant="ghost" onClick={() => setAdminPage(AdminPage.Dashboard)}>
+            Back
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Daily sync (default 3:00 AM SGT): submits <strong>new</strong> learner emails to the configured MailerLite subscriber group. Government (<strong>gov.sg</strong>) addresses are always excluded, and already-submitted emails are skipped. Use <strong>Run Once</strong> to trigger manually.
+      </p>
+
+      {runResult && (
+        <div className={`mb-4 p-3 rounded-lg border text-sm ${runResult.enabled
+          ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
+          : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300'}`}>
+          {runResult.enabled
+            ? <>✅ Done — <strong>{runResult.submitted}</strong> of <strong>{runResult.totalCandidates}</strong> new learner email(s) submitted{runResult.failed > 0 && <>, <strong>{runResult.failed}</strong> failed</>}.</>
+            : <>⚠️ Skipped — MailerLite is not configured (MAILERLITE_API_KEY / MAILERLITE_GROUP_ID).</>
+          }
+        </div>
+      )}
+      {runError && (
+        <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">
+          ❌ {runError}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-gray-500 py-6 text-center">Loading…</p>}
+
+      {!loading && logs.length === 0 && (
+        <p className="text-sm text-gray-500 py-6 text-center">No sync runs yet. Click <strong>Run Once</strong> to submit new learner emails now.</p>
+      )}
+
+      {!loading && logs.length > 0 && (
+        <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-gray-50 dark:bg-slate-700/30">
+                <tr>
+                  {['Run Time (SGT)', 'New Emails', 'Submitted', 'Errors', 'Status', 'Message'].map(h => (
+                    <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {logs.map(row => (
+                  <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/30">
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {new Date(row.created_at).toLocaleString('en-SG', {
+                        timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit', hour12: false,
+                      })}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.total_candidates}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">{row.submitted_count}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.error_count}</td>
+                    <td className="px-3 py-2">{statusBadge(row.status)}</td>
+                    <td className="px-3 py-2 max-w-[320px] truncate" title={row.message ?? ''}>{row.message ?? ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Auto Send Courseware/Attendance + Course Completion Logs ─────────────────
 
 interface AutoSendEmailLogRow {

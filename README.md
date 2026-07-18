@@ -259,6 +259,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | **Container** | Docker, Docker Compose |
 | **Deployment** | Coolify (self-hosted) |
 | **Automation** | n8n workflows, Task Scheduler, Webhooks |
+| **Email Marketing** | MailerLite (daily learner-email subscriber sync) |
 | **E-commerce** | Magento integration |
 
 ## API Documentation

@@ -298,6 +298,13 @@ async function seedDefaults() {
             default_enabled: false,
         },
         {
+            id: 'sync_learners_to_mailerlite',
+            name: 'Sync Learner Emails to MailerLite',
+            description: 'Daily: submits NEW learner emails (active accounts, gov.sg addresses always excluded) to the MailerLite subscriber group configured via MAILERLITE_API_KEY / MAILERLITE_GROUP_ID. Already-synced emails are tracked in mailerlite_synced_email and skipped, so each run only pushes learners added since the last one. Tenants without MailerLite configured log a skipped run. Runs daily at 3:00 AM SGT.',
+            cron_expression: '0 3 * * *', // 3:00 AM SGT daily
+            api_endpoint: '/api/external/sync-learners-to-mailerlite',
+        },
+        {
             id: 'auto_generate_da_invoices',
             name: 'Auto Generate DA Invoices',
             description: 'Daily sweep that posts QuickBooks invoices (main tax + Grant + SFC) for every confirmed, SSG-enrolled Direct Application still missing one or more of them, then sends unsent main tax invoice emails once via QuickBooks. Catches rows whose grant wasn\'t yet issued by SSG at manual-generate time and rows left in "failed" state by a transient QBO hiccup. Idempotent. Default 23:00 SGT daily.',
@@ -422,6 +429,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_generate_da_invoices', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-generate-da-invoices');
+            return runAutomation();
+        });
+        directHandlers.set('sync_learners_to_mailerlite', async () => {
+            const { runAutomation } = await import('../../pages/api/external/sync-learners-to-mailerlite');
             return runAutomation();
         });
         directHandlers.set('sync_trainers_to_calendar', async () => {
