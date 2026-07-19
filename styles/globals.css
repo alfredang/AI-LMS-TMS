@@ -421,12 +421,14 @@ body {
 }
 
 .chat-launcher:hover,
-.chat-launcher:focus-visible {
+.chat-launcher:focus-visible,
+.chat-launcher[aria-expanded='true'] {
   animation: none;
 }
 
 .chat-launcher:hover::before,
-.chat-launcher:focus-visible::before {
+.chat-launcher:focus-visible::before,
+.chat-launcher[aria-expanded='true']::before {
   opacity: 0;
   animation: none;
 }

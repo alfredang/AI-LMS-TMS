@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useLms } from '@contexts/LmsContext';
+import { CHAT_TEMPLATES, ChatTemplate, buildChatUrl, supportsPrefill } from './chatTemplates';
 
 /**
  * Floating external-agent chat launcher.
@@ -7,6 +8,12 @@ import { useLms } from '@contexts/LmsContext';
  * Replaces the former in-app Nemo chat window. Rather than a built-in agent, the
  * platform hands off to an external channel (WhatsApp or Telegram) which in turn
  * fronts an external agent such as OpenClaw or Hermes.
+ *
+ * Clicking the launcher opens a searchable template picker: each template is a
+ * fill-in-the-blank TMS request (add trainer to a class, submit a run to SSG, …)
+ * so the user sends structured input the agent can act on rather than free text.
+ * Picking one copies it to the clipboard and opens the chat, pre-filling the
+ * message where the channel supports it (see supportsPrefill).
  *
  * Configured per-tenant under Company Settings → Integrations → AI Agent →
  * Chat Link (training_provider.whatsapp_chat_url). When unset the launcher
@@ -38,39 +45,158 @@ const AiChatbot: React.FC = () => {
     const { trainingProviderProfile } = useLms();
     const chatUrl = trainingProviderProfile?.integrations?.whatsappChatUrl?.trim();
 
+    const [isOpen, setIsOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
+
+    // Close on outside click / Escape, and focus the search box on open.
+    useEffect(() => {
+        if (!isOpen) return;
+        const onDown = (e: MouseEvent) => {
+            if (panelRef.current && !panelRef.current.contains(e.target as Node)) setIsOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        searchRef.current?.focus();
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [isOpen]);
+
+    const grouped = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        const matches = q
+            ? CHAT_TEMPLATES.filter(t =>
+                  `${t.label} ${t.category} ${t.keywords || ''}`.toLowerCase().includes(q))
+            : CHAT_TEMPLATES;
+        return matches.reduce<Record<string, ChatTemplate[]>>((acc, t) => {
+            (acc[t.category] ||= []).push(t);
+            return acc;
+        }, {});
+    }, [query]);
+
     if (!chatUrl) return null;
 
     const isTelegram = /(?:^|\/\/)(?:t\.me|telegram\.(?:me|org|dog))\b/i.test(chatUrl);
     const channel = isTelegram ? TELEGRAM : WHATSAPP;
-    const label = `Chat on ${channel.name}`;
+    const canPrefill = supportsPrefill(chatUrl);
+
+    const handlePick = async (t: ChatTemplate) => {
+        // Always copy: on group-invite links the message can't be pre-filled, so
+        // the clipboard is the only way to carry the template across.
+        try {
+            await navigator.clipboard.writeText(t.body);
+            setCopiedId(t.id);
+            setTimeout(() => setCopiedId(null), 1800);
+        } catch {
+            /* clipboard blocked (insecure context / permission) — still open the chat */
+        }
+        window.open(buildChatUrl(chatUrl, t.body), '_blank', 'noopener,noreferrer');
+    };
+
+    const totalShown = Object.values(grouped).reduce((n, list) => n + list.length, 0);
 
     return (
-        <a
-            href={chatUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={label}
-            title={label}
-            style={
-                {
-                    backgroundColor: channel.accent,
-                    boxShadow: `0 8px 30px ${channel.glow}`,
-                    '--chat-accent': channel.accent,
-                    '--chat-accent-glow': channel.glow,
-                    '--chat-accent-ring': channel.ring,
-                } as React.CSSProperties
-            }
-            className="chat-launcher hidden md:flex fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full items-center justify-center transition hover:scale-105"
-        >
-            <svg
-                aria-hidden="true"
-                viewBox={channel.viewBox}
-                fill="currentColor"
-                className="w-7 h-7 text-white"
+        <div className="hidden md:block fixed bottom-6 right-6 z-50">
+            {isOpen && (
+                <div
+                    ref={panelRef}
+                    role="dialog"
+                    aria-label="Chat message templates"
+                    className="absolute bottom-20 right-0 w-[26rem] max-h-[70vh] flex flex-col rounded-xl bg-surface shadow-2xl border border-default overflow-hidden dark:bg-gray-800 dark:border-gray-700"
+                >
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-gray-700">
+                        <div>
+                            <h3 className="text-sm font-bold text-on-surface">Ask the AI Agent</h3>
+                            <p className="text-[11px] text-on-surface-secondary">
+                                Pick a template, fill in the blanks, send on {channel.name}
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setIsOpen(false)}
+                            aria-label="Close templates"
+                            className="p-1.5 rounded-full text-on-surface-secondary hover:bg-surface-elevated dark:hover:bg-gray-700"
+                        >
+                            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div className="px-3 py-2 border-b border-default dark:border-gray-700">
+                        <input
+                            ref={searchRef}
+                            type="text"
+                            value={query}
+                            onChange={e => setQuery(e.target.value)}
+                            placeholder="Search templates, e.g. trainer, SSG, invoice…"
+                            className="w-full px-3 py-1.5 text-sm rounded-md bg-surface-elevated border border-default text-on-surface placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-2 py-2">
+                        {totalShown === 0 && (
+                            <p className="px-2 py-6 text-center text-sm text-on-surface-secondary">
+                                No template matches “{query}”.
+                            </p>
+                        )}
+                        {Object.entries(grouped).map(([category, list]) => (
+                            <div key={category} className="mb-2">
+                                <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-on-surface-secondary">
+                                    {category}
+                                </p>
+                                {list.map(t => (
+                                    <button
+                                        key={t.id}
+                                        onClick={() => handlePick(t)}
+                                        className="w-full text-left px-2 py-1.5 rounded-md text-sm text-on-surface hover:bg-surface-elevated dark:hover:bg-gray-700 flex items-center justify-between gap-2"
+                                    >
+                                        <span>{t.label}</span>
+                                        {copiedId === t.id && (
+                                            <span className="text-[10px] text-green-600 dark:text-green-400 shrink-0">Copied</span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="px-4 py-2 border-t border-default dark:border-gray-700">
+                        <p className="text-[10px] text-on-surface-secondary">
+                            {canPrefill
+                                ? `The message opens pre-filled in ${channel.name}.`
+                                : `Group links can't be pre-filled — the template is copied to your clipboard, so just paste it in ${channel.name}.`}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            <button
+                type="button"
+                onClick={() => setIsOpen(o => !o)}
+                aria-label={isOpen ? 'Close chat templates' : `Chat on ${channel.name}`}
+                aria-expanded={isOpen}
+                title={`Chat on ${channel.name}`}
+                style={
+                    {
+                        backgroundColor: channel.accent,
+                        boxShadow: `0 8px 30px ${channel.glow}`,
+                        '--chat-accent': channel.accent,
+                        '--chat-accent-glow': channel.glow,
+                        '--chat-accent-ring': channel.ring,
+                    } as React.CSSProperties
+                }
+                className="chat-launcher flex w-14 h-14 rounded-full items-center justify-center transition hover:scale-105"
             >
-                <path d={channel.path} />
-            </svg>
-        </a>
+                <svg aria-hidden="true" viewBox={channel.viewBox} fill="currentColor" className="w-7 h-7 text-white">
+                    <path d={channel.path} />
+                </svg>
+            </button>
+        </div>
     );
 };
 
