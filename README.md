@@ -176,7 +176,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Company Setting**
   - Company profile (name, UEN, address, logo, color scheme)
   - Contact person management
-  - **Integrations** — Virtual class meeting provider selection (Google Meet, Zoom, Microsoft Teams), course-run meeting links override the company default, Google (Calendar, OAuth, Certificate Folder), Zoom OAuth meeting generation, Microsoft Teams meeting generation, n8n, Magento, MailerLite, AI Agent (external WhatsApp/Telegram chat link), Reference Links
+  - **Integrations** — Virtual class meeting provider selection (Google Meet, Zoom, Microsoft Teams), course-run meeting links override the company default, Google (Calendar, OAuth, Certificate Folder), Zoom OAuth meeting generation, Microsoft Teams meeting generation, n8n, Magento, MailerLite, AI Agent (external WhatsApp/Telegram chat links — separate ops and trainer groups), Reference Links
   - **SSG Authentication** — SSG certificate, private key, and encryption key (with support for App1, App3, App4 credentials)
   - **LLM Credentials** — Anthropic, OpenAI, Gemini, MiniMax, Kimi, DeepSeek with default and fallback provider selection
   - **Security Settings** — OTP login, default OTP, force first password change, default password, sensitive data masking
@@ -202,11 +202,12 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
   - 18 tools including dashboard queries, course run search, trainer management, enrollment operations, proforma/invoice generation, QuickBooks operations, SSG course operations
   - Agentic tool-use loop (up to 10 iterations per request)
 - **SEO Metadata Generator** — Claude-powered SEO content generation for WSQ and non-WSQ courses
-- **External Agent Chat Launcher** — Floating WhatsApp/Telegram widget (Admin, Finance, Training Provider, Developer, Payroll) that hands off to an external agent such as OpenClaw/Kael or Hermes:
-  - Opens a chat-style panel with suggested requests; 5 starters are shown, search or "Browse all" reveals the full catalogue of **40 fill-in-the-blank templates** across Trainers, Learners, Classes, Sessions, SSG/TPGateway, Finance and Reports
+- **External Agent Chat Launcher** — Floating WhatsApp/Telegram widget that hands off to an external agent such as OpenClaw/Kael or Hermes. Two role-scoped variants, each pointing at its own group:
+  - **Ops widget** (green — Admin, Finance, Training Provider, Developer, Payroll): 5 starter suggestions, with search or "Browse all" revealing the full catalogue of **40 fill-in-the-blank templates** across Trainers, Learners, Classes, Sessions, SSG/TPGateway, Finance and Reports
+  - **Trainer widget** (blue — Trainer role only): a deliberately narrow set of 4 requests — cannot find my class, assign me to this class, send me the Google Meet link, send me the e-attendance link. Classes are identified by course title + start date, never by a course run ID, and the trainer catalogue is a **separate array** rather than a filter, so no admin action (schedules, run IDs, enrolments, SSG, finance) is reachable from the trainer widget
   - Field names mirror the agent's tools and the `/api/external/*` parameters, so a completed template maps onto a real operation
   - Selecting one opens an editable message bubble; the message is copied to the clipboard and the chat opens. WhatsApp only accepts a pre-filled body on `wa.me` one-to-one links — **group invite links cannot be pre-filled**, so for a group the user pastes the copied message
-  - Destination is set per tenant under Company Settings → Integrations → AI Agent → Chat Link; the widget auto-detects WhatsApp vs Telegram and hides itself when no link is configured
+  - Destinations are set per tenant under Company Settings → Integrations → AI Agent (`whatsapp_chat_url` and `trainer_whatsapp_chat_url`); each widget auto-detects WhatsApp vs Telegram and hides itself when its link is blank
 - **GenAI Authoring** — AI content generation for course development
 - **Quiz Generator** — AI-generated quizzes based on course content
 
