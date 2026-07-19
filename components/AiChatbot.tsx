@@ -10,6 +10,7 @@ import {
     supportsPrefill,
 } from './chatTemplates';
 import { UserRole } from '@app-types';
+import { getApiUrl } from '@/lib/urlHelpers';
 
 /**
  * Floating external-agent chat launcher.
@@ -59,15 +60,37 @@ const WHATSAPP_TRAINER = {
 };
 
 const AiChatbot: React.FC = () => {
-    const { trainingProviderProfile, role } = useLms();
+    const { trainingProviderProfile, role, currentUser } = useLms();
 
     // Trainers get their own group and a deliberately narrow template set — no
     // schedules, run IDs, enrolments, SSG or finance actions.
     const isTrainer = role === UserRole.Trainer;
-    const chatUrl = (isTrainer
-        ? trainingProviderProfile?.integrations?.trainerWhatsappChatUrl
-        : trainingProviderProfile?.integrations?.whatsappChatUrl
-    )?.trim();
+
+    // The provider profile is fetched once at login and cached in context, so a
+    // session that predates a newly-added link would never see it. Fall back to
+    // a direct fetch rather than silently rendering nothing.
+    const [fallbackLinks, setFallbackLinks] = useState<Record<string, string> | null>(null);
+    const integrations = trainingProviderProfile?.integrations as Record<string, string> | undefined;
+    const linkKey = isTrainer ? 'trainerWhatsappChatUrl' : 'whatsappChatUrl';
+    const cachedUrl = integrations?.[linkKey];
+
+    useEffect(() => {
+        // Only reach out when the cached profile exists but lacks this key.
+        if (!integrations || cachedUrl !== undefined || fallbackLinks) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(getApiUrl(`/api/training-provider/info${currentUser?.id ? `?userId=${currentUser.id}` : ''}`));
+                const json = await res.json();
+                if (!cancelled) setFallbackLinks(json?.data?.referenceLinks || {});
+            } catch {
+                if (!cancelled) setFallbackLinks({});
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [integrations, cachedUrl, fallbackLinks, currentUser?.id]);
+
+    const chatUrl = (cachedUrl ?? fallbackLinks?.[linkKey])?.trim();
     const templates = isTrainer ? TRAINER_TEMPLATES : CHAT_TEMPLATES;
     const starterIds = isTrainer ? TRAINER_STARTER_TEMPLATE_IDS : STARTER_TEMPLATE_IDS;
 
