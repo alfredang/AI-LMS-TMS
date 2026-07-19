@@ -143,6 +143,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
         } catch (e) { /* columns don't exist */ }
         try {
+          const r = await pool.query(`SELECT whatsapp_chat_url FROM training_provider WHERE id = $1`, [trainingProvider.id]);
+          if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+        } catch (e) { /* columns don't exist */ }
+        try {
           const r = await pool.query(
             `SELECT r2_endpoint, r2_access_key_id, r2_secret_access_key, r2_bucket, r2_public_url FROM training_provider WHERE id = $1`,
             [trainingProvider.id],
@@ -200,6 +204,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             n8nFinanceWebhooksJson: refLinks.n8n_finance_webhooks_json || '',
             tertiaryCoursesSgUrl: refLinks.tertiary_courses_sg_url || refLinks.magento_backend_url || '',
             tertiaryCoursesSgApiKey: refLinks.tertiary_courses_sg_api_key || '',
+            whatsappChatUrl: refLinks.whatsapp_chat_url || '',
           },
         };
 

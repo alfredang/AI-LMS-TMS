@@ -1,222 +1,76 @@
-import React, { useState, useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
+import React from 'react';
 import { useLms } from '@contexts/LmsContext';
-import { Button } from './ui/Button';
-import { Icon, IconName } from './ui/Icon';
-import { ChatMessage } from '@app-types';
-import { getApiUrl } from '@/lib/urlHelpers';
 
-function getNemoSystemPrompt(companyName: string) {
-  return `You are Nemo, an AI operations assistant for ${companyName}'s LMS/TMS platform.
-You help admins and training providers manage courses, trainers, learners, enrollments, and class operations.
+/**
+ * Floating external-agent chat launcher.
+ *
+ * Replaces the former in-app Nemo chat window. Rather than a built-in agent, the
+ * platform hands off to an external channel (WhatsApp or Telegram) which in turn
+ * fronts an external agent such as OpenClaw or Hermes.
+ *
+ * Configured per-tenant under Company Settings → Integrations → AI Agent →
+ * Chat Link (training_provider.whatsapp_chat_url). When unset the launcher
+ * renders nothing, so tenants without an external channel get no dead button.
+ *
+ * Styling mirrors the tertiaryinfotech.com launcher (see .chat-launcher in
+ * styles/globals.css for the pulse/halo animations).
+ */
 
-Key capabilities:
-- Search and view course runs, trainers, learners, enrollments
-- Assign trainers to course runs
-- Create new classes and course runs
-- Manage learner enrollments
-- View statistics and analytics
-- Help with SSG/TPG grant and claim operations
+const WHATSAPP = {
+    name: 'WhatsApp',
+    accent: '#0B6E4F',
+    glow: 'rgba(11,110,79,0.45)',
+    ring: 'rgba(11,110,79,0.55)',
+    viewBox: '0 0 448 512',
+    path: 'M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zM223.9 438.7c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z',
+};
 
-When a user asks you to perform an action (assign trainer, enroll learner, etc.), explain what you'll do and confirm before executing.
-Be concise, professional, and proactive in suggesting next steps.
-If you don't know something, say so honestly.`;
-}
+const TELEGRAM = {
+    name: 'Telegram',
+    accent: '#2AABEE',
+    glow: 'rgba(42,171,238,0.45)',
+    ring: 'rgba(42,171,238,0.55)',
+    viewBox: '0 0 496 512',
+    path: 'M248 8C111.033 8 0 119.033 0 256s111.033 248 248 248 248-111.033 248-248S384.967 8 248 8zm114.952 168.66c-3.732 39.215-19.881 134.378-28.1 178.3-3.476 18.584-10.322 24.816-16.948 25.425-14.4 1.325-25.338-9.517-39.287-18.661-21.827-14.308-34.158-23.215-55.346-37.177-24.485-16.135-8.612-25 5.342-39.5 3.652-3.793 67.107-61.51 68.335-66.746.153-.655.3-3.1-1.154-4.384s-3.59-.849-5.135-.5q-3.283.746-104.608 69.142-14.845 10.194-26.894 9.934c-8.855-.191-25.888-5.006-38.551-9.123-15.531-5.048-27.875-7.717-26.8-16.291q.84-6.7 18.45-13.7 108.446-47.248 144.628-62.3c68.872-28.647 83.183-33.623 92.511-33.789 2.052-.034 6.639.474 9.61 2.885a10.452 10.452 0 013.53 6.716 43.765 43.765 0 01.417 9.769z',
+};
 
 const AiChatbot: React.FC = () => {
-    const { isChatOpen, toggleChat, resetInAppChat, trainingProviderProfile, currentUser, role } = useLms();
-    const NEMO_SYSTEM_PROMPT = getNemoSystemPrompt(trainingProviderProfile?.companyShortname || trainingProviderProfile?.companyName || 'Training Provider');
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        { id: 'initial', role: 'model', text: 'Hello! I\'m Nemo, your AI operations assistant. I can help you manage courses, trainers, learners, and more. What would you like to do?' }
-    ]);
-    const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const { trainingProviderProfile } = useLms();
+    const chatUrl = trainingProviderProfile?.integrations?.whatsappChatUrl?.trim();
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
+    if (!chatUrl) return null;
 
-    useEffect(() => {
-        if (isChatOpen) {
-            scrollToBottom();
-        } else {
-            if (messages.length > 1) {
-                setMessages([{ id: 'initial', role: 'model', text: 'Hello! I\'m Nemo, your AI operations assistant. I can help you manage courses, trainers, learners, and more. What would you like to do?' }]);
-                resetInAppChat();
-            }
-        }
-    }, [isChatOpen, messages.length, resetInAppChat]);
-
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
-    const handleSend = async () => {
-        if (!input.trim()) return;
-
-        const userMessage: ChatMessage = { id: Date.now().toString(), role: 'user', text: input };
-        setMessages(prev => [...prev, userMessage]);
-        setInput('');
-        setIsLoading(true);
-
-        const modelMessageId = (Date.now() + 1).toString();
-        setMessages(prev => [...prev, { id: modelMessageId, role: 'model', text: '' }]);
-
-        try {
-            // Build conversation history for the AI
-            const conversationMessages = [...messages.filter(m => m.id !== 'initial'), userMessage].map(m => ({
-                role: m.role === 'model' ? 'assistant' : 'user',
-                content: m.text
-            }));
-
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 120000);
-            const response = await fetch(getApiUrl('/api/ai/nemo'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                signal: controller.signal,
-                body: JSON.stringify({
-                    messages: conversationMessages,
-                    systemPrompt: NEMO_SYSTEM_PROMPT,
-                    currentUser: currentUser ? {
-                        id: currentUser.id,
-                        email: currentUser.email,
-                        role,
-                        name: currentUser.fullName,
-                    } : null,
-                }),
-            });
-            clearTimeout(timeout);
-
-            const rawBody = await response.text();
-            let data: any = null;
-
-            if (rawBody) {
-                try {
-                    data = JSON.parse(rawBody);
-                } catch {
-                    data = { error: rawBody };
-                }
-            }
-
-            if (!response.ok) {
-                const errorMsg = data?.error || data?.details || rawBody || `API error: ${response.status}`;
-                console.error('Nemo API error:', errorMsg);
-                setMessages(prev =>
-                    prev.map(msg =>
-                        msg.id === modelMessageId
-                            ? { ...msg, text: `Sorry, I encountered an error: ${errorMsg}` }
-                            : msg
-                    )
-                );
-                setIsLoading(false);
-                return;
-            }
-
-            const responseText = data?.text || rawBody || 'Sorry, I could not generate a response.';
-
-            setMessages(prev =>
-                prev.map(msg =>
-                    msg.id === modelMessageId
-                        ? { ...msg, text: responseText }
-                        : msg
-                )
-            );
-        } catch (error: any) {
-            console.error('Nemo AI error:', error);
-            setMessages(prev =>
-                prev.map(msg =>
-                    msg.id === modelMessageId
-                        ? { ...msg, text: `Sorry, I encountered an error: ${error?.message || 'Request failed'}` }
-                        : msg
-                )
-            );
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const isTelegram = /(?:^|\/\/)(?:t\.me|telegram\.(?:me|org|dog))\b/i.test(chatUrl);
+    const channel = isTelegram ? TELEGRAM : WHATSAPP;
+    const label = `Chat on ${channel.name}`;
 
     return (
-        <div className="hidden md:block fixed bottom-6 right-6 z-50">
-            {/* Chat Window */}
-            {isChatOpen && (
-                <div className="w-[28rem] h-[65vh] max-h-[750px] bg-surface shadow-2xl rounded-xl flex flex-col transform transition-all duration-300 ease-in-out origin-bottom-right scale-100 opacity-100 dark:bg-gray-800 dark:border dark:border-gray-700">
-                    <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">N</div>
-                            <div>
-                                <h3 className="text-lg font-bold text-primary dark:text-blue-400">Nemo</h3>
-                                <p className="text-[10px] text-gray-500 dark:text-gray-400 -mt-0.5">AI Operations Agent</p>
-                            </div>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={toggleChat} className="!p-2 rounded-full dark:text-gray-400 dark:hover:bg-gray-700">
-                            <Icon name={IconName.Close} className="w-6 h-6" />
-                        </Button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {messages.map((msg) => (
-                            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                {msg.role === 'model' && (
-                                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white font-bold text-[10px] mr-2 mt-1 flex-shrink-0">N</div>
-                                )}
-                                <div className={`max-w-[80%] px-4 py-2 rounded-2xl ${msg.role === 'user' ? 'bg-primary text-white dark:bg-blue-600' : 'bg-gray-100 !text-black dark:bg-gray-200 dark:!text-black'}`}>
-                                    {msg.text ? (
-                                        msg.role === 'user' ? (
-                                            <p className="whitespace-pre-wrap text-sm">{msg.text}</p>
-                                        ) : (
-                                            <div className="text-sm prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-1.5 prose-headings:text-black prose-strong:text-black prose-a:text-blue-600 prose-table:text-xs prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1 prose-table:border prose-th:border prose-td:border prose-th:bg-gray-200">
-                                                <ReactMarkdown>{msg.text}</ReactMarkdown>
-                                            </div>
-                                        )
-                                    ) : (
-                                        <div className="flex items-center gap-1.5 py-1">
-                                            <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                                            <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                                            <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                                            <span className="text-xs text-gray-500 ml-1.5">Nemo is thinking...</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                        <div ref={messagesEndRef} />
-                    </div>
-
-                    <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center space-x-2">
-                            <input
-                                type="text"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
-                                placeholder="Ask Nemo anything..."
-                                className="flex-1 px-4 py-2 text-on-surface bg-surface border border-gray-300 rounded-full placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400 text-sm"
-                                disabled={isLoading}
-                            />
-                            <Button onClick={handleSend} disabled={isLoading} className="rounded-full !p-3">
-                                <Icon name={IconName.Send} className="w-5 h-5" />
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Floating Action Button */}
-            {!isChatOpen && (
-                <button
-                    onClick={toggleChat}
-                    className="w-14 h-14 rounded-full bg-primary shadow-lg flex items-center justify-center transform hover:scale-110 transition-transform duration-200"
-                    aria-label="Open Nemo AI Agent"
-                    title="Nemo - AI Agent"
-                >
-                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-lg leading-none">
-                        N
-                    </div>
-                </button>
-            )}
-        </div>
+        <a
+            href={chatUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={label}
+            title={label}
+            style={
+                {
+                    backgroundColor: channel.accent,
+                    boxShadow: `0 8px 30px ${channel.glow}`,
+                    '--chat-accent': channel.accent,
+                    '--chat-accent-glow': channel.glow,
+                    '--chat-accent-ring': channel.ring,
+                } as React.CSSProperties
+            }
+            className="chat-launcher hidden md:flex fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full items-center justify-center transition hover:scale-105"
+        >
+            <svg
+                aria-hidden="true"
+                viewBox={channel.viewBox}
+                fill="currentColor"
+                className="w-7 h-7 text-white"
+            >
+                <path d={channel.path} />
+            </svg>
+        </a>
     );
 };
 

@@ -652,6 +652,11 @@ async function getTrainingProviderProfile(userId: string) {
     const r = await pool.query(`SELECT mailerlite_api_key, mailerlite_group_id FROM training_provider WHERE id = $1`, [profileData.provider_id]);
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
+  // AI Agent (WhatsApp support widget)
+  try {
+    const r = await pool.query(`SELECT whatsapp_chat_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
   // Cloudflare R2
   try {
     const r = await pool.query(
@@ -801,6 +806,7 @@ async function getTrainingProviderProfile(userId: string) {
       tertiaryCoursesSgApiKey: refLinks.tertiary_courses_sg_api_key || '',
       mailerliteApiKey: refLinks.mailerlite_api_key || '',
       mailerliteGroupId: refLinks.mailerlite_group_id || '',
+      whatsappChatUrl: refLinks.whatsapp_chat_url || '',
       r2Endpoint: refLinks.r2_endpoint || '',
       r2AccessKeyId: refLinks.r2_access_key_id || '',
       r2SecretAccessKey: refLinks.r2_secret_access_key || '',

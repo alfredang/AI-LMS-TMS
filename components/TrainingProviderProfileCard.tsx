@@ -2157,13 +2157,42 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     )}
                     </div>
 
-                            {/* Nemo OpenClaw Configuration */}
+                            {/* AI Agent Configuration */}
                     <div>
-                    {renderIntegrationPanelHeader('Nemo OpenClaw', isOpenClawIntegrationOpen, () => setIsOpenClawIntegrationOpen(prev => !prev))}
+                    {renderIntegrationPanelHeader('AI Agent', isOpenClawIntegrationOpen, () => setIsOpenClawIntegrationOpen(prev => !prev))}
                     {isOpenClawIntegrationOpen && (
                             <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
                                 <div className="p-3 bg-surface rounded-md border border-default">
                                     <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Chat Link (WhatsApp / Telegram)</label>
+                                            {isEditing ? (
+                                                <input
+                                                    type="text"
+                                                    value={formData.integrations.whatsappChatUrl || ''}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                whatsappChatUrl: e.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className={inputClasses}
+                                                    placeholder="e.g. https://chat.whatsapp.com/XXXXXXXXXXXXXXX"
+                                                />
+                                            ) : (
+                                                <p className="text-sm text-on-surface truncate">
+                                                    {formData.integrations.whatsappChatUrl ? (
+                                                        <a href={formData.integrations.whatsappChatUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                                            {formData.integrations.whatsappChatUrl}
+                                                        </a>
+                                                    ) : 'Not Set'}
+                                                </p>
+                                            )}
+                                            <p className="text-[10px] text-on-surface-secondary mt-1">The floating chat widget links here — a WhatsApp or Telegram channel fronting an external agent (e.g. OpenClaw, Hermes). The icon adapts to the link. Leave blank to hide the widget.</p>
+                                        </div>
                                         <div>
                                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Mode</label>
                                             {isEditing ? (

@@ -401,3 +401,63 @@ body {
     transform: translateX(100%);
   }
 }
+
+/* Floating external-agent chat launcher (WhatsApp / Telegram).
+   Mirrors the tertiaryinfotech.com widget: a pulsing box-shadow ring plus an
+   expanding halo, both settling on hover. The launcher sets --chat-accent per
+   channel so the same rules serve WhatsApp green and Telegram blue. */
+.chat-launcher {
+  animation: chat-pulse 2s ease-in-out infinite;
+}
+
+.chat-launcher::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 50%;
+  background: var(--chat-accent);
+  animation: chat-ring 2s ease-out infinite;
+}
+
+.chat-launcher:hover,
+.chat-launcher:focus-visible {
+  animation: none;
+}
+
+.chat-launcher:hover::before,
+.chat-launcher:focus-visible::before {
+  opacity: 0;
+  animation: none;
+}
+
+@keyframes chat-pulse {
+  0%,
+  100% {
+    box-shadow: 0 8px 30px var(--chat-accent-glow), 0 0 0 0 var(--chat-accent-ring);
+  }
+  50% {
+    box-shadow: 0 8px 30px var(--chat-accent-glow), 0 0 0 10px transparent;
+  }
+}
+
+@keyframes chat-ring {
+  0% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-launcher,
+  .chat-launcher::before {
+    animation: none;
+  }
+  .chat-launcher::before {
+    opacity: 0;
+  }
+}

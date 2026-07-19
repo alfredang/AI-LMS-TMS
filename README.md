@@ -32,7 +32,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 ### Why AI-LMS-TMS?
 
-- **AI-Powered Learning**: Nemo AI agent (Claude Agent SDK) with persistent memory and tool use, SEO metadata generator, plus Gemini chatbot and GenAI authoring tools
+- **AI-Powered Learning**: Nemo AI agent (Claude Agent SDK) with persistent memory and tool use, SEO metadata generator, external agent hand-off via WhatsApp/Telegram, plus GenAI authoring tools
 - **SSG Integration**: Full SkillsFuture Singapore API support for course runs, enrolments, assessments, grants, and claims
 - **Multi-Role System**: 7 roles with dedicated dashboards — Learner, Trainer, Admin, Developer, Finance, Payroll, Training Provider
 - **Multi-Tenant**: Same codebase deployed for multiple tenants on Coolify — Tertiary builds via **Dockerfile**, other tenants (Chariot, Intellisoft) build via **Docker Compose**
@@ -176,7 +176,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Company Setting**
   - Company profile (name, UEN, address, logo, color scheme)
   - Contact person management
-  - **Integrations** — Virtual class meeting provider selection (Google Meet, Zoom, Microsoft Teams), course-run meeting links override the company default, Google (Calendar, OAuth, Certificate Folder), Zoom OAuth meeting generation, Microsoft Teams meeting generation, n8n, Magento, Reference Links
+  - **Integrations** — Virtual class meeting provider selection (Google Meet, Zoom, Microsoft Teams), course-run meeting links override the company default, Google (Calendar, OAuth, Certificate Folder), Zoom OAuth meeting generation, Microsoft Teams meeting generation, n8n, Magento, MailerLite, AI Agent (external WhatsApp/Telegram chat link), Reference Links
   - **SSG Authentication** — SSG certificate, private key, and encryption key (with support for App1, App3, App4 credentials)
   - **LLM Credentials** — Anthropic, OpenAI, Gemini, MiniMax, Kimi, DeepSeek with default and fallback provider selection
   - **Security Settings** — OTP login, default OTP, force first password change, default password, sensitive data masking
@@ -202,7 +202,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
   - 18 tools including dashboard queries, course run search, trainer management, enrollment operations, proforma/invoice generation, QuickBooks operations, SSG course operations
   - Agentic tool-use loop (up to 10 iterations per request)
 - **SEO Metadata Generator** — Claude-powered SEO content generation for WSQ and non-WSQ courses
-- **AI Chatbot** — Gemini-powered chatbot for learner assistance on public landing page
+- **External Agent Chat Launcher** — Floating WhatsApp/Telegram button (Admin, Finance, Training Provider, Developer, Payroll) that hands off to an external agent such as OpenClaw or Hermes. The destination is set per tenant under Company Settings → Integrations → AI Agent → Chat Link; the widget auto-detects the channel and hides itself when no link is configured
 - **GenAI Authoring** — AI content generation for course development
 - **Quiz Generator** — AI-generated quizzes based on course content
 
@@ -345,7 +345,7 @@ ai-lms-tms/
 │   ├── ui/                     # Reusable UI components
 │   ├── common/                 # Shared components
 │   ├── LoginScreen.tsx         # Authentication screen
-│   ├── AiChatbot.tsx           # Gemini-powered chatbot
+│   ├── AiChatbot.tsx           # Floating WhatsApp/Telegram chat launcher
 │   ├── CourseDetail.tsx         # Course detail view
 │   ├── GradingView.tsx         # Assessment grading
 │   └── ...

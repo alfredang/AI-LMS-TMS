@@ -292,6 +292,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     tertiaryCoursesSgApiKey?: string;
     mailerliteApiKey?: string;
     mailerliteGroupId?: string;
+    whatsappChatUrl?: string;
     openClawMode?: 'live' | 'local';
     openClawGatewayUrl?: string;
     openClawLocalGatewayUrl?: string;
