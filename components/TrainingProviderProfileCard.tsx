@@ -2191,7 +2191,36 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                                     ) : 'Not Set'}
                                                 </p>
                                             )}
-                                            <p className="text-[10px] text-on-surface-secondary mt-1">The floating chat widget links here — a WhatsApp or Telegram channel fronting an external agent (e.g. OpenClaw, Hermes). The icon adapts to the link. Leave blank to hide the widget.</p>
+                                            <p className="text-[10px] text-on-surface-secondary mt-1">Admin ops group. The floating chat widget links here for Admin, Finance, Training Provider, Developer and Payroll — a WhatsApp or Telegram channel fronting an external agent (e.g. OpenClaw, Hermes). The icon adapts to the link. Leave blank to hide the widget.</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainer Chat Link (WhatsApp / Telegram)</label>
+                                            {isEditing ? (
+                                                <input
+                                                    type="text"
+                                                    value={formData.integrations.trainerWhatsappChatUrl || ''}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                trainerWhatsappChatUrl: e.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className={inputClasses}
+                                                    placeholder="e.g. https://chat.whatsapp.com/XXXXXXXXXXXXXXX"
+                                                />
+                                            ) : (
+                                                <p className="text-sm text-on-surface truncate">
+                                                    {formData.integrations.trainerWhatsappChatUrl ? (
+                                                        <a href={formData.integrations.trainerWhatsappChatUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                                            {formData.integrations.trainerWhatsappChatUrl}
+                                                        </a>
+                                                    ) : 'Not Set'}
+                                                </p>
+                                            )}
+                                            <p className="text-[10px] text-on-surface-secondary mt-1">Trainer support group. Shown only to the Trainer role, in blue, with a limited set of requests (find my class, assign me, meeting link, e-attendance link). Leave blank to hide the widget for trainers.</p>
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Mode</label>

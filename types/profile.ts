@@ -293,6 +293,7 @@ export interface TrainingProviderProfile extends BaseProfile {
     mailerliteApiKey?: string;
     mailerliteGroupId?: string;
     whatsappChatUrl?: string;
+    trainerWhatsappChatUrl?: string;
     openClawMode?: 'live' | 'local';
     openClawGatewayUrl?: string;
     openClawLocalGatewayUrl?: string;

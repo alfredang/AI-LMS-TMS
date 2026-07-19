@@ -146,6 +146,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const r = await pool.query(`SELECT whatsapp_chat_url FROM training_provider WHERE id = $1`, [trainingProvider.id]);
           if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
         } catch (e) { /* columns don't exist */ }
+        // Separate query: a missing trainer column must not drop whatsapp_chat_url.
+        try {
+          const r = await pool.query(`SELECT trainer_whatsapp_chat_url FROM training_provider WHERE id = $1`, [trainingProvider.id]);
+          if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+        } catch (e) { /* column doesn't exist yet */ }
         try {
           const r = await pool.query(
             `SELECT r2_endpoint, r2_access_key_id, r2_secret_access_key, r2_bucket, r2_public_url FROM training_provider WHERE id = $1`,
@@ -205,6 +210,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             tertiaryCoursesSgUrl: refLinks.tertiary_courses_sg_url || refLinks.magento_backend_url || '',
             tertiaryCoursesSgApiKey: refLinks.tertiary_courses_sg_api_key || '',
             whatsappChatUrl: refLinks.whatsapp_chat_url || '',
+            trainerWhatsappChatUrl: refLinks.trainer_whatsapp_chat_url || '',
           },
         };
 

@@ -657,6 +657,10 @@ async function getTrainingProviderProfile(userId: string) {
     const r = await pool.query(`SELECT whatsapp_chat_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
+  try {
+    const r = await pool.query(`SELECT trainer_whatsapp_chat_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* column doesn't exist yet */ }
   // Cloudflare R2
   try {
     const r = await pool.query(
@@ -807,6 +811,7 @@ async function getTrainingProviderProfile(userId: string) {
       mailerliteApiKey: refLinks.mailerlite_api_key || '',
       mailerliteGroupId: refLinks.mailerlite_group_id || '',
       whatsappChatUrl: refLinks.whatsapp_chat_url || '',
+      trainerWhatsappChatUrl: refLinks.trainer_whatsapp_chat_url || '',
       r2Endpoint: refLinks.r2_endpoint || '',
       r2AccessKeyId: refLinks.r2_access_key_id || '',
       r2SecretAccessKey: refLinks.r2_secret_access_key || '',

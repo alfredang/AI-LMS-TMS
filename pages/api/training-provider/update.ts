@@ -740,9 +740,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         { name: 'mailerlite_api_key', value: profileData.integrations?.mailerliteApiKey || null },
         { name: 'mailerlite_group_id', value: profileData.integrations?.mailerliteGroupId || null },
       ]);
-      // AI Agent (WhatsApp support widget)
+      // AI Agent (WhatsApp support widgets — admin ops group + trainer group)
       await autoCreateAndUpdate([
         { name: 'whatsapp_chat_url', value: profileData.integrations?.whatsappChatUrl || null },
+        { name: 'trainer_whatsapp_chat_url', value: profileData.integrations?.trainerWhatsappChatUrl || null },
       ]);
       // Cloudflare R2 (used by Course Image Generator)
       await autoCreateAndUpdate([

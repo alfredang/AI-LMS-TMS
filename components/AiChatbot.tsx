@@ -1,6 +1,15 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useLms } from '@contexts/LmsContext';
-import { CHAT_TEMPLATES, STARTER_TEMPLATE_IDS, ChatTemplate, buildChatUrl, supportsPrefill } from './chatTemplates';
+import {
+    CHAT_TEMPLATES,
+    STARTER_TEMPLATE_IDS,
+    TRAINER_TEMPLATES,
+    TRAINER_STARTER_TEMPLATE_IDS,
+    ChatTemplate,
+    buildChatUrl,
+    supportsPrefill,
+} from './chatTemplates';
+import { UserRole } from '@app-types';
 
 /**
  * Floating external-agent chat launcher.
@@ -41,9 +50,26 @@ const TELEGRAM = {
     path: 'M248 8C111.033 8 0 119.033 0 256s111.033 248 248 248 248-111.033 248-248S384.967 8 248 8zm114.952 168.66c-3.732 39.215-19.881 134.378-28.1 178.3-3.476 18.584-10.322 24.816-16.948 25.425-14.4 1.325-25.338-9.517-39.287-18.661-21.827-14.308-34.158-23.215-55.346-37.177-24.485-16.135-8.612-25 5.342-39.5 3.652-3.793 67.107-61.51 68.335-66.746.153-.655.3-3.1-1.154-4.384s-3.59-.849-5.135-.5q-3.283.746-104.608 69.142-14.845 10.194-26.894 9.934c-8.855-.191-25.888-5.006-38.551-9.123-15.531-5.048-27.875-7.717-26.8-16.291q.84-6.7 18.45-13.7 108.446-47.248 144.628-62.3c68.872-28.647 83.183-33.623 92.511-33.789 2.052-.034 6.639.474 9.61 2.885a10.452 10.452 0 013.53 6.716 43.765 43.765 0 01.417 9.769z',
 };
 
+/** Trainer support uses a blue palette to distinguish it from ops support. */
+const WHATSAPP_TRAINER = {
+    ...WHATSAPP,
+    accent: '#1B5E8C',
+    glow: 'rgba(27,94,140,0.45)',
+    ring: 'rgba(27,94,140,0.55)',
+};
+
 const AiChatbot: React.FC = () => {
-    const { trainingProviderProfile } = useLms();
-    const chatUrl = trainingProviderProfile?.integrations?.whatsappChatUrl?.trim();
+    const { trainingProviderProfile, role } = useLms();
+
+    // Trainers get their own group and a deliberately narrow template set — no
+    // schedules, run IDs, enrolments, SSG or finance actions.
+    const isTrainer = role === UserRole.Trainer;
+    const chatUrl = (isTrainer
+        ? trainingProviderProfile?.integrations?.trainerWhatsappChatUrl
+        : trainingProviderProfile?.integrations?.whatsappChatUrl
+    )?.trim();
+    const templates = isTrainer ? TRAINER_TEMPLATES : CHAT_TEMPLATES;
+    const starterIds = isTrainer ? TRAINER_STARTER_TEMPLATE_IDS : STARTER_TEMPLATE_IDS;
 
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -83,16 +109,16 @@ const AiChatbot: React.FC = () => {
     const grouped = useMemo(() => {
         const q = query.trim().toLowerCase();
         const matches = q
-            ? CHAT_TEMPLATES.filter(t =>
+            ? templates.filter(t =>
                   `${t.label} ${t.category} ${t.keywords || ''}`.toLowerCase().includes(q))
             : showAll
-              ? CHAT_TEMPLATES
-              : CHAT_TEMPLATES.filter(t => STARTER_TEMPLATE_IDS.includes(t.id));
+              ? templates
+              : templates.filter(t => starterIds.includes(t.id));
         return matches.reduce<Record<string, ChatTemplate[]>>((acc, t) => {
             (acc[t.category] ||= []).push(t);
             return acc;
         }, {});
-    }, [query, showAll]);
+    }, [query, showAll, templates, starterIds]);
 
     /** Group headings only help once the list is long. */
     const showCategoryHeadings = query.trim() !== '' || showAll;
@@ -100,7 +126,7 @@ const AiChatbot: React.FC = () => {
     if (!chatUrl) return null;
 
     const isTelegram = /(?:^|\/\/)(?:t\.me|telegram\.(?:me|org|dog))\b/i.test(chatUrl);
-    const channel = isTelegram ? TELEGRAM : WHATSAPP;
+    const channel = isTelegram ? TELEGRAM : isTrainer ? WHATSAPP_TRAINER : WHATSAPP;
     const canPrefill = supportsPrefill(chatUrl);
 
     /**
@@ -184,7 +210,11 @@ const AiChatbot: React.FC = () => {
                             )}
                             <div className="min-w-0">
                                 <h3 className="text-sm font-semibold truncate">
-                                    {selected ? selected.label : 'TIA Operation Support (Kael)'}
+                                    {selected
+                                        ? selected.label
+                                        : isTrainer
+                                          ? 'Trainer LMS/TMS Support'
+                                          : 'TIA Operation Support (Kael)'}
                                 </h3>
                                 <p className="text-[11px] text-white/75 truncate">
                                     {selected ? 'Tap to edit, then send' : 'Online · ask me anything'}
@@ -246,14 +276,15 @@ const AiChatbot: React.FC = () => {
                                     ))}
                                 </div>
 
-                                {query.trim() === '' && (
+                                {/* Trainers see every template already, so the toggle would be a no-op. */}
+                                {query.trim() === '' && templates.length > starterIds.length && (
                                     <button
                                         onClick={() => setShowAll(v => !v)}
                                         className="mt-3 text-[12px] font-medium text-gray-600 hover:text-gray-900 underline underline-offset-2"
                                     >
                                         {showAll
                                             ? 'Show fewer suggestions'
-                                            : `Browse all ${CHAT_TEMPLATES.length} requests`}
+                                            : `Browse all ${templates.length} requests`}
                                     </button>
                                 )}
                             </>

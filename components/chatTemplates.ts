@@ -20,6 +20,64 @@ export interface ChatTemplate {
 }
 
 /**
+ * Trainer-facing requests.
+ *
+ * Deliberately narrow: trainers raise problems about their OWN classes and ask
+ * for links. They must not touch schedules, course run IDs, enrolments, SSG
+ * submissions, finance or anything else outside the trainer role — those stay
+ * in the admin catalogue below, which the trainer widget never shows.
+ *
+ * Templates therefore identify a class by course title + date, never by an ID
+ * the trainer would have to be given.
+ */
+export const TRAINER_TEMPLATES: ChatTemplate[] = [
+    {
+        id: 'trainer-cannot-find-class',
+        label: 'Cannot find my class',
+        category: 'My Classes',
+        keywords: 'missing not showing cant see dashboard',
+        body: `Cannot find my class
+Trainer:
+Course Title:
+Start Date:
+What I see instead:`,
+    },
+    {
+        id: 'trainer-assign-me',
+        label: 'Assign me to this class',
+        category: 'My Classes',
+        keywords: 'add trainer access not assigned',
+        body: `Assign me to this class
+Trainer:
+Course Title:
+Start Date:`,
+    },
+    {
+        id: 'trainer-meeting-link',
+        label: 'Send me the Google Meet link',
+        category: 'Links',
+        keywords: 'google meeting zoom virtual online join',
+        body: `Send me the Google Meet link
+Trainer:
+Course Title:
+Start Date:`,
+    },
+    {
+        id: 'trainer-attendance-link',
+        label: 'Send me the e-attendance link',
+        category: 'Links',
+        keywords: 'attendance eattendance qr code sign in digital',
+        body: `Send me the e-attendance link
+Trainer:
+Course Title:
+Start Date:`,
+    },
+];
+
+/** Trainer starters — the list is short enough to show in full. */
+export const TRAINER_STARTER_TEMPLATE_IDS = TRAINER_TEMPLATES.map(t => t.id);
+
+/**
  * The handful shown before the user searches — one recognisable task from each
  * of the busiest areas. The full catalogue is a keystroke (or the "show all"
  * toggle) away.
