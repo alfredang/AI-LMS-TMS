@@ -202,7 +202,11 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
   - 18 tools including dashboard queries, course run search, trainer management, enrollment operations, proforma/invoice generation, QuickBooks operations, SSG course operations
   - Agentic tool-use loop (up to 10 iterations per request)
 - **SEO Metadata Generator** — Claude-powered SEO content generation for WSQ and non-WSQ courses
-- **External Agent Chat Launcher** — Floating WhatsApp/Telegram button (Admin, Finance, Training Provider, Developer, Payroll) that hands off to an external agent such as OpenClaw or Hermes. The destination is set per tenant under Company Settings → Integrations → AI Agent → Chat Link; the widget auto-detects the channel and hides itself when no link is configured
+- **External Agent Chat Launcher** — Floating WhatsApp/Telegram widget (Admin, Finance, Training Provider, Developer, Payroll) that hands off to an external agent such as OpenClaw/Kael or Hermes:
+  - Opens a chat-style panel with suggested requests; 5 starters are shown, search or "Browse all" reveals the full catalogue of **40 fill-in-the-blank templates** across Trainers, Learners, Classes, Sessions, SSG/TPGateway, Finance and Reports
+  - Field names mirror the agent's tools and the `/api/external/*` parameters, so a completed template maps onto a real operation
+  - Selecting one opens an editable message bubble; the message is copied to the clipboard and the chat opens. WhatsApp only accepts a pre-filled body on `wa.me` one-to-one links — **group invite links cannot be pre-filled**, so for a group the user pastes the copied message
+  - Destination is set per tenant under Company Settings → Integrations → AI Agent → Chat Link; the widget auto-detects WhatsApp vs Telegram and hides itself when no link is configured
 - **GenAI Authoring** — AI content generation for course development
 - **Quiz Generator** — AI-generated quizzes based on course content
 
@@ -345,7 +349,8 @@ ai-lms-tms/
 │   ├── ui/                     # Reusable UI components
 │   ├── common/                 # Shared components
 │   ├── LoginScreen.tsx         # Authentication screen
-│   ├── AiChatbot.tsx           # Floating WhatsApp/Telegram chat launcher
+│   ├── AiChatbot.tsx           # Floating WhatsApp/Telegram chat launcher + template picker
+│   ├── chatTemplates.ts        # 40 TMS request templates for the chat launcher
 │   ├── CourseDetail.tsx         # Course detail view
 │   ├── GradingView.tsx         # Assessment grading
 │   └── ...
