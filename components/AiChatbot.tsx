@@ -137,9 +137,14 @@ const AiChatbot: React.FC = () => {
     };
 
     const handleOpenChat = async () => {
-        // On links that can't be pre-filled the clipboard is the only carrier,
-        // so copy first and let the user paste into the conversation.
-        if (!canPrefill) await copyText(draft);
+        // WhatsApp group links can't carry a pre-filled body, so the clipboard is
+        // the only way across. Copy BEFORE window.open — once focus moves to the
+        // new tab the document is no longer focused and the write is rejected.
+        if (!canPrefill) {
+            const ok = await copyText(draft);
+            setCopyState(ok ? 'copied' : 'failed');
+            setTimeout(() => setCopyState('idle'), 2500);
+        }
         window.open(buildChatUrl(chatUrl, draft), '_blank', 'noopener,noreferrer');
     };
 
@@ -258,7 +263,14 @@ const AiChatbot: React.FC = () => {
                             <>
                                 <div className="bg-white rounded-xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[92%]">
                                     <p className="text-[13px] leading-relaxed text-gray-800">
-                                        Fill in the details below, then send it over on {channel.name}.
+                                        {canPrefill ? (
+                                            <>Fill in the details below, then send it over on {channel.name}.</>
+                                        ) : (
+                                            <>
+                                                Fill in the details below, then tap <b>Copy &amp; open {channel.name}</b> and
+                                                <b> paste</b> it into the group.
+                                            </>
+                                        )}
                                     </p>
                                 </div>
 
@@ -290,9 +302,9 @@ const AiChatbot: React.FC = () => {
                                     <button
                                         onClick={handleOpenChat}
                                         style={{ backgroundColor: channel.accent }}
-                                        className="flex-1 px-3 py-2 text-[13px] font-medium rounded-full text-white hover:opacity-90 flex items-center justify-center gap-2"
+                                        className="flex-[1.6] px-3 py-2 text-[13px] font-medium rounded-full text-white hover:opacity-90 flex items-center justify-center gap-2"
                                     >
-                                        Send on {channel.name}
+                                        {canPrefill ? `Send on ${channel.name}` : `Copy & open ${channel.name}`}
                                         <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
                                             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
                                         </svg>
@@ -300,10 +312,10 @@ const AiChatbot: React.FC = () => {
                                 </div>
                                 <p className="text-[10px] text-gray-500 mt-1.5">
                                     {copyState === 'failed'
-                                        ? 'Clipboard blocked by the browser — select the message and copy it manually.'
+                                        ? 'Clipboard blocked by the browser — select the message above and copy it manually, then paste it in the group.'
                                         : canPrefill
                                           ? `Opens ${channel.name} with this message already typed.`
-                                          : `Group links can't be pre-typed — we copy it for you, just paste in ${channel.name}.`}
+                                          : `WhatsApp doesn't let a website post into a group — the message is copied for you, so just press Ctrl/⌘+V in the chat.`}
                                 </p>
                             </>
                         ) : (
