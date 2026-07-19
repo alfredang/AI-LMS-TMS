@@ -19,6 +19,19 @@ export interface ChatTemplate {
     body: string;
 }
 
+/**
+ * The handful shown before the user searches — one recognisable task from each
+ * of the busiest areas. The full catalogue is a keystroke (or the "show all"
+ * toggle) away.
+ */
+export const STARTER_TEMPLATE_IDS = [
+    'add-trainer',
+    'add-learner',
+    'create-run',
+    'add-session',
+    'submit-run-ssg',
+];
+
 export const CHAT_TEMPLATE_CATEGORIES = [
     'Trainers',
     'Learners',

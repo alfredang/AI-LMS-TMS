@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useLms } from '@contexts/LmsContext';
-import { CHAT_TEMPLATES, ChatTemplate, buildChatUrl, supportsPrefill } from './chatTemplates';
+import { CHAT_TEMPLATES, STARTER_TEMPLATE_IDS, ChatTemplate, buildChatUrl, supportsPrefill } from './chatTemplates';
 
 /**
  * Floating external-agent chat launcher.
@@ -47,7 +47,10 @@ const AiChatbot: React.FC = () => {
 
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
-    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [selected, setSelected] = useState<ChatTemplate | null>(null);
+    const [draft, setDraft] = useState('');
+    const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+    const [showAll, setShowAll] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
 
@@ -57,27 +60,42 @@ const AiChatbot: React.FC = () => {
         const onDown = (e: MouseEvent) => {
             if (panelRef.current && !panelRef.current.contains(e.target as Node)) setIsOpen(false);
         };
-        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
+        // Escape backs out of the detail view first, then closes the panel.
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== 'Escape') return;
+            setSelected(prev => {
+                if (prev) return null;
+                setIsOpen(false);
+                return prev;
+            });
+        };
         document.addEventListener('mousedown', onDown);
         document.addEventListener('keydown', onKey);
-        searchRef.current?.focus();
+        if (!selected) searchRef.current?.focus();
         return () => {
             document.removeEventListener('mousedown', onDown);
             document.removeEventListener('keydown', onKey);
         };
-    }, [isOpen]);
+    }, [isOpen, selected]);
 
+    // With no search term, show a short starter set — the full catalogue of 40
+    // would swamp the panel. Typing surfaces everything else.
     const grouped = useMemo(() => {
         const q = query.trim().toLowerCase();
         const matches = q
             ? CHAT_TEMPLATES.filter(t =>
                   `${t.label} ${t.category} ${t.keywords || ''}`.toLowerCase().includes(q))
-            : CHAT_TEMPLATES;
+            : showAll
+              ? CHAT_TEMPLATES
+              : CHAT_TEMPLATES.filter(t => STARTER_TEMPLATE_IDS.includes(t.id));
         return matches.reduce<Record<string, ChatTemplate[]>>((acc, t) => {
             (acc[t.category] ||= []).push(t);
             return acc;
         }, {});
-    }, [query]);
+    }, [query, showAll]);
+
+    /** Group headings only help once the list is long. */
+    const showCategoryHeadings = query.trim() !== '' || showAll;
 
     if (!chatUrl) return null;
 
@@ -85,17 +103,44 @@ const AiChatbot: React.FC = () => {
     const channel = isTelegram ? TELEGRAM : WHATSAPP;
     const canPrefill = supportsPrefill(chatUrl);
 
-    const handlePick = async (t: ChatTemplate) => {
-        // Always copy: on group-invite links the message can't be pre-filled, so
-        // the clipboard is the only way to carry the template across.
+    /**
+     * Copy text, falling back to execCommand when the async Clipboard API is
+     * blocked. Chrome denies clipboard-write without a permission grant, which
+     * previously failed silently and left the user with nothing to paste.
+     */
+    const copyText = async (text: string): Promise<boolean> => {
         try {
-            await navigator.clipboard.writeText(t.body);
-            setCopiedId(t.id);
-            setTimeout(() => setCopiedId(null), 1800);
+            await navigator.clipboard.writeText(text);
+            return true;
         } catch {
-            /* clipboard blocked (insecure context / permission) — still open the chat */
+            /* fall through to the legacy path */
         }
-        window.open(buildChatUrl(chatUrl, t.body), '_blank', 'noopener,noreferrer');
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return ok;
+        } catch {
+            return false;
+        }
+    };
+
+    const handleCopy = async () => {
+        if (!selected) return;
+        setCopyState((await copyText(draft)) ? 'copied' : 'failed');
+        setTimeout(() => setCopyState('idle'), 2500);
+    };
+
+    const handleOpenChat = async () => {
+        // On links that can't be pre-filled the clipboard is the only carrier,
+        // so copy first and let the user paste into the conversation.
+        if (!canPrefill) await copyText(draft);
+        window.open(buildChatUrl(chatUrl, draft), '_blank', 'noopener,noreferrer');
     };
 
     const totalShown = Object.values(grouped).reduce((n, list) => n + list.length, 0);
@@ -107,19 +152,44 @@ const AiChatbot: React.FC = () => {
                     ref={panelRef}
                     role="dialog"
                     aria-label="Chat message templates"
-                    className="absolute bottom-20 right-0 w-[26rem] max-h-[70vh] flex flex-col rounded-xl bg-surface shadow-2xl border border-default overflow-hidden dark:bg-gray-800 dark:border-gray-700"
+                    className="absolute bottom-20 right-0 w-[26rem] max-h-[70vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden bg-[#0d1418] border border-black/20"
                 >
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-default dark:border-gray-700">
-                        <div>
-                            <h3 className="text-sm font-bold text-on-surface">Ask the AI Agent</h3>
-                            <p className="text-[11px] text-on-surface-secondary">
-                                Pick a template, fill in the blanks, send on {channel.name}
-                            </p>
+                    {/* Header — the channel accent, so the panel reads as part of the launcher */}
+                    <div
+                        style={{ backgroundColor: channel.accent }}
+                        className="flex items-center justify-between px-4 py-3 text-white"
+                    >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                            {selected ? (
+                                <button
+                                    onClick={() => setSelected(null)}
+                                    aria-label="Back to suggestions"
+                                    className="p-1 -ml-1 rounded-full hover:bg-white/15 shrink-0"
+                                >
+                                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                </button>
+                            ) : (
+                                <span className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+                                    <svg aria-hidden="true" viewBox={channel.viewBox} fill="currentColor" className="w-4 h-4">
+                                        <path d={channel.path} />
+                                    </svg>
+                                </span>
+                            )}
+                            <div className="min-w-0">
+                                <h3 className="text-sm font-semibold truncate">
+                                    {selected ? selected.label : 'TIA Operation Support (Kael)'}
+                                </h3>
+                                <p className="text-[11px] text-white/75 truncate">
+                                    {selected ? 'Tap to edit, then send' : 'Online · ask me anything'}
+                                </p>
+                            </div>
                         </div>
                         <button
                             onClick={() => setIsOpen(false)}
-                            aria-label="Close templates"
-                            className="p-1.5 rounded-full text-on-surface-secondary hover:bg-surface-elevated dark:hover:bg-gray-700"
+                            aria-label="Close chat"
+                            className="p-1.5 -mr-1 rounded-full hover:bg-white/15 shrink-0"
                         >
                             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
@@ -127,50 +197,146 @@ const AiChatbot: React.FC = () => {
                         </button>
                     </div>
 
-                    <div className="px-3 py-2 border-b border-default dark:border-gray-700">
-                        <input
-                            ref={searchRef}
-                            type="text"
-                            value={query}
-                            onChange={e => setQuery(e.target.value)}
-                            placeholder="Search templates, e.g. trainer, SSG, invoice…"
-                            className="w-full px-3 py-1.5 text-sm rounded-md bg-surface-elevated border border-default text-on-surface placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        />
-                    </div>
+                    {/* Conversation area — light, like a chat thread */}
+                    <div className="flex-1 overflow-y-auto bg-[#f6f7f5] px-4 py-4">
+                        {!selected && (
+                            <>
+                                <div className="bg-white rounded-xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[92%]">
+                                    <p className="text-[13px] leading-relaxed text-gray-800">
+                                        Hi there.
+                                        <br />
+                                        What would you like to do in the TMS today?
+                                    </p>
+                                </div>
 
-                    <div className="flex-1 overflow-y-auto px-2 py-2">
-                        {totalShown === 0 && (
-                            <p className="px-2 py-6 text-center text-sm text-on-surface-secondary">
-                                No template matches “{query}”.
-                            </p>
-                        )}
-                        {Object.entries(grouped).map(([category, list]) => (
-                            <div key={category} className="mb-2">
-                                <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-on-surface-secondary">
-                                    {category}
-                                </p>
-                                {list.map(t => (
+                                {!showCategoryHeadings && (
+                                    <p className="mt-4 mb-2 text-[11px] font-bold tracking-wide text-gray-500">
+                                        SUGGESTED QUESTIONS
+                                    </p>
+                                )}
+
+                                <div className="space-y-2">
+                                    {totalShown === 0 && (
+                                        <p className="py-6 text-center text-sm text-gray-500">
+                                            Nothing matches “{query}”.
+                                        </p>
+                                    )}
+                                    {Object.entries(grouped).map(([category, list]) => (
+                                        <div key={category} className="space-y-2">
+                                            {showCategoryHeadings && (
+                                                <p className="pt-2 text-[11px] font-bold tracking-wide text-gray-500">
+                                                    {category.toUpperCase()}
+                                                </p>
+                                            )}
+                                            {list.map(t => (
+                                                <button
+                                                    key={t.id}
+                                                    onClick={() => { setSelected(t); setDraft(t.body); setCopyState('idle'); }}
+                                                    className="w-full text-left px-4 py-2.5 rounded-full bg-white border border-gray-200 text-[13px] font-medium text-gray-800 hover:border-gray-300 hover:shadow-sm transition"
+                                                >
+                                                    {t.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {query.trim() === '' && (
                                     <button
-                                        key={t.id}
-                                        onClick={() => handlePick(t)}
-                                        className="w-full text-left px-2 py-1.5 rounded-md text-sm text-on-surface hover:bg-surface-elevated dark:hover:bg-gray-700 flex items-center justify-between gap-2"
+                                        onClick={() => setShowAll(v => !v)}
+                                        className="mt-3 text-[12px] font-medium text-gray-600 hover:text-gray-900 underline underline-offset-2"
                                     >
-                                        <span>{t.label}</span>
-                                        {copiedId === t.id && (
-                                            <span className="text-[10px] text-green-600 dark:text-green-400 shrink-0">Copied</span>
-                                        )}
+                                        {showAll
+                                            ? 'Show fewer suggestions'
+                                            : `Browse all ${CHAT_TEMPLATES.length} requests`}
                                     </button>
-                                ))}
-                            </div>
-                        ))}
+                                )}
+                            </>
+                        )}
+
+                        {selected && (
+                            <>
+                                <div className="bg-white rounded-xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[92%]">
+                                    <p className="text-[13px] leading-relaxed text-gray-800">
+                                        Fill in the details below, then send it over on {channel.name}.
+                                    </p>
+                                </div>
+
+                                {/* The draft, styled as the user's own outgoing bubble */}
+                                <div className="mt-3 ml-auto max-w-[92%]">
+                                    <textarea
+                                        value={draft}
+                                        onChange={e => setDraft(e.target.value)}
+                                        rows={Math.min(14, draft.split('\n').length + 1)}
+                                        spellCheck={false}
+                                        aria-label="Message to send"
+                                        className="w-full px-4 py-3 text-[13px] leading-relaxed rounded-xl rounded-br-sm bg-[#dcf8c6] text-gray-900 border border-transparent focus:outline-none focus:border-gray-300 resize-y shadow-sm"
+                                    />
+                                </div>
+                            </>
+                        )}
                     </div>
 
-                    <div className="px-4 py-2 border-t border-default dark:border-gray-700">
-                        <p className="text-[10px] text-on-surface-secondary">
-                            {canPrefill
-                                ? `The message opens pre-filled in ${channel.name}.`
-                                : `Group links can't be pre-filled — the template is copied to your clipboard, so just paste it in ${channel.name}.`}
-                        </p>
+                    <div className="px-3 py-2.5 bg-white border-t border-gray-200">
+                        {selected ? (
+                            <>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handleCopy}
+                                        className="flex-1 px-3 py-2 text-[13px] font-medium rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50"
+                                    >
+                                        {copyState === 'copied' ? 'Copied ✓' : copyState === 'failed' ? 'Press Ctrl/⌘+C' : 'Copy'}
+                                    </button>
+                                    <button
+                                        onClick={handleOpenChat}
+                                        style={{ backgroundColor: channel.accent }}
+                                        className="flex-1 px-3 py-2 text-[13px] font-medium rounded-full text-white hover:opacity-90 flex items-center justify-center gap-2"
+                                    >
+                                        Send on {channel.name}
+                                        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-1.5">
+                                    {copyState === 'failed'
+                                        ? 'Clipboard blocked by the browser — select the message and copy it manually.'
+                                        : canPrefill
+                                          ? `Opens ${channel.name} with this message already typed.`
+                                          : `Group links can't be pre-typed — we copy it for you, just paste in ${channel.name}.`}
+                                </p>
+                            </>
+                        ) : (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    ref={searchRef}
+                                    type="text"
+                                    value={query}
+                                    onChange={e => setQuery(e.target.value)}
+                                    onKeyDown={e => {
+                                        // Enter picks the first match, like sending a message.
+                                        if (e.key !== 'Enter') return;
+                                        const first = Object.values(grouped)[0]?.[0];
+                                        if (first) { setSelected(first); setDraft(first.body); setCopyState('idle'); }
+                                    }}
+                                    placeholder="Type your message..."
+                                    className="flex-1 px-4 py-2 text-[13px] rounded-full bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
+                                />
+                                <button
+                                    onClick={() => {
+                                        const first = Object.values(grouped)[0]?.[0];
+                                        if (first) { setSelected(first); setDraft(first.body); setCopyState('idle'); }
+                                    }}
+                                    aria-label="Use the first matching suggestion"
+                                    style={{ backgroundColor: channel.accent }}
+                                    className="w-9 h-9 rounded-full flex items-center justify-center text-white shrink-0 hover:opacity-90"
+                                >
+                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                                    </svg>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
