@@ -296,6 +296,7 @@ export interface Course {
   facilitatorGuideUrl?: string;
   assessmentPlanUrl?: string;
   trainerSlidesUrl?: string;
+  activitiesUrl?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   writtenAssessmentPublished?: boolean;
@@ -343,6 +344,7 @@ export interface CourseDetail {
   slidesUrl: string;
   facilitatorGuideUrl?: string;
   trainerSlidesUrl?: string;
+  activitiesUrl?: string;
   assessmentPlanUrl?: string;
   courseLink?: string;
   brochureLink?: string;

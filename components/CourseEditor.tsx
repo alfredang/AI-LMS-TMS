@@ -1148,6 +1148,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 renewedStatus: course.renewedStatus,
                 // Include trainer slides URL if it's a link (not upload)
                 trainerSlidesUrl: course.trainerSlidesUrl,
+                activitiesUrl: course.activitiesUrl || null,
                 lessonPlanUrl: course.lessonPlanUrl || null,
                 learnerGuideUrl: course.learnerGuideUrl || null,
                 facilitatorGuideUrl: course.facilitatorGuideUrl || null,
@@ -1730,6 +1731,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <LinkField label="Assessment Plan URL" value={course.assessmentPlanUrl} />
                                 <LinkField label="Learner Slides URL" value={course.slidesUrl} />
                                 <LinkField label="Trainer Slides URL" value={course.trainerSlidesUrl} />
+                                <LinkField label="Activities/Lab URL" value={course.activitiesUrl} />
                                 <LinkField label="Courseware Link" value={course.courseLink} />
                                 <LinkField label="Brochure Link" value={course.brochureLink} />
                                 <LinkField label="SkillsFuture Link" value={course.skillsfutureLink} />
@@ -2115,6 +2117,18 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     onChange={(e) => setCourse(prev => ({ ...prev, trainerSlidesUrl: e.target.value }))}
                                     className={inputClasses}
                                     placeholder="https://docs.google.com/presentation/..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="activitiesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Activities/Lab URL</label>
+                                <input
+                                    type="url"
+                                    id="activitiesUrl"
+                                    name="activitiesUrl"
+                                    value={course.activitiesUrl || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, activitiesUrl: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://drive.google.com/..."
                                 />
                             </div>
                             <div>

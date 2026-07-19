@@ -1197,6 +1197,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           slidesUrl: trainerData.data.courseDetail.slidesUrl,
           facilitatorGuideUrl: trainerData.data.courseDetail.facilitatorGuideUrl,
           trainerSlidesUrl: trainerData.data.courseDetail.trainerSlidesUrl,
+          activitiesUrl: trainerData.data.courseDetail.activitiesUrl,
           assessmentPlanUrl: trainerData.data.courseDetail.assessmentPlanUrl,
           courseLink: trainerData.data.courseDetail.courseLink,
           assessmentRecordLink: trainerData.data.courseDetail.assessmentRecordLink,

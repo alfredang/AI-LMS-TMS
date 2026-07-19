@@ -160,6 +160,7 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
             lesson_plan_url: str(['Lesson Plan Link', 'lesson_plan_url']),
             facilitator_guide_url: str(['Facilitator Guide Link', 'facilitator_guide_url']),
             trainer_slides_url: str(['Trainer Slides Link', 'trainer_slides_url']),
+            activities_url: str(['Activities Link', 'Activities/Lab Link', 'activities_url']),
             assessment_plan_url: str(['Assessment Plan Link', 'assessment_plan_url']),
             practical_performance_assessment_link: str(['Practical Performance Assessment Link', 'practical_performance_assessment_link']),
             written_assessment_link: str(['Written Assessment Link', 'written_assessment_link']),

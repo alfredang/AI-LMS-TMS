@@ -77,6 +77,7 @@ interface Course {
     learnerGuideUrl?: string;
     slidesUrl?: string;
     trainerSlidesUrl?: string;
+    activitiesUrl?: string;
     assessmentPlanUrl?: string;
     courseLink?: string;
     assessmentRecordLink?: string;
@@ -2507,6 +2508,7 @@ export const CourseDetail: React.FC = () => {
     const convertedCourse: Course & {
         facilitatorGuideUrl?: string;
         trainerSlidesUrl?: string;
+        activitiesUrl?: string;
         assessmentPlanUrl?: string;
     } = {
         id: selectedCourse.id || '1',
@@ -2530,6 +2532,7 @@ export const CourseDetail: React.FC = () => {
         // Add trainer-specific URLs
         facilitatorGuideUrl: effectiveDetail?.facilitatorGuideUrl,
         trainerSlidesUrl: effectiveDetail?.trainerSlidesUrl,
+        activitiesUrl: effectiveDetail?.activitiesUrl,
         assessmentPlanUrl: effectiveDetail?.assessmentPlanUrl,
         courseLink: effectiveDetail?.courseLink,
         assessmentRecordLink: effectiveDetail?.assessmentRecordLink,
@@ -2682,6 +2685,7 @@ export const CourseDetail: React.FC = () => {
     })();
     const isMaterialsUnlocked = userRole !== UserRole.Learner || !materialsUnlockTime || new Date() >= materialsUnlockTime;
     const isTrainerSlidesExternal = isExternalUrl(convertedCourse.trainerSlidesUrl);
+    const isActivitiesExternal = isExternalUrl(convertedCourse.activitiesUrl);
     const isFacilitatorGuideExternal = isExternalUrl(convertedCourse.facilitatorGuideUrl);
     const isAssessmentPlanExternal = isExternalUrl(convertedCourse.assessmentPlanUrl);
 
@@ -3072,6 +3076,27 @@ export const CourseDetail: React.FC = () => {
                                                 )
                                             )}
 
+                                            {/* Activities/Lab */}
+                                            {convertedCourse.activitiesUrl && (
+                                                isActivitiesExternal ? (
+                                                    <a href={convertedCourse.activitiesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Activities/Lab</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        </div>
+                                                    </a>
+                                                ) : (
+                                                    <div onClick={(e) => handleFileDownload(convertedCourse.activitiesUrl!, e)} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer">
+                                                        <Icon name={IconName.FileText} className="w-6 h-6 text-green-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">Activities/Lab</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to download</p>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            )}
+
                                             {/* Assessment Plan */}
                                             {convertedCourse.assessmentPlanUrl && (
                                                 isAssessmentPlanExternal ? (
@@ -3094,7 +3119,7 @@ export const CourseDetail: React.FC = () => {
                                             )}
 
                                             {/* Show message if nothing available */}
-                                            {!convertedCourse.courseLink && !convertedCourse.lessonPlanUrl && !convertedCourse.learnerGuideUrl && !convertedCourse.facilitatorGuideUrl && !convertedCourse.trainerSlidesUrl && !convertedCourse.assessmentPlanUrl && (
+                                            {!convertedCourse.courseLink && !convertedCourse.lessonPlanUrl && !convertedCourse.learnerGuideUrl && !convertedCourse.facilitatorGuideUrl && !convertedCourse.trainerSlidesUrl && !convertedCourse.activitiesUrl && !convertedCourse.assessmentPlanUrl && (
                                                 <p className="text-gray-500 dark:text-gray-400 text-sm">No courseware available.</p>
                                             )}
                                         </div>

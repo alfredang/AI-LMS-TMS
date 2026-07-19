@@ -1337,6 +1337,7 @@ CREATE TABLE public.course (
     assessment_plan_url text,
     facilitator_guide_url text,
     trainer_slides_url text,
+    activities_url text,
     is_gamified boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,

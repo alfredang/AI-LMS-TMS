@@ -65,8 +65,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 facilitator_guide_url,
                 slides_url,
                 trainer_slides_url,
+                activities_url,
                 assessment_plan_url
-            FROM course 
+            FROM course
             WHERE id = $1
         `;
 
@@ -150,6 +151,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 courseFiles.facilitator_guide_url,
                 courseFiles.slides_url,
                 courseFiles.trainer_slides_url,
+                courseFiles.activities_url,
                 courseFiles.assessment_plan_url,
                 ...assessmentFilesResult.rows.map(row => row.file_url)
             ].filter(Boolean); // Remove null/undefined values
