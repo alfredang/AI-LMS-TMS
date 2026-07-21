@@ -75,6 +75,7 @@ import WsqScheduleSyncView from '../components/admin/WsqScheduleSyncView';
 import SoftwareCredentialsView from '../components/admin/SoftwareCredentialsView';
 import RescheduleCancelView from '../components/admin/RescheduleCancelView';
 import { UploadCompanyApplicationView, ViewCompanyApplicationView, CheckSupportingDocumentView } from '../components/admin/CompanyApplicationViews';
+import { SyncedEnrolmentsView } from '../components/admin/SyncedEnrolmentsView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -166,6 +167,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.CompanyApplication]: 'COMPANY APPLICATION',
   [AdminPage.UploadCompanyApplication]: 'Upload Company Application',
   [AdminPage.ViewCompanyApplication]: 'View Company Application',
+  [AdminPage.ViewSyncedEnrolments]: 'All Synced Enrolments',
   [AdminPage.CheckSupportingDocument]: 'Check Supporting Document',
   [AdminPage.UpcomingClasses]: 'Upcoming Classes',
   [AdminPage.ViewClassByDate]: 'View Class By Date',
@@ -243,6 +245,7 @@ const AdminLayout: React.FC = () => {
       { title: "Upload Company Application", description: "Import company-sponsored application records into the system.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.UploadCompanyApplication) },
       { title: "Check Supporting Document", description: "Verify outstanding supporting documents before invoice emails are released.", icon: IconName.Shield, onClick: () => setAdminPage(AdminPage.CheckSupportingDocument) },
       { title: "View Company Application", description: "Review and manage company-sponsored application records.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewCompanyApplication) },
+      { title: "All Synced Enrolments", description: "Read-only: employer-sponsored enrolments not tracked as Company Applications.", icon: IconName.Sync, onClick: () => setAdminPage(AdminPage.ViewSyncedEnrolments) },
     ],
     [AdminPage.TpgCourseRun]: [
       { title: "View Class By Date", description: "Browse classes grouped by day from the local database.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.ViewClassByDate) },
@@ -426,6 +429,8 @@ const AdminLayout: React.FC = () => {
         return <UploadCompanyApplicationView />;
       case AdminPage.ViewCompanyApplication:
         return <ViewCompanyApplicationView />;
+      case AdminPage.ViewSyncedEnrolments:
+        return <SyncedEnrolmentsView />;
       case AdminPage.CheckSupportingDocument:
         return <CheckSupportingDocumentView />;
       case AdminPage.UpdateDirectApplication:
