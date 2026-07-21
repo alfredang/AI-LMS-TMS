@@ -114,13 +114,23 @@ async function qbResolveInvoiceForGrantRowAcrossApps(input: {
   const pref = String(input.preferredApp || '').trim() || 'app1';
   const apps = pref === 'app2' ? ['app2', 'app1'] : ['app1', 'app2'];
   for (const app of apps) {
-    const hit = await qbResolveInvoiceForGrantRow({
-      app,
-      grantId: input.grantId,
-      enrolmentId: input.enrolmentId,
-      paymentDate: input.paymentDate,
-    });
-    if (hit?.id) return { app, ...hit };
+    try {
+      const hit = await qbResolveInvoiceForGrantRow({
+        app,
+        grantId: input.grantId,
+        enrolmentId: input.enrolmentId,
+        paymentDate: input.paymentDate,
+      });
+      if (hit?.id) return { app, ...hit };
+    } catch (e) {
+      // A broken/unconfigured fallback app (e.g. stale refresh token) must not fail
+      // the whole row — invoice generation only ever touches the primary app, so
+      // grant matching should degrade the same way: skip this app, try the next.
+      console.warn(
+        `[grantImportApply] QB lookup failed for app=${app} (grant ${input.grantId}), trying next app:`,
+        e instanceof Error ? e.message : e
+      );
+    }
   }
   return null;
 }
