@@ -6,6 +6,7 @@ import { ProfilePage } from '../components/ProfilePage';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import PayoutListView from '../components/payroll/PayoutListView';
 import PayrollSettingsView from '../components/payroll/PayrollSettingsView';
+import AiChatbot from '../components/AiChatbot';
 import { Icon, IconName } from '../components/ui/Icon';
 import { useLms } from '@contexts/LmsContext';
 import { View } from '@app-types/index';
@@ -104,6 +105,7 @@ const PayrollLayout: React.FC = () => {
           </div>
         </main>
       </div>
+      <AiChatbot />
       <Footer />
     </div>
   );

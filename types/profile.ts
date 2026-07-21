@@ -290,6 +290,10 @@ export interface TrainingProviderProfile extends BaseProfile {
     n8nHost2Url?: string;
     tertiaryCoursesSgUrl?: string;
     tertiaryCoursesSgApiKey?: string;
+    mailerliteApiKey?: string;
+    mailerliteGroupId?: string;
+    whatsappChatUrl?: string;
+    trainerWhatsappChatUrl?: string;
     openClawMode?: 'live' | 'local';
     openClawGatewayUrl?: string;
     openClawLocalGatewayUrl?: string;

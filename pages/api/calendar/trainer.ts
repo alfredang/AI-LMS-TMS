@@ -52,9 +52,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     FROM course_run cr
     JOIN course c ON cr.course_id = c.id
     JOIN assessment a ON c.id = a.course_id
-    WHERE cr.assigned_trainer_id = $1
+    WHERE (
+        cr.assigned_trainer_id = $1
+        OR cr.tpg_assigned_trainer_id = $1
+        OR EXISTS (
+            SELECT 1 FROM course_run_trainer crt
+            WHERE crt.course_run_id = cr.id AND crt.trainer_id = $1
+        )
+    )
     AND cr.end_date IS NOT NULL
-    AND cr.end_date >= NOW() 
+    AND cr.end_date >= NOW()
 
     UNION ALL
 
@@ -78,7 +85,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         END AS priority
     FROM course_run cr
     JOIN course c ON cr.course_id = c.id
-    WHERE cr.assigned_trainer_id = $1
+    WHERE (
+        cr.assigned_trainer_id = $1
+        OR cr.tpg_assigned_trainer_id = $1
+        OR EXISTS (
+            SELECT 1 FROM course_run_trainer crt
+            WHERE crt.course_run_id = cr.id AND crt.trainer_id = $1
+        )
+    )
     AND cr.end_date >= NOW()
 
     ORDER BY date ASC;

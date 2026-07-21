@@ -32,7 +32,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 ### Why AI-LMS-TMS?
 
-- **AI-Powered Learning**: Nemo AI agent (Claude Agent SDK) with persistent memory and tool use, SEO metadata generator, plus Gemini chatbot and GenAI authoring tools
+- **AI-Powered Learning**: Nemo AI agent (Claude Agent SDK) with persistent memory and tool use, SEO metadata generator, external agent hand-off via WhatsApp/Telegram, plus GenAI authoring tools
 - **SSG Integration**: Full SkillsFuture Singapore API support for course runs, enrolments, assessments, grants, and claims
 - **Multi-Role System**: 7 roles with dedicated dashboards — Learner, Trainer, Admin, Developer, Finance, Payroll, Training Provider
 - **Multi-Tenant**: Same codebase deployed for multiple tenants on Coolify — Tertiary builds via **Dockerfile**, other tenants (Chariot, Intellisoft) build via **Docker Compose**
@@ -83,7 +83,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Ed Tools** — Interactive classroom tools:
   - [Ice Breaker](https://alfredang.github.io/ice-breaker/), [Pinboard](https://alfredang.github.io/pinboard/), [Break Timer](https://alfredang.github.io/musical-timer-countdown/), [Word Cloud](https://alfredang.github.io/wordcloud/), [Flash Cards](https://alfredang.github.io/flashcard/), [Live Q&A](https://alfredang.github.io/live-qna/), [Whiteboard](https://alfredang.github.io/whiteboard/), [QR Code Generator](https://alfredang.github.io/qrcodegenerator/), [Padlet](https://alfredang.github.io/padlet/), [Collaborative Note](https://alfredang.github.io/collabnote/), [Collaborative Flow](https://alfredang.github.io/collabflow/), [Collaborative Kanban](https://alfredang.github.io/kanban/), [Live Poll](https://alfredang.github.io/livepoll/), [MindMaps](https://alfredang.github.io/mindmapping/), [Spinning Wheel](https://alfredang.github.io/spinning-wheel/)
 - **Project Mgt Tools** — [RACI Matrix](https://alfredang.github.io/raci/), [Digital/AI Transformation](https://alfredang.github.io/digitaltransformation/), [Agile/Scrum](https://alfredang.github.io/scrum/), [Design Thinking Studio](https://alfredang.github.io/designthinking/), [BMC Studio](https://alfredang.github.io/bcm/)
-- **Problem Solving Tools** — [5 Whys](https://alfredang.github.io/5whys/), [Fishbone Diagram](https://alfredang.github.io/fishbone/), [Pareto Chart](https://alfredang.github.io/paretochart/), [System Thinking](https://alfredang.github.io/systemloop/)
+- **Six Sigma Tools** — [5 Whys](https://alfredang.github.io/5whys/), [Fishbone Diagram](https://alfredang.github.io/fishbone/), [Pareto Chart](https://alfredang.github.io/paretochart/), [System Thinking](https://alfredang.github.io/systemloop/), [SIPOC](https://alfredang.github.io/sipoc/)
 - **Cyber Security Tools** — [Cyber Labs](https://alfredang.github.io/cybersecuritysimulator/), [Ethical Hacking Labs](https://alfredang.github.io/ethnicalhacking/), [Pentest Labs](https://pentest-fauxbank.vercel.app/), [Cryptography](https://alfredang.github.io/cryptography-toolkit/)
 - **Finance Tools** — [Tax Calculator](https://alfredang.github.io/novataxsg/), [Financial Planning & Analysis](https://alfredang.github.io/novafinance/), [Financial Ratio Calculators](https://alfredang.github.io/novafinancialratiocalculator/), [Financial Trend Analysis](https://alfredang.github.io/financialtrend/), [Credit Loan Analysis](https://creditloananalysis.streamlit.app/)
 - **HR Tools** — [MBTI](https://alfredang.github.io/mbti/#landing), [AI Interview Coach](https://alfredang.github.io/ai-interviewing/), [HR Interview Gen](https://alfredang.github.io/hr-interviewing/)
@@ -176,7 +176,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Company Setting**
   - Company profile (name, UEN, address, logo, color scheme)
   - Contact person management
-  - **Integrations** — Virtual class meeting provider selection (Google Meet, Zoom, Microsoft Teams), course-run meeting links override the company default, Google (Calendar, OAuth, Certificate Folder), Zoom OAuth meeting generation, Microsoft Teams meeting generation, n8n, Magento, Reference Links
+  - **Integrations** — Virtual class meeting provider selection (Google Meet, Zoom, Microsoft Teams), course-run meeting links override the company default, Google (Calendar, OAuth, Certificate Folder), Zoom OAuth meeting generation, Microsoft Teams meeting generation, n8n, Magento, MailerLite, AI Agent (external WhatsApp/Telegram chat links — separate ops and trainer groups), Reference Links
   - **SSG Authentication** — SSG certificate, private key, and encryption key (with support for App1, App3, App4 credentials)
   - **LLM Credentials** — Anthropic, OpenAI, Gemini, MiniMax, Kimi, DeepSeek with default and fallback provider selection
   - **Security Settings** — OTP login, default OTP, force first password change, default password, sensitive data masking
@@ -202,7 +202,12 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
   - 18 tools including dashboard queries, course run search, trainer management, enrollment operations, proforma/invoice generation, QuickBooks operations, SSG course operations
   - Agentic tool-use loop (up to 10 iterations per request)
 - **SEO Metadata Generator** — Claude-powered SEO content generation for WSQ and non-WSQ courses
-- **AI Chatbot** — Gemini-powered chatbot for learner assistance on public landing page
+- **External Agent Chat Launcher** — Floating WhatsApp/Telegram widget that hands off to an external agent such as OpenClaw/Kael or Hermes. Two role-scoped variants, each pointing at its own group:
+  - **Ops widget** (green — Admin, Finance, Training Provider, Developer, Payroll): 5 starter suggestions, with search or "Browse all" revealing the full catalogue of **40 fill-in-the-blank templates** across Trainers, Learners, Classes, Sessions, SSG/TPGateway, Finance and Reports
+  - **Trainer widget** (blue — Trainer role only): a deliberately narrow set of 4 requests — cannot find my class, assign me to this class, send me the Google Meet link, send me the e-attendance link. Classes are identified by course title + start date, never by a course run ID, and the trainer catalogue is a **separate array** rather than a filter, so no admin action (schedules, run IDs, enrolments, SSG, finance) is reachable from the trainer widget
+  - Field names mirror the agent's tools and the `/api/external/*` parameters, so a completed template maps onto a real operation
+  - Selecting one opens an editable message bubble; the message is copied to the clipboard and the chat opens. WhatsApp only accepts a pre-filled body on `wa.me` one-to-one links — **group invite links cannot be pre-filled**, so for a group the user pastes the copied message
+  - Destinations are set per tenant under Company Settings → Integrations → AI Agent (`whatsapp_chat_url` and `trainer_whatsapp_chat_url`); each widget auto-detects WhatsApp vs Telegram and hides itself when its link is blank
 - **GenAI Authoring** — AI content generation for course development
 - **Quiz Generator** — AI-generated quizzes based on course content
 
@@ -259,6 +264,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | **Container** | Docker, Docker Compose |
 | **Deployment** | Coolify (self-hosted) |
 | **Automation** | n8n workflows, Task Scheduler, Webhooks |
+| **Email Marketing** | MailerLite (daily learner-email subscriber sync) |
 | **E-commerce** | Magento integration |
 
 ## API Documentation
@@ -275,6 +281,7 @@ POST /api/external/auto-create-learners   # Auto-create learner accounts
 POST /api/external/sync-course-run-dates  # Sync dates with SSG
 GET  /api/external/backfill-enrollments   # Preview enrollment backfill
 POST /api/external/backfill-enrollments   # Execute enrollment backfill
+POST /api/external/create-course-run      # Create a new course run (+ sessions) and submit to SSG
 ```
 
 ### Authentication
@@ -343,7 +350,8 @@ ai-lms-tms/
 │   ├── ui/                     # Reusable UI components
 │   ├── common/                 # Shared components
 │   ├── LoginScreen.tsx         # Authentication screen
-│   ├── AiChatbot.tsx           # Gemini-powered chatbot
+│   ├── AiChatbot.tsx           # Floating WhatsApp/Telegram chat launcher + template picker
+│   ├── chatTemplates.ts        # 40 TMS request templates for the chat launcher
 │   ├── CourseDetail.tsx         # Course detail view
 │   ├── GradingView.tsx         # Assessment grading
 │   └── ...

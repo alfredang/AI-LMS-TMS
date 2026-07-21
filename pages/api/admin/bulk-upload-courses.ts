@@ -31,6 +31,7 @@ interface CourseRow {
   lesson_plan_url?: string;
   facilitator_guide_url?: string;
   trainer_slides_url?: string;
+  activities_url?: string;
   assessment_plan_url?: string;
   practical_performance_assessment_link?: string;
   written_assessment_link?: string;
@@ -177,6 +178,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           toText(course.assessment_plan_url),                        // 39
           toText(course.practical_performance_assessment_link),      // 40
           toText(course.written_assessment_link),                    // 41
+          toText(course.activities_url),                             // 42
         ];
 
         if (existing.rows.length > 0) {
@@ -197,8 +199,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                slides_url=$35, lesson_plan_url=$36, facilitator_guide_url=$37,
                trainer_slides_url=$38, assessment_plan_url=$39,
                practical_performance_assessment_link=$40, written_assessment_link=$41,
+               activities_url=$42,
                updated_at=NOW()
-             WHERE course_code=$42`,
+             WHERE course_code=$43`,
             [...values, course_code.trim()]
           );
 
@@ -224,11 +227,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                slides_url, lesson_plan_url, facilitator_guide_url,
                trainer_slides_url, assessment_plan_url,
                practical_performance_assessment_link, written_assessment_link,
+               activities_url,
                course_code, created_at, updated_at
              ) VALUES (
                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
                $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,
-               $28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,NOW(),NOW()
+               $28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,NOW(),NOW()
              ) RETURNING id`,
             [...values, course_code.trim()]
           );

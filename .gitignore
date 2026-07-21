@@ -177,3 +177,10 @@ database/seeds/tertiary-software-credentials.sql
 
 # Personal ad-hoc scripts — never commit (contained live DB creds; see incident 2026-07-01)
 scratch/
+
+# Local-only binary artifacts (not for the public repo)
+docs/AI-LMS-TMS-Pitch-Deck.pptx
+eraser-ring-dashed.png
+
+# Distribution archives (rebuildable — never pushed to GitHub)
+*.zip

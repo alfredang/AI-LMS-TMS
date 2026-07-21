@@ -213,6 +213,11 @@ const EnrollLearners: React.FC = () => {
   // like an Excel upload of multiple rows.
   const [caBatch, setCaBatch] = useState<{ row: Record<string, string>; name: string; nric: string }[]>([]);
   const [isEnrolBatch, setIsEnrolBatch] = useState(false);
+  // Guard against the one-by-one Company Application mistake: submitting a single
+  // learner cuts ONE invoice for that learner alone. If the employer is enrolling
+  // more than one, they must be staged into the batch so the CA pipeline groups
+  // them into a single consolidated tax invoice. This modal is the last checkpoint.
+  const [showSingleCaConfirm, setShowSingleCaConfirm] = useState(false);
   const ENROLMENT_DRAFT_KEY = 'enrolment_submission_draft';
 
   const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
@@ -1075,8 +1080,19 @@ const EnrollLearners: React.FC = () => {
     e.preventDefault();
 
     // Employer picked from the dropdown → Company Application pipeline.
+    // Enrolling a single learner here cuts a standalone invoice for that learner.
+    // Validate first, then confirm the count so multi-learner companies are routed
+    // through the batch (one consolidated invoice) instead of one invoice each.
     if (isCompanyApplication) {
-      await handleCompanyApplicationSubmit();
+      const { courseTitle, startDate } = resolveCaContext();
+      const caErrors = validateCaFields(courseTitle, startDate);
+      if (caErrors.length > 0) {
+        setErrors(caErrors);
+        setWarnings([]);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      setShowSingleCaConfirm(true);
       return;
     }
 
@@ -2391,6 +2407,55 @@ const EnrollLearners: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* Single-learner Company Application confirmation. Stops the one-by-one
+          mistake where each learner is invoiced separately instead of the whole
+          company sharing ONE consolidated main tax invoice. */}
+      {showSingleCaConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-800">
+            <div className="p-6 space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Is {formData.employerOrgName?.trim() || 'this company'} enrolling only 1 learner?
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                You&apos;re about to enrol <span className="font-medium">just this one learner</span>, which
+                generates <span className="font-medium">a separate tax invoice for them alone</span>.
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                If the company is enrolling <span className="font-medium">more than one learner</span> for this
+                course, don&apos;t enrol them one by one — use <span className="font-medium">&ldquo;+ Add learner
+                to batch&rdquo;</span> to stage everyone, then <span className="font-medium">&ldquo;Enrol all &amp;
+                generate 1 invoice&rdquo;</span> so they share <span className="font-medium">one consolidated
+                invoice</span>.
+              </p>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setShowSingleCaConfirm(false);
+                  void handleCompanyApplicationSubmit();
+                }}
+                className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Yes, just 1 — enrol &amp; invoice
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSingleCaConfirm(false);
+                  handleAddToBatch();
+                }}
+                className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+              >
+                No — add more learners
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

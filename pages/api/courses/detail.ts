@@ -12,6 +12,7 @@ interface CourseDetailRow {
   training_hours: number;
   assessment_hours: number;
   lesson_plan_url: string;
+  activities_url: string;
   learner_guide_url: string;
   slides_url: string;
   written_assessment_link: string;
@@ -67,6 +68,7 @@ export default async function handler(
           c.training_hours,
           c.assessment_hours,
           c.lesson_plan_url,
+          c.activities_url,
           c.learner_guide_url,
           c.slides_url,
           c.written_assessment_link,
@@ -105,6 +107,7 @@ export default async function handler(
           c.training_hours,
           c.assessment_hours,
           c.lesson_plan_url,
+          c.activities_url,
           c.learner_guide_url,
           c.slides_url,
           c.written_assessment_link,
@@ -194,6 +197,7 @@ export default async function handler(
         trainingHours: courseDetail.training_hours,
         assessmentHours: courseDetail.assessment_hours,
         lessonPlanUrl: courseDetail.lesson_plan_url,
+        activitiesUrl: courseDetail.activities_url,
         learnerGuideUrl: courseDetail.learner_guide_url,
         slidesUrl: courseDetail.slides_url,
         writtenAssessmentLink: courseDetail.written_assessment_link,
