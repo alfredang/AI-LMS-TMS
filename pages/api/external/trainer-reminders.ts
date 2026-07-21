@@ -175,16 +175,37 @@ const BASE_SELECT = `
        WHERE cs.course_run_id = cr.id
          AND COALESCE(cs.deleted, false) = false
          AND cs.start_date IS NOT NULL
-     ) AS session_days
+     ) AS session_days,
+     (
+       -- cs.start_date is text in SSG's native YYYYMMDD format — cast through ::date so the
+       -- aggregated array comes back as proper ISO YYYY-MM-DD strings, matching the
+       -- start_date/end_date query params these get compared against in JS.
+       SELECT array_agg(DISTINCT (cs.start_date::date)::text ORDER BY (cs.start_date::date)::text)
+       FROM course_session cs
+       WHERE cs.course_run_id = cr.id
+         AND COALESCE(cs.deleted, false) = false
+         AND cs.start_date IS NOT NULL
+     ) AS session_dates
    FROM course_run cr
    JOIN course c ON c.id = cr.course_id
 `;
 
-/** Resolve trainer + phone for every row, in parallel. Row order is preserved. */
-async function resolveAllRows(rows: any[]): Promise<ReturnType<typeof mapRow>[]> {
+/**
+ * Resolve trainer + phone for every row, in parallel. Row order is preserved.
+ *
+ * `window` (batch endpoint only) picks, per run, the specific session date that actually
+ * fell inside the queried range — NOT just the run's overall start_date. A multi-day run's
+ * trainer can legitimately differ day to day (that's the whole reason this resolution exists),
+ * so a day-2 reminder must check day-2's calendar event, not day-1's.
+ */
+async function resolveAllRows(rows: any[], window?: { start: string; end: string }): Promise<ReturnType<typeof mapRow>[]> {
   return Promise.all(
     rows.map(async (row) => {
-      const resolution = await resolveTrainerForRunDate(row.run_uuid, String(row.start_date).slice(0, 10));
+      const sessionDates: string[] = row.session_dates || [];
+      const matchedDate = window
+        ? sessionDates.find((d) => d >= window.start && d <= window.end) || row.start_date
+        : row.start_date;
+      const resolution = await resolveTrainerForRunDate(row.run_uuid, String(matchedDate).slice(0, 10));
       const phoneRaw = await lookupTrainerPhone(resolution.trainer?.user_id ?? null);
       return mapRow(row, resolution, phoneRaw);
     })
@@ -220,7 +241,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Item: no longer requires a course_run_trainer row to exist — a run with no LMS trainer
     // assignment (e.g. only ever set via a calendar invite) must still appear, not vanish.
-    const conditions: string[] = [`cr.start_date >= $1`, `cr.end_date <= $2`];
+    //
+    // Item: date match is against actual SESSION days, not the run's overall start/end window.
+    // The old `cr.start_date >= $1 AND cr.end_date <= $2` required the run's ENTIRE span to fit
+    // inside the queried range — a multi-day run starting before the window (e.g. a 2-day class
+    // running 21-22 Jul, queried for just 22 Jul) was invisible even though it has a real
+    // teaching day in range. Every day a run has a session is a legitimate reminder day.
+    const conditions: string[] = [
+      `EXISTS (
+         SELECT 1 FROM course_session cs
+          WHERE cs.course_run_id = cr.id
+            AND COALESCE(cs.deleted, false) = false
+            AND cs.start_date::date >= $1::date AND cs.start_date::date <= $2::date
+       )`,
+    ];
     const params: (string | number)[] = [String(start_date), String(end_date)];
     let idx = 3;
 
@@ -244,7 +278,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params
     );
 
-    let rows = await resolveAllRows(result.rows);
+    let rows = await resolveAllRows(result.rows, { start: String(start_date), end: String(end_date) });
 
     // Filter only reminder-eligible (have phone)
     if (send_reminder === 'true') {
