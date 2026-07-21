@@ -270,6 +270,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <NavItem page={AdminPage.UploadCompanyApplication} label="Upload Company Application" isSubItem />
                 <NavItem page={AdminPage.CheckSupportingDocument} label="Check Supporting Document" isSubItem />
                 <NavItem page={AdminPage.ViewCompanyApplication} label="View Company Application" isSubItem badge={caStuckCount} />
+                <NavItem page={AdminPage.ViewSyncedEnrolments} label="All Synced Enrolments" isSubItem />
             </NavSection>
 
             <NavSection title="Enrolment" icon={IconName.Users} collapsed={collapsed} isOpen={openSections.enrolment} onToggle={() => toggleSection('enrolment')}>
