@@ -223,8 +223,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Auth: support both x-api-key and Bearer token
   const apiKey = req.headers['x-api-key'] || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
   const validKey = process.env.EXTERNAL_API_KEY_FOR_CLAWDBOT;
+  const callerIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
   if (!validKey) return res.status(500).json({ error: { code: 'internal_error', message: 'API key not configured on server' } });
-  if (!apiKey || apiKey !== validKey) return res.status(401).json({ error: { code: 'unauthorized', message: 'Invalid or missing API key' } });
+  if (!apiKey || apiKey !== validKey) {
+    const keyPrefix = typeof apiKey === 'string' ? apiKey.slice(0, 4) : 'none';
+    console.warn(`external/trainer-reminders: 401 from ${callerIp} — key prefix "${keyPrefix}..."`);
+    return res.status(401).json({ error: { code: 'unauthorized', message: 'Invalid or missing API key' } });
+  }
+  console.log(`external/trainer-reminders: authorized request from ${callerIp}`);
 
   const { course_run_id, start_date, end_date, status, send_reminder, include_virtual, include_external } = req.query;
 
@@ -285,6 +291,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       rows = rows.filter((r) => r.send_reminder);
     }
 
+    console.log(`external/trainer-reminders: 200 OK, ${rows.length} row(s) for ${start_date}..${end_date} (caller ${callerIp})`);
     return res.status(200).json(rows);
   } catch (error) {
     console.error('external/trainer-reminders error:', error);
