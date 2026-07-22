@@ -226,8 +226,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const callerIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
   if (!validKey) return res.status(500).json({ error: { code: 'internal_error', message: 'API key not configured on server' } });
   if (!apiKey || apiKey !== validKey) {
-    const keyPrefix = typeof apiKey === 'string' ? apiKey.slice(0, 4) : 'none';
-    console.warn(`external/trainer-reminders: 401 from ${callerIp} — key prefix "${keyPrefix}..."`);
+    const keyStr = typeof apiKey === 'string' ? apiKey : '';
+    const keyShape = keyStr
+      ? `len=${keyStr.length} "${keyStr.slice(0, 6)}...${keyStr.slice(-4)}" (validLen=${validKey.length})`
+      : 'none';
+    console.warn(`external/trainer-reminders: 401 from ${callerIp} — key shape: ${keyShape}`);
     return res.status(401).json({ error: { code: 'unauthorized', message: 'Invalid or missing API key' } });
   }
   console.log(`external/trainer-reminders: authorized request from ${callerIp}`);
