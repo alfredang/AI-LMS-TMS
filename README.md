@@ -162,6 +162,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Assessment authoring with multiple assessment methods (Written, Practical, Case Study, Role Play, Oral Questioning, Project, Assignment)
 - Learning unit and subtopic management
 - Course material uploads (lesson plans, slides, guides)
+- **Courseware link cards** — in course view mode, courseware documents (lesson plan, guides, slides, brochure, SkillsFuture link, etc.) render as click-to-open cards; empty links are hidden
 - **SEO Metadata Generator** — AI-powered SEO metadata generation for WSQ and non-WSQ courses using Claude Agent SDK
   - WSQ: Meta title (with WSQ prefix), keywords, description with 70% funding subsidy, course description, and 20 job roles
   - Non-WSQ: Region-specific meta titles (Singapore, Malaysia with HRD Corp, International), keywords, description, course description, and 20 job roles
