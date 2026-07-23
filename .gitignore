@@ -184,3 +184,9 @@ eraser-ring-dashed.png
 
 # Distribution archives (rebuildable — never pushed to GitHub)
 *.zip
+
+# Source material derived from third parties — not ours to republish.
+**/reference/
+# Our own n8n workflow doc — a project artifact, keep it tracked.
+!docs/reference/
+!docs/reference/**

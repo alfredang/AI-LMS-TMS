@@ -66,6 +66,24 @@ const LinkField: React.FC<{ label: string; value?: string | null }> = ({ label, 
     </div>
 );
 
+const LinkCard: React.FC<{ label: string; value?: string | null }> = ({ label, value }) => {
+    if (!value) return null;
+    return (
+        <a
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+        >
+            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+                <p className="font-semibold text-gray-900 dark:text-white">{label}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+            </div>
+        </a>
+    );
+};
+
 const ReadonlyValueField: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
     <div>
         <div className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">{label}</div>
@@ -1724,19 +1742,22 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Courseware</h3>
-                            <div className="space-y-4">
-                                <LinkField label="Lesson Plan URL" value={course.lessonPlanUrl} />
-                                <LinkField label="Learner Guide URL" value={course.learnerGuideUrl} />
-                                <LinkField label="Facilitator Guide URL" value={course.facilitatorGuideUrl} />
-                                <LinkField label="Assessment Plan URL" value={course.assessmentPlanUrl} />
-                                <LinkField label="Learner Slides URL" value={course.slidesUrl} />
-                                <LinkField label="Trainer Slides URL" value={course.trainerSlidesUrl} />
-                                <LinkField label="Activities/Lab URL" value={course.activitiesUrl} />
-                                <LinkField label="Courseware Link" value={course.courseLink} />
-                                <LinkField label="Brochure Link" value={course.brochureLink} />
-                                <LinkField label="SkillsFuture Link" value={course.skillsfutureLink} />
-                                <LinkField label="Assessment Record Link" value={course.assessmentRecordLink} />
-                                <LinkField label="Assessment Summary Record URL" value={course.assessmentSummaryRecordUrl} />
+                            <div className="space-y-3">
+                                <LinkCard label="Lesson Plan" value={course.lessonPlanUrl} />
+                                <LinkCard label="Learner Guide" value={course.learnerGuideUrl} />
+                                <LinkCard label="Facilitator Guide" value={course.facilitatorGuideUrl} />
+                                <LinkCard label="Assessment Plan" value={course.assessmentPlanUrl} />
+                                <LinkCard label="Learner Slides" value={course.slidesUrl} />
+                                <LinkCard label="Trainer Slides" value={course.trainerSlidesUrl} />
+                                <LinkCard label="Activities/Lab" value={course.activitiesUrl} />
+                                <LinkCard label="Courseware Link" value={course.courseLink} />
+                                <LinkCard label="Brochure Link" value={course.brochureLink} />
+                                <LinkCard label="SkillsFuture Link" value={course.skillsfutureLink} />
+                                <LinkCard label="Assessment Record Link" value={course.assessmentRecordLink} />
+                                <LinkCard label="Assessment Summary Record" value={course.assessmentSummaryRecordUrl} />
+                                {![course.lessonPlanUrl, course.learnerGuideUrl, course.facilitatorGuideUrl, course.assessmentPlanUrl, course.slidesUrl, course.trainerSlidesUrl, course.activitiesUrl, course.courseLink, course.brochureLink, course.skillsfutureLink, course.assessmentRecordLink, course.assessmentSummaryRecordUrl].some(Boolean) && (
+                                    <div className="text-gray-500 dark:text-gray-400">No courseware links available.</div>
+                                )}
                             </div>
                         </Card>
 
