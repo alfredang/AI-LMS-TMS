@@ -814,6 +814,11 @@ export const SubmitAssessmentView: React.FC = () => {
                                 <h4 className="font-semibold text-red-900 dark:text-red-200">Submission Creation Failed</h4>
                             </div>
                             <p className="text-sm text-red-800 dark:text-red-300 pl-7">{error}</p>
+                            {/TGS-?425/i.test(error) && (
+                                <p className="text-sm text-red-800 dark:text-red-300 pl-7 mt-1">
+                                    <strong>Submit one assessment for this course directly in SSG TPGateway</strong> — that fixes this automatically. Then retry.
+                                </p>
+                            )}
                         </div>
                     ) : (
                         <div className="bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 dark:border-green-600 rounded-r-lg p-4">
@@ -1177,6 +1182,11 @@ export const UpdateAssessmentView: React.FC = () => {
                             </div>
                             <div className="pl-7 space-y-1">
                                 <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+                                {/TGS-?425/i.test(error) && (
+                                    <p className="text-sm text-red-800 dark:text-red-300">
+                                        <strong>Submit one assessment for this course directly in SSG TPGateway</strong> — that fixes this automatically. Then retry.
+                                    </p>
+                                )}
                             </div>
                         </div>
                     ) : apiResult?.skipped ? (
@@ -1574,7 +1584,7 @@ export const BulkUpdateAssessmentView: React.FC = () => {
                     {mappingMsg && <p className="text-xs text-blue-600 dark:text-blue-400 mb-2">{mappingMsg}</p>}
                     {rows.filter(r => !r.skillCode?.trim()).length > 0 && (
                         <p className="text-xs text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded px-2 py-1.5 mb-3">
-                            ⚠️ {rows.filter(r => !r.skillCode?.trim()).length} row(s) have no Skill Code — none was found for their course. Enter it manually below before submitting (then "Save skill codes for these courses" so it auto-fills next time).
+                            ⚠️ {rows.filter(r => !r.skillCode?.trim()).length} row(s) have no Skill Code found automatically. <strong>Try the storefront's "Skills Framework" code first. If it fails with TGS-425, submit one assessment for this course directly in SSG TPGateway</strong> — that fixes it automatically. Then enter the working code below and save.
                         </p>
                     )}
 
@@ -1762,6 +1772,11 @@ export const BulkUpdateAssessmentView: React.FC = () => {
                                         <td className="p-2 text-xs">{r.createdOn ? `${r.createdOn}${r.updatedOn ? ` (updated ${r.updatedOn})` : ''}` : '-'}</td>
                                         <td className="p-2 text-xs">
                                             {r.error && <span className="text-red-600 dark:text-red-400">{r.error}</span>}
+                                            {r.error && /TGS-?425/i.test(r.error) && (
+                                                <span className="text-red-600 dark:text-red-400 block mt-0.5">
+                                                    <strong>Submit one assessment for this course directly in SSG TPGateway</strong> — that fixes this automatically. Then retry.
+                                                </span>
+                                            )}
                                             {r.paymentWarning && <span className="text-amber-600 dark:text-amber-400 block mt-0.5">⚠ {r.paymentWarning}</span>}
                                         </td>
                                     </tr>
