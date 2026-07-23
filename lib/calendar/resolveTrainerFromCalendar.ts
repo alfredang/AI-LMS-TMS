@@ -50,7 +50,7 @@ export interface TrainerResolutionResult {
  * miscounted as a collision and misclassified 'ambiguous' purely because they have 2 emails on
  * the invite, even though there's no actual ambiguity about who they are.
  */
-async function matchTrainerAccounts(emails: string[]): Promise<ResolvedTrainer[]> {
+export async function matchTrainerAccounts(emails: string[]): Promise<ResolvedTrainer[]> {
   if (emails.length === 0) return [];
   const rows = (await pool.query<{ user_id: string; name: string | null; email: string }>(
     `SELECT DISTINCT au.id AS user_id, au.full_name AS name, cand.em AS email
