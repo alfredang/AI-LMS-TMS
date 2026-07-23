@@ -1,6 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { resolveTrainerForRunDate, TrainerResolutionResult } from '../../../lib/calendar/resolveTrainerFromCalendar';
+import { getCalendarReadClient } from '../../../lib/calendar/calendarClient';
+import { resolveEventsToRuns, CandidateRun } from '../../../lib/calendar/resolveEventToRun';
 
 /**
  * External API — Trainer Reminders
@@ -143,7 +145,7 @@ function mapRow(row: any, resolution: TrainerResolutionResult, phoneRaw: string 
     send_reminder: !!phone,
     remarks: null,
     attendance_code: row.digital_attendance_id || null,
-    calendar_event_url: null,
+    calendar_event_url: row.calendar_event_url || null,
     last_reminder_sent_at: null,
     reminder_sent_count: 0,
   };
@@ -248,31 +250,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Item: no longer requires a course_run_trainer row to exist — a run with no LMS trainer
-    // assignment (e.g. only ever set via a calendar invite) must still appear, not vanish.
+    // Google Calendar is the source of truth for "is this class happening on date X" — NOT the
+    // local course_session sync cache, which is frequently incomplete (confirmed 2026-07-23: real
+    // Confirmed classes with real trainers were silently invisible here purely because their
+    // course_session rows were empty, even immediately after a live gap-fill sync attempt).
     //
-    // Item: date match is against actual SESSION days, not the run's overall start/end window.
-    // The old `cr.start_date >= $1 AND cr.end_date <= $2` required the run's ENTIRE span to fit
-    // inside the queried range — a multi-day run starting before the window (e.g. a 2-day class
-    // running 21-22 Jul, queried for just 22 Jul) was invisible even though it has a real
-    // teaching day in range. Every day a run has a session is a legitimate reminder day.
+    // Flow: (1) query a date-plausible CANDIDATE pool of course_runs from the local DB — this is
+    // a performance/scoping bound only, not the gate; (2) list real Google Calendar events for
+    // the window; (3) resolve each event to a course_run via course_run_calendar_event mapping ->
+    // "Course Run ID" in the description -> "Course Code" + date plausibility -> fuzzy title match
+    // (see lib/calendar/resolveEventToRun.ts); (4) only resolved {run, date} pairs become response
+    // rows. A course's coarse start/end span never by itself produces a row — a gap day with no
+    // real calendar event simply won't resolve, regardless of how wide the run's overall span is.
+    const calendarClient = await getCalendarReadClient();
+    if (!calendarClient) {
+      console.error('external/trainer-reminders: calendar unavailable, failing request');
+      return res.status(503).json({
+        error: {
+          code: 'calendar_unavailable',
+          message: 'Google Calendar sync is required for this endpoint and is not currently available.',
+        },
+      });
+    }
+
+    // Candidate pool — a generous ±30 day pad around the requested window, wide enough that no
+    // legitimately-relevant run (whose calendar event necessarily falls within its own declared
+    // span) could ever fall outside it. This bound does no correctness work; the per-event date
+    // plausibility check inside resolveEventsToRuns is what actually enforces precision.
     const conditions: string[] = [
-      `EXISTS (
-         SELECT 1 FROM course_session cs
-          WHERE cs.course_run_id = cr.id
-            AND COALESCE(cs.deleted, false) = false
-            AND cs.start_date::date >= $1::date AND cs.start_date::date <= $2::date
-       )`,
+      `cr.end_date >= ($1::date - interval '30 days')`,
+      `cr.start_date <= ($2::date + interval '30 days')`,
     ];
     const params: (string | number)[] = [String(start_date), String(end_date)];
     let idx = 3;
 
-    // Default to Confirmed if not specified
     const classStatus = status || 'Confirmed';
     conditions.push(`cr.class_status = $${idx++}`);
     params.push(String(classStatus));
 
-    // Exclude modes if not requested
     if (include_virtual === 'false') {
       conditions.push(`cr.mode_of_learning != 'Virtual'`);
     }
@@ -282,12 +297,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const where = `WHERE ${conditions.join(' AND ')}`;
 
-    const result = await pool.query(
+    const candidateResult = await pool.query(
       `${BASE_SELECT} ${where} ORDER BY cr.start_date ASC`,
       params
     );
 
-    let rows = await resolveAllRows(result.rows, { start: String(start_date), end: String(end_date) });
+    const rowByRunUuid = new Map<string, any>(candidateResult.rows.map((r) => [r.run_uuid, r]));
+    const candidateRuns: CandidateRun[] = candidateResult.rows.map((r) => ({
+      runUuid: r.run_uuid,
+      courseRunId: r.course_run_id,
+      courseCode: r.course_code,
+      courseTitle: r.course_title,
+      startDate: r.start_date,
+      endDate: r.end_date,
+    }));
+
+    // events.list padding convention matches ensureClassCalendarEvent.ts / backfill-class-calendar-links.ts
+    // (±1/2 day, UTC-anchored) — real timezone-boundary safety, not the actual match window.
+    const timeMin = new Date(`${start_date}T00:00:00Z`);
+    timeMin.setUTCDate(timeMin.getUTCDate() - 1);
+    const timeMax = new Date(`${end_date}T00:00:00Z`);
+    timeMax.setUTCDate(timeMax.getUTCDate() + 2);
+
+    const eventsResp = await calendarClient.calendar.events.list({
+      calendarId: calendarClient.calendarId,
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      maxResults: 500,
+    });
+    const events = (eventsResp.data.items || []).filter((e) => e.status !== 'cancelled');
+    if (events.length === 500) {
+      console.warn(`external/trainer-reminders: events.list returned 500 items, possible truncation for ${start_date}..${end_date}`);
+    }
+
+    const { resolved, unresolvedEventIds } = await resolveEventsToRuns(
+      events,
+      candidateRuns,
+      String(start_date),
+      String(end_date)
+    );
+    if (unresolvedEventIds.length > 0) {
+      console.warn(`external/trainer-reminders: ${unresolvedEventIds.length} calendar event(s) could not be resolved to a course run for ${start_date}..${end_date}`);
+    }
+
+    const rowsForResolution = resolved
+      .map((r) => {
+        const baseRow = rowByRunUuid.get(r.runUuid);
+        if (!baseRow) return null;
+        return {
+          ...baseRow,
+          session_dates: [r.matchedDate],
+          calendar_event_url: r.event.htmlLink || null,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    let rows = await resolveAllRows(rowsForResolution, { start: String(start_date), end: String(end_date) });
 
     // Filter only reminder-eligible (have phone)
     if (send_reminder === 'true') {

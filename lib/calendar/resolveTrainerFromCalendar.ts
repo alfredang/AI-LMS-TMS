@@ -42,7 +42,14 @@ export interface TrainerResolutionResult {
   adminWarning?: string;
 }
 
-/** Trainer-role app_user accounts matching any of the given emails (primary/secondary/additional). */
+/**
+ * Trainer-role app_user accounts matching any of the given emails (primary/secondary/additional).
+ * Deduped by user_id — a trainer whose primary AND secondary email were both added as calendar
+ * attendees (e.g. jyoti20.chopra@gmail.com + jyoti@tertiaryinfotech.com, the same person) must
+ * resolve as ONE candidate, not two. Without this, a single real Trainer-role attendee could be
+ * miscounted as a collision and misclassified 'ambiguous' purely because they have 2 emails on
+ * the invite, even though there's no actual ambiguity about who they are.
+ */
 async function matchTrainerAccounts(emails: string[]): Promise<ResolvedTrainer[]> {
   if (emails.length === 0) return [];
   const rows = (await pool.query<{ user_id: string; name: string | null; email: string }>(
@@ -57,7 +64,11 @@ async function matchTrainerAccounts(emails: string[]): Promise<ResolvedTrainer[]
       WHERE lower(btrim(cand.em)) = ANY($1::text[])`,
     [emails]
   )).rows;
-  return rows.map((r) => ({ user_id: r.user_id, name: r.name, email: r.email }));
+  const byUserId = new Map<string, ResolvedTrainer>();
+  for (const r of rows) {
+    if (!byUserId.has(r.user_id)) byUserId.set(r.user_id, { user_id: r.user_id, name: r.name, email: r.email });
+  }
+  return Array.from(byUserId.values());
 }
 
 /** Any app_user matching an email (no role requirement) — used to resolve an external trainer's LMS account, if any. */
