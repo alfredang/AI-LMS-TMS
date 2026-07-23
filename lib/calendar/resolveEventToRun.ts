@@ -127,16 +127,21 @@ export async function resolveEventsToRuns(
     }
 
     // Tier 3
-    if (!candidate) {
-      const code = extractEventCourseCode(evt);
-      if (code) {
-        const plausible = (byCourseCode.get(code) || []).filter((c) => datePlausible(c, dateIso));
-        if (plausible.length === 1) { candidate = plausible[0]; tier = 'course_code'; }
-      }
+    const eventCourseCode = extractEventCourseCode(evt);
+    if (!candidate && eventCourseCode) {
+      const plausible = (byCourseCode.get(eventCourseCode) || []).filter((c) => datePlausible(c, dateIso));
+      if (plausible.length === 1) { candidate = plausible[0]; tier = 'course_code'; }
     }
 
-    // Tier 4
-    if (!candidate) {
+    // Tier 4 — only when the event carries NO course code of its own. An event whose description
+    // names a course code that simply isn't among our candidates almost certainly belongs to a
+    // different, non-LMS course (e.g. an MMS-only course) rather than an LMS run that just wasn't
+    // labeled — fuzzy-matching it to an unrelated LMS run by title alone caused a real
+    // cross-contamination bug (confirmed 2026-07-23: an MMS "AI Vibe Coding for iOS Ecommerce App"
+    // event, description "C141", got claimed by an unrelated WSQ run "Vibe Coding for Multi-Agent
+    // AI Systems" purely from title word overlap, and the bad mapping got persisted). Only guess
+    // by title when the event gives us no code-based signal to trust instead.
+    if (!candidate && !eventCourseCode) {
       const plausible = candidateRuns.filter(
         (c) => datePlausible(c, dateIso) && !claimedRunDates.has(`${c.runUuid}|${dateIso}`)
       );
