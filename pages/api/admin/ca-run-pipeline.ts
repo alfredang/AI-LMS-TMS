@@ -99,9 +99,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 WHEN COALESCE(grant_id, '') <> '' OR COALESCE(grant_ineligible, false) = true THEN 'grant_found'
                 ELSE 'enroled'
               END,
+              -- Clear the stale error once the row has actually enrolled, so a
+              -- row wrongly stuck at 'failed' stops flagging once it succeeds.
+              auto_enrol_error = CASE WHEN enrolment_id IS NULL THEN auto_enrol_error ELSE NULL END,
               updated_at = now()
         WHERE id = ANY($1::uuid[])
-          AND auto_enrol_status = 'pending'`,
+          -- Re-classify both still-'pending' rows AND rows wrongly stuck at
+          -- 'failed' that have since acquired an enrolment_id (the first pass
+          -- stamped 'failed' before SSG returned the id). Genuinely-failed rows
+          -- (no enrolment_id) are not matched, so they correctly stay 'failed'.
+          AND (auto_enrol_status = 'pending'
+               OR (auto_enrol_status = 'failed' AND enrolment_id IS NOT NULL))`,
       [uniqueIds],
     );
 
