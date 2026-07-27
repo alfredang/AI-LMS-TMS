@@ -75,10 +75,11 @@ export function getCourseBannerDataUrl(options: CourseBannerOptions = {}): strin
   const scale = width / 400;
 
   // Logo mark — circle + "T", top-left on banners, centred on thumbnails.
-  const markR = (isThumbnail ? 34 : 15) * scale;
-  const markX = isThumbnail ? width / 2 : 28 * scale;
-  const markY = isThumbnail ? height / 2 : 26 * scale;
-  const markFont = markR * 1.1;
+  // Inset enough that the card's rounded corner never clips the circle.
+  const markR = (isThumbnail ? 34 : 14) * scale;
+  const markX = isThumbnail ? width / 2 : 34 * scale;
+  const markY = isThumbnail ? height / 2 : 32 * scale;
+  const markFont = markR * 1.15;
 
   const logo = `
     <circle cx="${markX}" cy="${markY}" r="${markR}" fill="#3b82f6"/>
@@ -87,8 +88,8 @@ export function getCourseBannerDataUrl(options: CourseBannerOptions = {}): strin
 
   const wordmark = isThumbnail
     ? ''
-    : `<text x="${48 * scale}" y="${markY}" fill="#e2e8f0" font-family="Helvetica,Arial,sans-serif"
-        font-size="${12 * scale}" font-weight="600" dominant-baseline="central">${escapeXml(BRAND_NAME)}</text>`;
+    : `<text x="${markX + markR + 10 * scale}" y="${markY}" fill="#f1f5f9" font-family="Helvetica,Arial,sans-serif"
+        font-size="${12.5 * scale}" font-weight="700" dominant-baseline="central">${escapeXml(BRAND_NAME)}</text>`;
 
   // Course title — centred in the lower two-thirds of the banner.
   let titleBlock = '';
@@ -111,18 +112,23 @@ export function getCourseBannerDataUrl(options: CourseBannerOptions = {}): strin
   // Decorative arc, echoing the brand banner motif.
   const arc = isThumbnail
     ? ''
-    : `<circle cx="${20 * scale}" cy="${height + 10 * scale}" r="${70 * scale}"
-        fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="${2 * scale}"/>`;
+    : `<circle cx="${10 * scale}" cy="${height - 6 * scale}" r="${64 * scale}"
+        fill="none" stroke="#ffffff" stroke-opacity="0.13" stroke-width="${1.5 * scale}"/>`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#0f2557"/>
-        <stop offset="55%" stop-color="#173a86"/>
-        <stop offset="100%" stop-color="#2a5bc0"/>
+        <stop offset="0%" stop-color="#0a1a3f"/>
+        <stop offset="100%" stop-color="#132f6b"/>
       </linearGradient>
+      <!-- Soft highlight lifting the centre-right, as on the brand banner. -->
+      <radialGradient id="glow" cx="0.62" cy="0.45" r="0.75">
+        <stop offset="0%" stop-color="#2d5aa8" stop-opacity="0.75"/>
+        <stop offset="100%" stop-color="#2d5aa8" stop-opacity="0"/>
+      </radialGradient>
     </defs>
     <rect width="${width}" height="${height}" fill="url(#bg)"/>
+    <rect width="${width}" height="${height}" fill="url(#glow)"/>
     ${arc}${logo}${wordmark}${titleBlock}
   </svg>`;
 
