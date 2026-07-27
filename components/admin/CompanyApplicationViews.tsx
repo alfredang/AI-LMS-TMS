@@ -1862,6 +1862,13 @@ export const ViewCompanyApplicationView: React.FC = () => {
         hasValue(r['Grant ID (BL)']) ||
         isCheckedValue(r['Grant Ineligible']);
       const calAdded = isCheckedValue(r['Calendar Added']);
+      // A row that actually enrolled but is still stamped 'failed' is a stale
+      // status left over from a first pass that finished before SSG returned the
+      // enrolment id. Don't treat it as done — let Auto-Process re-run so the
+      // server-side status flip reclassifies it and clears the stale error.
+      const staleFailed =
+        enroled && String(r['Auto-Enrol Status'] || '').trim().toLowerCase() === 'failed';
+      if (staleFailed) return false;
       return enroled && grantSettled && calAdded;
     };
     const pendingRows = selectedRows.filter(r => !isFullyDone(r));

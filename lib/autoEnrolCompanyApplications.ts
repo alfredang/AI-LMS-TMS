@@ -964,10 +964,13 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
     console.error('[bulkProcessCompanyApplications] invoice email auto-send crashed (non-fatal):', err);
   }
 
-  // Flip final per-row status. Rows still at 'pending' get classified by
-  // what actually landed in the DB. Rows already 'failed' (set by markFailed
-  // inside processCompanyApplication when enrolment itself crashed) are
-  // untouched by the WHERE clause.
+  // Flip final per-row status. Rows still at 'pending' get classified by what
+  // actually landed in the DB. We ALSO re-classify rows wrongly stuck at
+  // 'failed' that have since acquired an enrolment_id — the first pass can stamp
+  // 'failed' (enrolment_id IS NULL branch) before SSG returns the id, and
+  // without this a later-successful row would flag "failed" forever with all
+  // stages green. Genuinely-failed rows (no enrolment_id) are not matched by the
+  // WHERE clause, so they correctly stay 'failed' with their original error.
   await pool.query(
     `UPDATE public.company_application
         SET auto_enrol_status = CASE
@@ -975,9 +978,11 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
               WHEN COALESCE(grant_id, '') <> '' OR COALESCE(grant_ineligible, false) = true THEN 'grant_found'
               ELSE 'enroled'
             END,
+            auto_enrol_error = CASE WHEN enrolment_id IS NULL THEN auto_enrol_error ELSE NULL END,
             updated_at = now()
       WHERE id = ANY($1::uuid[])
-        AND auto_enrol_status = 'pending'`,
+        AND (auto_enrol_status = 'pending'
+             OR (auto_enrol_status = 'failed' AND enrolment_id IS NOT NULL))`,
     [uniqueIds]
   );
 }
