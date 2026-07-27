@@ -1838,11 +1838,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
   };
 
   // Run the full CA pipeline (SSG enrol → grant lookup + course-run sweep →
-  // Google Calendar add) for the selected rows. Replaces the separate
-  // Sync Grants / Sync Calendar buttons — every stage is idempotent, so
-  // re-running over already-processed rows just re-confirms them. Invoice
-  // generation stays on its own button because admins want explicit
-  // control over when QB invoices fire.
+  // Google Calendar add → auto-invoice) for the selected rows. Replaces the
+  // separate Sync Grants / Sync Calendar buttons — every stage is idempotent,
+  // so re-running over already-processed rows just re-confirms them. The
+  // invoice sweep is guarded server-side to bill only enroled + grant-settled
+  // rows; awaiting-grant rows are left for the explicit "Generate Invoice"
+  // button.
   const runPipeline = async () => {
     if (selectedIds.size === 0) return;
 
@@ -1896,6 +1897,14 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const parts: string[] = [`${processed} row${processed === 1 ? '' : 's'} processed`];
       parts.push(`${enroled} enroled`);
       parts.push(`${granted} with grant`);
+      const inv = data.invoice;
+      if (inv) {
+        parts.push(`${Number(inv.generated || 0)} invoice${Number(inv.generated || 0) === 1 ? '' : 's'} generated`);
+        const awaiting = Number(inv.skippedAwaitingGrants || 0);
+        if (awaiting > 0) parts.push(`${awaiting} invoice${awaiting === 1 ? '' : 's'} pending grant`);
+        const invFailed = Number(inv.failed || 0);
+        if (invFailed > 0) parts.push(`${invFailed} invoice${invFailed === 1 ? '' : 's'} failed`);
+      }
       if (skipped > 0) parts.push(`${skipped} already-done row${skipped === 1 ? '' : 's'} skipped`);
       if (failed > 0) parts.push(`${failed} failed — check row error popups`);
       setPipelineMessage(parts.join(' · '));
