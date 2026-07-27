@@ -10,14 +10,18 @@ import {
  *
  * Body: { applicationIds: string[] }   (required, at least one id)
  *
- * Runs the three-stage CA pipeline for the given rows:
+ * Runs the four-stage CA pipeline for the given rows:
  *   1. SSG enrolment       — skipped if enrolment_id already present
  *   2. Grant lookup        — per-row narrow search + course-run-wide sweep
  *   3. Google Calendar add — addCaLearnerToCalendar with the per-event lock
+ *   4. Auto-invoice        — grant-settled rows only (see guard below)
  *
- * Replaces the separate Sync Grants / Sync Calendar buttons. Invoice
- * generation stays explicit on its own button so admins control when QB
- * invoices are created.
+ * Replaces the separate Sync Grants / Sync Calendar buttons. The invoice
+ * sweep mirrors bulkProcessCompanyApplications: generateInvoicesForApplications
+ * is internally guarded to bill only rows that are SSG-enroled AND grant-
+ * settled (or explicitly grant-ineligible), so a row still awaiting its grant
+ * is never invoiced with a wrong amount. The explicit "Generate Invoice" button
+ * remains for re-billing / manually clearing stragglers.
  *
  * processCompanyApplication is idempotent at each stage: already-enroled
  * rows skip SSG, already-calendar'd learners short-circuit the patch,
@@ -101,6 +105,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [uniqueIds],
     );
 
+    // Stage 4 — auto-invoice. Mirrors bulkProcessCompanyApplications. The
+    // generator is internally guarded (skippedNotEnrolled / skippedAwaitingGrants
+    // / skippedAlreadyInvoiced), so it only bills enroled + grant-settled rows
+    // and never invoices a row that is still awaiting its grant. Non-fatal: a QB
+    // failure must not fail the enrol/grant/calendar work that already succeeded.
+    let invoice: {
+      generated: number;
+      skippedAlreadyInvoiced: number;
+      skippedNotEnrolled: number;
+      skippedAwaitingGrants: number;
+      failed: number;
+    } | null = null;
+    try {
+      const { generateInvoicesForApplications } = await import('../../../lib/quickbooks/createCompanyApplicationInvoice');
+      const summary = await generateInvoicesForApplications(uniqueIds);
+      invoice = {
+        generated: summary.generated,
+        skippedAlreadyInvoiced: summary.skippedAlreadyInvoiced,
+        skippedNotEnrolled: summary.skippedNotEnrolled,
+        skippedAwaitingGrants: summary.skippedAwaitingGrants,
+        failed: summary.failed,
+      };
+      console.log(
+        `[ca-run-pipeline] invoice sweep — generated ${summary.generated}, alreadyInvoiced ${summary.skippedAlreadyInvoiced}, notEnrolled ${summary.skippedNotEnrolled}, awaitingGrants ${summary.skippedAwaitingGrants}, failed ${summary.failed}`,
+      );
+      if (summary.failed > 0) {
+        console.warn('[ca-run-pipeline] invoice failures:', summary.errors);
+      }
+    } catch (err) {
+      console.error('[ca-run-pipeline] invoice generation crashed (non-fatal):', err);
+    }
+
     const enroled = results.filter(r => r.enrolmentId).length;
     const granted = results.filter(r => r.grantId).length;
     const failed = results.filter(r => !r.success).length;
@@ -111,6 +147,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       enroled,
       granted,
       failed,
+      invoice,
       results,
     });
   } catch (err) {
