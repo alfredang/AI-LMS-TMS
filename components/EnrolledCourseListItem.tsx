@@ -39,7 +39,7 @@ const EnrolledCourseListItem: React.FC<EnrolledCourseListItemProps> = ({ course 
         >
             <div className="flex flex-col md:flex-row">
                 <img
-                    src={getCourseImageUrl(course.imageUrl, course.id)}
+                    src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
                     alt={course.title}
                     className="w-full md:w-52 h-40 md:h-auto object-cover rounded-t-xl md:rounded-l-xl md:rounded-r-none"
                 />

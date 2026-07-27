@@ -3,6 +3,7 @@
  */
 
 import { getBaseUrl } from '../lib/config';
+import { getCourseBannerDataUrl } from './courseBanner';
 
 function extractGoogleDriveFileId(input: string): string | null {
   const trimmed = input.trim();
@@ -75,19 +76,26 @@ export function ensureAbsoluteImageUrl(url: string | undefined | null): string |
 
 /**
  * Gets the proper image URL for course images with fallback
- * Handles blob URLs, relative URLs, and provides fallback placeholder
+ * Handles blob URLs, relative URLs, and falls back to the standard branded banner
  * @param imageUrl - The image URL from the course data
- * @param courseId - Course ID for generating unique placeholder
- * @returns Proper image URL or fallback placeholder
+ * @param courseId - Course ID (retained for call-site compatibility)
+ * @param title - Course title, rendered into the fallback banner
+ * @returns Proper image URL or the standard branded banner
  */
-export function getCourseImageUrl(imageUrl?: string, courseId?: string): string {
+export function getCourseImageUrl(imageUrl?: string, courseId?: string, title?: string): string {
   if (!imageUrl) {
-    return `https://picsum.photos/seed/${courseId || 'default'}/400/200`;
+    return getCourseBannerDataUrl({ title });
   }
 
   // Strip localhost URLs before further processing
   if (/^https?:\/\/localhost(:\d+)?\//.test(imageUrl)) {
     imageUrl = imageUrl.replace(/^https?:\/\/localhost(:\d+)?/, '');
+  }
+
+  // Legacy random-photo placeholders were written into course records by older
+  // builds; treat them as "no image" so those courses get the standard banner.
+  if (imageUrl.includes('picsum.photos') || imageUrl.includes('pravatar')) {
+    return getCourseBannerDataUrl({ title });
   }
 
   // If it's already a full URL (http/https), use it as-is
@@ -118,7 +126,7 @@ export function getCourseImageUrl(imageUrl?: string, courseId?: string): string 
   }
 
   // Default fallback
-  return `https://picsum.photos/seed/${courseId || 'default'}/400/200`;
+  return getCourseBannerDataUrl({ title });
 }
 
 /**

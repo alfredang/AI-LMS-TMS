@@ -6,6 +6,7 @@ import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
 import Spinner from './ui/Spinner';
 import { getCourseImageUrl } from '@utils/imageUtils';
+import { getCourseBannerDataUrl } from '@utils/courseBanner';
 import { getApiUrl } from '@/lib/urlHelpers';
 import QuizEditorModal, { QuizQuestion } from './QuizEditorModal';
 import { TopicAccordion } from './CourseDetail';
@@ -539,8 +540,8 @@ const CourseEditor: React.FC = () => {
         assessments: editingCourse.assessments || [],
         assessmentMethods: initialAssessmentMethods,
         modeOfLearning: editingCourse.modeOfLearning?.length ? editingCourse.modeOfLearning : [ModeOfLearning.Physical],
-        // Ensure imageUrl is set - use existing or generate default
-        imageUrl: editingCourse.imageUrl || `https://picsum.photos/seed/${editingCourse.id || 'new'}/400/225`
+        // Leave blank when unset — the standard branded banner is rendered as the fallback
+        imageUrl: editingCourse.imageUrl || ''
     });
     const [isSaving, setIsSaving] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -807,10 +808,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     // Clean up invalid blob URLs from database when editing existing courses
     useEffect(() => {
         if (!isNewCourse && course.imageUrl && course.imageUrl.startsWith('blob:')) {
-            console.log('🔧 Detected invalid blob URL in database, falling back to placeholder');
+            console.log('🔧 Detected invalid blob URL in database, falling back to the standard banner');
             setCourse(prev => ({
                 ...prev,
-                imageUrl: `https://picsum.photos/seed/${course.id || 'default'}/400/225`
+                imageUrl: ''
             }));
         }
     }, [isNewCourse, course.id]); // Don't include course.imageUrl in dependencies to avoid infinite loop
@@ -1678,12 +1679,12 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Course Image</label>
                                     <div className="relative aspect-video bg-gray-100 dark:bg-gray-700 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600 mb-3 shadow-sm">
                                         <img
-                                            src={getCourseImageUrl(course.imageUrl, course.id)}
+                                            src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
                                             alt={course.title}
                                             className="w-full h-full object-cover"
                                             onError={(e) => {
                                                 const target = e.target as HTMLImageElement;
-                                                target.src = `https://picsum.photos/seed/${course.id || 'default'}/400/200`;
+                                                target.src = getCourseBannerDataUrl({ title: course.title });
                                             }}
                                         />
                                     </div>
@@ -1829,13 +1830,14 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 {/* Image preview */}
                                 <div className="relative aspect-video bg-gray-100 dark:bg-gray-700 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600 mb-3 shadow-sm">
                                     <img
-                                        src={getCourseImageUrl(course.imageUrl, course.id)}
+                                        src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
                                         alt={course.title}
                                         className="w-full h-full object-cover"
                                         onError={(e) => {
                                             const target = e.target as HTMLImageElement;
-                                            if (target.src !== `https://picsum.photos/seed/${course.id || 'default'}/400/200`) {
-                                                target.src = `https://picsum.photos/seed/${course.id || 'default'}/400/200`;
+                                            const fallback = getCourseBannerDataUrl({ title: course.title });
+                                            if (target.src !== fallback) {
+                                                target.src = fallback;
                                             }
                                         }}
                                     />

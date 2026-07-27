@@ -11,6 +11,7 @@ import { UserRole, AdminPage } from '@app-types';
 import EnrolledCourseListItem from './EnrolledCourseListItem';
 import { CourseDetail } from './CourseDetail';
 import { getCourseImageUrl } from '@utils/imageUtils';
+import { getCourseBannerDataUrl } from '@utils/courseBanner';
 import { BulkUploadCoursesView } from './admin/BulkUploadCoursesView';
 
 const getTypeColor = (courseType: string) => {
@@ -399,10 +400,10 @@ const ManagementCourseList: React.FC = () => {
             >
                 <div className="relative overflow-hidden bg-surface-elevated" style={{ height: '170px' }}>
                     <img
-                        src={getCourseImageUrl(course.imageUrl, course.id)}
+                        src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
                         alt={course.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${course.id}/400/200`; }}
+                        onError={(e) => { (e.target as HTMLImageElement).src = getCourseBannerDataUrl({ title: course.title }); }}
                     />
                 </div>
                 <div className="p-4 flex flex-col flex-grow">
@@ -474,12 +475,12 @@ const ManagementCourseList: React.FC = () => {
                     <Card key={course.id} className="flex flex-col bg-surface border-default">
                         <div className="aspect-[16/9] w-full overflow-hidden">
                             <img
-                                src={getCourseImageUrl(course.imageUrl, course.id)}
+                                src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
                                 alt={course.title}
                                 className="w-full h-full object-cover object-center"
                                 onError={(e) => {
                                     const target = e.target as HTMLImageElement;
-                                    target.src = `https://picsum.photos/seed/${course.id}/400/200`;
+                                    target.src = getCourseBannerDataUrl({ title: course.title });
                                 }}
                             />
                         </div>
@@ -621,11 +622,13 @@ const ManagementCourseList: React.FC = () => {
                                         <div className="flex-shrink-0 h-10 w-10">
                                             <img
                                                 className="h-10 w-10 rounded-md object-cover"
-                                                src={getCourseImageUrl(course.imageUrl, course.id)}
+                                                src={course.imageUrl && !course.imageUrl.includes('picsum.photos')
+                                                    ? getCourseImageUrl(course.imageUrl, course.id, course.title)
+                                                    : getCourseBannerDataUrl({ width: 100, height: 100 })}
                                                 alt={course.title}
                                                 onError={(e) => {
                                                     const target = e.target as HTMLImageElement;
-                                                    target.src = `https://picsum.photos/seed/${course.id}/100/100`;
+                                                    target.src = getCourseBannerDataUrl({ width: 100, height: 100 });
                                                 }}
                                             />
                                         </div>
@@ -1137,10 +1140,10 @@ const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
         <Card className="flex flex-col group cursor-pointer dark:bg-gray-800 dark:border-gray-700" onClick={handleClick}>
             <div className="relative">
                 <img
-                    src={getCourseImageUrl(course.imageUrl, course.id)}
+                    src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
                     alt={course.title}
                     className="w-full h-auto object-cover rounded-t-xl"
-                    onError={(e) => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${course.id}/400/200`; }}
+                    onError={(e) => { (e.target as HTMLImageElement).src = getCourseBannerDataUrl({ title: course.title }); }}
                 />
             </div>
             <div className="p-4 flex flex-col flex-grow">
