@@ -70,7 +70,8 @@ export async function resolveEventsToRuns(
   events: calendar_v3.Schema$Event[],
   candidateRuns: CandidateRun[],
   windowStart: string,
-  windowEnd: string
+  windowEnd: string,
+  options?: { dryRun?: boolean }
 ): Promise<{ resolved: ResolvedEventRun[]; unresolvedEventIds: string[] }> {
   const inWindow = events.filter((evt) => {
     const d = eventDateIso(evt);
@@ -173,6 +174,12 @@ export async function resolveEventsToRuns(
   }
 
   // Opportunistic cache write-through — same "adopt" pattern as backfill-class-calendar-links.ts.
+  // Skipped in dry-run mode (e.g. the gcal-sync-audit tool): a fuzzy_title match hasn't been
+  // human-confirmed, and persisting it here would let a wrong guess "harden" into the durable
+  // mapping tier before anyone's looked at it — the reverse of what an audit pass should do.
+  if (options?.dryRun) {
+    return { resolved, unresolvedEventIds };
+  }
   for (const u of toUpsert) {
     try {
       const ins = await pool.query(
