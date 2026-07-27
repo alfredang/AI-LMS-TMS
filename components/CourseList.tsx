@@ -400,10 +400,10 @@ const ManagementCourseList: React.FC = () => {
             >
                 <div className="relative overflow-hidden bg-surface-elevated" style={{ height: '170px' }}>
                     <img
-                        src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
+                        src={getCourseImageUrl(course.imageUrl, course.id, course.title, { width: 380, height: 170 })}
                         alt={course.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => { (e.target as HTMLImageElement).src = getCourseBannerDataUrl({ title: course.title }); }}
+                        onError={(e) => { (e.target as HTMLImageElement).src = getCourseBannerDataUrl({ width: 380, height: 170, title: course.title }); }}
                     />
                 </div>
                 <div className="p-4 flex flex-col flex-grow">
@@ -475,12 +475,12 @@ const ManagementCourseList: React.FC = () => {
                     <Card key={course.id} className="flex flex-col bg-surface border-default">
                         <div className="aspect-[16/9] w-full overflow-hidden">
                             <img
-                                src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
+                                src={getCourseImageUrl(course.imageUrl, course.id, course.title, { width: 400, height: 225 })}
                                 alt={course.title}
                                 className="w-full h-full object-cover object-center"
                                 onError={(e) => {
                                     const target = e.target as HTMLImageElement;
-                                    target.src = getCourseBannerDataUrl({ title: course.title });
+                                    target.src = getCourseBannerDataUrl({ width: 400, height: 225, title: course.title });
                                 }}
                             />
                         </div>

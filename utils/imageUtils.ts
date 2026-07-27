@@ -82,9 +82,14 @@ export function ensureAbsoluteImageUrl(url: string | undefined | null): string |
  * @param title - Course title, rendered into the fallback banner
  * @returns Proper image URL or the standard branded banner
  */
-export function getCourseImageUrl(imageUrl?: string, courseId?: string, title?: string): string {
+export function getCourseImageUrl(
+  imageUrl?: string,
+  courseId?: string,
+  title?: string,
+  banner?: { width?: number; height?: number }
+): string {
   if (!imageUrl) {
-    return getCourseBannerDataUrl({ title });
+    return getCourseBannerDataUrl({ ...banner, title });
   }
 
   // Strip localhost URLs before further processing
@@ -95,7 +100,7 @@ export function getCourseImageUrl(imageUrl?: string, courseId?: string, title?: 
   // Legacy random-photo placeholders were written into course records by older
   // builds; treat them as "no image" so those courses get the standard banner.
   if (imageUrl.includes('picsum.photos') || imageUrl.includes('pravatar')) {
-    return getCourseBannerDataUrl({ title });
+    return getCourseBannerDataUrl({ ...banner, title });
   }
 
   // If it's already a full URL (http/https), use it as-is
@@ -126,7 +131,7 @@ export function getCourseImageUrl(imageUrl?: string, courseId?: string, title?: 
   }
 
   // Default fallback
-  return getCourseBannerDataUrl({ title });
+  return getCourseBannerDataUrl({ ...banner, title });
 }
 
 /**

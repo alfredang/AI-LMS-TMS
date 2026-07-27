@@ -109,11 +109,11 @@ export const ClassCard: React.FC<ClassCardProps> = ({ course, onSelect }) => {
       {/* Image with gradient overlay */}
       <div className="relative h-40 overflow-hidden">
         <img
-          src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
+          src={getCourseImageUrl(course.imageUrl, course.id, course.title, { width: 380, height: 160 })}
           alt={course.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           onError={(e) => {
-            (e.target as HTMLImageElement).src = getCourseBannerDataUrl({ title: course.title });
+            (e.target as HTMLImageElement).src = getCourseBannerDataUrl({ width: 380, height: 160, title: course.title });
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent" />

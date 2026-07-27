@@ -72,14 +72,18 @@ export function getCourseBannerDataUrl(options: CourseBannerOptions = {}): strin
   const { width = 400, height = 200, title } = options;
 
   const isThumbnail = width < 160;
-  const scale = width / 400;
+
+  // Scale off the SMALLER dimension so nothing overflows when the banner is
+  // rendered into a short, wide box — the card containers are ~2.2:1, and
+  // scaling off width alone pushed the logo and arc outside the frame.
+  const scale = Math.min(width / 400, height / 200);
 
   // Logo mark — circle + "T", top-left on banners, centred on thumbnails.
-  // Inset enough that the card's rounded corner never clips the circle.
-  const markR = (isThumbnail ? 34 : 14) * scale;
-  const markX = isThumbnail ? width / 2 : 34 * scale;
-  const markY = isThumbnail ? height / 2 : 32 * scale;
-  const markFont = markR * 1.15;
+  const markR = (isThumbnail ? 34 : 10.5) * scale;
+  const pad = 20 * scale;
+  const markX = isThumbnail ? width / 2 : pad + markR;
+  const markY = isThumbnail ? height / 2 : pad + markR;
+  const markFont = markR * 1.2;
 
   const logo = `
     <circle cx="${markX}" cy="${markY}" r="${markR}" fill="#3b82f6"/>
@@ -88,16 +92,19 @@ export function getCourseBannerDataUrl(options: CourseBannerOptions = {}): strin
 
   const wordmark = isThumbnail
     ? ''
-    : `<text x="${markX + markR + 10 * scale}" y="${markY}" fill="#f1f5f9" font-family="Helvetica,Arial,sans-serif"
-        font-size="${12.5 * scale}" font-weight="700" dominant-baseline="central">${escapeXml(BRAND_NAME)}</text>`;
+    : `<text x="${markX + markR + 8 * scale}" y="${markY}" fill="#f1f5f9" font-family="Helvetica,Arial,sans-serif"
+        font-size="${11 * scale}" font-weight="700" dominant-baseline="central">${escapeXml(BRAND_NAME)}</text>`;
 
-  // Course title — centred in the lower two-thirds of the banner.
+  // Course title — optically centred in the area below the header row.
   let titleBlock = '';
   if (!isThumbnail && title) {
     const lines = wrapTitle(title, 26, 3);
-    const fontSize = (lines.length >= 3 ? 22 : 26) * scale;
-    const lineHeight = fontSize * 1.2;
-    const startY = height * 0.6 - ((lines.length - 1) * lineHeight) / 2;
+    const fontSize = (lines.length >= 3 ? 21 : 25) * scale;
+    const lineHeight = fontSize * 1.25;
+    // Centre within the band between the header and the bottom edge.
+    const bandTop = markY + markR + 8 * scale;
+    const centreY = bandTop + (height - bandTop) / 2;
+    const startY = centreY - ((lines.length - 1) * lineHeight) / 2;
 
     titleBlock = lines
       .map(
@@ -112,7 +119,7 @@ export function getCourseBannerDataUrl(options: CourseBannerOptions = {}): strin
   // Decorative arc, echoing the brand banner motif.
   const arc = isThumbnail
     ? ''
-    : `<circle cx="${10 * scale}" cy="${height - 6 * scale}" r="${64 * scale}"
+    : `<circle cx="${2 * scale}" cy="${height - 2 * scale}" r="${58 * scale}"
         fill="none" stroke="#ffffff" stroke-opacity="0.13" stroke-width="${1.5 * scale}"/>`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
