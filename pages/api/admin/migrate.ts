@@ -47,6 +47,26 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
+    // enrollment.user_id is NOT NULL in prod (contrary to what the confirmation-email
+    // query's LEFT JOIN + COALESCE fallback implied was possible) — need a real app_user
+    // row first. Idempotent by email.
+    let userRow = (await pool.query(
+      `SELECT id FROM app_user WHERE email = 'tertiarytesting@gmail.com' LIMIT 1`
+    )).rows[0];
+    if (!userRow) {
+      const created = await pool.query(
+        `INSERT INTO app_user (id, email, full_name, account_status, created_at, updated_at)
+         VALUES (gen_random_uuid(), 'tertiarytesting@gmail.com', 'Test Trainee (confirmation-email verification)', 'active', NOW(), NOW())
+         RETURNING id`
+      );
+      userRow = created.rows[0];
+      await pool.query(
+        `INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner')`,
+        [userRow.id]
+      );
+      console.log(`✅ Created test app_user ${userRow.id}`);
+    }
+
     const enrolmentId = `TEST-CONFIRM-EMAIL-${Date.now()}`;
     const result = await pool.query(
       `INSERT INTO enrollment (
@@ -55,12 +75,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
          enrolment_date, enrolment_id, enrolment_status,
          nric, email, calendar_added, created_at, updated_at
        ) VALUES (
-         gen_random_uuid(), NULL, '3ac6b597-55df-4df1-ad20-d009976416c2', '002371ff-0386-45fc-9381-2d8b81047e01',
+         gen_random_uuid(), $2, '3ac6b597-55df-4df1-ad20-d009976416c2', '002371ff-0386-45fc-9381-2d8b81047e01',
          0, 'Unpaid', 'Pending',
          CURRENT_DATE, $1, 'Confirmed',
          'TESTNRIC01', 'tertiarytesting@gmail.com', false, NOW(), NOW()
        ) RETURNING id, enrolment_id, enrolment_status, course_run_id, email`,
-      [enrolmentId]
+      [enrolmentId, userRow.id]
     );
     console.log(`✅ Created test enrollment ${enrolmentId}`);
 
