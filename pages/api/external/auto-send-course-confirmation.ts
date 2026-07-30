@@ -88,9 +88,16 @@ async function logResult(
  * (template), so the new date WINDOW below doesn't re-send on every day a run
  * remains inside it. */
 async function fetchAlreadySent(taskId: string, courseRunId: string): Promise<Set<string>> {
+    // task_id IS NULL matches too: every row logged before this column existed has a null
+    // task_id, and treating those as "not sent for this task" caused real duplicate sends
+    // (confirmed live 2026-07-30 — the window fix's first production trigger re-emailed 2+
+    // real trainees who'd already gotten their confirmation from this morning's run, because
+    // `task_id = $1` never matches a NULL column value in SQL). Old rows predate the
+    // two-task split entirely, so treating them as "already sent, regardless of task" is the
+    // safe direction to err in.
     const res = await pool.query(
         `SELECT DISTINCT learner_email FROM auto_send_confirmation_log
-         WHERE task_id = $1 AND course_run_id = $2 AND status = 'sent'`,
+         WHERE (task_id = $1 OR task_id IS NULL) AND course_run_id = $2 AND status = 'sent'`,
         [taskId, courseRunId]
     );
     return new Set(res.rows.map((r: any) => String(r.learner_email || '').toLowerCase()));
