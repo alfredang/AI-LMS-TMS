@@ -48,10 +48,15 @@ async function ensureLogTable() {
             created_at TIMESTAMPTZ DEFAULT NOW()
         )
     `);
+    // task_id distinguishes the two crons sharing this table (3-day "final confirmation"
+    // vs 7-day "class confirmation") so the dedupe check below doesn't mistake one
+    // template's send for the other's and wrongly suppress it.
+    await pool.query(`ALTER TABLE auto_send_confirmation_log ADD COLUMN IF NOT EXISTS task_id TEXT`);
 }
 
 async function logResult(
     runId: string,
+    taskId: string,
     status: 'sent' | 'skipped' | 'error' | 'summary',
     details: {
         courseRunId?: string;
@@ -64,10 +69,11 @@ async function logResult(
 ) {
     await pool.query(`
         INSERT INTO auto_send_confirmation_log
-        (run_id, course_run_id, course_title, course_code, learner_name, learner_email, status, error_message)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        (run_id, task_id, course_run_id, course_title, course_code, learner_name, learner_email, status, error_message)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `, [
         runId,
+        taskId,
         details.courseRunId || null,
         details.courseTitle || null,
         details.courseCode || null,
@@ -76,6 +82,18 @@ async function logResult(
         status,
         details.errorMessage || null,
     ]);
+}
+
+/** Learner+course_run pairs already successfully emailed for this specific task
+ * (template), so the new date WINDOW below doesn't re-send on every day a run
+ * remains inside it. */
+async function fetchAlreadySent(taskId: string, courseRunId: string): Promise<Set<string>> {
+    const res = await pool.query(
+        `SELECT DISTINCT learner_email FROM auto_send_confirmation_log
+         WHERE task_id = $1 AND course_run_id = $2 AND status = 'sent'`,
+        [taskId, courseRunId]
+    );
+    return new Set(res.rows.map((r: any) => String(r.learner_email || '').toLowerCase()));
 }
 
 // ── Send confirmation email via Gmail API ────────────────────────────────────
@@ -235,7 +253,15 @@ async function _runAutomationInner(taskId: string = 'auto_send_course_confirmati
             throw new Error(`Email template "${templatePrefix}" not configured`);
         }
 
-        // 2. Find course runs starting in N days
+        // 2. Find course runs starting within the next N days (a WINDOW, not an exact-day
+        // match — a run whose start_date is still inside the window keeps getting picked
+        // up on every subsequent day's run until a learner is actually sent to, via the
+        // dedupe check below. This fixes a real bug: with an exact match, a learner who
+        // enrolled AFTER today's run had already fired (e.g. mid-morning, after the 9am/
+        // 10am cron) would never be reconsidered — tomorrow's run checks a different
+        // start_date entirely, so that day's window was permanently, silently missed.
+        // Confirmed 2026-07-30: two real "Confirmed" enrolments created ~2.5h after the
+        // day's run, for a course_run whose start_date only matched that one exact day.
         const courseRunsRes = await pool.query(`
             SELECT cr.id as db_uuid, cr.course_run_id, c.course_code, c.title as course_title,
                    TO_CHAR(cr.start_date, 'DD Mon YYYY') as start_date_display,
@@ -243,7 +269,8 @@ async function _runAutomationInner(taskId: string = 'auto_send_course_confirmati
                    TO_CHAR(cr.start_date, 'DD Mon YYYY') || ' - ' || TO_CHAR(cr.end_date, 'DD Mon YYYY') as course_dates
             FROM course_run cr
             JOIN course c ON cr.course_id = c.id
-            WHERE cr.start_date = (NOW() AT TIME ZONE 'Asia/Singapore')::date + $1 * INTERVAL '1 day'
+            WHERE cr.start_date >= (NOW() AT TIME ZONE 'Asia/Singapore')::date
+              AND cr.start_date <= (NOW() AT TIME ZONE 'Asia/Singapore')::date + $1 * INTERVAL '1 day'
         `, [daysInAdvance]);
 
         const courseRuns = courseRunsRes.rows;
@@ -292,6 +319,12 @@ async function _runAutomationInner(taskId: string = 'auto_send_course_confirmati
 
                 console.log(`[auto-send-confirmation] ${run.course_run_id} (${run.course_title}): ${learnersRes.rows.length} confirmed learners`);
 
+                // Now that a run can be matched on multiple consecutive days (window, not
+                // exact-day), skip anyone already successfully emailed for THIS task/template
+                // on a prior day's run — otherwise they'd get the same confirmation email
+                // once per day until their start date arrives.
+                const alreadySent = await fetchAlreadySent(taskId, run.course_run_id);
+
                 for (const learner of learnersRes.rows) {
                     const traineeLogContext = {
                         ...logContext,
@@ -301,7 +334,14 @@ async function _runAutomationInner(taskId: string = 'auto_send_course_confirmati
 
                     if (!learner.learner_email) {
                         console.warn(`[auto-send-confirmation] No email for ${learner.learner_name} — skipping`);
-                        await logResult(runId, 'skipped', { ...traineeLogContext, errorMessage: 'No email address' });
+                        await logResult(runId, taskId, 'skipped', { ...traineeLogContext, errorMessage: 'No email address' });
+                        totalSkipped++;
+                        continue;
+                    }
+
+                    if (alreadySent.has(learner.learner_email.toLowerCase())) {
+                        console.log(`[auto-send-confirmation] Already sent to ${learner.learner_email} for this task — skipping`);
+                        await logResult(runId, taskId, 'skipped', { ...traineeLogContext, errorMessage: 'Already sent for this task' });
                         totalSkipped++;
                         continue;
                     }
@@ -323,11 +363,11 @@ async function _runAutomationInner(taskId: string = 'auto_send_course_confirmati
                         });
 
                         console.log(`[auto-send-confirmation] Confirmation email sent to ${learner.learner_email}`);
-                        await logResult(runId, 'sent', traineeLogContext);
+                        await logResult(runId, taskId, 'sent', traineeLogContext);
                         totalSent++;
                     } catch (emailErr: any) {
                         console.error(`[auto-send-confirmation] Failed to email ${learner.learner_email}:`, emailErr.message);
-                        await logResult(runId, 'error', { ...traineeLogContext, errorMessage: emailErr.message });
+                        await logResult(runId, taskId, 'error', { ...traineeLogContext, errorMessage: emailErr.message });
                         totalErrors++;
                     }
 
@@ -337,7 +377,7 @@ async function _runAutomationInner(taskId: string = 'auto_send_course_confirmati
 
             } catch (runErr: any) {
                 console.error(`[auto-send-confirmation] Error processing course run ${run.course_run_id}:`, runErr);
-                await logResult(runId, 'error', { ...logContext, errorMessage: runErr.message });
+                await logResult(runId, taskId, 'error', { ...logContext, errorMessage: runErr.message });
                 totalErrors++;
             }
 
@@ -356,7 +396,7 @@ async function _runAutomationInner(taskId: string = 'auto_send_course_confirmati
     const durationMs = Date.now() - startedAt;
     const summaryLine = `${courseRunsProcessed} course run(s) processed, ${totalSent} sent, ${totalSkipped} skipped, ${totalErrors} error(s) (days_in_advance=${daysInAdvance}, duration=${durationMs}ms)`;
     try {
-        await logResult(runId, fatalError ? 'error' : 'summary', {
+        await logResult(runId, taskId, fatalError ? 'error' : 'summary', {
             errorMessage: fatalError ? `${fatalError} — ${summaryLine}` : summaryLine,
         });
     } catch (logErr: any) {
@@ -384,12 +424,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ success: false, message: 'Method not allowed' });
     }
 
-    const { authKey } = req.body;
-    if (authKey !== SCHEDULER_SECRET) {
+    // Two accepted auth methods: the original scheduler secret (body authKey, used by the
+    // in-app scheduler trigger UI), or the standard external API key header (matching every
+    // other /api/external/* route) — added so this can be triggered on demand for testing
+    // without needing the scheduler secret, which isn't available outside prod's runtime env.
+    const { authKey } = req.body || {};
+    const apiKeyHeader = req.headers['x-api-key'];
+    const validExternalKey = process.env.EXTERNAL_API_KEY_FOR_CLAWDBOT;
+    const authorized =
+        authKey === SCHEDULER_SECRET ||
+        (validExternalKey && apiKeyHeader === validExternalKey);
+    if (!authorized) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    const result = await runAutomation();
+    // Optional taskId so both crons sharing this handler ('auto_send_course_confirmation'
+    // 3-day / 'auto_send_class_confirmation' 7-day) can be manually triggered and tested —
+    // defaults to the original hardcoded task to keep existing scheduler behavior unchanged.
+    const taskId = typeof req.body?.taskId === 'string' && req.body.taskId
+        ? req.body.taskId
+        : 'auto_send_course_confirmation';
+
+    const result = await runAutomation(taskId);
     if (result.success) {
         return res.status(200).json(result);
     } else {
