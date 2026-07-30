@@ -13,8 +13,11 @@ import { requireRole } from '@lib/auth/requireRole';
  * DB_USER/DB_HOST/... Pool (inconsistent with the rest of the app) onto the standard
  * lib/db.ts pool (DATABASE_URL), which every other route already relies on.
  *
- * Current migration: see database/migrations/fix_cross_contaminated_calendar_event_mapping.sql
- * — removes 2 bad course_run_calendar_event rows created by a fuzzy-title-match bug.
+ * Current use (2026-07-30): creates ONE test enrollment row (course_run 1169306, real
+ * course, fake learner) for tertiarytesting@gmail.com, to verify the
+ * auto-send-course-confirmation window/dedupe fix end-to-end without touching a real
+ * trainee. Idempotent — checks for an existing test row first via enrolment_id prefix
+ * 'TEST-CONFIRM-EMAIL-', so re-running this doesn't create duplicates.
  */
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS
@@ -30,22 +33,41 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (!authed) return;
 
   try {
-    console.log('🔄 Running migration: remove cross-contaminated course_run_calendar_event rows...');
+    console.log('🔄 Running migration: create test enrollment for confirmation-email verification...');
 
-    const result = await pool.query(
-      `DELETE FROM course_run_calendar_event
-       WHERE course_run_id = 'd1f4171e-5a3d-42fa-b598-56bd95318e89'
-         AND google_event_id IN (
-           'p2m6ec0kqethhi35tlaeggr66g_20260727T013000Z',
-           'p2m6ec0kqethhi35tlaeggr66g_20260728T013000Z'
-         )`
+    const existing = await pool.query(
+      `SELECT id, enrolment_id FROM enrollment WHERE enrolment_id LIKE 'TEST-CONFIRM-EMAIL-%' LIMIT 1`
     );
-    console.log(`✅ Deleted ${result.rowCount} bad course_run_calendar_event row(s)`);
+    if (existing.rows.length > 0) {
+      console.log(`ℹ️ Test enrollment already exists: ${existing.rows[0].enrolment_id}`);
+      return res.status(200).json({
+        success: true,
+        message: 'Test enrollment already exists (idempotent no-op)',
+        enrollment: existing.rows[0],
+      });
+    }
+
+    const enrolmentId = `TEST-CONFIRM-EMAIL-${Date.now()}`;
+    const result = await pool.query(
+      `INSERT INTO enrollment (
+         id, user_id, course_id, course_run_id,
+         progress_percent, payment_status, assessment_status,
+         enrolment_date, enrolment_id, enrolment_status,
+         nric, email, calendar_added, created_at, updated_at
+       ) VALUES (
+         gen_random_uuid(), NULL, '3ac6b597-55df-4df1-ad20-d009976416c2', '002371ff-0386-45fc-9381-2d8b81047e01',
+         0, 'Unpaid', 'Pending',
+         CURRENT_DATE, $1, 'Confirmed',
+         'TESTNRIC01', 'tertiarytesting@gmail.com', false, NOW(), NOW()
+       ) RETURNING id, enrolment_id, enrolment_status, course_run_id, email`,
+      [enrolmentId]
+    );
+    console.log(`✅ Created test enrollment ${enrolmentId}`);
 
     return res.status(200).json({
       success: true,
       message: 'Migration completed successfully',
-      deleted_rows: result.rowCount,
+      enrollment: result.rows[0],
     });
   } catch (error) {
     console.error('❌ Migration failed:', error);
