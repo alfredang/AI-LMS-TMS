@@ -153,17 +153,13 @@ const AiChatbot: React.FC = () => {
     const canPrefill = supportsPrefill(chatUrl);
 
     /**
-     * Copy text, falling back to execCommand when the async Clipboard API is
-     * blocked. Chrome denies clipboard-write without a permission grant, which
-     * previously failed silently and left the user with nothing to paste.
+     * Copy synchronously via execCommand. This has to stay non-async: awaiting
+     * navigator.clipboard first consumes the click's transient activation, so
+     * the window.open that follows gets swallowed by the popup blocker, and by
+     * the time the promise settles the new tab has taken focus — which makes
+     * both the async write and any fallback fail, leaving nothing to paste.
      */
-    const copyText = async (text: string): Promise<boolean> => {
-        try {
-            await navigator.clipboard.writeText(text);
-            return true;
-        } catch {
-            /* fall through to the legacy path */
-        }
+    const copyTextSync = (text: string): boolean => {
         try {
             const ta = document.createElement('textarea');
             ta.value = text;
@@ -171,6 +167,7 @@ const AiChatbot: React.FC = () => {
             ta.style.opacity = '0';
             document.body.appendChild(ta);
             ta.select();
+            ta.setSelectionRange(0, text.length); // iOS Safari ignores select() alone
             const ok = document.execCommand('copy');
             document.body.removeChild(ta);
             return ok;
@@ -179,22 +176,44 @@ const AiChatbot: React.FC = () => {
         }
     };
 
-    const handleCopy = async () => {
-        if (!selected) return;
-        setCopyState((await copyText(draft)) ? 'copied' : 'failed');
+    /** Async Clipboard API, used only to rescue a failed synchronous copy. */
+    const copyTextAsync = async (text: string): Promise<boolean> => {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    const flashCopyState = (ok: boolean) => {
+        setCopyState(ok ? 'copied' : 'failed');
         setTimeout(() => setCopyState('idle'), 2500);
     };
 
-    const handleOpenChat = async () => {
+    const handleCopy = async () => {
+        if (!selected) return;
+        // No navigation here, so either order is safe; sync first keeps the two
+        // buttons on identical behaviour.
+        const ok = copyTextSync(draft) || (await copyTextAsync(draft));
+        flashCopyState(ok);
+    };
+
+    const handleOpenChat = () => {
         // WhatsApp group links can't carry a pre-filled body, so the clipboard is
-        // the only way across. Copy BEFORE window.open — once focus moves to the
-        // new tab the document is no longer focused and the write is rejected.
-        if (!canPrefill) {
-            const ok = await copyText(draft);
-            setCopyState(ok ? 'copied' : 'failed');
-            setTimeout(() => setCopyState('idle'), 2500);
-        }
+        // the only way across. Both the copy and the open must happen in this
+        // one synchronous turn to stay inside the click's user activation.
+        const copied = canPrefill ? true : copyTextSync(draft);
         window.open(buildChatUrl(chatUrl, draft), '_blank', 'noopener,noreferrer');
+
+        if (canPrefill) return;
+        if (copied) {
+            flashCopyState(true);
+            return;
+        }
+        // Sync path failed — try the async API as a last resort. It often still
+        // succeeds because the opened tab has not stolen focus yet.
+        void copyTextAsync(draft).then(flashCopyState);
     };
 
     const totalShown = Object.values(grouped).reduce((n, list) => n + list.length, 0);
