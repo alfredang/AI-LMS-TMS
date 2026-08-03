@@ -13,7 +13,7 @@ function isRealSsgEnrolmentId(value: unknown): value is string {
   return /^ENR-/i.test(String(value || '').trim());
 }
 
-type AutoEnrolStatus = 'pending' | 'enroled' | 'grant_found' | 'failed';
+type AutoEnrolStatus = 'pending' | 'enroled' | 'grant_found' | 'invoiced' | 'failed';
 
 interface SsgCredentialLike {
   encryptionKey: string;
@@ -44,14 +44,14 @@ interface ResolvedRun {
 }
 
 const IV = Buffer.from('SSGAPIInitVector', 'utf8');
-const BATCH_SIZE = 5;
-const MAX_SSG_RETRY_ATTEMPTS = 3;
-const SSG_RETRY_BASE_DELAY_MS = 1000;
+const BATCH_SIZE = 1;
+const MAX_SSG_RETRY_ATTEMPTS = 4;
+const SSG_RETRY_BASE_DELAY_MS = 2000;
 
-// Treat SSG 5xx and underlying network errors as transient so a single blip
-// doesn't park a row at auto_enrol_status='failed' until a manual re-upload.
-// SSG 400s (validation, duplicate) are NOT transient — the duplicate-recovery
-// path in processCompanyApplication handles those at a higher layer.
+// Treat SSG 5xx, underlying network errors, and generic "try again later"
+// response bodies as transient so a single SSG blip doesn't park a row at
+// auto_enrol_status='failed' until a manual re-upload. Specific SSG 400s
+// (validation, duplicate) are still handled by processCompanyApplication.
 function isTransientSsgError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   if (/ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|network error/i.test(message)) {
@@ -63,6 +63,10 @@ function isTransientSsgError(err: unknown): boolean {
     return status >= 500 && status < 600;
   }
   return false;
+}
+
+function isTransientSsgMessage(message: string): boolean {
+  return /unable to process|try again later|temporarily unavailable|service unavailable|timeout|timed out|too many requests|rate limit/i.test(message);
 }
 
 function normalizeDate(value: unknown): string | null {
@@ -105,6 +109,11 @@ function normalizeTitle(value: unknown): string {
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+}
+
+// Word-order-insensitive key: "A class" and "class A" produce the same key.
+function titleTokenKey(value: unknown): string {
+  return normalizeTitle(value).split(' ').filter(Boolean).sort().join(' ');
 }
 
 function extractEnrolmentReference(parsed: any): string | null {
@@ -193,7 +202,18 @@ async function ssgEncryptedPost(ctx: SSGContext, path: string, payload: unknown,
   let lastErr: unknown;
   for (let attempt = 1; attempt <= MAX_SSG_RETRY_ATTEMPTS; attempt++) {
     try {
-      return await ssgEncryptedPostOnce(ctx, path, payload, timeoutMs);
+      const parsed = await ssgEncryptedPostOnce(ctx, path, payload, timeoutMs);
+      const errMsg = hasSsgError(parsed);
+      if (errMsg && isTransientSsgMessage(errMsg) && attempt < MAX_SSG_RETRY_ATTEMPTS) {
+        const delayMs = SSG_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        console.warn(
+          `[CA SSG] transient ${path} response attempt ${attempt}/${MAX_SSG_RETRY_ATTEMPTS}, retrying in ${delayMs}ms:`,
+          errMsg
+        );
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+      return parsed;
     } catch (err) {
       lastErr = err;
       if (attempt === MAX_SSG_RETRY_ATTEMPTS || !isTransientSsgError(err)) throw err;
@@ -313,12 +333,14 @@ async function resolveCourseRun(row: any): Promise<ResolvedRun | null> {
       [startDate]
     );
 
+    const targetTokens = titleTokenKey(title);
     const fuzzy = sameDateRuns.rows.find((candidate: any) => {
       const candidateTitle = normalizeTitle(candidate.course_title);
       return (
         candidateTitle === normalizedTitle ||
         candidateTitle.includes(normalizedTitle) ||
-        normalizedTitle.includes(candidateTitle)
+        normalizedTitle.includes(candidateTitle) ||
+        (!!targetTokens && titleTokenKey(candidate.course_title) === targetTokens) // same words, any order
       );
     });
 
@@ -872,31 +894,25 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
   for (let i = 0; i < uniqueIds.length; i += BATCH_SIZE) {
     const batch = uniqueIds.slice(i, i + BATCH_SIZE);
 
-    await Promise.all(
-      batch.map(id =>
-        processCompanyApplication(id).catch(err => markFailed(id, 'pipeline', err))
-      )
-    );
+    for (const id of batch) {
+      await processCompanyApplication(id).catch(err => markFailed(id, 'pipeline', err));
+    }
   }
 
   // Grant materialisation polling — SSG creates the grant asynchronously as a
   // side-effect of POST /tpg/enrolments. The grant typically appears within
-  // seconds but can take 15+ minutes. Rather than skip rows whose grant hasn't
-  // appeared and force an admin to click Sync Grants later, re-run the
-  // wide-net sweep every 30s until every successfully-enroled row has its
-  // grant_id (or is marked grant_ineligible). No timeout: if SSG never
-  // returns the grant, an admin marks the learner grant_ineligible from the
-  // View page to break out of the loop for that row.
+  // seconds but can take 15+ minutes. Re-run the wide-net sweep for a bounded
+  // window, then continue into the guarded invoice sweep. Rows still awaiting
+  // grants are skipped by generateInvoicesForApplications instead of blocking
+  // this background worker forever.
   //
   // Restart recovery: this loop is in-process. If the server restarts mid-poll
   // (deploy, crash), affected rows stay at auto_enrol_status='pending' with no
   // background process to resume them. Recovery is manual — admin clicks the
   // "Sync Grants" button on the View Company Application page, which runs the
   // same sweepGrantsByCourseRunForApplications logic against the same rows.
-  // Once grants land in ssg_grants, the final UPDATE at the end of this
-  // function flips auto_enrol_status to 'grant_found'. We accept this over a
-  // cron sweep to avoid masking real failures with self-healing.
   const POLL_INTERVAL_MS = 30_000;
+  const MAX_GRANT_POLL_ITERATIONS = 30;
   let pollIteration = 0;
   while (true) {
     try {
@@ -919,6 +935,12 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
     if (pendingCount === 0) break;
 
     pollIteration++;
+    if (pollIteration >= MAX_GRANT_POLL_ITERATIONS) {
+      console.warn(
+        `[bulkProcessCompanyApplications] grant poll timed out after ${pollIteration} iteration(s): ${pendingCount} row(s) still awaiting grant — continuing to guarded invoice sweep`
+      );
+      break;
+    }
     console.log(`[bulkProcessCompanyApplications] grant poll iteration ${pollIteration}: ${pendingCount} row(s) still awaiting grant — sleeping ${POLL_INTERVAL_MS}ms`);
     await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
   }
@@ -932,6 +954,11 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
     console.log(
       `[bulkProcessCompanyApplications] invoice sweep — generated ${summary.generated}, alreadyInvoiced ${summary.skippedAlreadyInvoiced}, notEnrolled ${summary.skippedNotEnrolled}, awaitingGrants ${summary.skippedAwaitingGrants}, failed ${summary.failed}`
     );
+    if (summary.skippedAwaitingGrants > 0) {
+      console.warn(
+        `[bulkProcessCompanyApplications] ${summary.skippedAwaitingGrants} invoice group(s) skipped because grants have not materialised yet`
+      );
+    }
     if (summary.failed > 0) {
       console.warn('[bulkProcessCompanyApplications] invoice failures:', summary.errors);
     }
@@ -975,6 +1002,7 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
     `UPDATE public.company_application
         SET auto_enrol_status = CASE
               WHEN enrolment_id IS NULL THEN 'failed'
+              WHEN COALESCE(invoice_id, '') <> '' THEN 'invoiced'
               WHEN COALESCE(grant_id, '') <> '' OR COALESCE(grant_ineligible, false) = true THEN 'grant_found'
               ELSE 'enroled'
             END,
