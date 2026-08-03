@@ -27,11 +27,11 @@ import {
  * rows skip SSG, already-calendar'd learners short-circuit the patch,
  * already-graunted rows just re-confirm. Safe to re-run.
  *
- * Rows are processed 5 at a time (Promise.all batches) to mirror the
- * upload pipeline. Per-event advisory locks inside addCaLearnerToCalendar
- * prevent the parallel-patch race that originally left learners unticked.
+ * Rows are processed one at a time. SSG enrolment creation can return a
+ * transient generic "try again later" response when hit with parallel creates,
+ * so this endpoint mirrors the upload pipeline's conservative pacing.
  */
-const BATCH_SIZE = 5;
+const BATCH_SIZE = 1;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -62,20 +62,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     for (let i = 0; i < uniqueIds.length; i += BATCH_SIZE) {
       const batch = uniqueIds.slice(i, i + BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map(async id => {
-          try {
-            return await processCompanyApplication(id);
-          } catch (err) {
-            return {
-              id,
-              success: false,
-              finalStatus: 'failed',
-              error: err instanceof Error ? err.message : String(err),
-            };
-          }
-        }),
-      );
+      const batchResults = [];
+      for (const id of batch) {
+        try {
+          batchResults.push(await processCompanyApplication(id));
+        } catch (err) {
+          batchResults.push({
+            id,
+            success: false,
+            finalStatus: 'failed',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       results.push(...batchResults);
     }
 
@@ -96,6 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `UPDATE public.company_application
           SET auto_enrol_status = CASE
                 WHEN enrolment_id IS NULL THEN 'failed'
+                WHEN COALESCE(invoice_id, '') <> '' THEN 'invoiced'
                 WHEN COALESCE(grant_id, '') <> '' OR COALESCE(grant_ineligible, false) = true THEN 'grant_found'
                 ELSE 'enroled'
               END,
@@ -124,16 +124,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       skippedNotEnrolled: number;
       skippedAwaitingGrants: number;
       failed: number;
+      // Human-readable reasons a group was skipped/failed, so Auto-Process can
+      // tell the admin WHY no invoice appeared instead of failing silently.
+      errors: string[];
+      note: string | null;
     } | null = null;
     try {
       const { generateInvoicesForApplications } = await import('../../../lib/quickbooks/createCompanyApplicationInvoice');
       const summary = await generateInvoicesForApplications(uniqueIds);
+      const notes: string[] = [];
+      if (summary.skippedAwaitingGrants > 0) notes.push(`${summary.skippedAwaitingGrants} group(s) awaiting grant — click "Sync Grants" then invoice, or mark learners "Not Grant Eligible"`);
+      if (summary.skippedNotEnrolled > 0) notes.push(`${summary.skippedNotEnrolled} group(s) have learner(s) not yet SSG-enrolled`);
+      if (summary.failed > 0) notes.push(`${summary.failed} group(s) failed (see details)`);
       invoice = {
         generated: summary.generated,
         skippedAlreadyInvoiced: summary.skippedAlreadyInvoiced,
         skippedNotEnrolled: summary.skippedNotEnrolled,
         skippedAwaitingGrants: summary.skippedAwaitingGrants,
         failed: summary.failed,
+        errors: Array.isArray(summary.errors) ? summary.errors : [],
+        note: notes.length ? notes.join('; ') : null,
       };
       console.log(
         `[ca-run-pipeline] invoice sweep — generated ${summary.generated}, alreadyInvoiced ${summary.skippedAlreadyInvoiced}, notEnrolled ${summary.skippedNotEnrolled}, awaitingGrants ${summary.skippedAwaitingGrants}, failed ${summary.failed}`,
@@ -143,7 +153,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     } catch (err) {
       console.error('[ca-run-pipeline] invoice generation crashed (non-fatal):', err);
+      invoice = {
+        generated: 0,
+        skippedAlreadyInvoiced: 0,
+        skippedNotEnrolled: 0,
+        skippedAwaitingGrants: 0,
+        failed: 0,
+        errors: [err instanceof Error ? err.message : String(err)],
+        note: 'Invoice generation crashed — see details.',
+      };
     }
+
+    await pool.query(
+      `UPDATE public.company_application
+          SET auto_enrol_status = CASE
+                WHEN enrolment_id IS NULL THEN 'failed'
+                WHEN COALESCE(invoice_id, '') <> '' THEN 'invoiced'
+                WHEN COALESCE(grant_id, '') <> '' OR COALESCE(grant_ineligible, false) = true THEN 'grant_found'
+                ELSE 'enroled'
+              END,
+              auto_enrol_error = CASE WHEN enrolment_id IS NULL THEN auto_enrol_error ELSE NULL END,
+              updated_at = now()
+        WHERE id = ANY($1::uuid[])
+          AND (auto_enrol_status IN ('pending', 'enroled', 'grant_found')
+               OR (auto_enrol_status = 'failed' AND enrolment_id IS NOT NULL))`,
+      [uniqueIds],
+    );
 
     const enroled = results.filter(r => r.enrolmentId).length;
     const granted = results.filter(r => r.grantId).length;

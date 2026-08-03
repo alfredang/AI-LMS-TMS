@@ -6,6 +6,7 @@ import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { ConfirmPopup } from './ConfirmPopup';
 import SupportingDocsModal from './SupportingDocsModal';
+import { authHeader } from '../../lib/auth/authHeader';
 
 // Shape returned by GET /api/admin/list-employers (QBO customers ∪ CA history ∪
 // UEN alias map). `source` tells us where the record came from: 'qb'/'both' means
@@ -1418,6 +1419,11 @@ export const ViewCompanyApplicationView: React.FC = () => {
   const [showPii, setShowPii] = useState(false);
   const [isRunningPipeline, setIsRunningPipeline] = useState(false);
   const [pipelineMessage, setPipelineMessage] = useState<string | null>(null);
+  // Employer enrolments that are enrolled but not yet registered as Company
+  // Applications (the "Synced Enrolments" gap) — surfaced as a banner so they
+  // are never silently invisible on this view.
+  const [syncedCount, setSyncedCount] = useState(0);
+  const [isRegisteringSynced, setIsRegisteringSynced] = useState(false);
   // Popup used by Auto-Process for both the "nothing to do" guard and any
   // API/network error. Inline messages were easy to miss next to the four
   // action buttons; admins asked for a blocking popup so they actually see
@@ -1584,12 +1590,50 @@ export const ViewCompanyApplicationView: React.FC = () => {
     });
   };
 
+  // How many employer enrolments are enrolled but not yet registered as CA rows.
+  const refreshSyncedCount = async () => {
+    try {
+      const res = await fetch('/api/admin/fetch-synced-enrolments');
+      const data = await res.json();
+      setSyncedCount(Array.isArray(data?.rows) ? data.rows.length : Number(data?.total || 0));
+    } catch {
+      /* non-fatal — the banner just won't show */
+    }
+  };
+
+  // One-click: register every synced employer enrolment as a Company Application
+  // so they appear on this view (employer name auto-filled from the learner's
+  // profile; QBO linking still happens at invoice time).
+  const registerAllSynced = async () => {
+    setIsRegisteringSynced(true);
+    try {
+      const res = await fetch('/api/admin/ca-auto-register-synced', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || `Request failed (${res.status})`);
+      setPipelineMessage(data.message || `Registered ${data.created ?? 0} synced enrolment(s).`);
+      await Promise.all([reloadRows(), refreshSyncedCount()]);
+    } catch (err) {
+      setAutoProcessPopup({
+        tone: 'danger',
+        title: 'Could not register synced enrolments',
+        subtitle: 'No rows were changed.',
+        message: err instanceof Error ? err.message : 'Unknown error — check the server console.',
+      });
+    } finally {
+      setIsRegisteringSynced(false);
+    }
+  };
+
   const reloadRows = async () => {
     setIsLoading(true);
     setLoadError(null);
     try {
       const fetched = await fetchRows();
       setRows(fetched);
+      void refreshSyncedCount();
     } catch (err) {
       console.error('Failed to load company applications:', err);
       setLoadError(err instanceof Error ? err.message : 'Failed to load company applications.');
@@ -1842,14 +1886,13 @@ export const ViewCompanyApplicationView: React.FC = () => {
   // separate Sync Grants / Sync Calendar buttons — every stage is idempotent,
   // so re-running over already-processed rows just re-confirms them. The
   // invoice sweep is guarded server-side to bill only enroled + grant-settled
-  // rows; awaiting-grant rows are left for the explicit "Generate Invoice"
-  // button.
+  // rows; awaiting-grant rows are reported as pending grant.
   const runPipeline = async () => {
     if (selectedIds.size === 0) return;
 
     // "Fully done" = SSG enroled AND grant settled (granted or explicitly
-    // ineligible) AND calendar added. Re-running Auto-Process on rows that
-    // already pass all three stages is a no-op at the lib level but burns
+    // ineligible) AND calendar added AND invoiced. Re-running Auto-Process on rows that
+    // already pass all four stages is a no-op at the lib level but burns
     // SSG/Google API quota and produces a confusing "0 enroled, 0 with
     // grant" summary that looks like a failure. Filter on the frontend so
     // the call only ships rows that still need work; if everything passes,
@@ -1862,6 +1905,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
         hasValue(r['Grant ID (BL)']) ||
         isCheckedValue(r['Grant Ineligible']);
       const calAdded = isCheckedValue(r['Calendar Added']);
+      const invoiced = hasValue(r['Invoice ID']);
       // A row that actually enrolled but is still stamped 'failed' is a stale
       // status left over from a first pass that finished before SSG returned the
       // enrolment id. Don't treat it as done — let Auto-Process re-run so the
@@ -1869,7 +1913,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const staleFailed =
         enroled && String(r['Auto-Enrol Status'] || '').trim().toLowerCase() === 'failed';
       if (staleFailed) return false;
-      return enroled && grantSettled && calAdded;
+      return enroled && grantSettled && calAdded && invoiced;
     };
     const pendingRows = selectedRows.filter(r => !isFullyDone(r));
 
@@ -1878,7 +1922,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
         tone: 'warning',
         title: 'Nothing to auto-process',
         subtitle: `${selectedRows.length} selected row${selectedRows.length === 1 ? '' : 's'} already finished`,
-        message: `Every selected row is already enroled with SSG, has a grant ID (or is marked grant-ineligible), and is on the Google Calendar. Auto-Process can't run again because there's nothing left to do for these rows. Pick rows whose Enrol / Grant / Cal tick is still missing.`,
+        message: `Every selected row is already enroled with SSG, has a grant ID (or is marked grant-ineligible), is on the Google Calendar, and has an invoice. Auto-Process can't run again because there's nothing left to do for these rows. Pick rows whose Enrol / Grant / Cal / Invoice tick is still missing.`,
       });
       return;
     }
@@ -1915,6 +1959,28 @@ export const ViewCompanyApplicationView: React.FC = () => {
       if (skipped > 0) parts.push(`${skipped} already-done row${skipped === 1 ? '' : 's'} skipped`);
       if (failed > 0) parts.push(`${failed} failed — check row error popups`);
       setPipelineMessage(parts.join(' · '));
+
+      // Surface WHY invoices didn't generate — otherwise Auto-Process silently
+      // skips (awaiting grant / not enrolled / QBO customer) and looks broken.
+      const invGenerated = Number(inv?.generated || 0);
+      const invSkipReasons = Number(inv?.skippedAwaitingGrants || 0) + Number(inv?.skippedNotEnrolled || 0) + Number(inv?.failed || 0);
+      const invErrors: string[] = Array.isArray(inv?.errors)
+        ? inv.errors.map((e: any) => (typeof e === 'string' ? e : e?.message || JSON.stringify(e)))
+        : [];
+      if (invGenerated === 0 && (invSkipReasons > 0 || invErrors.length > 0)) {
+        setAutoProcessPopup({
+          tone: 'warning',
+          title: 'Enrolment done — but no invoice was generated',
+          subtitle: inv?.note || 'Some invoice group(s) were skipped.',
+          message: [
+            inv?.note,
+            ...invErrors,
+            'Grants land asynchronously (seconds to ~15 min). Click "Sync Grants", then "Generate Invoice" — or mark full-fee learners "Not Grant Eligible" so they invoice without a grant.',
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+        });
+      }
     } catch (err) {
       console.error('Auto-Process failed:', err);
       setAutoProcessPopup({
@@ -2204,6 +2270,27 @@ export const ViewCompanyApplicationView: React.FC = () => {
           )
         )}
       </Card>
+
+      {syncedCount > 0 && (
+        <Card className="p-4 mb-6 border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-start gap-3">
+              <Icon name={IconName.Warning} className="w-5 h-5 text-amber-600 dark:text-amber-300 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                  {syncedCount} employer enrolment{syncedCount === 1 ? ' is' : 's are'} enrolled but not yet on this list
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-2xl">
+                  These arrived via manual / SSG-sync enrolment and never got a Company Application row — that&apos;s why they don&apos;t appear here. Register them to add them to this list (employer name is taken from the learner&apos;s profile; link the QuickBooks customer at invoice time if needed).
+                </p>
+              </div>
+            </div>
+            <Button onClick={() => void registerAllSynced()} disabled={isRegisteringSynced}>
+              {isRegisteringSynced ? 'Registering…' : `Register all (${syncedCount})`}
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <Card className="p-6 mb-6">
         <div className="flex flex-col md:flex-row gap-4 items-end">
