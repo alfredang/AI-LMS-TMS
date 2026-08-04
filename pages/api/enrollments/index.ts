@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
@@ -46,4 +47,4 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-export default handler;
+export default withAuth(handler);

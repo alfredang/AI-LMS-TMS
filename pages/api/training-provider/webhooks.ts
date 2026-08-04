@@ -1,8 +1,9 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     switch (req.method) {
       case 'GET': {
@@ -56,3 +57,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Internal error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider'] });

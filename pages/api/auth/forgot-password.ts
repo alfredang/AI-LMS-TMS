@@ -55,11 +55,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const tempPassword = crypto.randomBytes(4).toString('hex'); // e.g. "a1b2c3d4"
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-    // Update user's password
+    // Update user's password (hash only; plaintext column cleared)
     await pool.query(
-      'UPDATE app_user SET password = $1, password_hash = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-      [tempPassword, hashedPassword, user.id]
+      'UPDATE app_user SET password = NULL, password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [hashedPassword, user.id]
     );
+
+    // Revoke any live sessions — the old credential is no longer valid
+    try {
+      await pool.query('DELETE FROM user_session WHERE user_id = $1', [user.id]);
+    } catch (e) {
+      console.error('Session revocation after password reset failed:', e);
+    }
 
     // Set per-user flag to force password change on next login
     try {

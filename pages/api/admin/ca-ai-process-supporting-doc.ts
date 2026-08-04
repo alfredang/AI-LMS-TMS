@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
@@ -144,7 +145,7 @@ function parseAiResponse(text: string): any {
   throw new Error('unbalanced JSON braces in response');
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -245,3 +246,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

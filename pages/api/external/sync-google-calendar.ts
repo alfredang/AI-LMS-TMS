@@ -1,3 +1,4 @@
+import { withServiceAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
@@ -235,7 +236,7 @@ async function _runSyncGoogleCalendarInner(options?: { startDate?: string; endDa
   return { success: true, summary, results };
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed. Use POST.' });
   }
@@ -252,3 +253,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withServiceAuth(handler);

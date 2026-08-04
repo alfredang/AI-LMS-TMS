@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { unconfirmClass } from '@lib/class/unconfirmClass';
 
@@ -5,7 +6,7 @@ import { unconfirmClass } from '@lib/class/unconfirmClass';
  * Dedicated "Unconfirm class" action (multi-step + hits SSG), kept out of the
  * generic class-status PUT. The status dropdown's "Unconfirmed" option calls this.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -21,3 +22,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

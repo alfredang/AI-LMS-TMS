@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 /**
  * Next.js API route for Creating New Course Runs
  * POST /api/ssg/courses/courseRuns/create-new - Create new course runs
@@ -7,7 +8,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../../../lib/ssg/services/credentials-service';
 import { OptionalSelector } from '../../../../../lib/ssg/models/course-runs';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST for creating course runs.' });
   }
@@ -158,3 +159,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

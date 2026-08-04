@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import pool from '../../../lib/db';
@@ -113,7 +114,7 @@ function generateDoc(docType: string, courseData: any): { name: string; data: st
   return { name: fileName, data: docBuffer.toString('base64') };
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -358,3 +359,5 @@ CRITICAL: Return ONLY the JSON object, no markdown blocks, no explanation.`;
     return res.status(500).json({ error: error.message || 'Failed to generate document' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

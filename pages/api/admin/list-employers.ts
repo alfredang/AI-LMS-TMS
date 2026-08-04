@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureCompanyApplicationsTable } from '../../../lib/companyApplicationsTable';
@@ -31,7 +32,7 @@ export interface EmployerOption {
 
 const norm = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ message: 'Method not allowed' });
 
   try {
@@ -147,3 +148,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, message: err?.message || 'Failed to load employers' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -6,7 +7,7 @@ import pool from '../../../lib/db';
 //   - Deletes all course_attendance records across every session of the course run
 //   - Deletes the local enrollment record for this course run
 //   - Keeps app_user, learner_profile, user_role_map intact
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'DELETE') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -93,3 +94,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     client.release();
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

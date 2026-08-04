@@ -10,7 +10,13 @@ async function callApi(method: string, path: string, body?: any, query?: Record<
 
   const res = await fetch(url.toString(), {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      // Internal server-to-self call: authenticate as the service principal
+      ...(process.env.EXTERNAL_API_KEY_FOR_CLAWDBOT
+        ? { 'x-api-key': process.env.EXTERNAL_API_KEY_FOR_CLAWDBOT }
+        : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json();

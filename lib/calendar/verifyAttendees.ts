@@ -38,7 +38,11 @@ export async function verifyRunCalendarAttendees(
     const emails = new Set<string>();
     let reachable = false;
     try {
-      const r = await fetch(getApiUrl(`/api/admin/calendar-attendees?courseRunId=${encodeURIComponent(courseRunId)}`));
+      const r = await fetch(getApiUrl(`/api/admin/calendar-attendees?courseRunId=${encodeURIComponent(courseRunId)}`), {
+        headers: process.env.EXTERNAL_API_KEY_FOR_CLAWDBOT
+          ? { 'x-api-key': process.env.EXTERNAL_API_KEY_FOR_CLAWDBOT }
+          : undefined,
+      });
       const d = await r.json();
       if (d?.success && d.status === 'ok') {
         reachable = true;

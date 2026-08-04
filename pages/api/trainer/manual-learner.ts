@@ -1,9 +1,10 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
 // DELETE { nric, sessionId }
 // Removes a learner's attendance record for the specified session only.
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'DELETE') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -27,3 +28,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     client.release();
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

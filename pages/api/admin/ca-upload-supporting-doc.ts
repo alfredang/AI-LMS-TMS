@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
@@ -31,7 +32,7 @@ export const config = {
  * (treated as "uploaded but not yet reviewed") so re-uploads after a
  * mismatch force the admin to re-verify.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -165,3 +166,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

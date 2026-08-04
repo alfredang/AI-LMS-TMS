@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
@@ -9,7 +10,7 @@ import { BILLING_ENR_NORM_SQL } from '../../../lib/billing/canonicalEnrolmentRef
  * GET — stream QuickBooks invoice PDF for a learner enrolment (same auth model as /api/billing/history).
  * Prefers the file in Google Drive; falls back to QBO PDF API. No LibreOffice required.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -102,3 +103,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: msg });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
@@ -21,7 +22,7 @@ const RUN_START_NORM_SQL = `(
 
 const TODAY_SG_SQL = `to_char((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Singapore')::date, 'YYYY-MM-DD')`;
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
     return res.status(405).json({ error: 'Method not allowed' });
@@ -348,3 +349,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

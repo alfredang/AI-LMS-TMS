@@ -7,7 +7,7 @@
     "dev:scheduler": "cross-env ENABLE_APP_SCHEDULER=true NODE_OPTIONS=--max-old-space-size=8192 next dev -p 3000",
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=6144 next build --webpack",
     "start": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next start",
-    "lint": "next lint",
+    "lint": "node scripts/check-api-auth.js && next lint",
     "type-check": "tsc --noEmit",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "db:migrate": "node scripts/migrate.js",

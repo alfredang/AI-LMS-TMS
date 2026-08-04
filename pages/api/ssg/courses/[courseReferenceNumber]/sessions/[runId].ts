@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 /**
  * Next.js API route for course sessions
  * GET /api/ssg/courses/[courseReferenceNumber]/sessions/[runId] - View course sessions
@@ -16,7 +17,7 @@ const getOptionalSelector = (value: string | string[] | undefined): OptionalSele
   return OptionalSelector.NO;
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
     return res.status(405).json({ error: 'Method not allowed' });
@@ -79,3 +80,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

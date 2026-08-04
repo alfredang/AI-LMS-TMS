@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import pool from '../../../lib/db';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { isPayrollEnabled } from '../../../lib/payroll/featureFlag';
+import { createSession, pruneExpiredSessions } from '../../../lib/auth/session';
 
 
 interface LoginRequest {
@@ -125,15 +126,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
         });
       }
 
-      console.log(`🔍 Debug: Stored password hash: ${user.password}`);
-      console.log(`🔍 Debug: Input password: ${password}`);
-      console.log(`🔍 Debug: Password hash starts with $2b$: ${user.password?.startsWith('$2b$')}`);
-
       if (!user.password) {
         return res.status(401).json({ success: false, error: 'No password set for this account. Please contact your administrator.' });
       }
       const isPasswordValid = await bcrypt.compare(password, user.password);
-      console.log(`🔍 Debug: bcrypt.compare result: ${isPasswordValid}`);
 
       if (!isPasswordValid) {
         console.log(`❌ Invalid password for user: ${email}`);
@@ -185,7 +181,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       const storedOtp = otpResult.rows[0];
 
       if (otp !== storedOtp.otp_code) {
-        console.log(`❌ Invalid OTP for user: ${email}, expected: ${storedOtp.otp_code}, received: ${otp}`);
+        console.log(`❌ Invalid OTP for user: ${email}`);
         return res.status(401).json({
           success: false,
           error: 'Invalid OTP'
@@ -333,6 +329,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
       }
     }
 
+    // Issue a real server-side session token (opaque, hashed at rest).
+    const sessionToken = await createSession(user.id);
+    pruneExpiredSessions();
+
     // Successful login response
     const loginResponse = {
       success: true,
@@ -347,7 +347,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LoginResponse>)
         },
         role: primaryRole,
         roles: userRoles,
-        token: `mock-jwt-token-${user.id}`, // In production, generate a real JWT
+        token: sessionToken,
         forcePasswordChange,
         requiresProfileSetup
       }

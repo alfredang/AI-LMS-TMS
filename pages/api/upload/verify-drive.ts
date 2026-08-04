@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { google, drive_v3 } from 'googleapis';
 import pool from '../../../lib/db';
@@ -99,7 +100,7 @@ async function getCourseRunDetails(courseRunId: string) {
     return result.rows[0];
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (cors(req, res)) return;
 
     if (req.method === 'OPTIONS') {
@@ -199,3 +200,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ success: false, error: 'Failed to verify with Google Drive', details: error.message });
     }
 }
+
+export default withAuth(handler);

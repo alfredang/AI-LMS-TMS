@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import multer, { StorageEngine } from 'multer';
 import path from 'path';
@@ -113,7 +114,7 @@ interface CourseData {
   resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string; instructions?: string }>;
 }
 
-export default function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
+function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
   // Handle CORS
   if (cors(req, res)) {
     return; // Preflight request handled
@@ -390,3 +391,5 @@ export const config = {
     bodyParser: false,
   },
 };
+
+export default withAuth(handler);

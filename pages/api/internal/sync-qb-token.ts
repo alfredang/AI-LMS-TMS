@@ -1,9 +1,10 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
 // Called by HRMS whenever it rotates the QB refresh token.
 // Keeps the reference project credential table in sync so both apps always have the latest token.
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const secret = process.env.TOKEN_SYNC_SECRET;
@@ -27,3 +28,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: err?.message ?? 'DB error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider'] });

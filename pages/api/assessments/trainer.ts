@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
@@ -21,7 +22,7 @@ interface ApiResponse {
   error?: string;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse<ApiResponse>) {
+async function handler(req: NextApiRequest, res: NextApiResponse<ApiResponse>) {
   // Enable CORS and handle preflight
   if (cors(req, res)) {
     return; // Preflight request handled
@@ -103,3 +104,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     });
   }
 }
+
+export default withAuth(handler);

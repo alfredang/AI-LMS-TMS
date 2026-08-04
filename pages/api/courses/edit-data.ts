@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { splitTrainerList } from '@/lib/trainerInvitations';
@@ -31,7 +32,7 @@ interface LearningUnit {
   subtopics: Subtopic[];
 }
 
-export default async function handler(
+async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -270,3 +271,5 @@ export default async function handler(
     });
   }
 }
+
+export default withAuth(handler);

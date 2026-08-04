@@ -14,7 +14,13 @@ export const config = {
     api: { responseLimit: false },
 };
 
-const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback';
+// Fail closed: accept server-side secrets only. NEXT_PUBLIC_* values are baked
+// into the public JS bundle and must never act as an API key; with no key
+// configured, a per-boot random UUID makes every comparison fail.
+const SCHEDULER_SECRET =
+  process.env.SCHEDULER_SECRET ||
+  process.env.EXTERNAL_API_KEY_FOR_CLAWDBOT ||
+  globalThis.crypto.randomUUID();
 
 // ── Global in-flight lock ─────────────────────────────────────────────────────
 const g = globalThis as unknown as { __proformaInvoicesRunning?: boolean };

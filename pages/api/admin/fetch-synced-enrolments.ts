@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -16,7 +17,7 @@ import pool from '../../../lib/db';
 // can SEE these already-enrolled records in one place. Every row here is
 // already enrolled with SSG (it has an enrolment reference), so nothing needs
 // to be re-processed.
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ message: 'Method not allowed' });
 
   try {
@@ -82,3 +83,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ message: err?.message || 'Failed to fetch synced enrolments' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

@@ -44,7 +44,10 @@ npm run db:migrate
 ### Authentication
 
 - `bcryptjs` + **OTP** flow for first-time login / verification
-- **No real JWT** — `pages/api/auth/login.ts` returns placeholder `mock-jwt-token-${user.id}`; session held in `LmsContext`, re-checked against DB. No `JWT_SECRET`.
+- **DB-backed session tokens** (2026-08): login issues an opaque `lms_…` token; only its SHA-256 hash is stored in `user_session` (30-day expiry, revoked on logout/password change). Legacy `mock-jwt-token-*` values are rejected. Core: `lib/auth/session.ts`, `lib/auth/requireRole.ts`.
+- **Every API route is wrapped in `withAuth()`/`withServiceAuth()`** (`lib/auth/withAuth.ts`) except an explicit public allowlist (login screen, OAuth callbacks, asset serving, webhook-token routes). `scripts/check-api-auth.js` (runs in `npm run lint`) fails if a new route ships without auth — add public routes to its allowlist deliberately.
+- **Machine callers** (in-process scheduler, OpenClaw agents, other tenant systems) authenticate with `x-api-key: $EXTERNAL_API_KEY_FOR_CLAWDBOT` (or `SCHEDULER_SECRET`) on any route; `NEXT_PUBLIC_SCHEDULER_SECRET` is never accepted (client-bundle-exposed).
+- **Client side**: `lib/clientAuthFetch.ts` (installed in `_app.tsx`) injects the Bearer header on every same-origin `/api/` fetch and clears auth + reloads on 401 — new fetch call sites need no auth code.
 
 ### Roles
 

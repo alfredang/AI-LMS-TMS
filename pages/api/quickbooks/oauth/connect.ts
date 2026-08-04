@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../../lib/db';
 import { getQboRedirectUri } from '../../../../lib/quickbooks/qboRedirect';
@@ -10,7 +11,7 @@ import { getQboRedirectUri } from '../../../../lib/quickbooks/qboRedirect';
 const QBO_AUTH_URL = 'https://appcenter.intuit.com/connect/oauth2';
 const SCOPES = 'com.intuit.quickbooks.accounting';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -39,3 +40,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   res.redirect(authUrl);
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

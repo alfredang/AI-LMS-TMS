@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -5,7 +6,7 @@ import pool from '../../../lib/db';
  * API endpoint to check if a user is the last member of their training provider organization
  * GET /api/training-provider/check-last-member?userId=<uuid>
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'GET') {
         return res.status(405).json({ success: false, message: 'Method not allowed' });
     }
@@ -69,3 +70,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
     }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider'] });

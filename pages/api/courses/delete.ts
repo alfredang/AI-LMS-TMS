@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import fs from 'fs';
@@ -29,7 +30,7 @@ const deleteFile = (filePath: string) => {
     }
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
     // Set CORS headers
     setCorsHeaders(res);
 
@@ -182,3 +183,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
     }
 }
+
+export default withAuth(handler);

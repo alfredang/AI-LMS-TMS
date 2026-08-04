@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../../lib/db';
 import { getLocalYMD } from '../../../../lib/dateHelpers';
@@ -34,7 +35,7 @@ interface LocalCourseRunDTO {
   courseTitle: string | null;
 }
 
-export default async function handler(
+async function handler(
   req: NextApiRequest,
   res: NextApiResponse<{ success: boolean; data?: LocalCourseRunDTO | null; error?: string }>
 ) {
@@ -108,3 +109,5 @@ export default async function handler(
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

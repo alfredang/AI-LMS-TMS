@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureCompanyApplicationsTable } from '../../../lib/companyApplicationsTable';
@@ -57,7 +58,7 @@ function makeDedupKey(row: Record<string, string>): DedupKey | null {
   return { traineeNric, employerUen, courseTitle, startDate };
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ message: 'Method not allowed' });
 
   const rows = (req.body?.rows ?? []) as Array<Record<string, string>>;
@@ -220,3 +221,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ message: err?.message || 'Failed to insert company applications' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

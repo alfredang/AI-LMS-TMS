@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { ensureSkillCodeTable, resolveAndCacheSkillCodes, upsertSkillCodes } from '../../../lib/ssg/courseSkillCode';
 
@@ -11,7 +12,7 @@ import { ensureSkillCodeTable, resolveAndCacheSkillCodes, upsertSkillCodes } fro
  *
  * The value is stable per course (its SSG registration), so caching is safe; see lib/ssg/courseSkillCode.ts.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     await ensureSkillCodeTable();
 
@@ -51,3 +52,5 @@ async function getCachedAll(): Promise<Record<string, string>> {
   for (const row of r.rows) map[row.course_code] = row.skill_code;
   return map;
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

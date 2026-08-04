@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { pushTrainerToTpgForRun, clearTrainerOnTpgForRun } from '../../../lib/ssg/pushTrainerToTpgForRun';
@@ -13,7 +14,7 @@ import { pushTrainerToTpgForRun, clearTrainerOnTpgForRun } from '../../../lib/ss
  * already be a local course_run_trainer and have an NRIC for the push to succeed (pushTrainerToTpgForRun
  * reports the failure reason otherwise).
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
   const { courseRunId, action, email } = (req.body || {}) as { courseRunId?: string; action?: string; email?: string };
   if (!courseRunId) return res.status(400).json({ success: false, error: 'courseRunId is required' });
@@ -37,3 +38,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: err?.message || 'Failed to update TPG trainer' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { generateBrochure } from '../../../lib/cw-brochure';
 import path from 'path';
@@ -13,7 +14,7 @@ function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9_\-. ]/g, '').substring(0, 80).trim();
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -57,3 +58,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: error.message || 'Failed to generate brochure' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

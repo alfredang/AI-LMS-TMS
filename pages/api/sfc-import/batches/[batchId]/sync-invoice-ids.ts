@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@/lib/db';
 import { requireFinanceOrAdmin } from '@/lib/services/grantImport/requireFinanceOrAdmin';
@@ -55,7 +56,7 @@ async function qbFetchAllInvoices(app: string): Promise<Array<{ id: string; docN
   return all;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ success: false, error: 'Method not allowed' });
@@ -235,3 +236,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: msg });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

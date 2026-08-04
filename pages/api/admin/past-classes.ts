@@ -1,10 +1,11 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
 // GET /api/admin/past-classes
 // Returns all course runs whose end_date is in the past (no trainer filter).
 // Used by the admin Past Attendance view.
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
@@ -32,3 +33,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

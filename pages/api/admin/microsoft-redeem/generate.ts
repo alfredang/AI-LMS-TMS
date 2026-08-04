@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 /**
  * POST /api/admin/microsoft-redeem/generate
  *
@@ -15,7 +16,7 @@ export const config = {
   maxDuration: 300,
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method Not Allowed' });
   }
@@ -40,3 +41,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .json({ ok: false, error: err?.message || 'Code generation failed' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

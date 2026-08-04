@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import fs from 'fs';
@@ -6,7 +7,7 @@ import { ensureCourseAnnouncementTable } from '../../../lib/course-announcement-
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
     await ensureCourseAnnouncementTable();
 
     if (req.method === 'GET') {
@@ -79,3 +80,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader('Allow', ['GET', 'DELETE']);
     return res.status(405).json({ success: false, message: `Method ${req.method} Not Allowed` });
 }
+
+export default withAuth(handler);

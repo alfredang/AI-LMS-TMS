@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '../../../lib/db';
@@ -16,7 +17,7 @@ function stripPrefixes(title: string): string {
 
 // Clean NextJS handler
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const { getGoogleCredentials } = await import('../../../lib/google-auth/googleAuth');
     const credentials = await getGoogleCredentials(pool as any);
@@ -135,3 +136,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({ error: error.message, stack: error.stack });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

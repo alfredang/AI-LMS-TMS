@@ -1,7 +1,8 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   const client = await pool.connect();
   try {
     if (req.method === 'GET') {
@@ -94,3 +95,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     client.release();
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

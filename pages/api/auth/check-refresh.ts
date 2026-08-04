@@ -1,9 +1,10 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
 // GET ?userId=X&since=ISO_TIMESTAMP
 // Returns { refresh: true } if the learner's enrollments changed since `since`
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).end();
 
   const { userId, since } = req.query;
@@ -25,3 +26,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ refresh: false });
   }
 }
+
+export default withAuth(handler);

@@ -1,8 +1,9 @@
+import { withAuth } from '@lib/auth/withAuth';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
 import { NextApiRequest, NextApiResponse } from 'next';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   await cors(req, res);
 
   if (req.method === 'GET') {
@@ -62,3 +63,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.status(405).json({ success: false, error: 'Method not allowed' });
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider'] });

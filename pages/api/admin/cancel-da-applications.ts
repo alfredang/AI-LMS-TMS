@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { searchEnrolment, cancelEnrolment } from '../../../lib/ssg/services/enrolment-service';
@@ -68,7 +69,7 @@ function buildEnrolmentPayload(record: Record<string, any>, tpUen: string, tpCod
  * 3. For each record: cancel the enrolment via SSG
  * 4. Only update DB (application_status + enrolment_status) for records that succeeded
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
         return res.status(405).json({ success: false, error: 'Method not allowed' });
     }
@@ -285,3 +286,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
     }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

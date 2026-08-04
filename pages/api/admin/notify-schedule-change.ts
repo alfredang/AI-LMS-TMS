@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import {
   sendScheduleChangeNotification,
@@ -25,7 +26,7 @@ const isCancel = (t: ScheduleChangeType) => t === 'cancel' || t.endsWith('_cance
 const defaultSummary = (changeType: ScheduleChangeType, summary?: string) =>
   String(summary || (isCancel(changeType) ? 'Your class has been cancelled.' : 'Your class schedule has changed.'));
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     const { courseRunId, changeType, summary, reason, subject, includeTrainer } = req.query as Record<string, string>;
     if (!courseRunId) return res.status(400).json({ success: false, error: 'courseRunId is required' });
@@ -76,3 +77,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: err?.message || 'Failed to send notifications' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

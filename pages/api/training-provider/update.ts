@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import pool from '../../../lib/db';
 import { IncomingForm, File, Fields, Files } from 'formidable';
 import fs from 'fs';
@@ -209,7 +210,7 @@ const saveUploadedFile = async (file: File, userId: string, fieldName: string): 
   return `/uploads/training_provider/${folderName}/${fileName}`;
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS
   if (cors(req, res)) {
     return; // Preflight request handled
@@ -944,3 +945,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider'] });

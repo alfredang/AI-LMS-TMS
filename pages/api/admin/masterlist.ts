@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -57,7 +58,7 @@ const MIGRATE_COLUMNS = [
   `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS payment_mode_color text`,
 ];
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     await pool.query(ENSURE_TABLE);
     for (const sql of MIGRATE_COLUMNS) await pool.query(sql);
@@ -207,3 +208,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
   return res.status(405).json({ success: false, error: 'Method not allowed' });
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

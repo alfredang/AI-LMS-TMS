@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import {
@@ -14,7 +15,7 @@ import {
  *
  * Manages the accept and decline follow-up email templates.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   await ensureTrainerInvitationTemplateColumns((sql) => pool.query(sql));
 
   if (req.method === 'GET') {
@@ -71,3 +72,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.status(405).json({ success: false, error: 'Method not allowed' });
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider'] });

@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { BILLING_ENR_NORM_SQL } from '../../../lib/billing/canonicalEnrolmentRef';
@@ -9,7 +10,7 @@ import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
  * Each enrollment can have: pro_forma_url, company_invoice_url, personal_invoice_url, receipt_url
  * Each document type has its own invoice number column.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -176,3 +177,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

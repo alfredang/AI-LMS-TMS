@@ -1,7 +1,8 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const { webhookId, limit = '50', offset = '0' } = req.query;
@@ -18,3 +19,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Internal error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider'] });

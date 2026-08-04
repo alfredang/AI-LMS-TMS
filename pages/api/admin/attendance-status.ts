@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getLearnerAttendance } from '../../../lib/services/learnerAttendance';
@@ -10,7 +11,7 @@ import { getLearnerAttendance } from '../../../lib/services/learnerAttendance';
  * course_attendance (QR/TPG digital + manual marks), which is more complete than TPG alone. Used by
  * the Submit/Update Assessment views.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
   const courseRunId = String(req.query.courseRunId || '').trim();
@@ -45,3 +46,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: err?.message || 'Internal server error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

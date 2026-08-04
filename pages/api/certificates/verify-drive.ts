@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { google, drive_v3 } from 'googleapis';
 
@@ -19,7 +20,7 @@ function extractFileId(url: string): string | null {
     return match ? match[1] : null;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'GET') {
         return res.status(405).json({ success: false, error: 'Method not allowed' });
     }
@@ -95,3 +96,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
     }
 }
+
+export default withAuth(handler);

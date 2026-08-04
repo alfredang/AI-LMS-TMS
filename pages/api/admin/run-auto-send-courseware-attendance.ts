@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { runAutomation } from '../../api/external/auto-send-courseware-attendance';
 
@@ -5,7 +6,7 @@ import { runAutomation } from '../../api/external/auto-send-courseware-attendanc
  * POST /api/admin/run-auto-send-courseware-attendance
  * Admin "Run Now" trigger for the Auto Send Courseware and Attendance cron.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
@@ -16,3 +17,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

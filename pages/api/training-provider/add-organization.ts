@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
@@ -65,7 +66,7 @@ const saveLogoFile = async (file: File, providerId: string, companyName: string)
   return `/uploads/training_provider/company_logo/${fileName}`;
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (cors(req, res)) return;
 
   if (req.method !== 'POST') {
@@ -429,3 +430,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider'] });

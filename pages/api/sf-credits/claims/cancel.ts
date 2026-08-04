@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../../lib/ssg/utils/http-utils';
@@ -7,7 +8,7 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../../lib/ssg/
  * Cancel a SkillsFuture Credit claim via SSG API (v2).
  * Body: { claimId, nric, claimCancelCode, app? }
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -69,3 +70,5 @@ async function getOAuthToken(baseUrl: string, clientId: string, clientSecret: st
   const data = await resp.json();
   return data.access_token;
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

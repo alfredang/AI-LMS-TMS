@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
@@ -23,7 +24,7 @@ function extractRaCode(qrCodeLink: string | undefined): string | null {
   return parts[parts.length - 1] || null;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -168,3 +169,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     client.release();
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

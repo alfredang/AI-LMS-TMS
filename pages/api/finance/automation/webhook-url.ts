@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getFinanceAutomationAction } from '../../../../lib/config/financeAutomationActions';
 import {
@@ -14,7 +15,7 @@ function isLikelyHttpsUrl(s: string): boolean {
   }
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     const actionId = typeof req.query.actionId === 'string' ? req.query.actionId : '';
     const def = getFinanceAutomationAction(actionId);
@@ -51,3 +52,4 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

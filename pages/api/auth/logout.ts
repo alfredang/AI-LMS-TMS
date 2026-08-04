@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { cors } from '../../../lib/cors';
+import { revokeSession, SESSION_TOKEN_PREFIX } from '../../../lib/auth/session';
 
 interface LogoutResponse {
   success: boolean;
@@ -18,14 +19,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse<LogoutResponse>
   }
 
   try {
-    console.log('🚪 User logout requested');
-    
-    // In a real app, you would:
-    // 1. Invalidate the JWT token
-    // 2. Clear any server-side sessions
-    // 3. Log the logout event
-    
-    console.log('✅ Logout successful');
+    // Revoke the server-side session for the presented token, if any.
+    const header = req.headers.authorization;
+    if (header && header.toLowerCase().startsWith('bearer ')) {
+      const token = header.slice(7).trim();
+      if (token.startsWith(SESSION_TOKEN_PREFIX)) {
+        await revokeSession(token);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Logged out successfully'

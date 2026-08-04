@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { DEFAULT_FEEDBACK_FORM_SECTIONS, DEFAULT_FEEDBACK_FORM_TITLE } from '../../../lib/feedbackFormDefaults';
@@ -7,7 +8,7 @@ async function resolveProviderId(): Promise<string | null> {
   return r.rows[0]?.id ?? null;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     if (req.method === 'GET') {
       const providerId = await resolveProviderId();
@@ -91,3 +92,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
@@ -92,7 +93,7 @@ async function findDriveFileIdByTrainerName(trainerName: string): Promise<string
   return fileId;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
@@ -121,3 +122,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.redirect(307, DEFAULT_TRAINER_AVATAR);
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

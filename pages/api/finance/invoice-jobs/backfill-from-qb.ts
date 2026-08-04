@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@/lib/db';
 import { ensureInvoiceJobsTable } from '@/lib/services/invoiceJobs';
@@ -75,7 +76,7 @@ function isCustomerInvoiceDocNumber(docNumber: string | null | undefined): boole
  * Pass 3 (bulk scan): enrolments still missing a done invoice_jobs entry
  *   → fetch all QB invoices, match by the last-6-digits suffix in DocNumber (TC26-0315-{last6}).
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ success: false, error: 'Method not allowed' });
@@ -260,3 +261,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: msg });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 /**
  * GET /api/admin/microsoft-redeem/status
  *
@@ -6,7 +7,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getStoredSession } from '../../../../lib/microsoft-redeem/db';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ ok: false, error: 'Method Not Allowed' });
   }
@@ -24,3 +25,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .json({ ok: false, error: err?.message || 'Failed to read session status' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

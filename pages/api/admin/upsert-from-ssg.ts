@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 /**
  * POST /api/admin/upsert-from-ssg
  *
@@ -902,7 +903,7 @@ async function fetchAndDiffEnrolments(
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     return res.status(200).end();
@@ -1102,3 +1103,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

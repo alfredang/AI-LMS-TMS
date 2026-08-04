@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../../lib/ssg/utils/http-utils';
@@ -6,7 +7,7 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../../lib/ssg/
  * GET /api/sf-credits/claims/view?claimId=xxx&nric=xxx&app=app1
  * View SkillsFuture Credit claim details via SSG API (v2).
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -67,3 +68,5 @@ async function getOAuthToken(baseUrl: string, clientId: string, clientSecret: st
   const data = await resp.json();
   return data.access_token;
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

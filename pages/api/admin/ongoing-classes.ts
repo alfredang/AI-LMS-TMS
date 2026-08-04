@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -28,7 +29,7 @@ const ensureJunctionTable = async () => {
   await pool.query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS tpg_sync_status TEXT`);
 };
 
-export default async function handler(
+async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -360,3 +361,5 @@ export default async function handler(
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });
