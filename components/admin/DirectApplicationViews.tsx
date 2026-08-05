@@ -16,7 +16,9 @@ const TPG_JOB_KEY = 'lms.tpgConfirm.jobId';
  * inlines process.env.NODE_ENV at build time, so this is a compile-time constant
  * in the client bundle — the deployed build simply never contains the card.
  */
-const tpgAvailable = process.env.NODE_ENV !== 'production';
+const tpgAvailable =
+    process.env.NODE_ENV !== 'production' ||
+    process.env.NEXT_PUBLIC_TPG_SERVER_BROWSER === 'true';
 
 /** Where the operator's own LMS serves this page (npm run dev uses port 3000). */
 const LOCAL_LMS_TPG_URL = 'http://localhost:3000/?adminPage=uploadDirectApplication&view=admin';

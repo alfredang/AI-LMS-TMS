@@ -24,13 +24,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const user = await requireRole(req, res, ['admin', 'developer', 'trainingProvider']);
   if (!user) return; // requireRole already sent 401/403
 
-  // Local-only guard: a headed Singpass browser cannot open on the prod container.
-  if (process.env.NODE_ENV === 'production') {
+  // A headed Singpass browser needs a display. On a dev machine that is the
+  // operator's own desktop. On the server it requires the image to ship
+  // Chromium + Xvfb + a way to view the screen, so it stays refused until that
+  // image is deployed and TPG_SERVER_BROWSER is switched on.
+  if (process.env.NODE_ENV === 'production' && process.env.TPG_SERVER_BROWSER !== 'true') {
     return res.status(400).json({
       success: false,
       error:
-        'TPGateway confirmation runs a headed browser for Singpass and only ' +
-        'works when the LMS is run locally (npm run dev), not on the server.',
+        'TPGateway confirmation runs a browser for Singpass, which this server ' +
+        'is not yet set up to display. Run it from the LMS on your own computer, ' +
+        'or ask an administrator to enable TPG_SERVER_BROWSER.',
     });
   }
 

@@ -20,7 +20,7 @@
  * Progress is reported to lib/tpg/jobStore so the LMS UI can poll it.
  */
 
-import { chromium, type BrowserContext, type Page } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import path from 'node:path';
 import fs from 'node:fs';
 import {
@@ -44,6 +44,13 @@ const LIST_URL =
   'https://ds.tpgateway.gov.sg/content/portal/en/training-provider/course-application.html';
 const DETAIL_URL = (id: string) =>
   `https://ds.tpgateway.gov.sg/content/portal/en/training-provider/course-application/detail.html?application=${id}`;
+
+/**
+ * Is this browser running on the shared server rather than an operator's own
+ * desktop? Set TPG_SERVER_BROWSER=true only on an image that ships Chromium and
+ * a virtual display; it also switches the profile from persistent to per-run.
+ */
+const SERVER_BROWSER = process.env.TPG_SERVER_BROWSER === 'true';
 
 const CA_ID_RE = /CA-\d{4}-\d{6}/g;
 
@@ -130,19 +137,32 @@ export function approveTpgConfirmJob(id: string): boolean {
 // --- driver -----------------------------------------------------------------
 
 async function runJob(id: string, opts: StartOptions): Promise<void> {
-  fs.mkdirSync(PROFILE_DIR, { recursive: true });
   _detailDumped = false;
   log(`job ${id} started — ${opts.dryRun ? 'DRY RUN' : 'LIVE'}${opts.max ? `, max ${opts.max}` : ''}`);
 
   let context: BrowserContext | null = null;
+  let browser: Browser | null = null;
   try {
     note(id, 'Opening the browser…');
-    context = await chromium.launchPersistentContext(PROFILE_DIR, {
-      headless: false,
-      viewport: null,
-      acceptDownloads: true,
-      args: ['--start-maximized'],
-    });
+    if (SERVER_BROWSER) {
+      // Shared server: every run starts signed out, so whoever pressed the
+      // button scans the Singpass QR with their own phone and TPGateway sees
+      // that individual. A persistent profile would leave one person's session
+      // behind for the next person's run to inherit — convenient on your own
+      // laptop, wrong on a machine several staff share.
+      browser = await chromium.launch({ headless: false, args: ['--start-maximized'] });
+      context = await browser.newContext({ viewport: null, acceptDownloads: true });
+    } else {
+      // Local operator: keep the profile so you are not re-scanning a QR on
+      // every run of your own machine.
+      fs.mkdirSync(PROFILE_DIR, { recursive: true });
+      context = await chromium.launchPersistentContext(PROFILE_DIR, {
+        headless: false,
+        viewport: null,
+        acceptDownloads: true,
+        args: ['--start-maximized'],
+      });
+    }
     const page = context.pages()[0] || (await context.newPage());
 
     // 1. Login ---------------------------------------------------------------
@@ -318,6 +338,16 @@ async function runJob(id: string, opts: StartOptions): Promise<void> {
       try {
         note(id, 'Closing the browser window.');
         await context.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    // launch() leaves the browser process alive after its context closes —
+    // unlike launchPersistentContext, where closing the context ends it. On a
+    // long-lived server that difference is a Chromium leak per run.
+    if (browser) {
+      try {
+        await browser.close();
       } catch {
         /* ignore */
       }
