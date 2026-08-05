@@ -53,6 +53,29 @@ const DETAIL_URL = (id: string) =>
  */
 const SERVER_BROWSER = process.env.TPG_SERVER_BROWSER === 'true';
 
+/**
+ * Send the browser's traffic out through somewhere else.
+ *
+ * TPGateway sits behind CloudFront, which refuses datacentre IP ranges — this
+ * server's requests are rejected before the portal sees them, while the same
+ * request from the training provider's own office connection is accepted. Point
+ * this at a proxy on that network and the run works from the server.
+ *
+ *   TPG_BROWSER_PROXY       socks5://host:1080  or  http://host:3128
+ *   TPG_BROWSER_PROXY_USER  optional
+ *   TPG_BROWSER_PROXY_PASS  optional
+ *
+ * Unset means direct, which is correct on a machine that TPGateway already
+ * accepts — an operator's own laptop.
+ */
+function browserProxy(): { server: string; username?: string; password?: string } | undefined {
+  const server = (process.env.TPG_BROWSER_PROXY || '').trim();
+  if (!server) return undefined;
+  const username = process.env.TPG_BROWSER_PROXY_USER || undefined;
+  const password = process.env.TPG_BROWSER_PROXY_PASS || undefined;
+  return { server, username, password };
+}
+
 const CA_ID_RE = /CA-\d{4}-\d{6}/g;
 
 /** Text that only appears once the operator is logged into the workspace. */
@@ -179,9 +202,15 @@ async function runJob(id: string, opts: StartOptions): Promise<void> {
       // removed. This is not evasion of a security control: the same authorised
       // person signs in with their own Singpass either way. It stops a WAF
       // heuristic from rejecting a legitimate session.
+      const proxy = browserProxy();
+      if (proxy) {
+        // Host only — never the credentials.
+        note(id, `Routing the browser through ${proxy.server.replace(/\/\/.*@/, '//')}`);
+      }
       browser = await chromium.launch({
         headless: true,
         args: ['--disable-blink-features=AutomationControlled'],
+        ...(proxy ? { proxy } : {}),
       });
       // Build the UA from the real browser version so every other Chrome hint
       // the page can read stays consistent with it.

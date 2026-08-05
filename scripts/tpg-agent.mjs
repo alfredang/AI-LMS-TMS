@@ -29,9 +29,32 @@
  *   site. The operator scans the Singpass QR from the picture shown to them in
  *   the LMS, so nobody has to be sitting at this machine.
  */
-const LIVE_URL = (process.env.LIVE_URL || '').replace(/\/$/, '');
-const LOCAL_URL = (process.env.LOCAL_URL || 'http://localhost:3000').replace(/\/$/, '');
-const AGENT_KEY = process.env.AGENT_KEY || '';
+import { readFileSync } from 'node:fs';
+
+/**
+ * Read settings from .env.local when they are not already in the environment.
+ *
+ * Windows has no `VAR=value command` prefix, so requiring the operator to
+ * export variables first is a trap on the machine this actually runs on. The
+ * key is in .env.local anyway — that file is gitignored, which is where a
+ * secret belongs.
+ */
+function fromEnvFile(name) {
+  try {
+    for (const line of readFileSync('.env.local', 'utf8').split(/\r?\n/)) {
+      const at = line.indexOf('=');
+      if (at < 0 || line.trimStart().startsWith('#')) continue;
+      if (line.slice(0, at).trim() === name) return line.slice(at + 1).trim();
+    }
+  } catch {
+    /* no .env.local — fall through to the missing-settings message */
+  }
+  return '';
+}
+
+const LIVE_URL = (process.env.LIVE_URL || fromEnvFile('LIVE_URL') || '').replace(/\/$/, '');
+const LOCAL_URL = (process.env.LOCAL_URL || fromEnvFile('LOCAL_URL') || 'http://localhost:3000').replace(/\/$/, '');
+const AGENT_KEY = process.env.AGENT_KEY || fromEnvFile('AGENT_KEY') || '';
 
 const POLL_IDLE_MS = 5000;
 const POLL_ACTIVE_MS = 1000;
@@ -144,7 +167,18 @@ async function runOne(live) {
   console.log(`[agent] finished ${live.id}`);
 }
 
+// Ctrl+C during an in-flight fetch does not always unwind the loop on Windows,
+// which leaves the operator with a window they cannot close. Exit on the signal
+// itself rather than relying on the loop noticing.
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGBREAK']) {
+  process.on(signal, () => {
+    console.log('\n[agent] stopping.');
+    process.exit(0);
+  });
+}
+
 console.log(`[agent] watching ${LIVE_URL} — browser will open via ${LOCAL_URL}`);
+console.log('[agent] press Ctrl+C to stop.');
 for (;;) {
   try {
     const { job } = await api(LIVE_URL, '/api/admin/tpg-confirm/next');
