@@ -13,6 +13,16 @@
  */
 
 export type TpgPhase =
+  /**
+   * Waiting for an office machine to pick this up.
+   *
+   * TPGateway sits behind CloudFront, which blocks datacentre IP ranges — the
+   * server can drive the browser perfectly well, but its requests never reach
+   * the portal. So the live site queues the run and an agent on the office
+   * network runs it from an address the portal accepts, reporting progress back
+   * into this same job.
+   */
+  | 'queued'
   | 'starting'
   | 'awaiting_login'
   | 'collecting'
@@ -176,6 +186,24 @@ export function pushLog(id: string, text: string): void {
     job.log.splice(0, job.log.length - MAX_LOG_LINES);
   }
   job.updatedAt = Date.now();
+}
+
+/**
+ * Hand the oldest waiting job to an agent, or null if there is nothing to do.
+ *
+ * Claiming flips it out of 'queued' in the same call, so two agents polling at
+ * once cannot both pick up the same run — Node is single-threaded, so this
+ * check-and-set cannot be interleaved.
+ */
+export function claimQueuedJob(): TpgJob | null {
+  const queued = [...jobs.values()]
+    .filter((j) => j.phase === 'queued')
+    .sort((a, b) => a.startedAt - b.startedAt)[0];
+  if (!queued) return null;
+  queued.phase = 'starting';
+  queued.message = 'Picked up — starting the browser…';
+  queued.updatedAt = Date.now();
+  return queued;
 }
 
 /** Queue an operator gesture for the driver to apply on its next poll. */
