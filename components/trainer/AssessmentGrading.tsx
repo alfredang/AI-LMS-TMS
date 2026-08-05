@@ -324,6 +324,24 @@ const AssessmentGrading: React.FC = () => {
               Student Grading Roster
             </h2>
             <div className="flex items-center gap-3">
+              {/* Per-method submission counts, e.g. WA 11/17 */}
+              {students.length > 0 && assessmentMethods.map(m => {
+                const info = METHOD_INFO[m] || { abbr: m, label: m };
+                const count = students.filter(s => s.submitted_assessments?.includes(m)).length;
+                return (
+                  <div
+                    key={m}
+                    title={`${info.label}: ${count} of ${students.length} learners submitted`}
+                    className={`text-xs px-3 py-1 rounded-full border ${
+                      count === students.length
+                        ? 'text-green-700 bg-green-50 border-green-200 dark:text-green-400 dark:bg-green-900/20 dark:border-green-800'
+                        : 'text-gray-500 bg-white border-gray-200 dark:bg-gray-700 dark:border-gray-600'
+                    }`}
+                  >
+                    <span className="font-semibold">{info.abbr}</span> {count}/{students.length}
+                  </div>
+                );
+              })}
               <div className="text-xs text-gray-500 bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
                 {students.length} Enrolments
               </div>
