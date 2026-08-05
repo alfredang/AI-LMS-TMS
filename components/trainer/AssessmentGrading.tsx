@@ -335,10 +335,11 @@ const AssessmentGrading: React.FC = () => {
                     className={`text-xs px-3 py-1 rounded-full border ${
                       count === students.length
                         ? 'text-green-700 bg-green-50 border-green-200 dark:text-green-400 dark:bg-green-900/20 dark:border-green-800'
-                        : 'text-gray-500 bg-white border-gray-200 dark:bg-gray-700 dark:border-gray-600'
+                        : 'text-green-600 bg-white border-gray-200 dark:text-green-400 dark:bg-gray-700 dark:border-gray-600'
                     }`}
                   >
-                    <span className="font-semibold">{info.abbr}</span> {count}/{students.length}
+                    <span className="font-semibold">{info.abbr}</span>{' '}
+                    <span className="font-semibold">{count}/{students.length}</span>
                   </div>
                 );
               })}
