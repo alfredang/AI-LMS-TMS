@@ -22,17 +22,27 @@ REM ===========================================================================
 REM ----------------------------- SETTINGS ------------------------------------
 REM The live LMS address:
 set LIVE_URL=https://ai-lms-tms.tertiaryinfo.tech
-
-REM The service key. Must match EXTERNAL_API_KEY_FOR_CLAWDBOT (or
-REM SCHEDULER_SECRET) on the live server. Ask whoever manages the server.
-set AGENT_KEY=PUT-THE-KEY-HERE
 REM ---------------------------------------------------------------------------
 
 cd /d "%~dp0.."
 
-if "%AGENT_KEY%"=="PUT-THE-KEY-HERE" (
+REM The key is read from .env.local rather than kept here, because this file is
+REM in git and that one is not — a secret pasted here would end up published.
+REM Add this line to .env.local (same value as EXTERNAL_API_KEY_FOR_CLAWDBOT on
+REM the live server):
+REM     AGENT_KEY=...
+for /f "usebackq tokens=1,* delims==" %%a in (".env.local") do (
+  if /i "%%a"=="AGENT_KEY" set AGENT_KEY=%%b
+)
+
+if "%AGENT_KEY%"=="" (
   echo.
-  echo   Set AGENT_KEY inside this file first ^(see SETTINGS near the top^).
+  echo   AGENT_KEY is missing from .env.local
+  echo.
+  echo   Copy EXTERNAL_API_KEY_FOR_CLAWDBOT from the live server's settings
+  echo   in Coolify, then add this line to .env.local:
+  echo.
+  echo       AGENT_KEY=the-value-you-copied
   echo.
   pause
   exit /b 1

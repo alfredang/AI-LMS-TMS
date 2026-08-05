@@ -171,7 +171,35 @@ function isFinished(job: TpgJob): boolean {
  * confirmed. So a second start is refused rather than left to crash.
  */
 export function getActiveJob(): TpgJob | undefined {
-  return [...jobs.values()].find((j) => !isFinished(j));
+  return [...jobs.values()].find((j) => !isFinished(j) && !isStale(j));
+}
+
+/**
+ * How long a run may go unreported before we treat its driver as gone.
+ *
+ * Generous, because a healthy run can be quiet: it may be parked waiting for
+ * someone to finish Singpass or approve a batch. Those states are excluded
+ * below, so this only catches a driver that actually vanished — an agent whose
+ * machine slept, a dev server restarted mid-run.
+ */
+const STALE_AFTER_MS = 90_000;
+
+/**
+ * A job nobody is driving any more.
+ *
+ * Without this, an agent that dies mid-run leaves its job active forever:
+ * cancel is cooperative and has nobody to hear it, and getActiveJob() then
+ * refuses every later run. One crashed agent would jam the feature until the
+ * container restarted.
+ */
+function isStale(job: TpgJob): boolean {
+  if (isFinished(job)) return false;
+  // Waiting on a person is not staleness — they may be finding their phone.
+  if (job.phase === 'queued' || job.phase === 'awaiting_login' || job.phase === 'awaiting_approval') {
+    return false;
+  }
+  if (job.needsOperator) return false;
+  return Date.now() - job.updatedAt > STALE_AFTER_MS;
 }
 
 /** Keep only the tail — the panel shows a handful of lines and this is memory. */
@@ -245,13 +273,19 @@ export function requestCancel(id: string): boolean {
   if (!job) return false;
   if (isFinished(job)) return false;
 
-  // A queued run has no driver watching the flag — nothing has picked it up
-  // yet — so a cooperative cancel would leave it hanging at "Stopping…"
-  // forever. There is also nothing half-done to protect, so end it here.
-  if (job.phase === 'queued') {
+  // Cancel is normally cooperative: the driver notices the flag at a safe
+  // point, so a confirmation in flight is never abandoned half-done on
+  // TPGateway. That only works if a driver is still listening. A queued run has
+  // not been picked up, and a stale one has lost whoever was driving it — in
+  // both cases nobody will ever read the flag, so end the job here instead of
+  // leaving the operator stuck at "Stopping…".
+  if (job.phase === 'queued' || isStale(job)) {
+    const neverStarted = job.phase === 'queued';
     job.cancelRequested = true;
     job.phase = 'cancelled';
-    job.message = 'Cancelled before it started. Nothing was confirmed.';
+    job.message = neverStarted
+      ? 'Cancelled before it started. Nothing was confirmed.'
+      : 'Stopped — the machine running it stopped reporting. Anything already confirmed on TPGateway was still enrolled.';
     job.updatedAt = Date.now();
     return true;
   }
