@@ -52,7 +52,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                AND NULLIF(TRIM(COALESCE(trainee_id, '')), '') IS NOT NULL
              )
            )
-           AND LOWER(application_status) IN ('confirm application', 'confirmed')
+           AND (LOWER(application_status) = 'confirm application' OR LOWER(application_status) LIKE 'confirmed%')
          ORDER BY created_at ASC`
       );
       ids = result.rows.map(r => r.id);

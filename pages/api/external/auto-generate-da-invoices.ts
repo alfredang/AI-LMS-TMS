@@ -142,7 +142,7 @@ async function sendPendingDaMainInvoiceEmails(runId: string): Promise<{
        AND ij.invoice_sent_at IS NULL
        AND ij.learner_email IS NOT NULL
        AND TRIM(ij.learner_email) <> ''
-       AND LOWER(COALESCE(da.application_status, '')) IN ('confirm application', 'confirmed')
+       AND (LOWER(COALESCE(da.application_status, '')) = 'confirm application' OR LOWER(COALESCE(da.application_status, '')) LIKE 'confirmed%')
      ORDER BY ij.updated_at ASC
      LIMIT 50`
   );
@@ -231,7 +231,7 @@ async function _runAutomationInner(): Promise<
     const result = await pool.query(
       `SELECT id, application_id
          FROM da_application
-        WHERE LOWER(COALESCE(application_status, '')) IN ('confirm application', 'confirmed')
+        WHERE (LOWER(COALESCE(application_status, '')) = 'confirm application' OR LOWER(COALESCE(application_status, '')) LIKE 'confirmed%')
           AND enrolment_id IS NOT NULL
           AND TRIM(enrolment_id) <> ''
           AND (
