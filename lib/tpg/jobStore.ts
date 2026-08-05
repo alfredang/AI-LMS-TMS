@@ -244,6 +244,18 @@ export function requestCancel(id: string): boolean {
   const job = jobs.get(id);
   if (!job) return false;
   if (isFinished(job)) return false;
+
+  // A queued run has no driver watching the flag — nothing has picked it up
+  // yet — so a cooperative cancel would leave it hanging at "Stopping…"
+  // forever. There is also nothing half-done to protect, so end it here.
+  if (job.phase === 'queued') {
+    job.cancelRequested = true;
+    job.phase = 'cancelled';
+    job.message = 'Cancelled before it started. Nothing was confirmed.';
+    job.updatedAt = Date.now();
+    return true;
+  }
+
   job.cancelRequested = true;
   job.message = 'Stopping…';
   job.updatedAt = Date.now();
