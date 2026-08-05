@@ -22,7 +22,19 @@ interface StudentData {
   certificate: string | null;
   source: 'manual' | 'ssg';
   is_competent: boolean;
+  submitted_assessments: string[];
 }
+
+// Abbreviations for each assessment method (WA = Written Exam, PP = Practical Exam, ...)
+const METHOD_INFO: Record<string, { abbr: string; label: string }> = {
+  writtenAssessment: { abbr: 'WA', label: 'Written Exam' },
+  practicalExam: { abbr: 'PP', label: 'Practical Exam' },
+  caseStudy: { abbr: 'CS', label: 'Case Study' },
+  rolePlay: { abbr: 'RP', label: 'Role Play' },
+  oralQuestioning: { abbr: 'OQ', label: 'Oral Questioning' },
+  project: { abbr: 'PJ', label: 'Project' },
+  assignment: { abbr: 'AS', label: 'Assignment' },
+};
 
 const AssessmentGrading: React.FC = () => {
   const { currentUser, pendingGradingCourseRunId, setPendingGradingCourseRunId } = useLms();
@@ -31,6 +43,7 @@ const AssessmentGrading: React.FC = () => {
   const [selectedCourseRunId, setSelectedCourseRunId] = useState('');
 
   const [students, setStudents] = useState<StudentData[]>([]);
+  const [assessmentMethods, setAssessmentMethods] = useState<string[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({});
   const [certVerification, setCertVerification] = useState<Record<string, { checking: boolean; exists?: boolean }>>({});
@@ -78,15 +91,17 @@ const AssessmentGrading: React.FC = () => {
     }
     setLoadingStudents(true);
     setCertSendResult(null);
-    fetch(`/api/trainer/class-students?courseRunId=${selectedCourseRunId}`)
+    fetch(`/api/trainer/class-students?courseRunId=${selectedCourseRunId}&withMeta=1`)
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) {
-          setStudents(data);
+        const list: StudentData[] = Array.isArray(data) ? data : data?.students;
+        if (Array.isArray(list)) {
+          setStudents(list);
+          setAssessmentMethods(Array.isArray(data?.assessment_methods) ? data.assessment_methods : []);
           // Default: select all learners for certificate sending
-          setSelectedForCert(new Set(data.map((s: StudentData) => s.enrolment_id)));
+          setSelectedForCert(new Set(list.map((s: StudentData) => s.enrolment_id)));
           // Verify certificates against Google Drive
-          verifyCertificates(data);
+          verifyCertificates(list);
         }
       })
       .finally(() => setLoadingStudents(false));
@@ -252,11 +267,12 @@ const AssessmentGrading: React.FC = () => {
 
       // Refresh student list to show updated cert status
       if (data.success) {
-        const refreshRes = await fetch(`/api/trainer/class-students?courseRunId=${selectedCourseRunId}`);
+        const refreshRes = await fetch(`/api/trainer/class-students?courseRunId=${selectedCourseRunId}&withMeta=1`);
         const refreshData = await refreshRes.json();
-        if (Array.isArray(refreshData)) {
-          setStudents(refreshData);
-          verifyCertificates(refreshData);
+        const refreshList: StudentData[] = Array.isArray(refreshData) ? refreshData : refreshData?.students;
+        if (Array.isArray(refreshList)) {
+          setStudents(refreshList);
+          verifyCertificates(refreshList);
         }
       }
     } catch (err: any) {
@@ -404,6 +420,11 @@ const AssessmentGrading: React.FC = () => {
                 <span className="text-xs text-gray-500 dark:text-gray-400">
                   {selectedForCert.size === students.length ? 'Deselect All' : 'Select All'}
                 </span>
+                {assessmentMethods.length > 0 && (
+                  <span className="ml-auto text-[10px] text-gray-400 dark:text-gray-500">
+                    Submission status: {assessmentMethods.map(m => `${(METHOD_INFO[m] || { abbr: m }).abbr} = ${(METHOD_INFO[m] || { label: m }).label}`).join(' · ')}
+                  </span>
+                )}
               </div>
 
               <ul className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -441,6 +462,36 @@ const AssessmentGrading: React.FC = () => {
                       </div>
 
                       <div className="flex items-center space-x-4">
+                        {/* Assessment submission status — ticked when the learner has submitted that method */}
+                        {assessmentMethods.length > 0 && (
+                          <div className="flex items-center gap-3 pr-3 border-r border-gray-200 dark:border-gray-700">
+                            {assessmentMethods.map(m => {
+                              const info = METHOD_INFO[m] || { abbr: m, label: m };
+                              const submitted = student.submitted_assessments?.includes(m);
+                              return (
+                                <label
+                                  key={m}
+                                  title={`${info.label}: ${submitted ? 'Submitted' : 'Not submitted'}`}
+                                  className="flex items-center gap-1 cursor-default select-none"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={!!submitted}
+                                    readOnly
+                                    tabIndex={-1}
+                                    className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 accent-green-600 pointer-events-none"
+                                  />
+                                  <span className={`text-[10px] font-semibold ${
+                                    submitted ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
+                                  }`}>
+                                    {info.abbr}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+
                         {/* Certificate Status Badge — verified against Google Drive */}
                         {student.is_competent && (() => {
                           const verification = certVerification[sId];
