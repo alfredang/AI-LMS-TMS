@@ -254,7 +254,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | **Framework** | Next.js 16 (Pages Router, TypeScript) |
 | **Frontend** | React 18, Tailwind CSS |
 | **Database** | PostgreSQL 17 |
-| **Authentication** | bcryptjs password hashing + OTP flow (no JWT — session held client-side and re-checked against DB) |
+| **Authentication** | bcryptjs password hashing + OTP flow; server-side session tokens (hashed at rest in `user_session`) with role-based authorization on every API route |
 | **AI Integration** | Claude Agent SDK, Anthropic SDK, Google Generative AI (Gemini), OpenAI, MiniMax, Kimi, DeepSeek |
 | **Finance Integration** | QuickBooks Online (OAuth2), Bizfile API |
 | **File Uploads** | Multer, Google Drive API |
@@ -269,6 +269,11 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | **E-commerce** | Magento integration |
 
 ## API Documentation
+
+> **All API routes require authentication.** Every endpoint below is guarded except a
+> small public allowlist (login/OTP, OAuth callbacks, static asset serving, the
+> tokenised webhook route and the public feedback form). See
+> [API Authentication](#api-authentication) for how to authenticate.
 
 ### External APIs (x-api-key authenticated)
 
@@ -288,10 +293,43 @@ POST /api/external/create-course-run      # Create a new course run (+ sessions)
 ### Authentication
 
 ```
-POST /api/auth/login              # Login (password or OTP)
+POST /api/auth/login              # Login (password or OTP) → returns a session token
 POST /api/auth/send-otp           # Send OTP to email
-PUT  /api/auth/update-password    # Update user password
+GET  /api/auth/verify             # Validate the current session token
+POST /api/auth/logout             # Revoke the current session token
+PUT  /api/auth/update-password    # Update password (own account, or admin for any)
 ```
+
+### API Authentication
+
+Two ways to authenticate, both required as of the August 2026 lockdown:
+
+**1. User sessions (browser/UI).** `POST /api/auth/login` returns an opaque
+`lms_…` session token. Send it as a bearer token on every request:
+
+```
+Authorization: Bearer lms_<token>
+```
+
+Tokens are server-side records — only a SHA-256 hash is stored, they expire after
+30 days, and they are revoked on logout, password change and admin reset. The
+browser app does this automatically via the global fetch interceptor in
+`lib/clientAuthFetch.ts`, so UI code needs no per-call auth handling.
+
+**2. Service key (machines).** Schedulers, agents and other back-end systems send a
+server-side API key instead, valid on any route:
+
+```
+x-api-key: $EXTERNAL_API_KEY_FOR_CLAWDBOT
+```
+
+Authorization is role-based (Admin, Training Provider, Finance, Payroll, Trainer,
+Developer, Learner); a request with a valid session but the wrong role gets `403`.
+Unauthenticated requests get `401`.
+
+`scripts/check-api-auth.js` runs as part of `npm run lint` and fails the build if a
+new route is added without authentication — new public routes must be added to its
+allowlist deliberately.
 
 ### Courses & Course Runs
 
@@ -359,15 +397,15 @@ ai-lms-tms/
 │
 ├── pages/                      # Next.js pages & API routes
 │   ├── api/
-│   │   ├── admin/              # Admin operations (~58 endpoints)
-│   │   ├── external/           # External bot APIs (8 endpoints)
-│   │   ├── auth/               # Authentication (7 endpoints)
-│   │   ├── courses/            # Course management (17 endpoints)
+│   │   ├── admin/              # Admin operations (~189 endpoints)
+│   │   ├── external/           # External/machine APIs (~69 endpoints)
+│   │   ├── auth/               # Authentication (9 endpoints)
+│   │   ├── courses/            # Course management (25 endpoints)
 │   │   ├── enrolment/          # Enrolment operations
 │   │   ├── assessments/        # Assessment CRUD & SSG
 │   │   ├── grading/            # Grading system
 │   │   ├── trainer/            # Trainer operations
-│   │   ├── training-provider/  # TP management (13 endpoints)
+│   │   ├── training-provider/  # TP management (~38 endpoints)
 │   │   ├── profile/            # User profiles
 │   │   ├── ssg/                # SSG API proxies
 │   │   ├── ai/                 # AI endpoints
@@ -377,11 +415,17 @@ ai-lms-tms/
 │   └── index.tsx               # Main SPA entry
 │
 ├── lib/                        # Core libraries
+│   ├── auth/                   # API authentication & authorization
+│   │   ├── withAuth.ts         # Route guard wrapper (roles + service key)
+│   │   ├── requireRole.ts      # Session/role resolution
+│   │   ├── session.ts          # Session token issue/revoke (hashed at rest)
+│   │   └── serviceKey.ts       # Machine (x-api-key) authentication
 │   ├── services/               # Business logic services
-│   │   ├── authService.ts      # Authentication logic
+│   │   ├── authService.ts      # Client-side auth state
 │   │   ├── certificateService.ts # Certificate generation
 │   │   ├── geminiService.ts    # AI integration
 │   │   └── ...
+│   ├── clientAuthFetch.ts      # Browser fetch interceptor (bearer + 401 logout)
 │   ├── ssg/                    # SSG API utilities
 │   ├── config.ts               # Environment configuration
 │   └── db.ts                   # PostgreSQL connection pool
@@ -534,8 +578,11 @@ NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY=your-gemini-api-key
 # SSG API Integration
 SSG_API_BASE_URL=https://api.ssg-wsg.sg
 
-# External API Authentication
+# External / machine API Authentication
+# Required for schedulers, agents and back-end systems to call the API.
+# Sent as the `x-api-key` header; must be a server-side secret (never NEXT_PUBLIC_*).
 EXTERNAL_API_KEY_FOR_CLAWDBOT=your-external-api-key
+SCHEDULER_SECRET=your-scheduler-secret
 DIRECT_APPLICATION_EMAIL_INGEST_TOKEN=your-direct-application-email-ingest-token
 ```
 

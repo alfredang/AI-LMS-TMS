@@ -146,9 +146,12 @@ After running the seed data, you can login with these test accounts:
 
 | Email | Role | Password |
 |-------|------|----------|
-| `admin@tertiaryinfotech.com` | Admin | `password123` |
-| `trainer@tertiaryinfotech.com` | Trainer | `password123` |
-| `learner@tertiaryinfotech.com` | Learner | `password123` |
+| `admin@example.com` | Admin | `$ADMIN_PASSWORD` (from your local `.env`) |
+| `trainer@example.com` | Trainer | `$ADMIN_PASSWORD` (from your local `.env`) |
+| `learner@example.com` | Learner | `$ADMIN_PASSWORD` (from your local `.env`) |
+
+> **Never reuse these locally-seeded credentials on a deployed instance.** Set a unique
+> `ADMIN_PASSWORD` per environment, and change it immediately after the first login.
 
 ---
 

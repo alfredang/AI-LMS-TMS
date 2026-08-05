@@ -2249,7 +2249,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         </div>
                                         {[
                                             { key: 'openClawGatewayUrl' as const, label: 'Live Gateway URL', placeholder: 'e.g. http://10.0.0.1:18789' },
-                                            { key: 'openClawLocalGatewayUrl' as const, label: 'Local Testing URL', placeholder: 'e.g. http://76.13.180.29:18789' },
+                                            { key: 'openClawLocalGatewayUrl' as const, label: 'Local Testing URL', placeholder: 'e.g. http://192.0.2.10:18789' },
                                             { key: 'openClawHooksPath' as const, label: 'Hooks Path', placeholder: 'e.g. /hooks' },
                                             { key: 'openClawAgentId' as const, label: 'Agent ID', placeholder: 'e.g. main' },
                                             { key: 'openClawCallbackUrl' as const, label: 'Callback URL', placeholder: 'e.g. https://your-app.example.com/api/openclaw/callback' },
@@ -3374,7 +3374,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     }))
                                 }
                                 className={inputClasses}
-                                placeholder="Enter default password (e.g. password123)"
+                                placeholder="Enter a strong default password (avoid common passwords)"
                             />
                         ) : (
                             <p className="font-mono text-sm">

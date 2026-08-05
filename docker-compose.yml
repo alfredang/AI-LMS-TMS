@@ -12,8 +12,9 @@ services:
       - .env
     environment:
       NODE_ENV: production
-      # Internal URL — app talks to the db container within the Docker network
-      # Public URL for external tools: postgresql://postgres:password123@76.13.180.29:6434/lmsdb?sslmode=disable
+      # Internal URL — app talks to the db container within the Docker network.
+      # External admin/DBA access is via SSH tunnel only (see CLAUDE.md); the DB
+      # is firewalled off the internet, so no public connection string is documented here.
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-password123}@db:5432/${DB_NAME:-lmsdb}?sslmode=disable
     volumes:
       # Persist uploaded files across container restarts and redeployments
@@ -53,7 +54,8 @@ services:
       - ./database/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
       - ./database/02-init-admin.sql:/docker-entrypoint-initdb.d/02-init-admin.sql
     ports:
-      # 6434 = public port on the server (e.g. 76.13.180.29:6434)
+      # 6434 = host port on the server (reachable only from the internal network
+      #        and the admin allowlist — see the DB firewall notes in CLAUDE.md)
       # 5432 = internal postgres port inside the container
       - "6434:5432"
     healthcheck:
