@@ -22,6 +22,7 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from './ssg/utils/http-uti
 import { getTrainingPartnerIdentifiers } from './trainingPartnerIdentifiers';
 import { buildEnrolmentPayload } from './ssg/buildEnrolmentPayload';
 import { searchEnrolment } from './ssg/services/enrolment-service';
+import { isEnrollableDaStatus } from './da-status';
 import {
   createDirectApplicationInvoice,
   type DaApplicationForInvoice,
@@ -44,8 +45,9 @@ import { shouldSendQboInvoiceEmailFromQuickBooks } from './services/qboInvoiceEm
 import { toDateOnlyIso } from './utils/dateOnly';
 import { google } from 'googleapis';
 import { getGoogleCredentials } from './google-auth/googleAuth';
-import { calendarWritesAllowed } from './calendar/calendarGuard';
+import { calendarWritesAllowed, calendarSkipReason } from './calendar/calendarGuard';
 import { getLocalYMD } from './dateHelpers';
+import { addDaLearnerToCalendar } from './google-calendar/da-calendar-sync';
 
 export type AutoEnrolStatus =
   | 'pending'
@@ -148,16 +150,76 @@ async function updateRow(
   );
 }
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Backoff between enrolment retries, one entry per retry.
+ *
+ * Front-loaded: SSG usually only needs a few seconds, so a flat 20s made every
+ * single-application run pay 20s it rarely needed. Later steps stay long for the
+ * genuinely slow cases. A batch run barely notices either way — by the time the
+ * last application is confirmed, the first has had minutes to propagate.
+ */
+const ENROLMENT_RETRY_DELAYS_MS = [8_000, 20_000, 40_000];
+const ENROLMENT_RETRY_ATTEMPTS = ENROLMENT_RETRY_DELAYS_MS.length;
+
+/**
+ * Is this SSG enrolment rejection worth retrying?
+ *
+ * Enrolling seconds after confirming on TPGateway routinely comes back
+ * "TGS-403 - Please verify particulars of this trainee" or "System is unable to
+ * process the request at this time", then succeeds unchanged a minute later —
+ * SSG simply hasn't propagated the trainee yet. Observed on every application
+ * confirmed through the TPGateway automation.
+ *
+ * Deliberately narrow: only explicit SSG *rejections*, where nothing was
+ * created. Timeouts and network errors are excluded — SSG may have created the
+ * enrolment despite the error, so those keep the existing recover-then-fail
+ * path rather than risking a second create.
+ */
+function isRetryableSsgEnrolmentError(message: string): boolean {
+  const m = (message || '').toLowerCase();
+  return (
+    m.includes('tgs-403') ||
+    m.includes('verify particulars') ||
+    m.includes('unable to process the request') ||
+    m.includes('try again later')
+  );
+}
+
+/**
+ * Record a failed pipeline step.
+ *
+ * Only 1 of the ~12 steps that call this IS the enrolment; the rest (invoice,
+ * Drive upload, grant/SFC invoice, billing sync) run *after* the learner is
+ * already enrolled with SSG. Stamping the row 'failed' for those said "not
+ * enrolled" about someone who demonstrably was — and because two pipelines can
+ * process the same row, a straggler's failure could also overwrite the status
+ * the winner had already set to 'enroled'.
+ *
+ * So the error is always recorded, but the status is only downgraded when the
+ * row has no real SSG enrolment reference. A post-enrolment failure keeps its
+ * status and surfaces through auto_enrol_error instead.
+ */
 async function markFailed(
   id: string,
   step: string,
   err: unknown
 ): Promise<void> {
   const message = err instanceof Error ? err.message : String(err);
-  await updateRow(id, {
-    auto_enrol_status: 'failed',
-    auto_enrol_error: `${step}: ${message}`.slice(0, 1000),
-  });
+  await pool.query(
+    `UPDATE da_application
+        SET auto_enrol_error = $2,
+            auto_enrol_status = CASE
+              WHEN NULLIF(TRIM(COALESCE(enrolment_id, '')), '') IS NOT NULL
+               AND UPPER(TRIM(COALESCE(enrolment_id, ''))) <> ALL(ARRAY['N/A','NA','-','MANUAL','NONE'])
+              THEN auto_enrol_status
+              ELSE 'failed'
+            END,
+            updated_at = NOW()
+      WHERE id = $1`,
+    [id, `${step}: ${message}`.slice(0, 1000)]
+  );
 }
 
 async function createNativeEnrolmentForPipeline(appId: string): Promise<void> {
@@ -460,127 +522,69 @@ function stripCalendarPrefixes(title: string): string {
     .trim();
 }
 
-async function addLearnerToCalendarEvent(
-  learnerEmail: string,
-  courseTitle: string,
-  courseStartDate: string | Date | null
-): Promise<boolean> {
-  if (!learnerEmail || !courseTitle) return false;
+/**
+ * Add a DA learner to their course-run calendar events.
+ *
+ * Uses addDaLearnerToCalendar — the same function the Add to Calendar button,
+ * da-enrol, enrolment-actions and the Excel upload all use. This pipeline was
+ * the only caller of a private title+date matcher, so an automatic add behaved
+ * differently from a manual one on the very same row. Now they agree, and the
+ * pipeline gains per-session matching.
+ *
+ * THE PAST-RUN GUARD IS NOT OPTIONAL. Unlike the old matcher, which could only
+ * find an existing event, addDaLearnerToCalendar CREATES a missing one
+ * (da-calendar-sync.ts events.insert). Without this check the nightly cron would
+ * create calendar events for course runs that finished long ago.
+ *
+ * Note the comparison: the equivalent guard in upload-da-applications.ts does
+ * `new Date(startDate) < getLocalYMD(...)`, comparing a Date to a
+ * 'YYYY-MM-DD' string. That coerces to NaN and is ALWAYS false, so that guard
+ * has never fired. Compare YMD strings on both sides instead.
+ */
+async function addDaLearnerToCalendarGuarded(
+  row: Record<string, any>,
+  appId: string,
+  applicationId: string
+): Promise<void> {
+  if (!row.trainee_email) return;
 
-  const tpRes = await pool.query(
-    `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
+  const crRes = await pool.query(
+    `SELECT id, start_date FROM course_run WHERE course_run_id = $1 LIMIT 1`,
+    [row.course_run_id]
   );
-  const tpRow = tpRes.rows[0];
-  if (!tpRow?.sync_google_calendar || !calendarWritesAllowed()) {
-    console.log(`📅 [calendar-attendee] sync_google_calendar is off — skipping`);
-    return false;
+  const courseRunUuid = crRes.rows[0]?.id || row.course_run_id;
+  const startDate = crRes.rows[0]?.start_date ?? row.course_start_date;
+
+  const runYmd = getLocalYMD(startDate);
+  const todayYmd = getLocalYMD(new Date());
+  if (runYmd && todayYmd && runYmd < todayYmd) {
+    console.log(
+      `⏭️  auto-enrol [${applicationId}] skipping calendar — course run ${row.course_run_id} started ${runYmd}`
+    );
+    return;
   }
 
-  // Verify the application is still active (not cancelled)
-  const activeAppRes = await pool.query(
-    `SELECT application_status FROM da_application 
-     WHERE LOWER(trainee_email) = LOWER($1) 
-       AND LOWER(course_title) = LOWER($2)
-       AND LOWER(application_status) IN ('confirmed', 'confirm application')
-     LIMIT 1`,
-    [learnerEmail, courseTitle]
+  const res = await addDaLearnerToCalendar(
+    row.trainee_email,
+    String(courseRunUuid),
+    row.course_title || '',
+    row.course_start_date,
+    row.course_reference_number,
+    row.course_run_id
   );
-  if (activeAppRes.rows.length === 0) {
-    console.log(`📅 [calendar-attendee] No active application for ${learnerEmail} in ${courseTitle} — skipping add`);
-    return false;
+  if (res.addedTo > 0) {
+    console.log(
+      `📅 auto-enrol [${applicationId}] added ${row.trainee_email} to ${res.addedTo}/${res.totalSessions} session(s)`
+    );
+    await updateRow(appId, { calendar_added: true });
   }
-
-  const credentials = await getGoogleCredentials(pool);
-
-  let calendarId = 'primary';
-  const calUrl = tpRow.google_calendar_url || '';
-  if (calUrl) {
-    const cidMatch = calUrl.match(/[?&]cid=([^&]+)/);
-    if (cidMatch) {
-      try {
-        calendarId = Buffer.from(cidMatch[1], 'base64').toString('utf-8');
-      } catch {
-        calendarId = cidMatch[1];
-      }
-    } else if (calUrl.includes('@')) {
-      calendarId = calUrl;
-    }
-  }
-
-  const oauth2Client = new google.auth.OAuth2(
-    credentials.clientId,
-    credentials.clientSecret,
-    'https://developers.google.com/oauthplayground'
-  );
-  oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-  let startDateIso: string;
-  if (!courseStartDate) return false;
-  if (courseStartDate instanceof Date) {
-    startDateIso = getLocalYMD(courseStartDate);
-  } else {
-    startDateIso = String(courseStartDate).slice(0, 10);
-  }
-
-  const dayBefore = new Date(startDateIso);
-  dayBefore.setDate(dayBefore.getDate() - 1);
-  const dayAfter = new Date(startDateIso);
-  dayAfter.setDate(dayAfter.getDate() + 2);
-
-  const eventsResponse = await calendar.events.list({
-    calendarId,
-    timeMin: dayBefore.toISOString(),
-    timeMax: dayAfter.toISOString(),
-    singleEvents: true,
-    maxResults: 200,
-  });
-
-  const events = eventsResponse.data.items || [];
-  const strippedCourseTitle = stripCalendarPrefixes(courseTitle).toLowerCase();
-
-  const matchedEvent = events.find(evt => {
-    const evtSummary = stripCalendarPrefixes(evt.summary || '').toLowerCase();
-    const titleMatch =
-      evtSummary.includes(strippedCourseTitle) ||
-      strippedCourseTitle.includes(evtSummary);
-    if (!titleMatch) return false;
-    const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
-    return evtDate === startDateIso;
-  });
-
-  if (!matchedEvent || !matchedEvent.id) {
-    console.log(`📅 [calendar-attendee] No matching event for "${courseTitle}" on ${startDateIso} — skipping`);
-    return false;
-  }
-
-  const existingAttendees = matchedEvent.attendees || [];
-  const emailLower = learnerEmail.trim().toLowerCase();
-  if (existingAttendees.some(a => (a.email || '').toLowerCase() === emailLower)) {
-    console.log(`📅 [calendar-attendee] ${learnerEmail} already in event "${matchedEvent.summary}" — no-op`);
-    return true;
-  }
-
-  await calendar.events.patch({
-    calendarId,
-    eventId: matchedEvent.id,
-    requestBody: {
-      attendees: [
-        ...existingAttendees,
-        { email: learnerEmail, responseStatus: 'needsAction' },
-      ],
-    },
-    sendUpdates: 'none',
-  });
-
-  console.log(`📅 [calendar-attendee] Added ${learnerEmail} to event "${matchedEvent.summary}" (${matchedEvent.id})`);
-  return true;
 }
+
 
 /**
  * Add a trainer to ALL calendar events for a course run.
  *
- * Strategy: find the first event by title + date (same as addLearnerToCalendarEvent),
+ * Strategy: find the first event by title + date,
  * extract the recurring event base ID, then fetch all sibling events with the same
  * base ID and patch them all.
  *
@@ -598,7 +602,11 @@ export async function addTrainerToCalendarEvent(
     `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
   );
   const tpRow = tpRes.rows[0];
-  if (!tpRow?.sync_google_calendar || !calendarWritesAllowed()) return result;
+  const removeSkip = calendarSkipReason(tpRow?.sync_google_calendar);
+  if (removeSkip) {
+    console.log(`📅 [calendar-remove] skipping — ${removeSkip}`);
+    return result;
+  }
 
   const credentials = await getGoogleCredentials(pool);
 
@@ -620,7 +628,7 @@ export async function addTrainerToCalendarEvent(
   oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
   const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-  // Step 1: Find first event by title + date (same logic as addLearnerToCalendarEvent)
+  // Step 1: Find first event by title + date
   let startDateIso: string;
   if (!courseStartDate) return result;
   if (courseStartDate instanceof Date) {
@@ -791,7 +799,7 @@ export async function processDirectApplication(
   const applicationId: string = row.application_id || '';
 
   const currentStatus = (row.application_status || '').toLowerCase();
-  if (currentStatus !== 'confirm application' && currentStatus !== 'confirmed' && !options?.forceInvoice) {
+  if (!isEnrollableDaStatus(currentStatus) && !options?.forceInvoice) {
     return {
       id: appId,
       applicationId,
@@ -862,40 +870,64 @@ export async function processDirectApplication(
       return null;
     };
 
-    try {
-      // SSG create-enrolment routinely exceeds the default 30s and aborts even
-      // though SSG created the record — give it 60s (mirrors /api/enrolment/create).
-      const parsed = await ssgEncryptedPost(ctx, '/tpg/enrolments', payload, 60000);
-      console.log(`📦 auto-enrol [${applicationId}]:`, JSON.stringify(parsed));
+    // Retry loop for SSG's propagation lag after a TPGateway confirmation. Only
+    // explicit rejections are retried (see isRetryableSsgEnrolmentError); every
+    // other outcome falls straight through to the recovery path below, exactly
+    // as before.
+    let enrolErr: unknown = null;
+    for (let attempt = 1; attempt <= ENROLMENT_RETRY_ATTEMPTS + 1; attempt++) {
+      try {
+        // SSG create-enrolment routinely exceeds the default 30s and aborts even
+        // though SSG created the record — give it 60s (mirrors /api/enrolment/create).
+        const parsed = await ssgEncryptedPost(ctx, '/tpg/enrolments', payload, 60000);
+        console.log(`📦 auto-enrol [${applicationId}]:`, JSON.stringify(parsed));
 
-      const errMsg = hasSsgError(parsed);
-      if (errMsg) {
-        if (errMsg.toLowerCase().includes('duplicate')) {
-          console.log(`ℹ️  auto-enrol [${applicationId}]: Duplicate detected in SSG, searching for existing enrolment...`);
-          const recovered = await recoverExistingEnrolment();
-          if (recovered) {
-            console.log(`✅ auto-enrol [${applicationId}]: Recovered duplicate enrolment reference: ${recovered}`);
-            enrolmentReference = recovered;
+        const errMsg = hasSsgError(parsed);
+        if (errMsg) {
+          if (errMsg.toLowerCase().includes('duplicate')) {
+            console.log(`ℹ️  auto-enrol [${applicationId}]: Duplicate detected in SSG, searching for existing enrolment...`);
+            const recovered = await recoverExistingEnrolment();
+            if (recovered) {
+              console.log(`✅ auto-enrol [${applicationId}]: Recovered duplicate enrolment reference: ${recovered}`);
+              enrolmentReference = recovered;
+            } else {
+              throw new Error(`Duplicate record found, but search failed to recover reference`);
+            }
           } else {
-            throw new Error(`Duplicate record found, but search failed to recover reference`);
+            throw new Error(errMsg);
           }
         } else {
-          throw new Error(errMsg);
+          enrolmentReference = extractEnrolmentReference(parsed);
         }
-      } else {
-        enrolmentReference = extractEnrolmentReference(parsed);
-      }
 
-      if (!enrolmentReference) {
-        throw new Error('no enrolment reference in SSG response');
-      }
+        if (!enrolmentReference) {
+          throw new Error('no enrolment reference in SSG response');
+        }
 
-      await updateRow(appId, {
-        enrolment_id: enrolmentReference,
-        enrolment_status: 'Confirmed',
-        auto_enrol_status: 'enroled',
-      });
-    } catch (err) {
+        await updateRow(appId, {
+          enrolment_id: enrolmentReference,
+          enrolment_status: 'Confirmed',
+          auto_enrol_status: 'enroled',
+        });
+        enrolErr = null;
+        break;
+      } catch (err) {
+        enrolErr = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (attempt <= ENROLMENT_RETRY_ATTEMPTS && isRetryableSsgEnrolmentError(msg)) {
+          const delay = ENROLMENT_RETRY_DELAYS_MS[attempt - 1];
+          console.log(
+            `⏳ auto-enrol [${applicationId}] attempt ${attempt}/${ENROLMENT_RETRY_ATTEMPTS + 1} — SSG not ready yet (${msg}); retrying in ${delay / 1000}s`
+          );
+          await sleep(delay);
+          continue;
+        }
+        break;
+      }
+    }
+
+    if (enrolErr) {
+      const err = enrolErr;
       // Timeout / network / 5xx — SSG may have created the enrolment anyway.
       // Recover it before giving up so we don't orphan a live enrolment and so
       // the downstream calendar/invoice/email steps still run.
@@ -979,8 +1011,7 @@ export async function processDirectApplication(
   if (!autoInvoice && !options?.forceInvoice) {
     if (autoCalendar && row.trainee_email) {
       try {
-        const calAdded = await addLearnerToCalendarEvent(row.trainee_email, row.course_title || '', row.course_start_date);
-        if (calAdded) await updateRow(appId, { calendar_added: true });
+        await addDaLearnerToCalendarGuarded(row, appId, applicationId);
       } catch (err) {
         console.warn(`⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`, err instanceof Error ? err.message : err);
       }
@@ -1423,12 +1454,7 @@ export async function processDirectApplication(
   // Step 5: Add learner to calendar (non-fatal)
   if (autoCalendar && row.trainee_email) {
     try {
-      const calAdded = await addLearnerToCalendarEvent(
-        row.trainee_email,
-        row.course_title || '',
-        row.course_start_date
-      );
-      if (calAdded) await updateRow(appId, { calendar_added: true });
+      await addDaLearnerToCalendarGuarded(row, appId, applicationId);
     } catch (err) {
       console.warn(
         `⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`,
