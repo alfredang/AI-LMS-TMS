@@ -472,7 +472,7 @@ const AssessmentGrading: React.FC = () => {
                                 <label
                                   key={m}
                                   title={`${info.label}: ${submitted ? 'Submitted' : 'Not submitted'}`}
-                                  className="flex items-center gap-1 cursor-default select-none"
+                                  className="flex items-center gap-1 w-10 cursor-default select-none"
                                 >
                                   <input
                                     type="checkbox"
@@ -492,7 +492,10 @@ const AssessmentGrading: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Certificate Status Badge — verified against Google Drive */}
+                        {/* Certificate Status Badge — verified against Google Drive.
+                            Fixed-width column (always rendered) so the submission
+                            checkboxes stay aligned across rows. */}
+                        <div className="w-32 flex justify-end flex-shrink-0">
                         {student.is_competent && (() => {
                           const verification = certVerification[sId];
                           let badgeClass = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
@@ -544,8 +547,9 @@ const AssessmentGrading: React.FC = () => {
                           
                           return badgeContent;
                         })()}
+                        </div>
 
-                        <span className={`text-xs font-semibold uppercase tracking-wider ${
+                        <span className={`inline-block w-40 text-right whitespace-nowrap text-xs font-semibold uppercase tracking-wider ${
                             student.is_competent ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-500'
                           }`}>
                             {student.is_competent ? 'Competent' : 'Not Yet Competent'}
