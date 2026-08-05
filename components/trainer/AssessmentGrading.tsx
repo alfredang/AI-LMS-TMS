@@ -514,7 +514,7 @@ const AssessmentGrading: React.FC = () => {
                         {/* Certificate Status Badge — verified against Google Drive.
                             Fixed-width column (always rendered) so the submission
                             checkboxes stay aligned across rows. */}
-                        <div className="w-32 flex justify-end flex-shrink-0">
+                        <div className="w-32 flex justify-start flex-shrink-0">
                         {student.is_competent && (() => {
                           const verification = certVerification[sId];
                           let badgeClass = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
