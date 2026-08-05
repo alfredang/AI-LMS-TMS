@@ -9,6 +9,15 @@ import type { TpgJob } from '@lib/tpg/jobStore';
 // Lets the panel re-attach to a TPGateway run that outlived its tab.
 const TPG_JOB_KEY = 'lms.tpgConfirm.jobId';
 
+/**
+ * Is the TPGateway automation usable in this environment?
+ *
+ * Mirrors the server-side refusal in pages/api/admin/tpg-confirm/run.ts. Next
+ * inlines process.env.NODE_ENV at build time, so this is a compile-time constant
+ * in the client bundle — the deployed build simply never contains the card.
+ */
+const tpgAvailable = process.env.NODE_ENV !== 'production';
+
 const inputClasses ="block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
 const getStatusColor = (status: string) => {
@@ -73,6 +82,10 @@ export const UploadDirectApplicationView: React.FC = () => {
     // moving between polls instead of jumping every 2s.
     const [tpgNow, setTpgNow] = useState(() => Date.now());
     const tpgFeedRef = useRef<HTMLDivElement | null>(null);
+    // A run that fails to START has no job, so it never reached the progress
+    // panel — the message went to the upload card's error banner further down
+    // the page, where it read as "the button did nothing".
+    const [tpgError, setTpgError] = useState<string | null>(null);
     // Same toast pattern as ViewDirectApplicationView below, so a run that
     // finishes while you are looking elsewhere on the page still announces
     // itself — the panel alone is easy to miss once the browser window closes.
@@ -442,6 +455,7 @@ export const UploadDirectApplicationView: React.FC = () => {
 
     const runTpg = async (dryRun: boolean) => {
         setError(null);
+        setTpgError(null);
         setTpgJob(null);
         setTpgProgress(0);
         setTpgJobId(null);
@@ -463,7 +477,7 @@ export const UploadDirectApplicationView: React.FC = () => {
             try { window.localStorage.setItem(TPG_JOB_KEY, json.jobId); } catch { /* ignore */ }
             await pollTpg(json.jobId);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'TPGateway run failed');
+            setTpgError(err instanceof Error ? err.message : 'TPGateway run failed');
             setTpgRunning(false);
         }
     };
@@ -487,7 +501,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                     // is nothing left to wait for.
                     setTpgRunning(false);
                     setTpgCancelling(false);
-                    setError('That TPGateway run is no longer available (the dev server restarted).');
+                    setTpgError('That TPGateway run is no longer available (the dev server restarted).');
                     finish();
                     return;
                 }
@@ -1014,6 +1028,12 @@ export const UploadDirectApplicationView: React.FC = () => {
     return (
         <div className="space-y-6">
             {headerRow}
+            {/* Hidden on the deployed server. The run endpoint refuses outright when
+                NODE_ENV is production (pages/api/admin/tpg-confirm/run.ts) because the
+                flow drives a HEADED Chromium that a human signs into with Singpass —
+                impossible on the Coolify container. Showing the card there offered
+                every admin two buttons that could only ever return an error. */}
+            {tpgAvailable && (
             <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-start gap-3">
@@ -1044,6 +1064,30 @@ export const UploadDirectApplicationView: React.FC = () => {
                         )}
                     </div>
                 </div>
+
+                {tpgError && (
+                    <div className="mt-4 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 flex items-start gap-3">
+                        <div className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
+                            <Icon name={IconName.Close} className="w-3 h-3 text-red-500 dark:text-red-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-red-900 dark:text-red-200">Could not start the run</p>
+                            <p className="text-xs text-red-800 dark:text-red-300 mt-1">{tpgError}</p>
+                            {/* The server rejects legacy and expired tokens outright, so this
+                                is by far the most common cause — and it is not obvious from
+                                the raw message that re-logging in is the fix. */}
+                            {/not authenticated|unauthor/i.test(tpgError) && (
+                                <p className="text-xs text-red-800 dark:text-red-300 mt-1.5">
+                                    Your sign-in has expired. Log out and log back in, then try again.
+                                </p>
+                            )}
+                        </div>
+                        <button onClick={() => setTpgError(null)} aria-label="Dismiss"
+                            className="flex-shrink-0 text-red-400 hover:text-red-600 dark:hover:text-red-200">
+                            <Icon name={IconName.Close} className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
 
                 {tpgJob && (
                     <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
@@ -1234,6 +1278,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                     </div>
                 )}
             </Card>
+            )}
 
             <UploadStep />
 
