@@ -45,6 +45,30 @@ export interface TpgLogEntry {
   text: string;
 }
 
+/**
+ * A live picture of the browser, so a run on the server is still driveable.
+ *
+ * Singpass cannot be automated — someone has to scan a QR with their phone. On
+ * an operator's own machine they just look at the browser window; on the server
+ * there is no window to look at, so the driver posts frames here and the panel
+ * renders them. A picture plus forwarded clicks is enough for this flow and
+ * avoids putting a remote-desktop service on the box that hosts the database.
+ */
+export interface TpgScreen {
+  /** PNG data URL of the current page. */
+  dataUrl: string;
+  /** Rendered size, so the UI can map a click back to page coordinates. */
+  width: number;
+  height: number;
+  at: number;
+}
+
+/** An operator gesture waiting to be applied to the page. */
+export type TpgInput =
+  | { kind: 'click'; x: number; y: number }
+  | { kind: 'type'; text: string }
+  | { kind: 'key'; key: string };
+
 export interface TpgJob {
   id: string;
   dryRun: boolean;
@@ -66,6 +90,12 @@ export interface TpgJob {
    * hung one look identical. These lines are what tells them apart.
    */
   log: TpgLogEntry[];
+  /** Latest browser frame, or null when the run needs no supervision. */
+  screen: TpgScreen | null;
+  /** Gestures the operator has sent that the driver has not applied yet. */
+  pendingInput: TpgInput[];
+  /** True while the driver wants a human looking at `screen`. */
+  needsOperator: boolean;
   /** Parsed Excel rows (header-keyed objects), ready for the UI to ingest. Live mode only. */
   rows: Record<string, unknown>[] | null;
   error: string | null;
@@ -96,6 +126,9 @@ export function createJob(id: string, dryRun: boolean, max: number | null): TpgJ
     approved: false,
     apps: [],
     log: [],
+    screen: null,
+    pendingInput: [],
+    needsOperator: false,
     rows: null,
     error: null,
     screenshot: null,
@@ -143,6 +176,27 @@ export function pushLog(id: string, text: string): void {
     job.log.splice(0, job.log.length - MAX_LOG_LINES);
   }
   job.updatedAt = Date.now();
+}
+
+/** Queue an operator gesture for the driver to apply on its next poll. */
+export function pushInput(id: string, input: TpgInput): boolean {
+  const job = jobs.get(id);
+  if (!job) return false;
+  // Bound the queue: a click-happy operator (or a stuck UI) must not grow this
+  // without limit while the driver is busy between polls.
+  if (job.pendingInput.length >= 50) return false;
+  job.pendingInput.push(input);
+  job.updatedAt = Date.now();
+  return true;
+}
+
+/** Take everything queued, leaving the queue empty. */
+export function drainInput(id: string): TpgInput[] {
+  const job = jobs.get(id);
+  if (!job || job.pendingInput.length === 0) return [];
+  const taken = job.pendingInput;
+  job.pendingInput = [];
+  return taken;
 }
 
 /** Shallow-merge a patch into the job and bump updatedAt. No-op if the job is gone. */

@@ -16,12 +16,7 @@ const TPG_JOB_KEY = 'lms.tpgConfirm.jobId';
  * inlines process.env.NODE_ENV at build time, so this is a compile-time constant
  * in the client bundle — the deployed build simply never contains the card.
  */
-const tpgAvailable =
-    process.env.NODE_ENV !== 'production' ||
-    process.env.NEXT_PUBLIC_TPG_SERVER_BROWSER === 'true';
 
-/** Where the operator's own LMS serves this page (npm run dev uses port 3000). */
-const LOCAL_LMS_TPG_URL = 'http://localhost:3000/?adminPage=uploadDirectApplication&view=admin';
 
 const inputClasses ="block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -426,6 +421,21 @@ export const UploadDirectApplicationView: React.FC = () => {
         const iv = setInterval(() => setTpgNow(Date.now()), 1000);
         return () => clearInterval(iv);
     }, [tpgRunning, autoEnrolPolling]);
+
+    /** Forward a click or keystroke to the browser the server is driving. */
+    const sendTpgInput = async (input: { kind: 'click'; x: number; y: number } | { kind: 'type'; text: string } | { kind: 'key'; key: string }) => {
+        if (!tpgJobId) return;
+        try {
+            await fetch('/api/admin/tpg-confirm/input', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ jobId: tpgJobId, ...input }),
+            });
+            // Deliberately no error surfaced: the driver applies gestures on its
+            // next tick and the very next frame shows whether it landed, which
+            // is faster feedback than any message could be.
+        } catch { /* the operator can click again */ }
+    };
 
     const cancelTpg = async () => {
         if (!tpgJobId) return;
@@ -1054,40 +1064,25 @@ export const UploadDirectApplicationView: React.FC = () => {
                                 the action — the server cannot open a Singpass browser, so it
                                 hands over to the LMS running on the operator's machine, which
                                 talks to this same database. */}
-                            {!tpgAvailable && (
-                                <p className="text-xs text-amber-700 dark:text-amber-300 mt-2 max-w-xl">
-                                    Singpass needs a person and a visible browser, so this step runs on your
-                                    own computer — not on the server. Start the LMS there and open this page;
-                                    anything you confirm updates this system immediately, because both use the
-                                    same database.
-                                </p>
-                            )}
                         </div>
                     </div>
+                    {/* Same controls everywhere. On the server the browser runs
+                        headless and its screen is streamed into the panel below, so
+                        there is no longer anything the operator must do locally. */}
                     <div className="flex items-end gap-2">
-                        {tpgAvailable ? (
-                            <>
-                                <label className="block">
-                                    <span className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Limit</span>
-                                    <input type="number" min="1" value={tpgMax} onChange={e => setTpgMax(e.target.value)} placeholder="all"
-                                        disabled={tpgRunning}
-                                        className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                                </label>
-                                <Button variant="outline" onClick={() => runTpg(true)} disabled={tpgRunning}>Dry run</Button>
-                                <Button onClick={() => runTpg(false)} disabled={tpgRunning}>Confirm &amp; Enrol</Button>
-                                {tpgRunning && (
-                                    <Button variant="outline" onClick={cancelTpg} disabled={tpgCancelling}
-                                        className="!text-red-600 !border-red-300 hover:!bg-red-50 dark:!text-red-300 dark:!border-red-700 dark:hover:!bg-red-900/30">
-                                        {tpgCancelling ? 'Stopping…' : 'Cancel'}
-                                    </Button>
-                                )}
-                            </>
-                        ) : (
-                            <a href={LOCAL_LMS_TPG_URL} target="_blank" rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-colors">
-                                <Icon name={IconName.Download} className="w-4 h-4" />
-                                Open on my computer
-                            </a>
+                        <label className="block">
+                            <span className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Limit</span>
+                            <input type="number" min="1" value={tpgMax} onChange={e => setTpgMax(e.target.value)} placeholder="all"
+                                disabled={tpgRunning}
+                                className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        </label>
+                        <Button variant="outline" onClick={() => runTpg(true)} disabled={tpgRunning}>Dry run</Button>
+                        <Button onClick={() => runTpg(false)} disabled={tpgRunning}>Confirm &amp; Enrol</Button>
+                        {tpgRunning && (
+                            <Button variant="outline" onClick={cancelTpg} disabled={tpgCancelling}
+                                className="!text-red-600 !border-red-300 hover:!bg-red-50 dark:!text-red-300 dark:!border-red-700 dark:hover:!bg-red-900/30">
+                                {tpgCancelling ? 'Stopping…' : 'Cancel'}
+                            </Button>
                         )}
                     </div>
                 </div>
@@ -1148,6 +1143,42 @@ export const UploadDirectApplicationView: React.FC = () => {
                                 ))}
                             </div>
                         </div>
+                        {/* The Singpass step. The run is on the server, so the operator
+                            cannot see its browser — these are live frames of it. Clicking
+                            the picture forwards a click at the same spot on the real page,
+                            which is all this flow needs: a tap or two, then scan the QR. */}
+                        {tpgJob.needsOperator && tpgJob.screen && (
+                            <div className="mt-4 rounded-lg border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4">
+                                <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+                                    <div>
+                                        <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                                            Sign in with Singpass to continue
+                                        </p>
+                                        <p className="text-xs text-blue-800 dark:text-blue-300 mt-1 max-w-2xl">
+                                            This is the live browser running on the server. Scan the QR with the
+                                            Singpass app on your phone — you are signing in as yourself. Click the
+                                            picture if you need to press something on the page.
+                                        </p>
+                                    </div>
+                                    <span className="text-[11px] text-blue-700 dark:text-blue-300 tabular-nums">
+                                        updated {new Date(tpgJob.screen.at).toLocaleTimeString([], { hour12: false })}
+                                    </span>
+                                </div>
+                                <img
+                                    src={tpgJob.screen.dataUrl}
+                                    alt="Live view of the sign-in page"
+                                    onClick={(e) => {
+                                        // Map the click from however large the image is rendered
+                                        // back to the page's own coordinate system.
+                                        const r = (e.target as HTMLImageElement).getBoundingClientRect();
+                                        const x = ((e.clientX - r.left) / r.width) * (tpgJob.screen?.width || 1);
+                                        const y = ((e.clientY - r.top) / r.height) * (tpgJob.screen?.height || 1);
+                                        void sendTpgInput({ kind: 'click', x: Math.round(x), y: Math.round(y) });
+                                    }}
+                                    className="w-full rounded border border-blue-200 dark:border-blue-800 cursor-pointer bg-white"
+                                />
+                            </div>
+                        )}
                         {tpgJob.dryRun && !tpgNothingToConfirm && (
                             <p className="text-[11px] mt-1 text-indigo-600 dark:text-indigo-300">Dry run — nothing will be confirmed on TPGateway.</p>
                         )}
