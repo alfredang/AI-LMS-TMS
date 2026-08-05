@@ -33,6 +33,7 @@ import {
   approveJob,
   isApproved,
   pushLog,
+  drainInput,
 } from './jobStore';
 
 const REPO_ROOT = process.cwd();
@@ -145,13 +146,21 @@ async function runJob(id: string, opts: StartOptions): Promise<void> {
   try {
     note(id, 'Opening the browser…');
     if (SERVER_BROWSER) {
-      // Shared server: every run starts signed out, so whoever pressed the
-      // button scans the Singpass QR with their own phone and TPGateway sees
-      // that individual. A persistent profile would leave one person's session
-      // behind for the next person's run to inherit — convenient on your own
-      // laptop, wrong on a machine several staff share.
-      browser = await chromium.launch({ headless: false, args: ['--start-maximized'] });
-      context = await browser.newContext({ viewport: null, acceptDownloads: true });
+      // Headless is fine here precisely BECAUSE nobody looks at this browser
+      // directly — the operator watches streamed frames in the LMS and clicks
+      // on them. That is what removes the need to ship a virtual display and a
+      // remote-desktop service on the machine that also hosts the database.
+      //
+      // Fresh context every run, never a persistent profile: each run starts
+      // signed out so whoever pressed the button scans the Singpass QR with
+      // their own phone and TPGateway sees that individual. A shared profile
+      // would hand the next person someone else's session, which the TPGateway
+      // Terms of Use forbid.
+      browser = await chromium.launch({ headless: true });
+      context = await browser.newContext({
+        viewport: { width: SCREEN_W, height: SCREEN_H },
+        acceptDownloads: true,
+      });
     } else {
       // Local operator: keep the profile so you are not re-scanning a QR on
       // every run of your own machine.
@@ -375,18 +384,72 @@ function finishCancelled(id: string, message: string): void {
 
 // --- steps ------------------------------------------------------------------
 
+/** Viewport used for server runs — big enough for the Singpass QR to be legible. */
+const SCREEN_W = 1280;
+const SCREEN_H = 900;
+
+/**
+ * Publish a frame of the page for the panel to render.
+ *
+ * Only used on the server, where there is no window for the operator to look
+ * at. JPEG rather than PNG: these frames go through the status endpoint every
+ * second or so, and a PNG of a full page is several times larger for no benefit
+ * on what is essentially a screenshot of text and a QR code.
+ */
+async function publishScreen(page: Page, jobId: string): Promise<void> {
+  try {
+    const buf = await page.screenshot({ type: 'jpeg', quality: 60 });
+    patchJob(jobId, {
+      screen: {
+        dataUrl: `data:image/jpeg;base64,${buf.toString('base64')}`,
+        width: SCREEN_W,
+        height: SCREEN_H,
+        at: Date.now(),
+      },
+    });
+  } catch {
+    /* mid-navigation — the next tick will get one */
+  }
+}
+
+/** Apply whatever the operator clicked or typed since the last poll. */
+async function applyOperatorInput(page: Page, jobId: string): Promise<void> {
+  for (const input of drainInput(jobId)) {
+    try {
+      if (input.kind === 'click') await page.mouse.click(input.x, input.y);
+      else if (input.kind === 'type') await page.keyboard.type(input.text, { delay: 20 });
+      else if (input.kind === 'key') await page.keyboard.press(input.key);
+    } catch {
+      /* the page moved under the gesture — operator can simply click again */
+    }
+  }
+}
+
 async function waitForLogin(page: Page, timeoutMs: number, jobId: string): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
+  // On the server the operator is watching a stream of frames instead of a real
+  // window, so tell the UI to show it and keep the frames coming.
+  if (SERVER_BROWSER) patchJob(jobId, { needsOperator: true });
   while (Date.now() < deadline) {
     if (isCancelled(jobId)) return false;
+    if (SERVER_BROWSER) {
+      await applyOperatorInput(page, jobId);
+      await publishScreen(page, jobId);
+    }
     try {
       const body = (await page.textContent('body')) || '';
-      if (LOGGED_IN_MARKERS.some((re) => re.test(body))) return true;
+      if (LOGGED_IN_MARKERS.some((re) => re.test(body))) {
+        patchJob(jobId, { needsOperator: false, screen: null });
+        return true;
+      }
     } catch {
       /* mid-navigation — retry */
     }
-    await page.waitForTimeout(2500);
+    // Server runs poll fast so the streamed frames feel live; a local run only
+    // needs to notice that the operator finished in their own window.
+    await page.waitForTimeout(SERVER_BROWSER ? 1000 : 2500);
   }
+  patchJob(jobId, { needsOperator: false });
   return false;
 }
 
