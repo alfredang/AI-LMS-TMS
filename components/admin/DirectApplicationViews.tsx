@@ -16,7 +16,12 @@ const TPG_JOB_KEY = 'lms.tpgConfirm.jobId';
  * inlines process.env.NODE_ENV at build time, so this is a compile-time constant
  * in the client bundle — the deployed build simply never contains the card.
  */
-const tpgAvailable = process.env.NODE_ENV !== 'production';
+const tpgAvailable =
+    process.env.NODE_ENV !== 'production' ||
+    process.env.NEXT_PUBLIC_TPG_SERVER_BROWSER === 'true';
+
+/** Where the operator's own LMS serves this page (npm run dev uses port 3000). */
+const LOCAL_LMS_TPG_URL = 'http://localhost:3000/?adminPage=uploadDirectApplication&view=admin';
 
 const inputClasses ="block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
@@ -1033,7 +1038,6 @@ export const UploadDirectApplicationView: React.FC = () => {
                 flow drives a HEADED Chromium that a human signs into with Singpass —
                 impossible on the Coolify container. Showing the card there offered
                 every admin two buttons that could only ever return an error. */}
-            {tpgAvailable && (
             <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-start gap-3">
@@ -1043,24 +1047,47 @@ export const UploadDirectApplicationView: React.FC = () => {
                         <div>
                             <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Confirm &amp; fetch from TPGateway</h3>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 max-w-xl">
-                                Opens a browser for you to log in with Singpass, confirms pending Direct Applications, then reads each learner's details and enrols them — in one go. Runs on this computer only (local dev). <strong>Dry run</strong> finds and checks the pending ones without confirming anything. Leave <strong>Limit</strong> empty and it will show you how many it found and wait for your approval before confirming.
+                                Opens a browser for you to log in with Singpass, confirms pending Direct Applications, then reads each learner's details and enrols them — in one go. <strong>Dry run</strong> finds and checks the pending ones without confirming anything. Leave <strong>Limit</strong> empty and it will show you how many it found and wait for your approval before confirming.
                             </p>
+                            {/* The card is shown in BOTH environments on purpose: hiding it on
+                                the server made a working feature look deleted. What changes is
+                                the action — the server cannot open a Singpass browser, so it
+                                hands over to the LMS running on the operator's machine, which
+                                talks to this same database. */}
+                            {!tpgAvailable && (
+                                <p className="text-xs text-amber-700 dark:text-amber-300 mt-2 max-w-xl">
+                                    Singpass needs a person and a visible browser, so this step runs on your
+                                    own computer — not on the server. Start the LMS there and open this page;
+                                    anything you confirm updates this system immediately, because both use the
+                                    same database.
+                                </p>
+                            )}
                         </div>
                     </div>
                     <div className="flex items-end gap-2">
-                        <label className="block">
-                            <span className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Limit</span>
-                            <input type="number" min="1" value={tpgMax} onChange={e => setTpgMax(e.target.value)} placeholder="all"
-                                disabled={tpgRunning}
-                                className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                        </label>
-                        <Button variant="outline" onClick={() => runTpg(true)} disabled={tpgRunning}>Dry run</Button>
-                        <Button onClick={() => runTpg(false)} disabled={tpgRunning}>Confirm &amp; Enrol</Button>
-                        {tpgRunning && (
-                            <Button variant="outline" onClick={cancelTpg} disabled={tpgCancelling}
-                                className="!text-red-600 !border-red-300 hover:!bg-red-50 dark:!text-red-300 dark:!border-red-700 dark:hover:!bg-red-900/30">
-                                {tpgCancelling ? 'Stopping…' : 'Cancel'}
-                            </Button>
+                        {tpgAvailable ? (
+                            <>
+                                <label className="block">
+                                    <span className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Limit</span>
+                                    <input type="number" min="1" value={tpgMax} onChange={e => setTpgMax(e.target.value)} placeholder="all"
+                                        disabled={tpgRunning}
+                                        className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                                </label>
+                                <Button variant="outline" onClick={() => runTpg(true)} disabled={tpgRunning}>Dry run</Button>
+                                <Button onClick={() => runTpg(false)} disabled={tpgRunning}>Confirm &amp; Enrol</Button>
+                                {tpgRunning && (
+                                    <Button variant="outline" onClick={cancelTpg} disabled={tpgCancelling}
+                                        className="!text-red-600 !border-red-300 hover:!bg-red-50 dark:!text-red-300 dark:!border-red-700 dark:hover:!bg-red-900/30">
+                                        {tpgCancelling ? 'Stopping…' : 'Cancel'}
+                                    </Button>
+                                )}
+                            </>
+                        ) : (
+                            <a href={LOCAL_LMS_TPG_URL} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-colors">
+                                <Icon name={IconName.Download} className="w-4 h-4" />
+                                Open on my computer
+                            </a>
                         )}
                     </div>
                 </div>
@@ -1278,7 +1305,6 @@ export const UploadDirectApplicationView: React.FC = () => {
                     </div>
                 )}
             </Card>
-            )}
 
             <UploadStep />
 
