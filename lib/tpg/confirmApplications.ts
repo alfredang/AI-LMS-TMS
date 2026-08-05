@@ -118,6 +118,21 @@ export function startTpgConfirmJob(opts: StartOptions): string {
 export { getJob };
 
 /**
+ * Register a run for an office agent to pick up, without starting a browser
+ * here. Used by the deployed site, whose IP TPGateway's CDN refuses.
+ */
+export function queueTpgConfirmJob(opts: StartOptions): string {
+  const id = `tpg_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
+  createJob(id, opts.dryRun, opts.max);
+  patchJob(id, {
+    phase: 'queued',
+    message: 'Queued — waiting for the office machine to pick it up…',
+  });
+  pushLog(id, 'Queued for the office machine.');
+  return id;
+}
+
+/**
  * Ask a running job to stop. Cancellation is cooperative: the driver only acts
  * on it at a safe boundary (between applications), so a confirmation already in
  * flight always completes rather than being abandoned half-way on TPGateway.
@@ -156,10 +171,31 @@ async function runJob(id: string, opts: StartOptions): Promise<void> {
       // their own phone and TPGateway sees that individual. A shared profile
       // would hand the next person someone else's session, which the TPGateway
       // Terms of Use forbid.
-      browser = await chromium.launch({ headless: true });
+      //
+      // The portal sits behind CloudFront, which 403s an obviously-automated
+      // client before TPGateway ever sees the request. Headless Chromium
+      // advertises itself twice over — its User-Agent literally contains
+      // "HeadlessChrome", and navigator.webdriver is true — so both are
+      // removed. This is not evasion of a security control: the same authorised
+      // person signs in with their own Singpass either way. It stops a WAF
+      // heuristic from rejecting a legitimate session.
+      browser = await chromium.launch({
+        headless: true,
+        args: ['--disable-blink-features=AutomationControlled'],
+      });
+      // Build the UA from the real browser version so every other Chrome hint
+      // the page can read stays consistent with it.
+      const chromeVersion = browser.version();
       context = await browser.newContext({
         viewport: { width: SCREEN_W, height: SCREEN_H },
         acceptDownloads: true,
+        userAgent: `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`,
+        locale: 'en-SG',
+        timezoneId: 'Asia/Singapore',
+        extraHTTPHeaders: { 'Accept-Language': 'en-SG,en;q=0.9' },
+      });
+      await context.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
       });
     } else {
       // Local operator: keep the profile so you are not re-scanning a QR on

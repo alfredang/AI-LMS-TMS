@@ -11,7 +11,7 @@
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireRole } from '@lib/auth/requireRole';
-import { startTpgConfirmJob } from '@lib/tpg/confirmApplications';
+import { startTpgConfirmJob, queueTpgConfirmJob } from '@lib/tpg/confirmApplications';
 import { getActiveJob } from '@lib/tpg/jobStore';
 
 export const config = { maxDuration: 300 };
@@ -24,22 +24,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const user = await requireRole(req, res, ['admin', 'developer', 'trainingProvider']);
   if (!user) return; // requireRole already sent 401/403
 
-  // A headed Singpass browser needs a display. On a dev machine that is the
-  // operator's own desktop. On the server it requires the image to ship
-  // Chromium + Xvfb + a way to view the screen, so it stays refused until that
-  // image is deployed and TPG_SERVER_BROWSER is switched on.
-  if (process.env.NODE_ENV === 'production' && process.env.TPG_SERVER_BROWSER !== 'true') {
-    return res.status(400).json({
-      success: false,
-      error:
-        'TPGateway confirmation runs a browser for Singpass, which this server ' +
-        'is not yet set up to display. Run it from the LMS on your own computer, ' +
-        'or ask an administrator to enable TPG_SERVER_BROWSER.',
-    });
-  }
-
-  // One run at a time — a second would fight the first for the persistent
-  // Chromium profile and Playwright would fail on the lock mid-run.
+  // One run at a time — a second would fight the first for the Chromium profile
+  // and Playwright would fail on the lock mid-run.
   const active = getActiveJob();
   if (active) {
     return res.status(409).json({
@@ -49,13 +35,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
+  const dryRun = req.body?.dryRun !== false; // default TRUE (safe)
+  const rawMax = req.body?.max;
+  const max =
+    typeof rawMax === 'number' && Number.isFinite(rawMax) && rawMax > 0
+      ? Math.floor(rawMax)
+      : null;
+
   try {
-    const dryRun = req.body?.dryRun !== false; // default TRUE (safe)
-    const rawMax = req.body?.max;
-    const max =
-      typeof rawMax === 'number' && Number.isFinite(rawMax) && rawMax > 0
-        ? Math.floor(rawMax)
-        : null;
+    // Where the browser runs depends on where the request can reach TPGateway
+    // from. This server drives Chromium fine, but the portal sits behind
+    // CloudFront, which blocks datacentre IP ranges — the request is refused
+    // before TPGateway ever sees it. So the deployed site QUEUES the run and an
+    // agent on the office network drives it from an address the portal accepts,
+    // reporting progress back into this same job. Locally we just run it here.
+    const runsHere =
+      process.env.NODE_ENV !== 'production' || process.env.TPG_SERVER_BROWSER === 'true';
+
+    if (!runsHere) {
+      const jobId = queueTpgConfirmJob({ dryRun, max });
+      return res.status(200).json({
+        success: true,
+        jobId,
+        dryRun,
+        max,
+        queued: true,
+        message:
+          'Queued — waiting for the office machine to pick it up. Progress appears here.',
+      });
+    }
 
     const jobId = startTpgConfirmJob({ dryRun, max });
     return res.status(200).json({ success: true, jobId, dryRun, max });
