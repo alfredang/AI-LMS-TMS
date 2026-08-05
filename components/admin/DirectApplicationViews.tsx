@@ -380,6 +380,9 @@ export const UploadDirectApplicationView: React.FC = () => {
     // Where the bar "wants" to be for the current phase (the creep eases toward this).
     const tpgTargetPct = (job: TpgJob | null): number => {
         if (!job) return 0;
+        // Queued is genuinely 0% — nothing has started. Letting the bar creep
+        // here suggests progress that does not exist.
+        if (job.phase === 'queued') return 0;
         if (job.phase === 'done') return 100;
         if (job.phase === 'confirming' && job.total > 0) {
             const done = job.apps.filter(a => ['confirmed', 'would-confirm', 'skipped', 'failed'].includes(a.status)).length;
@@ -995,6 +998,7 @@ export const UploadDirectApplicationView: React.FC = () => {
     );
 
     const TPG_PHASE_LABEL: Record<string, string> = {
+        queued: 'Waiting for the office machine',
         starting: 'Starting…',
         awaiting_login: 'Waiting for Singpass login',
         collecting: 'Finding pending applications',
@@ -1177,6 +1181,22 @@ export const UploadDirectApplicationView: React.FC = () => {
                                     }}
                                     className="w-full rounded border border-blue-200 dark:border-blue-800 cursor-pointer bg-white"
                                 />
+                            </div>
+                        )}
+                        {/* A queued run is waiting on something outside this page, so say
+                            what — a creeping progress bar alone reads as work happening
+                            when in fact nothing has started. */}
+                        {tpgJob.phase === 'queued' && (
+                            <div className="mt-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3">
+                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                                    Waiting for the office machine to pick this up
+                                </p>
+                                <p className="text-xs text-amber-800 dark:text-amber-300 mt-1 max-w-2xl">
+                                    TPGateway does not accept connections from this server, so the browser
+                                    runs on a machine at the office instead. Nothing happens until that
+                                    machine is on with the agent running. If nobody is expecting to run this
+                                    now, press Cancel.
+                                </p>
                             </div>
                         )}
                         {tpgJob.dryRun && !tpgNothingToConfirm && (
