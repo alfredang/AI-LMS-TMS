@@ -7,6 +7,7 @@ import {
   recomputeSfcBatchApplyCounts,
 } from './sfcImportDb';
 import { createDirectApplicationSfcInvoice } from '@/lib/quickbooks/createDirectApplicationSfcInvoice';
+import { backfillDaSfcClaimIds } from '@/lib/daSfcClaimBackfill';
 
 type ProxyResponse<T = any> = { success: boolean; data?: T; error?: string };
 
@@ -497,7 +498,22 @@ export async function applySfcImportRows(input: {
         }
       }
 
-      // Step 7 — Audit log
+      // Step 7 — Copy the claim id onto the matching Direct Application row.
+      // The claim id only exists once the learner has claimed, so this is the
+      // first moment the LMS can know it. Non-fatal: a payment that applied
+      // cleanly must not be reported as failed because a DA row didn't update.
+      if (enrolmentId) {
+        try {
+          await backfillDaSfcClaimIds({ enrolmentId });
+        } catch (err) {
+          console.warn(
+            `⚠️  sfc-import: could not copy claim id to the Direct Application for ${enrolmentId} (non-fatal):`,
+            err instanceof Error ? err.message : err
+          );
+        }
+      }
+
+      // Step 8 — Audit log
       await insertSfcImportAuditLog({
         batchId: input.batchId,
         rowId,

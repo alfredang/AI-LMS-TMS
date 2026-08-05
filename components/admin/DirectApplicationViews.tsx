@@ -1,10 +1,15 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { authService } from '@lib/services/authService';
+import type { TpgJob } from '@lib/tpg/jobStore';
 
-const inputClasses = "block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
+// Lets the panel re-attach to a TPGateway run that outlived its tab.
+const TPG_JOB_KEY = 'lms.tpgConfirm.jobId';
+
+const inputClasses ="block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500";
 
 const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -52,6 +57,40 @@ export const UploadDirectApplicationView: React.FC = () => {
     const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
     const [autoEnrolQueued, setAutoEnrolQueued] = useState(0);
     const [autoEnrolPolling, setAutoEnrolPolling] = useState(false);
+    // Enrolling is the long half of a run (SSG + grant + invoice, per learner,
+    // in series). Without a clock and a count it reads as a frozen spinner.
+    const [autoEnrolStartedAt, setAutoEnrolStartedAt] = useState<number | null>(null);
+    const [refreshingStatuses, setRefreshingStatuses] = useState(false);
+    // TPGateway "confirm & fetch" automation (local-only; drives a headed browser)
+    const [tpgJob, setTpgJob] = useState<TpgJob | null>(null);
+    const [tpgRunning, setTpgRunning] = useState(false);
+    const [tpgMax, setTpgMax] = useState('');
+    const [tpgProgress, setTpgProgress] = useState(0);
+    const [tpgJobId, setTpgJobId] = useState<string | null>(null);
+    const [tpgCancelling, setTpgCancelling] = useState(false);
+    const [tpgApproving, setTpgApproving] = useState(false);
+    // Drives the elapsed clock. Kept separate from the job so the time keeps
+    // moving between polls instead of jumping every 2s.
+    const [tpgNow, setTpgNow] = useState(() => Date.now());
+    const tpgFeedRef = useRef<HTMLDivElement | null>(null);
+    // Same toast pattern as ViewDirectApplicationView below, so a run that
+    // finishes while you are looking elsewhere on the page still announces
+    // itself — the panel alone is easy to miss once the browser window closes.
+    const [toastMsg, setToastMsg] = useState<string | null>(null);
+    const [toastIsError, setToastIsError] = useState(false);
+    const [toastVisible, setToastVisible] = useState(false);
+    const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const showToast = React.useCallback((message: string, isError = false) => {
+        setToastMsg(message);
+        setToastIsError(isError);
+        setToastVisible(true);
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => {
+            setToastVisible(false);
+            setTimeout(() => setToastMsg(null), 300);
+        }, 5000);
+    }, []);
     const [emailToggleOn, setEmailToggleOn] = useState(false);
     const [emailToggleSaving, setEmailToggleSaving] = useState(false);
     const [invoiceEmailCc, setInvoiceEmailCc] = useState('');
@@ -227,8 +266,10 @@ export const UploadDirectApplicationView: React.FC = () => {
         });
     };
 
-    const handleUpload = async () => {
-        if (!file) return;
+    // Shared ingest: takes already-parsed rows (from a file upload OR the
+    // TPGateway automation) and pushes them through the DA upload API in
+    // batches. Returns the flat result rows so callers can chain auto-enrol.
+    const ingestDaRows = async (excelData: any[]): Promise<DaResultRow[]> => {
         setViewState('processing');
         setAllResults([]);
         setSummary({ inserted: 0, updated: 0, skipped: 0, failed: 0 });
@@ -237,8 +278,7 @@ export const UploadDirectApplicationView: React.FC = () => {
         setError(null);
         setProgressCurrent(0);
         setProgressTotal(0);
-        try {
-            const excelData = await parseExcelFile(file);
+        {
             const total = excelData.length;
             setProgressTotal(total);
             const flat: DaResultRow[] = [];
@@ -267,6 +307,15 @@ export const UploadDirectApplicationView: React.FC = () => {
             setAllResults(flat);
             setSummary({ inserted: ins, updated: upd, skipped: skip, failed: fail });
             setViewState('results');
+            return flat;
+        }
+    };
+
+    const handleUpload = async () => {
+        if (!file) return;
+        try {
+            const excelData = await parseExcelFile(file);
+            await ingestDaRows(excelData);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to upload file');
             setViewState('upload');
@@ -279,8 +328,11 @@ export const UploadDirectApplicationView: React.FC = () => {
         setProgressCurrent(0); setProgressTotal(0); setViewState('upload');
     };
 
-    const handleAutoEnrol = async () => {
-        const eligibleRows = allResults.filter(r => (r.action === 'inserted' || r.action === 'updated') && r.id);
+    const handleAutoEnrol = async (rowsArg?: DaResultRow[]) => {
+        // rowsArg lets the TPGateway flow pass freshly-ingested rows directly;
+        // onClick handlers pass a MouseEvent, so guard with Array.isArray.
+        const source = Array.isArray(rowsArg) ? rowsArg : allResults;
+        const eligibleRows = source.filter(r => (r.action === 'inserted' || r.action === 'updated') && r.id);
         const eligibleIds = eligibleRows.map(r => r.id!).filter(Boolean);
         if (eligibleIds.length === 0) return;
         setIsAutoEnrolling(true);
@@ -289,10 +341,284 @@ export const UploadDirectApplicationView: React.FC = () => {
             const json = await res.json();
             if (!json.success) throw new Error(json.error || 'Failed to trigger auto-enrol');
             setAutoEnrolQueued(json.queued || eligibleIds.length);
+            setAutoEnrolStartedAt(Date.now());
             setAutoEnrolPolling(true);
             pollEnrolStatus(eligibleRows.map(r => r.application_id).filter(Boolean));
         } catch (err) { setError(err instanceof Error ? err.message : 'Auto-enrol failed'); }
         finally { setIsAutoEnrolling(false); }
+    };
+
+    // --- TPGateway "confirm & fetch" automation (local-only) -----------------
+    const authHeaders = (): Record<string, string> => {
+        const t = authService.getAuthToken();
+        return t ? { Authorization: `Bearer ${t}` } : {};
+    };
+
+    const notifyTpg = (title: string, body: string) => {
+        try {
+            if (typeof window === 'undefined' || !('Notification' in window)) return;
+            if (Notification.permission === 'granted') { new Notification(title, { body }); return; }
+            if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then((p) => { if (p === 'granted') new Notification(title, { body }); });
+            }
+        } catch { /* notifications unsupported/blocked — ignore */ }
+    };
+
+    // Where the bar "wants" to be for the current phase (the creep eases toward this).
+    const tpgTargetPct = (job: TpgJob | null): number => {
+        if (!job) return 0;
+        if (job.phase === 'done') return 100;
+        if (job.phase === 'confirming' && job.total > 0) {
+            const done = job.apps.filter(a => ['confirmed', 'would-confirm', 'skipped', 'failed'].includes(a.status)).length;
+            return 32 + Math.round((done / job.total) * 50); // 32 → 82 as apps complete
+        }
+        const base: Record<string, number> = { starting: 4, awaiting_login: 12, collecting: 26, awaiting_approval: 30, confirming: 32, downloading: 86, parsing: 92, error: 100 };
+        return base[job.phase] ?? 5;
+    };
+
+    // Continuously ease the displayed bar toward its phase target so it always
+    // looks like it's moving (never frozen), and surges forward on phase changes.
+    useEffect(() => {
+        if (!tpgRunning) return;
+        const iv = setInterval(() => {
+            setTpgProgress(prev => {
+                const target = tpgTargetPct(tpgJob);
+                const softCap = Math.min(target + 6, 97); // let it creep a bit past the base, never to 100
+                if (prev >= softCap) return prev;
+                return Math.min(softCap, prev + Math.max(0.3, (softCap - prev) * 0.08));
+            });
+        }, 180);
+        return () => clearInterval(iv);
+    }, [tpgRunning, tpgJob]);
+
+    // Keep the newest line in view. Without this the feed silently grows past
+    // the fold and the one line you want — what it is doing now — is the one
+    // you cannot see.
+    useEffect(() => {
+        const el = tpgFeedRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+    }, [tpgJob?.log?.length]);
+
+    // Elapsed clock, once a second. Covers BOTH halves of a run — the browser
+    // phase and the enrolment phase — since either can be the one you are sat
+    // watching.
+    useEffect(() => {
+        if (!tpgRunning && !autoEnrolPolling) return;
+        setTpgNow(Date.now());
+        const iv = setInterval(() => setTpgNow(Date.now()), 1000);
+        return () => clearInterval(iv);
+    }, [tpgRunning, autoEnrolPolling]);
+
+    const cancelTpg = async () => {
+        if (!tpgJobId) return;
+        setTpgCancelling(true);
+        try {
+            await fetch('/api/admin/tpg-confirm/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ jobId: tpgJobId }),
+            });
+            // The driver stops at its next safe point; the poll below reports it.
+        } catch { /* the run keeps polling; the operator can close the browser */ }
+    };
+
+    const approveTpg = async () => {
+        if (!tpgJobId) return;
+        setTpgApproving(true);
+        try {
+            const res = await fetch('/api/admin/tpg-confirm/approve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ jobId: tpgJobId }),
+            });
+            const json = await res.json();
+            if (!json.success) setError(json.error || 'Could not approve the run');
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Could not approve the run');
+        } finally {
+            setTpgApproving(false);
+        }
+    };
+
+    const runTpg = async (dryRun: boolean) => {
+        setError(null);
+        setTpgJob(null);
+        setTpgProgress(0);
+        setTpgJobId(null);
+        setTpgCancelling(false);
+        setTpgRunning(true);
+        // Ask for notification permission up-front so the completion ping can fire.
+        try { if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch { /* ignore */ }
+        try {
+            const maxNum = parseInt(tpgMax, 10);
+            const max = Number.isFinite(maxNum) && maxNum > 0 ? maxNum : null;
+            const res = await fetch('/api/admin/tpg-confirm/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ dryRun, max }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Failed to start TPGateway run');
+            setTpgJobId(json.jobId);
+            try { window.localStorage.setItem(TPG_JOB_KEY, json.jobId); } catch { /* ignore */ }
+            await pollTpg(json.jobId);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'TPGateway run failed');
+            setTpgRunning(false);
+        }
+    };
+
+    const pollTpg = (jobId: string): Promise<void> => new Promise<void>((resolve) => {
+        // Poll for as long as the JOB says it is running. An attempt cap used to
+        // stop the UI after ~10 minutes while the driver kept confirming — the
+        // ingest happens in here, so anything confirmed after that was left on
+        // TPGateway and never reached the LMS. Only a job that has finished, or a
+        // status endpoint that keeps failing, ends the loop now.
+        let consecutiveFailures = 0;
+        const finish = () => {
+            try { window.localStorage.removeItem(TPG_JOB_KEY); } catch { /* ignore */ }
+            resolve();
+        };
+        const tick = async () => {
+            try {
+                const res = await fetch(`/api/admin/tpg-confirm/status?jobId=${encodeURIComponent(jobId)}`, { headers: authHeaders() });
+                if (res.status === 404) {
+                    // The dev server restarted: the in-memory job is gone, so there
+                    // is nothing left to wait for.
+                    setTpgRunning(false);
+                    setTpgCancelling(false);
+                    setError('That TPGateway run is no longer available (the dev server restarted).');
+                    finish();
+                    return;
+                }
+                const json = await res.json();
+                if (json.success && json.job) {
+                    consecutiveFailures = 0;
+                    const job = json.job as TpgJob;
+                    setTpgJob(job);
+                    // A cancelled run is treated like a finished one: anything it
+                    // already confirmed is live on TPGateway and must still be
+                    // ingested, or it would be stranded.
+                    if (job.phase === 'done' || job.phase === 'cancelled') {
+                        const stopped = job.phase === 'cancelled';
+                        setTpgRunning(false);
+                        setTpgCancelling(false);
+                        setTpgProgress(100);
+                        const confirmedCount = job.apps.filter(a => a.status === 'confirmed').length;
+                        const wouldCount = job.apps.filter(a => a.status === 'would-confirm').length;
+                        // "Found none" is a normal, successful outcome, not a
+                        // lesser version of "confirmed 5" — say so in its own
+                        // words rather than reporting a count of zero.
+                        const nothingFound = !stopped && job.found === 0;
+                        notifyTpg(
+                            stopped ? 'TPGateway run stopped'
+                                : nothingFound ? 'TPGateway — nothing to confirm'
+                                : job.dryRun ? 'TPGateway dry run complete' : 'TPGateway confirm & enrol complete',
+                            nothingFound ? 'Every Direct Application is already confirmed.'
+                                : job.dryRun ? `${wouldCount} application(s) would be confirmed. Nothing changed.`
+                                : `Confirmed ${confirmedCount} application(s).${confirmedCount > 0 ? ' Now enrolling…' : ''}`,
+                        );
+                        showToast(
+                            stopped ? 'TPGateway run stopped. Anything already confirmed was still enrolled.'
+                                : nothingFound ? 'All caught up — no applications are waiting to be confirmed.'
+                                : job.dryRun ? `Dry run complete — ${wouldCount} application(s) would be confirmed. Nothing changed.`
+                                : `Confirmed ${confirmedCount} application(s).${confirmedCount > 0 ? ' Enrolling now…' : ''}`,
+                            stopped,
+                        );
+                        // Live run: feed the fetched export rows through the existing
+                        // ingest, then auto-enrol — the whole loop in one click.
+                        if (!job.dryRun && Array.isArray(job.rows) && job.rows.length > 0) {
+                            try {
+                                const flat = await ingestDaRows(job.rows as any[]);
+                                await handleAutoEnrol(flat);
+                            } catch (e) {
+                                setError(e instanceof Error ? e.message : 'Failed to ingest fetched applications');
+                            }
+                        }
+                        finish();
+                        return;
+                    }
+                    if (job.phase === 'error') {
+                        setTpgRunning(false);
+                        setTpgCancelling(false);
+                        setError(job.error || 'TPGateway run failed');
+                        notifyTpg('TPGateway run failed', job.error || 'See the panel for details.');
+                        finish();
+                        return;
+                    }
+                } else {
+                    consecutiveFailures++;
+                }
+            } catch {
+                consecutiveFailures++; // transient network blip — keep polling
+            }
+            // Only give up if the status endpoint itself has been unreachable for
+            // a solid minute, never merely because the run is taking a while.
+            if (consecutiveFailures > 40) {
+                setTpgRunning(false);
+                setTpgCancelling(false);
+                setError('Lost contact with the TPGateway run. Check the dev terminal.');
+                finish();
+                return;
+            }
+            setTimeout(tick, 1500);
+        };
+        tick();
+    });
+
+    // Re-attach to a run still in flight after a reload or an accidentally closed
+    // tab. The job (and its scraped rows) live on the server, so picking it back
+    // up is what stops a confirmed application from being stranded. Re-ingesting
+    // is harmless: the upload dedupes on application_id and auto-enrol skips rows
+    // that already hold a real SSG enrolment id.
+    useEffect(() => {
+        let saved: string | null = null;
+        try { saved = window.localStorage.getItem(TPG_JOB_KEY); } catch { /* ignore */ }
+        if (!saved) return;
+        setTpgJobId(saved);
+        setTpgRunning(true);
+        void pollTpg(saved);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    /**
+     * Re-read the enrolment status for every row on screen, once.
+     *
+     * pollEnrolStatus gives up after 60 attempts (~5 min) or when the page
+     * reloads, and until now that left rows stuck showing nothing forever even
+     * though the enrolment had completed. This makes that state recoverable.
+     */
+    const refreshEnrolStatuses = async () => {
+        const ids = allResults.map(r => r.application_id).filter(Boolean);
+        if (ids.length === 0) return;
+        setRefreshingStatuses(true);
+        try {
+            const res = await fetch('/api/admin/da-enrol-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ applicationIds: ids }),
+            });
+            const json = await res.json();
+            if (json.success && Array.isArray(json.data)) {
+                const byId = new Map<string, any>();
+                for (const row of json.data) if (row.application_id) byId.set(row.application_id, row);
+                setAllResults(prev => prev.map(r => {
+                    const dbRow = byId.get(r.application_id);
+                    if (!dbRow) return r;
+                    return {
+                        ...r,
+                        enrolStatus: dbRow.auto_enrol_status || null,
+                        enrolmentId: dbRow.enrolment_id || null,
+                        grantId: dbRow.grant_id || null,
+                        enrolError: dbRow.auto_enrol_error || null,
+                    };
+                }));
+            }
+        } catch {
+            /* leave the current values in place */
+        } finally {
+            setRefreshingStatuses(false);
+        }
     };
 
     const pollEnrolStatus = async (appIds: string[]) => {
@@ -301,7 +627,13 @@ export const UploadDirectApplicationView: React.FC = () => {
         const poll = async () => {
             attempts++;
             try {
-                const res = await fetch('/api/admin/fetch-all-da-applications');
+                // Ask only for the rows being watched. This used to refetch every
+                // DA row in the system (a 1-2.5s query) every 5 seconds.
+                const res = await fetch('/api/admin/da-enrol-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                    body: JSON.stringify({ applicationIds: [...appIdSet] }),
+                });
                 const json = await res.json();
                 if (json.success && Array.isArray(json.data)) {
                     const byId = new Map<string, any>();
@@ -341,6 +673,28 @@ export const UploadDirectApplicationView: React.FC = () => {
             )}
         </div>
     );
+
+    const fmtElapsed = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`);
+
+    // Progress of the enrolment half, read off the statuses the poll already
+    // fetches — no extra request. 'done' means SSG accepted the enrolment; the
+    // grant and invoice steps follow it, so they are counted separately rather
+    // than folded into one number.
+    //
+    // Declared ABOVE the early returns below: the results view uses them, and a
+    // const declared after a `return` that renders it is a TDZ crash, not a
+    // compile error — nothing would catch it until the screen was on-screen.
+    const enrolCounts = React.useMemo(() => {
+        const rows = allResults.filter(r => r.action === 'inserted' || r.action === 'updated');
+        return {
+            done: rows.filter(r => r.enrolStatus && !['pending', 'pending_identity', 'failed'].includes(r.enrolStatus)).length,
+            granted: rows.filter(r => r.enrolStatus === 'grant_found' || r.enrolStatus === 'invoiced').length,
+            failed: rows.filter(r => r.enrolStatus === 'failed').length,
+        };
+    }, [allResults]);
+    const autoEnrolElapsed = autoEnrolStartedAt
+        ? Math.max(0, Math.round(((autoEnrolPolling ? tpgNow : Date.now()) - autoEnrolStartedAt) / 1000))
+        : 0;
 
     if (viewState === 'processing') {
         return (
@@ -387,9 +741,22 @@ export const UploadDirectApplicationView: React.FC = () => {
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 className="text-sm font-semibold text-gray-800 dark:text-white">SSG Enrolment & Grant Application</h3>
+                                {/* "Processing 10 application(s)" never changed for minutes.
+                                    Each learner goes through SSG enrolment, then grant, then
+                                    invoice — so report how many have cleared each stage and
+                                    how long it has been running. */}
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                    {autoEnrolPolling ? `Processing ${autoEnrolQueued} application(s)... refreshing status every 5s` : autoEnrolQueued > 0 ? `Completed - ${autoEnrolQueued} application(s) processed` : `${summary.inserted + summary.updated} eligible application(s) ready to enrol`}
+                                    {autoEnrolPolling
+                                        ? `Enrolling — ${enrolCounts.done} of ${autoEnrolQueued} done${enrolCounts.granted > 0 ? `, ${enrolCounts.granted} with grant` : ''}${enrolCounts.failed > 0 ? `, ${enrolCounts.failed} failed` : ''} · ${fmtElapsed(autoEnrolElapsed)} elapsed`
+                                        : autoEnrolQueued > 0
+                                            ? `Completed - ${autoEnrolQueued} application(s) processed${autoEnrolElapsed > 0 ? ` in ${fmtElapsed(autoEnrolElapsed)}` : ''}`
+                                            : `${summary.inserted + summary.updated} eligible application(s) ready to enrol`}
                                 </p>
+                                {autoEnrolPolling && (
+                                    <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                                        Each learner is submitted to SSG, then its grant is looked up, then the invoice is raised — expect roughly 30–60s each.
+                                    </p>
+                                )}
                             </div>
                             <Button onClick={handleAutoEnrol} disabled={isAutoEnrolling || autoEnrolPolling}>
                                 {isAutoEnrolling ? 'Triggering...' : autoEnrolPolling ? 'Processing...' : autoEnrolQueued > 0 ? 'Re-run Auto-Enrol' : 'Auto-Enrol to SSG & Apply Grant'}
@@ -402,7 +769,19 @@ export const UploadDirectApplicationView: React.FC = () => {
                         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                             {filterCategory === 'all' ? 'All Results' : `${filterCategory.charAt(0).toUpperCase() + filterCategory.slice(1)} (${filteredResults.length})`}
                         </h2>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">{filteredResults.length} record{filteredResults.length !== 1 ? 's' : ''}</span>
+                        <div className="flex items-center gap-3">
+                            {/* The status column used to freeze the moment polling gave up, with no
+                                way to ask again — so a finished enrolment kept showing as blank. */}
+                            <button
+                                onClick={refreshEnrolStatuses}
+                                disabled={refreshingStatuses}
+                                className="text-xs font-medium px-2.5 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+                                title="Re-read the SSG enrolment status for these applications"
+                            >
+                                {refreshingStatuses ? 'Refreshing…' : 'Refresh status'}
+                            </button>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">{filteredResults.length} record{filteredResults.length !== 1 ? 's' : ''}</span>
+                        </div>
                     </div>
                     {filteredResults.length === 0 ? (
                         <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No records in this category.</div>
@@ -440,12 +819,37 @@ export const UploadDirectApplicationView: React.FC = () => {
                                             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.message}</td>
                                             <td className="px-4 py-3 text-center">
                                                 {(() => {
+                                                    // Say what happened in words, and show the enrolment reference —
+                                                    // it was being hidden in a tooltip behind a coloured square, so a
+                                                    // successful enrolment was indistinguishable from an unknown one.
+                                                    const chip = (cls: string, label: string, title?: string) => (
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${cls}`} title={title}>{label}</span>
+                                                    );
                                                     if (r.action !== 'inserted' && r.action !== 'updated') return <span className="text-gray-300">-</span>;
                                                     const s = r.enrolStatus;
-                                                    if (!s || s === 'pending') return autoEnrolPolling ? <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /> : <span className="inline-flex items-center justify-center w-5 h-5 rounded border-2 border-gray-300" />;
-                                                    if (s === 'pending_identity') return <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-yellow-100 text-yellow-700 text-xs font-bold" title={r.enrolError || 'Pending identity'}>!</span>;
-                                                    if (s === 'failed') return <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-red-100 text-red-600 text-xs font-bold" title={r.enrolError || 'Failed'}>-</span>;
-                                                    return <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-green-100 text-green-600 text-xs font-bold" title={`${s}${r.enrolmentId ? ` - ${r.enrolmentId}` : ''}`}>-</span>;
+                                                    if (!s || s === 'pending') {
+                                                        return autoEnrolPolling
+                                                            ? <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400"><span className="inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />enrolling…</span>
+                                                            : chip('bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300', 'not checked', 'The page stopped watching this row. Click "Refresh status" to re-read it.');
+                                                    }
+                                                    if (s === 'pending_identity') return chip('bg-yellow-100 text-yellow-800', 'needs ID', r.enrolError || 'Pending identity');
+                                                    if (s === 'failed') return chip('bg-red-100 text-red-700', 'failed', r.enrolError || 'Failed');
+                                                    // Enrolled, but a later step (invoice, Drive, grant/SFC) failed. Not red
+                                                    // — the learner IS enrolled — but it mustn't read as a clean success either.
+                                                    if (r.enrolError) {
+                                                        return (
+                                                            <span className="inline-flex flex-col items-center gap-0.5">
+                                                                {chip('bg-amber-100 text-amber-800', 'enrolled — see note', `Enrolled but a later step failed — ${r.enrolError}`)}
+                                                                {r.enrolmentId && <span className="font-mono text-[10px] text-gray-500 dark:text-gray-400">{r.enrolmentId}</span>}
+                                                            </span>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <span className="inline-flex flex-col items-center gap-0.5">
+                                                            {chip('bg-green-100 text-green-700', s === 'invoiced' ? 'invoiced' : s === 'grant_found' ? 'grant found' : 'enrolled', s)}
+                                                            {r.enrolmentId && <span className="font-mono text-[10px] text-gray-500 dark:text-gray-400">{r.enrolmentId}</span>}
+                                                        </span>
+                                                    );
                                                 })()}
                                             </td>
                                         </tr>
@@ -561,10 +965,290 @@ export const UploadDirectApplicationView: React.FC = () => {
         </Card>
     );
 
+    const TPG_PHASE_LABEL: Record<string, string> = {
+        starting: 'Starting…',
+        awaiting_login: 'Waiting for Singpass login',
+        collecting: 'Finding pending applications',
+        awaiting_approval: 'Waiting for your approval',
+        confirming: 'Confirming applications',
+        downloading: 'Preparing enrolment data',
+        parsing: 'Preparing enrolment data',
+        done: 'Done',
+        cancelled: 'Stopped',
+        error: 'Error',
+    };
+    // 'pending' (queued, not yet looked at) and 'would-confirm' (checked, dry run
+    // stopped short of confirming) must read differently — sharing a label made a
+    // dry run look like it had processed everything it found.
+    const tpgStatusLabel = (s: string): string => ({
+        pending: 'queued',
+        confirming: 'confirming…',
+        confirmed: 'confirmed',
+        'would-confirm': 'would be confirmed',
+        skipped: 'skipped',
+        failed: 'failed',
+    } as Record<string, string>)[s] || s;
+    const tpgAppChipClass = (s: string) =>
+        s === 'confirmed' ? 'bg-green-100 text-green-700'
+            : s === 'would-confirm' ? 'bg-yellow-100 text-yellow-700'
+                : s === 'confirming' ? 'bg-blue-100 text-blue-700'
+                    : s === 'failed' ? 'bg-red-100 text-red-700'
+                        : s === 'skipped' ? 'bg-gray-100 text-gray-600'
+                            : 'bg-gray-100 text-gray-500';
+
+    // A finished run that found nothing. `found` is the count BEFORE Limit is
+    // applied, so this stays true whatever Limit was typed — a Limit of 1 over an
+    // empty list still means there was nothing to confirm.
+    const tpgNothingToConfirm = !!tpgJob && tpgJob.phase === 'done' && tpgJob.found === 0;
+    // When it was checked matters more than that it was checked: this panel can
+    // sit on screen long after the run, and a stale "all clear" is misleading.
+    const tpgCheckedAt = tpgJob?.updatedAt
+        ? new Date(tpgJob.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '';
+    // A run takes minutes, so "how long has this been going?" is the first thing
+    // you want to know when it feels stuck. Ticks off tpgNow while running.
+    const tpgElapsed = tpgJob?.startedAt
+        ? Math.max(0, Math.round(((tpgRunning ? tpgNow : tpgJob.updatedAt) - tpgJob.startedAt) / 1000))
+        : 0;
+
     return (
         <div className="space-y-6">
             {headerRow}
+            <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 flex-shrink-0 rounded-full bg-purple-100 dark:bg-purple-800/40 flex items-center justify-center">
+                            <Icon name={IconName.Download} className="w-5 h-5 text-purple-600 dark:text-purple-300" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Confirm &amp; fetch from TPGateway</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 max-w-xl">
+                                Opens a browser for you to log in with Singpass, confirms pending Direct Applications, then reads each learner's details and enrols them — in one go. Runs on this computer only (local dev). <strong>Dry run</strong> finds and checks the pending ones without confirming anything. Leave <strong>Limit</strong> empty and it will show you how many it found and wait for your approval before confirming.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-end gap-2">
+                        <label className="block">
+                            <span className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">Limit</span>
+                            <input type="number" min="1" value={tpgMax} onChange={e => setTpgMax(e.target.value)} placeholder="all"
+                                disabled={tpgRunning}
+                                className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        </label>
+                        <Button variant="outline" onClick={() => runTpg(true)} disabled={tpgRunning}>Dry run</Button>
+                        <Button onClick={() => runTpg(false)} disabled={tpgRunning}>Confirm &amp; Enrol</Button>
+                        {tpgRunning && (
+                            <Button variant="outline" onClick={cancelTpg} disabled={tpgCancelling}
+                                className="!text-red-600 !border-red-300 hover:!bg-red-50 dark:!text-red-300 dark:!border-red-700 dark:hover:!bg-red-900/30">
+                                {tpgCancelling ? 'Stopping…' : 'Cancel'}
+                            </Button>
+                        )}
+                    </div>
+                </div>
+
+                {tpgJob && (
+                    <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <div className="flex items-center gap-2">
+                                {tpgRunning && <span className="inline-block w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />}
+                                <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{TPG_PHASE_LABEL[tpgJob.phase] || tpgJob.phase}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                {/* Hidden in two cases, both of them duplication: the all-clear
+                                    block says it in full, and while running the feed's newest
+                                    line already says it — the header was echoing the phase
+                                    label verbatim next to itself. */}
+                                {!tpgNothingToConfirm && !(tpgRunning && tpgJob.log?.length > 0) && (
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 text-right">{tpgJob.message}</span>
+                                )}
+                                {/* "Clear" implies discarding a result worth keeping. When the
+                                    answer is simply "nothing to do", there is no result to
+                                    clear — you are just dismissing a notice, which is what an
+                                    X means everywhere else. */}
+                                {!tpgRunning && (tpgNothingToConfirm ? (
+                                    <button onClick={() => setTpgJob(null)} aria-label="Dismiss" title="Dismiss"
+                                        className="flex-shrink-0 p-1 rounded text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                        <Icon name={IconName.Close} className="w-4 h-4" />
+                                    </button>
+                                ) : (
+                                    <button onClick={() => setTpgJob(null)}
+                                        className="flex-shrink-0 text-xs font-medium px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                        Clear
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        {tpgJob.dryRun && !tpgNothingToConfirm && (
+                            <p className="text-[11px] mt-1 text-indigo-600 dark:text-indigo-300">Dry run — nothing will be confirmed on TPGateway.</p>
+                        )}
+                        {/* Finding nothing to do is a success, so it reads as one. The
+                            old panel showed a raw status line plus a full purple bar at
+                            100%, which looks like work was completed. */}
+                        {tpgNothingToConfirm && (
+                            <div className="mt-3 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 p-3">
+                                <div className="flex items-start gap-3">
+                                    <div className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                                        <svg className="w-3 h-3 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+                                            All caught up — nothing to confirm
+                                        </p>
+                                        {/* One template string, not text split around JSX
+                                            expressions — that quietly inserts stray spaces. */}
+                                        <p className="text-xs text-emerald-800 dark:text-emerald-300 mt-1">
+                                            {`No Direct Applications on TPGateway are waiting for confirmation${tpgCheckedAt ? ` as of ${tpgCheckedAt}` : ''}. Nothing was confirmed or changed.`}
+                                        </p>
+                                        {tpgJob.screenshot && (
+                                            <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/70 mt-1.5">
+                                                Expecting some? A screenshot of the TPGateway list was saved to scratch/ so you can check what it showed.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {tpgJob.phase === 'awaiting_approval' && (
+                            <div className="mt-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3">
+                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                                    {tpgJob.total} application(s) are ready to confirm.
+                                </p>
+                                <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
+                                    Nothing has been confirmed on TPGateway yet. Check the list below, then approve.
+                                    Confirming cannot be undone.
+                                </p>
+                                <div className="flex items-center gap-2 mt-3">
+                                    <Button onClick={approveTpg} disabled={tpgApproving}>
+                                        {tpgApproving ? 'Approving…' : `Confirm all ${tpgJob.total}`}
+                                    </Button>
+                                    <Button variant="outline" onClick={cancelTpg} disabled={tpgCancelling}>
+                                        {tpgCancelling ? 'Stopping…' : 'Cancel'}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                        {tpgJob.found > tpgJob.total && tpgJob.total > 0 && (
+                            <p className="text-[11px] mt-1 text-gray-500 dark:text-gray-400">
+                                {tpgJob.found} application(s) are awaiting confirmation — this run is limited to {tpgJob.total}.
+                            </p>
+                        )}
+                        {tpgJob.phase === 'cancelled' && (
+                            <p className="text-[11px] mt-1 text-red-600 dark:text-red-300">
+                                Stopped by you. Anything already confirmed on TPGateway was still enrolled.
+                            </p>
+                        )}
+                        {!tpgNothingToConfirm && (() => {
+                            const doneCount = tpgJob.apps.filter(a => ['confirmed', 'would-confirm', 'skipped', 'failed'].includes(a.status)).length;
+                            const total = tpgJob.total || 0;
+                            return (
+                                <div className="mt-3">
+                                    <div className="flex justify-between text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                                        <span>{total > 0 ? `${doneCount} / ${total}` : (tpgJob.phase === 'done' ? 'Complete' : 'Working…')}</span>
+                                        <span className="tabular-nums">{fmtElapsed(tpgElapsed)} · {Math.round(tpgProgress)}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                                        <div className="h-2 rounded-full bg-purple-500 transition-all duration-200 ease-out"
+                                            style={{ width: `${tpgProgress}%` }} />
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                        {/* What it is doing right now. The chips below say where each
+                            application ended up; this says what the run is touching at
+                            this second, which is the difference between "slow" and
+                            "hung". Newest last, so it reads like a terminal. */}
+                        {!tpgNothingToConfirm && tpgJob.log?.length > 0 && (
+                            <div className="mt-4">
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Activity</p>
+                                    {tpgRunning && (
+                                        <span className="flex items-center gap-1.5 text-[10px] font-medium text-purple-500 dark:text-purple-400">
+                                            <span className="relative flex w-1.5 h-1.5">
+                                                <span className="absolute inline-flex w-full h-full rounded-full bg-purple-400 opacity-75 animate-ping" />
+                                                <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-purple-500" />
+                                            </span>
+                                            Live
+                                        </span>
+                                    )}
+                                </div>
+                                <div ref={tpgFeedRef}
+                                    className="max-h-44 overflow-y-auto rounded-xl border border-gray-200/80 dark:border-gray-700/60 bg-gray-50/70 dark:bg-gray-900/40 px-4 py-3">
+                                    <ol className="space-y-3">
+                                        {tpgJob.log.slice(-12).map((entry, i, shown) => {
+                                            const isLast = i === shown.length - 1;
+                                            const isCurrent = isLast && tpgRunning;
+                                            return (
+                                                <li key={`${entry.at}-${i}`} className="relative flex gap-3">
+                                                    {/* Thread the dots together so the feed reads as one
+                                                        sequence of steps rather than loose lines. */}
+                                                    {!isLast && (
+                                                        <span aria-hidden
+                                                            className="absolute left-[4px] top-3 -bottom-3 w-px bg-gray-200 dark:bg-gray-700" />
+                                                    )}
+                                                    <span className="relative flex-shrink-0 mt-1.5 w-[9px] h-[9px]">
+                                                        {isCurrent ? (
+                                                            <>
+                                                                <span className="absolute inset-0 rounded-full bg-purple-400 opacity-60 animate-ping" />
+                                                                <span className="relative block w-[9px] h-[9px] rounded-full bg-purple-500" />
+                                                            </>
+                                                        ) : (
+                                                            <span className="block w-[9px] h-[9px] rounded-full bg-gray-300 dark:bg-gray-600 ring-4 ring-gray-50/70 dark:ring-gray-900/40" />
+                                                        )}
+                                                    </span>
+                                                    <div className="min-w-0 flex-1 flex items-baseline justify-between gap-3">
+                                                        <span className={`text-xs leading-relaxed ${isCurrent
+                                                            ? 'font-semibold text-gray-900 dark:text-gray-50'
+                                                            : 'text-gray-500 dark:text-gray-400'}`}>
+                                                            {entry.text}
+                                                        </span>
+                                                        <span className="flex-shrink-0 text-[10px] tabular-nums text-gray-400 dark:text-gray-600">
+                                                            {new Date(entry.at).toLocaleTimeString([], { hour12: false })}
+                                                        </span>
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ol>
+                                </div>
+                            </div>
+                        )}
+                        {tpgJob.apps.length > 0 && (
+                            <div className="mt-3 max-h-64 overflow-y-auto rounded border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                                {tpgJob.apps.map(a => (
+                                    <div key={a.id} className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs">
+                                        <span className="min-w-0 truncate">
+                                            <span className="font-semibold text-gray-800 dark:text-gray-100">{a.name || '—'}</span>
+                                            <span className="ml-2 font-mono text-gray-400 dark:text-gray-500">{a.id}</span>
+                                        </span>
+                                        <span className={`flex-shrink-0 px-2 py-0.5 rounded-full font-semibold ${tpgAppChipClass(a.status)}`} title={a.reason || ''}>
+                                            {tpgStatusLabel(a.status)}{a.reason ? ` — ${a.reason}` : ''}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {tpgJob.phase === 'error' && tpgJob.screenshot && (
+                            <p className="text-[11px] mt-2 text-gray-500 dark:text-gray-400">A debug screenshot was saved to scratch/ for troubleshooting.</p>
+                        )}
+                    </div>
+                )}
+            </Card>
+
             <UploadStep />
+
+            {toastMsg && (
+                <div className={`fixed top-5 right-5 z-[9999] max-w-sm w-full transition-all duration-300 ${toastVisible ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0'}`}>
+                    <div className={`flex items-start gap-3 px-4 py-3.5 rounded-xl shadow-lg border backdrop-blur-sm ${toastIsError ? 'bg-red-950/90 border-red-800/40 text-red-200' : 'bg-emerald-950/90 border-emerald-800/40 text-emerald-200'}`}>
+                        <div className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center ${toastIsError ? 'bg-red-500/20' : 'bg-emerald-500/20'}`}>
+                            {toastIsError
+                                ? <Icon name={IconName.Close} className="w-3 h-3 text-red-400" />
+                                : <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </div>
+                        <p className="text-sm leading-snug">{toastMsg}</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -595,6 +1279,10 @@ export const ViewDirectApplicationView: React.FC = () => {
     // sequence. syncAllStep drives the spinner label so the admin sees progress.
     const [isSyncingAll, setIsSyncingAll] = useState(false);
     const [syncAllStep, setSyncAllStep] = useState('');
+    // Repair for rows wrongly marked failed (see lib/daEnrolStatusRepair.ts).
+    const [repairBusy, setRepairBusy] = useState(false);
+    const [repairCount, setRepairCount] = useState<number | null>(null);
+    const [repairMsg, setRepairMsg] = useState<string | null>(null);
     const [emailToggleOn, setEmailToggleOn] = useState(false);
     const [emailToggleSaving, setEmailToggleSaving] = useState(false);
     const [invoiceEmailCc, setInvoiceEmailCc] = useState('');
@@ -997,6 +1685,40 @@ export const ViewDirectApplicationView: React.FC = () => {
     //   2. Sync Enrolment        — fill enrolment_id from the local enrollment table
     //   3. Sync Grants           — pull grants from SSG into ssg_grants
     //   4. Sync Calendar         — reconcile the calendar_added flag
+    /**
+     * Two-step by design: the first click only reports the count (writes
+     * nothing), the second applies it. Corrects rows marked failed that hold a
+     * real SSG enrolment id — it never marks anything AS failed.
+     */
+    const runStatusRepair = async (dryRun: boolean) => {
+        setRepairBusy(true);
+        setRepairMsg(null);
+        try {
+            const token = authService.getAuthToken();
+            const res = await fetch('/api/admin/repair-da-enrol-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ dryRun }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Could not check enrol statuses');
+            setRepairMsg(json.message);
+            if (dryRun) {
+                setRepairCount(json.matched);
+            } else {
+                setRepairCount(null);
+                await fetchApplications(); // pull the corrected rows back in
+            }
+        } catch (e) {
+            setRepairMsg(e instanceof Error ? e.message : 'Could not check enrol statuses');
+        } finally {
+            setRepairBusy(false);
+        }
+    };
+
     const handleSyncAll = async () => {
         if (!window.confirm(
             'Run full sync for ALL applications?\n\n' +
@@ -1184,8 +1906,31 @@ export const ViewDirectApplicationView: React.FC = () => {
         return (app.trainee_name || '').toLowerCase().includes(query) || (app.application_id || '').toLowerCase().includes(query) || (app.course_title || '').toLowerCase().includes(query) || (app.trainee_email || '').toLowerCase().includes(query) || (app.trainee_id || '').toLowerCase().includes(query) || (app.course_run_id || '').toLowerCase().includes(query);
     });
 
+    // Columns holding dates must be compared as dates, not text — "22 Jul 2026"
+    // and "2026-08-03" sort nonsensically against each other as strings.
+    const DATE_COLUMNS = ['application_date', 'course_start_date', 'course_end_date', 'created_at'];
+    const timeOf = (v: any): number | null => {
+        if (!v) return null;
+        const t = new Date(v).getTime();
+        return Number.isFinite(t) ? t : null;
+    };
+
     const sortedApplications = [...filteredApplications].sort((a, b) => {
-        const col = sortColumn || 'application_date'; const dir = sortColumn ? sortDirection : 'desc';
+        const col = sortColumn || '__recency';
+        const dir = sortColumn ? sortDirection : 'desc';
+
+        // Default view: newest first. Rows added by the TPGateway automation can
+        // still lack a DA date, so fall back to when the row was created rather
+        // than letting them sink to the bottom as empty strings.
+        if (col === '__recency' || DATE_COLUMNS.includes(col)) {
+            const ta = col === '__recency' ? (timeOf(a.application_date) ?? timeOf(a.created_at)) : timeOf(a[col]);
+            const tb = col === '__recency' ? (timeOf(b.application_date) ?? timeOf(b.created_at)) : timeOf(b[col]);
+            if (ta === null && tb === null) return 0;
+            if (ta === null) return 1;  // undated rows always last, either direction
+            if (tb === null) return -1;
+            return dir === 'asc' ? ta - tb : tb - ta;
+        }
+
         const valA = (a[col] || '').toString().toLowerCase(); const valB = (b[col] || '').toString().toLowerCase();
         if (valA < valB) return dir === 'asc' ? -1 : 1; if (valA > valB) return dir === 'asc' ? 1 : -1; return 0;
     });
@@ -1355,8 +2100,25 @@ export const ViewDirectApplicationView: React.FC = () => {
                             >
                                 {isSyncingAll ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />{syncAllStep ? `${syncAllStep}...` : 'Syncing...'}</> : <><Icon name={IconName.Sync} className="w-3.5 h-3.5 mr-1.5" />Sync</>}
                             </button>
+                            <button
+                                onClick={() => runStatusRepair(repairCount === null)}
+                                disabled={repairBusy}
+                                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg border border-amber-400 text-amber-700 dark:text-amber-300 dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                title="Find applications marked failed that actually hold an SSG enrolment ID, and correct their status. Checks first — nothing is changed until you click again."
+                            >
+                                {repairBusy
+                                    ? 'Checking...'
+                                    : repairCount === null
+                                        ? 'Check enrol statuses'
+                                        : repairCount > 0 ? `Fix ${repairCount} status(es)` : 'Nothing to fix'}
+                            </button>
                         </div>
                     </div>
+                    {repairMsg && (
+                        <div className="px-4 py-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border-b dark:border-gray-700">
+                            {repairMsg}
+                        </div>
+                    )}
 
                     {/* Toolbar */}
                     <div className="px-4 py-3 border-b bg-gray-50 dark:bg-gray-800 dark:border-gray-700 flex flex-wrap items-center gap-2">
@@ -1591,7 +2353,11 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                         : <span className="text-gray-400">-</span>}
                                                 </td>
                                                 <td className="px-2 py-1.5">
-                                                    {hasVisibleMainInvoice(app) && app.skillsfuture_credit_claim_id && app.sfc_invoice_id && ((app.sfc_invoice_drive_web_view_link || app.sfc_invoice_drive_file_id) || brokenDocumentKeys.has(getDocumentKey(app, 'sfc')))
+                                                    {/* Mirrors shouldGenerateSfcInvoice in the pipeline: a claim id OR an SFC
+                                                        amount means this row has SFC. Requiring the claim id hid invoices that
+                                                        had genuinely been created — the id only exists once a learner claims,
+                                                        which is long after the invoice is raised. */}
+                                                    {hasVisibleMainInvoice(app) && (app.skillsfuture_credit_claim_id || parseFloat(app.skillsfuture_credit || 0) > 0) && app.sfc_invoice_id && ((app.sfc_invoice_drive_web_view_link || app.sfc_invoice_drive_file_id) || brokenDocumentKeys.has(getDocumentKey(app, 'sfc')))
                                                         ? renderDocumentButton(app, 'sfc', 'bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:hover:bg-purple-900/40')
                                                         : <span className="text-gray-400">-</span>}
                                                 </td>

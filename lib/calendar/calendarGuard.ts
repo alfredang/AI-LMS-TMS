@@ -24,3 +24,21 @@ export function calendarWritesAllowed(): boolean {
 /** One-line reason for logs when writes are skipped. */
 export const CALENDAR_WRITES_BLOCKED_MSG =
   'Calendar writes disabled for this environment (set ENABLE_CALENDAR_WRITES=true to allow)';
+
+/**
+ * Why a calendar write was skipped, or null if it may proceed.
+ *
+ * Two very different things stop a write — the tenant's `sync_google_calendar`
+ * toggle, and this environment's write guard — and callers used to log "sync is
+ * off" for both. On a dev machine that reads as a broken toggle when the real
+ * reason is the guard, which sends you looking in the wrong place.
+ */
+export function calendarSkipReason(syncGoogleCalendar: unknown): string | null {
+  if (!syncGoogleCalendar) {
+    return 'the sync_google_calendar toggle is OFF for this training provider';
+  }
+  if (!calendarWritesAllowed()) {
+    return `${CALENDAR_WRITES_BLOCKED_MSG} — NODE_ENV=${process.env.NODE_ENV ?? 'undefined'}, ENABLE_CALENDAR_WRITES=${process.env.ENABLE_CALENDAR_WRITES ?? 'unset'}`;
+  }
+  return null;
+}

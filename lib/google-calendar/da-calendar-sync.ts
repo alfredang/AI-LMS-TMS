@@ -2,7 +2,7 @@ import { google } from 'googleapis';
 import pool from '../db';
 import { getGoogleCredentials } from '../google-auth/googleAuth';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
-import { calendarWritesAllowed } from '../calendar/calendarGuard';
+import { calendarWritesAllowed, calendarSkipReason } from '../calendar/calendarGuard';
 import * as crypto from 'crypto';
 
 /**
@@ -81,14 +81,20 @@ export async function addDaLearnerToCalendar(
     const tpRes = await pool.query(
       `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
     );
-    if (!tpRes.rows[0]?.sync_google_calendar || !calendarWritesAllowed()) return result;
+    // Returning silently here made "Add to Calendar" look like it worked (HTTP
+    // 200, 0 events added) with nothing in the log to say why.
+    const addSkip = calendarSkipReason(tpRes.rows[0]?.sync_google_calendar);
+    if (addSkip) {
+      console.log(`📅 [da-calendar-add] skipping ${learnerEmail} — ${addSkip}`);
+      return result;
+    }
 
     // 1b. Verify the application is still active (not cancelled)
     const activeAppRes = await pool.query(
       `SELECT application_status FROM da_application 
        WHERE LOWER(trainee_email) = LOWER($1) 
          AND (course_run_id = $2 OR course_run_id = (SELECT course_run_id FROM course_run WHERE id::text = $2 LIMIT 1))
-         AND LOWER(application_status) IN ('confirmed', 'confirm application')
+         AND (LOWER(application_status) = 'confirm application' OR LOWER(application_status) LIKE 'confirmed%')
        LIMIT 1`,
       [learnerEmail, courseRunUuid]
     );
@@ -442,7 +448,11 @@ export async function removeDaLearnerFromCalendar(
     const tpRes = await pool.query(
       `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
     );
-    if (!tpRes.rows[0]?.sync_google_calendar || !calendarWritesAllowed()) return result;
+    const removeSkip = calendarSkipReason(tpRes.rows[0]?.sync_google_calendar);
+    if (removeSkip) {
+      console.log(`📅 [da-calendar-remove] skipping — ${removeSkip}`);
+      return result;
+    }
 
     const credentials = await getGoogleCredentials(pool);
     const oauth2Client = new google.auth.OAuth2(
@@ -650,7 +660,7 @@ export async function retryFailedCalendarSyncs(): Promise<void> {
        WHERE enrolment_status = 'Confirmed'
          AND (calendar_added IS NOT TRUE)
          AND trainee_email IS NOT NULL
-         AND LOWER(application_status) IN ('confirm application', 'confirmed')`
+         AND (LOWER(application_status) = 'confirm application' OR LOWER(application_status) LIKE 'confirmed%')`
     );
 
     if (daRes.rows.length === 0) return;

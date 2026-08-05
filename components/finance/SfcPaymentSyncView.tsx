@@ -3,6 +3,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { useLms } from '@contexts/LmsContext';
+import { authService } from '@lib/services/authService';
 
 type SfcPreviewRow = {
   id: number;
@@ -112,6 +113,12 @@ const SfcPaymentSyncView: React.FC = () => {
   const { currentUser } = useLms();
   const actorUserId = currentUser?.id ? String(currentUser.id) : '';
   const fileInputId = useId();
+
+  // One-off catch-up for Direct Applications confirmed before claim ids were
+  // copied across. New payout imports fill them automatically.
+  const [claimFixBusy, setClaimFixBusy] = useState(false);
+  const [claimFixMsg, setClaimFixMsg] = useState<string | null>(null);
+  const [claimFixPending, setClaimFixPending] = useState<number | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -386,6 +393,32 @@ const SfcPaymentSyncView: React.FC = () => {
       setInvoiceGenErrors((prev) => new Map(prev).set(rowId, e?.message || 'Invoice generation failed'));
     } finally {
       setInvoiceGenLoading((prev) => { const s = new Set(prev); s.delete(rowId); return s; });
+    }
+  };
+
+  // Dry run first, always: it reports the count without writing, so the number
+  // is visible before anything changes. Filling only ever populates a blank.
+  const runClaimFix = async (dryRun: boolean) => {
+    setClaimFixBusy(true);
+    setClaimFixMsg(null);
+    try {
+      const token = authService.getAuthToken();
+      const res = await fetch('/api/admin/backfill-da-sfc-claim-ids', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ dryRun }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Could not check claim ids');
+      setClaimFixMsg(json.message);
+      setClaimFixPending(dryRun ? json.matched : 0);
+    } catch (e) {
+      setClaimFixMsg(e instanceof Error ? e.message : 'Could not check claim ids');
+    } finally {
+      setClaimFixBusy(false);
     }
   };
 
@@ -833,6 +866,36 @@ const SfcPaymentSyncView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* One-off catch-up — new payout imports fill claim ids automatically. */}
+      <Card className="p-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h3 className="text-sm font-semibold text-on-surface">Claim IDs on Direct Applications</h3>
+            <p className="text-xs text-on-surface-secondary mt-1 max-w-2xl">
+              A claim ID only exists once a learner has claimed, so applications confirmed
+              earlier can be missing it. Uploading a payout report now fills them in
+              automatically — use this once to catch up the older ones. It only fills blanks
+              and never changes a claim ID that is already there.
+            </p>
+            {claimFixMsg && (
+              <p className="text-xs mt-2 text-on-surface">{claimFixMsg}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => runClaimFix(true)} disabled={claimFixBusy}>
+              {claimFixBusy ? 'Checking…' : 'Check'}
+            </Button>
+            <Button
+              onClick={() => runClaimFix(false)}
+              disabled={claimFixBusy || !claimFixPending}
+              title={!claimFixPending ? 'Run Check first' : undefined}
+            >
+              Fill{claimFixPending ? ` ${claimFixPending}` : ''}
+            </Button>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 };
