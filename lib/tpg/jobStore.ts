@@ -242,6 +242,30 @@ function isStale(job: TpgJob): boolean {
   return Date.now() - job.updatedAt > limit;
 }
 
+/**
+ * When an agent last asked for work.
+ *
+ * Whether anything can actually run is invisible from the live site otherwise —
+ * a run just sits at "waiting" with no way for the person who clicked to tell
+ * whether it will be picked up in five seconds or never. The agent polls every
+ * few seconds, so recent contact is a good proxy for "the helper is on".
+ */
+let lastAgentSeenAt = 0;
+
+/** Generous next to the agent's 5s idle poll, so a slow tick is not "offline". */
+const AGENT_ONLINE_WINDOW_MS = 25_000;
+
+export function markAgentSeen(): void {
+  lastAgentSeenAt = Date.now();
+}
+
+export function agentStatus(): { online: boolean; lastSeenAt: number | null } {
+  return {
+    online: lastAgentSeenAt > 0 && Date.now() - lastAgentSeenAt < AGENT_ONLINE_WINDOW_MS,
+    lastSeenAt: lastAgentSeenAt || null,
+  };
+}
+
 /** Keep only the tail — the panel shows a handful of lines and this is memory. */
 const MAX_LOG_LINES = 80;
 
