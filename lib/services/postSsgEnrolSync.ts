@@ -85,7 +85,7 @@ export async function runPostSsgEnrolSync(input: PostSsgEnrolSyncInput): Promise
   try {
     await client.query('BEGIN');
 
-    let learnerRow = await client.query(`SELECT id FROM app_user WHERE email = $1 LIMIT 1`, [traineeEmail]);
+    let learnerRow = await client.query(`SELECT id FROM app_user WHERE LOWER(email) = LOWER($1) LIMIT 1`, [traineeEmail]);
 
     let learnerId: string;
     let learnerCreated = false;
@@ -97,7 +97,7 @@ export async function runPostSsgEnrolSync(input: PostSsgEnrolSyncInput): Promise
       const inserted = await client.query(
         `INSERT INTO app_user (email, password, password_hash, full_name)
          VALUES ($1, $2, $2, $3)
-         ON CONFLICT (email) DO NOTHING
+         ON CONFLICT ((LOWER(email))) DO NOTHING
          RETURNING id`,
         [traineeEmail, placeholderPwd, fullName]
       );
@@ -106,7 +106,7 @@ export async function runPostSsgEnrolSync(input: PostSsgEnrolSyncInput): Promise
         learnerId = inserted.rows[0].id;
         learnerCreated = true;
       } else {
-        const existing = await client.query(`SELECT id FROM app_user WHERE email = $1 LIMIT 1`, [traineeEmail]);
+        const existing = await client.query(`SELECT id FROM app_user WHERE LOWER(email) = LOWER($1) LIMIT 1`, [traineeEmail]);
         learnerId = existing.rows[0].id;
       }
 
