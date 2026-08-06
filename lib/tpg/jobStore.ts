@@ -156,7 +156,32 @@ export function createJob(id: string, dryRun: boolean, max: number | null): TpgJ
 }
 
 export function getJob(id: string): TpgJob | undefined {
-  return jobs.get(id);
+  const job = jobs.get(id);
+  if (job) reapIfStale(job);
+  return job;
+}
+
+/**
+ * Finish a job whose driver has gone silent.
+ *
+ * Cancel raises a flag for the driver to act on at a safe point. If the driver
+ * has died, nobody ever acts on it and the panel sits at "Stopping…"
+ * indefinitely — pressing Cancel appeared to do nothing at all. There is no
+ * background timer over this in-memory store, so the check runs whenever a job
+ * is read, which is every poll from the panel.
+ *
+ * Only ever applied to a job nothing is driving (see isStale), so a run that is
+ * simply waiting for someone to finish Singpass is never cut short.
+ */
+function reapIfStale(job: TpgJob): void {
+  if (!isStale(job)) return;
+  job.phase = 'cancelled';
+  job.message = job.cancelRequested
+    ? 'Stopped. Anything already confirmed on TPGateway was still enrolled.'
+    : 'Lost contact with the machine running this. Anything already confirmed on TPGateway was still enrolled.';
+  job.needsOperator = false;
+  job.screen = null;
+  job.updatedAt = Date.now();
 }
 
 /** True once a job can no longer change — nothing is driving a browser for it. */
@@ -185,6 +210,14 @@ export function getActiveJob(): TpgJob | undefined {
 const STALE_AFTER_MS = 90_000;
 
 /**
+ * How long a driver has to acknowledge a cancel before we stop waiting.
+ *
+ * Comfortably longer than the agent's one-second poll, short enough that the
+ * button does not feel broken.
+ */
+const CANCEL_ACK_MS = 12_000;
+
+/**
  * A job nobody is driving any more.
  *
  * Without this, an agent that dies mid-run leaves its job active forever:
@@ -195,11 +228,18 @@ const STALE_AFTER_MS = 90_000;
 function isStale(job: TpgJob): boolean {
   if (isFinished(job)) return false;
   // Waiting on a person is not staleness — they may be finding their phone.
-  if (job.phase === 'queued' || job.phase === 'awaiting_login' || job.phase === 'awaiting_approval') {
-    return false;
+  // A cancel is different: it is a live driver's job to acknowledge that
+  // promptly whatever it was doing, so silence after one means it is gone.
+  if (!job.cancelRequested) {
+    if (job.phase === 'queued' || job.phase === 'awaiting_login' || job.phase === 'awaiting_approval') {
+      return false;
+    }
+    if (job.needsOperator) return false;
   }
-  if (job.needsOperator) return false;
-  return Date.now() - job.updatedAt > STALE_AFTER_MS;
+  // A driver that has been asked to stop gets seconds, not a minute and a half
+  // — otherwise Cancel looks broken to the person who pressed it.
+  const limit = job.cancelRequested ? CANCEL_ACK_MS : STALE_AFTER_MS;
+  return Date.now() - job.updatedAt > limit;
 }
 
 /** Keep only the tail — the panel shows a handful of lines and this is memory. */
