@@ -20,7 +20,7 @@
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getAuthedUser } from '@lib/auth/requireRole';
-import { claimQueuedJob, getJob, drainInput } from '@lib/tpg/jobStore';
+import { claimQueuedJob, getJob, drainInput, markAgentSeen } from '@lib/tpg/jobStore';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -29,6 +29,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const user = await getAuthedUser(req);
   if (!user) return res.status(401).json({ success: false, error: 'Not authenticated' });
+
+  // Every poll is proof the helper is alive — that is what the live site shows
+  // staff so they know whether clicking will actually do anything.
+  markAgentSeen();
 
   // An agent that is mid-run asks about its own job rather than claiming a new
   // one — that is how it collects the operator's clicks.

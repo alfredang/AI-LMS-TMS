@@ -82,6 +82,10 @@ export const UploadDirectApplicationView: React.FC = () => {
     // moving between polls instead of jumping every 2s.
     const [tpgNow, setTpgNow] = useState(() => Date.now());
     const tpgFeedRef = useRef<HTMLDivElement | null>(null);
+    // Whether a helper machine is listening. Runs started here are driven by one
+    // (see /api/admin/tpg-confirm/helper), and if none is on, a click just waits
+    // — better to say so before it is pressed than after.
+    const [tpgHelper, setTpgHelper] = useState<{ notNeeded: boolean; online: boolean } | null>(null);
     // A run that fails to START has no job, so it never reached the progress
     // panel — the message went to the upload card's error banner further down
     // the page, where it read as "the button did nothing".
@@ -414,6 +418,24 @@ export const UploadDirectApplicationView: React.FC = () => {
         const el = tpgFeedRef.current;
         if (el) el.scrollTop = el.scrollHeight;
     }, [tpgJob?.log?.length]);
+
+    // Poll the helper's presence. Slow on purpose: this only decides a label,
+    // and a run in progress is already reporting through /status.
+    useEffect(() => {
+        let cancelled = false;
+        const check = async () => {
+            try {
+                const res = await fetch('/api/admin/tpg-confirm/helper', { headers: authHeaders() });
+                const json = await res.json();
+                if (!cancelled && json?.success) {
+                    setTpgHelper({ notNeeded: !!json.notNeeded, online: !!json.online });
+                }
+            } catch { /* leave the last known state rather than flicker */ }
+        };
+        check();
+        const iv = setInterval(check, 20000);
+        return () => { cancelled = true; clearInterval(iv); };
+    }, []);
 
     // Elapsed clock, once a second. Covers BOTH halves of a run — the browser
     // phase and the enrolment phase — since either can be the one you are sat
@@ -1035,6 +1057,12 @@ export const UploadDirectApplicationView: React.FC = () => {
     const tpgNothingToConfirm = !!tpgJob && tpgJob.phase === 'done' && tpgJob.found === 0;
     // When it was checked matters more than that it was checked: this panel can
     // sit on screen long after the run, and a stale "all clear" is misleading.
+    // Known-offline only. While the first check is still in flight tpgHelper is
+    // null, and disabling the buttons on "not yet known" would make the page
+    // look broken for its first second.
+    const tpgHelperOffline = !!tpgHelper && !tpgHelper.notNeeded && !tpgHelper.online;
+    const OFFLINE_HINT = 'The office machine that runs this is switched off, so a run cannot start.';
+
     const tpgCheckedAt = tpgJob?.updatedAt
         ? new Date(tpgJob.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : '';
@@ -1059,7 +1087,31 @@ export const UploadDirectApplicationView: React.FC = () => {
                             <Icon name={IconName.Download} className="w-5 h-5 text-purple-600 dark:text-purple-300" />
                         </div>
                         <div>
-                            <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Confirm &amp; fetch from TPGateway</h3>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Confirm &amp; fetch from TPGateway</h3>
+                                {/* Always says where the browser will open. Hiding this where no
+                                    helper is involved left the most useful fact — that it runs on
+                                    THIS machine — unsaid, and made the badge look broken. */}
+                                {tpgHelper?.notNeeded && (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                        Runs on this computer
+                                    </span>
+                                )}
+                                {tpgHelper && !tpgHelper.notNeeded && (
+                                    tpgHelper.online ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                            Ready
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                            Office machine offline
+                                        </span>
+                                    )
+                                )}
+                            </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 max-w-xl">
                                 Opens a browser for you to log in with Singpass, confirms pending Direct Applications, then reads each learner's details and enrols them — in one go. <strong>Dry run</strong> finds and checks the pending ones without confirming anything. Leave <strong>Limit</strong> empty and it will show you how many it found and wait for your approval before confirming.
                             </p>
@@ -1080,8 +1132,13 @@ export const UploadDirectApplicationView: React.FC = () => {
                                 disabled={tpgRunning}
                                 className="w-20 px-2 py-1.5 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                         </label>
-                        <Button variant="outline" onClick={() => runTpg(true)} disabled={tpgRunning}>Dry run</Button>
-                        <Button onClick={() => runTpg(false)} disabled={tpgRunning}>Confirm &amp; Enrol</Button>
+                        {/* Disabled rather than explained: a button that queues a run nothing
+                            can pick up is worse than no button, and the badge above already
+                            says why. */}
+                        <Button variant="outline" onClick={() => runTpg(true)} disabled={tpgRunning || tpgHelperOffline}
+                            title={tpgHelperOffline ? OFFLINE_HINT : undefined}>Dry run</Button>
+                        <Button onClick={() => runTpg(false)} disabled={tpgRunning || tpgHelperOffline}
+                            title={tpgHelperOffline ? OFFLINE_HINT : undefined}>Confirm &amp; Enrol</Button>
                         {tpgRunning && (
                             <Button variant="outline" onClick={cancelTpg} disabled={tpgCancelling}
                                 className="!text-red-600 !border-red-300 hover:!bg-red-50 dark:!text-red-300 dark:!border-red-700 dark:hover:!bg-red-900/30">
@@ -1186,18 +1243,13 @@ export const UploadDirectApplicationView: React.FC = () => {
                         {/* A queued run is waiting on something outside this page, so say
                             what — a creeping progress bar alone reads as work happening
                             when in fact nothing has started. */}
+                        {/* Short now: the badge above says whether a machine is listening, and
+                            the buttons are disabled when none is, so reaching this state at all
+                            means the helper dropped out mid-click. */}
                         {tpgJob.phase === 'queued' && (
-                            <div className="mt-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3">
-                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                                    Waiting for the office machine to pick this up
-                                </p>
-                                <p className="text-xs text-amber-800 dark:text-amber-300 mt-1 max-w-2xl">
-                                    TPGateway does not accept connections from this server, so the browser
-                                    runs on a machine at the office instead. Nothing happens until that
-                                    machine is on with the agent running. If nobody is expecting to run this
-                                    now, press Cancel.
-                                </p>
-                            </div>
+                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">
+                                Handing over to the office machine…
+                            </p>
                         )}
                         {tpgJob.dryRun && !tpgNothingToConfirm && (
                             <p className="text-[11px] mt-1 text-indigo-600 dark:text-indigo-300">Dry run — nothing will be confirmed on TPGateway.</p>
