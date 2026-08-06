@@ -290,11 +290,15 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     );
   }
 
-  // 1) Best-effort grant refresh (populates ssg_grants for BL / Non-BL split)
+  // 1) Grant refresh (populates ssg_grants for BL / Non-BL split).
+  // MUST be awaited: resolveGrantDeductionLinesForInvoice reads ssg_grants right after this,
+  // and DA enrolments can fall back to da_application's own subsidy fields when it's empty —
+  // but non-DA individual invoices have no such fallback, so a fire-and-forget refresh here
+  // raced that read and shipped invoices with the WSQ funding lines (and the GRN invoice,
+  // which only fires when grant lines exist) silently missing whenever this was the first
+  // grant fetch for the enrolment.
   try {
-    // Do not block invoice generation on SSG sync latency.
-    // `resolveGrantDeductionLinesForInvoice` can still use existing rows (or fall back).
-    void refreshGrantsForEnrolments([enrolmentId]);
+    await refreshGrantsForEnrolments([enrolmentId]);
   } catch (e) {
     console.warn('[invoice-job] Grant refresh failed (non-blocking):', e);
   }
