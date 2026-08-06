@@ -70,6 +70,7 @@ const FundingValidityView: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '', courseType: 'WSQ', newCourseCode: '' });
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const today = startOfDay(new Date());
   const fourMonthsAhead = startOfDay(FOUR_MONTHS_AHEAD(today));
@@ -195,6 +196,57 @@ const FundingValidityView: React.FC = () => {
     }
   };
 
+  // Export the full list (not just what's on screen) so it can be filtered in Excel.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+
+      const rows = wsqCourses.map(course => {
+        const validityDate = parseValidityDate(course.fundingValidity);
+        const renewDate = validityDate ? new Date(validityDate) : null;
+        if (renewDate) renewDate.setMonth(renewDate.getMonth() - 3);
+
+        return {
+          'Course Title': course.title,
+          'Course Ref Code (New)': course.newCourseCode || '',
+          'Course Ref Code (Old)': course.courseCode || '',
+          'Type': displayCourseType(course.courseType),
+          'Validity End Date': validityDate || '',
+          'Renew Date': renewDate || '',
+          'Status': !validityDate ? '' : validityDate < today ? 'Expired' : validityDate <= fourMonthsAhead ? 'Expiring Soon' : 'Valid',
+          'CAS': course.casScore != null ? Number(course.casScore) : '',
+          'ES': course.esScore != null ? Number(course.esScore) : '',
+          'Whitelist': (whitelistStateOverrides[course.id] ?? !!course.whitelistStatus) ? 'Yes' : 'No',
+          'Renew': (renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus)) ? 'Yes' : 'No',
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows, { cellDates: true });
+
+      // Header-row dropdowns in Excel — the Type column filters to WSQ / CASL.
+      ws['!autofilter'] = { ref: ws['!ref'] };
+      ws['!cols'] = [{ wch: 60 }, { wch: 20 }, { wch: 20 }, { wch: 8 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }];
+
+      // Date columns (E, F) render as dd/mm/yyyy like the table.
+      for (let r = 1; r <= rows.length; r++) {
+        for (const col of ['E', 'F']) {
+          const cell = ws[`${col}${r + 1}`];
+          if (cell && cell.t === 'd') cell.z = 'dd/mm/yyyy';
+        }
+      }
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Funding Validity');
+      XLSX.writeFile(wb, `funding-validity-${getLocalYMD(new Date())}.xlsx`);
+    } catch (err) {
+      console.error('Failed to export funding validity list:', err);
+      window.alert('Failed to download the list. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-64">
@@ -241,6 +293,13 @@ const FundingValidityView: React.FC = () => {
             <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Course Validity List</h4>
             <p className="text-sm text-gray-600 dark:text-gray-400">Sorted from earliest validity date to latest. Courses expiring within 4 months are highlighted.</p>
           </div>
+          <button
+            onClick={handleExport}
+            disabled={exporting || wsqCourses.length === 0}
+            className="shrink-0 px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {exporting ? 'Preparing…' : 'Download Excel'}
+          </button>
         </div>
 
         <div className="overflow-x-auto">
