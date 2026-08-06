@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { pushEnrolmentToSsgForLearner } from '../../../lib/ssg/pushEnrolmentToSsgForLearner';
@@ -11,7 +12,7 @@ import { cancelEnrolmentForLearnerOnRun } from '../../../lib/ssg/mutateEnrolment
  *   action 'cancel'          — cancel the TPG enrolment and clear the local enrolment_id
  *                              (the learner stays on the local roster).
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
   const { courseRunUuid, userId, email, action } = (req.body || {}) as
@@ -42,3 +43,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, status: 'error', message: e?.message || 'Internal server error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

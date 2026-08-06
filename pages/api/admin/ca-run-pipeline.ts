@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import {
@@ -10,26 +11,30 @@ import {
  *
  * Body: { applicationIds: string[] }   (required, at least one id)
  *
- * Runs the three-stage CA pipeline for the given rows:
+ * Runs the four-stage CA pipeline for the given rows:
  *   1. SSG enrolment       — skipped if enrolment_id already present
  *   2. Grant lookup        — per-row narrow search + course-run-wide sweep
  *   3. Google Calendar add — addCaLearnerToCalendar with the per-event lock
+ *   4. Auto-invoice        — grant-settled rows only (see guard below)
  *
- * Replaces the separate Sync Grants / Sync Calendar buttons. Invoice
- * generation stays explicit on its own button so admins control when QB
- * invoices are created.
+ * Replaces the separate Sync Grants / Sync Calendar buttons. The invoice
+ * sweep mirrors bulkProcessCompanyApplications: generateInvoicesForApplications
+ * is internally guarded to bill only rows that are SSG-enroled AND grant-
+ * settled (or explicitly grant-ineligible), so a row still awaiting its grant
+ * is never invoiced with a wrong amount. The explicit "Generate Invoice" button
+ * remains for re-billing / manually clearing stragglers.
  *
  * processCompanyApplication is idempotent at each stage: already-enroled
  * rows skip SSG, already-calendar'd learners short-circuit the patch,
  * already-graunted rows just re-confirm. Safe to re-run.
  *
- * Rows are processed 5 at a time (Promise.all batches) to mirror the
- * upload pipeline. Per-event advisory locks inside addCaLearnerToCalendar
- * prevent the parallel-patch race that originally left learners unticked.
+ * Rows are processed one at a time. SSG enrolment creation can return a
+ * transient generic "try again later" response when hit with parallel creates,
+ * so this endpoint mirrors the upload pipeline's conservative pacing.
  */
-const BATCH_SIZE = 5;
+const BATCH_SIZE = 1;
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -58,20 +63,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     for (let i = 0; i < uniqueIds.length; i += BATCH_SIZE) {
       const batch = uniqueIds.slice(i, i + BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map(async id => {
-          try {
-            return await processCompanyApplication(id);
-          } catch (err) {
-            return {
-              id,
-              success: false,
-              finalStatus: 'failed',
-              error: err instanceof Error ? err.message : String(err),
-            };
-          }
-        }),
-      );
+      const batchResults = [];
+      for (const id of batch) {
+        try {
+          batchResults.push(await processCompanyApplication(id));
+        } catch (err) {
+          batchResults.push({
+            id,
+            success: false,
+            finalStatus: 'failed',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
       results.push(...batchResults);
     }
 
@@ -92,12 +96,88 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `UPDATE public.company_application
           SET auto_enrol_status = CASE
                 WHEN enrolment_id IS NULL THEN 'failed'
+                WHEN COALESCE(invoice_id, '') <> '' THEN 'invoiced'
                 WHEN COALESCE(grant_id, '') <> '' OR COALESCE(grant_ineligible, false) = true THEN 'grant_found'
                 ELSE 'enroled'
               END,
+              -- Clear the stale error once the row has actually enrolled, so a
+              -- row wrongly stuck at 'failed' stops flagging once it succeeds.
+              auto_enrol_error = CASE WHEN enrolment_id IS NULL THEN auto_enrol_error ELSE NULL END,
               updated_at = now()
         WHERE id = ANY($1::uuid[])
-          AND auto_enrol_status = 'pending'`,
+          -- Re-classify both still-'pending' rows AND rows wrongly stuck at
+          -- 'failed' that have since acquired an enrolment_id (the first pass
+          -- stamped 'failed' before SSG returned the id). Genuinely-failed rows
+          -- (no enrolment_id) are not matched, so they correctly stay 'failed'.
+          AND (auto_enrol_status = 'pending'
+               OR (auto_enrol_status = 'failed' AND enrolment_id IS NOT NULL))`,
+      [uniqueIds],
+    );
+
+    // Stage 4 — auto-invoice. Mirrors bulkProcessCompanyApplications. The
+    // generator is internally guarded (skippedNotEnrolled / skippedAwaitingGrants
+    // / skippedAlreadyInvoiced), so it only bills enroled + grant-settled rows
+    // and never invoices a row that is still awaiting its grant. Non-fatal: a QB
+    // failure must not fail the enrol/grant/calendar work that already succeeded.
+    let invoice: {
+      generated: number;
+      skippedAlreadyInvoiced: number;
+      skippedNotEnrolled: number;
+      skippedAwaitingGrants: number;
+      failed: number;
+      // Human-readable reasons a group was skipped/failed, so Auto-Process can
+      // tell the admin WHY no invoice appeared instead of failing silently.
+      errors: string[];
+      note: string | null;
+    } | null = null;
+    try {
+      const { generateInvoicesForApplications } = await import('../../../lib/quickbooks/createCompanyApplicationInvoice');
+      const summary = await generateInvoicesForApplications(uniqueIds);
+      const notes: string[] = [];
+      if (summary.skippedAwaitingGrants > 0) notes.push(`${summary.skippedAwaitingGrants} group(s) awaiting grant — click "Sync Grants" then invoice, or mark learners "Not Grant Eligible"`);
+      if (summary.skippedNotEnrolled > 0) notes.push(`${summary.skippedNotEnrolled} group(s) have learner(s) not yet SSG-enrolled`);
+      if (summary.failed > 0) notes.push(`${summary.failed} group(s) failed (see details)`);
+      invoice = {
+        generated: summary.generated,
+        skippedAlreadyInvoiced: summary.skippedAlreadyInvoiced,
+        skippedNotEnrolled: summary.skippedNotEnrolled,
+        skippedAwaitingGrants: summary.skippedAwaitingGrants,
+        failed: summary.failed,
+        errors: Array.isArray(summary.errors) ? summary.errors : [],
+        note: notes.length ? notes.join('; ') : null,
+      };
+      console.log(
+        `[ca-run-pipeline] invoice sweep — generated ${summary.generated}, alreadyInvoiced ${summary.skippedAlreadyInvoiced}, notEnrolled ${summary.skippedNotEnrolled}, awaitingGrants ${summary.skippedAwaitingGrants}, failed ${summary.failed}`,
+      );
+      if (summary.failed > 0) {
+        console.warn('[ca-run-pipeline] invoice failures:', summary.errors);
+      }
+    } catch (err) {
+      console.error('[ca-run-pipeline] invoice generation crashed (non-fatal):', err);
+      invoice = {
+        generated: 0,
+        skippedAlreadyInvoiced: 0,
+        skippedNotEnrolled: 0,
+        skippedAwaitingGrants: 0,
+        failed: 0,
+        errors: [err instanceof Error ? err.message : String(err)],
+        note: 'Invoice generation crashed — see details.',
+      };
+    }
+
+    await pool.query(
+      `UPDATE public.company_application
+          SET auto_enrol_status = CASE
+                WHEN enrolment_id IS NULL THEN 'failed'
+                WHEN COALESCE(invoice_id, '') <> '' THEN 'invoiced'
+                WHEN COALESCE(grant_id, '') <> '' OR COALESCE(grant_ineligible, false) = true THEN 'grant_found'
+                ELSE 'enroled'
+              END,
+              auto_enrol_error = CASE WHEN enrolment_id IS NULL THEN auto_enrol_error ELSE NULL END,
+              updated_at = now()
+        WHERE id = ANY($1::uuid[])
+          AND (auto_enrol_status IN ('pending', 'enroled', 'grant_found')
+               OR (auto_enrol_status = 'failed' AND enrolment_id IS NOT NULL))`,
       [uniqueIds],
     );
 
@@ -111,6 +191,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       enroled,
       granted,
       failed,
+      invoice,
       results,
     });
   } catch (err) {
@@ -121,3 +202,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

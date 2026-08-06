@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import AiChatbot from '../components/AiChatbot';
 import { useAppVersion } from '@hooks/useAppVersion';
 import { useLms } from '../contexts/LmsContext';
 import { View, TrainerPage } from '@app-types';
@@ -156,6 +157,7 @@ const TrainerLayout: React.FC = () => {
         </main>
       </div>
 
+      <AiChatbot />
       <Footer />
     </div>
   );

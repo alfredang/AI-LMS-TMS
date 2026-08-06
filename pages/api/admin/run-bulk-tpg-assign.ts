@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
 import { getSSGCredentialsService } from '@lib/ssg/services/credentials-service';
@@ -11,7 +12,7 @@ import { classifySsgError } from '../external/sync-trainer-to-tpg';
  * Assign local trainers to TPG (SSG) for selected course runs.
  * Body: { items: [{ courseRunUuid, trainerName, trainerEmail, nric }] }
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { items } = req.body || {};
@@ -136,3 +137,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

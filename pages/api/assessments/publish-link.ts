@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -5,7 +6,7 @@ import pool from '../../../lib/db';
 // ALTER TABLE course_run ADD COLUMN IF NOT EXISTS written_assessment_published BOOLEAN NOT NULL DEFAULT FALSE;
 // ALTER TABLE course_run ADD COLUMN IF NOT EXISTS practical_assessment_published BOOLEAN NOT NULL DEFAULT FALSE;
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -49,3 +50,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: error.message });
   }
 }
+
+export default withAuth(handler);

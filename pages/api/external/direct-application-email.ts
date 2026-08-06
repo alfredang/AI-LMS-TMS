@@ -1,3 +1,4 @@
+import { withServiceAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import {
   DirectApplicationEmailIngestError,
@@ -8,7 +9,7 @@ function getBearerToken(req: NextApiRequest): string {
   return String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({
       success: false,
@@ -53,3 +54,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withServiceAuth(handler);

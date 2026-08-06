@@ -1,10 +1,11 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
 
 // Public read-only endpoint for tertiarycourses.com.sg staff to extract feedback.
 // Per product decision: no authentication. Beware PII exposure.
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   await cors(req, res);
   if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
@@ -55,3 +56,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler);

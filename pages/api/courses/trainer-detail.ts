@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -28,7 +29,7 @@ interface LearningUnit {
   subtopics: Subtopic[];
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -61,6 +62,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         c.learner_guide_url,
         c.facilitator_guide_url,
         c.trainer_slides_url,
+        c.activities_url,
         c.assessment_plan_url,
         c.courseware_link,
         c.assessment_record_link,
@@ -218,6 +220,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           learnerGuideUrl: courseDetail.learner_guide_url,
           facilitatorGuideUrl: courseDetail.facilitator_guide_url,
           trainerSlidesUrl: courseDetail.trainer_slides_url,
+          activitiesUrl: courseDetail.activities_url,
           assessmentPlanUrl: courseDetail.assessment_plan_url,
           courseLink: courseDetail.courseware_link,
           assessmentRecordLink: courseDetail.assessment_record_link,
@@ -254,3 +257,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler);

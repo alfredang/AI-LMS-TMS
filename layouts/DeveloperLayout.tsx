@@ -10,6 +10,7 @@ import { CourseDetail } from '../components/CourseDetail';
 import ProfileView from '../components/ProfileView';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import DeveloperSidebar from '../components/developer/DeveloperSidebar';
+import AiChatbot from '../components/AiChatbot';
 import CpGeneratorView from '../components/developer/CpGeneratorView';
 import CwGeneratorView from '../components/developer/CwGeneratorView';
 import CoursewareToolsView from '../components/developer/CoursewareToolsView';
@@ -115,6 +116,7 @@ const DeveloperLayout: React.FC = () => {
         </main>
       </div>
 
+      <AiChatbot />
       <Footer />
     </div>
   );

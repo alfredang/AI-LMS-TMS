@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { qboGetAccessTokenAndRealm, qboSendInvoice } from '../../../lib/services/qboInvoiceService';
@@ -182,7 +183,7 @@ async function getAccessToken(creds: QBOCredentialsResolved): Promise<string> {
   }
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -297,3 +298,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }
 
 function capitalize(s: string) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

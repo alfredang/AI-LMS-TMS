@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSender';
 
@@ -9,7 +10,7 @@ import { sendNextTrainerInvitationForCourseRun } from '@/lib/trainerInvitationSe
  * helper so the admin UI, the on-decline auto-escalation, and the weekly
  * auto-sweep all go through the same code path.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -50,3 +51,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Failed to send trainer invitation' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

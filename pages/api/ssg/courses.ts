@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 /**
  * Next.js API routes for SSG course operations
  * GET /api/ssg/courses/[runId] - View course run by ID
@@ -31,7 +32,7 @@ const getOptionalSelector = (value: string | string[] | undefined): OptionalSele
   return OptionalSelector.NO;
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const baseUrl = await getBaseUrl();
 
@@ -260,3 +261,5 @@ async function handleDeleteCourseRun(
 
   res.status(200).json(result);
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

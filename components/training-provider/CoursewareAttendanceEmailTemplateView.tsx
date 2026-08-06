@@ -9,7 +9,7 @@ const DEFAULT_SUBJECT = 'Courseware and Attendance Taking for {COURSE_NAME}';
 const DEFAULT_BODY = `Dear Learners,<br><br>
 <strong>Course Material</strong><br>
 You can access the platform at the following link: {SITE_URL}<br><br>
-To log in, please use your email address with either an OTP or the default password: password123. For security purposes, please change your password immediately after your first login.<br><br>
+To log in, please use your email address and request a one-time password (OTP) from the login page. If you have been issued a temporary password, please change it immediately after your first login.<br><br>
 <strong>E-Attendance Taking (for SSG-funded courses only)</strong><br>
 Please click on the link below to take e-attendance for trainer (SingPass app) and trainee (Mobile Camera) in separate option provided.<br><br>
 Course Run Code : {DIGITAL_ATTENDANCE_ID}<br><br>

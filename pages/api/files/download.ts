@@ -24,6 +24,13 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     const absolutePath = path.join(process.cwd(), 'public', cleanPath);
+
+    // Containment check AFTER resolution — "uploads/../.." style traversal
+    // passes the prefix check above but escapes once joined.
+    const uploadsRoot = path.resolve(process.cwd(), 'public', 'uploads') + path.sep;
+    if (!path.resolve(absolutePath).startsWith(uploadsRoot)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
     
     // Check if file exists
     if (!fs.existsSync(absolutePath)) {

@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../../lib/db';
 import { syncAllDaApplicantsToCalendar } from '../../../../lib/google-calendar/da-calendar-sync';
@@ -35,7 +36,7 @@ const parseSessionNumber = (ssgSessionId: string): string => {
   return m ? `S${m[1]}` : '';
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.status(200).end();
@@ -215,3 +216,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

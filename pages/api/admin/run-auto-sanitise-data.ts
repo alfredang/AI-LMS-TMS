@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { runAutomation } from '../../api/external/auto-sanitise-data';
 
@@ -7,7 +8,7 @@ import { runAutomation } from '../../api/external/auto-sanitise-data';
  * Admin "Run Once" trigger for the Auto Sanitise Data sweep.
  * No API key required — protected by the admin session layer.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
@@ -18,3 +19,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Unknown error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

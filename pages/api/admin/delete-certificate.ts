@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
 import pool from '../../../lib/db';
@@ -9,7 +10,7 @@ function extractFileId(url: string): string | null {
     return match ? match[1] : null;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'DELETE') {
         return res.status(405).json({ message: 'Method Not Allowed' });
     }
@@ -57,3 +58,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ message: 'Internal server error', error: error.message });
     }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

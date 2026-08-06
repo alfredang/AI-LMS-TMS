@@ -27,12 +27,18 @@ const PROBLEM_SOLVING_TOOLS = [
     icon: IconName.Link,
     href: 'https://alfredang.github.io/systemloop/',
   },
+  {
+    title: 'SIPOC',
+    description: 'Map Suppliers, Inputs, Process, Outputs and Customers to scope a process',
+    icon: IconName.Link,
+    href: 'https://alfredang.github.io/sipoc/',
+  },
 ];
 
 const ProblemSolvingToolsPage: React.FC = () => {
   return (
     <div>
-      <h2 className="text-3xl font-bold mb-6 dark:text-white">Problem Solving Tools</h2>
+      <h2 className="text-3xl font-bold mb-6 dark:text-white">Six Sigma Tools</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {PROBLEM_SOLVING_TOOLS.map(tool => (
           <a

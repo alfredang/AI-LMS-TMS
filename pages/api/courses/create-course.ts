@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import multer, { StorageEngine } from 'multer';
 import path from 'path';
@@ -88,6 +89,7 @@ interface CourseData {
   courseType: string;
   learningOutcomes: string;
   trainerSlidesUrl?: string;
+  activitiesUrl?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
   courseLink?: string;
@@ -112,7 +114,7 @@ interface CourseData {
   resourceLinks?: Array<{ id: string; topicId: string; type: string; title: string; url: string; instructions?: string }>;
 }
 
-export default function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
+function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
   // Handle CORS
   if (cors(req, res)) {
     return; // Preflight request handled
@@ -186,8 +188,9 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
             learning_outcomes, is_gamified, learner_guide_url, slides_url,
             lesson_plan_url, assessment_plan_url, facilitator_guide_url, trainer_slides_url,
             written_assessment_link, practical_performance_assessment_link,
-            courseware_link, assessment_record_link, assessment_summary_record_url, resource_links
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+            courseware_link, assessment_record_link, assessment_summary_record_url, resource_links,
+            activities_url
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
           RETURNING id
         `;
 
@@ -215,6 +218,7 @@ export default function handler(req: NextApiRequest & { files?: any }, res: Next
           courseData.assessmentRecordLink || null,
           courseData.assessmentSummaryRecordUrl || null,
           courseData.resourceLinks ? JSON.stringify(courseData.resourceLinks) : null,
+          filesByFieldname?.activities ? `/uploads/plans/${filesByFieldname.activities[0].filename}` : courseData.activitiesUrl || null,
         ];
 
         console.log('🔍 About to execute course insert with values:', courseValues);
@@ -387,3 +391,5 @@ export const config = {
     bodyParser: false,
   },
 };
+
+export default withAuth(handler);

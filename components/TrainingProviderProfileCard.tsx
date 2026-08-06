@@ -298,6 +298,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [isOpenClawIntegrationOpen, setIsOpenClawIntegrationOpen] = useState(false);
     const [isTertiaryCoursesSgIntegrationOpen, setIsTertiaryCoursesSgIntegrationOpen] = useState(false);
     const [isN8nIntegrationOpen, setIsN8nIntegrationOpen] = useState(false);
+    const [isMailerliteIntegrationOpen, setIsMailerliteIntegrationOpen] = useState(false);
     const [isR2IntegrationOpen, setIsR2IntegrationOpen] = useState(false);
     const [isSmtpIntegrationOpen, setIsSmtpIntegrationOpen] = useState(false);
     const [isSmtpHowToOpen, setIsSmtpHowToOpen] = useState(false);
@@ -2156,13 +2157,71 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     )}
                     </div>
 
-                            {/* Nemo OpenClaw Configuration */}
+                            {/* AI Agent Configuration */}
                     <div>
-                    {renderIntegrationPanelHeader('Nemo OpenClaw', isOpenClawIntegrationOpen, () => setIsOpenClawIntegrationOpen(prev => !prev))}
+                    {renderIntegrationPanelHeader('AI Agent', isOpenClawIntegrationOpen, () => setIsOpenClawIntegrationOpen(prev => !prev))}
                     {isOpenClawIntegrationOpen && (
                             <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
                                 <div className="p-3 bg-surface rounded-md border border-default">
                                     <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Chat Link (WhatsApp / Telegram)</label>
+                                            {isEditing ? (
+                                                <input
+                                                    type="text"
+                                                    value={formData.integrations.whatsappChatUrl || ''}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                whatsappChatUrl: e.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className={inputClasses}
+                                                    placeholder="e.g. https://chat.whatsapp.com/XXXXXXXXXXXXXXX"
+                                                />
+                                            ) : (
+                                                <p className="text-sm text-on-surface truncate">
+                                                    {formData.integrations.whatsappChatUrl ? (
+                                                        <a href={formData.integrations.whatsappChatUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                                            {formData.integrations.whatsappChatUrl}
+                                                        </a>
+                                                    ) : 'Not Set'}
+                                                </p>
+                                            )}
+                                            <p className="text-[10px] text-on-surface-secondary mt-1">Admin ops group. The floating chat widget links here for Admin, Finance, Training Provider, Developer and Payroll — a WhatsApp or Telegram channel fronting an external agent (e.g. OpenClaw, Hermes). The icon adapts to the link. Leave blank to hide the widget.</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-on-surface-secondary mb-1">Trainer Chat Link (WhatsApp / Telegram)</label>
+                                            {isEditing ? (
+                                                <input
+                                                    type="text"
+                                                    value={formData.integrations.trainerWhatsappChatUrl || ''}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            integrations: {
+                                                                ...prev.integrations,
+                                                                trainerWhatsappChatUrl: e.target.value,
+                                                            },
+                                                        }))
+                                                    }
+                                                    className={inputClasses}
+                                                    placeholder="e.g. https://chat.whatsapp.com/XXXXXXXXXXXXXXX"
+                                                />
+                                            ) : (
+                                                <p className="text-sm text-on-surface truncate">
+                                                    {formData.integrations.trainerWhatsappChatUrl ? (
+                                                        <a href={formData.integrations.trainerWhatsappChatUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                                                            {formData.integrations.trainerWhatsappChatUrl}
+                                                        </a>
+                                                    ) : 'Not Set'}
+                                                </p>
+                                            )}
+                                            <p className="text-[10px] text-on-surface-secondary mt-1">Trainer support group. Shown only to the Trainer role, in blue, with a limited set of requests (find my class, assign me, meeting link, e-attendance link). Leave blank to hide the widget for trainers.</p>
+                                        </div>
                                         <div>
                                             <label className="block text-sm font-medium text-on-surface-secondary mb-1">Mode</label>
                                             {isEditing ? (
@@ -2190,7 +2249,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                         </div>
                                         {[
                                             { key: 'openClawGatewayUrl' as const, label: 'Live Gateway URL', placeholder: 'e.g. http://10.0.0.1:18789' },
-                                            { key: 'openClawLocalGatewayUrl' as const, label: 'Local Testing URL', placeholder: 'e.g. http://76.13.180.29:18789' },
+                                            { key: 'openClawLocalGatewayUrl' as const, label: 'Local Testing URL', placeholder: 'e.g. http://192.0.2.10:18789' },
                                             { key: 'openClawHooksPath' as const, label: 'Hooks Path', placeholder: 'e.g. /hooks' },
                                             { key: 'openClawAgentId' as const, label: 'Agent ID', placeholder: 'e.g. main' },
                                             { key: 'openClawCallbackUrl' as const, label: 'Callback URL', placeholder: 'e.g. https://your-app.example.com/api/openclaw/callback' },
@@ -2778,6 +2837,51 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     )}
                     </div>
 
+                            {/* MailerLite Configuration */}
+                    <div>
+                    {renderIntegrationPanelHeader('MailerLite', isMailerliteIntegrationOpen, () => setIsMailerliteIntegrationOpen(prev => !prev))}
+                    {isMailerliteIntegrationOpen && (
+                            <div className="p-4 bg-surface-elevated rounded-b-md border border-t-0 border-default">
+                                <div className="p-3 bg-surface rounded-md border border-default">
+                                    <div className="space-y-3">
+                                        {[
+                                            { key: 'mailerliteApiKey' as const, label: 'API Key', placeholder: 'MailerLite API token', secret: true, helpText: 'Used by the daily "Sync Learner Emails to MailerLite" scheduled task. Replaces MAILERLITE_API_KEY env var.' },
+                                            { key: 'mailerliteGroupId' as const, label: 'Subscriber Group ID', placeholder: 'e.g. 97171109342873057', secret: false, helpText: 'The MailerLite group new learner emails are subscribed to (e.g. the Singapore group). Replaces MAILERLITE_GROUP_ID env var.' },
+                                        ].map(({ key, label, placeholder, secret, helpText }) => (
+                                            <div key={key}>
+                                                <label className="block text-sm font-medium text-on-surface-secondary mb-1">{label}</label>
+                                                {isEditing ? (
+                                                    <input
+                                                        type="text"
+                                                        value={(formData.integrations as any)[key] || ''}
+                                                        onChange={(e) =>
+                                                            setFormData((prev) => ({
+                                                                ...prev,
+                                                                integrations: {
+                                                                    ...prev.integrations,
+                                                                    [key]: e.target.value,
+                                                                },
+                                                            }))
+                                                        }
+                                                        className={inputClasses}
+                                                        placeholder={placeholder}
+                                                    />
+                                                ) : (
+                                                    <p className="text-sm text-on-surface truncate">
+                                                        {(formData.integrations as any)[key]
+                                                            ? (secret ? '••••••••' + String((formData.integrations as any)[key]).slice(-4) : (formData.integrations as any)[key])
+                                                            : 'Not Set'}
+                                                    </p>
+                                                )}
+                                                {helpText && <p className="text-[10px] text-on-surface-secondary mt-1">{helpText}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                    )}
+                    </div>
+
                 </div>}
 
                 <div className="border-t my-6"></div>
@@ -3270,7 +3374,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                     }))
                                 }
                                 className={inputClasses}
-                                placeholder="Enter default password (e.g. password123)"
+                                placeholder="Enter a strong default password (avoid common passwords)"
                             />
                         ) : (
                             <p className="font-mono text-sm">

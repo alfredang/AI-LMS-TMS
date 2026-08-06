@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
@@ -28,7 +29,7 @@ function findQrCodeLinkOrRaCode(obj: any, depth = 0): string | undefined {
   return undefined;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   // PUT: manually save a digitalAttendanceId provided by the user
   if (req.method === 'PUT') {
     const { courseRunUuid, digitalAttendanceId } = req.body;
@@ -172,3 +173,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

@@ -1,3 +1,4 @@
+import { isServiceRequest } from '@lib/auth/serviceKey';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
@@ -5,7 +6,13 @@ import { createSSGAttendanceAPI } from '../../../lib/ssg/api/attendance-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { extractRecordsFromViewAttendance, normalizeAttendanceRecord } from '../../../lib/ssg/utils/attendance-decrypt';
 
-const SCHEDULER_SECRET = process.env.NEXT_PUBLIC_SCHEDULER_SECRET || 'local-dev-fallback';
+// Fail closed: accept server-side secrets only. NEXT_PUBLIC_* values are baked
+// into the public JS bundle and must never act as an API key; with no key
+// configured, a per-boot random UUID makes every comparison fail.
+const SCHEDULER_SECRET =
+  process.env.SCHEDULER_SECRET ||
+  process.env.EXTERNAL_API_KEY_FOR_CLAWDBOT ||
+  globalThis.crypto.randomUUID();
 const RATE_LIMIT_MS = 1500;
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -180,7 +187,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const { authKey } = req.body;
-    if (authKey !== SCHEDULER_SECRET) {
+    if (authKey !== SCHEDULER_SECRET && !isServiceRequest(req)) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 

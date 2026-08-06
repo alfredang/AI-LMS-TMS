@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureProformaLogTable } from '../../../lib/services/proformaInvoiceService';
@@ -7,7 +8,7 @@ import { ensureProformaLogTable } from '../../../lib/services/proformaInvoiceSer
  *
  * Reads per-enrollment logs produced by the scheduled proforma invoice sweep.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const limit = Math.min(parseInt(String(req.query.limit || '500'), 10), 1000);
@@ -32,3 +33,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: error.message });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

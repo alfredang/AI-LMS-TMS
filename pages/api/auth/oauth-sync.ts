@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { cors } from '../../../lib/cors';
 import pool from '../../../lib/db';
+import { isServiceRequest } from '../../../lib/auth/serviceKey';
 
 interface OAuthSyncRequest {
     supabaseUserId: string;
@@ -31,6 +32,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse<OAuthSyncRespon
 
     if (req.method !== 'POST') {
         return res.status(405).json({ success: false, error: 'Method not allowed' });
+    }
+
+    // This endpoint upserts user records from a caller-supplied email, so it
+    // must not be internet-callable. No repo client uses it today; machine
+    // callers must present the service API key.
+    if (!isServiceRequest(req)) {
+        return res.status(401).json({ success: false, error: 'Not authenticated' });
     }
 
     const { supabaseUserId, email, fullName, profilePictureUrl, provider }: OAuthSyncRequest = req.body;

@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
@@ -6,6 +7,7 @@ import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdent
 import { bulkProcessDirectApplications, createNativeEnrolmentFromDA, processDirectApplication } from '../../../lib/autoEnrolDirectApplications';
 import { addDaLearnerToCalendar, removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
 import { getLocalYMD } from '../../../lib/dateHelpers';
+import { isEnrollableDaStatus } from '../../../lib/da-status';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -268,7 +270,7 @@ async function callSearchEnrolmentSSGBatch(records: Record<string, any>[], tpUen
  * POST /api/admin/upload-da-applications
  * Body: { data: [...Excel rows...] }
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
         return res.status(405).json({ success: false, error: 'Method not allowed' });
     }
@@ -623,7 +625,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     const alreadyEnrolled = autoStatus && !['failed'].includes(autoStatus) && !(autoStatus === 'pending_identity' && hasTraineeId);
                     // Only skip if the row already has a real SSG enrolment reference (ENR-...)
                     // Placeholder values like "N/A", "-", "MANUAL", or empty are NOT real enrolments
-                    return (status === 'confirmed' || status === 'confirm application') && !alreadyEnrolled && !isRealSsgEnrolmentId(r.enrolment_id);
+                    return isEnrollableDaStatus(status) && !alreadyEnrolled && !isRealSsgEnrolmentId(r.enrolment_id);
                 })
                 .map(r => r.id as string);
 
@@ -666,8 +668,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     const appStatus = String(record.application_status || '').toLowerCase();
                     const oldStatus = String(record.old_status || '').toLowerCase();
 
-                    // Automation 1a: Add to Calendar (triggers if application_status is Confirmed)
-                    if (appStatus === 'confirmed' && record.trainee_email) {
+                    // Automation 1a: Add to Calendar (triggers if application_status is Confirmed,
+                    // incl. "Confirmed (Pending payment)" — see lib/da-status.ts)
+                    if (isEnrollableDaStatus(appStatus) && record.trainee_email) {
                         try {
                             // Resolve course_run UUID and check if course run is in the future
                             const crRes = await pool.query(
@@ -793,3 +796,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
     }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

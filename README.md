@@ -32,7 +32,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 ### Why AI-LMS-TMS?
 
-- **AI-Powered Learning**: Nemo AI agent (Claude Agent SDK) with persistent memory and tool use, SEO metadata generator, plus Gemini chatbot and GenAI authoring tools
+- **AI-Powered Learning**: Nemo AI agent (Claude Agent SDK) with persistent memory and tool use, SEO metadata generator, external agent hand-off via WhatsApp/Telegram, plus GenAI authoring tools
 - **SSG Integration**: Full SkillsFuture Singapore API support for course runs, enrolments, assessments, grants, and claims
 - **Multi-Role System**: 7 roles with dedicated dashboards — Learner, Trainer, Admin, Developer, Finance, Payroll, Training Provider
 - **Multi-Tenant**: Same codebase deployed for multiple tenants on Coolify — Tertiary builds via **Dockerfile**, other tenants (Chariot, Intellisoft) build via **Docker Compose**
@@ -72,7 +72,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 ### Trainer Features
 - **My Classes** — View assigned classes (upcoming, ongoing, completed)
 - **E-Attendance** — Digital attendance tracking
-- **Assessment Grading** — Rubric-based grading with Assessment Summary Record support
+- **Assessment Grading** — Rubric-based grading with Assessment Summary Record support; each learner row shows per-method submission status (WA Written, PP Practical, CS Case Study, RP Role Play, OQ Oral Questioning) ticked when the learner has submitted, plus Mark All Competent and bulk certificate sending
 - **Training Hours** — Trainer training hours tracking
 - **Past Attendance** / **Past Assessment** — Historical records
 - **Lesson Delivery Guide** / **Assessment Guide**
@@ -83,7 +83,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Ed Tools** — Interactive classroom tools:
   - [Ice Breaker](https://alfredang.github.io/ice-breaker/), [Pinboard](https://alfredang.github.io/pinboard/), [Break Timer](https://alfredang.github.io/musical-timer-countdown/), [Word Cloud](https://alfredang.github.io/wordcloud/), [Flash Cards](https://alfredang.github.io/flashcard/), [Live Q&A](https://alfredang.github.io/live-qna/), [Whiteboard](https://alfredang.github.io/whiteboard/), [QR Code Generator](https://alfredang.github.io/qrcodegenerator/), [Padlet](https://alfredang.github.io/padlet/), [Collaborative Note](https://alfredang.github.io/collabnote/), [Collaborative Flow](https://alfredang.github.io/collabflow/), [Collaborative Kanban](https://alfredang.github.io/kanban/), [Live Poll](https://alfredang.github.io/livepoll/), [MindMaps](https://alfredang.github.io/mindmapping/), [Spinning Wheel](https://alfredang.github.io/spinning-wheel/)
 - **Project Mgt Tools** — [RACI Matrix](https://alfredang.github.io/raci/), [Digital/AI Transformation](https://alfredang.github.io/digitaltransformation/), [Agile/Scrum](https://alfredang.github.io/scrum/), [Design Thinking Studio](https://alfredang.github.io/designthinking/), [BMC Studio](https://alfredang.github.io/bcm/)
-- **Problem Solving Tools** — [5 Whys](https://alfredang.github.io/5whys/), [Fishbone Diagram](https://alfredang.github.io/fishbone/), [Pareto Chart](https://alfredang.github.io/paretochart/), [System Thinking](https://alfredang.github.io/systemloop/)
+- **Six Sigma Tools** — [5 Whys](https://alfredang.github.io/5whys/), [Fishbone Diagram](https://alfredang.github.io/fishbone/), [Pareto Chart](https://alfredang.github.io/paretochart/), [System Thinking](https://alfredang.github.io/systemloop/), [SIPOC](https://alfredang.github.io/sipoc/)
 - **Cyber Security Tools** — [Cyber Labs](https://alfredang.github.io/cybersecuritysimulator/), [Ethical Hacking Labs](https://alfredang.github.io/ethnicalhacking/), [Pentest Labs](https://pentest-fauxbank.vercel.app/), [Cryptography](https://alfredang.github.io/cryptography-toolkit/)
 - **Finance Tools** — [Tax Calculator](https://alfredang.github.io/novataxsg/), [Financial Planning & Analysis](https://alfredang.github.io/novafinance/), [Financial Ratio Calculators](https://alfredang.github.io/novafinancialratiocalculator/), [Financial Trend Analysis](https://alfredang.github.io/financialtrend/), [Credit Loan Analysis](https://creditloananalysis.streamlit.app/)
 - **HR Tools** — [MBTI](https://alfredang.github.io/mbti/#landing), [AI Interview Coach](https://alfredang.github.io/ai-interviewing/), [HR Interview Gen](https://alfredang.github.io/hr-interviewing/)
@@ -162,6 +162,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Assessment authoring with multiple assessment methods (Written, Practical, Case Study, Role Play, Oral Questioning, Project, Assignment)
 - Learning unit and subtopic management
 - Course material uploads (lesson plans, slides, guides)
+- **Courseware link cards** — in course view mode, courseware documents (lesson plan, guides, slides, brochure, SkillsFuture link, etc.) render as click-to-open cards; empty links are hidden
 - **SEO Metadata Generator** — AI-powered SEO metadata generation for WSQ and non-WSQ courses using Claude Agent SDK
   - WSQ: Meta title (with WSQ prefix), keywords, description with 70% funding subsidy, course description, and 20 job roles
   - Non-WSQ: Region-specific meta titles (Singapore, Malaysia with HRD Corp, International), keywords, description, course description, and 20 job roles
@@ -176,7 +177,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Company Setting**
   - Company profile (name, UEN, address, logo, color scheme)
   - Contact person management
-  - **Integrations** — Virtual class meeting provider selection (Google Meet, Zoom, Microsoft Teams), course-run meeting links override the company default, Google (Calendar, OAuth, Certificate Folder), Zoom OAuth meeting generation, Microsoft Teams meeting generation, n8n, Magento, Reference Links
+  - **Integrations** — Virtual class meeting provider selection (Google Meet, Zoom, Microsoft Teams), course-run meeting links override the company default, Google (Calendar, OAuth, Certificate Folder), Zoom OAuth meeting generation, Microsoft Teams meeting generation, n8n, Magento, MailerLite, AI Agent (external WhatsApp/Telegram chat links — separate ops and trainer groups), Reference Links
   - **SSG Authentication** — SSG certificate, private key, and encryption key (with support for App1, App3, App4 credentials)
   - **LLM Credentials** — Anthropic, OpenAI, Gemini, MiniMax, Kimi, DeepSeek with default and fallback provider selection
   - **Security Settings** — OTP login, default OTP, force first password change, default password, sensitive data masking
@@ -202,7 +203,12 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
   - 18 tools including dashboard queries, course run search, trainer management, enrollment operations, proforma/invoice generation, QuickBooks operations, SSG course operations
   - Agentic tool-use loop (up to 10 iterations per request)
 - **SEO Metadata Generator** — Claude-powered SEO content generation for WSQ and non-WSQ courses
-- **AI Chatbot** — Gemini-powered chatbot for learner assistance on public landing page
+- **External Agent Chat Launcher** — Floating WhatsApp/Telegram widget that hands off to an external agent such as OpenClaw/Kael or Hermes. Two role-scoped variants, each pointing at its own group:
+  - **Ops widget** (green — Admin, Finance, Training Provider, Developer, Payroll): 5 starter suggestions, with search or "Browse all" revealing the full catalogue of **40 fill-in-the-blank templates** across Trainers, Learners, Classes, Sessions, SSG/TPGateway, Finance and Reports
+  - **Trainer widget** (blue — Trainer role only): a deliberately narrow set of 4 requests — cannot find my class, assign me to this class, send me the Google Meet link, send me the e-attendance link. Classes are identified by course title + start date, never by a course run ID, and the trainer catalogue is a **separate array** rather than a filter, so no admin action (schedules, run IDs, enrolments, SSG, finance) is reachable from the trainer widget
+  - Field names mirror the agent's tools and the `/api/external/*` parameters, so a completed template maps onto a real operation
+  - Selecting one opens an editable message bubble; the message is copied to the clipboard and the chat opens. WhatsApp only accepts a pre-filled body on `wa.me` one-to-one links — **group invite links cannot be pre-filled**, so for a group the user pastes the copied message
+  - Destinations are set per tenant under Company Settings → Integrations → AI Agent (`whatsapp_chat_url` and `trainer_whatsapp_chat_url`); each widget auto-detects WhatsApp vs Telegram and hides itself when its link is blank
 - **GenAI Authoring** — AI content generation for course development
 - **Quiz Generator** — AI-generated quizzes based on course content
 
@@ -248,7 +254,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | **Framework** | Next.js 16 (Pages Router, TypeScript) |
 | **Frontend** | React 18, Tailwind CSS |
 | **Database** | PostgreSQL 17 |
-| **Authentication** | bcryptjs password hashing + OTP flow (no JWT — session held client-side and re-checked against DB) |
+| **Authentication** | bcryptjs password hashing + OTP flow; server-side session tokens (hashed at rest in `user_session`) with role-based authorization on every API route |
 | **AI Integration** | Claude Agent SDK, Anthropic SDK, Google Generative AI (Gemini), OpenAI, MiniMax, Kimi, DeepSeek |
 | **Finance Integration** | QuickBooks Online (OAuth2), Bizfile API |
 | **File Uploads** | Multer, Google Drive API |
@@ -259,9 +265,15 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | **Container** | Docker, Docker Compose |
 | **Deployment** | Coolify (self-hosted) |
 | **Automation** | n8n workflows, Task Scheduler, Webhooks |
+| **Email Marketing** | MailerLite (daily learner-email subscriber sync) |
 | **E-commerce** | Magento integration |
 
 ## API Documentation
+
+> **All API routes require authentication.** Every endpoint below is guarded except a
+> small public allowlist (login/OTP, OAuth callbacks, static asset serving, the
+> tokenised webhook route and the public feedback form). See
+> [API Authentication](#api-authentication) for how to authenticate.
 
 ### External APIs (x-api-key authenticated)
 
@@ -275,15 +287,49 @@ POST /api/external/auto-create-learners   # Auto-create learner accounts
 POST /api/external/sync-course-run-dates  # Sync dates with SSG
 GET  /api/external/backfill-enrollments   # Preview enrollment backfill
 POST /api/external/backfill-enrollments   # Execute enrollment backfill
+POST /api/external/create-course-run      # Create a new course run (+ sessions) and submit to SSG
 ```
 
 ### Authentication
 
 ```
-POST /api/auth/login              # Login (password or OTP)
+POST /api/auth/login              # Login (password or OTP) → returns a session token
 POST /api/auth/send-otp           # Send OTP to email
-PUT  /api/auth/update-password    # Update user password
+GET  /api/auth/verify             # Validate the current session token
+POST /api/auth/logout             # Revoke the current session token
+PUT  /api/auth/update-password    # Update password (own account, or admin for any)
 ```
+
+### API Authentication
+
+Two ways to authenticate, both required as of the August 2026 lockdown:
+
+**1. User sessions (browser/UI).** `POST /api/auth/login` returns an opaque
+`lms_…` session token. Send it as a bearer token on every request:
+
+```
+Authorization: Bearer lms_<token>
+```
+
+Tokens are server-side records — only a SHA-256 hash is stored, they expire after
+30 days, and they are revoked on logout, password change and admin reset. The
+browser app does this automatically via the global fetch interceptor in
+`lib/clientAuthFetch.ts`, so UI code needs no per-call auth handling.
+
+**2. Service key (machines).** Schedulers, agents and other back-end systems send a
+server-side API key instead, valid on any route:
+
+```
+x-api-key: $EXTERNAL_API_KEY_FOR_CLAWDBOT
+```
+
+Authorization is role-based (Admin, Training Provider, Finance, Payroll, Trainer,
+Developer, Learner); a request with a valid session but the wrong role gets `403`.
+Unauthenticated requests get `401`.
+
+`scripts/check-api-auth.js` runs as part of `npm run lint` and fails the build if a
+new route is added without authentication — new public routes must be added to its
+allowlist deliberately.
 
 ### Courses & Course Runs
 
@@ -343,22 +389,23 @@ ai-lms-tms/
 │   ├── ui/                     # Reusable UI components
 │   ├── common/                 # Shared components
 │   ├── LoginScreen.tsx         # Authentication screen
-│   ├── AiChatbot.tsx           # Gemini-powered chatbot
+│   ├── AiChatbot.tsx           # Floating WhatsApp/Telegram chat launcher + template picker
+│   ├── chatTemplates.ts        # 40 TMS request templates for the chat launcher
 │   ├── CourseDetail.tsx         # Course detail view
 │   ├── GradingView.tsx         # Assessment grading
 │   └── ...
 │
 ├── pages/                      # Next.js pages & API routes
 │   ├── api/
-│   │   ├── admin/              # Admin operations (~58 endpoints)
-│   │   ├── external/           # External bot APIs (8 endpoints)
-│   │   ├── auth/               # Authentication (7 endpoints)
-│   │   ├── courses/            # Course management (17 endpoints)
+│   │   ├── admin/              # Admin operations (~189 endpoints)
+│   │   ├── external/           # External/machine APIs (~69 endpoints)
+│   │   ├── auth/               # Authentication (9 endpoints)
+│   │   ├── courses/            # Course management (25 endpoints)
 │   │   ├── enrolment/          # Enrolment operations
 │   │   ├── assessments/        # Assessment CRUD & SSG
 │   │   ├── grading/            # Grading system
 │   │   ├── trainer/            # Trainer operations
-│   │   ├── training-provider/  # TP management (13 endpoints)
+│   │   ├── training-provider/  # TP management (~38 endpoints)
 │   │   ├── profile/            # User profiles
 │   │   ├── ssg/                # SSG API proxies
 │   │   ├── ai/                 # AI endpoints
@@ -368,11 +415,17 @@ ai-lms-tms/
 │   └── index.tsx               # Main SPA entry
 │
 ├── lib/                        # Core libraries
+│   ├── auth/                   # API authentication & authorization
+│   │   ├── withAuth.ts         # Route guard wrapper (roles + service key)
+│   │   ├── requireRole.ts      # Session/role resolution
+│   │   ├── session.ts          # Session token issue/revoke (hashed at rest)
+│   │   └── serviceKey.ts       # Machine (x-api-key) authentication
 │   ├── services/               # Business logic services
-│   │   ├── authService.ts      # Authentication logic
+│   │   ├── authService.ts      # Client-side auth state
 │   │   ├── certificateService.ts # Certificate generation
 │   │   ├── geminiService.ts    # AI integration
 │   │   └── ...
+│   ├── clientAuthFetch.ts      # Browser fetch interceptor (bearer + 401 logout)
 │   ├── ssg/                    # SSG API utilities
 │   ├── config.ts               # Environment configuration
 │   └── db.ts                   # PostgreSQL connection pool
@@ -525,8 +578,11 @@ NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY=your-gemini-api-key
 # SSG API Integration
 SSG_API_BASE_URL=https://api.ssg-wsg.sg
 
-# External API Authentication
+# External / machine API Authentication
+# Required for schedulers, agents and back-end systems to call the API.
+# Sent as the `x-api-key` header; must be a server-side secret (never NEXT_PUBLIC_*).
 EXTERNAL_API_KEY_FOR_CLAWDBOT=your-external-api-key
+SCHEDULER_SECRET=your-scheduler-secret
 DIRECT_APPLICATION_EMAIL_INGEST_TOKEN=your-direct-application-email-ingest-token
 ```
 

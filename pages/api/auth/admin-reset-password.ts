@@ -1,8 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import bcrypt from 'bcryptjs';
+import { withAuth } from '../../../lib/auth/withAuth';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -36,11 +37,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Hash the default password
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-    // Update user's password to the default password
+    // Update user's password to the default password (hash only; plaintext column cleared)
     await pool.query(
-      'UPDATE app_user SET password = $1, password_hash = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-      [defaultPassword, hashedPassword, userId]
+      'UPDATE app_user SET password = NULL, password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [hashedPassword, userId]
     );
+
+    // Revoke any live sessions for the reset account
+    try {
+      await pool.query('DELETE FROM user_session WHERE user_id = $1', [userId]);
+    } catch (e) {
+      console.error('Session revocation after admin reset failed:', e);
+    }
 
     // Set per-user flag to force password change on next login
     try {
@@ -62,3 +70,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: 'Failed to reset password' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider'] });

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { getFileUrl } from '@/lib/urlHelpers';
+import { getCourseBannerDataUrl } from '@utils/courseBanner';
 
 interface CourseImageProps {
   src?: string;
   alt: string;
   className?: string;
-  fallbackSeed: string;
+  /** Retained for call-site compatibility; the fallback is now the standard branded banner. */
+  fallbackSeed?: string;
   width?: number;
   height?: number;
 }
@@ -23,7 +25,7 @@ export const CourseImage: React.FC<CourseImageProps> = ({
 
   const getImageSrc = (imageSrc?: string): string => {
     if (!imageSrc || hasError) {
-      return `https://picsum.photos/seed/${fallbackSeed}/${width}/${height}`;
+      return getCourseBannerDataUrl({ width, height, title: alt });
     }
 
     // If it's already a full URL (http/https), use it as-is
@@ -39,7 +41,7 @@ export const CourseImage: React.FC<CourseImageProps> = ({
     // If it's a blob URL or any other format, fall back to placeholder
     if (imageSrc.startsWith('blob:')) {
       setHasError(true);
-      return `https://picsum.photos/seed/${fallbackSeed}/${width}/${height}`;
+      return getCourseBannerDataUrl({ width, height, title: alt });
     }
 
     return imageSrc;

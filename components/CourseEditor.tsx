@@ -6,6 +6,7 @@ import { Card } from './ui/Card';
 import { Icon, IconName } from './ui/Icon';
 import Spinner from './ui/Spinner';
 import { getCourseImageUrl } from '@utils/imageUtils';
+import { getCourseBannerDataUrl } from '@utils/courseBanner';
 import { getApiUrl } from '@/lib/urlHelpers';
 import QuizEditorModal, { QuizQuestion } from './QuizEditorModal';
 import { TopicAccordion } from './CourseDetail';
@@ -65,6 +66,24 @@ const LinkField: React.FC<{ label: string; value?: string | null }> = ({ label, 
         )}
     </div>
 );
+
+const LinkCard: React.FC<{ label: string; value?: string | null }> = ({ label, value }) => {
+    if (!value) return null;
+    return (
+        <a
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+        >
+            <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+                <p className="font-semibold text-gray-900 dark:text-white">{label}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+            </div>
+        </a>
+    );
+};
 
 const ReadonlyValueField: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
     <div>
@@ -521,8 +540,8 @@ const CourseEditor: React.FC = () => {
         assessments: editingCourse.assessments || [],
         assessmentMethods: initialAssessmentMethods,
         modeOfLearning: editingCourse.modeOfLearning?.length ? editingCourse.modeOfLearning : [ModeOfLearning.Physical],
-        // Ensure imageUrl is set - use existing or generate default
-        imageUrl: editingCourse.imageUrl || `https://picsum.photos/seed/${editingCourse.id || 'new'}/400/225`
+        // Leave blank when unset — the standard branded banner is rendered as the fallback
+        imageUrl: editingCourse.imageUrl || ''
     });
     const [isSaving, setIsSaving] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -789,10 +808,10 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     // Clean up invalid blob URLs from database when editing existing courses
     useEffect(() => {
         if (!isNewCourse && course.imageUrl && course.imageUrl.startsWith('blob:')) {
-            console.log('🔧 Detected invalid blob URL in database, falling back to placeholder');
+            console.log('🔧 Detected invalid blob URL in database, falling back to the standard banner');
             setCourse(prev => ({
                 ...prev,
-                imageUrl: `https://picsum.photos/seed/${course.id || 'default'}/400/225`
+                imageUrl: ''
             }));
         }
     }, [isNewCourse, course.id]); // Don't include course.imageUrl in dependencies to avoid infinite loop
@@ -1148,6 +1167,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 renewedStatus: course.renewedStatus,
                 // Include trainer slides URL if it's a link (not upload)
                 trainerSlidesUrl: course.trainerSlidesUrl,
+                activitiesUrl: course.activitiesUrl || null,
                 lessonPlanUrl: course.lessonPlanUrl || null,
                 learnerGuideUrl: course.learnerGuideUrl || null,
                 facilitatorGuideUrl: course.facilitatorGuideUrl || null,
@@ -1161,13 +1181,16 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
                 numOfTrainers: selectedApprovedTrainers.length,
                 trainersList: selectedApprovedTrainers.join(' | '),
-                // Sync assessmentMethods links to legacy columns so view mode always shows latest
-                writtenAssessmentLink: (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
-                    ? course.assessmentMethods.writtenAssessment.link
-                    : (writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || null) : null),
-                practicalPerformanceAssessmentLink: (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
-                    ? course.assessmentMethods.practicalExam.link
-                    : (practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || null) : null),
+                // Sync assessmentMethods links to legacy columns so view mode always shows latest.
+                // A disabled method clears its legacy column, otherwise the stale link keeps showing.
+                writtenAssessmentLink: course.assessmentMethods?.writtenAssessment?.enabled
+                    ? (course.assessmentMethods.writtenAssessment.link
+                        || (writtenAssessmentInputType === 'link' ? (course.writtenAssessmentLink || null) : null))
+                    : null,
+                practicalPerformanceAssessmentLink: course.assessmentMethods?.practicalExam?.enabled
+                    ? (course.assessmentMethods.practicalExam.link
+                        || (practicalPerformanceInputType === 'link' ? (course.practicalPerformanceAssessmentLink || null) : null))
+                    : null,
                 assessmentMethods: course.assessmentMethods || null,
                 // Drop rows that have no payload at all. Activity-type rows
                 // can use instructions instead of a URL; Quiz-type rows can
@@ -1656,12 +1679,12 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Course Image</label>
                                     <div className="relative aspect-video bg-gray-100 dark:bg-gray-700 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600 mb-3 shadow-sm">
                                         <img
-                                            src={getCourseImageUrl(course.imageUrl, course.id)}
+                                            src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
                                             alt={course.title}
                                             className="w-full h-full object-cover"
                                             onError={(e) => {
                                                 const target = e.target as HTMLImageElement;
-                                                target.src = `https://picsum.photos/seed/${course.id || 'default'}/400/200`;
+                                                target.src = getCourseBannerDataUrl({ title: course.title });
                                             }}
                                         />
                                     </div>
@@ -1720,18 +1743,22 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
 
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Courseware</h3>
-                            <div className="space-y-4">
-                                <LinkField label="Lesson Plan URL" value={course.lessonPlanUrl} />
-                                <LinkField label="Learner Guide URL" value={course.learnerGuideUrl} />
-                                <LinkField label="Facilitator Guide URL" value={course.facilitatorGuideUrl} />
-                                <LinkField label="Assessment Plan URL" value={course.assessmentPlanUrl} />
-                                <LinkField label="Learner Slides URL" value={course.slidesUrl} />
-                                <LinkField label="Trainer Slides URL" value={course.trainerSlidesUrl} />
-                                <LinkField label="Courseware Link" value={course.courseLink} />
-                                <LinkField label="Brochure Link" value={course.brochureLink} />
-                                <LinkField label="SkillsFuture Link" value={course.skillsfutureLink} />
-                                <LinkField label="Assessment Record Link" value={course.assessmentRecordLink} />
-                                <LinkField label="Assessment Summary Record URL" value={course.assessmentSummaryRecordUrl} />
+                            <div className="space-y-3">
+                                <LinkCard label="Lesson Plan" value={course.lessonPlanUrl} />
+                                <LinkCard label="Learner Guide" value={course.learnerGuideUrl} />
+                                <LinkCard label="Facilitator Guide" value={course.facilitatorGuideUrl} />
+                                <LinkCard label="Assessment Plan" value={course.assessmentPlanUrl} />
+                                <LinkCard label="Learner Slides" value={course.slidesUrl} />
+                                <LinkCard label="Trainer Slides" value={course.trainerSlidesUrl} />
+                                <LinkCard label="Activities/Lab" value={course.activitiesUrl} />
+                                <LinkCard label="Courseware Link" value={course.courseLink} />
+                                <LinkCard label="Brochure Link" value={course.brochureLink} />
+                                <LinkCard label="SkillsFuture Link" value={course.skillsfutureLink} />
+                                <LinkCard label="Assessment Record Link" value={course.assessmentRecordLink} />
+                                <LinkCard label="Assessment Summary Record" value={course.assessmentSummaryRecordUrl} />
+                                {![course.lessonPlanUrl, course.learnerGuideUrl, course.facilitatorGuideUrl, course.assessmentPlanUrl, course.slidesUrl, course.trainerSlidesUrl, course.activitiesUrl, course.courseLink, course.brochureLink, course.skillsfutureLink, course.assessmentRecordLink, course.assessmentSummaryRecordUrl].some(Boolean) && (
+                                    <div className="text-gray-500 dark:text-gray-400">No courseware links available.</div>
+                                )}
                             </div>
                         </Card>
 
@@ -1769,22 +1796,18 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                         <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Assessment Links</h3>
                             <div className="space-y-4">
-                                <LinkField label="Written Exam" value={
-                                    (course.assessmentMethods?.writtenAssessment?.enabled && course.assessmentMethods.writtenAssessment.link)
-                                        ? course.assessmentMethods.writtenAssessment.link
-                                        : course.writtenAssessmentLink
-                                } />
-                                <LinkField label="Practical Exam" value={
-                                    (course.assessmentMethods?.practicalExam?.enabled && course.assessmentMethods.practicalExam.link)
-                                        ? course.assessmentMethods.practicalExam.link
-                                        : course.practicalPerformanceAssessmentLink
-                                } />
-                                {course.assessmentMethods && Object.entries(course.assessmentMethods).map(([key, method]) => {
+                                {(Object.keys(ASSESSMENT_METHOD_LABELS) as AssessmentMethodKey[]).map((key) => {
+                                    const method = course.assessmentMethods?.[key];
                                     if (!method?.enabled) return null;
-                                    if (key === 'writtenAssessment') return null;
-                                    if (key === 'practicalExam') return null;
-                                    return <LinkField key={key} label={ASSESSMENT_METHOD_LABELS[key as AssessmentMethodKey]} value={method.link} />;
+                                    // Legacy columns may still hold the link for older courses saved before per-method links
+                                    const legacyLink = key === 'writtenAssessment' ? course.writtenAssessmentLink
+                                        : key === 'practicalExam' ? course.practicalPerformanceAssessmentLink
+                                        : null;
+                                    return <LinkField key={key} label={ASSESSMENT_METHOD_LABELS[key]} value={method.link || legacyLink} />;
                                 })}
+                                {!Object.values(course.assessmentMethods || {}).some(m => m?.enabled) && (
+                                    <div className="text-gray-500 dark:text-gray-400">No assessment methods selected.</div>
+                                )}
                             </div>
                         </Card>
                     </div>
@@ -1807,13 +1830,14 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 {/* Image preview */}
                                 <div className="relative aspect-video bg-gray-100 dark:bg-gray-700 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600 mb-3 shadow-sm">
                                     <img
-                                        src={getCourseImageUrl(course.imageUrl, course.id)}
+                                        src={getCourseImageUrl(course.imageUrl, course.id, course.title)}
                                         alt={course.title}
                                         className="w-full h-full object-cover"
                                         onError={(e) => {
                                             const target = e.target as HTMLImageElement;
-                                            if (target.src !== `https://picsum.photos/seed/${course.id || 'default'}/400/200`) {
-                                                target.src = `https://picsum.photos/seed/${course.id || 'default'}/400/200`;
+                                            const fallback = getCourseBannerDataUrl({ title: course.title });
+                                            if (target.src !== fallback) {
+                                                target.src = fallback;
                                             }
                                         }}
                                     />
@@ -2116,6 +2140,18 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     onChange={(e) => setCourse(prev => ({ ...prev, trainerSlidesUrl: e.target.value }))}
                                     className={inputClasses}
                                     placeholder="https://docs.google.com/presentation/..."
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="activitiesUrl" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Activities/Lab URL</label>
+                                <input
+                                    type="url"
+                                    id="activitiesUrl"
+                                    name="activitiesUrl"
+                                    value={course.activitiesUrl || ''}
+                                    onChange={(e) => setCourse(prev => ({ ...prev, activitiesUrl: e.target.value }))}
+                                    className={inputClasses}
+                                    placeholder="https://drive.google.com/..."
                                 />
                             </div>
                             <div>

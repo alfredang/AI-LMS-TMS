@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
@@ -57,7 +58,7 @@ interface CourseRunInfo {
   enrolment_count: number;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed. Use POST.' });
   }
@@ -614,3 +615,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     skippedExisting,
   });
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

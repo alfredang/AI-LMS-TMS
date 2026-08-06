@@ -1,7 +1,8 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
@@ -28,6 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           c.facilitator_guide_url AS facilitator_guide,
           c.slides_url           AS learner_slides,
           c.trainer_slides_url   AS trainer_slides,
+          c.activities_url       AS activities,
           c.assessment_plan_url  AS assessment_plan,
           c.courseware_link,
           c.assessment_record_link,
@@ -85,6 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         slidesUrl: courseDetail.learner_slides,
         facilitatorGuideUrl: courseDetail.facilitator_guide,
         trainerSlidesUrl: courseDetail.trainer_slides,
+        activitiesUrl: courseDetail.activities,
         assessmentPlanUrl: courseDetail.assessment_plan,
         courseLink: courseDetail.courseware_link,
         assessmentRecordLink: courseDetail.assessment_record_link,
@@ -107,3 +110,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler);

@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { addDaLearnerToCalendar } from '../../../lib/google-calendar/da-calendar-sync';
@@ -16,7 +17,7 @@ import { addDaLearnerToCalendar } from '../../../lib/google-calendar/da-calendar
  *   - generate-invoice: { enrollmentIds } — creates QB invoices (placeholder)
  */
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
   const { action } = req.body || {};
@@ -172,3 +173,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: msg });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

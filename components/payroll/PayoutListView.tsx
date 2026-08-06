@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Icon, IconName } from '../ui/Icon';
 import PayoutEditDialog, { PayoutRow } from './PayoutEditDialog';
-import TrainerPayoutDialog from './TrainerPayoutDialog';
 import ManualClassDialog, { ManualClass } from './ManualClassDialog';
 import { PayoutTier } from '@lib/payroll/calculate';
 import { authHeader } from '@lib/auth/authHeader';
@@ -63,6 +62,22 @@ const CompactStat: React.FC<{
 
 const PAGE_SIZE = 20;
 
+const todayIso = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+// The two endpoints answer with their own row shapes (payroll_manual_class calls
+// the title class_title), so fold either back onto the merged PayoutRow shape.
+const mergeSaved = (prev: PayoutRow, saved: any): PayoutRow => ({
+  ...prev,
+  ...saved,
+  ...(saved?.class_title !== undefined ? { course_title: saved.class_title } : {}),
+});
+
 const PayoutListView: React.FC = () => {
   const [rows, setRows] = useState<PayoutRow[]>([]);
   const [tiers, setTiers] = useState<PayoutTier[]>([]);
@@ -97,7 +112,14 @@ const PayoutListView: React.FC = () => {
   const [startFrom, setStartFrom] = useState<string>('');
   const [startTo, setStartTo] = useState<string>('');
   const [groupByTrainer, setGroupByTrainer] = useState(false);
-  const [trainerModal, setTrainerModal] = useState<{ name: string; ids: Set<string> } | null>(null);
+  // Accordion: at most one trainer's classes open at a time (holds the group key).
+  const [expandedTrainer, setExpandedTrainer] = useState<string | null>(null);
+  // Group key currently running a bulk mark/unmark, plus its failure message.
+  const [bulkSaving, setBulkSaving] = useState<string | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  // Mirrors bulkSaving synchronously — state updates are async, so the click
+  // handler can't rely on them to reject a second concurrent run.
+  const bulkRunning = useRef(false);
   const [page, setPage] = useState(0);
 
   // silent = refresh data (incl. the server-computed overview totals) without the
@@ -262,14 +284,6 @@ const PayoutListView: React.FC = () => {
     return Array.from(map.values()).sort((a, b) => a.trainer_name.localeCompare(b.trainer_name));
   }, [filtered, trainerKey]);
 
-  // Rows for the open trainer modal. Membership is fixed to the ids captured at open
-  // time (so changing a class's status mid-edit can't make it vanish), but the data is
-  // pulled live from `rows` so edits/totals stay current.
-  const trainerModalRows = useMemo(
-    () => (trainerModal ? rows.filter((r) => trainerModal.ids.has(r.id)) : []),
-    [trainerModal, rows]
-  );
-
   const hasExtraFilters =
     trainerFilter !== 'all' ||
     classFilter !== 'all' ||
@@ -303,12 +317,65 @@ const PayoutListView: React.FC = () => {
 
   useEffect(() => {
     setPage(0);
+    // Collapse on any filter change — the open trainer may not even be in the new list.
+    setExpandedTrainer(null);
   }, [statusFilter, sourceFilter, search, months, month, windowMode, trainerFilter, classFilter, startFrom, startTo, groupByTrainer]);
 
-  // Close the trainer modal if none of its classes remain (e.g. after a data reload).
+  // Collapse if the open trainer scrolled off the current page.
   useEffect(() => {
-    if (trainerModal && trainerModalRows.length === 0) setTrainerModal(null);
-  }, [trainerModal, trainerModalRows.length]);
+    if (expandedTrainer && !pageGroups.some((g) => g.key === expandedTrainer)) setExpandedTrainer(null);
+  }, [expandedTrainer, pageGroups]);
+
+  // Bulk mark/unmark every class under one trainer. Sequential on purpose — one
+  // request in flight at a time, so a trainer with many classes can't stampede
+  // the API or the connection pool.
+  const bulkSetPaid = useCallback(async (groupKey: string, groupRows: PayoutRow[], paid: boolean) => {
+    // Hard re-entry guard. The button's disabled state alone isn't enough: collapsing
+    // mid-save and opening another trainer unmounts it, so a second loop could start
+    // and then have its "saving" flag cleared by the first one finishing.
+    if (bulkRunning.current) return;
+    bulkRunning.current = true;
+    setBulkError(null);
+    setBulkSaving(groupKey);
+    const failed: string[] = [];
+    for (const r of groupRows) {
+      if (paid ? r.status === 'completed' : r.status !== 'completed') continue; // already there
+      const est = Number(r.estimated_payout) || 0;
+      const hasActual = r.actual_payout !== null && r.actual_payout !== undefined && r.actual_payout !== '';
+      const body = paid
+        ? {
+            status: 'completed',
+            actual_payout: hasActual ? r.actual_payout : est > 0 ? est.toFixed(2) : null,
+            payment_date: r.payment_date || todayIso(),
+          }
+        : { status: 'pending' }; // amounts and dates are kept
+      try {
+        // Route to the right table: non-WSQ rows live in payroll_manual_class.
+        const endpoint = isManual(r)
+          ? `/api/payroll/manual-classes/${r.id}`
+          : `/api/payroll/payouts/${r.id}`;
+        const res = await fetch(endpoint, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...authHeader() },
+          body: JSON.stringify(body),
+        });
+        const j = await res.json();
+        if (!j.success) throw new Error(j.error || 'save failed');
+        const updated = mergeSaved(r, j.data);
+        setRows((rs) => rs.map((x) => (x.id === updated.id ? updated : x)));
+      } catch {
+        failed.push(r.course_title || r.course_code || 'a class');
+      }
+    }
+    bulkRunning.current = false;
+    setBulkSaving(null);
+    if (failed.length > 0) {
+      setBulkError(
+        `${failed.length} class${failed.length === 1 ? '' : 'es'} failed to update: ${failed.join(', ')}. Please try again.`
+      );
+    }
+    load(true); // re-sync the Overview cards
+  }, [load]);
 
   // "Selected window" card row + status-pill counts — both derived from baseFiltered
   // (the current filters minus the status pill) so they agree with each other and
@@ -550,7 +617,7 @@ const PayoutListView: React.FC = () => {
           <div className="inline-flex rounded-md border border-default overflow-hidden text-xs font-medium">
             <button
               type="button"
-              onClick={() => { setGroupByTrainer(false); setTrainerModal(null); }}
+              onClick={() => { setGroupByTrainer(false); setExpandedTrainer(null); }}
               className={`inline-flex items-center gap-1.5 px-3 h-8 transition-colors ${
                 !groupByTrainer
                   ? 'bg-primary text-white'
@@ -770,18 +837,28 @@ const PayoutListView: React.FC = () => {
               pageGroups.map((g) => {
                 const manualCount = g.rows.filter(isManual).length;
                 const wsqCount = g.rows.length - manualCount;
+                const open = expandedTrainer === g.key;
+                const busy = bulkSaving === g.key;
+                const allCompleted = g.rows.length > 0 && g.rows.every((r) => r.status === 'completed');
                 return (
+                <React.Fragment key={g.key}>
                 <tr
-                  key={g.key}
-                  onClick={() => setTrainerModal({ name: g.trainer_name, ids: new Set(g.rows.map((r) => r.id)) })}
-                  title="View consolidated payouts & edit"
-                  className="group border-t border-default even:bg-gray-50/40 dark:even:bg-slate-900/20 hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors cursor-pointer"
+                  // Single-open accordion: picking another trainer collapses this one.
+                  onClick={() => setExpandedTrainer(open ? null : g.key)}
+                  title={open ? 'Hide classes' : 'Show classes'}
+                  className={`group border-t border-default transition-colors cursor-pointer ${
+                    open
+                      ? 'bg-primary/5 dark:bg-primary/10'
+                      : 'even:bg-gray-50/40 dark:even:bg-slate-900/20 hover:bg-primary/5 dark:hover:bg-primary/10'
+                  }`}
                 >
-                  <td className="px-3 py-2.5 font-medium max-w-[18rem] border-l-2 border-transparent group-hover:border-primary">
+                  <td className={`px-3 py-2.5 font-medium max-w-[18rem] border-l-2 ${open ? 'border-primary' : 'border-transparent group-hover:border-primary'}`}>
                     <div className="flex items-center gap-2">
                       <Icon
                         name={IconName.ChevronDown}
-                        className="w-4 h-4 flex-shrink-0 -rotate-90 text-on-surface-secondary transition-colors group-hover:text-primary"
+                        className={`w-4 h-4 flex-shrink-0 transition-transform ${
+                          open ? 'text-primary' : '-rotate-90 text-on-surface-secondary group-hover:text-primary'
+                        }`}
                       />
                       <span className="truncate uppercase" title={g.trainer_name}>{g.trainer_name}</span>
                       {manualCount > 0 && (
@@ -803,6 +880,142 @@ const PayoutListView: React.FC = () => {
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(g.estimated)}</td>
                   <td className="px-3 py-2.5 text-right font-semibold text-primary tabular-nums">{fmtCurrency(g.actual)}</td>
                 </tr>
+
+                {open && (
+                  <tr className="bg-gray-50/60 dark:bg-slate-900/40">
+                    <td colSpan={5} className="p-0 border-l-2 border-primary">
+                      <div className="px-4 py-3">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="text-xs text-on-surface-secondary">
+                            Click a class to edit its payout.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); bulkSetPaid(g.key, g.rows, !allCompleted); }}
+                            disabled={bulkSaving !== null}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border border-default rounded-md bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface disabled:opacity-50"
+                          >
+                            {busy ? (
+                              <>
+                                <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
+                                Saving…
+                              </>
+                            ) : allCompleted ? (
+                              <>
+                                <Icon name={IconName.Clock} className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                Unmark all as paid
+                              </>
+                            ) : (
+                              <>
+                                <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                                Mark all as paid
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {bulkError && !busy && (
+                          <div className="mb-2 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-md px-2.5 py-1.5">
+                            {bulkError}
+                          </div>
+                        )}
+
+                        <div className="overflow-x-auto rounded-lg border border-default bg-white dark:bg-slate-800">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-gray-100 dark:bg-slate-700 text-left text-[11px] uppercase tracking-wider text-on-surface-secondary">
+                              <tr>
+                                <th className="px-3 py-2 whitespace-nowrap">Course</th>
+                                <th className="px-2 py-2 whitespace-nowrap">Dates</th>
+                                <th className="px-2 py-2 whitespace-nowrap text-right">Pax</th>
+                                <th className="px-2 py-2 whitespace-nowrap text-right">Course Fee</th>
+                                <th className="px-2 py-2 whitespace-nowrap text-right">Est. Payout</th>
+                                <th className="px-2 py-2 whitespace-nowrap text-right">Actual Payout</th>
+                                <th className="px-2 py-2 whitespace-nowrap">Status</th>
+                                <th className="px-2 py-2 whitespace-nowrap">Payment Date</th>
+                                <th className="px-2 py-2 whitespace-nowrap">Remark</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {g.rows.map((r) => {
+                                const manual = isManual(r);
+                                const dateLabel = r.class_dates
+                                  ? collapseMultiDates(parseMultiDates(r.class_dates))
+                                  : fmtDate(r.start_date);
+                                const hasActual =
+                                  r.actual_payout !== null && r.actual_payout !== undefined && r.actual_payout !== '';
+                                return (
+                                  <tr
+                                    key={r.id}
+                                    // Inert mid-bulk-save: opening the editor then would let it
+                                    // write the same row the loop is still working through.
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (busy) return;
+                                      if (manual) setEditingManual(toManualClass(r));
+                                      else setEditing(r);
+                                    }}
+                                    title={
+                                      busy
+                                        ? 'Saving…'
+                                        : manual
+                                        ? 'Click to edit this non-WSQ class'
+                                        : 'Click to edit this payout'
+                                    }
+                                    className={`group/row border-t border-default transition-colors ${
+                                      busy ? 'cursor-wait opacity-60' : 'cursor-pointer'
+                                    } ${
+                                      manual
+                                        ? `${NON_WSQ_ROW} ${!busy ? NON_WSQ_ROW_HOVER : ''}`
+                                        : `even:bg-gray-50/50 dark:even:bg-slate-700/20 ${
+                                            !busy ? 'hover:bg-primary/5 dark:hover:bg-primary/10' : ''
+                                          }`
+                                    }`}
+                                  >
+                                    <td
+                                      className={`px-3 py-2.5 max-w-[18rem] border-l-2 ${
+                                        manual ? NON_WSQ_ACCENT : 'border-transparent group-hover/row:border-primary'
+                                      }`}
+                                      title={r.course_title || ''}
+                                    >
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <span className="font-medium truncate">{r.course_title || '-'}</span>
+                                        {manual && <NonWsqTag />}
+                                        <Icon
+                                          name={IconName.Edit}
+                                          className="w-3.5 h-3.5 flex-shrink-0 text-primary opacity-0 group-hover/row:opacity-100 transition-opacity"
+                                        />
+                                      </div>
+                                      <div className="text-[11px] text-on-surface-secondary font-mono truncate">
+                                        {manual
+                                          ? (r.course_code || 'Non-WSQ class')
+                                          : `${r.course_code || '-'} · ${r.course_run_code || '-'}`}
+                                      </div>
+                                    </td>
+                                    <td className="px-2 py-2.5 max-w-[12rem] truncate text-on-surface-secondary" title={dateLabel}>
+                                      {dateLabel}
+                                    </td>
+                                    <td className="px-2 py-2.5 text-right tabular-nums">{r.num_learners}</td>
+                                    <td className="px-2 py-2.5 text-right tabular-nums">{fmtCurrency(r.course_fee)}</td>
+                                    <td className="px-2 py-2.5 text-right tabular-nums">{fmtCurrency(r.estimated_payout)}</td>
+                                    <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${hasActual ? 'text-green-600 dark:text-green-400' : ''}`}>
+                                      {fmtCurrency(r.actual_payout)}
+                                    </td>
+                                    <td className="px-2 py-2.5"><StatusBadge status={r.status} /></td>
+                                    <td className="px-2 py-2.5 whitespace-nowrap text-on-surface-secondary">{fmtDate(r.payment_date)}</td>
+                                    <td className="px-2 py-2.5 max-w-[12rem] truncate text-on-surface-secondary" title={r.remark || ''}>
+                                      {r.remark || '-'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
                 );
               })}
           </tbody>
@@ -843,19 +1056,6 @@ const PayoutListView: React.FC = () => {
           </div>
         )}
       </div>
-
-      {trainerModal && trainerModalRows.length > 0 && (
-        <TrainerPayoutDialog
-          trainerName={trainerModal.name}
-          rows={trainerModalRows}
-          // Refresh the server-computed Overview totals once the consolidated
-          // editor closes (rows are updated in place live; the cards catch up here).
-          onClose={() => { setTrainerModal(null); load(true); }}
-          onSaved={(updated) =>
-            setRows((rs) => rs.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)))
-          }
-        />
-      )}
 
       {editing && (
         <PayoutEditDialog

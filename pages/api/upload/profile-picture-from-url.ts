@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { cors } from '../../../lib/cors';
 import { uploadProfileImageBufferToDrive } from '../../../lib/google-drive/profile-image-helpers';
@@ -11,7 +12,7 @@ function isHttpUrl(value: string) {
   }
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (cors(req, res)) return;
 
   if (req.method !== 'POST') {
@@ -75,3 +76,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler);

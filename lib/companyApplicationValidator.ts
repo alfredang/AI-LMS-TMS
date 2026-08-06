@@ -80,6 +80,12 @@ function normalizeTitle(value: string): string {
     .trim();
 }
 
+// Word-order-insensitive key: same words in any order produce the same key, so
+// "A class" and "class A" match. Input must already be normalizeTitle()'d.
+function titleTokenKey(normalizedTitle: string): string {
+  return normalizedTitle.split(' ').filter(Boolean).sort().join(' ');
+}
+
 // Pre-fetches all course_runs that could match anything in this upload, so we
 // do one query for N rows instead of N queries. Returns a lookup function the
 // per-row validator calls.
@@ -117,9 +123,15 @@ async function buildCourseRunResolver(
     if (!candidates || candidates.length === 0) return false;
     const target = normalizeTitle(title);
     if (!target) return false;
+    const targetTokens = titleTokenKey(target);
     return candidates.some(candidate => {
       const c = normalizeTitle(candidate);
-      return c === target || c.includes(target) || target.includes(c);
+      return (
+        c === target ||
+        c.includes(target) ||
+        target.includes(c) ||
+        (!!targetTokens && titleTokenKey(c) === targetTokens) // same words, any order
+      );
     });
   };
 }

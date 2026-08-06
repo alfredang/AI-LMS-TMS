@@ -1,15 +1,24 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { Pool } from 'pg';
 import { cors } from '../../../lib/cors';
+import pool from '../../../lib/db';
+import { requireRole } from '@lib/auth/requireRole';
 
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'tertiarydb',
-  password: process.env.DB_PASSWORD,
-  port: parseInt(process.env.DB_PORT || '5432'),
-});
-
+/**
+ * POST /api/admin/migrate
+ *
+ * One-off, hand-editable data/schema fix runner — repurposed per use (see git history for
+ * prior migrations run through this route). Previously had NO auth check despite running
+ * arbitrary mutating SQL on every POST; fixed 2026-07-24 per CLAUDE.md's API security policy
+ * (every data-mutating pages/api/** route must authenticate). Also switched off a stray
+ * DB_USER/DB_HOST/... Pool (inconsistent with the rest of the app) onto the standard
+ * lib/db.ts pool (DATABASE_URL), which every other route already relies on.
+ *
+ * Current use (2026-07-30): creates ONE test enrollment row (course_run 1169306, real
+ * course, fake learner) for tertiarytesting@gmail.com, to verify the
+ * auto-send-course-confirmation window/dedupe fix end-to-end without touching a real
+ * trainee. Idempotent — checks for an existing test row first via enrolment_id prefix
+ * 'TEST-CONFIRM-EMAIL-', so re-running this doesn't create duplicates.
+ */
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS
   if (cors(req, res)) {
@@ -20,61 +29,65 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
+  const authed = await requireRole(req, res, ['admin', 'developer']);
+  if (!authed) return;
+
   try {
-    console.log('🔄 Running migration: Add file_url to submission table...');
+    console.log('🔄 Running migration: create test enrollment for confirmation-email verification...');
 
-    // Add file_url column to submission table if it doesn't exist
-    await pool.query(`
-      ALTER TABLE public.submission
-      ADD COLUMN IF NOT EXISTS file_url text;
-    `);
-
-    // Add secondary_email column to app_user if it doesn't exist
-    console.log('🔄 Running migration: Add secondary_email to app_user table...');
-    await pool.query(`
-      ALTER TABLE public.app_user
-      ADD COLUMN IF NOT EXISTS secondary_email text;
-    `);
-    console.log('✅ Added secondary_email column');
-
-    // Add new course columns
-    console.log('🔄 Running migration: Add course_fees_include_gst, renewed_status to course table...');
-    await pool.query(`
-      ALTER TABLE public.course
-      ADD COLUMN IF NOT EXISTS course_fees_include_gst text,
-      ADD COLUMN IF NOT EXISTS renewed_status text;
-    `);
-    console.log('✅ Added course_fees_include_gst and renewed_status columns');
-    
-    console.log('✅ Added file_url column');
-    
-    // Add unique constraint if it doesn't exist
-    try {
-      await pool.query(`
-        ALTER TABLE public.submission 
-        ADD CONSTRAINT submission_enrollment_assessment_unique 
-        UNIQUE (enrollment_id, assessment_id);
-      `);
-      console.log('✅ Added unique constraint');
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('already exists')) {
-        console.log('ℹ️ Unique constraint already exists');
-      } else {
-        throw error;
-      }
+    const existing = await pool.query(
+      `SELECT id, enrolment_id FROM enrollment WHERE enrolment_id LIKE 'TEST-CONFIRM-EMAIL-%' LIMIT 1`
+    );
+    if (existing.rows.length > 0) {
+      console.log(`ℹ️ Test enrollment already exists: ${existing.rows[0].enrolment_id}`);
+      return res.status(200).json({
+        success: true,
+        message: 'Test enrollment already exists (idempotent no-op)',
+        enrollment: existing.rows[0],
+      });
     }
-    
-    // Create index for better performance
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_submission_user_course 
-      ON public.submission(enrollment_id, assessment_id);
-    `);
-    
-    console.log('✅ Created index');
+
+    // enrollment.user_id is NOT NULL in prod (contrary to what the confirmation-email
+    // query's LEFT JOIN + COALESCE fallback implied was possible) — need a real app_user
+    // row first. Idempotent by email.
+    let userRow = (await pool.query(
+      `SELECT id FROM app_user WHERE email = 'tertiarytesting@gmail.com' LIMIT 1`
+    )).rows[0];
+    if (!userRow) {
+      const created = await pool.query(
+        `INSERT INTO app_user (id, email, full_name, account_status, created_at, updated_at)
+         VALUES (gen_random_uuid(), 'tertiarytesting@gmail.com', 'Test Trainee (confirmation-email verification)', 'active', NOW(), NOW())
+         RETURNING id`
+      );
+      userRow = created.rows[0];
+      await pool.query(
+        `INSERT INTO user_role_map (user_id, role) VALUES ($1, 'Learner')`,
+        [userRow.id]
+      );
+      console.log(`✅ Created test app_user ${userRow.id}`);
+    }
+
+    const enrolmentId = `TEST-CONFIRM-EMAIL-${Date.now()}`;
+    const result = await pool.query(
+      `INSERT INTO enrollment (
+         id, user_id, course_id, course_run_id,
+         progress_percent, payment_status, assessment_status,
+         enrolment_date, enrolment_id, enrolment_status,
+         nric, email, calendar_added, created_at, updated_at
+       ) VALUES (
+         gen_random_uuid(), $2, '3ac6b597-55df-4df1-ad20-d009976416c2', '002371ff-0386-45fc-9381-2d8b81047e01',
+         0, 'Unpaid', 'Pending',
+         CURRENT_DATE, $1, 'Confirmed',
+         'TESTNRIC01', 'tertiarytesting@gmail.com', false, NOW(), NOW()
+       ) RETURNING id, enrolment_id, enrolment_status, course_run_id, email`,
+      [enrolmentId, userRow.id]
+    );
+    console.log(`✅ Created test enrollment ${enrolmentId}`);
 
     return res.status(200).json({
       success: true,
-      message: 'Migration completed successfully'
+      message: 'Migration completed successfully',
+      enrollment: result.rows[0],
     });
   } catch (error) {
     console.error('❌ Migration failed:', error);

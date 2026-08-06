@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 
 interface ApiResponse {
@@ -6,7 +7,7 @@ interface ApiResponse {
   error?: string;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse<ApiResponse>) {
+async function handler(req: NextApiRequest, res: NextApiResponse<ApiResponse>) {
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -18,3 +19,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     courseRunId: courseRunId as string,
   });
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

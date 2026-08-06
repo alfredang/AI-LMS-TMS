@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 /**
  * SSG API endpoint for editing and deleting course runs
  * POST /api/ssg/courses/courseRuns/[runId]?action=edit - Edit course run
@@ -54,7 +55,7 @@ async function reassertTpgTrainer(ssgRunId: string): Promise<{ status: string; m
   }
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST for both edit and delete operations.' });
   }
@@ -818,3 +819,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

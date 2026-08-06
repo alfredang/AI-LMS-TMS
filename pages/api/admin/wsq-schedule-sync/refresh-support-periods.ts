@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../../lib/db';
 import { getSSGCredentialsService } from '../../../../lib/ssg/services/credentials-service';
@@ -13,7 +14,7 @@ import { HTTPRequestBuilder, HttpMethod, HttpClient, handleRequest } from '../..
  * Processes up to 5 courses concurrently to avoid SSG rate-limiting.
  * Returns a summary of updated / unchanged / failed courses.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method not allowed' });
@@ -109,3 +110,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.status(200).json({ summary, total: courses.length, errors: errors.slice(0, 20) });
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

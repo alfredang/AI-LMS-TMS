@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
@@ -21,7 +22,7 @@ interface ApiResponse {
   error?: string;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse<ApiResponse>) {
+async function handler(req: NextApiRequest, res: NextApiResponse<ApiResponse>) {
   // Enable CORS and handle preflight
   if (cors(req, res)) {
     return; // Preflight request handled
@@ -58,10 +59,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         t.user_id AS trainer_id
       FROM course_run cr
       JOIN course c ON cr.course_id = c.id
-      JOIN trainer_profile t ON cr.assigned_trainer_id = t.user_id
+      JOIN trainer_profile t ON t.user_id = $2
       JOIN assessment a ON a.course_id = c.id
       LEFT JOIN course_run_assessment cra ON cra.course_run_id = cr.id AND cra.assessment_id = a.id
-      WHERE cr.id = $1 AND t.user_id = $2
+      WHERE cr.id = $1
+        AND (
+          cr.assigned_trainer_id = $2
+          OR cr.tpg_assigned_trainer_id = $2
+          OR EXISTS (
+            SELECT 1 FROM course_run_trainer crt
+            WHERE crt.course_run_id = cr.id AND crt.trainer_id = $2
+          )
+        )
       ORDER BY a.title;
     `;
 
@@ -95,3 +104,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     });
   }
 }
+
+export default withAuth(handler);

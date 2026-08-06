@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next'
 import pool from '../../lib/db';
 import { cors } from '../../lib/cors';
@@ -14,7 +15,7 @@ function createApiResponse(success: boolean, message: string, data?: any, error?
   };
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS
   if (cors(req, res)) {
     return; // Preflight request handled
@@ -647,6 +648,20 @@ async function getTrainingProviderProfile(userId: string) {
     const r = await pool.query(`SELECT tertiary_courses_sg_url, tertiary_courses_sg_api_key, magento_backend_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
     if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
   } catch (e) { /* columns don't exist */ }
+  // MailerLite
+  try {
+    const r = await pool.query(`SELECT mailerlite_api_key, mailerlite_group_id FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
+  // AI Agent (WhatsApp support widget)
+  try {
+    const r = await pool.query(`SELECT whatsapp_chat_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* columns don't exist */ }
+  try {
+    const r = await pool.query(`SELECT trainer_whatsapp_chat_url FROM training_provider WHERE id = $1`, [profileData.provider_id]);
+    if (r.rows.length > 0) refLinks = { ...refLinks, ...r.rows[0] };
+  } catch (e) { /* column doesn't exist yet */ }
   // Cloudflare R2
   try {
     const r = await pool.query(
@@ -794,6 +809,10 @@ async function getTrainingProviderProfile(userId: string) {
       n8nWebhookTimeoutMs: refLinks.n8n_webhook_timeout_ms || '',
       tertiaryCoursesSgUrl: refLinks.tertiary_courses_sg_url || refLinks.magento_backend_url || '',
       tertiaryCoursesSgApiKey: refLinks.tertiary_courses_sg_api_key || '',
+      mailerliteApiKey: refLinks.mailerlite_api_key || '',
+      mailerliteGroupId: refLinks.mailerlite_group_id || '',
+      whatsappChatUrl: refLinks.whatsapp_chat_url || '',
+      trainerWhatsappChatUrl: refLinks.trainer_whatsapp_chat_url || '',
       r2Endpoint: refLinks.r2_endpoint || '',
       r2AccessKeyId: refLinks.r2_access_key_id || '',
       r2SecretAccessKey: refLinks.r2_secret_access_key || '',
@@ -862,3 +881,5 @@ async function getTrainingProviderProfile(userId: string) {
     updated_at: new Date().toISOString()
   };
 }
+
+export default withAuth(handler);

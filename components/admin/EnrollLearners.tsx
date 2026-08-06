@@ -204,8 +204,20 @@ const EnrollLearners: React.FC = () => {
     // Company Application path only
     companyApplication?: boolean;
     employerOrgName?: string;
+    batchCount?: number;
   }
   const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
+  // Company Application batch staging: accumulate learners under one employer +
+  // course run, then enrol them in ONE call so the CA pipeline groups them by
+  // (employer_uen, course_run_id) into a single consolidated invoice — exactly
+  // like an Excel upload of multiple rows.
+  const [caBatch, setCaBatch] = useState<{ row: Record<string, string>; name: string; nric: string }[]>([]);
+  const [isEnrolBatch, setIsEnrolBatch] = useState(false);
+  // Guard against the one-by-one Company Application mistake: submitting a single
+  // learner cuts ONE invoice for that learner alone. If the employer is enrolling
+  // more than one, they must be staged into the batch so the CA pipeline groups
+  // them into a single consolidated tax invoice. This modal is the last checkpoint.
+  const [showSingleCaConfirm, setShowSingleCaConfirm] = useState(false);
   const ENROLMENT_DRAFT_KEY = 'enrolment_submission_draft';
 
   const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
@@ -876,27 +888,70 @@ const EnrollLearners: React.FC = () => {
   // names and POST it to the same endpoint the Excel upload uses, so the full
   // pipeline (SSG enrol → grant → calendar → native enrolment → invoice) runs
   // and the learner shows up in View Company Application. No Excel required.
-  const handleCompanyApplicationSubmit = async () => {
-    const newErrors: string[] = [];
-
+  // ── Company Application helpers (shared by single submit + batch staging) ──
+  const resolveCaContext = () => {
     const course = availableCourses.find(c => c.courseCode === formData.courseReferenceNumber);
     const run = availableCourseRuns.find(r => r.course_run_id === formData.courseRunId);
-    const courseTitle = course?.title || '';
-    const startDate = run?.start_date ? toDdMmYyyy(run.start_date) : '';
+    return {
+      courseTitle: course?.title || '',
+      startDate: run?.start_date ? toDdMmYyyy(run.start_date) : '',
+    };
+  };
 
-    if (!courseTitle) newErrors.push('Select the course from the "Available Courses" dropdown so the Company Application can resolve its title.');
-    if (!startDate) newErrors.push('Select the course run from the "Available Course Runs" dropdown so the Company Application can resolve its start date.');
-    if (!formData.traineeId.trim()) newErrors.push('Trainee NRIC/FIN is required.');
-    if (!formData.traineeFullName.trim()) newErrors.push('Trainee Full Name is required.');
-    if (!formData.traineeDateOfBirth.trim()) newErrors.push('Trainee Date of Birth is required.');
-    if (!formData.traineeEmailAddress.trim()) newErrors.push('Trainee Email is required.');
-    if (!formData.traineeContactNumberPhoneNumber.trim()) newErrors.push('Trainee Phone Number is required.');
-    if (!formData.employerOrgName?.trim()) newErrors.push('Employer Organization Name is required.');
-    if (!formData.employerUen?.trim()) newErrors.push('Employer UEN is required.');
-    if (!formData.employerFullName?.trim()) newErrors.push('Employer Contact Name is required.');
-    if (!formData.employerContactDesignation?.trim()) newErrors.push('Employer Contact Designation is required.');
-    if (!formData.employerPhoneNumber?.trim()) newErrors.push('Employer Contact Telephone is required.');
-    if (!formData.employerEmailAddress?.trim()) newErrors.push('Employer Contact Email is required.');
+  const validateCaFields = (courseTitle: string, startDate: string): string[] => {
+    const e: string[] = [];
+    if (!courseTitle) e.push('Select the course from the "Available Courses" dropdown so the Company Application can resolve its title.');
+    if (!startDate) e.push('Select the course run from the "Available Course Runs" dropdown so the Company Application can resolve its start date.');
+    if (!formData.traineeId.trim()) e.push('Trainee NRIC/FIN is required.');
+    if (!formData.traineeFullName.trim()) e.push('Trainee Full Name is required.');
+    if (!formData.traineeDateOfBirth.trim()) e.push('Trainee Date of Birth is required.');
+    if (!formData.traineeEmailAddress.trim()) e.push('Trainee Email is required.');
+    if (!formData.traineeContactNumberPhoneNumber.trim()) e.push('Trainee Phone Number is required.');
+    if (!formData.employerOrgName?.trim()) e.push('Employer Organization Name is required.');
+    if (!formData.employerUen?.trim()) e.push('Employer UEN is required.');
+    if (!formData.employerFullName?.trim()) e.push('Employer Contact Name is required.');
+    if (!formData.employerContactDesignation?.trim()) e.push('Employer Contact Designation is required.');
+    if (!formData.employerPhoneNumber?.trim()) e.push('Employer Contact Telephone is required.');
+    if (!formData.employerEmailAddress?.trim()) e.push('Employer Contact Email is required.');
+    return e;
+  };
+
+  const buildCaRow = (courseTitle: string, startDate: string): Record<string, string> => ({
+    'Course Title*': courseTitle,
+    'Course Start Date (DD-MM-YYYY)*': startDate,
+    'Trainee Identity Type*': formData.traineeIdentityType || '',
+    'Trainee FULL Name as on government ID*': formData.traineeFullName,
+    'Trainee ID Type*': formData.traineeIdType,
+    'Trainee NRIC/FIN Number*': formData.traineeId,
+    'Date of Birth* (DD-MM-YYYY)': toDdMmYyyy(formData.traineeDateOfBirth),
+    'Trainee Company email Address*': formData.traineeEmailAddress,
+    'Trainee Mobile Phone Number*': formData.traineeContactNumberPhoneNumber,
+    'Trainee Highest Qualification*': formData.traineeHighestQualification || '',
+    'Employer Organization Name*': formData.employerOrgName || '',
+    'Employer UEN*': formData.employerUen || '',
+    'Employer Contact Name*': formData.employerFullName || '',
+    'Employer Contact Designation*': formData.employerContactDesignation || '',
+    'Employer Contact Telephone No.*': formData.employerPhoneNumber || '',
+    'Employer Contact Email Address*': formData.employerEmailAddress || '',
+  });
+
+  // Clear only the trainee-specific fields; keep course/run/employer locked so
+  // the next staged learner consolidates onto the same invoice.
+  const clearTraineeFields = () => {
+    setFormData(prev => ({
+      ...prev,
+      traineeId: '',
+      traineeFullName: '',
+      traineeDateOfBirth: '',
+      traineeEmailAddress: '',
+      traineeContactNumberPhoneNumber: '',
+      traineeHighestQualification: '',
+    }));
+  };
+
+  const handleCompanyApplicationSubmit = async () => {
+    const { courseTitle, startDate } = resolveCaContext();
+    const newErrors = validateCaFields(courseTitle, startDate);
 
     if (newErrors.length > 0) {
       setErrors(newErrors);
@@ -905,24 +960,7 @@ const EnrollLearners: React.FC = () => {
       return;
     }
 
-    const row: Record<string, string> = {
-      'Course Title*': courseTitle,
-      'Course Start Date (DD-MM-YYYY)*': startDate,
-      'Trainee Identity Type*': formData.traineeIdentityType || '',
-      'Trainee FULL Name as on government ID*': formData.traineeFullName,
-      'Trainee ID Type*': formData.traineeIdType,
-      'Trainee NRIC/FIN Number*': formData.traineeId,
-      'Date of Birth* (DD-MM-YYYY)': toDdMmYyyy(formData.traineeDateOfBirth),
-      'Trainee Company email Address*': formData.traineeEmailAddress,
-      'Trainee Mobile Phone Number*': formData.traineeContactNumberPhoneNumber,
-      'Trainee Highest Qualification*': formData.traineeHighestQualification || '',
-      'Employer Organization Name*': formData.employerOrgName || '',
-      'Employer UEN*': formData.employerUen || '',
-      'Employer Contact Name*': formData.employerFullName || '',
-      'Employer Contact Designation*': formData.employerContactDesignation || '',
-      'Employer Contact Telephone No.*': formData.employerPhoneNumber || '',
-      'Employer Contact Email Address*': formData.employerEmailAddress || '',
-    };
+    const row = buildCaRow(courseTitle, startDate);
 
     setIsSubmitting(true);
     setErrors([]);
@@ -971,12 +1009,90 @@ const EnrollLearners: React.FC = () => {
     }
   };
 
+  // Stage the current trainee under the locked employer + course for a batch.
+  const handleAddToBatch = () => {
+    const { courseTitle, startDate } = resolveCaContext();
+    const errs = validateCaFields(courseTitle, startDate);
+    if (errs.length > 0) {
+      setErrors(errs);
+      setWarnings([]);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setCaBatch(prev => [...prev, { row: buildCaRow(courseTitle, startDate), name: formData.traineeFullName, nric: formData.traineeId }]);
+    setErrors([]);
+    setWarnings([]);
+    clearTraineeFields();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const removeFromBatch = (idx: number) => {
+    setCaBatch(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  // Enrol every staged learner in ONE call so the CA pipeline groups them by
+  // (employer_uen, course_run_id) into a single consolidated invoice.
+  const handleEnrolBatch = async () => {
+    if (caBatch.length === 0) return;
+    setIsEnrolBatch(true);
+    setErrors([]);
+    setWarnings([]);
+    try {
+      const response = await fetch('/api/admin/upload-company-applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: caBatch.map(b => b.row) }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        if (Array.isArray(data?.validationErrors) && data.validationErrors.length > 0) {
+          const msgs = data.validationErrors.flatMap((v: any) => (v.issues || []).map((issue: string) => issue));
+          setErrors(msgs.length ? msgs : [data?.message || 'The batch could not be validated.']);
+        } else {
+          setErrors([data?.message || `Failed to submit batch (${response.status})`]);
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      setSubmissionResult({
+        success: true,
+        companyApplication: true,
+        batchCount: caBatch.length,
+        employerOrgName: formData.employerOrgName,
+        courseReferenceNumber: formData.courseReferenceNumber,
+        courseRunId: formData.courseRunId,
+        sponsorshipType: SponsorshipType.EMPLOYER,
+        submittedAt: new Date().toISOString(),
+      });
+      setCaBatch([]);
+    } catch (err) {
+      console.error('Company Application batch submit failed:', err);
+      setErrors(['Network error while submitting the Company Application batch. Please try again.']);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } finally {
+      setIsEnrolBatch(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Employer picked from the dropdown → Company Application pipeline.
+    // Enrolling a single learner here cuts a standalone invoice for that learner.
+    // Validate first, then confirm the count so multi-learner companies are routed
+    // through the batch (one consolidated invoice) instead of one invoice each.
     if (isCompanyApplication) {
-      await handleCompanyApplicationSubmit();
+      const { courseTitle, startDate } = resolveCaContext();
+      const caErrors = validateCaFields(courseTitle, startDate);
+      if (caErrors.length > 0) {
+        setErrors(caErrors);
+        setWarnings([]);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      setShowSingleCaConfirm(true);
       return;
     }
 
@@ -1161,21 +1277,41 @@ const EnrollLearners: React.FC = () => {
 
           <div className="p-6 space-y-6">
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 text-sm text-blue-800 dark:text-blue-200">
-              <span className="font-semibold">{submissionResult.traineeName}</span> is being enrolled under{' '}
-              <span className="font-semibold">{submissionResult.employerOrgName}</span> via TPGateway. The system will
-              automatically run enrolment → grant lookup → calendar → invoice, then the learner will appear in{' '}
-              <span className="font-semibold">View Company Application</span> with live status.
+              {submissionResult.batchCount ? (
+                <>
+                  <span className="font-semibold">{submissionResult.batchCount} learner{submissionResult.batchCount === 1 ? '' : 's'}</span> are being enrolled under{' '}
+                  <span className="font-semibold">{submissionResult.employerOrgName}</span> and will be{' '}
+                  <span className="font-semibold">consolidated into a single invoice</span>. The system runs enrolment → grant lookup → calendar → invoice, then they appear in{' '}
+                  <span className="font-semibold">View Company Application</span> with live status.
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold">{submissionResult.traineeName}</span> is being enrolled under{' '}
+                  <span className="font-semibold">{submissionResult.employerOrgName}</span> via TPGateway. The system will
+                  automatically run enrolment → grant lookup → calendar → invoice, then the learner will appear in{' '}
+                  <span className="font-semibold">View Company Application</span> with live status.
+                </>
+              )}
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {[
-                { label: 'Trainee Name', value: submissionResult.traineeName },
-                { label: 'Trainee ID', value: submissionResult.traineeId },
-                { label: 'Employer', value: submissionResult.employerOrgName },
-                { label: 'Course Ref No.', value: submissionResult.courseReferenceNumber },
-                { label: 'Course Run ID', value: submissionResult.courseRunId },
-                { label: 'Sponsorship', value: submissionResult.sponsorshipType },
-              ].map(({ label, value }) => (
+              {(submissionResult.batchCount
+                ? [
+                    { label: 'Learners', value: String(submissionResult.batchCount) },
+                    { label: 'Employer', value: submissionResult.employerOrgName },
+                    { label: 'Course Ref No.', value: submissionResult.courseReferenceNumber },
+                    { label: 'Course Run ID', value: submissionResult.courseRunId },
+                    { label: 'Sponsorship', value: submissionResult.sponsorshipType },
+                  ]
+                : [
+                    { label: 'Trainee Name', value: submissionResult.traineeName },
+                    { label: 'Trainee ID', value: submissionResult.traineeId },
+                    { label: 'Employer', value: submissionResult.employerOrgName },
+                    { label: 'Course Ref No.', value: submissionResult.courseReferenceNumber },
+                    { label: 'Course Run ID', value: submissionResult.courseRunId },
+                    { label: 'Sponsorship', value: submissionResult.sponsorshipType },
+                  ]
+              ).map(({ label, value }) => (
                 <div key={label} className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3">
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{label}</p>
                   <p className="text-sm font-medium text-gray-900 dark:text-white break-all">{value || 'N/A'}</p>
@@ -2166,6 +2302,70 @@ const EnrollLearners: React.FC = () => {
             </div>
           )}
 
+          {/* Company Application consolidated batch — stage multiple learners
+              under the SAME employer + course run, then enrol them together so
+              the CA pipeline issues ONE consolidated invoice (like an Excel
+              upload). The single "Enrol as Company Application" button below
+              still works for a one-off learner. */}
+          {isCompanyApplication && selectedEmployerKey !== '' && (
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg p-5 space-y-4">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <h3 className="text-md font-semibold text-gray-800 dark:text-white">
+                  Consolidated batch{caBatch.length > 0 ? ` (${caBatch.length} learner${caBatch.length === 1 ? '' : 's'})` : ''}
+                </h3>
+                <span className="text-xs text-gray-500 dark:text-gray-400 max-w-xs text-right">
+                  All staged learners share this employer + course run → one invoice.
+                </span>
+              </div>
+
+              {caBatch.length > 0 ? (
+                <ul className="divide-y divide-indigo-100 dark:divide-indigo-800/60 rounded-md border border-indigo-100 dark:border-indigo-800/60 bg-white dark:bg-gray-800">
+                  {caBatch.map((b, i) => (
+                    <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+                      <span className="text-gray-800 dark:text-gray-200">
+                        <span className="font-medium">{b.name || '(unnamed)'}</span>
+                        <span className="text-gray-500 dark:text-gray-400 ml-2">{b.nric}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeFromBatch(i)}
+                        disabled={isEnrolBatch}
+                        className="text-xs font-medium text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Fill the trainee fields above, then <span className="font-medium">Add learner to batch</span>. Repeat for each learner from this company, then enrol them all at once for a single invoice.
+                </p>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={handleAddToBatch}
+                  disabled={isEnrolBatch}
+                  className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold rounded-md border border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  + Add learner to batch
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEnrolBatch}
+                  disabled={isEnrolBatch || caBatch.length === 0}
+                  className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isEnrolBatch
+                    ? 'Enrolling batch…'
+                    : `Enrol all ${caBatch.length > 0 ? `${caBatch.length} ` : ''}& generate 1 invoice`}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Submit Button */}
           <div className="flex justify-end space-x-4">
             <button
@@ -2207,6 +2407,55 @@ const EnrollLearners: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* Single-learner Company Application confirmation. Stops the one-by-one
+          mistake where each learner is invoiced separately instead of the whole
+          company sharing ONE consolidated main tax invoice. */}
+      {showSingleCaConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-800">
+            <div className="p-6 space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Is {formData.employerOrgName?.trim() || 'this company'} enrolling only 1 learner?
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                You&apos;re about to enrol <span className="font-medium">just this one learner</span>, which
+                generates <span className="font-medium">a separate tax invoice for them alone</span>.
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                If the company is enrolling <span className="font-medium">more than one learner</span> for this
+                course, don&apos;t enrol them one by one — use <span className="font-medium">&ldquo;+ Add learner
+                to batch&rdquo;</span> to stage everyone, then <span className="font-medium">&ldquo;Enrol all &amp;
+                generate 1 invoice&rdquo;</span> so they share <span className="font-medium">one consolidated
+                invoice</span>.
+              </p>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setShowSingleCaConfirm(false);
+                  void handleCompanyApplicationSubmit();
+                }}
+                className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Yes, just 1 — enrol &amp; invoice
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSingleCaConfirm(false);
+                  handleAddToBatch();
+                }}
+                className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+              >
+                No — add more learners
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

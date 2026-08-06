@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { reconcileRunCalendar } from '../../../lib/calendar/reconcileRunCalendar';
@@ -23,7 +24,7 @@ import { getCalendarClient } from '../../../lib/calendar/calendarClient';
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const SGT = 'Asia/Singapore';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
   const { courseRunId, resolution } = (req.body || {}) as {
     courseRunId?: string;
@@ -72,3 +73,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Failed to reconcile calendar' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

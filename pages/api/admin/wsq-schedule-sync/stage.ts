@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 /**
  * ARCHIVED — not called by any UI as of 2026-06-02.
  *
@@ -42,7 +43,7 @@ type StageResult = {
   message?: string;
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method not allowed' });
@@ -105,3 +106,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   };
   return res.status(200).json({ summary, results });
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

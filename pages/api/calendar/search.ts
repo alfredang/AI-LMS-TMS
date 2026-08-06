@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
@@ -9,7 +10,7 @@ import { getGoogleCredentials } from '@lib/google-auth/googleAuth';
  * Searches Google Calendar events by keyword (course code, title, name, date).
  * Returns event details including attendee emails, description, location, and meet links.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed. Use GET.' });
   }
@@ -116,3 +117,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler);

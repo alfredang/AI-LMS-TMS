@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { enqueueInvoiceJobsFromConsolidatedFinance } from '@/lib/services/invoiceJobs';
 import { runPendingInvoiceJobs } from '@/lib/services/invoiceJobsRunner';
@@ -7,7 +8,7 @@ import { processInvoiceJob } from '@/lib/services/invoiceJobProcessor';
  * POST /api/finance/invoice-jobs/enqueue
  * Body: { enrolmentIds: string[] } — SSG ENR references from Consolidated Finance.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
@@ -48,3 +49,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: msg });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

@@ -58,6 +58,11 @@ interface PopupState { open: boolean; type: PopupType; title: string; message: s
 
 const STATUS_COLORS: Record<string, string> = { Confirmed: '#16a34a', Pending: '#d97706', Cancelled: '#dc2626' };
 const colorFor = (s: string) => STATUS_COLORS[s] || '#2563eb';
+// Non-WSQ courses (no TGS- prefix) never go through TPGateway/SSG, so they're visually
+// flagged yellow regardless of status — distinct from Pending's amber/orange — so staff can
+// spot them at a glance rather than assume every block on this calendar is WSQ.
+const NON_WSQ_COLOR = '#eab308';
+const isNonWsq = (courseCode: string) => !/^TGS-/i.test((courseCode || '').trim());
 const to24h = (t?: string | null): string => {
   if (!t) return '';
   const m = String(t).trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?$/i);
@@ -215,8 +220,8 @@ const InAppCalendar: React.FC = () => {
           start: t ? `${r.sessionDate}T${t}` : r.sessionDate,
           end: te ? `${r.sessionDate}T${te}` : undefined,
           allDay: !t,
-          backgroundColor: colorFor(r.classStatus),
-          borderColor: colorFor(r.classStatus),
+          backgroundColor: isNonWsq(r.courseCode) ? NON_WSQ_COLOR : colorFor(r.classStatus),
+          borderColor: isNonWsq(r.courseCode) ? NON_WSQ_COLOR : colorFor(r.classStatus),
           extendedProps: { kind: 'runDay', ...r },
         } as EventInput;
       });

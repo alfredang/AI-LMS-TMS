@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 /**
  * API endpoint for SSG decryption
  * Decrypts ciphertext using SSG credentials from the database
@@ -7,7 +8,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { SSGEncryptionService } from '../../../lib/ssg/services/encryption-service';
 
-export default async function handler(
+async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -56,3 +57,5 @@ export default async function handler(
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

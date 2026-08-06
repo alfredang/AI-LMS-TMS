@@ -1,10 +1,11 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
 // API endpoint for submitting link-based assessments (Written Assessment / Practical Performance Assessment)
 // Supports multiple file uploads per assessment type
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     const { userId, courseRunId } = req.query;
 
@@ -95,3 +96,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: error.message });
   }
 }
+
+export default withAuth(handler);

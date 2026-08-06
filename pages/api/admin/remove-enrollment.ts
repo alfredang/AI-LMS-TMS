@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cancelEnrolmentForLearnerOnRun } from '../../../lib/ssg/mutateEnrolmentForLearner';
@@ -5,7 +6,7 @@ import { cancelEnrolmentForLearnerOnRun } from '../../../lib/ssg/mutateEnrolment
 // POST { email, courseRunId, force?, cancelOnTpg? }
 // Removes a learner from a course run. When cancelOnTpg is true (opt-in, confirm-gated
 // in the UI — hits REAL SSG), also cancels their TPGateway enrolment if they have one.
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
@@ -108,3 +109,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     client.release();
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

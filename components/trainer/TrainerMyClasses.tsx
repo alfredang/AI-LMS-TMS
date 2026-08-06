@@ -7,6 +7,7 @@ import { Icon, IconName } from '@components/ui/Icon';
 import Spinner from '@components/ui/Spinner';
 import { EmptyState } from '@components/ui/EmptyState';
 import { getCourseImageUrl } from '@utils/imageUtils';
+import { getCourseBannerDataUrl } from '@utils/courseBanner';
 
 // ── Shared helpers ──
 
@@ -108,11 +109,11 @@ export const ClassCard: React.FC<ClassCardProps> = ({ course, onSelect }) => {
       {/* Image with gradient overlay */}
       <div className="relative h-40 overflow-hidden">
         <img
-          src={getCourseImageUrl(course.imageUrl, course.id)}
+          src={getCourseImageUrl(course.imageUrl, course.id, course.title, { width: 380, height: 160 })}
           alt={course.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           onError={(e) => {
-            (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${course.id || 'default'}/400/200`;
+            (e.target as HTMLImageElement).src = getCourseBannerDataUrl({ width: 380, height: 160, title: course.title });
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent" />

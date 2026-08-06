@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { splitTrainerList } from '@/lib/trainerInvitations';
@@ -31,7 +32,7 @@ interface LearningUnit {
   subtopics: Subtopic[];
 }
 
-export default async function handler(
+async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -86,6 +87,7 @@ export default async function handler(
         c.assessment_plan_url,
         c.slides_url           AS learner_slides_url,
         c.trainer_slides_url,
+        c.activities_url,
         c.written_assessment_link,
         c.practical_performance_assessment_link,
         c.courseware_link,
@@ -214,6 +216,7 @@ export default async function handler(
       assessmentPlanUrl: courseData.assessment_plan_url,
       slidesUrl: courseData.learner_slides_url,
       trainerSlidesUrl: courseData.trainer_slides_url,
+      activitiesUrl: courseData.activities_url,
       writtenAssessmentLink: courseData.written_assessment_link,
       practicalPerformanceAssessmentLink: courseData.practical_performance_assessment_link,
       courseLink: courseData.courseware_link,
@@ -268,3 +271,5 @@ export default async function handler(
     });
   }
 }
+
+export default withAuth(handler);

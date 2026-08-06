@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { sgtToday } from '../../../lib/wsqScheduleSync';
@@ -91,7 +92,7 @@ async function fetchMagento(baseUrl: string, apiKey: string, forceRefresh: boole
   return data;
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
     return res.status(405).json({ error: 'Method not allowed' });
@@ -307,3 +308,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     cached: !forceRefresh && cache ? new Date(cache.at).toISOString() : null,
   });
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

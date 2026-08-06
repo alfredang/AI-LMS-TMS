@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
@@ -52,6 +53,7 @@ interface CourseData {
   isUtapEligible?: boolean;
   renewedStatus?: string;
   trainerSlidesUrl?: string; // For Google Slides links
+  activitiesUrl?: string; // Link to hands-on lab worksheets / activities folder
   lessonPlanUrl?: string;
   learnerGuideUrl?: string;
   facilitatorGuideUrl?: string;
@@ -163,7 +165,7 @@ const getAssessmentFileUrl = async (client: any, assessmentId: string, courseId:
   }
 };
 
-export default async function handler(
+async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
@@ -513,8 +515,9 @@ export default async function handler(
           num_of_trainers = $35,
           trainers_list = $36,
           trainers_email_list = $37,
+          activities_url = COALESCE($38, activities_url),
           updated_at = now()
-        WHERE id = $38
+        WHERE id = $39
         RETURNING id
       `;
 
@@ -556,6 +559,7 @@ export default async function handler(
         courseData.numOfTrainers ?? 0,
         courseData.trainersList || null,
         courseData.trainersEmailList || null,
+        fileUrls.activitiesUrl || courseData.activitiesUrl || null,
         courseId
       ]);
 
@@ -887,3 +891,5 @@ export default async function handler(
     });
   }
 }
+
+export default withAuth(handler);

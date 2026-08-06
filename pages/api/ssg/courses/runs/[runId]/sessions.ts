@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 /**
  * Next.js API route for course sessions
  * GET /api/ssg/courses/runs/[runId]/sessions?courseCode=TGS-XXX&uen=<uen>
@@ -8,7 +9,7 @@ import { getSSGCredentialsService } from '../../../../../../lib/ssg/services/cre
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../../../../lib/ssg/utils/http-utils';
 import { getTrainingPartnerIdentifiers } from '../../../../../../lib/trainingPartnerIdentifiers';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
     return res.status(405).json({ error: 'Method not allowed' });
@@ -81,3 +82,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

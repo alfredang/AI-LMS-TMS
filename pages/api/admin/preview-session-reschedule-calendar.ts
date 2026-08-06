@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getCalendarReadClient } from '../../../lib/calendar/calendarClient';
@@ -20,7 +21,7 @@ import { eventDateIso, findEventOnDate } from '../../../lib/calendar/eventMatch'
  */
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' });
   const courseRunId = String(req.query.courseRunId || '').trim();
   const oldDate = String(req.query.oldDate || '').trim();
@@ -74,3 +75,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'Failed to preview calendar' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

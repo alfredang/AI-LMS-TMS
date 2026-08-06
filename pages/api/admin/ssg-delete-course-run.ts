@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HTTPRequestBuilder, HttpMethod, handleRequest } from '../../../lib/ssg/utils/http-utils';
@@ -10,7 +11,7 @@ import pool from '../../../lib/db';
  * Delete a course run from SSG and mark it as deleted in local DB.
  * Body: { courseReferenceNumber, courseRunId }
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -134,3 +135,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

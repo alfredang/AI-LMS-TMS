@@ -33,7 +33,7 @@ const DashboardCourseCard: React.FC<DashboardCourseCardProps> = ({ course }) => 
   return (
     <Card className="flex flex-col group cursor-pointer dark:bg-gray-800 dark:border-gray-700" onClick={handleCourseClick}>
       <div className="relative">
-        <img src={getCourseImageUrl(course.imageUrl, course.id)} alt={course.title} className="w-full h-auto object-cover rounded-t-xl" />
+        <img src={getCourseImageUrl(course.imageUrl, course.id, course.title)} alt={course.title} className="w-full h-auto object-cover rounded-t-xl" />
       </div>
       <div className="p-4 flex flex-col flex-grow">
         <h3 className="font-bold text-on-surface mb-3 group-hover:text-primary transition-colors mt-3 dark:text-white">{course.title}</h3>

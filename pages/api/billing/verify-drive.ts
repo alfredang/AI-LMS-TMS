@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
 import pool from '../../../lib/db';
@@ -11,7 +12,7 @@ import pool from '../../../lib/db';
  * GET /api/billing/verify-drive?url=<driveUrl>&enrollmentId=<uuid>
  * Returns { valid: true } or { valid: false }
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -76,3 +77,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ valid: true });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });

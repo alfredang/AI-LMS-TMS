@@ -53,13 +53,14 @@ const PROJECT_MGT_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] 
   { label: 'BMC Studio', icon: IconName.Create, href: 'https://alfredang.github.io/bcm/' },
 ];
 
-// Problem Solving tools — split out from Ed Tools so root-cause analysis
+// Six Sigma tools — split out from Ed Tools so root-cause analysis
 // tools have their own discoverable home in the sidebar.
 const PROBLEM_SOLVING_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
   { label: '5 Whys',          icon: IconName.Help, href: 'https://alfredang.github.io/5whys/' },
   { label: 'Fishbone Diagram', icon: IconName.Link, href: 'https://alfredang.github.io/fishbone/' },
   { label: 'Pareto Chart',    icon: IconName.Link, href: 'https://alfredang.github.io/paretochart/' },
   { label: 'System Thinking', icon: IconName.Link, href: 'https://alfredang.github.io/systemloop/' },
+  { label: 'SIPOC',           icon: IconName.Link, href: 'https://alfredang.github.io/sipoc/' },
 ];
 
 const CYBER_SECURITY_TOOL_ITEMS: { label: string; icon: IconName; href: string }[] = [
@@ -543,7 +544,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onNavigate, collapsed =
                 trainerPage === TrainerPage.ProblemSolvingTools ? 'text-primary' : inactiveIconClass
               }`}
             />
-            {!collapsed && <span className="truncate">Problem Solving Tools</span>}
+            {!collapsed && <span className="truncate">Six Sigma Tools</span>}
             {!collapsed && <Icon
               name={IconName.ChevronDown}
               className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${

@@ -4,12 +4,12 @@
 
 ```sql
 -- Step 1: Create user account (if not exists)
-INSERT INTO app_user (id, email, password, password_hash, full_name, created_at, updated_at)
+-- Store the bcrypt hash ONLY; never write a plaintext password column.
+INSERT INTO app_user (id, email, password_hash, full_name, created_at, updated_at)
 VALUES (
     gen_random_uuid(),
     'user@example.com',
-    'password123',
-    '$2b$10$HASH_HERE',
+    '$2b$10$REPLACE_WITH_BCRYPT_HASH',
     'User Full Name',
     NOW(),
     NOW()
@@ -64,12 +64,12 @@ INSERT INTO training_provider (
 RETURNING id;
 
 -- Step 2: Create admin user for this company
-INSERT INTO app_user (id, email, password, password_hash, full_name, created_at, updated_at)
+-- Store the bcrypt hash ONLY; never write a plaintext password column.
+INSERT INTO app_user (id, email, password_hash, full_name, created_at, updated_at)
 VALUES (
     gen_random_uuid(),
     'admin@newcompany.com',
-    'password123',
-    '$2b$10$HASH_HERE',
+    '$2b$10$REPLACE_WITH_BCRYPT_HASH',
     'John Doe',
     NOW(),
     NOW()

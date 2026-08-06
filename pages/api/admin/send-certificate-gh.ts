@@ -1,9 +1,10 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 import pool from '@lib/db';
 import { getTrainingPartnerIdentifiers } from '@lib/trainingPartnerIdentifiers';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -230,3 +231,5 @@ Tel: ${tp.contactTel} | Email: ${tp.supportEmail || tp.companyEmail} | WhatsApp:
     return res.status(500).json({ error: err.message || 'Failed to generate and send certificate' });
   }
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

@@ -31,7 +31,7 @@ Authenticate user with email and password or OTP.
 ```json
 {
   "email": "user@example.com",
-  "password": "password123",
+  "password": "<your-password>",
   "loginType": "password"
 }
 ```

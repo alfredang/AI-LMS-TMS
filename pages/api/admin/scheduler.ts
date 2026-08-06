@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import {
     getSchedulerTasks,
@@ -16,7 +17,7 @@ import {
  * POST body:  { taskId }
  */
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
     // GET — List all tasks
     if (req.method === 'GET') {
         try {
@@ -84,3 +85,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader('Allow', ['GET', 'PUT', 'POST']);
     return res.status(405).json({ success: false, error: 'Method not allowed' });
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });

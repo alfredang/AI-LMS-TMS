@@ -1,3 +1,4 @@
+import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../../lib/db';
 
@@ -9,7 +10,7 @@ import pool from '../../../../lib/db';
  * Blocks if a sync job started within the last 10 minutes is still running —
  * returns the existing job_id instead so the UI can poll it.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Method not allowed' });
@@ -63,3 +64,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.status(200).json({ job_id: inserted.rows[0].id });
 }
+
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });
