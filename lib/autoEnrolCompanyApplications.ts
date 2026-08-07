@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import pool from './db';
+import { extractCourseReferenceNumber } from './courseTitleMatch';
 import { ensureCompanyApplicationsTable, appendPipelineWarning } from './companyApplicationsTable';
 import { buildEnrolmentPayload } from './ssg/buildEnrolmentPayload';
 import { getSSGCredentialsService } from './ssg/services/credentials-service';
@@ -276,9 +277,64 @@ async function ssgEncryptedPostOnce(ctx: SSGContext, path: string, payload: unkn
   return JSON.parse(decrypted);
 }
 
+/**
+ * Refuse to pick between equally-good course runs.
+ *
+ * Two sittings of one course can start on the same day (an onsite class and an
+ * external one). Nothing the matcher looks at — title, start date, even
+ * mode_of_learning — distinguishes them, so any choice is a coin flip. A wrong
+ * pick puts the learner on the wrong class and bills the wrong run, and it is
+ * only noticed when someone reads the table against the invoice.
+ *
+ * Failing loudly is the only safe answer: the row stops with a message naming
+ * the candidates, and an admin pins the right one.
+ */
+function assertSingleCourseRun(rows: any[], title: string, startDate: string | null): void {
+  if (rows.length <= 1) return;
+  const ids = rows.map(r => String(r.course_run_id)).join(', ');
+  throw new Error(
+    `Ambiguous course run: ${rows.length} runs of "${title}" start on ${startDate || '(no date)'} — ${ids}. ` +
+    `The LMS will not guess which one this learner is on. Re-upload and pick the course run, ` +
+    `or set the Course Run ID on the application.`
+  );
+}
+
 async function resolveCourseRun(row: any): Promise<ResolvedRun | null> {
   const title = String(row.course_title || '').trim();
   const startDate = normalizeDate(row.course_start_date);
+
+  // An admin already answered "did you mean this run?" at upload time, and that
+  // answer was stamped on the row. Trust it — re-deriving from the same title
+  // and date that failed to match would just fail again.
+  const preResolved = String(row.course_run_id || '').trim();
+  if (preResolved) {
+    const pinned = await pool.query(
+      `SELECT cr.id::text AS course_run_uuid,
+              cr.course_run_id::text AS course_run_id,
+              c.course_code::text AS course_reference_number,
+              c.title::text AS course_title,
+              c.course_fee::numeric AS course_fee,
+              cr.start_date::text AS start_date
+         FROM public.course_run cr
+         JOIN public.course c ON c.id = cr.course_id
+        WHERE cr.course_run_id = $1
+          AND COALESCE(cr.is_deleted, false) = false
+        LIMIT 1`,
+      [preResolved]
+    );
+    const run = pinned.rows[0];
+    if (run) {
+      return {
+        courseRunUuid: run.course_run_uuid,
+        courseRunId: run.course_run_id,
+        courseReferenceNumber: run.course_reference_number,
+        courseTitle: run.course_title,
+        startDate: run.start_date ? normalizeDate(run.start_date) : startDate,
+        courseFee: run.course_fee == null ? null : Number(run.course_fee),
+      };
+    }
+  }
+
   if (!title) return null;
   const normalizedTitle = normalizeTitle(title);
 
@@ -300,10 +356,19 @@ async function resolveCourseRun(row: any): Promise<ResolvedRun | null> {
        JOIN public.course c ON c.id = cr.course_id
       WHERE LOWER(TRIM(c.title::text)) = LOWER(TRIM($1::text))
         ${dateClause}
-      ORDER BY cr.start_date ASC NULLS LAST
-      LIMIT 1`,
+        AND COALESCE(cr.is_deleted, false) = false
+      ORDER BY cr.start_date ASC NULLS LAST, cr.course_run_id ASC
+      LIMIT 5`,
     params
   );
+
+  // More than one run of this course starts on this date — an onsite and an
+  // external sitting, typically. Title and start date cannot separate them, and
+  // guessing silently writes the wrong run onto the learner: wrong class, wrong
+  // invoice, and a table that contradicts the enrolment. Refuse instead. The
+  // upload popup exists so a human pins the run up front; this is the backstop
+  // for rows that arrive without one.
+  assertSingleCourseRun(exact.rows, title, startDate);
 
   const found = exact.rows[0];
   if (found) {
@@ -328,13 +393,23 @@ async function resolveCourseRun(row: any): Promise<ResolvedRun | null> {
          FROM public.course_run cr
          JOIN public.course c ON c.id = cr.course_id
         WHERE cr.start_date::date = $1::date
-        ORDER BY cr.start_date ASC NULLS LAST
+        -- Stable tie-break, as above.
+        ORDER BY cr.start_date ASC NULLS LAST, cr.course_run_id ASC
         LIMIT 100`,
       [startDate]
     );
 
+    // A TGS code pasted into the title is exact and survives renames — try it
+    // before falling back to comparing words.
+    const pastedCode = extractCourseReferenceNumber(title);
     const targetTokens = titleTokenKey(title);
-    const fuzzy = sameDateRuns.rows.find((candidate: any) => {
+
+    const byCode = pastedCode
+      ? sameDateRuns.rows.filter(
+          (candidate: any) => String(candidate.course_reference_number || '').trim().toUpperCase() === pastedCode
+        )
+      : [];
+    const byTitle = sameDateRuns.rows.filter((candidate: any) => {
       const candidateTitle = normalizeTitle(candidate.course_title);
       return (
         candidateTitle === normalizedTitle ||
@@ -343,6 +418,13 @@ async function resolveCourseRun(row: any): Promise<ResolvedRun | null> {
         (!!targetTokens && titleTokenKey(candidate.course_title) === targetTokens) // same words, any order
       );
     });
+
+    // Same rule as the exact path: several equally-good runs means we do not
+    // know, so we say so rather than pick one. (A TGS code narrows to one
+    // course but not to one sitting of it, so it needs the check too.)
+    const matches = byCode.length > 0 ? byCode : byTitle;
+    assertSingleCourseRun(matches, title, startDate);
+    const fuzzy = matches[0];
 
     if (fuzzy) {
       return {
@@ -614,6 +696,35 @@ export async function processCompanyApplication(
     const message = `Could not resolve course run for "${row.course_title || ''}" on "${row.course_start_date || ''}"`;
     await markFailed(appId, 'course_run', new Error(message));
     return { id: appId, success: false, finalStatus: 'failed', error: message };
+  }
+
+  // Never silently replace a course run that is already on the row.
+  //
+  // The matcher keys on (title, start date), which cannot separate two runs of
+  // the same course starting the same day — an onsite and an external sitting of
+  // one course, say. Its tie-break is `ORDER BY start_date LIMIT 1`, so on a tie
+  // the winner is whatever the query plan returns, and two passes over the same
+  // row can legitimately disagree. That is not theoretical: a row was enrolled
+  // and invoiced against run 1386025, then a later pass flipped the column to
+  // 1404702, leaving the table contradicting the invoice.
+  //
+  // A run ID already on the row came either from an admin confirming it at
+  // upload, or from the pass that actually enrolled the learner. Both beat a
+  // fresh guess. Keep it, and surface the disagreement instead of burying it.
+  // Reaching here with a mismatch means the run ID on the row could not be
+  // loaded from course_run at all (deleted, or never imported) — resolveCourseRun
+  // returns the pinned run untouched whenever it exists. Keeping a run ID that
+  // points at nothing would be worse than useless, so the matcher's answer is
+  // used; the warning is what makes the swap visible instead of silent.
+  const existingRunId = String(row.course_run_id || '').trim();
+  if (existingRunId && existingRunId !== run.courseRunId) {
+    console.warn(
+      `[CA] Course run ${existingRunId} on ${appId} is not in course_run — falling back to matched run ${run.courseRunId}`
+    );
+    await appendPipelineWarning(
+      appId,
+      `Course run changed from ${existingRunId} to ${run.courseRunId}: ${existingRunId} was not found in the LMS. Check this is the right run — two sittings of one course can share a start date.`
+    ).catch(() => { /* advisory only; never break the pipeline over a warning */ });
   }
 
   await updateCompanyRow(appId, {
@@ -1039,7 +1150,12 @@ export async function sweepGrantsByCourseRunForApplications(applicationIds: stri
     [ids]
   );
   const courseRunIds: string[] = runRes.rows.map((r: any) => String(r.course_run_id));
-  if (courseRunIds.length === 0) return;
+  if (courseRunIds.length === 0) {
+    // Nothing to sweep, but residency is knowable without SSG — settle it so
+    // this path doesn't leave rows waiting on a grant that can't exist.
+    await markNonResidentsGrantIneligible(ids);
+    return;
+  }
 
   const ctx = await loadSsgContext();
   const { upsertSsgGrant } = await import('./services/billingSync');
@@ -1118,4 +1234,74 @@ export async function sweepGrantsByCourseRunForApplications(applicationIds: stri
   }
 
   console.log(`[sweepGrantsByCourseRun] swept ${courseRunIds.length} run(s), upserted ${totalUpserted} grant(s)`);
+
+  // Settle residency-based ineligibility now that SSG has had its chance to
+  // produce a grant. Runs on every sweep (upload pipeline, Sync Grants, Run
+  // Pipeline) so no caller can skip it.
+  await markNonResidentsGrantIneligible(ids);
+}
+
+/**
+ * Mark learners who can never receive an SSG grant — foreigners on a FIN /
+ * Work Permit / passport — as `grant_ineligible`.
+ *
+ * SSG funding is Citizens and PRs only, so waiting on a grant for these rows is
+ * waiting for something that will never come; worse, the per-group invoice guard
+ * withholds the ENTIRE employer group's invoice while any learner is
+ * "awaiting grant". Marking them lets the group bill correctly: the foreign
+ * learner at full course fee, everyone else net of grant.
+ *
+ * Conservative on purpose:
+ *   - Never touches a row that already has a grant_id. If SSG did grant one,
+ *     reality beats our classification.
+ *   - Never touches a row already marked ineligible (no redundant writes, and an
+ *     admin's manual mark stands).
+ *   - Only marks IDs we can positively identify as foreign. An unparseable or
+ *     ambiguous ID stays untouched so a typo'd NRIC is never silently billed at
+ *     full fee — it surfaces to the admin as "awaiting grant" instead.
+ *
+ * Returns the number of rows marked.
+ */
+export async function markNonResidentsGrantIneligible(applicationIds: string[]): Promise<number> {
+  const ids = Array.from(new Set(applicationIds.filter(Boolean)));
+  if (ids.length === 0) return 0;
+
+  const { assessGrantEligibility } = await import('./grantEligibility');
+
+  const candidates = await pool.query(
+    `SELECT id, trainee_full_name, trainee_nric, trainee_id_type, trainee_identity_type
+       FROM public.company_application
+      WHERE id = ANY($1::uuid[])
+        AND COALESCE(grant_ineligible, false) = false
+        AND COALESCE(grant_id, '') = ''`,
+    [ids]
+  );
+  if (candidates.rows.length === 0) return 0;
+
+  const toMark: string[] = [];
+  for (const row of candidates.rows) {
+    const verdict = assessGrantEligibility({
+      nric: row.trainee_nric,
+      idType: row.trainee_id_type,
+      identityType: row.trainee_identity_type,
+    });
+    if (verdict.status !== 'ineligible') continue;
+    toMark.push(String(row.id));
+    console.log(
+      `[grant-eligibility] ${String(row.trainee_full_name || '').trim() || row.id}: not grant eligible — ${verdict.reason}`
+    );
+  }
+  if (toMark.length === 0) return 0;
+
+  await pool.query(
+    `UPDATE public.company_application
+        SET grant_ineligible = true,
+            updated_at = now()
+      WHERE id = ANY($1::uuid[])`,
+    [toMark]
+  );
+  console.log(
+    `[grant-eligibility] marked ${toMark.length} learner(s) Not Grant Eligible (not a Singapore Citizen or PR) — they will be billed at the full course fee`
+  );
+  return toMark.length;
 }

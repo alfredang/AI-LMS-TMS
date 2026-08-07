@@ -2,7 +2,7 @@ import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureCompanyApplicationsTable } from '../../../lib/companyApplicationsTable';
-import { validateCompanyApplicationRows } from '../../../lib/companyApplicationValidator';
+import { validateCompanyApplicationRows, type CourseRunOverride } from '../../../lib/companyApplicationValidator';
 
 export const config = {
   api: {
@@ -68,15 +68,47 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     await ensureCompanyApplicationsTable();
 
-    // Pre-flight: reject the whole upload if any row has issues so the admin
-    // can fix the Excel and re-upload cleanly. The validator catches things
-    // that previously only surfaced after auto-enrol attempted SSG (e.g. a
-    // DOB entered as MM-DD-YYYY becoming "Invalid Date" in the payload, or a
-    // course run that doesn't exist in the LMS).
-    const validationErrors = await validateCompanyApplicationRows(rows);
+    // "Did you mean this run?" answers from the admin, keyed by the raw Excel
+    // (title, date). Each is verified against a real course_run before it can
+    // satisfy validation — a client can't wave a row through with a made-up id.
+    const rawOverrides = Array.isArray(req.body?.courseRunOverrides) ? req.body.courseRunOverrides : [];
+    const overrides: CourseRunOverride[] = [];
+    const resolvedRunByKey = new Map<string, { courseRunId: string; courseCode: string }>();
+    for (const o of rawOverrides) {
+      const courseRunId = String(o?.courseRunId || '').trim();
+      const courseTitle = String(o?.courseTitle || '');
+      const courseStartDate = String(o?.courseStartDate || '');
+      if (!courseRunId || !courseTitle) continue;
+      const runRes = await pool.query(
+        `SELECT cr.course_run_id::text AS course_run_id, c.course_code::text AS course_code
+           FROM public.course_run cr
+           JOIN public.course c ON c.id = cr.course_id
+          WHERE cr.course_run_id = $1
+            AND COALESCE(cr.is_deleted, false) = false
+          LIMIT 1`,
+        [courseRunId]
+      );
+      if (!runRes.rows[0]) {
+        return res.status(400).json({ message: `Selected course run "${courseRunId}" no longer exists — reload and pick again.` });
+      }
+      overrides.push({ courseTitle, courseStartDate, courseRunId });
+      resolvedRunByKey.set(
+        `${courseTitle.trim().toLowerCase()}|${courseStartDate.trim()}`,
+        { courseRunId: runRes.rows[0].course_run_id, courseCode: String(runRes.rows[0].course_code || '') }
+      );
+    }
+
+    // Pre-flight: reject the whole upload if any row has issues so the admin can
+    // fix it and re-upload cleanly. Catches things that previously only surfaced
+    // after auto-enrol hit SSG (e.g. a DOB entered as MM-DD-YYYY becoming
+    // "Invalid Date" in the payload, or a course run that doesn't exist).
+    const validationErrors = await validateCompanyApplicationRows(rows, overrides);
     if (validationErrors.length > 0) {
+      const resolvable = validationErrors.filter(e => e.courseRunUnresolved).length;
       return res.status(400).json({
-        message: `${validationErrors.length} row${validationErrors.length === 1 ? ' has' : 's have'} issues — fix the Excel and re-upload.`,
+        message: resolvable > 0
+          ? `${validationErrors.length} row${validationErrors.length === 1 ? ' has' : 's have'} issues — pick the correct course run below, or fix the Excel and re-upload.`
+          : `${validationErrors.length} row${validationErrors.length === 1 ? ' has' : 's have'} issues — fix the Excel and re-upload.`,
         validationErrors,
       });
     }
@@ -88,13 +120,26 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     for (const row of rows) {
       const dedupKey = makeDedupKey(row);
       const debugMap: Record<string, unknown> = {};
-      const values = DB_COLUMNS.map(dbCol => {
+      const baseValues = DB_COLUMNS.map(dbCol => {
         const sourceKey = Object.keys(COLUMN_TO_DB).find(k => COLUMN_TO_DB[k] === dbCol)!;
         const raw = row[sourceKey];
         const val: any = raw == null || raw === '' ? null : String(raw).trim();
         debugMap[dbCol] = val;
         return val;
       });
+
+      // When the admin resolved this row's course run by hand, persist that
+      // choice instead of leaving the pipeline to re-derive it from the same
+      // title/date that failed to match in the first place. The employer's
+      // original wording is preserved in course_title — we add the answer, we
+      // don't rewrite the question.
+      const chosenRun = resolvedRunByKey.get(
+        `${String(row['Course Title*'] || '').trim().toLowerCase()}|${String(row['Course Start Date (DD-MM-YYYY)*'] || '').trim()}`
+      );
+      const COLUMNS = chosenRun ? [...DB_COLUMNS, 'course_run_id', 'course_reference_number'] : DB_COLUMNS;
+      const values = chosenRun
+        ? [...baseValues, chosenRun.courseRunId, chosenRun.courseCode || null]
+        : baseValues;
       console.log('[upload-company-applications] parsed row →', JSON.stringify({
         dedupKey,
         rowKeys: Object.keys(row),
@@ -115,7 +160,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         : { rows: [] };
 
       if (existing.rows[0]?.id) {
-        const setClause = DB_COLUMNS.map((col, index) => `${col} = $${index + 2}`).join(', ');
+        const setClause = COLUMNS.map((col, index) => `${col} = $${index + 2}`).join(', ');
         const result = await pool.query(
           `UPDATE public.company_application
               SET ${setClause},
@@ -131,7 +176,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           queuedIds.push(result.rows[0].id);
         }
       } else {
-        const insertColumns = [...DB_COLUMNS, ...AUTOMATION_COLUMNS];
+        const insertColumns = [...COLUMNS, ...AUTOMATION_COLUMNS];
         const insertValues = [...values, 'pending'];
         const placeholders = insertValues.map((_, index) => `$${index + 1}`).join(', ');
         try {
@@ -163,7 +208,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             );
             const recoveredId = recovered.rows[0]?.id;
             if (recoveredId) {
-              const setClause = DB_COLUMNS.map((col, index) => `${col} = $${index + 2}`).join(', ');
+              const setClause = COLUMNS.map((col, index) => `${col} = $${index + 2}`).join(', ');
               const updRes = await pool.query(
                 `UPDATE public.company_application
                     SET ${setClause},

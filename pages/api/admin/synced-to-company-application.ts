@@ -7,7 +7,7 @@ import { requireRole } from '../../../lib/auth/requireRole';
  * POST /api/admin/synced-to-company-application
  *
  * Body: {
- *   enrolmentIds: string[],              // enrollment.id UUIDs from the Synced Enrolments list
+ *   enrolmentIds: string[],              // SSG enrolment references (e.g. "ENR-2608-028670") from the Synced Enrolments list
  *   employer: {
  *     uen: string,
  *     orgName: string,                   // must match a QuickBooks customer for invoicing to work
@@ -41,13 +41,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const authed = await requireRole(req, res, ['admin', 'trainingProvider', 'developer']);
   if (!authed) return; // requireRole already sent 401/403
 
-  // Cap the batch and accept only well-formed UUIDs. This bounds the work per
-  // request (no unbounded insert loop / connection hogging) and prevents a bad
-  // value ever reaching the ::uuid cast.
+  // Cap the batch and accept only well-formed SSG enrolment references. The
+  // list now keys on the enrolment reference rather than an enrollment.id UUID,
+  // because most of these learners have no native enrollment row yet — that is
+  // created the evening before their class, long after SSG confirms them.
   const MAX_BATCH = 300;
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const ENROLMENT_REF_RE = /^ENR-[0-9]{4}-[0-9]{6}$/i;
   const rawIds: string[] = Array.isArray(req.body?.enrolmentIds) ? req.body.enrolmentIds : [];
-  const enrolmentIds = [...new Set(rawIds.map((v) => String(v)))].filter((id) => UUID_RE.test(id));
+  const enrolmentIds = [...new Set(rawIds.map((v) => String(v).trim().toUpperCase()))]
+    .filter((id) => ENROLMENT_REF_RE.test(id));
 
   const employer = req.body?.employer ?? {};
   const orgName = String(employer.orgName ?? '').trim();
@@ -80,31 +82,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Pull every selected enrolment that is genuinely EMPLOYER-sponsored and not
     // already tracked as a Company Application. Anything filtered out here is
     // reported back as skipped so the admin knows nothing silently vanished.
+    // Mirrors the three sources the Synced Enrolments feed unions, so anything
+    // visible on that page can actually be converted. Keyed on the enrolment
+    // reference; `enrollment` is an optional extra (it supplies phone/email when
+    // the learner already has an LMS account).
     const enrolments = await pool.query(
-      `SELECT
-         e.id,
-         e.enrolment_id,
-         e.enrolment_status,
-         e.nric,
-         e.email,
-         e.course_reference,
-         au.full_name,
+      `SELECT DISTINCT ON (k.k)
+         k.k AS id,
+         COALESCE(s.enrolment_id, r.enrolment_reference, e.enrolment_id) AS enrolment_id,
+         COALESCE(s.enrolment_status, e.enrolment_status::text, r.status) AS enrolment_status,
+         COALESCE(NULLIF(TRIM(s.trainee_nric), ''), NULLIF(TRIM(r.learner_nric), ''), e.nric) AS nric,
+         COALESCE(NULLIF(TRIM(r.learner_email), ''), NULLIF(TRIM(e.email), ''), au.email) AS email,
+         COALESCE(s.course_reference, r.course_ref_code, e.course_reference) AS course_reference,
+         COALESCE(NULLIF(TRIM(s.trainee_name), ''), NULLIF(TRIM(r.learner_name), ''), au.full_name) AS full_name,
          lp.tel,
-         co.title AS course_title,
-         cr.course_run_id AS run_text_ref,
-         to_char(cr.start_date, 'DD-MM-YYYY') AS course_start_date
-       FROM public.enrollment e
-       LEFT JOIN public.app_user au        ON au.id = e.user_id
-       LEFT JOIN public.learner_profile lp ON lp.user_id = e.user_id
-       LEFT JOIN public.course_run cr      ON cr.id = e.course_run_id
-       LEFT JOIN public.course co          ON co.id = e.course_id
-       WHERE e.id = ANY($1::uuid[])
-         AND e.course_sponsorship::text ILIKE '%employ%'
+         COALESCE(s.course_title, r.course_title, co.title) AS course_title,
+         COALESCE(s.course_run_id, r.course_run_id, cr.course_run_id) AS run_text_ref,
+         to_char(COALESCE(cr.start_date, r.start_date), 'DD-MM-YYYY') AS course_start_date
+       FROM (SELECT UPPER(TRIM(x)) AS k FROM UNNEST($1::text[]) AS x) k
+       LEFT JOIN public.ssg_enrolments s       ON UPPER(TRIM(s.enrolment_id))        = k.k
+       LEFT JOIN public.ssg_enrolment_record r ON UPPER(TRIM(r.enrolment_reference)) = k.k
+       LEFT JOIN public.enrollment e           ON UPPER(TRIM(e.enrolment_id))        = k.k
+       LEFT JOIN public.app_user au            ON au.id = e.user_id
+       LEFT JOIN public.learner_profile lp     ON lp.user_id = e.user_id
+       LEFT JOIN public.course co              ON co.id = e.course_id
+       LEFT JOIN public.course_run cr          ON cr.course_run_id = COALESCE(s.course_run_id, r.course_run_id)
+       WHERE COALESCE(s.enrolment_id, r.enrolment_reference, e.enrolment_id) IS NOT NULL
+         AND COALESCE(
+               s.sponsorship_type,
+               r.raw_data #>> '{enrolment,trainee,sponsorshipType}',
+               e.course_sponsorship::text, '') ILIKE '%employ%'
          AND NOT EXISTS (
            SELECT 1 FROM public.company_application ca
            WHERE ca.enrolment_id IS NOT NULL
-             AND LOWER(TRIM(ca.enrolment_id)) = LOWER(TRIM(e.enrolment_id))
-         )`,
+             AND UPPER(TRIM(ca.enrolment_id)) = k.k
+         )
+       ORDER BY k.k, e.created_at DESC NULLS LAST`,
       [enrolmentIds]
     );
 
