@@ -332,12 +332,53 @@ type CompanyUploadResult = {
   insertedIds: string[];
 };
 
+// Why the background pipeline stopped short of "every row invoiced". Built by
+// the poller when it detects a terminal state, so the spinner can be replaced
+// by an explanation instead of spinning forever (the invoice is per employer
+// group — one learner without a grant holds up the whole group's invoice).
+type BackendStallInfo = {
+  doneCount: number;
+  total: number;
+  /** Enrolled, but SSG hasn't produced a grant and they're not marked Not Grant Eligible. */
+  awaitingGrant: string[];
+  /** Never got an ENR- id — auto-enrol failed for these. */
+  notEnrolled: string[];
+  /** Rows carrying an auto-enrol error message. */
+  failed: string[];
+  /** Enrolled + grant settled, but no QBO invoice yet. */
+  awaitingInvoice: number;
+  /** False when rows are still 'pending' — i.e. we gave up waiting, the worker didn't finish. */
+  workerFinished: boolean;
+};
+
+export interface CourseRunCandidate {
+  courseRunId: string;
+  courseTitle: string;
+  courseCode: string;
+  startDate: string;
+  endDate: string;
+  score: number;
+}
+
 export interface RowValidationError {
   rowNumber: number;
   traineeName: string;
   traineeNric: string;
   courseTitle: string;
   issues: string[];
+  /** Set when the only problem is an unmatched course run — offer a picker. */
+  courseRunUnresolved?: {
+    courseTitle: string;
+    courseStartDate: string;
+    candidates: CourseRunCandidate[];
+  };
+}
+
+/** The admin's "did you mean this run?" answer for one (title, date) group. */
+export interface CourseRunOverride {
+  courseTitle: string;
+  courseStartDate: string;
+  courseRunId: string;
 }
 
 // Custom error class so handleUpload can pluck the structured row-level
@@ -352,11 +393,14 @@ export class UploadValidationError extends Error {
   }
 }
 
-const uploadRows = async (rows: CompanyApplicationRow[]): Promise<CompanyUploadResult> => {
+const uploadRows = async (
+  rows: CompanyApplicationRow[],
+  courseRunOverrides: CourseRunOverride[] = [],
+): Promise<CompanyUploadResult> => {
   const response = await fetch('/api/admin/upload-company-applications', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rows }),
+    body: JSON.stringify({ rows, courseRunOverrides }),
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
@@ -642,9 +686,18 @@ export const UploadCompanyApplicationView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<RowValidationError[]>([]);
   const [uploadResult, setUploadResult] = useState<CompanyUploadResult | null>(null);
-  const [backendStatus, setBackendStatus] = useState<'idle' | 'processing' | 'complete'>('idle');
+  const [backendStatus, setBackendStatus] = useState<'idle' | 'processing' | 'complete' | 'stalled'>('idle');
   const [backendDoneCount, setBackendDoneCount] = useState(0);
   const [backendProgress, setBackendProgress] = useState(0); // 0..1, finer-grained per-step progress
+  const [backendStall, setBackendStall] = useState<BackendStallInfo | null>(null);
+  // Learners the pipeline marked Not Grant Eligible (not a Singapore Citizen or
+  // PR). Shown in both the complete and stalled panels — they are billed at the
+  // full course fee, which the admin should see without hunting the table.
+  const [backendIneligible, setBackendIneligible] = useState<string[]>([]);
+  // Course-run confirmation popup. Non-empty = the popup is open and the upload
+  // is parked waiting for the admin to confirm a run per course in the file.
+  const [runConfirmGroups, setRunConfirmGroups] = useState<CourseRunConfirmGroup[]>([]);
+  const [isPreparing, setIsPreparing] = useState(false);
   // SupportingDocsModal opens when the pipeline finishes (backendStatus
   // flips to 'complete'). Stays mounted until the admin closes it or all
   // rows are verified.
@@ -668,6 +721,9 @@ export const UploadCompanyApplicationView: React.FC = () => {
     setBackendStatus('idle');
     setBackendDoneCount(0);
     setBackendProgress(0);
+    setBackendStall(null);
+    setBackendIneligible([]);
+    setRunConfirmGroups([]);
   };
 
   const pollBackendProcessing = (ids: string[]) => {
@@ -683,8 +739,19 @@ export const UploadCompanyApplicationView: React.FC = () => {
     setBackendStatus('processing');
     setBackendDoneCount(0);
     setBackendProgress(0);
+    setBackendStall(null);
+    setBackendIneligible([]);
+    setRunConfirmGroups([]);
     let attempts = 0;
     const idSet = new Set(ids);
+    const startedAt = Date.now();
+
+    // Hard ceiling on how long we keep the spinner up. The backend's own grant
+    // poll is capped at 30 × 30s = 15 min, after which it runs the invoice
+    // sweep and stamps a final status on every row. If nothing is settled by
+    // then the worker died (deploy/restart mid-run) — show that rather than
+    // spinning indefinitely.
+    const MAX_POLL_MS = 20 * 60 * 1000;
 
     // Each row contributes 5 step units: enrol, grant lookup, calendar, main
     // invoice, grant invoice. Step 5 auto-completes for learners without a
@@ -707,6 +774,14 @@ export const UploadCompanyApplicationView: React.FC = () => {
 
         let stepUnits = 0;
         let rowsFullyDone = 0;
+        // Terminal-state bookkeeping — who is blocking, and has the backend
+        // worker actually finished (every row stamped a final status)?
+        const awaitingGrant: string[] = [];
+        const notEnrolled: string[] = [];
+        const failedRows: string[] = [];
+        const ineligibleNames: string[] = [];
+        let awaitingInvoice = 0;
+        let stillPending = 0;
 
         for (const row of matchingRows) {
           const hasError = hasValue(row['Auto-Enrol Error']);
@@ -714,6 +789,19 @@ export const UploadCompanyApplicationView: React.FC = () => {
           const hasGrantId = hasValue(row['Grant ID']);
           const hasGrantInvoice = hasValue(row['Grant Invoice ID']);
           const isIneligible = isCheckedValue(row['Grant Ineligible']);
+          const hasEnrolment = hasValue(row['Enrolment ID']);
+
+          // Terminal-state bookkeeping. Collected before the hasError early-out
+          // below so an errored row still contributes its reason.
+          const traineeName = String(row['Trainee FULL Name as on government ID*'] || '').trim() || '(unnamed)';
+          const status = String(row['Auto-Enrol Status'] || '').trim().toLowerCase();
+          if (status === '' || status === 'pending') stillPending++;
+          if (hasError) failedRows.push(traineeName);
+          if (isIneligible && !hasGrantId) ineligibleNames.push(traineeName);
+          if (!hasEnrolment) notEnrolled.push(traineeName);
+          else if (!hasGrantId && !isIneligible) awaitingGrant.push(traineeName);
+          else if (!hasInvoice) awaitingInvoice++;
+
           // Grant invoice is "complete" only when the QBO invoice has
           // actually been created — OR when the learner is explicitly
           // marked Not Grant Eligible (no supplemental invoice expected).
@@ -734,7 +822,7 @@ export const UploadCompanyApplicationView: React.FC = () => {
           }
 
           // Mid-pipeline — count whichever steps have already written their column.
-          if (hasValue(row['Enrolment ID'])) stepUnits += 1;
+          if (hasEnrolment) stepUnits += 1;
           if (hasGrantId || isTruthy(row['Calendar Added']) || hasInvoice) stepUnits += 1;
           if (isTruthy(row['Calendar Added']) || hasInvoice) stepUnits += 1;
           if (hasInvoice) stepUnits += 1;
@@ -745,6 +833,7 @@ export const UploadCompanyApplicationView: React.FC = () => {
 
         setBackendDoneCount(rowsFullyDone);
         setBackendProgress(totalSteps > 0 ? stepUnits / totalSteps : 1);
+        setBackendIneligible(ineligibleNames);
 
         if (matchingRows.length >= ids.length && rowsFullyDone >= ids.length) {
           setBackendProgress(1);
@@ -752,6 +841,29 @@ export const UploadCompanyApplicationView: React.FC = () => {
           // Pipeline finished — open the supporting-docs verification modal.
           // Admin chooses Yes (verify now) or No (skip; close + navigate).
           setDocsModalOpen(true);
+          return;
+        }
+
+        // Not fully done — but is anything still going to happen? The backend
+        // stamps a final auto_enrol_status on every row as its last act, so
+        // "no row left pending" means the worker has run to completion and the
+        // remaining gaps are permanent until an admin intervenes. Stopping
+        // here (instead of polling forever) is the whole point: a group whose
+        // invoice is blocked by one grant-less learner would otherwise spin
+        // with 0/N indefinitely.
+        const workerFinished = matchingRows.length >= ids.length && stillPending === 0;
+        const timedOut = Date.now() - startedAt > MAX_POLL_MS;
+        if (workerFinished || timedOut) {
+          setBackendStall({
+            doneCount: rowsFullyDone,
+            total: ids.length,
+            awaitingGrant,
+            notEnrolled,
+            failed: failedRows,
+            awaitingInvoice,
+            workerFinished,
+          });
+          setBackendStatus('stalled');
           return;
         }
       } catch (err) {
@@ -776,7 +888,73 @@ export const UploadCompanyApplicationView: React.FC = () => {
     };
   }, []);
 
-  const handleUpload = async () => {
+  /**
+   * Step 1 of upload: read the file and ask which course run each course in it
+   * refers to. NOTHING is written and no pipeline starts until the admin
+   * confirms — auto-enrolment, calendar sync and invoicing all happen server-side
+   * after the upload POST, so this popup is the last point where a wrong run can
+   * be caught for free. Matching the run from the Excel's title+date was the
+   * single biggest source of bad imports; the admin knows the run ID, so ask.
+   */
+  const beginUpload = async () => {
+    if (!file) return;
+    setIsPreparing(true);
+    setError(null);
+    setValidationErrors([]);
+    try {
+      const rows = await parseCompanyApplicationRows(file);
+      if (rows.length === 0) {
+        setError('No data rows found in that file.');
+        return;
+      }
+
+      // One question per distinct course in the file, not per learner.
+      const groups = new Map<string, { courseTitle: string; courseStartDate: string; rowCount: number }>();
+      for (const r of rows) {
+        const courseTitle = String((r as any)['Course Title*'] ?? '').trim();
+        const courseStartDate = String((r as any)['Course Start Date (DD-MM-YYYY)*'] ?? '').trim();
+        const key = `${courseTitle.toLowerCase()}|${courseStartDate}`;
+        const found = groups.get(key);
+        if (found) found.rowCount++;
+        else groups.set(key, { courseTitle, courseStartDate, rowCount: 1 });
+      }
+
+      // Advisory suggestions so the admin can click rather than go hunting for
+      // the ID. Failure here is non-fatal — they can still type it in.
+      let suggestions: Array<{ courseTitle: string; courseStartDate: string; candidates: CourseRunCandidate[] }> = [];
+      try {
+        const res = await fetch('/api/admin/ca-suggest-course-runs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groups: Array.from(groups.values()).map(({ courseTitle, courseStartDate }) => ({ courseTitle, courseStartDate })) }),
+        });
+        const data = await res.json();
+        if (res.ok && data?.success) suggestions = data.suggestions ?? [];
+      } catch {
+        /* suggestions are a convenience, not a requirement */
+      }
+
+      setRunConfirmGroups(
+        Array.from(groups.values()).map(g => ({
+          ...g,
+          candidates:
+            suggestions.find(
+              s => s.courseTitle.trim().toLowerCase() === g.courseTitle.toLowerCase() && s.courseStartDate.trim() === g.courseStartDate,
+            )?.candidates ?? [],
+        })),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to read the Excel file.');
+    } finally {
+      setIsPreparing(false);
+    }
+  };
+
+  // Step 2: the admin has confirmed a course run per course, so upload for real.
+  // `courseRunOverrides` also carries answers from the validation modal's picker
+  // when a row still fails afterwards. Re-parses the same file rather than
+  // caching the parsed rows — the file is still in state and parsing is cheap.
+  const handleUpload = async (courseRunOverrides: CourseRunOverride[] = []) => {
     if (!file) return;
     setIsUploading(true);
     setError(null);
@@ -785,9 +963,12 @@ export const UploadCompanyApplicationView: React.FC = () => {
     setBackendStatus('idle');
     setBackendDoneCount(0);
     setBackendProgress(0);
+    setBackendStall(null);
+    setBackendIneligible([]);
+    setRunConfirmGroups([]);
     try {
       const rows = await parseCompanyApplicationRows(file);
-      const result = await uploadRows(rows);
+      const result = await uploadRows(rows, courseRunOverrides);
       setUploadResult(result);
       pollBackendProcessing(result.insertedIds);
     } catch (err) {
@@ -814,6 +995,9 @@ export const UploadCompanyApplicationView: React.FC = () => {
     setBackendStatus('idle');
     setBackendDoneCount(0);
     setBackendProgress(0);
+    setBackendStall(null);
+    setBackendIneligible([]);
+    setRunConfirmGroups([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -917,11 +1101,11 @@ export const UploadCompanyApplicationView: React.FC = () => {
             <Button variant="ghost" onClick={reset}>
               <Icon name={IconName.Close} className="w-4 h-4 mr-2" />Reset
             </Button>
-            <Button onClick={handleUpload} disabled={!file || isUploading}>
-              {isUploading ? (
+            <Button onClick={() => void beginUpload()} disabled={!file || isUploading || isPreparing}>
+              {isUploading || isPreparing ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                  Uploading...
+                  {isPreparing ? 'Reading file...' : 'Uploading...'}
                 </>
               ) : (
                 <>
@@ -933,15 +1117,21 @@ export const UploadCompanyApplicationView: React.FC = () => {
         </Card>
       ) : (
         <Card className="p-8 text-center">
-          <div className={`w-14 h-14 rounded-full ${backendStatus === 'processing' ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'} flex items-center justify-center mx-auto mb-4`}>
+          <div className={`w-14 h-14 rounded-full ${backendStatus === 'processing' ? 'bg-blue-100 dark:bg-blue-900/30' : backendStatus === 'stalled' ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-green-100 dark:bg-green-900/30'} flex items-center justify-center mx-auto mb-4`}>
             {backendStatus === 'processing' ? (
               <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-200 border-t-blue-600" />
+            ) : backendStatus === 'stalled' ? (
+              <Icon name={IconName.Warning} className="w-8 h-8 text-amber-600 dark:text-amber-400" />
             ) : (
               <Icon name={IconName.CheckCircle} className="w-8 h-8 text-green-600 dark:text-green-400" />
             )}
           </div>
           <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-            {backendStatus === 'processing' ? 'Processing Enrolment & Grant Lookup' : 'Upload Complete'}
+            {backendStatus === 'processing'
+              ? 'Processing Enrolment & Grant Lookup'
+              : backendStatus === 'stalled'
+                ? 'Processing Stopped — Needs Your Attention'
+                : 'Upload Complete'}
           </h3>
           <p className="text-gray-500 dark:text-gray-400 mt-2">
             {uploadResult.inserted} inserted, {uploadResult.updated} updated. {uploadResult.queued} record{uploadResult.queued === 1 ? '' : 's'} queued for enrolment and grant lookup.
@@ -964,6 +1154,75 @@ export const UploadCompanyApplicationView: React.FC = () => {
           {backendStatus === 'complete' && uploadResult.queued > 0 && (
             <p className="text-sm text-green-600 dark:text-green-400 mt-4">Background processing finished. View the table to see enrolment and grant results.</p>
           )}
+          {(backendStatus === 'complete' || backendStatus === 'stalled') && backendIneligible.length > 0 && (
+            <div className="w-full max-w-2xl mx-auto mt-4 text-left rounded-lg border border-sky-300 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-900/20 p-4">
+              <p className="text-sm font-semibold text-sky-800 dark:text-sky-200">
+                Not grant eligible ({backendIneligible.length}) — billed at full course fee
+              </p>
+              <p className="text-sm text-sky-700 dark:text-sky-300 mt-1">{backendIneligible.join(', ')}</p>
+              <p className="text-xs text-sky-700 dark:text-sky-300 mt-1">
+                SSG funding is for Singapore Citizens and PRs only, so no grant is expected for these learners and the pipeline did not wait for one.
+                Override with the <span className="font-semibold">Grant Ineligible</span> toggle on View Company Application if this is wrong.
+              </p>
+            </div>
+          )}
+          {backendStatus === 'stalled' && backendStall && (
+            <div className="w-full max-w-2xl mx-auto mt-6 text-left space-y-3">
+              <div className="rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-900/20 p-4 space-y-3">
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                  {backendStall.doneCount} of {backendStall.total} record{backendStall.total === 1 ? '' : 's'} fully processed.
+                  {backendStall.workerFinished
+                    ? ' Enrolment finished, but the run stopped before everything was invoiced:'
+                    : ' Background processing is no longer reporting progress:'}
+                </p>
+
+                {backendStall.notEnrolled.length > 0 && (
+                  <div className="text-sm text-amber-800 dark:text-amber-200">
+                    <p className="font-medium">Not enrolled with SSG ({backendStall.notEnrolled.length}):</p>
+                    <p className="text-amber-700 dark:text-amber-300">{backendStall.notEnrolled.join(', ')}</p>
+                    <p className="text-xs mt-1 text-amber-700 dark:text-amber-300">Open the application on View Company Application to see the error, then use Retry Selected.</p>
+                  </div>
+                )}
+
+                {backendStall.awaitingGrant.length > 0 && (
+                  <div className="text-sm text-amber-800 dark:text-amber-200">
+                    <p className="font-medium">No SSG grant found yet ({backendStall.awaitingGrant.length}):</p>
+                    <p className="text-amber-700 dark:text-amber-300">{backendStall.awaitingGrant.join(', ')}</p>
+                    <p className="text-xs mt-1 text-amber-700 dark:text-amber-300">
+                      SSG creates the grant asynchronously after enrolment and it can lag by 15+ minutes. The employer invoice covers the whole group,
+                      so it is not generated until every learner has a grant — or is marked <span className="font-semibold">Not Grant Eligible</span>.
+                      On View Company Application, click <span className="font-semibold">Sync Grants</span> to re-check, or mark the learner Not Grant Eligible to release the invoice.
+                    </p>
+                  </div>
+                )}
+
+                {backendStall.failed.length > 0 && (
+                  <div className="text-sm text-amber-800 dark:text-amber-200">
+                    <p className="font-medium">Errors reported ({backendStall.failed.length}):</p>
+                    <p className="text-amber-700 dark:text-amber-300">{backendStall.failed.join(', ')}</p>
+                  </div>
+                )}
+
+                {backendStall.notEnrolled.length === 0 && backendStall.awaitingGrant.length === 0 && backendStall.failed.length === 0 && backendStall.awaitingInvoice > 0 && (
+                  <div className="text-sm text-amber-800 dark:text-amber-200">
+                    <p className="font-medium">Awaiting invoice ({backendStall.awaitingInvoice}):</p>
+                    <p className="text-xs mt-1 text-amber-700 dark:text-amber-300">
+                      Enrolment and grants are done but no QuickBooks invoice was created. Use <span className="font-semibold">Generate Invoice</span> on View Company Application.
+                    </p>
+                  </div>
+                )}
+
+                {!backendStall.workerFinished && (
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Nothing is lost — the rows are saved. This usually means the server restarted mid-run. Re-check from View Company Application (Sync Grants / Retry Selected).
+                  </p>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                It is safe to leave this page — enrolments and grants already recorded are saved.
+              </p>
+            </div>
+          )}
           <div className="flex justify-center gap-3 mt-6">
             <Button variant="secondary" onClick={reset}>Upload Another File</Button>
             <Button onClick={() => setAdminPage(AdminPage.ViewCompanyApplication)}>View Company Application</Button>
@@ -984,13 +1243,248 @@ export const UploadCompanyApplicationView: React.FC = () => {
         />
       )}
 
+      {runConfirmGroups.length > 0 && (
+        <CourseRunConfirmModal
+          groups={runConfirmGroups}
+          fileName={file?.name}
+          isUploading={isUploading}
+          onCancel={() => setRunConfirmGroups([])}
+          onConfirm={(overrides) => {
+            setRunConfirmGroups([]);
+            void handleUpload(overrides);
+          }}
+        />
+      )}
+
       {validationErrors.length > 0 && (
         <ValidationErrorsModal
           errors={validationErrors}
           fileName={file?.name}
+          isUploading={isUploading}
           onClose={() => setValidationErrors([])}
+          onRetryWithRuns={(overrides) => {
+            setValidationErrors([]);
+            void handleUpload(overrides);
+          }}
         />
       )}
+    </div>
+  );
+};
+
+/**
+ * Course-run dates come back from /lookup-course-run as full timestamps
+ * ("2026-08-11T16:00:00.000Z") because that endpoint selects start_date without
+ * ::text. That instant is midnight *Singapore* on the 12th, so truncating the
+ * string yields the wrong day. Format in Asia/Singapore instead — and pass
+ * already-date-only values straight through.
+ */
+function sgDateOnly(value: string): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw.slice(0, 10);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(parsed);
+  const by = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  return `${by.year}-${by.month}-${by.day}`;
+}
+
+/** "12-08-2026" → "2026-08-12", for comparing the Excel date to a run's real date. */
+function toIsoFromDdMmYyyy(raw: string): string {
+  const m = String(raw || '').trim().match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (!m) return '';
+  return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+
+export interface CourseRunConfirmGroup {
+  courseTitle: string;
+  courseStartDate: string;
+  rowCount: number;
+  candidates: CourseRunCandidate[];
+}
+
+/** A run ID the admin typed, once we've looked it up and know what it is. */
+interface VerifiedRun {
+  courseRunId: string;
+  title: string;
+  courseCode: string;
+  startDate: string;
+  endDate: string;
+  source: 'db' | 'ssg';
+}
+
+/**
+ * Blocks the upload until the admin says which course run each course in the
+ * file belongs to. Deliberately a hard gate: once the upload POSTs, the server
+ * inserts the rows and immediately kicks off SSG enrolment, calendar sync and
+ * invoicing — all of which are painful to undo if the run was wrong.
+ */
+const CourseRunConfirmModal: React.FC<{
+  groups: CourseRunConfirmGroup[];
+  fileName?: string;
+  isUploading?: boolean;
+  onCancel: () => void;
+  onConfirm: (overrides: CourseRunOverride[]) => void;
+}> = ({ groups, fileName, isUploading, onCancel, onConfirm }) => {
+  const [typed, setTyped] = useState<Record<string, string>>({});
+  const [verified, setVerified] = useState<Record<string, VerifiedRun>>({});
+  const [checking, setChecking] = useState<Record<string, boolean>>({});
+  const [lookupError, setLookupError] = useState<Record<string, string>>({});
+
+  const keyOf = (g: CourseRunConfirmGroup) => `${g.courseTitle.toLowerCase()}|${g.courseStartDate}`;
+
+  const verify = async (key: string, rawId: string) => {
+    const courseRunId = rawId.trim();
+    setLookupError(p => ({ ...p, [key]: '' }));
+    setVerified(p => { const n = { ...p }; delete n[key]; return n; });
+    if (!courseRunId) return;
+
+    setChecking(p => ({ ...p, [key]: true }));
+    try {
+      const res = await fetch(`/api/admin/lookup-course-run?courseRunCode=${encodeURIComponent(courseRunId)}`);
+      const data = await res.json();
+      if (!res.ok || !data?.success || !data?.data) {
+        setLookupError(p => ({ ...p, [key]: data?.error || `Course run ${courseRunId} not found.` }));
+        return;
+      }
+      const d = data.data;
+      setVerified(p => ({
+        ...p,
+        [key]: {
+          courseRunId: String(d.courseRunCode ?? courseRunId),
+          title: String(d.title ?? ''),
+          courseCode: String(d.courseCode ?? ''),
+          startDate: sgDateOnly(String(d.startDate ?? '')),
+          endDate: sgDateOnly(String(d.endDate ?? '')),
+          source: data.source === 'ssg' ? 'ssg' : 'db',
+        },
+      }));
+    } catch (err) {
+      setLookupError(p => ({ ...p, [key]: err instanceof Error ? err.message : 'Lookup failed.' }));
+    } finally {
+      setChecking(p => ({ ...p, [key]: false }));
+    }
+  };
+
+  const pick = (key: string, courseRunId: string) => {
+    setTyped(p => ({ ...p, [key]: courseRunId }));
+    void verify(key, courseRunId);
+  };
+
+  const allConfirmed = groups.every(g => verified[keyOf(g)]);
+  const totalRows = groups.reduce((sum, g) => sum + g.rowCount, 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[88vh] flex flex-col">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Confirm the course run</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {totalRows} row{totalRows === 1 ? '' : 's'}{fileName ? ` in ${fileName}` : ''} ·{' '}
+            {groups.length} course{groups.length === 1 ? '' : 's'}. Nothing is imported yet — enrolment, calendar and invoicing
+            all start once you continue, so check the run is right.
+          </p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {groups.map(g => {
+            const key = keyOf(g);
+            const v = verified[key];
+            const err = lookupError[key];
+            return (
+              <div key={key} className="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{g.courseTitle || '(no course title)'}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Excel start date {g.courseStartDate || '(none)'} · {g.rowCount} learner{g.rowCount === 1 ? '' : 's'}
+                </p>
+
+                <label className="block mt-3 text-xs font-medium text-gray-700 dark:text-gray-300">Course Run ID</label>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    type="text"
+                    value={typed[key] ?? ''}
+                    onChange={e => setTyped(p => ({ ...p, [key]: e.target.value }))}
+                    onBlur={e => void verify(key, e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void verify(key, (e.target as HTMLInputElement).value); } }}
+                    placeholder="e.g. 1404702"
+                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                  />
+                  <Button variant="secondary" onClick={() => void verify(key, typed[key] ?? '')} disabled={checking[key]}>
+                    {checking[key] ? 'Checking…' : 'Check'}
+                  </Button>
+                </div>
+
+                {err && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{err}</p>}
+
+                {v && (
+                  <div className="mt-2 rounded-lg border border-green-300 dark:border-green-500/40 bg-green-50 dark:bg-green-900/20 p-3">
+                    <p className="text-sm font-medium text-green-800 dark:text-green-200">{v.title}</p>
+                    <p className="text-xs text-green-700 dark:text-green-300 mt-0.5">
+                      Run {v.courseRunId}{v.courseCode ? ` · ${v.courseCode}` : ''} · {v.startDate}
+                      {v.endDate && v.endDate !== v.startDate ? ` → ${v.endDate}` : ''}
+                      {v.source === 'ssg' ? ' · pulled from SSG and added to the LMS' : ''}
+                    </p>
+                    {v.startDate && g.courseStartDate && v.startDate !== toIsoFromDdMmYyyy(g.courseStartDate) && (
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                        Heads up: this run starts {v.startDate}, but the Excel says {g.courseStartDate}. Continuing uses the run above.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {g.candidates.length > 0 && !v && (
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Or pick a likely match:</p>
+                    <div className="space-y-1.5">
+                      {g.candidates.slice(0, 4).map(c => (
+                        <button
+                          key={c.courseRunId}
+                          type="button"
+                          onClick={() => pick(key, c.courseRunId)}
+                          className="w-full text-left px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-blue-400 bg-white dark:bg-gray-900"
+                        >
+                          <span className="block text-sm text-gray-900 dark:text-white truncate">{c.courseTitle}</span>
+                          <span className="block text-xs text-gray-500 dark:text-gray-400">
+                            {c.startDate} · Run {c.courseRunId}
+                            {c.courseCode ? ` · ${c.courseCode}` : ''}
+                            {c.score >= 0.999 ? ' · course code match' : ` · ${Math.round(c.score * 100)}% title match`}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex justify-end items-center gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+          {!allConfirmed && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mr-auto">
+              Confirm a course run for every course to continue.
+            </p>
+          )}
+          <Button variant="secondary" onClick={onCancel} disabled={isUploading}>Cancel</Button>
+          <Button
+            onClick={() =>
+              onConfirm(
+                groups.map(g => ({
+                  courseTitle: g.courseTitle,
+                  courseStartDate: g.courseStartDate,
+                  courseRunId: verified[keyOf(g)].courseRunId,
+                })),
+              )
+            }
+            disabled={!allConfirmed || isUploading}
+          >
+            {isUploading ? 'Importing…' : 'Confirm & import'}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -998,11 +1492,56 @@ export const UploadCompanyApplicationView: React.FC = () => {
 interface ValidationErrorsModalProps {
   errors: RowValidationError[];
   fileName?: string;
+  isUploading?: boolean;
   onClose: () => void;
+  onRetryWithRuns?: (overrides: CourseRunOverride[]) => void;
 }
 
-const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({ errors, fileName, onClose }) => {
+const runGroupKey = (courseTitle: string, courseStartDate: string) =>
+  `${String(courseTitle || '').trim().toLowerCase()}|${String(courseStartDate || '').trim()}`;
+
+const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({
+  errors,
+  fileName,
+  isUploading,
+  onClose,
+  onRetryWithRuns,
+}) => {
   const totalIssues = errors.reduce((sum, e) => sum + e.issues.length, 0);
+
+  // Ten learners on the same course share one unresolved (title, date) — ask
+  // once, not ten times.
+  const runGroups = useMemo(() => {
+    const map = new Map<string, { courseTitle: string; courseStartDate: string; candidates: CourseRunCandidate[]; rowCount: number }>();
+    for (const err of errors) {
+      const u = err.courseRunUnresolved;
+      if (!u) continue;
+      const key = runGroupKey(u.courseTitle, u.courseStartDate);
+      const existing = map.get(key);
+      if (existing) existing.rowCount++;
+      else map.set(key, { courseTitle: u.courseTitle, courseStartDate: u.courseStartDate, candidates: u.candidates || [], rowCount: 1 });
+    }
+    return Array.from(map.entries()).map(([key, v]) => ({ key, ...v }));
+  }, [errors]);
+
+  const [picked, setPicked] = useState<Record<string, string>>({});
+
+  // Only rows whose sole problem is the course run can be rescued here. If
+  // anything else is broken, the Excel still has to be fixed.
+  const resolvableRowCount = errors.filter(e => e.courseRunUnresolved).length;
+  const blockedRowCount = errors.length - resolvableRowCount;
+  const allGroupsPicked = runGroups.length > 0 && runGroups.every(g => picked[g.key]);
+  const canRetry = !!onRetryWithRuns && blockedRowCount === 0 && allGroupsPicked;
+
+  const handleRetry = () => {
+    if (!onRetryWithRuns) return;
+    onRetryWithRuns(
+      runGroups
+        .filter(g => picked[g.key])
+        .map(g => ({ courseTitle: g.courseTitle, courseStartDate: g.courseStartDate, courseRunId: picked[g.key] })),
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
@@ -1016,7 +1555,10 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({ errors, f
                 Excel has {errors.length} row{errors.length === 1 ? '' : 's'} with issues
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                {totalIssues} issue{totalIssues === 1 ? '' : 's'} found{fileName ? ` in ${fileName}` : ''}. Nothing was imported — fix the Excel and re-upload.
+                {totalIssues} issue{totalIssues === 1 ? '' : 's'} found{fileName ? ` in ${fileName}` : ''}. Nothing was imported
+                {runGroups.length > 0 && blockedRowCount === 0
+                  ? ' — pick the correct course run below to continue.'
+                  : ' — fix the Excel and re-upload.'}
               </p>
             </div>
           </div>
@@ -1030,6 +1572,54 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({ errors, f
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {runGroups.map(group => (
+            <div
+              key={group.key}
+              className="border border-blue-300 dark:border-blue-500/40 rounded-xl p-4 bg-blue-50/60 dark:bg-blue-900/15"
+            >
+              <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                No run matched &ldquo;{group.courseTitle}&rdquo; on {group.courseStartDate}
+              </p>
+              <p className="text-xs text-blue-800 dark:text-blue-300 mt-0.5">
+                Affects {group.rowCount} row{group.rowCount === 1 ? '' : 's'}. Did you mean one of these? Runs within 30 days, closest title first.
+              </p>
+
+              {group.candidates.length === 0 ? (
+                <p className="text-sm text-blue-800 dark:text-blue-300 mt-3">
+                  No similar runs found near that date — create the course run first, or fix the title/date in the Excel.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {group.candidates.map(c => {
+                    const selected = picked[group.key] === c.courseRunId;
+                    return (
+                      <button
+                        key={c.courseRunId}
+                        type="button"
+                        onClick={() => setPicked(p => ({ ...p, [group.key]: c.courseRunId }))}
+                        className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
+                          selected
+                            ? 'border-blue-600 bg-blue-100 dark:bg-blue-900/40 dark:border-blue-400'
+                            : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-blue-400'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{c.courseTitle}</span>
+                          {selected && <Icon name={IconName.CheckCircle} className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {c.startDate}{c.endDate && c.endDate !== c.startDate ? ` → ${c.endDate}` : ''} · Run {c.courseRunId}
+                          {c.courseCode ? ` · ${c.courseCode}` : ''}
+                          {c.score >= 0.999 ? ' · course code match' : ` · ${Math.round(c.score * 100)}% title match`}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+
           {errors.map((err) => (
             <div
               key={`${err.rowNumber}-${err.traineeNric}`}
@@ -1056,8 +1646,18 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({ errors, f
             </div>
           ))}
         </div>
-        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
-          <Button onClick={onClose}>Close & Fix Excel</Button>
+        <div className="flex justify-end items-center gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+          {runGroups.length > 0 && blockedRowCount > 0 && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mr-auto text-left">
+              {blockedRowCount} row{blockedRowCount === 1 ? '' : 's'} {blockedRowCount === 1 ? 'has' : 'have'} other problems too — those must be fixed in the Excel.
+            </p>
+          )}
+          <Button variant="secondary" onClick={onClose}>Close &amp; Fix Excel</Button>
+          {runGroups.length > 0 && blockedRowCount === 0 && (
+            <Button onClick={handleRetry} disabled={!canRetry || isUploading}>
+              {isUploading ? 'Importing…' : 'Use selected run & import'}
+            </Button>
+          )}
         </div>
       </div>
     </div>

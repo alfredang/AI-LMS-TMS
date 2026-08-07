@@ -3,6 +3,7 @@
  * SkillsFuture subsidy and credit).
  */
 
+import { callQbProxy } from './qbProxyClient';
 import { getLocalYMD } from '../dateHelpers';
 import { refreshGrantsForEnrolments } from '../services/billingSync';
 import { resolveGrantDeductionLinesForInvoice } from '../services/daInvoiceGrantLines';
@@ -119,21 +120,6 @@ export function buildDirectApplicationCourseDescription(app: Pick<
     })(),
     `Course Run: ${app.course_run_id ?? '-'}`,
   ].join('\n');
-}
-
-async function callQbProxy(body: Record<string, any>): Promise<any> {
-  const baseUrl = process.env.QBO_PROXY_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await resp.json().catch(() => null);
-  if (!resp.ok || !data?.success) {
-    console.error('[QBO proxy error details]', JSON.stringify(data, null, 2));
-    throw new Error(data?.error || `QB proxy returned ${resp.status}`);
-  }
-  return data;
 }
 
 async function resolveLineItemRef(opts: {

@@ -11,19 +11,7 @@
  * void an invoice that no other (still-present) learner shares.
  */
 
-async function callQbProxy(body: Record<string, any>): Promise<any> {
-  const baseUrl = process.env.QBO_PROXY_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await resp.json().catch(() => null);
-  if (!resp.ok || !data?.success) {
-    throw new Error(data?.error || `QB proxy returned ${resp.status}`);
-  }
-  return data;
-}
+import { callQbProxy } from './qbProxyClient';
 
 export interface VoidInvoiceResult {
   ok: boolean;

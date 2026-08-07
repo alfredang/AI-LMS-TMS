@@ -1,4 +1,9 @@
 import pool from './db';
+import {
+  courseTitlesMatch,
+  extractCourseReferenceNumber,
+  scoreCourseTitleSimilarity,
+} from './courseTitleMatch';
 
 // Per-row validation for the Company Application Excel upload. Block-mode:
 // the upload endpoint rejects the whole request if ANY row has issues so the
@@ -12,6 +17,32 @@ export interface RowValidationError {
   traineeNric: string;
   courseTitle: string;
   issues: string[];
+  /**
+   * Present only when the sole reason this row failed is that its course run
+   * couldn't be resolved. Lets the UI offer "did you mean this run?" instead of
+   * a dead-end "go fix the Excel". Absent when the row has other problems too —
+   * picking a run wouldn't make those rows importable.
+   */
+  courseRunUnresolved?: {
+    /** Echoed back so the client can key its selection to this exact row group. */
+    courseTitle: string;
+    courseStartDate: string;
+    candidates: CourseRunCandidate[];
+  };
+}
+
+/**
+ * An admin's answer to "did you mean this run?" — keyed by the raw Excel values
+ * so it applies to every row sharing that (title, date), not just one learner.
+ */
+export interface CourseRunOverride {
+  courseTitle: string;
+  courseStartDate: string;
+  courseRunId: string;
+}
+
+function overrideKey(courseTitle: string, courseStartDate: string): string {
+  return `${String(courseTitle || '').trim().toLowerCase()}|${String(courseStartDate || '').trim()}`;
 }
 
 // Every asterisk-marked column in the Excel form. Several of these end up in
@@ -71,21 +102,6 @@ function parseDdMmYyyy(raw: string): ParsedDate | null {
   return { iso, year, month, day };
 }
 
-function normalizeTitle(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[^\w\s]/g, '')
-    .replace(/\bwsq\b/g, '')
-    .trim();
-}
-
-// Word-order-insensitive key: same words in any order produce the same key, so
-// "A class" and "class A" match. Input must already be normalizeTitle()'d.
-function titleTokenKey(normalizedTitle: string): string {
-  return normalizedTitle.split(' ').filter(Boolean).sort().join(' ');
-}
-
 // Pre-fetches all course_runs that could match anything in this upload, so we
 // do one query for N rows instead of N queries. Returns a lookup function the
 // per-row validator calls.
@@ -103,37 +119,115 @@ async function buildCourseRunResolver(
   }
 
   const result = await pool.query(
-    `SELECT c.title::text AS title, cr.start_date::text AS start_date
+    `SELECT c.title::text AS title, c.course_code::text AS course_code, cr.start_date::text AS start_date
        FROM public.course_run cr
        JOIN public.course c ON c.id = cr.course_id
       WHERE cr.start_date::date = ANY($1::date[])`,
     [Array.from(startDates)],
   );
 
-  const byDate = new Map<string, string[]>();
+  const byDate = new Map<string, Array<{ title: string; courseCode: string }>>();
   for (const r of result.rows) {
     const iso = String(r.start_date).slice(0, 10);
     const arr = byDate.get(iso) || [];
-    arr.push(String(r.title || ''));
+    arr.push({ title: String(r.title || ''), courseCode: String(r.course_code || '') });
     byDate.set(iso, arr);
   }
 
   return (title, isoStartDate) => {
     const candidates = byDate.get(isoStartDate);
     if (!candidates || candidates.length === 0) return false;
-    const target = normalizeTitle(title);
-    if (!target) return false;
-    const targetTokens = titleTokenKey(target);
-    return candidates.some(candidate => {
-      const c = normalizeTitle(candidate);
-      return (
-        c === target ||
-        c.includes(target) ||
-        target.includes(c) ||
-        (!!targetTokens && titleTokenKey(c) === targetTokens) // same words, any order
-      );
-    });
+
+    // A TGS code pasted into the title (e.g. "WSQ - Process and Design FMEA
+    // (TGS-2023037830)") is exact and survives renames — prefer it over any
+    // amount of title comparison.
+    const code = extractCourseReferenceNumber(title);
+    if (code && candidates.some(c => c.courseCode.trim().toUpperCase() === code)) return true;
+
+    return candidates.some(c => courseTitlesMatch(c.title, title));
   };
+}
+
+export interface CourseRunCandidate {
+  courseRunId: string;
+  courseTitle: string;
+  courseCode: string;
+  startDate: string;
+  endDate: string;
+  /** 0..1 title similarity, for display and ordering. */
+  score: number;
+}
+
+/**
+ * How far either side of the stated start date we look for a plausible run.
+ * 45 rather than 30: the case that prompted this had a 12 Sep date for a class
+ * that ran 12 Aug — 31 days out, which a 30-day window misses by a day.
+ */
+const CANDIDATE_DATE_WINDOW_DAYS = 45;
+// Popular courses run weekly, so a single course can fill the list. 8 keeps
+// roughly a month of runs visible for the winning course.
+const MAX_CANDIDATES_PER_ROW = 8;
+
+function shiftIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Find runs the admin might have meant, for a (title, date) that didn't resolve.
+ *
+ * Searches a date window rather than the exact date on purpose: when an upload
+ * fails, the date is as likely to be wrong as the title (the case that prompted
+ * this had BOTH wrong — a 12 Sep date for a class that ran 12 Aug), and an
+ * exact-date search would return nothing at all to choose from.
+ */
+export async function findCourseRunCandidates(
+  title: string,
+  isoStartDate: string,
+): Promise<CourseRunCandidate[]> {
+  const from = shiftIso(isoStartDate, -CANDIDATE_DATE_WINDOW_DAYS);
+  const to = shiftIso(isoStartDate, CANDIDATE_DATE_WINDOW_DAYS);
+
+  const result = await pool.query(
+    `SELECT cr.course_run_id::text AS course_run_id,
+            c.title::text          AS title,
+            c.course_code::text    AS course_code,
+            cr.start_date::text    AS start_date,
+            cr.end_date::text      AS end_date
+       FROM public.course_run cr
+       JOIN public.course c ON c.id = cr.course_id
+      WHERE cr.start_date::date BETWEEN $1::date AND $2::date
+        AND COALESCE(cr.is_deleted, false) = false
+        AND cr.course_run_id IS NOT NULL`,
+    [from, to],
+  );
+
+  const code = extractCourseReferenceNumber(title);
+  const scored = result.rows.map((r: any) => {
+    const courseCode = String(r.course_code || '').trim().toUpperCase();
+    // A matching TGS code is certainty, not similarity — pin it to the top.
+    const score = code && courseCode === code ? 1 : scoreCourseTitleSimilarity(r.title, title);
+    return {
+      courseRunId: String(r.course_run_id),
+      courseTitle: String(r.title || ''),
+      courseCode: String(r.course_code || ''),
+      startDate: String(r.start_date || '').slice(0, 10),
+      endDate: String(r.end_date || '').slice(0, 10),
+      score,
+    };
+  });
+
+  return scored
+    .filter(c => c.score > 0.2) // below this the words barely overlap — noise
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      // Same relevance: prefer the run closest to the date they gave.
+      const da = Math.abs(Date.parse(a.startDate) - Date.parse(isoStartDate));
+      const db = Math.abs(Date.parse(b.startDate) - Date.parse(isoStartDate));
+      return da - db;
+    })
+    .slice(0, MAX_CANDIDATES_PER_ROW);
 }
 
 function validateRow(
@@ -192,9 +286,11 @@ function validateRow(
   }
 
   const title = get('Course Title*');
+  let courseRunUnresolved = false;
   if (title && startParsed) {
     if (!resolveCourseRun(title, startParsed.iso)) {
-      issues.push(`No course run found in the LMS for "${title}" on ${startParsed.iso} — create the course run first, or fix the title/date in the Excel`);
+      courseRunUnresolved = true;
+      issues.push(`No course run found in the LMS for "${title}" on ${startParsed.iso} — pick the correct run below, or fix the title/date in the Excel`);
     }
   }
 
@@ -206,18 +302,49 @@ function validateRow(
     traineeNric: nric || '(no NRIC)',
     courseTitle: title || '(no course title)',
     issues,
+    // Only offer the picker when the run is the ONLY thing wrong — resolving it
+    // on a row that also has, say, a bad NRIC would still fail on re-submit.
+    ...(courseRunUnresolved && issues.length === 1
+      ? { courseRunUnresolved: { courseTitle: title, courseStartDate: startRaw, candidates: [] } }
+      : {}),
   };
 }
 
 export async function validateCompanyApplicationRows(
   rows: Array<Record<string, string>>,
+  overrides: CourseRunOverride[] = [],
 ): Promise<RowValidationError[]> {
   if (rows.length === 0) return [];
-  const resolveCourseRun = await buildCourseRunResolver(rows);
+
+  // Rows the admin has already answered "did you mean this run?" for.
+  const overridden = new Set(overrides.map(o => overrideKey(o.courseTitle, o.courseStartDate)));
+
+  const baseResolve = await buildCourseRunResolver(rows);
   const errors: RowValidationError[] = [];
   for (let i = 0; i < rows.length; i++) {
-    const err = validateRow(rows[i], i + 1, resolveCourseRun); // 1-based data-row index (header row not counted)
+    const row = rows[i];
+    const rowKey = overrideKey(row['Course Title*'], row['Course Start Date (DD-MM-YYYY)*']);
+    const resolve = overridden.has(rowKey) ? () => true : baseResolve;
+    const err = validateRow(row, i + 1, resolve); // 1-based data-row index (header row not counted)
     if (err) errors.push(err);
   }
+
+  // Attach "did you mean" candidates. Done here, after validation, so the
+  // window query only runs when something actually failed — and once per
+  // distinct (title, date) rather than once per learner.
+  const needCandidates = errors.filter(e => e.courseRunUnresolved);
+  if (needCandidates.length > 0) {
+    const byKey = new Map<string, CourseRunCandidate[]>();
+    for (const err of needCandidates) {
+      const { courseTitle, courseStartDate } = err.courseRunUnresolved!;
+      const key = overrideKey(courseTitle, courseStartDate);
+      if (!byKey.has(key)) {
+        const parsed = parseDdMmYyyy(courseStartDate);
+        byKey.set(key, parsed ? await findCourseRunCandidates(courseTitle, parsed.iso) : []);
+      }
+      err.courseRunUnresolved!.candidates = byKey.get(key)!;
+    }
+  }
+
   return errors;
 }

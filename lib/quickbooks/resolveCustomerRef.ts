@@ -9,30 +9,7 @@
  * All calls go through the existing QB proxy so OAuth refresh stays centralized.
  */
 
-interface ProxyResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  details?: unknown;
-}
-
-/**
- * Call the internal QuickBooks proxy endpoint. Uses QBO_PROXY_BASE_URL or falls
- * back to localhost — the pipeline runs inside the same Next.js process.
- */
-async function callQbProxy(body: Record<string, any>): Promise<ProxyResponse> {
-  const baseUrl = process.env.QBO_PROXY_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await resp.json().catch(() => null);
-  if (!resp.ok || !data?.success) {
-    throw new Error(data?.error || `QB proxy returned ${resp.status}`);
-  }
-  return data;
-}
+import { callQbProxy } from './qbProxyClient';
 
 function escapeQbQueryString(value: string): string {
   // QBO query language uses single quotes, so any apostrophe must be doubled.
