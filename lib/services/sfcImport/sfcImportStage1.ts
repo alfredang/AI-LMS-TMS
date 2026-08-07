@@ -8,27 +8,11 @@ import {
   getAppliedQbPaymentIdsByClaimId,
 } from './sfcImportDb';
 
-type ProxyResponse<T = any> = { success: boolean; data?: T; error?: string };
+// Unwrapped variant — these call sites want the QBO payload, not the envelope.
+import { callQbProxyData as callQbProxy } from '@/lib/quickbooks/qbProxyClient';
 
 function escapeQbQueryString(value: string): string {
   return value.replace(/'/g, "''");
-}
-
-async function callQbProxy(body: Record<string, any>): Promise<any> {
-  const baseUrl =
-    process.env.QBO_PROXY_BASE_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
-    'http://localhost:3000';
-  const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = (await resp.json().catch(() => null)) as ProxyResponse | null;
-  if (!resp.ok || !data?.success) {
-    throw new Error(data?.error || `QB proxy returned ${resp.status}`);
-  }
-  return data.data;
 }
 
 function parseDisbursementDate(raw: string): string | null {

@@ -24,6 +24,7 @@
  */
 
 import pool from '../db';
+import { callQbProxy } from './qbProxyClient';
 import { appendPipelineWarning } from '../companyApplicationsTable';
 import { findEmployerQboDisplayNameByUen, upsertEmployerQboAlias } from '../employerQboAliasTable';
 import { refreshGrantsForEnrolments } from '../services/billingSync';
@@ -570,21 +571,6 @@ async function resolveEmployerCustomerRef(opts: {
   throw new Error(
     `QuickBooks customer not found for employer "${name || '?'}" (UEN ${uen || '?'}). Tried alias map, exact DisplayName/CompanyName, UEN substring, and fuzzy scoring against all QBO customers.${hints} Fix: rename the matching QBO customer to "${name}" exactly, or append UEN "${uen}" to its DisplayName / CompanyName.`
   );
-}
-
-async function callQbProxy(body: Record<string, any>): Promise<any> {
-  const baseUrl = process.env.QBO_PROXY_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const resp = await fetch(`${baseUrl}/api/quickbooks/proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await resp.json().catch(() => null);
-  if (!resp.ok || !data?.success) {
-    console.error('[QBO proxy error details]', JSON.stringify(data, null, 2));
-    throw new Error(data?.error || `QB proxy returned ${resp.status}`);
-  }
-  return data;
 }
 
 export interface CaInvoiceLearner {

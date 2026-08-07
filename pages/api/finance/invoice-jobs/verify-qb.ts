@@ -2,30 +2,20 @@ import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@/lib/db';
 import { ensureInvoiceJobsTable } from '@/lib/services/invoiceJobs';
-
-const BASE_URL =
-  process.env.QBO_PROXY_BASE_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
-  'http://localhost:3000';
+import { callQbProxy } from '@/lib/quickbooks/qbProxyClient';
 
 async function qbInvoiceExists(qboInvoiceId: string, app: string): Promise<boolean | null> {
   try {
-    const resp = await fetch(`${BASE_URL}/api/quickbooks/proxy`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'query',
-        entity: 'invoice',
-        app,
-        query: `SELECT Id FROM Invoice WHERE Id = '${String(qboInvoiceId).replace(/'/g, "''")}' MAXRESULTS 1`,
-      }),
+    const resp = await callQbProxy({
+      action: 'query',
+      entity: 'invoice',
+      app,
+      query: `SELECT Id FROM Invoice WHERE Id = '${String(qboInvoiceId).replace(/'/g, "''")}' MAXRESULTS 1`,
     });
-    const data = await resp.json().catch(() => null);
-    if (!resp.ok || !data?.success) return null; // QB unreachable or auth error — can't conclude
-    const inv = data?.data?.QueryResponse?.Invoice;
+    const inv = resp?.data?.QueryResponse?.Invoice;
     return Array.isArray(inv) ? inv.length > 0 : !!inv;
   } catch {
-    return null; // network error — can't conclude
+    return null; // QB unreachable, auth error, or network error — can't conclude
   }
 }
 

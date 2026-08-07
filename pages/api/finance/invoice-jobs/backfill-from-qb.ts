@@ -2,27 +2,17 @@ import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@/lib/db';
 import { ensureInvoiceJobsTable } from '@/lib/services/invoiceJobs';
-
-const BASE_URL =
-  process.env.QBO_PROXY_BASE_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
-  'http://localhost:3000';
+import { callQbProxy } from '@/lib/quickbooks/qbProxyClient';
 
 type QbInvoice = { id: string; docNumber: string | null };
 
 async function qbQuery(app: string, query: string): Promise<any[] | null> {
   try {
-    const resp = await fetch(`${BASE_URL}/api/quickbooks/proxy`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'query', entity: 'invoice', app, query }),
-    });
-    const data = await resp.json().catch(() => null);
-    if (!resp.ok || !data?.success) return null;
-    const rows = data?.data?.QueryResponse?.Invoice;
+    const resp = await callQbProxy({ action: 'query', entity: 'invoice', app, query });
+    const rows = resp?.data?.QueryResponse?.Invoice;
     return Array.isArray(rows) ? rows : rows ? [rows] : [];
   } catch {
-    return null;
+    return null; // QB unreachable or auth error — caller treats null as "can't conclude"
   }
 }
 

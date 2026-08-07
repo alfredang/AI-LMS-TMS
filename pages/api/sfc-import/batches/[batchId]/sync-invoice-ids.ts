@@ -3,11 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@/lib/db';
 import { requireFinanceOrAdmin } from '@/lib/services/grantImport/requireFinanceOrAdmin';
 import { requireSfcImportSchema } from '@/lib/services/sfcImport/sfcImportDb';
-
-const BASE_URL =
-  process.env.QBO_PROXY_BASE_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
-  'http://localhost:3000';
+import { callQbProxy } from '@/lib/quickbooks/qbProxyClient';
 
 function enrolmentLast6(enrolmentId: string): string {
   const digits = String(enrolmentId || '').replace(/\D/g, '');
@@ -30,19 +26,13 @@ async function qbFetchAllInvoices(app: string): Promise<Array<{ id: string; docN
   let startPos = 1;
   while (true) {
     try {
-      const resp = await fetch(`${BASE_URL}/api/quickbooks/proxy`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'query',
-          entity: 'invoice',
-          app,
-          query: `SELECT Id, DocNumber FROM Invoice ORDERBY TxnDate DESC STARTPOSITION ${startPos} MAXRESULTS 1000`,
-        }),
+      const resp = await callQbProxy({
+        action: 'query',
+        entity: 'invoice',
+        app,
+        query: `SELECT Id, DocNumber FROM Invoice ORDERBY TxnDate DESC STARTPOSITION ${startPos} MAXRESULTS 1000`,
       });
-      const data = await resp.json().catch(() => null);
-      if (!resp.ok || !data?.success) break;
-      const rows = data?.data?.QueryResponse?.Invoice;
+      const rows = resp?.data?.QueryResponse?.Invoice;
       const page: any[] = Array.isArray(rows) ? rows : rows ? [rows] : [];
       for (const r of page) {
         all.push({ id: String(r.Id), docNumber: r.DocNumber ? String(r.DocNumber) : null });
