@@ -45,6 +45,7 @@ const AssessmentGrading: React.FC = () => {
   const [students, setStudents] = useState<StudentData[]>([]);
   const [assessmentMethods, setAssessmentMethods] = useState<string[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const [refreshingStudents, setRefreshingStudents] = useState(false);
   const [savingStatus, setSavingStatus] = useState<Record<string, boolean>>({});
   const [certVerification, setCertVerification] = useState<Record<string, { checking: boolean; exists?: boolean }>>({});
 
@@ -84,13 +85,14 @@ const AssessmentGrading: React.FC = () => {
     }
   }, [pendingGradingCourseRunId, classes, loadingClasses]);
 
-  useEffect(() => {
-    if (!selectedCourseRunId) {
-      setStudents([]);
-      return;
+  const fetchStudents = (silent = false) => {
+    if (!selectedCourseRunId) return;
+    if (silent) {
+      setRefreshingStudents(true);
+    } else {
+      setLoadingStudents(true);
+      setCertSendResult(null);
     }
-    setLoadingStudents(true);
-    setCertSendResult(null);
     fetch(`/api/trainer/class-students?courseRunId=${selectedCourseRunId}&withMeta=1`)
       .then(res => res.json())
       .then(data => {
@@ -98,13 +100,26 @@ const AssessmentGrading: React.FC = () => {
         if (Array.isArray(list)) {
           setStudents(list);
           setAssessmentMethods(Array.isArray(data?.assessment_methods) ? data.assessment_methods : []);
-          // Default: select all learners for certificate sending
-          setSelectedForCert(new Set(list.map((s: StudentData) => s.enrolment_id)));
+          if (silent) {
+            // Keep the trainer's cert selection, dropping enrolments no longer in the roster
+            setSelectedForCert(prev => new Set(list.filter(s => prev.has(s.enrolment_id)).map(s => s.enrolment_id)));
+          } else {
+            // Default: select all learners for certificate sending
+            setSelectedForCert(new Set(list.map((s: StudentData) => s.enrolment_id)));
+          }
           // Verify certificates against Google Drive
           verifyCertificates(list);
         }
       })
-      .finally(() => setLoadingStudents(false));
+      .finally(() => (silent ? setRefreshingStudents(false) : setLoadingStudents(false)));
+  };
+
+  useEffect(() => {
+    if (!selectedCourseRunId) {
+      setStudents([]);
+      return;
+    }
+    fetchStudents();
   }, [selectedCourseRunId]);
 
   const verifyCertificates = async (studentList: StudentData[]) => {
@@ -324,6 +339,16 @@ const AssessmentGrading: React.FC = () => {
               Student Grading Roster
             </h2>
             <div className="flex items-center gap-3">
+              {/* Refresh assessment submission status */}
+              <button
+                onClick={() => fetchStudents(true)}
+                disabled={loadingStudents || refreshingStudents}
+                title="Refresh assessment submission status"
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border text-gray-600 bg-white border-gray-200 hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Icon name={IconName.Sync} className={`w-3.5 h-3.5 ${refreshingStudents ? 'animate-spin' : ''}`} />
+                {refreshingStudents ? 'Refreshing...' : 'Refresh'}
+              </button>
               {/* Per-method submission counts, e.g. WA 11/17 */}
               {students.length > 0 && assessmentMethods.map(m => {
                 const info = METHOD_INFO[m] || { abbr: m, label: m };
