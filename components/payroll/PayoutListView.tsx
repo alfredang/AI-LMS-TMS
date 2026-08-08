@@ -739,8 +739,8 @@ const PayoutListView: React.FC = () => {
                 <th className="px-3 py-2 whitespace-nowrap">Trainer</th>
                 <th className="px-3 py-2 whitespace-nowrap text-right"># Classes</th>
                 <th className="px-2 py-2 whitespace-nowrap text-right w-14"># Pax</th>
-                <th className="px-3 py-2 whitespace-nowrap text-right">Est. Payout</th>
-                <th className="px-3 py-2 whitespace-nowrap text-right">Act. Payout</th>
+                <th className="px-2 py-2 whitespace-nowrap text-right">Est. Pay</th>
+                <th className="px-2 py-2 whitespace-nowrap text-right">Act. Pay</th>
               </tr>
             ) : (
               <tr>
@@ -751,8 +751,8 @@ const PayoutListView: React.FC = () => {
                 <th className="px-3 py-2 whitespace-nowrap">Start Date</th>
                 <th className="px-2 py-2 whitespace-nowrap text-right w-14"># Pax</th>
                 <th className="px-3 py-2 whitespace-nowrap text-right">Course Fee</th>
-                <th className="px-3 py-2 whitespace-nowrap text-right">Est. Payout</th>
-                <th className="px-3 py-2 whitespace-nowrap text-right">Act. Payout</th>
+                <th className="px-2 py-2 whitespace-nowrap text-right">Est. Pay</th>
+                <th className="px-2 py-2 whitespace-nowrap text-right">Act. Pay</th>
                 <th className="px-3 py-2 whitespace-nowrap">Status</th>
                 <th className="px-3 py-2 whitespace-nowrap">Bill No</th>
                 <th className="px-3 py-2 whitespace-nowrap">Payment Date</th>
@@ -812,7 +812,7 @@ const PayoutListView: React.FC = () => {
                   <td className="px-3 py-2.5 whitespace-nowrap font-mono text-on-surface-secondary">
                     {r.course_run_code || '-'}
                   </td>
-                  <td className="px-3 py-2.5 max-w-[14rem] truncate uppercase" title={r.trainer_name || ''}>
+                  <td className="px-3 py-2.5 max-w-[9rem] truncate uppercase" title={r.trainer_name || ''}>
                     {r.trainer_name || '-'}
                   </td>
                   {(() => {
@@ -830,8 +830,8 @@ const PayoutListView: React.FC = () => {
                   })()}
                   <td className="px-2 py-2.5 text-right tabular-nums">{r.num_learners}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(r.course_fee)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(r.estimated_payout)}</td>
-                  <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${r.actual_payout != null && r.actual_payout !== '' ? 'text-green-600 dark:text-green-400' : ''}`}>{fmtCurrency(r.actual_payout)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums">{fmtCurrency(r.estimated_payout)}</td>
+                  <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${r.actual_payout != null && r.actual_payout !== '' ? 'text-green-600 dark:text-green-400' : ''}`}>{fmtCurrency(r.actual_payout)}</td>
                   <td className="px-3 py-2.5"><StatusBadge status={r.status} /></td>
                   <td className="px-3 py-2.5 whitespace-nowrap"><BillNo value={r.bill_no} /></td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-on-surface-secondary">{fmtDate(r.payment_date)}</td>
@@ -886,8 +886,8 @@ const PayoutListView: React.FC = () => {
                     )}
                   </td>
                   <td className="px-2 py-2.5 text-right tabular-nums">{g.learners}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(g.estimated)}</td>
-                  <td className="px-3 py-2.5 text-right font-semibold text-primary tabular-nums">{fmtCurrency(g.actual)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums">{fmtCurrency(g.estimated)}</td>
+                  <td className="px-2 py-2.5 text-right font-semibold text-primary tabular-nums">{fmtCurrency(g.actual)}</td>
                 </tr>
 
                 {open && (
@@ -939,8 +939,8 @@ const PayoutListView: React.FC = () => {
                                 <th className="px-2 py-2 whitespace-nowrap">Dates</th>
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Pax</th>
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Course Fee</th>
-                                <th className="px-2 py-2 whitespace-nowrap text-right">Est. Payout</th>
-                                <th className="px-2 py-2 whitespace-nowrap text-right">Act. Payout</th>
+                                <th className="px-2 py-2 whitespace-nowrap text-right">Est. Pay</th>
+                                <th className="px-2 py-2 whitespace-nowrap text-right">Act. Pay</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Status</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Bill No</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Payment Date</th>
