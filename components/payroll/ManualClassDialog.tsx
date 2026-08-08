@@ -22,6 +22,7 @@ export interface ManualClass {
   status: 'pending' | 'completed' | 'cancelled';
   payment_date: string | null;
   remark: string | null;
+  bill_no?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -111,6 +112,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
   const [status, setStatus] = useState<ManualClass['status']>(initial?.status ?? 'pending');
   const [paymentDate, setPaymentDate] = useState<string>(initial?.payment_date ?? '');
   const [remark, setRemark] = useState<string>(initial?.remark ?? '');
+  const [billNo, setBillNo] = useState<string>(initial?.bill_no ?? '');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +144,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
       status: initial?.status ?? 'pending',
       paymentDate: initial?.payment_date ?? '',
       remark: initial?.remark ?? '',
+      billNo: initial?.bill_no ?? '',
     };
     return (
       classTitle !== orig.classTitle ||
@@ -154,9 +157,10 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
       actual !== orig.actual ||
       status !== orig.status ||
       paymentDate !== orig.paymentDate ||
-      remark !== orig.remark
+      remark !== orig.remark ||
+      billNo !== orig.billNo
     );
-  }, [classTitle, courseCode, trainerName, classDates, numLearners, courseFee, tierPercent, actual, status, paymentDate, remark, initial, initialClassDates]);
+  }, [classTitle, courseCode, trainerName, classDates, numLearners, courseFee, tierPercent, actual, status, paymentDate, remark, billNo, initial, initialClassDates]);
 
   const requestClose = () => {
     if (saving) return;
@@ -202,6 +206,9 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
       status,
       payment_date: paymentDate || null,
       remark: remark.trim() || null,
+      // Only sent when actually edited — otherwise an empty string would
+      // suppress the server's auto-issue on mark-as-paid.
+      ...(billNo !== (initial?.bill_no ?? '') ? { bill_no: billNo.trim() || null } : {}),
     };
     try {
       const url = isEdit ? `/api/payroll/manual-classes/${initial!.id}` : '/api/payroll/manual-classes';
@@ -488,6 +495,23 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
                 </button>
               </div>
               <DateRangeCell singleDate standalone value={paymentDate} onChange={setPaymentDate} />
+            </div>
+
+            <div>
+              <label htmlFor="mc-bill-no" className="block text-xs font-medium mb-1">
+                Bill No <span className="font-normal text-on-surface-secondary">(QuickBooks ref)</span>
+              </label>
+              <input
+                id="mc-bill-no"
+                type="text"
+                value={billNo}
+                onChange={(e) => setBillNo(e.target.value.toUpperCase())}
+                placeholder="Auto-assigned when marked as paid"
+                className="w-full border border-default rounded-md px-2 py-1.5 text-sm font-mono tracking-wide bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <p className="mt-1 text-[11px] text-on-surface-secondary">
+                Format TX + YYMMDD + running no. (e.g. TX26030605). Edit to match an existing QuickBooks bill.
+              </p>
             </div>
 
             <div>

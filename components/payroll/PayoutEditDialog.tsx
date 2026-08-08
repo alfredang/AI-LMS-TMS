@@ -25,6 +25,7 @@ export interface PayoutRow {
   status: 'pending' | 'completed' | 'cancelled';
   payment_date: string | null;
   remark: string | null;
+  bill_no?: string | null;
 }
 
 interface Props {
@@ -90,6 +91,7 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
   const [status, setStatus] = useState<PayoutRow['status']>(row.status);
   const [paymentDate, setPaymentDate] = useState<string>(row.payment_date || '');
   const [remark, setRemark] = useState<string>(row.remark || '');
+  const [billNo, setBillNo] = useState<string>(row.bill_no || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -115,9 +117,10 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
       actual !== origActual ||
       status !== row.status ||
       paymentDate !== (row.payment_date || '') ||
-      remark !== (row.remark || '')
+      remark !== (row.remark || '') ||
+      billNo !== (row.bill_no || '')
     );
-  }, [numLearners, courseFee, tierPercent, actual, status, paymentDate, remark, row]);
+  }, [numLearners, courseFee, tierPercent, actual, status, paymentDate, remark, billNo, row]);
 
   const requestClose = () => {
     if (saving) return;
@@ -160,6 +163,9 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
           status,
           payment_date: paymentDate || null,
           remark: remark || null,
+          // Only sent when actually edited — otherwise an empty string would
+          // suppress the server's auto-issue on mark-as-paid.
+          ...(billNo !== (row.bill_no || '') ? { bill_no: billNo.trim() || null } : {}),
         }),
       });
       const j = await r.json();
@@ -374,6 +380,23 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
                 value={paymentDate}
                 onChange={setPaymentDate}
               />
+            </div>
+
+            <div>
+              <label htmlFor="payout-bill-no" className="block text-xs font-medium mb-1">
+                Bill No <span className="font-normal text-on-surface-secondary">(QuickBooks ref)</span>
+              </label>
+              <input
+                id="payout-bill-no"
+                type="text"
+                value={billNo}
+                onChange={(e) => setBillNo(e.target.value.toUpperCase())}
+                placeholder="Auto-assigned when marked as paid"
+                className="w-full border border-default rounded-md px-2 py-1.5 text-sm font-mono tracking-wide bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <p className="mt-1 text-[11px] text-on-surface-secondary">
+                Format TX + YYMMDD + running no. (e.g. TX26030605). Edit to match an existing QuickBooks bill.
+              </p>
             </div>
 
             <div>

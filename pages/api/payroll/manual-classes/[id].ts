@@ -3,6 +3,7 @@ import pool from '@lib/db';
 import { payoutAmount } from '@lib/payroll/calculate';
 import { requireRole } from '@lib/auth/requireRole';
 import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
+import { acquireBillNoLock, ensureBillNoColumn, nextBillNo, normalizeBillNo } from '@lib/payroll/billNo';
 
 const numOrNull = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v));
 
@@ -14,7 +15,7 @@ const SELECT_COLS = `
   num_learners, course_fee, tier_percent, estimated_payout, actual_payout,
   status,
   payment_date::text AS payment_date,
-  remark, created_at, updated_at
+  remark, bill_no, created_at, updated_at
 `;
 
 // Normalize a "YYYY-MM-DD,..." list → sorted unique + derived min/max.
@@ -56,6 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   await ensureClassDatesColumn();
+  await ensureBillNoColumn();
 
   const {
     class_title,
@@ -72,6 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     status,
     payment_date,
     remark,
+    bill_no,
   } = req.body || {};
 
   if (class_title !== undefined && !String(class_title).trim()) {
@@ -104,6 +107,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (start_date && end_date && String(end_date) < String(start_date)) {
     return res.status(400).json({ success: false, error: 'end_date must be on or after start_date' });
   }
+  let billNoOverride: string | null | undefined;
+  if (bill_no !== undefined) {
+    const n = normalizeBillNo(bill_no);
+    if (!n.ok) return res.status(400).json({ success: false, error: n.error });
+    billNoOverride = n.value;
+  }
 
   const client = await pool.connect();
   try {
@@ -111,7 +120,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Lock the row so the recompute reads a consistent (learners, fee, percent)
     // even under a concurrent edit — no lost-update on estimated_payout.
     const cur = await client.query(
-      `SELECT num_learners, course_fee, tier_percent FROM payroll_manual_class WHERE id = $1 FOR UPDATE`,
+      `SELECT num_learners, course_fee, tier_percent, bill_no, start_date::text AS start_date
+         FROM payroll_manual_class WHERE id = $1 FOR UPDATE`,
       [id]
     );
     if (cur.rowCount === 0) {
@@ -161,6 +171,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       set('estimated_payout', payoutAmount(effLearners, effFee, effPercent));
     }
 
+    if (billNoOverride !== undefined) {
+      // Explicit edit always wins over auto-issue.
+      set('bill_no', billNoOverride);
+    } else if (status === 'completed' && !cur.rows[0].bill_no) {
+      // Auto-issue on mark-as-paid, only when this class has no number yet, so
+      // unmark → re-mark keeps the original ref instead of burning a new one.
+      // Derive the date from the edit where the dates are being changed in this
+      // same request, else the stored start_date.
+      const effStart =
+        class_dates !== undefined
+          ? normalizeClassDates(class_dates).startDate
+          : start_date !== undefined
+          ? start_date || null
+          : cur.rows[0].start_date;
+      await acquireBillNoLock(client, effStart);
+      const issued = await nextBillNo(client, effStart);
+      if (issued) set('bill_no', issued);
+    }
+
     set('updated_by', authed.id);
 
     if (sets.length === 0) {
@@ -178,6 +207,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (err: any) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('payroll/manual-classes PUT failed', err);
+    if (err?.code === '23505' && String(err?.constraint || '').includes('bill_no')) {
+      return res.status(409).json({ success: false, error: 'That Bill No is already used by another payout.' });
+    }
     return res.status(500).json({ success: false, error: err?.message || 'Internal error' });
   } finally {
     client.release();

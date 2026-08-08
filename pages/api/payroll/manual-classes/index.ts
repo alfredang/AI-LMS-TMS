@@ -8,6 +8,7 @@ import {
 } from '@lib/payroll/calculate';
 import { requireRole } from '@lib/auth/requireRole';
 import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
+import { acquireBillNoLock, ensureBillNoColumn, nextBillNo, normalizeBillNo } from '@lib/payroll/billNo';
 
 async function loadTiers(): Promise<PayoutTier[]> {
   try {
@@ -31,7 +32,7 @@ const SELECT_COLS = `
   num_learners, course_fee, tier_percent, estimated_payout, actual_payout,
   status,
   payment_date::text AS payment_date,
-  remark, created_at, updated_at
+  remark, bill_no, created_at, updated_at
 `;
 
 // Non-consecutive class dates: normalize a "YYYY-MM-DD,YYYY-MM-DD,..." string to
@@ -53,6 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!authed) return;
 
   await ensureClassDatesColumn();
+  await ensureBillNoColumn();
 
   if (req.method === 'GET') {
     try {
@@ -114,6 +116,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status,
         payment_date,
         remark,
+        bill_no,
       } = req.body || {};
 
       // When an explicit date list is given, it wins and derives start/end.
@@ -152,6 +155,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (start_date && end_date && String(end_date) < String(start_date)) {
         return res.status(400).json({ success: false, error: 'end_date must be on or after start_date' });
       }
+      const billNorm = normalizeBillNo(bill_no);
+      if (!billNorm.ok) return res.status(400).json({ success: false, error: billNorm.error });
 
       // If no explicit percent was supplied, derive it from the tier ladder for
       // the given learner count. Same rule the WSQ payouts use.
@@ -162,36 +167,60 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const estimated = payoutAmount(learners, fee, percent);
 
-      const r = await pool.query(
-        `INSERT INTO payroll_manual_class
-            (class_title, course_code, trainer_id, trainer_name, start_date, end_date, class_dates,
-             num_learners, course_fee, tier_percent, estimated_payout, actual_payout,
-             status, payment_date, remark, created_by, updated_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$16)
-         RETURNING ${SELECT_COLS}`,
-        [
-          String(class_title).trim(),
-          course_code ? String(course_code).trim() : null,
-          trainer_id || null,
-          String(trainer_name).trim(),
-          finalStart,
-          finalEnd,
-          finalClassDates,
-          learners,
-          fee,
-          percent,
-          estimated,
-          actualVal,
-          status || 'pending',
-          payment_date || null,
-          remark ? String(remark) : null,
-          authed.id,
-        ]
-      );
+      // Transaction so the bill-number read-modify-write is serialized against a
+      // concurrent create/mark-as-paid for the same class date.
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
 
-      return res.status(201).json({ success: true, data: r.rows[0] });
+        // An explicit ref wins; otherwise issue one only if the class is being
+        // created already marked as paid.
+        let billNo = billNorm.value;
+        if (!billNo && (status || 'pending') === 'completed') {
+          await acquireBillNoLock(client, finalStart);
+          billNo = await nextBillNo(client, finalStart);
+        }
+
+        const r = await client.query(
+          `INSERT INTO payroll_manual_class
+              (class_title, course_code, trainer_id, trainer_name, start_date, end_date, class_dates,
+               num_learners, course_fee, tier_percent, estimated_payout, actual_payout,
+               status, payment_date, remark, bill_no, created_by, updated_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)
+           RETURNING ${SELECT_COLS}`,
+          [
+            String(class_title).trim(),
+            course_code ? String(course_code).trim() : null,
+            trainer_id || null,
+            String(trainer_name).trim(),
+            finalStart,
+            finalEnd,
+            finalClassDates,
+            learners,
+            fee,
+            percent,
+            estimated,
+            actualVal,
+            status || 'pending',
+            payment_date || null,
+            remark ? String(remark) : null,
+            billNo,
+            authed.id,
+          ]
+        );
+        await client.query('COMMIT');
+        return res.status(201).json({ success: true, data: r.rows[0] });
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
     } catch (err: any) {
       console.error('payroll/manual-classes POST failed', err);
+      if (err?.code === '23505' && String(err?.constraint || '').includes('bill_no')) {
+        return res.status(409).json({ success: false, error: 'That Bill No is already used by another payout.' });
+      }
       return res.status(500).json({ success: false, error: err?.message || 'Internal error' });
     }
   }

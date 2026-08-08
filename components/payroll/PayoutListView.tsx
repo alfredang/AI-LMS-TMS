@@ -9,6 +9,7 @@ import DateRangeCell, { parseMultiDates, collapseMultiDates } from '../ui/DateRa
 import {
   fmtCurrency,
   StatusBadge,
+  BillNo,
   StatCard,
   LoadingRow,
   OPTION_CLASS,
@@ -41,6 +42,7 @@ const toManualClass = (r: PayoutRow): ManualClass => ({
   status: r.status,
   payment_date: r.payment_date,
   remark: r.remark,
+  bill_no: r.bill_no ?? null,
 });
 
 // Compact, low-emphasis stat used for the secondary "Selected window" strip.
@@ -235,7 +237,7 @@ const PayoutListView: React.FC = () => {
         if (to && sd > to) return false;
       }
       if (!q) return true;
-      return [r.trainer_name, r.course_title, r.course_code, r.course_run_code]
+      return [r.trainer_name, r.course_title, r.course_code, r.course_run_code, r.bill_no]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q));
     });
@@ -652,7 +654,7 @@ const PayoutListView: React.FC = () => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search trainer, course or run code…"
+              placeholder="Search trainer, course, run code or bill no…"
               className="w-full h-9 border border-default rounded-md pl-8 pr-2 text-sm bg-white dark:bg-slate-700/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
@@ -750,16 +752,17 @@ const PayoutListView: React.FC = () => {
                 <th className="px-3 py-2 whitespace-nowrap text-right">Est. Payout</th>
                 <th className="px-3 py-2 whitespace-nowrap text-right">Actual Payout</th>
                 <th className="px-3 py-2 whitespace-nowrap">Status</th>
+                <th className="px-3 py-2 whitespace-nowrap">Bill No</th>
                 <th className="px-3 py-2 whitespace-nowrap">Payment Date</th>
                 <th className="px-3 py-2 whitespace-nowrap">Remark</th>
               </tr>
             )}
           </thead>
           <tbody>
-            {loading && <LoadingRow colSpan={groupByTrainer ? 5 : 10} label="Loading payouts…" />}
+            {loading && <LoadingRow colSpan={groupByTrainer ? 5 : 11} label="Loading payouts…" />}
             {!loading && totalItems === 0 && (
               <tr>
-                <td colSpan={groupByTrainer ? 5 : 10} className="px-3 py-12 text-center">
+                <td colSpan={groupByTrainer ? 5 : 11} className="px-3 py-12 text-center">
                   <div className="flex flex-col items-center gap-2 text-on-surface-secondary">
                     <Icon name={IconName.DollarSign} className="w-10 h-10 opacity-30" />
                     {rows.length === 0 ? (
@@ -825,6 +828,7 @@ const PayoutListView: React.FC = () => {
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(r.estimated_payout)}</td>
                   <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${r.actual_payout != null && r.actual_payout !== '' ? 'text-green-600 dark:text-green-400' : ''}`}>{fmtCurrency(r.actual_payout)}</td>
                   <td className="px-3 py-2.5"><StatusBadge status={r.status} /></td>
+                  <td className="px-3 py-2.5 whitespace-nowrap"><BillNo value={r.bill_no} /></td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-on-surface-secondary">{fmtDate(r.payment_date)}</td>
                   <td className="px-3 py-2.5 max-w-[14rem] truncate text-on-surface-secondary" title={r.remark || ''}>
                     {r.remark || '-'}
@@ -931,6 +935,7 @@ const PayoutListView: React.FC = () => {
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Est. Payout</th>
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Actual Payout</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Status</th>
+                                <th className="px-2 py-2 whitespace-nowrap">Bill No</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Payment Date</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Remark</th>
                               </tr>
@@ -1001,6 +1006,7 @@ const PayoutListView: React.FC = () => {
                                       {fmtCurrency(r.actual_payout)}
                                     </td>
                                     <td className="px-2 py-2.5"><StatusBadge status={r.status} /></td>
+                                    <td className="px-2 py-2.5 whitespace-nowrap"><BillNo value={r.bill_no} /></td>
                                     <td className="px-2 py-2.5 whitespace-nowrap text-on-surface-secondary">{fmtDate(r.payment_date)}</td>
                                     <td className="px-2 py-2.5 max-w-[12rem] truncate text-on-surface-secondary" title={r.remark || ''}>
                                       {r.remark || '-'}

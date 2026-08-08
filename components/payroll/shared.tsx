@@ -114,6 +114,20 @@ export const NonWsqTag: React.FC<{ children?: React.ReactNode; title?: string }>
   </span>
 );
 
+// QuickBooks bill reference (TX + YYMMDD + running no.). Monospaced so a column
+// of refs lines up and a transposed digit is easy to spot against QuickBooks.
+// Renders an em dash when the payout hasn't been billed yet.
+export const BillNo: React.FC<{ value?: string | null }> = ({ value }) =>
+  value ? (
+    <span className="font-mono text-xs tracking-wide" title={`QuickBooks ref ${value}`}>
+      {value}
+    </span>
+  ) : (
+    <span className="text-on-surface-secondary" title="Assigned when the payout is marked as paid">
+      —
+    </span>
+  );
+
 export const LoadingRow: React.FC<{ colSpan: number; label?: string }> = ({ colSpan, label = 'Loading…' }) => (
   <tr>
     <td colSpan={colSpan} className="px-3 py-16">

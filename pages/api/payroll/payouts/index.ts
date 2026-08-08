@@ -3,6 +3,7 @@ import pool from '@lib/db';
 import { estimatedPayout, DEFAULT_PAYOUT_TIERS, PayoutTier } from '@lib/payroll/calculate';
 import { requireRole } from '@lib/auth/requireRole';
 import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
+import { ensureBillNoColumn } from '@lib/payroll/billNo';
 
 async function loadTiers(): Promise<PayoutTier[]> {
   try {
@@ -35,6 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       : `cr.end_date <= CURRENT_DATE
          AND cr.end_date >= (CURRENT_DATE - ($1 || ' months')::interval)`;
     const dateBoundParam = monthParam || String(months);
+    await ensureBillNoColumn();
     const tiers = await loadTiers();
 
     // Find every (course_run, trainer) pair for runs whose end_date is within the last N months
@@ -130,6 +132,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tp.status,
         tp.payment_date::text AS payment_date,
         tp.remark,
+        tp.bill_no,
         tp.updated_at
       FROM trainer_payout tp
       JOIN course_run cr ON cr.id = tp.course_run_id
@@ -204,6 +207,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         status,
         payment_date::text AS payment_date,
         remark,
+        bill_no,
         updated_at
       FROM payroll_manual_class
       ORDER BY end_date DESC NULLS LAST, created_at DESC
@@ -229,6 +233,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       status: m.status,
       payment_date: m.payment_date,
       remark: m.remark,
+      bill_no: m.bill_no,
       updated_at: m.updated_at,
     }));
 
