@@ -119,7 +119,7 @@ export const NonWsqTag: React.FC<{ children?: React.ReactNode; title?: string }>
 // Renders an em dash when the payout hasn't been billed yet.
 export const BillNo: React.FC<{ value?: string | null }> = ({ value }) =>
   value ? (
-    <span className="font-mono text-xs tracking-wide" title={`QuickBooks ref ${value}`}>
+    <span className="font-mono tracking-wide" title={`QuickBooks ref ${value}`}>
       {value}
     </span>
   ) : (

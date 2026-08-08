@@ -455,71 +455,6 @@ const PayoutListView: React.FC = () => {
         </button>
       </div>
 
-      {/* Window + refresh controls */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Month vs rolling-range mode */}
-        <div className="flex h-9 rounded-lg border border-default overflow-hidden">
-          {(['month', 'range'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setWindowMode(m)}
-              className={`px-3 text-sm font-medium transition ${
-                windowMode === m
-                  ? 'bg-primary text-white'
-                  : 'bg-white dark:bg-slate-800 text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
-              }`}
-            >
-              {m === 'month' ? 'Month' : 'Range'}
-            </button>
-          ))}
-        </div>
-
-        {windowMode === 'month' ? (
-          <div className="flex items-center h-9 border border-default rounded-lg bg-white dark:bg-slate-800 overflow-hidden">
-            <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="w-8 h-full flex items-center justify-center text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700 text-lg leading-none">‹</button>
-            <span className="text-sm font-semibold min-w-[8rem] text-center px-1">{monthLabel}</span>
-            <button
-              onClick={() => shiftMonth(1)}
-              disabled={month >= currentMonthStr}
-              aria-label="Next month"
-              className="w-8 h-full flex items-center justify-center text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700 text-lg leading-none disabled:opacity-30 disabled:cursor-not-allowed"
-            >›</button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 h-9 pl-3 pr-1.5 border border-default rounded-lg bg-white dark:bg-slate-800">
-            <span className="text-[11px] uppercase tracking-wider text-on-surface-secondary font-medium whitespace-nowrap">Last</span>
-            <select
-              value={months}
-              onChange={(e) => setMonths(Number(e.target.value))}
-              aria-label="Window: within the last"
-              className="h-8 bg-transparent pr-1 text-sm font-medium focus:outline-none cursor-pointer"
-            >
-              <option className={OPTION_CLASS} value={1}>1 month</option>
-              <option className={OPTION_CLASS} value={2}>2 months</option>
-              <option className={OPTION_CLASS} value={3}>3 months</option>
-              <option className={OPTION_CLASS} value={6}>6 months</option>
-              <option className={OPTION_CLASS} value={12}>12 months</option>
-            </select>
-          </div>
-        )}
-        {windowMode === 'month' && month !== currentMonthStr && (
-          <button
-            onClick={() => setMonth(currentMonthStr)}
-            className="h-9 px-3 text-sm font-medium border border-default rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface-secondary transition"
-          >
-            This month
-          </button>
-        )}
-        <button
-          onClick={load}
-          title="Refresh"
-          className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-sm font-medium border border-default rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface-secondary transition"
-        >
-          <Icon name={IconName.Sync} className="w-4 h-4" />
-          <span className="hidden md:inline">Refresh</span>
-        </button>
-      </div>
-
       {/* Summary: prominent all-time overview + compact selected-window detail */}
       <div className="space-y-3">
       {/* Year-to-date overview — independent of the window filter */}
@@ -616,6 +551,70 @@ const PayoutListView: React.FC = () => {
             <FilterPill value="completed" label="Completed" />
             <FilterPill value="cancelled" label="Cancelled" />
           </div>
+          {/* Window (Month/Range) + refresh + view toggle — one control strip */}
+          <div className="flex flex-wrap items-center gap-2">
+          {/* Month vs rolling-range mode */}
+          <div className="inline-flex h-8 rounded-md border border-default overflow-hidden text-xs font-medium">
+            {(['month', 'range'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setWindowMode(m)}
+                className={`px-2.5 transition ${
+                  windowMode === m
+                    ? 'bg-primary text-white'
+                    : 'bg-white dark:bg-slate-800 text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                {m === 'month' ? 'Month' : 'Range'}
+              </button>
+            ))}
+          </div>
+
+          {windowMode === 'month' ? (
+            <div className="flex items-center h-8 border border-default rounded-md bg-white dark:bg-slate-800 overflow-hidden text-xs">
+              <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="w-7 h-full flex items-center justify-center text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700 text-base leading-none">‹</button>
+              <span className="font-semibold min-w-[7rem] text-center px-1">{monthLabel}</span>
+              <button
+                onClick={() => shiftMonth(1)}
+                disabled={month >= currentMonthStr}
+                aria-label="Next month"
+                className="w-7 h-full flex items-center justify-center text-on-surface-secondary hover:bg-gray-50 dark:hover:bg-slate-700 text-base leading-none disabled:opacity-30 disabled:cursor-not-allowed"
+              >›</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 h-8 pl-2.5 pr-1 border border-default rounded-md bg-white dark:bg-slate-800">
+              <span className="text-[10px] uppercase tracking-wider text-on-surface-secondary font-medium whitespace-nowrap">Last</span>
+              <select
+                value={months}
+                onChange={(e) => setMonths(Number(e.target.value))}
+                aria-label="Window: within the last"
+                className="h-7 bg-transparent pr-1 text-xs font-medium focus:outline-none cursor-pointer"
+              >
+                <option className={OPTION_CLASS} value={1}>1 month</option>
+                <option className={OPTION_CLASS} value={2}>2 months</option>
+                <option className={OPTION_CLASS} value={3}>3 months</option>
+                <option className={OPTION_CLASS} value={6}>6 months</option>
+                <option className={OPTION_CLASS} value={12}>12 months</option>
+              </select>
+            </div>
+          )}
+          {windowMode === 'month' && month !== currentMonthStr && (
+            <button
+              onClick={() => setMonth(currentMonthStr)}
+              className="h-8 px-2.5 text-xs font-medium border border-default rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface-secondary transition"
+            >
+              This month
+            </button>
+          )}
+          <button
+            onClick={() => load()}
+            title="Refresh"
+            aria-label="Refresh"
+            className="inline-flex items-center justify-center h-8 w-8 border border-default rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface-secondary transition"
+          >
+            <Icon name={IconName.Sync} className="w-4 h-4" />
+          </button>
+
           <div className="inline-flex rounded-md border border-default overflow-hidden text-xs font-medium">
             <button
               type="button"
@@ -641,6 +640,7 @@ const PayoutListView: React.FC = () => {
               <Icon name={IconName.Users} className="w-3.5 h-3.5" />
               By Trainer
             </button>
+          </div>
           </div>
         </div>
 
@@ -732,15 +732,15 @@ const PayoutListView: React.FC = () => {
       )}
 
       <div className="overflow-x-auto bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-default">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-[11px]">
           <thead className="bg-gray-50 dark:bg-slate-900/40 text-left text-[11px] uppercase tracking-wider text-on-surface-secondary font-semibold border-b border-default">
             {groupByTrainer ? (
               <tr>
                 <th className="px-3 py-2 whitespace-nowrap">Trainer</th>
                 <th className="px-3 py-2 whitespace-nowrap text-right"># Classes</th>
-                <th className="px-3 py-2 whitespace-nowrap text-right"># Learners</th>
+                <th className="px-2 py-2 whitespace-nowrap text-right w-14"># Pax</th>
                 <th className="px-3 py-2 whitespace-nowrap text-right">Est. Payout</th>
-                <th className="px-3 py-2 whitespace-nowrap text-right">Actual Payout</th>
+                <th className="px-3 py-2 whitespace-nowrap text-right">Act. Payout</th>
               </tr>
             ) : (
               <tr>
@@ -749,10 +749,10 @@ const PayoutListView: React.FC = () => {
                 <th className="px-3 py-2 whitespace-nowrap">Run ID</th>
                 <th className="px-3 py-2 whitespace-nowrap">Trainer</th>
                 <th className="px-3 py-2 whitespace-nowrap">Start Date</th>
-                <th className="px-3 py-2 whitespace-nowrap text-right"># Learners</th>
+                <th className="px-2 py-2 whitespace-nowrap text-right w-14"># Pax</th>
                 <th className="px-3 py-2 whitespace-nowrap text-right">Course Fee</th>
                 <th className="px-3 py-2 whitespace-nowrap text-right">Est. Payout</th>
-                <th className="px-3 py-2 whitespace-nowrap text-right">Actual Payout</th>
+                <th className="px-3 py-2 whitespace-nowrap text-right">Act. Payout</th>
                 <th className="px-3 py-2 whitespace-nowrap">Status</th>
                 <th className="px-3 py-2 whitespace-nowrap">Bill No</th>
                 <th className="px-3 py-2 whitespace-nowrap">Payment Date</th>
@@ -806,10 +806,10 @@ const PayoutListView: React.FC = () => {
                       {manual && <NonWsqTag />}
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap font-mono text-xs text-on-surface-secondary">
+                  <td className="px-3 py-2.5 whitespace-nowrap font-mono text-on-surface-secondary">
                     {r.course_code || '-'}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap font-mono text-xs text-on-surface-secondary">
+                  <td className="px-3 py-2.5 whitespace-nowrap font-mono text-on-surface-secondary">
                     {r.course_run_code || '-'}
                   </td>
                   <td className="px-3 py-2.5 max-w-[14rem] truncate uppercase" title={r.trainer_name || ''}>
@@ -828,7 +828,7 @@ const PayoutListView: React.FC = () => {
                       </td>
                     );
                   })()}
-                  <td className="px-3 py-2.5 text-right tabular-nums">{r.num_learners}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums">{r.num_learners}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(r.course_fee)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(r.estimated_payout)}</td>
                   <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${r.actual_payout != null && r.actual_payout !== '' ? 'text-green-600 dark:text-green-400' : ''}`}>{fmtCurrency(r.actual_payout)}</td>
@@ -885,7 +885,7 @@ const PayoutListView: React.FC = () => {
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{g.learners}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums">{g.learners}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(g.estimated)}</td>
                   <td className="px-3 py-2.5 text-right font-semibold text-primary tabular-nums">{fmtCurrency(g.actual)}</td>
                 </tr>
@@ -930,7 +930,7 @@ const PayoutListView: React.FC = () => {
                         )}
 
                         <div className="overflow-x-auto rounded-lg border border-default bg-white dark:bg-slate-800">
-                          <table className="min-w-full text-sm">
+                          <table className="min-w-full text-[11px]">
                             <thead className="bg-gray-100 dark:bg-slate-700 text-left text-[11px] uppercase tracking-wider text-on-surface-secondary">
                               <tr>
                                 <th className="px-3 py-2 whitespace-nowrap">Course</th>
@@ -940,7 +940,7 @@ const PayoutListView: React.FC = () => {
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Pax</th>
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Course Fee</th>
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Est. Payout</th>
-                                <th className="px-2 py-2 whitespace-nowrap text-right">Actual Payout</th>
+                                <th className="px-2 py-2 whitespace-nowrap text-right">Act. Payout</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Status</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Bill No</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Payment Date</th>
@@ -998,10 +998,10 @@ const PayoutListView: React.FC = () => {
                                         />
                                       </div>
                                     </td>
-                                    <td className="px-2 py-2.5 whitespace-nowrap font-mono text-xs text-on-surface-secondary">
+                                    <td className="px-2 py-2.5 whitespace-nowrap font-mono text-on-surface-secondary">
                                       {r.course_code || '-'}
                                     </td>
-                                    <td className="px-2 py-2.5 whitespace-nowrap font-mono text-xs text-on-surface-secondary">
+                                    <td className="px-2 py-2.5 whitespace-nowrap font-mono text-on-surface-secondary">
                                       {r.course_run_code || '-'}
                                     </td>
                                     <td className="px-2 py-2.5 max-w-[12rem] truncate text-on-surface-secondary" title={dateLabel}>
