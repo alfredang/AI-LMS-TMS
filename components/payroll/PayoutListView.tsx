@@ -798,7 +798,7 @@ const PayoutListView: React.FC = () => {
                   }`}
                 >
                   <td
-                    className={`px-3 py-2.5 max-w-[20rem] border-l-2 ${manual ? NON_WSQ_ACCENT : 'border-transparent group-hover:border-primary'}`}
+                    className={`px-3 py-2.5 max-w-[17rem] border-l-2 ${manual ? NON_WSQ_ACCENT : 'border-transparent group-hover:border-primary'}`}
                     title={r.course_title || ''}
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
