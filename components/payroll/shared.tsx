@@ -123,7 +123,7 @@ export const BillNo: React.FC<{ value?: string | null }> = ({ value }) =>
       {value}
     </span>
   ) : (
-    <span className="text-on-surface-secondary" title="Assigned when the payout is marked as paid">
+    <span className="text-on-surface-secondary" title="Assigned automatically once the class has a date">
       —
     </span>
   );

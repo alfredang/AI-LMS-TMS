@@ -173,10 +173,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         await client.query('BEGIN');
 
-        // An explicit ref wins; otherwise issue one only if the class is being
-        // created already marked as paid.
+        // An explicit ref wins; otherwise every new class is numbered at creation
+        // (pending included) — the whole list carries a Bill No like the legacy
+        // spreadsheet did. Classes without dates get one later, when dated.
         let billNo = billNorm.value;
-        if (!billNo && (status || 'pending') === 'completed') {
+        if (!billNo) {
           await acquireBillNoLock(client, finalStart);
           billNo = await nextBillNo(client, finalStart);
         }

@@ -174,9 +174,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (billNoOverride !== undefined) {
       // Explicit edit always wins over auto-issue.
       set('bill_no', billNoOverride);
-    } else if (status === 'completed' && !cur.rows[0].bill_no) {
-      // Auto-issue on mark-as-paid, only when this class has no number yet, so
-      // unmark → re-mark keeps the original ref instead of burning a new one.
+    } else if (!cur.rows[0].bill_no) {
+      // Every class carries a Bill No (issued at creation; history backfilled).
+      // This is the catch-up path for a class created without dates that is
+      // being dated now. Never reissued once set.
       // Derive the date from the edit where the dates are being changed in this
       // same request, else the stored start_date.
       const effStart =

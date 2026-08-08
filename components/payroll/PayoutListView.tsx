@@ -745,6 +745,8 @@ const PayoutListView: React.FC = () => {
             ) : (
               <tr>
                 <th className="px-3 py-2 whitespace-nowrap">Course</th>
+                <th className="px-3 py-2 whitespace-nowrap">Course Code</th>
+                <th className="px-3 py-2 whitespace-nowrap">Run ID</th>
                 <th className="px-3 py-2 whitespace-nowrap">Trainer</th>
                 <th className="px-3 py-2 whitespace-nowrap">Start Date</th>
                 <th className="px-3 py-2 whitespace-nowrap text-right"># Learners</th>
@@ -759,10 +761,10 @@ const PayoutListView: React.FC = () => {
             )}
           </thead>
           <tbody>
-            {loading && <LoadingRow colSpan={groupByTrainer ? 5 : 11} label="Loading payouts…" />}
+            {loading && <LoadingRow colSpan={groupByTrainer ? 5 : 13} label="Loading payouts…" />}
             {!loading && totalItems === 0 && (
               <tr>
-                <td colSpan={groupByTrainer ? 5 : 11} className="px-3 py-12 text-center">
+                <td colSpan={groupByTrainer ? 5 : 13} className="px-3 py-12 text-center">
                   <div className="flex flex-col items-center gap-2 text-on-surface-secondary">
                     <Icon name={IconName.DollarSign} className="w-10 h-10 opacity-30" />
                     {rows.length === 0 ? (
@@ -803,9 +805,12 @@ const PayoutListView: React.FC = () => {
                       <span className="font-medium truncate" title={r.course_title || ''}>{r.course_title || '-'}</span>
                       {manual && <NonWsqTag />}
                     </div>
-                    <div className="text-[11px] text-on-surface-secondary font-mono truncate">
-                      {manual ? (r.course_code || 'Non-WSQ class') : `${r.course_code || '-'} · ${r.course_run_code || '-'}`}
-                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap font-mono text-xs text-on-surface-secondary">
+                    {r.course_code || '-'}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap font-mono text-xs text-on-surface-secondary">
+                    {r.course_run_code || '-'}
                   </td>
                   <td className="px-3 py-2.5 max-w-[14rem] truncate uppercase" title={r.trainer_name || ''}>
                     {r.trainer_name || '-'}
@@ -929,6 +934,8 @@ const PayoutListView: React.FC = () => {
                             <thead className="bg-gray-100 dark:bg-slate-700 text-left text-[11px] uppercase tracking-wider text-on-surface-secondary">
                               <tr>
                                 <th className="px-3 py-2 whitespace-nowrap">Course</th>
+                                <th className="px-2 py-2 whitespace-nowrap">Course Code</th>
+                                <th className="px-2 py-2 whitespace-nowrap">Run ID</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Dates</th>
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Pax</th>
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Course Fee</th>
@@ -990,11 +997,12 @@ const PayoutListView: React.FC = () => {
                                           className="w-3.5 h-3.5 flex-shrink-0 text-primary opacity-0 group-hover/row:opacity-100 transition-opacity"
                                         />
                                       </div>
-                                      <div className="text-[11px] text-on-surface-secondary font-mono truncate">
-                                        {manual
-                                          ? (r.course_code || 'Non-WSQ class')
-                                          : `${r.course_code || '-'} · ${r.course_run_code || '-'}`}
-                                      </div>
+                                    </td>
+                                    <td className="px-2 py-2.5 whitespace-nowrap font-mono text-xs text-on-surface-secondary">
+                                      {r.course_code || '-'}
+                                    </td>
+                                    <td className="px-2 py-2.5 whitespace-nowrap font-mono text-xs text-on-surface-secondary">
+                                      {r.course_run_code || '-'}
                                     </td>
                                     <td className="px-2 py-2.5 max-w-[12rem] truncate text-on-surface-secondary" title={dateLabel}>
                                       {dateLabel}

@@ -3,7 +3,7 @@ import pool from '@lib/db';
 import { estimatedPayout, DEFAULT_PAYOUT_TIERS, PayoutTier } from '@lib/payroll/calculate';
 import { requireRole } from '@lib/auth/requireRole';
 import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
-import { ensureBillNoColumn } from '@lib/payroll/billNo';
+import { ensureBillNoColumn, BILL_NO_LOCK_NAMESPACE } from '@lib/payroll/billNo';
 
 async function loadTiers(): Promise<PayoutTier[]> {
   try {
@@ -48,6 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         c.title            AS course_title,
         c.course_code      AS course_code,
         c.course_fee       AS course_fee,
+        cr.start_date::text AS start_date,
         cr.end_date::text  AS end_date,
         crt.trainer_id     AS trainer_id,
         crt.trainer_name   AS trainer_name,
@@ -73,28 +74,90 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (numLearners < 1) return null;
         const courseFee = Number(row.course_fee) || 0;
         const { tier, amount } = estimatedPayout(numLearners, courseFee, tiers);
-        return [row.course_run_id, row.trainer_id, numLearners, courseFee, tier?.percent ?? 0, amount];
+        return [
+          row.course_run_id,
+          row.trainer_id,
+          numLearners,
+          courseFee,
+          tier?.percent ?? 0,
+          amount,
+          row.start_date, // drives the bill number
+        ];
       })
       .filter((v): v is (string | number)[] => v !== null);
 
     // One multi-row INSERT per chunk instead of a query per candidate. Chunked so the
-    // bound-parameter count stays well under Postgres' 65535 limit (6 cols × 500 = 3000).
+    // bound-parameter count stays well under Postgres' 65535 limit (7 cols × 500 = 3500).
+    //
+    // Each new row gets its Bill No here, at creation — every payout is numbered,
+    // pending included, the way the legacy spreadsheet was. The ref is built in SQL
+    // rather than JS so the whole batch is numbered in one atomic statement:
+    // TX<YYMMDD> from the class start date, then a per-day sequence continuing past
+    // the highest suffix already used that day (across BOTH payout tables).
+    // Rows already present are left untouched by ON CONFLICT DO NOTHING, so a
+    // number is never reissued or changed on a later refresh.
+    // Serialized under the bill-number advisory lock (key 0 = "all days"): two
+    // browser tabs refreshing at once would otherwise number the same fresh rows
+    // identically and one INSERT would trip the unique index.
+    const insertClient = toInsert.length > 0 ? await pool.connect() : null;
+    if (insertClient) await insertClient.query('BEGIN');
+    try {
+    if (insertClient) {
+      await insertClient.query(`SELECT pg_advisory_xact_lock($1, 0)`, [BILL_NO_LOCK_NAMESPACE]);
+    }
     const CHUNK = 500;
     for (let start = 0; start < toInsert.length; start += CHUNK) {
       const batch = toInsert.slice(start, start + CHUNK);
       const valuesSql = batch
         .map((_, k) => {
-          const b = k * 6;
-          return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, $${b + 6})`;
+          const b = k * 7;
+          return `($${b + 1}::uuid, $${b + 2}::uuid, $${b + 3}::int, $${b + 4}::numeric, $${b + 5}::numeric, $${b + 6}::numeric, $${b + 7}::date)`;
         })
         .join(', ');
-      await pool.query(
-        `INSERT INTO trainer_payout
-            (course_run_id, trainer_id, num_learners, course_fee, tier_percent, estimated_payout)
-         VALUES ${valuesSql}
+      await insertClient!.query(
+        `WITH input (course_run_id, trainer_id, num_learners, course_fee, tier_percent, estimated_payout, class_date)
+                AS (VALUES ${valuesSql}),
+         -- Only rows that don't already have a payout: numbering must not leave
+         -- gaps for pairs that are about to be skipped by ON CONFLICT.
+         fresh AS (
+           SELECT i.* FROM input i
+            WHERE NOT EXISTS (
+              SELECT 1 FROM trainer_payout t
+               WHERE t.course_run_id = i.course_run_id AND t.trainer_id = i.trainer_id
+            )
+         ),
+         used AS (
+           SELECT day_prefix, MAX(suffix) AS max_suffix FROM (
+             SELECT substring(bill_no FROM 1 FOR 8) AS day_prefix,
+                    NULLIF(regexp_replace(substring(bill_no FROM 9), '\\D', '', 'g'), '')::bigint AS suffix
+               FROM trainer_payout WHERE bill_no IS NOT NULL
+             UNION ALL
+             SELECT substring(bill_no FROM 1 FOR 8),
+                    NULLIF(regexp_replace(substring(bill_no FROM 9), '\\D', '', 'g'), '')::bigint
+               FROM payroll_manual_class WHERE bill_no IS NOT NULL
+           ) x GROUP BY day_prefix
+         )
+         INSERT INTO trainer_payout
+            (course_run_id, trainer_id, num_learners, course_fee, tier_percent, estimated_payout, bill_no)
+         SELECT f.course_run_id, f.trainer_id, f.num_learners, f.course_fee, f.tier_percent, f.estimated_payout,
+                CASE WHEN f.class_date IS NULL THEN NULL ELSE
+                  'TX' || to_char(f.class_date, 'YYMMDD')
+                       || lpad((COALESCE(u.max_suffix, 0)
+                                + row_number() OVER (PARTITION BY f.class_date
+                                                     ORDER BY f.course_run_id, f.trainer_id))::text, 2, '0')
+                END
+           FROM fresh f
+           LEFT JOIN used u ON u.day_prefix = 'TX' || to_char(f.class_date, 'YYMMDD')
          ON CONFLICT (course_run_id, trainer_id) DO NOTHING`,
         batch.flat()
       );
+    }
+    if (insertClient) await insertClient.query('COMMIT');
+    } catch (e) {
+      if (insertClient) await insertClient.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      insertClient?.release();
     }
 
     // A payout stays visible/payable only while its trainer is STILL assigned to

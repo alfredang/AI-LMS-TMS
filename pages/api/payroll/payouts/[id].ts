@@ -147,9 +147,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Explicit edit always wins over auto-issue.
         sets.push(`bill_no = $${i++}`);
         params.push(billNoOverride);
-      } else if (status === 'completed' && !row.bill_no) {
-        // Auto-issue on mark-as-paid, only if this row doesn't already have one
-        // (so unmark → re-mark keeps the original number rather than burning a new one).
+      } else if (!row.bill_no) {
+        // Every payout carries a Bill No (rows are numbered at creation; the
+        // backfill migration covered history). This is the catch-up path for any
+        // straggler — e.g. a row materialized before its run had a start date.
+        // Never reissued once set, so unmark → re-mark keeps the original ref.
         await acquireBillNoLock(client, row.start_date);
         const issued = await nextBillNo(client, row.start_date);
         if (issued) {

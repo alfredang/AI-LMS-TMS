@@ -391,7 +391,7 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
                 type="text"
                 value={billNo}
                 onChange={(e) => setBillNo(e.target.value.toUpperCase())}
-                placeholder="Auto-assigned when marked as paid"
+                placeholder="Auto-assigned from the class date"
                 className="w-full border border-default rounded-md px-2 py-1.5 text-sm font-mono tracking-wide bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
               <p className="mt-1 text-[11px] text-on-surface-secondary">

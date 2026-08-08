@@ -8,9 +8,9 @@
 -- for multi-date non-WSQ classes), NOT the payment date, so the ref sorts and
 -- reconciles the same way the spreadsheet did.
 --
--- The number is issued when a payout is marked Completed (see
--- lib/payroll/billNo.ts) and stays editable — Payroll can paste a legacy
--- QuickBooks ref or correct a wrong one.
+-- The number is issued when the payout row is created (see lib/payroll/billNo.ts
+-- and backfill_payroll_bill_no.sql for history) and stays editable — Payroll can
+-- paste a legacy QuickBooks ref or correct a wrong one.
 --
 -- Uniqueness is enforced across BOTH tables by a shared sequence allocator that
 -- reads the max suffix already used for that day; a partial unique index per
@@ -28,10 +28,10 @@ ALTER TABLE public.payroll_manual_class
     ADD COLUMN IF NOT EXISTS bill_no TEXT;
 
 COMMENT ON COLUMN public.trainer_payout.bill_no IS
-  'QuickBooks bill reference, format TX<YYMMDD><NN> derived from the class start date + per-day sequence. Issued on mark-as-paid; editable. NULL = not yet billed.';
+  'QuickBooks bill reference, format TX<YYMMDD><NN> derived from the class start date + per-day sequence. Issued at row creation; editable. NULL = awaiting a class date.';
 
 COMMENT ON COLUMN public.payroll_manual_class.bill_no IS
-  'QuickBooks bill reference, format TX<YYMMDD><NN> derived from the first class date + per-day sequence. Issued on mark-as-paid; editable. NULL = not yet billed.';
+  'QuickBooks bill reference, format TX<YYMMDD><NN> derived from the first class date + per-day sequence. Issued at row creation; editable. NULL = awaiting a class date.';
 
 -- Partial unique indexes: a bill number is unique within its table when set.
 -- Cross-table collisions are prevented by the allocator in lib/payroll/billNo.ts,

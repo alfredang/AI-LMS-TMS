@@ -96,19 +96,74 @@ export async function nextBillNo(
  * nextBillNo reads the current max and the caller then writes max+1 — a
  * read-modify-write that two simultaneous "mark as paid" clicks would both win,
  * producing a duplicate (and, with the unique index, a failed save). A
- * transaction-scoped advisory lock keyed on the day prefix makes the pair
- * atomic; it releases automatically on COMMIT/ROLLBACK.
+ * transaction-scoped advisory lock makes the pair atomic; it releases
+ * automatically on COMMIT/ROLLBACK.
+ *
+ * One GLOBAL key (namespace, 0) — not per-day — because bulk materialization
+ * and the backfill number many days in one statement under this same key; a
+ * per-day key would not exclude them. Issuance volume is tiny, so global
+ * serialization costs nothing.
  */
 export async function acquireBillNoLock(client: PoolClient, classDate: string | null | undefined): Promise<void> {
-  const day = billNoDayPrefix(classDate);
-  if (!day) return;
-  // hashtext() gives a stable int4 key for the day; the 1st arg namespaces it
-  // to payroll bill numbers so it can't collide with other advisory locks.
-  await client.query(`SELECT pg_advisory_xact_lock($1, hashtext($2))`, [BILL_NO_LOCK_NAMESPACE, day]);
+  if (!billNoDayPrefix(classDate)) return; // no date → nothing will be issued
+  await client.query(`SELECT pg_advisory_xact_lock($1, 0)`, [BILL_NO_LOCK_NAMESPACE]);
 }
 
-// Idempotently ensure the bill_no columns exist, memoized so the additive
-// ALTERs run at most ONCE per process (same pattern as ensureClassDatesColumn).
+// One-shot chronological backfill: number every existing payout that has a class
+// date but no ref yet, oldest-first, restarting the NN sequence per day and
+// continuing past any suffix already used that day. Mirrors
+// database/migrations/backfill_payroll_bill_no.sql (kept for manual/tenant use);
+// running it here means prod is covered by deploy alone — this project has no
+// migration runner (db:migrate's script doesn't exist; runtime ensure* is the
+// pattern). Idempotent: rows with a bill_no are never touched, so after the
+// first pass this finds nothing to do.
+const BACKFILL_SQL = `
+WITH
+unnumbered AS (
+    SELECT 'wsq'::text AS src, tp.id, cr.start_date AS class_date,
+           COALESCE(c.course_code, '') AS sort_a, COALESCE(cr.course_run_id, '') AS sort_b
+      FROM trainer_payout tp
+      JOIN course_run cr ON cr.id = tp.course_run_id
+      LEFT JOIN course c ON c.id = cr.course_id
+     WHERE tp.bill_no IS NULL AND cr.start_date IS NOT NULL
+    UNION ALL
+    SELECT 'manual', pmc.id, pmc.start_date,
+           COALESCE(pmc.course_code, ''), COALESCE(pmc.class_title, '')
+      FROM payroll_manual_class pmc
+     WHERE pmc.bill_no IS NULL AND pmc.start_date IS NOT NULL
+),
+used AS (
+    SELECT day_prefix, MAX(suffix) AS max_suffix FROM (
+      SELECT substring(bill_no FROM 1 FOR 8) AS day_prefix,
+             NULLIF(regexp_replace(substring(bill_no FROM 9), '\\D', '', 'g'), '')::bigint AS suffix
+        FROM trainer_payout WHERE bill_no IS NOT NULL
+      UNION ALL
+      SELECT substring(bill_no FROM 1 FOR 8),
+             NULLIF(regexp_replace(substring(bill_no FROM 9), '\\D', '', 'g'), '')::bigint
+        FROM payroll_manual_class WHERE bill_no IS NOT NULL
+    ) x GROUP BY day_prefix
+),
+numbered AS (
+    SELECT u.src, u.id,
+           'TX' || to_char(u.class_date, 'YYMMDD')
+                || lpad((COALESCE(d.max_suffix, 0)
+                         + row_number() OVER (PARTITION BY u.class_date
+                                              ORDER BY u.sort_a, u.sort_b, u.id))::text, 2, '0') AS bill_no
+      FROM unnumbered u
+      LEFT JOIN used d ON d.day_prefix = 'TX' || to_char(u.class_date, 'YYMMDD')
+),
+upd_wsq AS (
+    UPDATE trainer_payout t SET bill_no = n.bill_no
+      FROM numbered n WHERE n.src = 'wsq' AND t.id = n.id
+    RETURNING 1
+)
+UPDATE payroll_manual_class m SET bill_no = n.bill_no
+  FROM numbered n WHERE n.src = 'manual' AND m.id = n.id
+`;
+
+// Idempotently ensure the bill_no columns exist and history is numbered,
+// memoized so the ALTERs + backfill run at most ONCE per process (same
+// pattern as ensureClassDatesColumn).
 let ensured: Promise<void> | null = null;
 
 export function ensureBillNoColumn(): Promise<void> {
@@ -124,6 +179,20 @@ export function ensureBillNoColumn(): Promise<void> {
         `CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_manual_class_bill_no
            ON public.payroll_manual_class(bill_no) WHERE bill_no IS NOT NULL`
       );
+      // Backfill under the global bill-number lock so it can't race a
+      // concurrent issue on another instance/request.
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`SELECT pg_advisory_xact_lock($1, 0)`, [BILL_NO_LOCK_NAMESPACE]);
+        await client.query(BACKFILL_SQL);
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
     })()
       .then(() => undefined)
       .catch((err) => {
