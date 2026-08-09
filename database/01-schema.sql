@@ -200,7 +200,6 @@ CREATE TYPE public.course_sponsorship AS ENUM (
 CREATE TYPE public.course_type AS ENUM (
     'WSQ',
     'IBF',
-    'non-WSQ',
     'Non-WSQ',
     'CASL'
 );
