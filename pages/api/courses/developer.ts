@@ -50,11 +50,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const courses = result.rows.map((row: any) => ({
       id: row.course_id,
       title: row.course_title,
-      // Display the code currently in force; the original stays available as
-      // originalCourseCode so a renumbered course is still traceable in the UI.
-      courseCode: row.new_course_code || row.course_code || '',
+      // courseCode is the ORIGINAL registration code, matching what
+      // developer-course-detail returns and what the course editor writes back
+      // into course_code. These two endpoints both populate the editor, so a
+      // disagreement here made the form flip depending on which call landed
+      // last -- and, worse, a save could have written the renewed code over the
+      // original, breaking the link to records created under it.
+      // currentCourseCode carries the code in force for display.
+      courseCode: row.course_code || '',
       originalCourseCode: row.course_code || '',
       newCourseCode: row.new_course_code || '',
+      currentCourseCode: row.new_course_code || row.course_code || '',
       courseDuration: (row.training_hours || 0) + (row.assessment_hours || 0),
       trainingHours: row.training_hours || 0,
       assessmentHours: row.assessment_hours || 0,

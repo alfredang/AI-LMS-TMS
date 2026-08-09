@@ -23,6 +23,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           -- in force, falling back to the original when never renumbered
           COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS course_code,
           c.course_code          AS original_course_code,
+          -- Both codes are also returned unfolded, so an editor binding a
+          -- separate "original" and "current" field gets the same shape the
+          -- course list endpoint returns. Collapsing them into course_code alone
+          -- left the renewed-code field with nothing to bind to and it rendered
+          -- empty, as if the course had never been renewed.
+          c.new_course_code,
           c.tsc_title,
           c.tsc_code,
           c.training_hours,
@@ -78,6 +84,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         courseId: courseDetail.course_id,
         title: courseDetail.course_title,
         tgsRef: courseDetail.course_code,
+        // The editor binds these two directly and writes them straight back via
+        // update-course, where courseCode lands in course_code. So courseCode
+        // MUST stay the ORIGINAL registration code -- handing back the code in
+        // force here would make the next save overwrite the original and break
+        // the link to enrolments and SSG records created under it.
+        //
+        // Returning only a folded course_code was the bug: the editor's
+        // "Course Code (Current)" field had nothing to bind to and rendered
+        // empty on courses that had in fact been renewed.
+        courseCode: courseDetail.original_course_code || '',
+        newCourseCode: courseDetail.new_course_code || '',
+        // The code in force, for read-only display. Same value as tgsRef.
+        currentCourseCode: courseDetail.course_code || '',
         tscTitle: courseDetail.tsc_title,
         tscCode: courseDetail.tsc_code,
         courseRunId: null, // No course run for developers

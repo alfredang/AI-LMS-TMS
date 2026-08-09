@@ -259,8 +259,15 @@ export enum TrainerPage {
 export interface Course {
   id: string;
   title: string;
+  /** The ORIGINAL registration code. Written back to course.course_code on save,
+   *  so it must never be replaced with the renewed code -- past enrolments and
+   *  SSG records were created against it. */
   courseCode: string;
+  /** The code issued at funding renewal; blank when the course was never renewed. */
   newCourseCode?: string;
+  /** The code currently in force (newCourseCode when set, else courseCode).
+   *  Use this for DISPLAY and search; never write it back to course_code. */
+  currentCourseCode?: string;
   courseDuration: number;
   trainingHours: number;
   assessmentHours: number;
