@@ -10,6 +10,7 @@ interface DeveloperSidebarProps {
 
 const TOP_NAV_ITEMS: { page: DeveloperPage; label: string; icon: IconName }[] = [
     { page: DeveloperPage.CourseList, label: 'Course Management', icon: IconName.Courses },
+    { page: DeveloperPage.CourseChangeControl, label: 'Course Change Control', icon: IconName.Clock },
 ];
 
 const CP_PREPARE_ITEMS: { page: DeveloperPage; label: string }[] = [

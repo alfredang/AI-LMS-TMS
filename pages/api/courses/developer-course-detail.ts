@@ -19,7 +19,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       SELECT 
           c.id                   AS course_id,
           c.title                AS course_title,
-          c.course_code          AS course_code,
+          -- funding renewal issues a new code for the same course; show the one
+          -- in force, falling back to the original when never renumbered
+          COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS course_code,
+          c.course_code          AS original_course_code,
           c.tsc_title,
           c.tsc_code,
           c.training_hours,

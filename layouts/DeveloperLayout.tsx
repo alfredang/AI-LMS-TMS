@@ -5,6 +5,7 @@ import { useLms } from '../contexts/LmsContext';
 import { View, DeveloperPage } from '@app-types';
 import CourseList from '../components/CourseList';
 import SeoGeneratorView from '../components/developer/SeoGeneratorView';
+import CourseChangeControlView from '../components/developer/CourseChangeControlView';
 import CourseEditor from '../components/CourseEditor';
 import { CourseDetail } from '../components/CourseDetail';
 import ProfileView from '../components/ProfileView';
@@ -40,6 +41,9 @@ const DeveloperLayout: React.FC = () => {
     }
     if (selectedCourse) {
       return <CourseDetail />;
+    }
+    if (developerPage === DeveloperPage.CourseChangeControl) {
+      return <CourseChangeControlView />;
     }
     if (developerPage === DeveloperPage.CoursewareTools) {
       return <CoursewareToolsView />;
