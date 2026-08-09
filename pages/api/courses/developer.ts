@@ -50,7 +50,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const courses = result.rows.map((row: any) => ({
       id: row.course_id,
       title: row.course_title,
-      courseCode: row.course_code || '',
+      // Display the code currently in force; the original stays available as
+      // originalCourseCode so a renumbered course is still traceable in the UI.
+      courseCode: row.new_course_code || row.course_code || '',
+      originalCourseCode: row.course_code || '',
       newCourseCode: row.new_course_code || '',
       courseDuration: (row.training_hours || 0) + (row.assessment_hours || 0),
       trainingHours: row.training_hours || 0,

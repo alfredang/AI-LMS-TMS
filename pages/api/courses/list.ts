@@ -20,7 +20,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       SELECT
         c.id,
         c.title,
-        c.course_code,
+        -- funding renewal issues a new code for the same course; show the one in
+        -- force, falling back to the original when the course was never renumbered
+        COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS course_code,
         c.tsc_title,
         c.tsc_code,
         (SELECT ARRAY_AGG(cr.course_run_id) FROM course_run cr WHERE cr.course_id = c.id) AS course_run_ids

@@ -59,10 +59,11 @@ async function handler(
       SELECT 
         c.id AS course_id,
         c.title AS course_title,
-        c.course_code AS course_code,
+        -- current code in force (renewal issues a new code for the same course)
+        COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS course_code,
         c.tsc_title,
         c.tsc_code,
-        c.course_code AS tgs_ref,
+        COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS tgs_ref,
         cr.id AS course_run_id,
         cr.course_run_id AS course_run_code,
         (c.training_hours + c.assessment_hours) AS course_duration,
