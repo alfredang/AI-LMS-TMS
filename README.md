@@ -340,7 +340,15 @@ POST /api/courses/create-course   # Create course (multipart)
 POST /api/admin/save-course-run   # Create/update course run
 GET  /api/admin/search-course-runs # Search course runs
 POST /api/admin/import-course-run # Import from SSG
+GET  /api/admin/course-code-history # Every course reference code a course has carried
 ```
+
+**Course code history.** SSG funding renewal issues a *new* course reference code for what
+is still the same course, so a course accumulates codes over time. `course_code_history`
+records every one of them, which keeps past records retrievable by the code they were
+created under. Use `lib/courseCode.ts` — `resolveCourseIdByCode()` accepts any code, current
+or superseded, and returns the single course it belongs to; resolving with a bare
+`WHERE course_code = $1` sees only the pre-renewal code and will miss.
 
 ### Enrolments
 
@@ -494,6 +502,7 @@ ai-lms-tms/
 | `training_provider` | Organization settings, templates, integrations, and security config |
 | `training_provider_member` | User membership in training provider organizations |
 | `course` | Course templates with metadata, materials, funding info, and assessment methods |
+| `course_code_history` | Every course reference code a course has carried, with validity windows — funding renewal issues a new code for the same course |
 | `course_run` | Scheduled course instances with dates, trainers, and digital attendance |
 | `enrollment` | Learner enrollments with progress, payment, and sponsorship tracking |
 | `assessment` | Course assessments (Written, Practical, Case Study, Role Play, etc.) |
