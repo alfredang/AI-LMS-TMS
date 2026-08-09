@@ -1148,6 +1148,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 // Only include imageUrl if no new image is being uploaded (let backend set the path for new uploads)
                 imageUrl: files.courseImage ? undefined : course.imageUrl,
                 courseCode: course.courseCode,
+                newCourseCode: course.newCourseCode ?? '',
                 tscTitle: course.tscTitle,
                 tscCode: course.tscCode,
                 trainingHours: course.trainingHours,
@@ -1932,9 +1933,23 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             </div>
                             <div>
                                 <label htmlFor="courseCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    Course Code <span className="text-red-500">*</span>
+                                    Course Code (Original) <span className="text-red-500">*</span>
                                 </label>
                                 <input type="text" id="courseCode" name="courseCode" value={course.courseCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. CRS-Q-0041188-1" />
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    The code this course was first registered under. Keep it — it is what past
+                                    enrolments and SSG records were created against.
+                                </p>
+                            </div>
+                            <div>
+                                <label htmlFor="newCourseCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Course Code (Current)
+                                </label>
+                                <input type="text" id="newCourseCode" name="newCourseCode" value={course.newCourseCode || ''} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. TGS-2026064474 — leave blank if never renewed" />
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    The code issued at funding renewal. This is the code shown on course cards
+                                    and used for new SSG submissions. Both codes resolve to this same course.
+                                </p>
                             </div>
                             <div>
                                 <label htmlFor="tscTitle" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">

@@ -34,6 +34,7 @@ interface CourseData {
   title: string;
   imageUrl: string;
   courseCode: string;
+  newCourseCode?: string;
   courseDuration?: number; // Add this to match Course interface
   tscTitle: string;
   tscCode: string;
@@ -516,6 +517,11 @@ async function handler(
           trainers_list = $36,
           trainers_email_list = $37,
           activities_url = COALESCE($38, activities_url),
+          -- The code issued at funding renewal. Only written when the caller sends
+          -- the field, so a client that does not manage it cannot blank it out.
+          -- course_code above keeps the ORIGINAL code so history stays traceable.
+          new_course_code = CASE WHEN $40::text IS NULL THEN new_course_code
+                                 ELSE NULLIF(btrim($40::text), '') END,
           updated_at = now()
         WHERE id = $39
         RETURNING id
@@ -560,7 +566,8 @@ async function handler(
         courseData.trainersList || null,
         courseData.trainersEmailList || null,
         fileUrls.activitiesUrl || courseData.activitiesUrl || null,
-        courseId
+        courseId,
+        courseData.newCourseCode === undefined ? null : courseData.newCourseCode
       ]);
 
       // Safely attempt to update assessment_methods column
