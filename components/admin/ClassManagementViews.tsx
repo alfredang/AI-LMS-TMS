@@ -6079,6 +6079,7 @@ export const AddCourseView: React.FC = () => {
                             <select value={form.courseType} onChange={e => setForm(p => ({ ...p, courseType: e.target.value }))} className={inputClasses}>
                                 <option value="Non-WSQ">Non-WSQ</option>
                                 <option value="WSQ">WSQ</option>
+                                <option value="CASL">CASL</option>
                                 <option value="IBF">IBF</option>
                             </select>
                         </div>

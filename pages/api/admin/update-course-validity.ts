@@ -23,7 +23,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // Only touch course_type when an explicit, valid value is supplied — leaves
     // existing values (incl. IBF / non-WSQ) untouched otherwise.
-    if (courseType === 'WSQ' || courseType === 'Non-WSQ') {
+    if (courseType === 'WSQ' || courseType === 'CASL' || courseType === 'Non-WSQ') {
       params.push(courseType);
       setClauses.push(`course_type = $${params.length}`);
     }

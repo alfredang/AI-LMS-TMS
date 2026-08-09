@@ -218,7 +218,7 @@ async function handler(
     }
 
     const courseType = req.query.courseType;
-    if (courseType === 'WSQ' || courseType === 'IBF' || courseType === 'Non-WSQ') {
+    if (courseType === 'WSQ' || courseType === 'CASL' || courseType === 'IBF' || courseType === 'Non-WSQ') {
       whereConditions.push(`c.course_type = $${paramCounter}`);
       queryParams.push(courseType);
       paramCounter++;

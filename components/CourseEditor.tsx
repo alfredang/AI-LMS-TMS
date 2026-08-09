@@ -1086,8 +1086,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             { field: course.courseType, name: 'Course Type' }
         ];
 
-        // TSC Title and TSC Code are required for WSQ and IBF courses
-        const isTscRequired = course.courseType === 'WSQ' || course.courseType === 'IBF';
+        // TSC Title and TSC Code are required for WSQ, CASL and IBF courses
+        const isTscRequired = course.courseType === 'WSQ' || course.courseType === 'CASL' || course.courseType === 'IBF';
         if (isTscRequired) {
             requiredFields.push(
                 { field: course.tscTitle || '', name: 'TSC Title' },
@@ -1938,13 +1938,13 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             </div>
                             <div>
                                 <label htmlFor="tscTitle" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    TSC Title {(course.courseType === 'WSQ' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
+                                    TSC Title {(course.courseType === 'WSQ' || course.courseType === 'CASL' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
                                 </label>
                                 <input type="text" id="tscTitle" name="tscTitle" value={course.tscTitle} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. Web Development" />
                             </div>
                             <div>
                                 <label htmlFor="tscCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    TSC Code {(course.courseType === 'WSQ' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
+                                    TSC Code {(course.courseType === 'WSQ' || course.courseType === 'CASL' || course.courseType === 'IBF') && <span className="text-red-500">*</span>}
                                 </label>
                                 <input type="text" id="tscCode" name="tscCode" value={course.tscCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. ICT-DIT-3011-1.1" />
                             </div>
@@ -2026,6 +2026,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 >
                                     <option value="Non-WSQ">Non-WSQ</option>
                                     <option value="WSQ">WSQ</option>
+                                    <option value="CASL">CASL</option>
                                     <option value="IBF">IBF</option>
                                 </select>
                             </div>

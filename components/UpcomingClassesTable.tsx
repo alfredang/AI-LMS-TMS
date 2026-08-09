@@ -342,7 +342,7 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
     // 'Cancelled' from the Advanced Filters dropdown to see cancelled classes.
     const [selectedClassStatus, setSelectedClassStatus] = useState<'all' | 'ActiveOnly' | 'Confirmed' | 'Pending' | 'Cancelled'>('ActiveOnly');
     const [selectedClassType, setSelectedClassType] = useState<'all' | 'Physical' | 'Virtual' | 'Hybrid' | 'External'>('all');
-    const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'IBF' | 'Non-WSQ'>('all');
+    const [selectedCourseType, setSelectedCourseType] = useState<'all' | 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ'>('all');
     const [selectedLearnerFilter, setSelectedLearnerFilter] = useState<'all' | 'withLearners' | 'noLearners'>('withLearners');
     const [selectedTrainerAssignmentFilter, setSelectedTrainerAssignmentFilter] = useState<'all' | 'withTrainers' | 'noTrainers'>('all');
     const [selectedUpcomingWindow, setSelectedUpcomingWindow] = useState<'30' | '60' | '90' | 'custom'>('30');
@@ -1126,11 +1126,12 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Course Type</label>
                                             <select
                                                 value={selectedCourseType}
-                                                onChange={(e) => setSelectedCourseType(e.target.value as 'all' | 'WSQ' | 'IBF' | 'Non-WSQ')}
+                                                onChange={(e) => setSelectedCourseType(e.target.value as 'all' | 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ')}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                                             >
                                                 <option value="all">All</option>
                                                 <option value="WSQ">WSQ</option>
+                                                <option value="CASL">CASL</option>
                                                 <option value="IBF">IBF</option>
                                                 <option value="Non-WSQ">Non-WSQ</option>
                                             </select>

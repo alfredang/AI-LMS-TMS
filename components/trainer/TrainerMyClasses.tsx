@@ -14,6 +14,7 @@ import { getCourseBannerDataUrl } from '@utils/courseBanner';
 const getTypeStyle = (courseType: string) => {
   switch (courseType) {
     case 'WSQ': return 'bg-blue-500/20 text-blue-300 border border-blue-400/30';
+    case 'CASL': return 'bg-teal-500/20 text-teal-300 border border-teal-400/30';
     case 'IBF': return 'bg-purple-500/20 text-purple-300 border border-purple-400/30';
     default: return 'bg-gray-500/20 text-gray-300 border border-gray-400/30';
   }

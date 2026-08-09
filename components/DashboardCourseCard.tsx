@@ -17,6 +17,7 @@ const DashboardCourseCard: React.FC<DashboardCourseCardProps> = ({ course }) => 
   const getTypeColor = () => {
     switch (course.courseType) {
       case 'WSQ': return 'bg-blue-100 text-blue-800';
+      case 'CASL': return 'bg-teal-100 text-teal-800';
       case 'IBF': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
     }

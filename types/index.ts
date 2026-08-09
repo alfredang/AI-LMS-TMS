@@ -264,7 +264,7 @@ export interface Course {
   trainingHours: number;
   assessmentHours: number;
   totalAssessments?: number;
-  courseType: 'WSQ' | 'IBF' | 'Non-WSQ';
+  courseType: 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ';
   tscTitle?: string;
   tscCode?: string;
   imageUrl?: string;

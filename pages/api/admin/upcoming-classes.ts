@@ -409,7 +409,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     const courseType = req.query.courseType;
-    if (courseType === 'WSQ' || courseType === 'IBF' || courseType === 'Non-WSQ') {
+    if (courseType === 'WSQ' || courseType === 'CASL' || courseType === 'IBF' || courseType === 'Non-WSQ') {
       filters.push(`c.course_type = $${paramIndex}`);
       params.push(courseType);
       paramIndex++;

@@ -201,7 +201,8 @@ CREATE TYPE public.course_type AS ENUM (
     'WSQ',
     'IBF',
     'non-WSQ',
-    'Non-WSQ'
+    'Non-WSQ',
+    'CASL'
 );
 
 

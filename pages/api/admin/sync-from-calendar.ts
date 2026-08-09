@@ -539,7 +539,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
        WHERE cs.deleted = false
          AND cs.start_date = $1
          AND cr.class_status NOT IN ('Cancelled', 'Confirmed')
-         AND c.course_type IN ('WSQ', 'IBF')
+         AND c.course_type IN ('WSQ', 'CASL', 'IBF')
        ORDER BY c.title`,
       [date.replace(/-/g, '')]
     );

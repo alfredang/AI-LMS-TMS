@@ -17,6 +17,7 @@ import { BulkUploadCoursesView } from './admin/BulkUploadCoursesView';
 const getTypeColor = (courseType: string) => {
     switch (courseType) {
         case 'WSQ': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+        case 'CASL': return 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300';
         case 'IBF': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300';
         default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
     }
@@ -94,7 +95,7 @@ const ManagementCourseList: React.FC = () => {
 
     // Search and filter state
     const [searchQuery, setSearchQuery] = useState('');
-    const [filterCourseType, setFilterCourseType] = useState<'WSQ' | 'IBF' | 'Non-WSQ' | 'WSQ+IBF' | 'All'>(
+    const [filterCourseType, setFilterCourseType] = useState<'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ' | 'WSQ+IBF' | 'All'>(
         role === UserRole.Admin ? 'WSQ+IBF' : 'All'
     );
     const [filterMode, setFilterMode] = useState<string>('All');
@@ -249,7 +250,7 @@ const ManagementCourseList: React.FC = () => {
                 course.courseCode?.toLowerCase().includes(filterCourseCode.toLowerCase());
 
             const matchesType = filterCourseType === 'All' ||
-                (filterCourseType === 'WSQ+IBF' ? (course.courseType === 'WSQ' || course.courseType === 'IBF') : course.courseType === filterCourseType);
+                (filterCourseType === 'WSQ+IBF' ? (course.courseType === 'WSQ' || course.courseType === 'CASL' || course.courseType === 'IBF') : course.courseType === filterCourseType);
             const matchesMode = filterMode === 'All' || (
                 role === UserRole.Trainer
                     ? (course.classType || 'Physical') === filterMode
@@ -771,9 +772,10 @@ const ManagementCourseList: React.FC = () => {
     }
 
     // KPI stats from full dataset
-    const wsqCourses = (relevantCourses || []).filter(c => c.courseType === 'WSQ').length;
+    // CASL is funded like WSQ, so it counts under the WSQ tile rather than as unfunded.
+    const wsqCourses = (relevantCourses || []).filter(c => c.courseType === 'WSQ' || c.courseType === 'CASL').length;
     const ibfCourses = (relevantCourses || []).filter(c => c.courseType === 'IBF').length;
-    const unfundedCourses = (relevantCourses || []).filter(c => c.courseType !== 'WSQ' && c.courseType !== 'IBF').length;
+    const unfundedCourses = (relevantCourses || []).filter(c => c.courseType !== 'WSQ' && c.courseType !== 'CASL' && c.courseType !== 'IBF').length;
 
     return (
         <div>
@@ -937,6 +939,7 @@ const ManagementCourseList: React.FC = () => {
                                 <option value="All">All Types</option>
                                 <option value="WSQ+IBF">WSQ + IBF</option>
                                 <option value="WSQ">WSQ</option>
+                                <option value="CASL">CASL</option>
                                 <option value="IBF">IBF</option>
                                 <option value="Non-WSQ">Non-WSQ</option>
                             </select>

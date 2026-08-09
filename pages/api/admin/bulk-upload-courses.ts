@@ -124,6 +124,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const courseTypeVal = (() => {
         const raw = (course.course_type || '').trim().toUpperCase();
         if (raw === 'WSQ') return 'WSQ';
+        if (raw === 'CASL') return 'CASL';
         if (raw === 'IBF') return 'IBF';
         return 'Non-WSQ';
       })();

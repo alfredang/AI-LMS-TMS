@@ -48,16 +48,16 @@ const displayCourseType = (value?: string | null) => {
   return value || 'CASL';
 };
 
-// Collapse the stored course_type into the two editable buckets. Anything that
-// isn't exactly 'WSQ' (incl. IBF / non-WSQ) is treated as Non-WSQ here.
-const normalizeCourseType = (value?: string | null): 'WSQ' | 'Non-WSQ' =>
-  value === 'WSQ' ? 'WSQ' : 'Non-WSQ';
+// Collapse the stored course_type into the editable buckets. Anything that isn't
+// exactly 'WSQ' or 'CASL' (incl. IBF / non-WSQ) is treated as Non-WSQ here.
+const normalizeCourseType = (value?: string | null): 'WSQ' | 'CASL' | 'Non-WSQ' =>
+  value === 'WSQ' ? 'WSQ' : value === 'CASL' ? 'CASL' : 'Non-WSQ';
 
 interface EditState {
   casScore: string;
   esScore: string;
   fundingValidity: string;
-  courseType: 'WSQ' | 'Non-WSQ';
+  courseType: 'WSQ' | 'CASL' | 'Non-WSQ';
   newCourseCode: string;
 }
 
@@ -357,10 +357,11 @@ const FundingValidityView: React.FC = () => {
                       {isEditing ? (
                         <select
                           value={editState.courseType}
-                          onChange={e => setEditState(s => ({ ...s, courseType: e.target.value as 'WSQ' | 'Non-WSQ' }))}
+                          onChange={e => setEditState(s => ({ ...s, courseType: e.target.value as 'WSQ' | 'CASL' | 'Non-WSQ' }))}
                           className={`${inputClass} w-24`}
                         >
                           <option value="WSQ">WSQ</option>
+                          <option value="CASL">CASL</option>
                           <option value="Non-WSQ">Non-WSQ</option>
                         </select>
                       ) : (

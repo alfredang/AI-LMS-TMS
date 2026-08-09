@@ -131,6 +131,7 @@ export const BulkUploadCoursesView: React.FC<BulkUploadCoursesViewProps> = ({ on
             course_type: (() => {
               const raw = String(row['Type'] || row['Course Type'] || row['course_type'] || '').trim().toUpperCase();
               if (raw === 'WSQ') return 'WSQ';
+              if (raw === 'CASL') return 'CASL';
               if (raw === 'IBF') return 'IBF';
               return 'Non-WSQ';
             })(),
