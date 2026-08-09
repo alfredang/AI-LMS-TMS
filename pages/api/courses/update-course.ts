@@ -2,6 +2,7 @@ import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
+import { recordCourseChanges } from '../../../lib/courseChangeLog';
 import { IncomingForm, File as FormidableFile } from 'formidable';
 import fs from 'fs';
 import path from 'path';
@@ -473,6 +474,30 @@ async function handler(
     try {
       await client.query('BEGIN');
       console.log('✅ Database transaction started');
+
+      // 0. Record what is about to change, for the Course Change Control log.
+      // Runs BEFORE the UPDATE because it reads the pre-update values to compute
+      // the "from" side of each change. Best-effort: a SAVEPOINT keeps a failure
+      // here (e.g. the table not yet migrated) from aborting the whole save --
+      // losing an audit row is acceptable, losing the user's edit is not.
+      try {
+        await client.query('SAVEPOINT before_change_log');
+        const authUser = (req as any).authUser;
+        await recordCourseChanges(
+          client,
+          courseId,
+          courseData,
+          // Service callers have no app_user row, so attributing the change to
+          // their id would violate the FK; record them by name only.
+          authUser?.isService
+            ? { userName: 'System' }
+            : { userId: authUser?.id || null },
+        );
+        await client.query('RELEASE SAVEPOINT before_change_log');
+      } catch (logError) {
+        await client.query('ROLLBACK TO SAVEPOINT before_change_log');
+        console.error('⚠️ Course change log skipped:', (logError as Error).message);
+      }
 
       // 1. Update course basic information
       console.log('🔄 Updating course basic information...');

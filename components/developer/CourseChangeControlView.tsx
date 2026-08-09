@@ -1,73 +1,52 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-interface CodeEntry {
-  code: string;
-  isCurrent: boolean;
-  validFrom: string | null;
-  validTo: string | null;
-  effectiveFrom: string | null;
-}
-
-interface TitleEntry {
-  title: string;
-  isCurrent: boolean;
-  validFrom: string | null;
-  validTo: string | null;
-  effectiveFrom: string | null;
-}
-
-interface ChangeEvent {
-  date: string | null;
-  field: 'code' | 'title';
-  from: string;
-  to: string;
-}
-
-interface CourseRow {
+interface ChangeRow {
+  id: string;
   courseId: string;
-  title: string;
+  courseTitle: string;
   courseType: string | null;
-  fundingValidity: string | null;
-  fundingValid: boolean | null;
-  enrolments: number;
-  runs: number;
-  codes: CodeEntry[];
-  titles: TitleEntry[];
-  changes: ChangeEvent[];
+  currentCode: string | null;
+  field: string;
+  fieldLabel: string;
+  oldValue: string | null;
+  newValue: string | null;
+  /** ISO date, or null when the change predates date tracking. */
+  changedAt: string | null;
+  changedByName: string | null;
+  note: string | null;
 }
 
 const PAGE_SIZE = 20;
 
-const fmt = (d: string | null): string => {
-  if (!d) return '—';
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return d;
-  return dt.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
-};
-
 /** dd-mm-yyyy, the format the change log is read in. */
 const fmtDdMmYyyy = (d: string | null): string => {
-  if (!d) return 'Date not recorded';
+  if (!d) return 'Not recorded';
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return d;
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(dt.getUTCDate())}-${pad(dt.getUTCMonth() + 1)}-${dt.getUTCFullYear()}`;
 };
 
+/** Values are stored as text; render an unset one as an em dash. */
+const val = (v: string | null): string => (v === null || v === '' ? '—' : v);
+
 /**
- * Course Change Control — the audit trail of course code and title changes.
+ * Course Change Control — the chronological audit trail of course changes.
  *
- * A course keeps its identity (and all its enrolments and runs) across a funding
- * renewal that issues a new reference code, or a rename. This view shows every
- * code and title a course has carried and when each took effect, so a record
- * created under a superseded code or a former title can still be traced.
+ * One row per change: when it happened, which field moved, and what it moved
+ * from and to. A course keeps its identity (and all its enrolments and classes)
+ * across a rename or a funding renewal that issues a new reference code, so
+ * records created under a superseded code or a former title stay traceable.
+ *
+ * Changes recorded before per-field tracking shipped carry no date; those are
+ * shown as "Not recorded" and sorted last rather than given an invented date.
  */
 const CourseChangeControlView: React.FC = () => {
-  const [rows, setRows] = useState<CourseRow[]>([]);
+  const [rows, setRows] = useState<ChangeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [changedOnly, setChangedOnly] = useState(true);
+  const [fieldFilter, setFieldFilter] = useState('all');
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -76,12 +55,12 @@ const CourseChangeControlView: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch('/api/admin/course-code-history');
+        const res = await fetch('/api/admin/course-change-log');
         if (!res.ok) throw new Error(`Failed to load (${res.status})`);
         const data = await res.json();
-        if (!cancelled) setRows(data.courses || []);
+        if (!cancelled) setRows(data.changes || []);
       } catch (e: any) {
-        if (!cancelled) setError(e.message || 'Failed to load change history');
+        if (!cancelled) setError(e.message || 'Failed to load change log');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -89,25 +68,28 @@ const CourseChangeControlView: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // The set of fields actually present, so the filter never offers an empty option.
+  const fields = useMemo(() => {
+    const seen = new Map<string, string>();
+    rows.forEach(r => seen.set(r.field, r.fieldLabel));
+    return Array.from(seen, ([field, label]) => ({ field, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [rows]);
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows
-      .filter(r => {
-        const changed = (r.codes?.length || 0) > 1 || (r.titles?.length || 0) > 1;
-        if (changedOnly && !changed) return false;
-        if (!q) return true;
-        if (r.title.toLowerCase().includes(q)) return true;
-        if (r.codes?.some(c => c.code.toLowerCase().includes(q))) return true;
-        if (r.titles?.some(t => t.title.toLowerCase().includes(q))) return true;
-        return false;
-      })
-      .sort((a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' }));
-  }, [rows, query, changedOnly]);
-
-  const changedCount = useMemo(
-    () => rows.filter(r => (r.codes?.length || 0) > 1 || (r.titles?.length || 0) > 1).length,
-    [rows]
-  );
+    return rows.filter(r => {
+      if (fieldFilter !== 'all' && r.field !== fieldFilter) return false;
+      if (!q) return true;
+      // Match the course title, and the values themselves so a superseded code
+      // pasted from an old invoice finds the change that retired it.
+      return (
+        r.courseTitle.toLowerCase().includes(q) ||
+        (r.oldValue || '').toLowerCase().includes(q) ||
+        (r.newValue || '').toLowerCase().includes(q)
+      );
+    });
+  }, [rows, query, fieldFilter]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   // A filter change can leave the current page past the end of the new result set.
@@ -118,16 +100,16 @@ const CourseChangeControlView: React.FC = () => {
   );
 
   // Any change to what is being listed puts the reader back at the first page.
-  useEffect(() => { setPage(1); }, [query, changedOnly]);
+  useEffect(() => { setPage(1); }, [query, fieldFilter]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-on-surface">Course Change Control</h1>
         <p className="mt-1 text-sm text-on-surface-secondary">
-          Every course reference code and title a course has carried, and when each took effect.
-          Enrolments and classes stay attached to the course across a change, so records created
-          under a superseded code or a former title remain traceable.
+          Every recorded change to a course, newest first — what changed, when, and from what
+          to what. Enrolments and classes stay attached to the course across a change, so
+          records created under a superseded code or a former title remain traceable.
         </p>
       </div>
 
@@ -136,29 +118,30 @@ const CourseChangeControlView: React.FC = () => {
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search by course title or any code, current or superseded…"
+          placeholder="Filter by course title, or any old/new value…"
           className="w-full sm:max-w-md rounded-lg border border-default bg-surface px-3 py-2 text-sm text-on-surface placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
-        <label className="flex items-center gap-2 text-sm text-on-surface-secondary select-none">
-          <input
-            type="checkbox"
-            checked={changedOnly}
-            onChange={e => setChangedOnly(e.target.checked)}
-            className="rounded border-default"
-          />
-          Only courses with changes
-        </label>
+        <select
+          value={fieldFilter}
+          onChange={e => setFieldFilter(e.target.value)}
+          className="rounded-lg border border-default bg-surface px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
+        >
+          <option value="all">All fields</option>
+          {fields.map(f => (
+            <option key={f.field} value={f.field}>{f.label}</option>
+          ))}
+        </select>
         {!loading && !error && (
           <span className="text-sm text-muted sm:ml-auto">
             {visible.length === 0
-              ? '0 shown'
-              : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, visible.length)} of ${visible.length}`}{' '}
-            · {changedCount} changed · {rows.length} total
+              ? '0 changes'
+              : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, visible.length)} of ${visible.length}`}
+            {visible.length !== rows.length && ` (of ${rows.length} total)`}
           </span>
         )}
       </div>
 
-      {loading && <p className="text-sm text-on-surface-secondary">Loading change history…</p>}
+      {loading && <p className="text-sm text-on-surface-secondary">Loading change log…</p>}
       {error && (
         <div className="rounded-lg border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           {error}
@@ -166,125 +149,74 @@ const CourseChangeControlView: React.FC = () => {
       )}
 
       {!loading && !error && visible.length === 0 && (
-        <p className="text-sm text-on-surface-secondary">No courses match.</p>
+        <p className="text-sm text-on-surface-secondary">
+          {rows.length === 0
+            ? 'No changes recorded yet. Course edits are logged here from now on.'
+            : 'No changes match this filter.'}
+        </p>
       )}
 
-      <div className="space-y-4">
-        {pageRows.map(course => {
-          const codes = course.codes || [];
-          const titles = course.titles || [];
-          const changes = course.changes || [];
-          const current = codes.find(c => c.isCurrent);
-          const currentTitle = titles.find(t => t.isCurrent);
-
-          return (
-            <div key={course.courseId} className="rounded-xl border border-default bg-surface p-4 sm:p-5">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-3">
-                <h2 className="text-base font-semibold text-on-surface">{course.title}</h2>
-                {course.courseType && (
-                  <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                    {course.courseType}
-                  </span>
-                )}
-                <span className="text-xs text-muted">
-                  {course.enrolments} enrolments · {course.runs} classes
-                </span>
-                {course.fundingValidity && (
-                  <span
-                    className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                      course.fundingValid
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-                        : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
-                    }`}
-                  >
-                    Funding to {fmt(course.fundingValidity)}
-                    {course.fundingValid === false && ' · Expired'}
-                  </span>
-                )}
-              </div>
-
-              <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-                <span className="text-on-surface-secondary">
-                  Current code:{' '}
-                  <span className="font-mono font-semibold text-on-surface">
-                    {current?.code || '—'}
-                  </span>
-                </span>
-                <span className="text-on-surface-secondary">
-                  Current title:{' '}
-                  <span className="font-medium text-on-surface">
-                    {currentTitle?.title || course.title}
-                  </span>
-                </span>
-              </div>
-
-              {changes.length === 0 ? (
-                <p className="text-sm text-on-surface-secondary">
-                  No changes recorded — this course still carries its original code and title.
-                </p>
-              ) : (
-                <div className="overflow-x-auto rounded-lg border border-default">
-                  <table className="w-full min-w-[520px] border-collapse text-left">
-                    <thead>
-                      <tr className="bg-background-secondary">
-                        <th className="w-36 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
-                          Date of change
-                        </th>
-                        <th className="w-24 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
-                          Field
-                        </th>
-                        <th className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
-                          Detail of change
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {changes.map((ch, i) => {
-                        const mono = ch.field === 'code' ? 'font-mono' : '';
-                        return (
-                          <tr
-                            key={`${ch.field}-${ch.from}-${ch.to}-${i}`}
-                            className="border-t border-default align-top"
-                          >
-                            <td
-                              className={`whitespace-nowrap px-3 py-2 text-sm ${
-                                ch.date ? 'font-mono text-on-surface' : 'italic text-muted'
-                              }`}
-                            >
-                              {fmtDdMmYyyy(ch.date)}
-                            </td>
-                            <td className="px-3 py-2">
-                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary">
-                                {ch.field}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-sm text-on-surface">
-                              {ch.field === 'code' ? 'Changed course code from ' : 'Changed course title from '}
-                              <span className={`${mono} font-medium text-on-surface-secondary line-through`}>
-                                {ch.from}
-                              </span>
-                              {' to '}
-                              <span className={`${mono} font-semibold`}>{ch.to}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {codes.length > 1 && current && (
-                <p className="mt-3 border-t border-default pt-2 text-xs text-on-surface-secondary">
-                  Records created under {codes.filter(c => !c.isCurrent).map(c => c.code).join(', ')}{' '}
-                  belong to this same course and are retrievable under{' '}
-                  <span className="font-mono">{current.code}</span>.
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {!loading && !error && visible.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border border-default">
+          <table className="w-full min-w-[880px] border-collapse text-left">
+            <thead>
+              <tr className="bg-background-secondary">
+                <th className="w-32 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                  Date of Change
+                </th>
+                <th className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                  Course
+                </th>
+                <th className="w-44 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                  Field
+                </th>
+                <th className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                  Detail of Change
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map(r => {
+                const mono = r.field === 'courseCode' || r.field === 'newCourseCode';
+                return (
+                  <tr key={r.id} className="border-t border-default align-top">
+                    <td
+                      className={`whitespace-nowrap px-3 py-2 text-sm ${
+                        r.changedAt ? 'font-mono text-on-surface' : 'italic text-muted'
+                      }`}
+                    >
+                      {fmtDdMmYyyy(r.changedAt)}
+                    </td>
+                    <td className="px-3 py-2 text-sm text-on-surface">
+                      {r.courseTitle}
+                      {r.currentCode && (
+                        <span className="ml-2 font-mono text-xs text-muted">{r.currentCode}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary">
+                        {r.fieldLabel}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-sm text-on-surface">
+                      <span className={`${mono ? 'font-mono' : ''} text-on-surface-secondary line-through`}>
+                        {val(r.oldValue)}
+                      </span>
+                      <span className="mx-2 text-muted">→</span>
+                      <span className={`${mono ? 'font-mono' : ''} font-semibold`}>
+                        {val(r.newValue)}
+                      </span>
+                      {r.changedByName && (
+                        <span className="ml-2 text-xs text-muted">by {r.changedByName}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {!loading && !error && pageCount > 1 && (
         <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
