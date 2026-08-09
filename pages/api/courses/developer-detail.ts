@@ -18,7 +18,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const courseDetailQuery = `
       SELECT 
           c.title                AS course_title,
-          c.course_code          AS course_code,
+          -- The code currently in force, not the superseded one. A funding renewal
+          -- issues a new code and parks it in new_course_code, leaving the original
+          -- in course_code; reading the bare column shows a retired code.
+          COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS course_code,
           c.tsc_title,
           c.tsc_code,
           cr.course_run_id,

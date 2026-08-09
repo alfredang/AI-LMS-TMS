@@ -218,41 +218,60 @@ const CourseChangeControlView: React.FC = () => {
                 </span>
               </div>
 
-              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
-                Change history
-              </p>
-
               {changes.length === 0 ? (
                 <p className="text-sm text-on-surface-secondary">
                   No changes recorded — this course still carries its original code and title.
                 </p>
               ) : (
-                <ul className="divide-y divide-default border-t border-default">
-                  {changes.map((ch, i) => (
-                    <li
-                      key={`${ch.field}-${ch.from}-${ch.to}-${i}`}
-                      className="flex flex-col gap-0.5 py-2 sm:flex-row sm:gap-4"
-                    >
-                      <span
-                        className={`shrink-0 text-xs sm:w-32 sm:pt-0.5 ${
-                          ch.date ? 'font-mono text-on-surface-secondary' : 'italic text-muted'
-                        }`}
-                      >
-                        {fmtDdMmYyyy(ch.date)}
-                      </span>
-                      <span className="text-sm text-on-surface">
-                        {ch.field === 'code' ? 'Changed course code from ' : 'Changed course title from '}
-                        <span className={ch.field === 'code' ? 'font-mono font-medium' : 'font-medium'}>
-                          {ch.from}
-                        </span>
-                        {' to '}
-                        <span className={ch.field === 'code' ? 'font-mono font-medium' : 'font-medium'}>
-                          {ch.to}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="overflow-x-auto rounded-lg border border-default">
+                  <table className="w-full min-w-[520px] border-collapse text-left">
+                    <thead>
+                      <tr className="bg-background-secondary">
+                        <th className="w-36 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                          Date of change
+                        </th>
+                        <th className="w-24 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                          Field
+                        </th>
+                        <th className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                          Detail of change
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {changes.map((ch, i) => {
+                        const mono = ch.field === 'code' ? 'font-mono' : '';
+                        return (
+                          <tr
+                            key={`${ch.field}-${ch.from}-${ch.to}-${i}`}
+                            className="border-t border-default align-top"
+                          >
+                            <td
+                              className={`whitespace-nowrap px-3 py-2 text-sm ${
+                                ch.date ? 'font-mono text-on-surface' : 'italic text-muted'
+                              }`}
+                            >
+                              {fmtDdMmYyyy(ch.date)}
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary">
+                                {ch.field}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-sm text-on-surface">
+                              {ch.field === 'code' ? 'Changed course code from ' : 'Changed course title from '}
+                              <span className={`${mono} font-medium text-on-surface-secondary line-through`}>
+                                {ch.from}
+                              </span>
+                              {' to '}
+                              <span className={`${mono} font-semibold`}>{ch.to}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
 
               {codes.length > 1 && current && (
