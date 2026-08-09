@@ -15,6 +15,13 @@ interface CodeEntry {
   validTo: string | null;
 }
 
+interface TitleEntry {
+  title: string;
+  isCurrent: boolean;
+  validFrom: string | null;
+  validTo: string | null;
+}
+
 interface CourseCodeRow {
   courseId: string;
   title: string;
@@ -24,6 +31,7 @@ interface CourseCodeRow {
   enrolments: number;
   runs: number;
   codes: CodeEntry[];
+  titles: TitleEntry[];
 }
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -53,11 +61,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                        ORDER BY h.is_current, h.valid_from NULLS FIRST, h.code)
                   FROM public.course_code_history h
                  WHERE h.course_id = c.id), '[]'::json)                                 AS codes,
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                         'title',      t.title,
+                         'isCurrent',  t.is_current,
+                         'validFrom',  t.valid_from,
+                         'validTo',    t.valid_to)
+                       ORDER BY t.is_current, t.valid_from NULLS FIRST, t.title)
+                  FROM public.course_title_history t
+                 WHERE t.course_id = c.id), '[]'::json)                                 AS titles,
               (SELECT count(*) FROM public.course_code_history h WHERE h.course_id = c.id)::int AS n_codes
          FROM public.course c
         WHERE ($1 = '' OR c.title ILIKE '%'||$1||'%'
                OR EXISTS (SELECT 1 FROM public.course_code_history h
-                           WHERE h.course_id = c.id AND h.code ILIKE '%'||$1||'%'))
+                           WHERE h.course_id = c.id AND h.code ILIKE '%'||$1||'%')
+               OR EXISTS (SELECT 1 FROM public.course_title_history t
+                           WHERE t.course_id = c.id AND t.title ILIKE '%'||$1||'%'))
         ORDER BY c.title`,
       [q]
     );
@@ -73,6 +92,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         enrolments: r.enrolments,
         runs: r.runs,
         codes: r.codes as CodeEntry[],
+        titles: r.titles as TitleEntry[],
       }));
 
     return res.status(200).json({
