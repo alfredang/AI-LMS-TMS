@@ -517,11 +517,17 @@ async function handler(
           trainers_list = $36,
           trainers_email_list = $37,
           activities_url = COALESCE($38, activities_url),
-          -- The code issued at funding renewal. Only written when the caller sends
-          -- the field, so a client that does not manage it cannot blank it out.
-          -- course_code above keeps the ORIGINAL code so history stays traceable.
-          new_course_code = CASE WHEN $40::text IS NULL THEN new_course_code
-                                 ELSE NULLIF(btrim($40::text), '') END,
+          -- The code issued at funding renewal. course_code above keeps the
+          -- ORIGINAL code so history stays traceable.
+          --
+          -- A BLANK value leaves the existing code alone rather than clearing it.
+          -- Treating blank as "erase" cost us a live code: a client that did not
+          -- load the field sent '', which NULLIF turned into NULL and silently
+          -- wiped a renewal on save. Clearing a renewed code is not something the
+          -- course editor ever needs to do, so blank means "not supplied".
+          new_course_code = CASE WHEN NULLIF(btrim(COALESCE($40::text, '')), '') IS NULL
+                                 THEN new_course_code
+                                 ELSE btrim($40::text) END,
           updated_at = now()
         WHERE id = $39
         RETURNING id

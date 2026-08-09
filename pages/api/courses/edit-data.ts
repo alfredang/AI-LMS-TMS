@@ -65,6 +65,11 @@ async function handler(
         c.id,
         c.title,
         c.course_code,
+        -- The code issued at funding renewal. This endpoint feeds the course
+        -- editor, which edits the original and the renewed code as two separate
+        -- fields; omitting this left the "Course Code (Current)" box permanently
+        -- empty even for courses that had been renewed.
+        c.new_course_code,
         c.tsc_title,
         c.tsc_code,
         c.training_hours,
@@ -193,7 +198,13 @@ async function handler(
     const completeCourseData = {
       id: courseData.id,
       title: courseData.title,
+      // courseCode is the ORIGINAL registration code -- the editor writes it
+      // straight back into course.course_code, so it must never carry the
+      // renewed code or the next save would overwrite the original and break
+      // the link to enrolments and SSG records created under it.
       courseCode: courseData.course_code,
+      newCourseCode: courseData.new_course_code || '',
+      currentCourseCode: courseData.new_course_code || courseData.course_code || '',
       tscTitle: courseData.tsc_title,
       tscCode: courseData.tsc_code,
       trainingHours: courseData.training_hours,
