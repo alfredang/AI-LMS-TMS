@@ -5,6 +5,7 @@ interface CodeEntry {
   isCurrent: boolean;
   validFrom: string | null;
   validTo: string | null;
+  effectiveFrom: string | null;
 }
 
 interface TitleEntry {
@@ -12,6 +13,14 @@ interface TitleEntry {
   isCurrent: boolean;
   validFrom: string | null;
   validTo: string | null;
+  effectiveFrom: string | null;
+}
+
+interface ChangeEvent {
+  date: string | null;
+  field: 'code' | 'title';
+  from: string;
+  to: string;
 }
 
 interface CourseRow {
@@ -24,13 +33,25 @@ interface CourseRow {
   runs: number;
   codes: CodeEntry[];
   titles: TitleEntry[];
+  changes: ChangeEvent[];
 }
+
+const PAGE_SIZE = 20;
 
 const fmt = (d: string | null): string => {
   if (!d) return '—';
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return d;
   return dt.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+/** dd-mm-yyyy, the format the change log is read in. */
+const fmtDdMmYyyy = (d: string | null): string => {
+  if (!d) return 'Date not recorded';
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return d;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(dt.getUTCDate())}-${pad(dt.getUTCMonth() + 1)}-${dt.getUTCFullYear()}`;
 };
 
 /**
@@ -47,6 +68,7 @@ const CourseChangeControlView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [changedOnly, setChangedOnly] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,21 +91,34 @@ const CourseChangeControlView: React.FC = () => {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter(r => {
-      const changed = (r.codes?.length || 0) > 1 || (r.titles?.length || 0) > 1;
-      if (changedOnly && !changed) return false;
-      if (!q) return true;
-      if (r.title.toLowerCase().includes(q)) return true;
-      if (r.codes?.some(c => c.code.toLowerCase().includes(q))) return true;
-      if (r.titles?.some(t => t.title.toLowerCase().includes(q))) return true;
-      return false;
-    });
+    return rows
+      .filter(r => {
+        const changed = (r.codes?.length || 0) > 1 || (r.titles?.length || 0) > 1;
+        if (changedOnly && !changed) return false;
+        if (!q) return true;
+        if (r.title.toLowerCase().includes(q)) return true;
+        if (r.codes?.some(c => c.code.toLowerCase().includes(q))) return true;
+        if (r.titles?.some(t => t.title.toLowerCase().includes(q))) return true;
+        return false;
+      })
+      .sort((a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' }));
   }, [rows, query, changedOnly]);
 
   const changedCount = useMemo(
     () => rows.filter(r => (r.codes?.length || 0) > 1 || (r.titles?.length || 0) > 1).length,
     [rows]
   );
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  // A filter change can leave the current page past the end of the new result set.
+  const safePage = Math.min(page, pageCount);
+  const pageRows = useMemo(
+    () => visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [visible, safePage]
+  );
+
+  // Any change to what is being listed puts the reader back at the first page.
+  useEffect(() => { setPage(1); }, [query, changedOnly]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -115,7 +150,10 @@ const CourseChangeControlView: React.FC = () => {
         </label>
         {!loading && !error && (
           <span className="text-sm text-muted sm:ml-auto">
-            {visible.length} shown · {changedCount} changed · {rows.length} total
+            {visible.length === 0
+              ? '0 shown'
+              : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, visible.length)} of ${visible.length}`}{' '}
+            · {changedCount} changed · {rows.length} total
           </span>
         )}
       </div>
@@ -132,14 +170,12 @@ const CourseChangeControlView: React.FC = () => {
       )}
 
       <div className="space-y-4">
-        {visible.map(course => {
-          const codes = [...(course.codes || [])].sort(
-            (a, b) => Number(a.isCurrent) - Number(b.isCurrent)
-          );
-          const titles = [...(course.titles || [])].sort(
-            (a, b) => Number(a.isCurrent) - Number(b.isCurrent)
-          );
+        {pageRows.map(course => {
+          const codes = course.codes || [];
+          const titles = course.titles || [];
+          const changes = course.changes || [];
           const current = codes.find(c => c.isCurrent);
+          const currentTitle = titles.find(t => t.isCurrent);
 
           return (
             <div key={course.courseId} className="rounded-xl border border-default bg-surface p-4 sm:p-5">
@@ -167,58 +203,57 @@ const CourseChangeControlView: React.FC = () => {
                 )}
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
-                    Course code history
-                  </p>
-                  <ul className="space-y-1">
-                    {codes.map(c => (
-                      <li key={c.code} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className={`font-mono ${c.isCurrent ? 'text-on-surface font-semibold' : 'text-on-surface-secondary line-through'}`}>
-                          {c.code}
-                        </span>
-                        {c.isCurrent ? (
-                          <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                            CURRENT
-                          </span>
-                        ) : (
-                          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                            superseded
-                          </span>
-                        )}
-                        <span className="text-xs text-muted">
-                          {fmt(c.validFrom)} → {fmt(c.validTo)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div>
-                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
-                    Course title history
-                  </p>
-                  <ul className="space-y-1">
-                    {titles.map(t => (
-                      <li key={t.title} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className={t.isCurrent ? 'text-on-surface font-medium' : 'text-on-surface-secondary line-through'}>
-                          {t.title}
-                        </span>
-                        {t.isCurrent ? (
-                          <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                            CURRENT
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted">
-                            until {fmt(t.validTo)}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+                <span className="text-on-surface-secondary">
+                  Current code:{' '}
+                  <span className="font-mono font-semibold text-on-surface">
+                    {current?.code || '—'}
+                  </span>
+                </span>
+                <span className="text-on-surface-secondary">
+                  Current title:{' '}
+                  <span className="font-medium text-on-surface">
+                    {currentTitle?.title || course.title}
+                  </span>
+                </span>
               </div>
+
+              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
+                Change history
+              </p>
+
+              {changes.length === 0 ? (
+                <p className="text-sm text-on-surface-secondary">
+                  No changes recorded — this course still carries its original code and title.
+                </p>
+              ) : (
+                <ul className="divide-y divide-default border-t border-default">
+                  {changes.map((ch, i) => (
+                    <li
+                      key={`${ch.field}-${ch.from}-${ch.to}-${i}`}
+                      className="flex flex-col gap-0.5 py-2 sm:flex-row sm:gap-4"
+                    >
+                      <span
+                        className={`shrink-0 text-xs sm:w-32 sm:pt-0.5 ${
+                          ch.date ? 'font-mono text-on-surface-secondary' : 'italic text-muted'
+                        }`}
+                      >
+                        {fmtDdMmYyyy(ch.date)}
+                      </span>
+                      <span className="text-sm text-on-surface">
+                        {ch.field === 'code' ? 'Changed course code from ' : 'Changed course title from '}
+                        <span className={ch.field === 'code' ? 'font-mono font-medium' : 'font-medium'}>
+                          {ch.from}
+                        </span>
+                        {' to '}
+                        <span className={ch.field === 'code' ? 'font-mono font-medium' : 'font-medium'}>
+                          {ch.to}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
               {codes.length > 1 && current && (
                 <p className="mt-3 border-t border-default pt-2 text-xs text-on-surface-secondary">
@@ -231,6 +266,30 @@ const CourseChangeControlView: React.FC = () => {
           );
         })}
       </div>
+
+      {!loading && !error && pageCount > 1 && (
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={safePage === 1}
+            className="rounded-lg border border-default px-3 py-1.5 text-sm text-on-surface disabled:opacity-40 disabled:cursor-not-allowed bg-surface-hover"
+          >
+            Previous
+          </button>
+          <span className="px-2 text-sm text-on-surface-secondary">
+            Page {safePage} of {pageCount}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+            disabled={safePage === pageCount}
+            className="rounded-lg border border-default px-3 py-1.5 text-sm text-on-surface disabled:opacity-40 disabled:cursor-not-allowed bg-surface-hover"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 };
