@@ -1211,6 +1211,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           startDate: trainerData.data.courseDetail.startDate || null,
           endDate: trainerData.data.courseDetail.endDate || null,
           fundingValidity: trainerData.data.courseDetail.fundingValidity || null,
+          skillsfutureLink: trainerData.data.courseDetail.skillsfutureLink || null,
           classType: trainerData.data.courseDetail.classType || 'Physical',
           virtualMeetingLink: trainerData.data.courseDetail.virtualMeetingLink || null,
           certificate: ''
