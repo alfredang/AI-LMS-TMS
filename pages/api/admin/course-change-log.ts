@@ -18,6 +18,7 @@ interface ChangeRow {
   courseId: string;
   courseTitle: string;
   courseType: string | null;
+  originalCode: string | null;
   currentCode: string | null;
   field: string;
   fieldLabel: string;
@@ -42,6 +43,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
               l.course_id::text                     AS course_id,
               c.title                               AS course_title,
               c.course_type::text                   AS course_type,
+              c.course_code                         AS original_code,
               COALESCE(NULLIF(c.new_course_code,''), c.course_code) AS current_code,
               l.field,
               l.field_label,
@@ -69,6 +71,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       courseId: r.course_id,
       courseTitle: r.course_title,
       courseType: r.course_type,
+      originalCode: r.original_code,
       currentCode: r.current_code,
       field: r.field,
       fieldLabel: r.field_label,

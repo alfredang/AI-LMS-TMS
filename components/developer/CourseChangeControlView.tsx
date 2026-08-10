@@ -5,6 +5,7 @@ interface ChangeRow {
   courseId: string;
   courseTitle: string;
   courseType: string | null;
+  originalCode: string | null;
   currentCode: string | null;
   field: string;
   fieldLabel: string;
@@ -158,19 +159,22 @@ const CourseChangeControlView: React.FC = () => {
 
       {!loading && !error && visible.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-default">
-          <table className="w-full min-w-[880px] border-collapse text-left">
+          <table className="w-full min-w-[1100px] border-collapse text-left">
             <thead>
               <tr className="bg-background-secondary">
-                <th className="w-32 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                <th className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted whitespace-nowrap">
                   Date of Change
                 </th>
-                <th className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
-                  Course
+                <th className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted whitespace-nowrap">
+                  Course Title
                 </th>
-                <th className="w-44 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
-                  Field
+                <th className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted whitespace-nowrap">
+                  Original Course Code
                 </th>
-                <th className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                <th className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted whitespace-nowrap">
+                  Current Course Code
+                </th>
+                <th className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted whitespace-nowrap">
                   Detail of Change
                 </th>
               </tr>
@@ -179,7 +183,7 @@ const CourseChangeControlView: React.FC = () => {
               {pageRows.map(r => {
                 const mono = r.field === 'courseCode' || r.field === 'newCourseCode';
                 return (
-                  <tr key={r.id} className="border-t border-default align-top">
+                  <tr key={r.id} className="border-t border-default">
                     <td
                       className={`whitespace-nowrap px-3 py-2 text-sm ${
                         r.changedAt ? 'font-mono text-on-surface' : 'italic text-muted'
@@ -187,22 +191,17 @@ const CourseChangeControlView: React.FC = () => {
                     >
                       {fmtDdMmYyyy(r.changedAt)}
                     </td>
-                    <td className="px-3 py-2 text-sm text-on-surface">
+                    <td className="whitespace-nowrap px-3 py-2 text-sm text-on-surface">
                       {r.courseTitle}
-                      {r.currentCode && (
-                        <span className="ml-2 font-mono text-xs text-muted">{r.currentCode}</span>
-                      )}
                     </td>
-                    <td className="px-3 py-2">
-                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-primary">
-                        {r.fieldLabel}
-                      </span>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-sm text-on-surface-secondary">
+                      {val(r.originalCode)}
                     </td>
-                    <td className="px-3 py-2 text-sm text-on-surface">
-                      <span className={`${mono ? 'font-mono' : ''} text-on-surface-secondary line-through`}>
-                        {val(r.oldValue)}
-                      </span>
-                      <span className="mx-2 text-muted">→</span>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-sm text-on-surface">
+                      {val(r.currentCode)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-sm text-on-surface">
+                      {r.fieldLabel} changed to{' '}
                       <span className={`${mono ? 'font-mono' : ''} font-semibold`}>
                         {val(r.newValue)}
                       </span>
