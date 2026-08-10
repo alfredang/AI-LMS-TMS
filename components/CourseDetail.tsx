@@ -2536,6 +2536,7 @@ export const CourseDetail: React.FC = () => {
         activitiesUrl: effectiveDetail?.activitiesUrl,
         assessmentPlanUrl: effectiveDetail?.assessmentPlanUrl,
         courseLink: effectiveDetail?.courseLink,
+        skillsfutureLink: effectiveDetail?.skillsfutureLink,
         assessmentRecordLink: effectiveDetail?.assessmentRecordLink,
         assessmentSummaryRecordUrl: effectiveDetail?.assessmentSummaryRecordUrl,
         writtenAssessmentLink: effectiveDetail?.writtenAssessmentLink,
@@ -3119,8 +3120,24 @@ export const CourseDetail: React.FC = () => {
                                                 )
                                             )}
 
+                                            {/* SkillsFuture Link */}
+                                            {convertedCourse.skillsfutureLink && (
+                                                <a
+                                                    href={convertedCourse.skillsfutureLink}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                                                >
+                                                    <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-gray-900 dark:text-white">SkillsFuture Link</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                    </div>
+                                                </a>
+                                            )}
+
                                             {/* Show message if nothing available */}
-                                            {!convertedCourse.courseLink && !convertedCourse.lessonPlanUrl && !convertedCourse.learnerGuideUrl && !convertedCourse.facilitatorGuideUrl && !convertedCourse.trainerSlidesUrl && !convertedCourse.activitiesUrl && !convertedCourse.assessmentPlanUrl && (
+                                            {!convertedCourse.courseLink && !convertedCourse.skillsfutureLink && !convertedCourse.lessonPlanUrl && !convertedCourse.learnerGuideUrl && !convertedCourse.facilitatorGuideUrl && !convertedCourse.trainerSlidesUrl && !convertedCourse.activitiesUrl && !convertedCourse.assessmentPlanUrl && (
                                                 <p className="text-gray-500 dark:text-gray-400 text-sm">No courseware available.</p>
                                             )}
                                         </div>
@@ -3216,8 +3233,19 @@ export const CourseDetail: React.FC = () => {
                                                     )
                                                 )}
 
+                                                {/* SkillsFuture Link */}
+                                                {convertedCourse.skillsfutureLink && (
+                                                    <a href={convertedCourse.skillsfutureLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                                        <Icon name={IconName.ExternalLink} className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-gray-900 dark:text-white">SkillsFuture Link</p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Click to open</p>
+                                                        </div>
+                                                    </a>
+                                                )}
+
                                                 {/* Empty state */}
-                                                {!convertedCourse.learnerGuideUrl && !convertedCourse.slidesUrl && !(trainingProviderProfile?.showLessonPlanLearnerView && convertedCourse.lessonPlanUrl) && (
+                                                {!convertedCourse.learnerGuideUrl && !convertedCourse.slidesUrl && !convertedCourse.skillsfutureLink && !(trainingProviderProfile?.showLessonPlanLearnerView && convertedCourse.lessonPlanUrl) && (
                                                     <p className="text-gray-500 dark:text-gray-400 text-sm">No courseware available.</p>
                                                 )}
                                             </div>

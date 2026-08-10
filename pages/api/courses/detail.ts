@@ -82,6 +82,7 @@ async function handler(
           e.certificate,
           c.resource_links,
           c.funding_validity,
+          c.skillsfuture_link,
           COALESCE(cr.class_type, 'Physical') AS class_type,
           cr.virtual_meeting_link,
           cr.virtual_meeting_provider
@@ -121,6 +122,7 @@ async function handler(
           e.certificate,
           c.resource_links,
           c.funding_validity,
+          c.skillsfuture_link,
           COALESCE(cr.class_type, 'Physical') AS class_type,
           cr.virtual_meeting_link,
           cr.virtual_meeting_provider
@@ -213,6 +215,7 @@ async function handler(
         certificate: courseDetail.certificate,
         resourceLinks: (courseDetail as any).resource_links ? (typeof (courseDetail as any).resource_links === 'string' ? JSON.parse((courseDetail as any).resource_links) : (courseDetail as any).resource_links) : [],
         fundingValidity: (courseDetail as any).funding_validity || null,
+        skillsfutureLink: (courseDetail as any).skillsfuture_link || null,
         classType: (courseDetail as any).class_type || 'Physical',
         virtualMeetingLink: (courseDetail as any).virtual_meeting_link || null,
         virtualMeetingProvider: (courseDetail as any).virtual_meeting_provider || null

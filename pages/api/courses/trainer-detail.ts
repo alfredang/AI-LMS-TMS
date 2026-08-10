@@ -79,6 +79,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         cr.end_date,
         c.resource_links,
         c.funding_validity,
+        c.skillsfuture_link,
         COALESCE(cr.class_type, 'Physical') AS class_type,
         CASE
           WHEN cr.virtual_meeting_provider = 'zoom'
@@ -238,6 +239,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           courseCode: courseDetail.course_code,
           resourceLinks: courseDetail.resource_links ? (typeof courseDetail.resource_links === 'string' ? JSON.parse(courseDetail.resource_links) : courseDetail.resource_links) : [],
           fundingValidity: courseDetail.funding_validity || null,
+          skillsfutureLink: courseDetail.skillsfuture_link || null,
           classType: courseDetail.class_type || 'Physical',
           virtualMeetingLink: courseDetail.virtual_meeting_link || null,
           virtualMeetingHostLink: courseDetail.virtual_meeting_host_link || null,
