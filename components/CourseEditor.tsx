@@ -1945,10 +1945,11 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <label htmlFor="newCourseCode" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                     Course Code (Current)
                                 </label>
-                                <input type="text" id="newCourseCode" name="newCourseCode" value={course.newCourseCode || ''} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. TGS-2026064474 — leave blank if never renewed" />
+                                <input type="text" id="newCourseCode" name="newCourseCode" value={course.newCourseCode || ''} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. TGS-2026064474" />
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    The code issued at funding renewal. This is the code shown on course cards
-                                    and used for new SSG submissions. Both codes resolve to this same course.
+                                    The code currently in force — same as the original until a funding renewal
+                                    issues a new one. This is the code shown on course cards and used for new
+                                    SSG submissions. Both codes resolve to this same course.
                                 </p>
                             </div>
                             <div>

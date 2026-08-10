@@ -189,8 +189,12 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
             lesson_plan_url, assessment_plan_url, facilitator_guide_url, trainer_slides_url,
             written_assessment_link, practical_performance_assessment_link,
             courseware_link, assessment_record_link, assessment_summary_record_url, resource_links,
-            activities_url
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+            activities_url,
+            -- The code in force starts equal to the registration code; a funding
+            -- renewal overwrites it later. Kept populated so "current code" is
+            -- never empty anywhere it is displayed.
+            new_course_code
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $3)
           RETURNING id
         `;
 

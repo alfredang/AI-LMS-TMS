@@ -341,6 +341,7 @@ POST /api/admin/save-course-run   # Create/update course run
 GET  /api/admin/search-course-runs # Search course runs
 POST /api/admin/import-course-run # Import from SSG
 GET  /api/admin/course-code-history # Every course reference code a course has carried
+GET  /api/admin/course-change-log   # Chronological audit of course field changes
 ```
 
 **Course code history.** SSG funding renewal issues a *new* course reference code for what
@@ -349,6 +350,24 @@ records every one of them, which keeps past records retrievable by the code they
 created under. Use `lib/courseCode.ts` — `resolveCourseIdByCode()` accepts any code, current
 or superseded, and returns the single course it belongs to; resolving with a bare
 `WHERE course_code = $1` sees only the pre-renewal code and will miss.
+
+**Two code columns on `course`.** `course_code` is the ORIGINAL registration code and never
+changes — past enrolments and SSG records were created against it. `new_course_code` is the
+code currently in force (kept equal to the original until a renewal issues a new one, so it
+is always populated). The course editor edits them as separate fields; a blank submitted
+value never clears the stored one.
+
+**Records show the code of their own era.** The SQL function `course_code_at(course_id, at)`
+resolves the code in force at any moment. Class and enrolment listings use it with the
+record's creation date, so an enrolment submitted under a superseded code keeps displaying
+that code while records created after the renewal show the new one — all attached to the
+same course throughout.
+
+**Course Change Control.** `course_change_log` is an append-only audit of key course field
+changes (title, both codes, type, hours, fee, funding validity, TSC title/code) as
+old → new rows with timestamp and author, written inside the course-save transaction
+(`lib/courseChangeLog.ts`). The Developer role's Course Change Control page renders it as a
+chronological table filterable by course title.
 
 ### Enrolments
 
@@ -503,6 +522,8 @@ ai-lms-tms/
 | `training_provider_member` | User membership in training provider organizations |
 | `course` | Course templates with metadata, materials, funding info, and assessment methods |
 | `course_code_history` | Every course reference code a course has carried, with validity windows — funding renewal issues a new code for the same course |
+| `course_title_history` | Every title a course has carried — a renamed course stays findable by its former titles |
+| `course_change_log` | Append-only audit of key course field changes (old → new, when, by whom) behind the Course Change Control page |
 | `course_run` | Scheduled course instances with dates, trainers, and digital attendance |
 | `enrollment` | Learner enrollments with progress, payment, and sponsorship tracking |
 | `assessment` | Course assessments (Written, Practical, Case Study, Role Play, etc.) |
