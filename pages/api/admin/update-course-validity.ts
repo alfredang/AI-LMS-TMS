@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { recordCourseChanges } from '../../../lib/courseChangeLog';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT') {
@@ -28,22 +29,65 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       setClauses.push(`course_type = $${params.length}`);
     }
 
-    // Only touch new_course_code when the field is present in the request body,
-    // so callers that don't manage it leave the existing value untouched. An
-    // empty string clears it back to NULL.
+    // Only touch new_course_code when a NON-BLANK value is supplied. Blank means
+    // "not supplied", never "erase" -- treating '' as a clear is exactly the bug
+    // that silently wiped a live renewed code via the course editor. Clearing a
+    // renewal is not something this route needs to do.
     if (newCourseCode !== undefined) {
       const trimmed = typeof newCourseCode === 'string' ? newCourseCode.trim() : newCourseCode;
-      params.push(trimmed ? trimmed : null);
-      setClauses.push(`new_course_code = $${params.length}`);
+      if (trimmed) {
+        params.push(trimmed);
+        setClauses.push(`new_course_code = $${params.length}`);
+      }
     }
 
     params.push(courseId);
-    await pool.query(
-      `UPDATE public.course
-       SET ${setClauses.join(', ')}, updated_at = NOW()
-       WHERE id = $${params.length}`,
-      params
-    );
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Record what is about to change for Course Change Control. Runs BEFORE
+      // the UPDATE (it reads the pre-update values); best-effort so an audit
+      // problem can never cost the caller their edit.
+      try {
+        await client.query('SAVEPOINT before_change_log');
+        const authUser = (req as any).authUser;
+        await recordCourseChanges(
+          client,
+          courseId,
+          {
+            // The route always writes funding_validity (absent -> NULL), so a
+            // clear is a real change and must be logged too.
+            fundingValidity: fundingValidity ?? null,
+            // course_type is only applied when valid -- log it only then, or the
+            // log would claim a change the UPDATE never made.
+            ...(courseType === 'WSQ' || courseType === 'CASL' || courseType === 'Non-WSQ'
+              ? { courseType }
+              : {}),
+            newCourseCode,
+          },
+          authUser?.isService ? { userName: 'System' } : { userId: authUser?.id || null },
+        );
+        await client.query('RELEASE SAVEPOINT before_change_log');
+      } catch (logError) {
+        await client.query('ROLLBACK TO SAVEPOINT before_change_log');
+        console.error('Course change log skipped:', (logError as Error).message);
+      }
+
+      await client.query(
+        `UPDATE public.course
+         SET ${setClauses.join(', ')}, updated_at = NOW()
+         WHERE id = $${params.length}`,
+        params
+      );
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
 
     return res.status(200).json({ success: true });
   } catch (error: any) {
