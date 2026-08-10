@@ -29,6 +29,7 @@ const PUBLIC = new Set([
   'training-provider/send-feedback.ts', // feedback widget on login screen
   'quickbooks/oauth/callback.ts', // OAuth redirect target (Intuit)
   'integrations/zoom/oauth/callback.ts', // OAuth redirect target (Zoom)
+  'integrations/google/oauth-callback.ts', // OAuth redirect target (Google); single-use state nonce
   'files/download.ts', // <a>/<img> asset serving; containment-checked
   'uploads/[...path].ts', // <img> asset serving; containment-checked
   'download/[...path].ts', // <a>/<img> asset serving; containment-checked

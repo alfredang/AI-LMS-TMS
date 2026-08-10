@@ -309,6 +309,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
     const [smtpTestStatus, setSmtpTestStatus] = useState<{ kind: 'idle' | 'sending' | 'ok' | 'error'; message?: string }>({ kind: 'idle' });
     const [gmailTestRecipient, setGmailTestRecipient] = useState('');
     const [gmailTestStatus, setGmailTestStatus] = useState<{ kind: 'idle' | 'sending' | 'ok' | 'error'; message?: string }>({ kind: 'idle' });
+    const [googleRenewStatus, setGoogleRenewStatus] = useState<{ kind: 'idle' | 'starting' | 'opened' | 'error'; message?: string }>({ kind: 'idle' });
     const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
     const [isPayrollOpen, setIsPayrollOpen] = useState(false);
     const [isSecurityOpen, setIsSecurityOpen] = useState(false);
@@ -1639,6 +1640,45 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                                             )}
                                         </div>
                                     ))}
+                                    </div>
+
+                                    {/* Renew via Google Sign-In — mints a fresh refresh token
+                                        through the OAuth consent popup and saves it server-side,
+                                        replacing the manual OAuth-Playground copy/paste ritual. */}
+                                    <div className="pt-3 mt-4 border-t border-default">
+                                        <div className="flex items-center gap-3 flex-wrap">
+                                            <button
+                                                type="button"
+                                                disabled={googleRenewStatus.kind === 'starting'}
+                                                onClick={async () => {
+                                                    setGoogleRenewStatus({ kind: 'starting' });
+                                                    try {
+                                                        const resp = await fetch('/api/integrations/google/oauth-start', { method: 'POST' });
+                                                        const data = await resp.json();
+                                                        if (!resp.ok || !data.success) {
+                                                            throw new Error(data.error || 'Could not start Google sign-in');
+                                                        }
+                                                        window.open(data.url, 'google-oauth-renew', 'width=560,height=720');
+                                                        setGoogleRenewStatus({ kind: 'opened', message: 'Complete the sign-in in the popup, then reload this page to see the new token.' });
+                                                    } catch (err: any) {
+                                                        setGoogleRenewStatus({ kind: 'error', message: err?.message || String(err) });
+                                                    }
+                                                }}
+                                                className="px-4 py-2 text-sm rounded border border-default bg-surface hover:bg-surface-elevated whitespace-nowrap disabled:opacity-50 flex items-center gap-2"
+                                            >
+                                                <Icon name={IconName.Sync} className="w-4 h-4" />
+                                                {googleRenewStatus.kind === 'starting' ? 'Starting…' : 'Renew via Google Sign-In'}
+                                            </button>
+                                            <p className="text-xs text-on-surface-secondary flex-1 min-w-[240px]">
+                                                Renews the refresh token by signing in as the Email User — no OAuth Playground needed. One-time setup: the OAuth client must list <code className="text-[11px]">{typeof window !== 'undefined' ? `${window.location.origin}/api/integrations/google/oauth-callback` : '/api/integrations/google/oauth-callback'}</code> as an authorised redirect URI.
+                                            </p>
+                                        </div>
+                                        {googleRenewStatus.kind === 'opened' && (
+                                            <p className="text-xs text-green-600 mt-2">{googleRenewStatus.message}</p>
+                                        )}
+                                        {googleRenewStatus.kind === 'error' && (
+                                            <p className="text-xs text-red-600 mt-2">{googleRenewStatus.message}</p>
+                                        )}
                                     </div>
 
                                     {/* Send Test row — verifies the Gmail OAuth credentials.
