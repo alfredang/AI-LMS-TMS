@@ -46,6 +46,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           c.written_assessment_link,
           c.practical_performance_assessment_link,
           c.funding_validity,
+          c.skillsfuture_link,
           c.resource_links
       FROM course c
       WHERE c.id = $1
@@ -118,6 +119,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         practicalPerformanceAssessmentLink: courseDetail.practical_performance_assessment_link,
         assessmentMethods: assessmentMethodsValue,
         fundingValidity: courseDetail.funding_validity || null,
+        skillsfutureLink: courseDetail.skillsfuture_link || null,
         resourceLinks: courseDetail.resource_links ? (typeof courseDetail.resource_links === 'string' ? JSON.parse(courseDetail.resource_links) : courseDetail.resource_links) : [],
         certificate: ''
       }
