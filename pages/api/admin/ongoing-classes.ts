@@ -291,7 +291,7 @@ async function handler(
         cr.id as "id",
         cr.course_run_id as "courseRunId",
         c.title as "courseTitle",
-        c.course_code as "courseCode",
+        public.course_code_at(c.id, COALESCE(cr.created_at, cr.start_date::timestamptz, now())) as "courseCode",
         cr.class_status as "classStatus",
         COALESCE(cr.class_type, 'Physical') as "classType",
         cr.digital_attendance_id as "digitalAttendanceId",

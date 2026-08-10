@@ -53,7 +53,7 @@ const inactiveIconClass = 'text-gray-400 dark:text-gray-500 group-hover:text-gra
 const subItemClass = 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
 
 const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collapsed = false }) => {
-    const { developerPage, setDeveloperPage } = useLms();
+    const { developerPage, setDeveloperPage, setEditingCourse, setSelectedCourse, setCourseEditMode } = useLms();
 
     const cpPages = new Set<DeveloperPage>([...CP_PREPARE_ITEMS, ...CP_SUBMIT_ITEMS].map(i => i.page));
     const cwPages = new Set<DeveloperPage>(CW_ITEMS.map(i => i.page));
@@ -67,6 +67,12 @@ const DeveloperSidebar: React.FC<DeveloperSidebarProps> = ({ onNavigate, collaps
     const [skillsOpen, setSkillsOpen] = useState(false);
 
     const navigateTo = (page: DeveloperPage) => {
+        // Leaving via the sidebar exits any course being edited or viewed.
+        // The layout gives the editor priority over the page selection, so
+        // stale edit state made sidebar clicks appear dead while editing.
+        setEditingCourse(null);
+        setSelectedCourse(null);
+        setCourseEditMode(null);
         setDeveloperPage(page);
         onNavigate?.();
     };

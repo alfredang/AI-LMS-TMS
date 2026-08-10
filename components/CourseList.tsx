@@ -1,3 +1,4 @@
+import { displayCourseCodes } from '@lib/utils/courseCodes';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { useCourses, useLearnerCourseSearch } from '../hooks/useCourses';
@@ -414,7 +415,7 @@ const ManagementCourseList: React.FC = () => {
                         {course.title}
                     </h3>
                     <div className="flex-grow space-y-0">
-                        <LearnerCardDetailRow label="Course Code" value={course.currentCourseCode || course.courseCode || '—'} />
+                        <LearnerCardDetailRow label="Course Code" value={displayCourseCodes(course)} />
                         <LearnerCardDetailRow label="Course Duration" value={`${totalHours} Hours (${course.trainingHours}T + ${course.assessmentHours}A)`} />
                         <LearnerCardDetailRow label="Course Type" value={
                             <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getTypeColor(course.courseType)}`}>{course.courseType}</span>
@@ -491,7 +492,7 @@ const ManagementCourseList: React.FC = () => {
                             <h3 className="text-xl font-bold mb-4 h-14 line-clamp-2 overflow-hidden">{course.title}</h3>
 
                             <div className="text-xs space-y-2 mb-4 flex-grow min-h-[180px]">
-                                <DetailRow label="TGS Ref" value={course.currentCourseCode || course.courseCode} />
+                                <DetailRow label="TGS Ref" value={displayCourseCodes(course)} />
                                 <DetailRow label="TSC Title" value={course.tscTitle || 'N/A'} />
                                 <DetailRow label="TSC Code" value={course.tscCode || 'N/A'} />
                                 <DetailRow label="Course Type" value={
@@ -637,7 +638,7 @@ const ManagementCourseList: React.FC = () => {
                                         </div>
                                         <div className="ml-4">
                                             <div className="text-sm font-medium text-on-surface">{course.title}</div>
-                                            <div className="text-sm text-on-surface-secondary">{course.currentCourseCode || course.courseCode}</div>
+                                            <div className="text-sm text-on-surface-secondary">{displayCourseCodes(course)}</div>
                                         </div>
                                     </div>
                                 </td>
@@ -1158,7 +1159,7 @@ const LearnerCourseCard: React.FC<{ course: any }> = ({ course }) => {
                     <div className="text-xs space-y-2 flex-grow">
                         <div className="flex justify-between items-center">
                             <span className="font-semibold text-gray-500 dark:text-gray-400">Course Code</span>
-                            <span className="font-mono text-gray-800 dark:text-gray-200">{course.currentCourseCode || course.courseCode || '—'}</span>
+                            <span className="font-mono text-gray-800 dark:text-gray-200">{displayCourseCodes(course)}</span>
                         </div>
                         <div className="flex justify-between items-center">
                             <span className="font-semibold text-gray-500 dark:text-gray-400">Course Duration</span>

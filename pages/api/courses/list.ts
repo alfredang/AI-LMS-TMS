@@ -23,6 +23,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         -- funding renewal issues a new code for the same course; show the one in
         -- force, falling back to the original when the course was never renumbered
         COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS course_code,
+        c.course_code   AS original_course_code,
+        c.new_course_code,
         c.tsc_title,
         c.tsc_code,
         (SELECT ARRAY_AGG(cr.course_run_id) FROM course_run cr WHERE cr.course_id = c.id) AS course_run_ids
@@ -36,7 +38,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const courses = result.rows.map(row => ({
       id: row.id,
       title: row.title,
+      // courseCode here is the code IN FORCE -- EnrollLearners submits it as the
+      // enrolment reference, so new enrolments must carry the renewed code. The
+      // explicit fields let display surfaces show both codes.
       courseCode: row.course_code,
+      originalCourseCode: row.original_course_code || '',
+      newCourseCode: row.new_course_code || '',
+      currentCourseCode: row.course_code || '',
       tscTitle: row.tsc_title,
       tscCode: row.tsc_code,
       courseRunIds: row.course_run_ids || [],

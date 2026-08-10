@@ -61,7 +61,7 @@ async function handler(
       SELECT 
         c.id AS course_id,
         c.title AS course_title,
-        c.course_code AS course_code,
+        public.course_code_at(c.id, COALESCE(e.created_at, cr.created_at, now())) AS course_code,
         cr.id AS course_run_id,
         cr.course_run_id AS course_run_code,
         (COALESCE(c.training_hours, 0) + COALESCE(c.assessment_hours, 0)) AS course_duration,

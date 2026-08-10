@@ -81,7 +81,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ClassDetailsRes
           cr.mode_of_learning AS mode,
           cr.tpg_assigned_trainer_name,
           cr.tpg_assigned_trainer_email,
-          c.course_code AS tgs_ref,
+          public.course_code_at(c.id, COALESCE(cr.created_at, cr.start_date::timestamptz, now())) AS tgs_ref,
           cr.class_status AS class_status,
           cr.course_run_id AS course_run_id,
           cr.id AS course_run_uuid

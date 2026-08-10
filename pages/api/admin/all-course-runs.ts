@@ -36,7 +36,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         cr.id,
         cr.course_run_id,
         c.title AS course_title,
-        c.course_code,
+        public.course_code_at(c.id, COALESCE(cr.created_at, cr.start_date::timestamptz, now())) AS course_code,
         cr.start_date,
         cr.end_date,
         cr.class_status,

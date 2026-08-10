@@ -1,3 +1,4 @@
+import { displayCourseCodes } from '@lib/utils/courseCodes';
 import React from 'react';
 import { Course, UserRole } from '@app-types';
 import { Card } from './ui/Card';
@@ -44,7 +45,7 @@ const DashboardCourseCard: React.FC<DashboardCourseCardProps> = ({ course }) => 
           <div className="text-xs space-y-2 flex-grow">
             <div className="flex justify-between items-center">
               <span className="font-semibold text-gray-500 dark:text-gray-400">TGS Ref</span>
-              <span className="font-mono text-gray-800 dark:text-gray-200">{course.currentCourseCode || course.courseCode}</span>
+              <span className="font-mono text-gray-800 dark:text-gray-200">{displayCourseCodes(course)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="font-semibold text-gray-500 dark:text-gray-400">Course Duration</span>
