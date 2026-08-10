@@ -3,7 +3,7 @@ import { cors } from '../../../lib/cors';
 import pool from '../../../lib/db';
 import { google } from 'googleapis';
 import { isSmtpEnabled, sendViaSmtp, getSmtpConfig } from '../../../lib/smtp';
-import { sendViaGmailOAuth } from '../../../lib/gmailOauthSend';
+import { sendViaGmailOAuth, trySendViaGmailServiceAccount } from '../../../lib/gmailOauthSend';
 
 interface SendOtpResponse {
   success: boolean;
@@ -119,7 +119,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SendOtpResponse
     const gmailReady = !!(email_user && google_client_id && google_client_secret && google_refresh_token);
     const smtpCfgEarly = await getSmtpConfig();
     const smtpReady = !!(smtpCfgEarly && smtpCfgEarly.host && smtpCfgEarly.user && smtpCfgEarly.password);
-    if (!gmailReady && !smtpReady) {
+    // Service-account (domain-wide delegation) transport only needs email_user
+    // + an uploaded key file — it must not be blocked by a missing refresh token.
+    let saReady = false;
+    if (email_user) {
+      try {
+        const saR = await pool.query('SELECT google_service_account_json FROM training_provider LIMIT 1');
+        saReady = !!saR.rows[0]?.google_service_account_json;
+      } catch { /* column may not exist on this tenant */ }
+    }
+    if (!gmailReady && !smtpReady && !saReady) {
       console.error('❌ No email transport configured (Gmail OAuth missing AND SMTP missing)');
       console.error(`  email_user: ${email_user ? 'set' : 'MISSING'}, google_client_id: ${google_client_id ? 'set' : 'MISSING'}, google_client_secret: ${google_client_secret ? 'set' : 'MISSING'}, google_refresh_token: ${google_refresh_token ? 'set' : 'MISSING'}`);
       return res.status(500).json({ success: false, error: 'Email not configured. Configure Gmail OAuth and/or SMTP in Company Settings → Integration.' });
@@ -173,6 +182,22 @@ Warm regards
             }).join('\n')}
           </div>
         `;
+
+      // Transport 0: Gmail via service account with domain-wide delegation.
+      // Permanent credential (survives mailbox password changes, never expires),
+      // so it outranks both SMTP and the OAuth refresh token. Returns null when
+      // not configured/authorized, in which case the existing chain runs.
+      const saResult = await trySendViaGmailServiceAccount({
+        to: email,
+        subject: subjectForSend,
+        text: bodyTextForSend,
+        html: htmlBodyForSend,
+        replyTo: replyToEmail || undefined,
+      });
+      if (saResult?.ok) {
+        console.log(`✅ OTP email sent successfully to ${email} via Gmail service account (messageId: ${saResult.messageId})`);
+        return;
+      }
 
       // SMTP branch — primary when toggle is ON. On failure, fall back to Gmail OAuth.
       if (smtpOn) {

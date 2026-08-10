@@ -46,7 +46,7 @@ export async function getGoogleDriveClient(pool: Pool): Promise<drive_v3.Drive> 
 }
 
 /**
- * Returns a Google Auth client using a service account JSON file uploaded via Company Settings.
+ * Loads the raw service account JSON credentials uploaded via Company Settings.
  * The DB column (google_service_account_json) holds the relative URL path
  * (e.g. /uploads/training_provider/service_account/service-account.json).
  *
@@ -56,7 +56,7 @@ export async function getGoogleDriveClient(pool: Pool): Promise<drive_v3.Drive> 
  *   3. HTTP fetch via APP_URL + path
  *   4. HTTP fetch via localhost:PORT + path (local dev)
  */
-export async function getServiceAccountAuth(dbPool: Pool, scopes: string[]) {
+export async function loadServiceAccountCredentials(dbPool: Pool): Promise<Record<string, any>> {
     const result = await dbPool.query(`
         SELECT google_service_account_json
         FROM training_provider
@@ -84,7 +84,7 @@ export async function getServiceAccountAuth(dbPool: Pool, scopes: string[]) {
             const text = fs.readFileSync(absPath, 'utf8');
             const credentials = JSON.parse(text);
             console.log(`[google-auth] Service account loaded from file: ${absPath}`);
-            return new google.auth.GoogleAuth({ credentials, scopes });
+            return credentials;
         }
     } catch { /* fall through */ }
     tried.push(`file:${absPath}`);
@@ -108,13 +108,21 @@ export async function getServiceAccountAuth(dbPool: Pool, scopes: string[]) {
                 const text = await res.text();
                 const credentials = JSON.parse(text);
                 console.log(`[google-auth] Service account loaded via URL: ${url}`);
-                return new google.auth.GoogleAuth({ credentials, scopes });
+                return credentials;
             }
         } catch { /* try next */ }
         tried.push(url);
     }
 
     throw new Error(`Google service account key file could not be loaded from: ${normalizedPath}. Tried: ${tried.join(', ')}`);
+}
+
+/**
+ * Returns a Google Auth client using a service account JSON file uploaded via Company Settings.
+ */
+export async function getServiceAccountAuth(dbPool: Pool, scopes: string[]) {
+    const credentials = await loadServiceAccountCredentials(dbPool);
+    return new google.auth.GoogleAuth({ credentials, scopes });
 }
 
 /**
