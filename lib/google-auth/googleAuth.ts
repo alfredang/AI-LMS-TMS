@@ -34,10 +34,63 @@ export async function getGoogleCredentials(pool: Pool): Promise<GoogleCredential
     return { clientId, clientSecret, refreshToken };
 }
 
+// --- Service-account (domain-wide delegation) transport ----------------------
+// Mirrors the Gmail SA transport in lib/gmailOauthSend.ts: a JWT client
+// impersonating email_user. Permanent — survives sales@ password changes,
+// which auto-revoke the OAuth refresh token (invalid_grant) and have twice
+// taken down Drive uploads (incl. learner assessment submissions).
+// Requires the SA's client ID to be granted the scope under Workspace Admin →
+// Security → API controls → Domain-wide delegation; until then authorize()
+// fails fast with unauthorized_client and we fall back to the OAuth token.
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
+const PRESENTATIONS_SCOPE = 'https://www.googleapis.com/auth/presentations';
+
+const cachedSaJwtByScope = new Map<string, InstanceType<typeof google.auth.JWT>>();
+const saUnavailableUntilByScope = new Map<string, number>();
+const SA_RETRY_MS = 60_000;
+
+async function getServiceAccountJwt(pool: Pool, scopes: string[]): Promise<InstanceType<typeof google.auth.JWT> | null> {
+    const key = scopes.join(' ');
+    const cached = cachedSaJwtByScope.get(key);
+    if (cached) return cached;
+    if (Date.now() < (saUnavailableUntilByScope.get(key) || 0)) return null;
+    try {
+        const result = await pool.query(`SELECT email_user FROM training_provider LIMIT 1`);
+        const subject = result.rows[0]?.email_user;
+        if (!subject) throw new Error('email_user is not configured in Company Settings');
+        const sa = await loadServiceAccountCredentials(pool);
+        const jwt = new google.auth.JWT({
+            email: sa.client_email,
+            key: sa.private_key,
+            scopes,
+            subject,
+        });
+        await jwt.authorize();
+        console.log(`[google-auth] Using service-account transport (${sa.client_email} impersonating ${subject}) for scopes: ${key}`);
+        cachedSaJwtByScope.set(key, jwt);
+        return jwt;
+    } catch (e: any) {
+        console.warn(`[google-auth] Service-account transport unavailable for scopes ${key} (${e?.message || e}); falling back to OAuth refresh token`);
+        saUnavailableUntilByScope.set(key, Date.now() + SA_RETRY_MS);
+        return null;
+    }
+}
+
+/** Clears cached SA clients so a settings change / DWD grant applies without an app restart. */
+export function invalidateGoogleAuthCache(): void {
+    cachedSaJwtByScope.clear();
+    saUnavailableUntilByScope.clear();
+}
+
 /**
  * Returns an authenticated Google Drive client using database credentials.
+ * Prefers the service-account (domain-wide delegation) transport; falls back
+ * to the OAuth refresh token when the SA lacks the Drive scope.
  */
 export async function getGoogleDriveClient(pool: Pool): Promise<drive_v3.Drive> {
+    const saJwt = await getServiceAccountJwt(pool, [DRIVE_SCOPE]);
+    if (saJwt) return google.drive({ version: 'v3', auth: saJwt });
+
     const { clientId, clientSecret, refreshToken } = await getGoogleCredentials(pool);
     // Using OAuth Playground redirect URI as it is commonly used for token generation in this app
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'https://developers.google.com/oauthplayground');
@@ -127,8 +180,13 @@ export async function getServiceAccountAuth(dbPool: Pool, scopes: string[]) {
 
 /**
  * Returns an authenticated Google Slides client using database credentials.
+ * Prefers the service-account (domain-wide delegation) transport; falls back
+ * to the OAuth refresh token when the SA lacks the Slides/Drive scopes.
  */
 export async function getGoogleSlidesClient(pool: Pool): Promise<slides_v1.Slides> {
+    const saJwt = await getServiceAccountJwt(pool, [PRESENTATIONS_SCOPE, DRIVE_SCOPE]);
+    if (saJwt) return google.slides({ version: 'v1', auth: saJwt });
+
     const { clientId, clientSecret, refreshToken } = await getGoogleCredentials(pool);
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'https://developers.google.com/oauthplayground');
     oauth2Client.setCredentials({ refresh_token: refreshToken });
