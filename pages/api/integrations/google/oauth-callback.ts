@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
 import { invalidateGmailSenderCache } from '../../../../lib/gmailOauthSend';
+import { invalidateGoogleAuthCache } from '../../../../lib/google-auth/googleAuth';
 import { getGoogleOauthRedirectUri } from '../../../../lib/googleOauthRenew';
 
 // GET /api/integrations/google/oauth-callback — Google OAuth redirect target
@@ -89,6 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [data.refresh_token]
     );
     invalidateGmailSenderCache();
+    invalidateGoogleAuthCache();
     console.log(`✅ [google-oauth] Refresh token renewed via Google Sign-In${signedInEmail ? ` by ${signedInEmail}` : ''}`);
 
     const mismatch = signedInEmail && emailUser && signedInEmail.toLowerCase() !== String(emailUser).toLowerCase()
