@@ -2042,7 +2042,6 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 >
                                     <option value="Non-WSQ">Non-WSQ</option>
                                     <option value="WSQ">WSQ</option>
-                                    <option value="CASL">CASL</option>
                                     <option value="IBF">IBF</option>
                                 </select>
                             </div>

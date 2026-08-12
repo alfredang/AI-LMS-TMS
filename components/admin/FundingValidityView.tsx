@@ -361,7 +361,6 @@ const FundingValidityView: React.FC = () => {
                           className={`${inputClass} w-24`}
                         >
                           <option value="WSQ">WSQ</option>
-                          <option value="CASL">CASL</option>
                           <option value="Non-WSQ">Non-WSQ</option>
                         </select>
                       ) : (
