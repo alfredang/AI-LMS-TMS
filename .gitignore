@@ -190,3 +190,6 @@ eraser-ring-dashed.png
 # Our own n8n workflow doc — a project artifact, keep it tracked.
 !docs/reference/
 !docs/reference/**
+
+# Raw TPGateway financial transaction reports — real learner PII (names, NRIC, payment refs).
+transaction data/

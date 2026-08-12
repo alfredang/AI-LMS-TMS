@@ -604,6 +604,29 @@ export async function listAlreadyAppliedGrantIds(grantIds: string[]): Promise<Se
   return out;
 }
 
+/**
+ * Sibling grant_ids seen for this enrolment across our own import history.
+ * `ssg_grants` (synced from TPGateway) frequently lags or is missing entirely for newer
+ * enrolments, which breaks the "other GRNs on this enrolment share one QB invoice" resolution
+ * fallback (e.g. a baseline grant + a top-up like MCES billed on the same invoice). Our own
+ * `grant_import_rows` already has this enrolment/grant pairing recorded from prior uploads
+ * regardless of whether ssg_grants was ever populated, so it's a more reliable source here.
+ */
+export async function listGrantIdsForEnrolmentFromImportHistory(enrolmentId: string): Promise<string[]> {
+  await requireGrantImportSchema();
+  const id = String(enrolmentId || '').trim();
+  if (!id) return [];
+  const r = await pool.query(
+    `SELECT DISTINCT grant_id::text AS grant_id
+     FROM public.grant_import_rows
+     WHERE LOWER(TRIM(COALESCE(enrolment_id::text, ''))) = LOWER(TRIM($1::text))
+       AND COALESCE(TRIM(COALESCE(grant_id::text, '')), '') <> ''
+     ORDER BY grant_id ASC`,
+    [id]
+  );
+  return r.rows.map((x: any) => String(x.grant_id)).filter(Boolean);
+}
+
 export async function sumAppliedReceivedByEnrolment(enrolmentIds: string[]): Promise<Map<string, number>> {
   await requireGrantImportSchema();
   const out = new Map<string, number>();

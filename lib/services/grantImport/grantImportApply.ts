@@ -3,6 +3,7 @@ import {
   clearApplyStateForSpecificRows,
   insertGrantImportAuditLog,
   listApplyCandidates,
+  listGrantIdsForEnrolmentFromImportHistory,
   markBatchStatus,
   updateBatchCounts,
   updateRowApplyResult,
@@ -33,23 +34,14 @@ async function qbFindInvoiceByDocNumber(app: string | undefined, docNumber: stri
   return { id: String(row.Id), customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined };
 }
 
-async function qbFindInvoiceByLineDescriptionContains(
-  app: string | undefined,
-  grantId: string
-): Promise<{ id: string; customerRef?: string } | null> {
-  const raw = String(grantId || '').trim();
-  if (!raw) return null;
-  const safe = escapeQbQueryString(raw);
-  try {
-    const data = await qboQuery(app, `SELECT * FROM Invoice WHERE Line.Description LIKE '%${safe}%' MAXRESULTS 1`);
-    const inv = data?.QueryResponse?.Invoice;
-    const row = Array.isArray(inv) ? inv[0] : inv;
-    if (!row?.Id) return null;
-    return { id: String(row.Id), customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined };
-  } catch {
-    // Some QBO realms reject nested Line queries; treat as "not found" instead of failing apply.
-    return null;
-  }
+async function qbGetInvoiceBalance(app: string | undefined, invoiceId: string): Promise<number | null> {
+  const safe = escapeQbQueryString(String(invoiceId || '').trim());
+  if (!safe) return null;
+  const data = await qboQuery(app, `SELECT Id, Balance FROM Invoice WHERE Id = '${safe}' MAXRESULTS 1`);
+  const inv = data?.QueryResponse?.Invoice;
+  const row = Array.isArray(inv) ? inv[0] : inv;
+  const bal = Number(row?.Balance);
+  return Number.isFinite(bal) ? bal : null;
 }
 
 async function listSsgGrantIdsForEnrolment(enrolmentId: string): Promise<string[]> {
@@ -72,27 +64,34 @@ async function qbResolveInvoiceForGrantRow(input: {
   enrolmentId: string | null;
   paymentDate?: string | null;
 }): Promise<
-  | { id: string; customerRef?: string; resolvedBy: 'docNumber' | 'line_description' | 'enrolment_grant_docNumber' | 'enrolment_grant_line_description' }
+  | { id: string; customerRef?: string; resolvedBy: 'docNumber' | 'enrolment_grant_docNumber' | 'date_window_scan' }
   | null
 > {
   const direct = await qbFindInvoiceByDocNumber(input.app, input.grantId);
   if (direct?.id) return { ...direct, resolvedBy: 'docNumber' };
-  const byDesc = await qbFindInvoiceByLineDescriptionContains(input.app, input.grantId);
-  if (byDesc?.id) return { ...byDesc, resolvedBy: 'line_description' };
-  if (input.paymentDate) {
-    const scanned = await qbFindInvoiceByScanningRecentInvoices(input.app, input.grantId, input.paymentDate);
-    if (scanned?.id) return { ...scanned, resolvedBy: 'line_description' };
-  }
 
-  // Fallback: if invoice DocNumber is the "primary" GRN for the enrolment, try other GRNs for same enrolment.
+  // A grant that isn't itself the invoice's DocNumber is usually a secondary funding
+  // component (e.g. MCES) billed on another grant's invoice for the same enrolment
+  // (see the invoice screenshot: one invoice, one line per grant ref). QBO's query
+  // language doesn't support filtering by Line.Description at all (confirmed: QBO
+  // rejects it outright with "not queryable", every time — it's not a per-realm quirk),
+  // so the only reliable way to find that invoice is via a sibling grant_id's DocNumber.
   if (input.enrolmentId) {
-    const grns = await listSsgGrantIdsForEnrolment(input.enrolmentId);
+    const [ssgGrns, historyGrns] = await Promise.all([
+      listSsgGrantIdsForEnrolment(input.enrolmentId),
+      listGrantIdsForEnrolmentFromImportHistory(input.enrolmentId),
+    ]);
+    const grns = Array.from(new Set([...ssgGrns, ...historyGrns])).filter((g) => g && g !== input.grantId);
     for (const grn of grns) {
       const hit = await qbFindInvoiceByDocNumber(input.app, grn);
       if (hit?.id) return { ...hit, resolvedBy: 'enrolment_grant_docNumber' };
-      const hitDesc = await qbFindInvoiceByLineDescriptionContains(input.app, grn);
-      if (hitDesc?.id) return { ...hitDesc, resolvedBy: 'enrolment_grant_line_description' };
     }
+  }
+
+  // Last resort: scan invoices near the payment date and inspect their lines client-side.
+  if (input.paymentDate) {
+    const scanned = await qbFindInvoiceByScanningRecentInvoices(input.app, input.grantId, input.paymentDate);
+    if (scanned?.id) return { ...scanned, resolvedBy: 'date_window_scan' };
   }
   return null;
 }
@@ -107,7 +106,7 @@ async function qbResolveInvoiceForGrantRowAcrossApps(input: {
       app: string;
       id: string;
       customerRef?: string;
-      resolvedBy: 'docNumber' | 'line_description' | 'enrolment_grant_docNumber' | 'enrolment_grant_line_description';
+      resolvedBy: 'docNumber' | 'enrolment_grant_docNumber' | 'date_window_scan';
     }
   | null
 > {
@@ -199,9 +198,20 @@ async function qbQueryPaymentsByCustomerAndDate(
   const safeCust = escapeQbQueryString(String(customerRef || '').trim());
   const safeDate = escapeQbQueryString(String(txnDate || '').trim());
   if (!safeCust || !safeDate) return [];
-  const data = await qboQuery(app, `SELECT * FROM Payment WHERE CustomerRef = '${safeCust}' AND TxnDate = '${safeDate}' MAXRESULTS 200`);
-  const rows = data?.QueryResponse?.Payment;
-  return Array.isArray(rows) ? rows : rows ? [rows] : [];
+  // A single busy settlement day for this customer can exceed 200 payments (confirmed: 100+ on
+  // one day alone in this company's data) — page through rather than silently truncating.
+  const all: any[] = [];
+  let page = 1;
+  while (page <= 20) {
+    const startPos = (page - 1) * 1000 + 1;
+    const data = await qboQuery(app, `SELECT * FROM Payment WHERE CustomerRef = '${safeCust}' AND TxnDate = '${safeDate}' STARTPOSITION ${startPos} MAXRESULTS 1000`);
+    const rows = data?.QueryResponse?.Payment;
+    const arr = Array.isArray(rows) ? rows : rows ? [rows] : [];
+    all.push(...arr);
+    if (arr.length < 1000) break;
+    page++;
+  }
+  return all;
 }
 
 async function qbQueryPaymentByRefNum(app: string | undefined, paymentRefNum: string): Promise<any | null> {
@@ -216,9 +226,23 @@ async function qbQueryPaymentByRefNum(app: string | undefined, paymentRefNum: st
 async function qbQueryPaymentsByRefNum(app: string | undefined, paymentRefNum: string): Promise<any[]> {
   const safe = escapeQbQueryString(String(paymentRefNum || '').trim());
   if (!safe) return [];
-  const data = await qboQuery(app, `SELECT * FROM Payment WHERE PaymentRefNum = '${safe}' MAXRESULTS 200`);
-  const rows = data?.QueryResponse?.Payment;
-  return Array.isArray(rows) ? rows : rows ? [rows] : [];
+  // One real bank reference commonly covers hundreds of individually-created Payment records
+  // (one per invoice in a bulk disbursement) — confirmed up to 674 for a single ref in this
+  // company's data. A single MAXRESULTS-200 page silently misses the rest, which broke the
+  // idempotency check for invoices whose matching payment fell outside the first page. Page
+  // through with a generous safety cap.
+  const all: any[] = [];
+  let page = 1;
+  while (page <= 20) {
+    const startPos = (page - 1) * 1000 + 1;
+    const data = await qboQuery(app, `SELECT * FROM Payment WHERE PaymentRefNum = '${safe}' STARTPOSITION ${startPos} MAXRESULTS 1000`);
+    const rows = data?.QueryResponse?.Payment;
+    const arr = Array.isArray(rows) ? rows : rows ? [rows] : [];
+    all.push(...arr);
+    if (arr.length < 1000) break;
+    page++;
+  }
+  return all;
 }
 
 async function qbFindAccountIdByName(app: string | undefined, name: string): Promise<string | null> {
@@ -463,13 +487,16 @@ export async function applyGrantImportBatch(input: {
         enrolmentId: row.enrolment_id,
         paymentDate: txnDate,
       });
-      if (!inv?.id) throw new Error(`No QuickBooks invoice found for grant ${grantId} (tried DocNumber, then other GRNs in enrolment)`);
+      if (!inv?.id) throw new Error(`No QuickBooks invoice found for grant ${grantId} (tried DocNumber, sibling GRNs for this enrolment, then a date-window scan)`);
       const customerRef = inv.customerRef;
       if (!customerRef) throw new Error(`QuickBooks invoice ${grantId} has no CustomerRef`);
 
       const refNum = String(row.bank_reference_id || row.financial_transaction_id || '').trim();
 
       // Idempotency: if QB already has a payment linked to this invoice+amount on this payment date, do NOT create another.
+      // This MUST run before the balance guard below — otherwise a row whose exact payment is
+      // already correctly applied gets rejected as "exceeds balance" instead of recognized as done,
+      // since the invoice's balance is (correctly) already zero from that same existing payment.
       const sameDatePayments = await qbQueryPaymentsByCustomerAndDate(inv.app, customerRef, txnDate);
       const existingLinked = sameDatePayments.find((p: any) => paymentLinksInvoiceAndAmount(p, inv.id, amount));
       if (existingLinked?.Id && !input.allowOverwriteAlreadyApplied) {
@@ -504,52 +531,11 @@ export async function applyGrantImportBatch(input: {
         continue;
       }
 
-      // Overwrite behavior: if we previously created a payment for this row, void it first (so we don't double-count).
-      if (match === 'already_applied' && input.allowOverwriteAlreadyApplied && row.matched_qb_object_id) {
-        try {
-          const existing = await qbReadPayment(inv.app, String(row.matched_qb_object_id));
-          if (existing?.syncToken) {
-            await qbVoidPayment(inv.app, String(row.matched_qb_object_id), String(existing.syncToken));
-          }
-        } catch {
-          // best-effort; proceed to create a new payment
-        }
-      }
-
-      // If overwrite is enabled but we don't have a stored Payment Id, attempt best-effort detection:
-      // find an existing payment for same customer+date that is linked to the invoice with same amount,
-      // then void it so we can recreate it with the correct PaymentRefNum.
-      if (match === 'already_applied' && input.allowOverwriteAlreadyApplied && !row.matched_qb_object_id) {
-        try {
-          const candidates = await qbQueryPaymentsByCustomerAndDate(inv.app, customerRef, txnDate);
-          const hit = candidates.find((p: any) => paymentLinksInvoiceAndAmount(p, inv.id, amount));
-          if (hit?.Id && hit?.SyncToken) {
-            await qbVoidPayment(inv.app, String(hit.Id), String(hit.SyncToken));
-          }
-        } catch {
-          // best-effort
-        }
-      }
-
-      const paymentBody: any = {
-        CustomerRef: { value: customerRef },
-        TotalAmt: Number(amount.toFixed(2)),
-        TxnDate: txnDate,
-        Line: [
-          {
-            Amount: Number(amount.toFixed(2)),
-            LinkedTxn: [{ TxnId: inv.id, TxnType: 'Invoice' }],
-          },
-        ],
-      };
-
-      if (refNum) paymentBody.PaymentRefNum = refNum;
-
-      // Safety: if payment already exists in QB, skip (no QB changes) unless overwrite is enabled.
-      // This prevents duplicate payments when QB was updated outside FMS previously.
+      // Second idempotency angle: match by PaymentRefNum (falls back to customer+date if no refNum).
+      // Bank Reference IDs can repeat across multiple invoices, so only treat it as an "existing"
+      // duplicate if a payment with this ref is linked to the *same* invoice + amount + date.
+      // Runs before the balance guard below, same reasoning as the check above.
       if (refNum) {
-        // Bank Reference IDs can repeat across multiple invoices.
-        // Only treat it as an "existing" duplicate if a payment with this ref is linked to the *same* invoice + amount + date.
         const candidates = await qbQueryPaymentsByRefNum(inv.app, refNum);
         const hit = candidates.find((p: any) => {
           const links = paymentLinksInvoiceAndAmount(p, inv.id, amount);
@@ -652,6 +638,68 @@ export async function applyGrantImportBatch(input: {
           }
         }
       }
+
+      // Overwrite behavior: if we previously created a payment for this row, void it first (so we don't double-count).
+      if (match === 'already_applied' && input.allowOverwriteAlreadyApplied && row.matched_qb_object_id) {
+        try {
+          const existing = await qbReadPayment(inv.app, String(row.matched_qb_object_id));
+          if (existing?.syncToken) {
+            await qbVoidPayment(inv.app, String(row.matched_qb_object_id), String(existing.syncToken));
+          }
+        } catch {
+          // best-effort; proceed to create a new payment
+        }
+      }
+
+      // If overwrite is enabled but we don't have a stored Payment Id, attempt best-effort detection:
+      // find an existing payment for same customer+date that is linked to the invoice with same amount,
+      // then void it so we can recreate it with the correct PaymentRefNum.
+      if (match === 'already_applied' && input.allowOverwriteAlreadyApplied && !row.matched_qb_object_id) {
+        try {
+          const candidates = await qbQueryPaymentsByCustomerAndDate(inv.app, customerRef, txnDate);
+          const hit = candidates.find((p: any) => paymentLinksInvoiceAndAmount(p, inv.id, amount));
+          if (hit?.Id && hit?.SyncToken) {
+            await qbVoidPayment(inv.app, String(hit.Id), String(hit.SyncToken));
+          }
+        } catch {
+          // best-effort
+        }
+      }
+
+      // Safety guard: never create a payment for more than the resolved invoice actually owes.
+      // Every grant invoice bills to one shared QBO customer, and this company's
+      // AutoApplyPayments setting silently spills any excess onto that customer's OTHER open
+      // invoices when one can't absorb the full amount — the mechanism behind payments (dated
+      // and amounted correctly) ending up cross-linked to invoices they were never meant for,
+      // usually because a loose fallback match (line-description / same-enrolment) picked the
+      // wrong invoice. Refuse rather than let QB silently redistribute the difference.
+      // Runs here (after all the idempotency/overwrite-void checks above, not before) so a row
+      // whose exact payment is already correctly applied is recognized as done rather than
+      // rejected, and so an overwrite's void-then-recreate has already freed the balance it needs.
+      const invoiceBalance = await qbGetInvoiceBalance(inv.app, inv.id);
+      if (invoiceBalance == null) {
+        throw new Error(`Could not read balance for QuickBooks invoice ${inv.id} (grant ${grantId}); refusing to apply blind`);
+      }
+      if (amount - invoiceBalance > 0.01) {
+        throw new Error(
+          `Payment amount ${amount.toFixed(2)} exceeds invoice ${grantId} (QB id ${inv.id}) remaining balance ${invoiceBalance.toFixed(2)} — ` +
+            `likely resolved to the wrong invoice; not applying (QuickBooks would spill the excess onto other invoices under AutoApplyPayments)`
+        );
+      }
+
+      const paymentBody: any = {
+        CustomerRef: { value: customerRef },
+        TotalAmt: Number(amount.toFixed(2)),
+        TxnDate: txnDate,
+        Line: [
+          {
+            Amount: Number(amount.toFixed(2)),
+            LinkedTxn: [{ TxnId: inv.id, TxnType: 'Invoice' }],
+          },
+        ],
+      };
+
+      if (refNum) paymentBody.PaymentRefNum = refNum;
 
       const pm = (process.env.QBO_GRANT_PAYMENT_METHOD_REF || '').trim();
       if (pm) paymentBody.PaymentMethodRef = { value: pm };

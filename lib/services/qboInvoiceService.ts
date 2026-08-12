@@ -424,6 +424,32 @@ export async function qboSparseUpdateInvoice(
   };
 }
 
+/**
+ * Sparse-update an existing QBO payment. Only the fields in `fields` are
+ * modified; all other fields are preserved. Caller must supply the current
+ * SyncToken (available via qboReadPayment).
+ */
+export async function qboSparseUpdatePayment(
+  appOverride: string | undefined,
+  paymentId: string,
+  syncToken: string,
+  fields: Record<string, any>
+): Promise<{ id: string; syncToken?: string; raw: any }> {
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/payment?minorversion=${MINOR_VERSION}`;
+  const body = { Id: paymentId, SyncToken: syncToken, sparse: true, ...fields };
+  const data = await qboFetchJson({ token, url, method: 'POST', body });
+  const p = data?.Payment ?? data;
+  return {
+    id: String(p?.Id ?? ''),
+    syncToken: p?.SyncToken ? String(p.SyncToken) : undefined,
+    raw: p,
+  };
+}
+
 export async function qboCreatePayment(
   appOverride: string | undefined,
   body: any
