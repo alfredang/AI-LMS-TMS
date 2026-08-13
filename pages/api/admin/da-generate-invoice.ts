@@ -129,10 +129,23 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         );
       }
 
-      const pipelineResult = await processDirectApplication(row.id, undefined, {
-        forceInvoice: true,
-        sendInvoiceEmail: true,
-      });
+      // Per-row isolation. The pipeline can throw outright (QBO auth blip, a
+      // Drive call that fails with something other than 404), and an unhandled
+      // throw here used to escape to the outer catch and 500 the whole request —
+      // so one bad row reported every selected row as failed, even the ones
+      // already invoiced successfully. Now a throw fails only its own row.
+      let pipelineResult: Awaited<ReturnType<typeof processDirectApplication>>;
+      try {
+        pipelineResult = await processDirectApplication(row.id, undefined, {
+          forceInvoice: true,
+          sendInvoiceEmail: true,
+        });
+      } catch (pipelineErr) {
+        const error = pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr);
+        console.error(`[da-generate-invoice] threw for ${row.id}: ${error}`);
+        results.push({ id: row.id, success: false, error });
+        continue;
+      }
 
       if (pipelineResult.success && pipelineResult.invoiceId) {
         results.push({
