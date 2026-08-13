@@ -15,6 +15,10 @@ import { recordCourseChanges } from '../../../lib/courseChangeLog';
  * Deliberately does NOT touch tsc_title: it is a separate SSG-facing field and
  * some courses set it independently of the display title.
  *
+ * courseCode matches either the original course_code or the current
+ * new_course_code, so a renewed course can be renamed by the code it is
+ * actually known by today.
+ *
  * PUT { updates: [{ courseCode, title }, ...], dryRun?: boolean }
  */
 
@@ -75,8 +79,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // Resolve the code to an id: course_change_log keys on course_id, and the
       // UNIQUE constraint on course_code is not a guarantee across tenants'
       // historical data -- so verify a single match rather than assuming one.
+      //
+      // Match the CURRENT code too, not just the original: after a funding
+      // renewal the course is known everywhere (SSG, the course listing, the
+      // catalogue) by new_course_code, so that is the code a caller pastes in.
+      // Resolving only on course_code made a renewed course look not_found.
       const { rows } = await client.query(
-        `SELECT id, title FROM public.course WHERE course_code = $1`,
+        `SELECT id, title
+           FROM public.course
+          WHERE course_code = $1
+             OR NULLIF(btrim(COALESCE(new_course_code, '')), '') = $1`,
         [courseCode]
       );
 
