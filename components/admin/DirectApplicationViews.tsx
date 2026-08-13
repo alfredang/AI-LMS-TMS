@@ -1669,6 +1669,14 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [invProgressFailed, setInvProgressFailed] = useState(0);
     const [invProgressWarnings, setInvProgressWarnings] = useState(0);
     const [invProgressTotal, setInvProgressTotal] = useState(0);
+    // Per-row failure/warning reasons. The API has always returned these; the
+    // modal used to show only a count, so "1 failed" gave the admin nothing to
+    // act on. The pipeline prefixes each message with the step that failed
+    // (invoice, invoice_drive, grant_invoice, …), which is usually enough to
+    // tell a missing course fee from a QuickBooks outage.
+    const [invProgressIssues, setInvProgressIssues] = useState<
+        { label: string; message: string; kind: 'failed' | 'warning' }[]
+    >([]);
 
     const toggleDaField = async (appId: string, field: 'enrol' | 'calendar' | 'invoice', newValue: boolean) => {
         setApplications(prev => prev.map(a => {
@@ -1724,6 +1732,7 @@ export const ViewDirectApplicationView: React.FC = () => {
         setInvProgressSucceeded(0);
         setInvProgressFailed(0);
         setInvProgressWarnings(0);
+        setInvProgressIssues([]);
         setInvProgressTotal(ids.length);
         setInvProgressStartTime(Date.now());
 
@@ -1739,6 +1748,25 @@ export const ViewDirectApplicationView: React.FC = () => {
             setInvProgressSucceeded(succeeded.length);
             setInvProgressFailed(failed.length);
             setInvProgressWarnings(warnings.length);
+
+            // Surface WHY, not just how many. Failures first — those are the
+            // rows that produced no invoice and need the admin to act.
+            const labelForResult = (r: any) => {
+                const app = applications.find(a => a.id === r.id);
+                return app?.application_id || app?.trainee_name || String(r.id || '').slice(0, 8);
+            };
+            setInvProgressIssues([
+                ...failed.map((r: any) => ({
+                    label: labelForResult(r),
+                    message: String(r.error || 'Unknown error'),
+                    kind: 'failed' as const,
+                })),
+                ...warnings.map((r: any) => ({
+                    label: labelForResult(r),
+                    message: String(r.warning || 'Supplemental invoice issue'),
+                    kind: 'warning' as const,
+                })),
+            ]);
             setInvProgressDone(true);
             fetchApplications();
             if (warnings.length > 0) {
@@ -1754,11 +1782,15 @@ export const ViewDirectApplicationView: React.FC = () => {
             } else {
                 showToast(`${succeeded.length} invoice${succeeded.length !== 1 ? 's' : ''} generated successfully`);
             }
-        } catch {
+        } catch (err) {
+            // Network drop / non-JSON response — no per-row detail exists, so
+            // report the transport error itself rather than a bare "failed".
+            const message = err instanceof Error ? err.message : String(err);
             setInvProgressFailed(ids.length);
             setInvProgressWarnings(0);
+            setInvProgressIssues([{ label: 'Request', message, kind: 'failed' }]);
             setInvProgressDone(true);
-            showToast('Invoice generation failed. Please try again.', true);
+            showToast(`Invoice generation failed: ${message}`, true);
         } finally {
             setIsGeneratingInv(false);
         }
@@ -2622,6 +2654,38 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             <div className="text-base font-bold text-gray-700 dark:text-gray-300">{fmt(elapsed)}</div>
                                             <div className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">Duration</div>
                                         </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {invProgressDone && invProgressIssues.length > 0 && (
+                                <div className="px-6 pt-3">
+                                    <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
+                                        What went wrong
+                                    </div>
+                                    <div className="max-h-44 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-600">
+                                        {invProgressIssues.map((issue, idx) => (
+                                            <div key={`${issue.label}-${idx}`} className="px-3 py-2">
+                                                <div className="flex items-start gap-2">
+                                                    <span
+                                                        className={`mt-0.5 shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${issue.kind === 'failed'
+                                                            ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                                            }`}
+                                                    >
+                                                        {issue.kind === 'failed' ? 'Failed' : 'Warning'}
+                                                    </span>
+                                                    <div className="min-w-0">
+                                                        <div className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 truncate">
+                                                            {issue.label}
+                                                        </div>
+                                                        <div className="text-[11px] text-gray-600 dark:text-gray-400 break-words whitespace-pre-wrap">
+                                                            {issue.message}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             )}
