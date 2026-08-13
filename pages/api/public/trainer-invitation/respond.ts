@@ -16,6 +16,7 @@ import {
 import { sendNextTrainerInvitationForCourseRun, sendExhaustedListAlert } from '@/lib/trainerInvitationSender';
 import { getGoogleCredentials } from '@/lib/google-auth/googleAuth';
 import { pushTrainerToTpgForRun } from '@/lib/ssg/pushTrainerToTpgForRun';
+import { autoShareCourseResourcesWithTrainerByRun } from '@/lib/google-drive/drive-helpers';
 import { calendarWritesAllowed } from '@/lib/calendar/calendarGuard';
 import { getLocalYMD } from '../../../../lib/dateHelpers';
 
@@ -391,6 +392,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           `✅ [trainer-invitation/respond] course_run_trainer ${row?.was_inserted ? 'INSERTED' : 'UPDATED'} ` +
           `id=${row?.id} for course_run=${invitation.course_run_id}`
         );
+
+        // Auto-share courseware + assessment folders with the accepting trainer (non-blocking)
+        autoShareCourseResourcesWithTrainerByRun(invitation.course_run_id, invitation.trainer_email).catch(err => {
+          console.warn(`⚠️ [trainer-invitation/respond] auto-share failed (non-blocking): ${err?.message}`);
+        });
 
         // #4: confirm the class immediately on accept. Matches the lazy derive
         // in upcoming-classes (trainer + learners → Confirmed) but without

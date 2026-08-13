@@ -4,6 +4,7 @@ import pool from '../../../lib/db';
 import { ensureClassCalendarEvent, syncClassAttendees, removeClassCalendarEvents } from '../../../lib/calendar/ensureClassCalendarEvent';
 import { pushTrainerToTpgForRun, clearTrainerOnTpgForRun } from '../../../lib/ssg/pushTrainerToTpgForRun';
 import { repointEnrolmentToRunForLearner, cancelEnrolmentForLearnerOnRun } from '../../../lib/ssg/mutateEnrolmentForLearner';
+import { autoShareCourseResourcesWithTrainerByRun } from '../../../lib/google-drive/drive-helpers';
 
 /**
  * POST /api/admin/move-class-to-run
@@ -211,6 +212,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     await client.query('COMMIT');
+
+    // Auto-share courseware + assessment folders with the target run's trainers (non-blocking)
+    for (const t of inserted) {
+      if (t.email) {
+        autoShareCourseResourcesWithTrainerByRun(targetRunId, t.email).catch(err => {
+          console.warn(`⚠️ [move-class-to-run] auto-share failed (non-blocking): ${err?.message}`);
+        });
+      }
+    }
 
     // Did the source run end up vacated (no active learners left)? Reported always
     // so the UI can offer to clean up the source's now-orphaned calendar events even

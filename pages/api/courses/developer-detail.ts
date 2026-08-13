@@ -22,6 +22,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           -- issues a new code and parks it in new_course_code, leaving the original
           -- in course_code; reading the bare column shows a retired code.
           COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS course_code,
+          c.course_code AS original_course_code,
+          c.new_course_code,
           c.tsc_title,
           c.tsc_code,
           cr.course_run_id,
@@ -57,6 +59,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       data: {
         title: courseDetail.course_title,
         tgsRef: courseDetail.course_code,
+        originalCourseCode: courseDetail.original_course_code || '',
+        newCourseCode: courseDetail.new_course_code || '',
+        currentCourseCode: courseDetail.course_code || '',
         tscTitle: courseDetail.tsc_title,
         tscCode: courseDetail.tsc_code,
         courseRunId: courseDetail.course_run_id,

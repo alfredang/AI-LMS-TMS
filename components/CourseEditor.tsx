@@ -1692,7 +1692,19 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     <LinkField label="Image URL Link" value={course.imageUrl} />
                                 </div>
                                 <ReadonlyValueField label="Course Title" value={course.title} />
-                                <ReadonlyValueField label="Course Code" value={course.courseCode} />
+                                {/* Renewal issues a new code for the same course. Always show the
+                                    pair — same labels as edit mode — even when unrenewed, so the
+                                    view/edit fields line up one-to-one. */}
+                                {(() => {
+                                    const original = (course.originalCourseCode || course.courseCode || '').trim();
+                                    const current = ((course.currentCourseCode || course.newCourseCode || '').trim()) || original;
+                                    return (
+                                        <>
+                                            <ReadonlyValueField label="Course Code (Original)" value={original || current} />
+                                            <ReadonlyValueField label="Course Code (Current)" value={current || original} />
+                                        </>
+                                    );
+                                })()}
                                 <ReadonlyValueField label="TSC Title" value={course.tscTitle} />
                                 <ReadonlyValueField label="TSC Code" value={course.tscCode} />
                                 <ReadonlyValueField label="Funding Validity" value={course.fundingValidity} />
