@@ -94,4 +94,4 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance'] });
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'finance', 'developer', 'trainer'] });
