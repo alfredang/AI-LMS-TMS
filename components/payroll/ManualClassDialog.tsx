@@ -4,6 +4,7 @@ import { findTier, payoutAmount, PayoutTier } from '@lib/payroll/calculate';
 import { authHeader } from '@lib/auth/authHeader';
 import { fmtCurrency } from './shared';
 import DateRangeCell from '../ui/DateRangeCell';
+import type { RaisedBill } from './PayoutEditDialog';
 
 export interface ManualClass {
   id: string;
@@ -31,7 +32,7 @@ interface Props {
   initial?: ManualClass | null;
   tiers?: PayoutTier[];
   onClose: () => void;
-  onSaved: (row: ManualClass) => void;
+  onSaved: (row: ManualClass, bill?: RaisedBill | null) => void;
   onDeleted?: (id: string) => void;
 }
 
@@ -219,7 +220,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
       });
       const j = await r.json();
       if (!j.success) throw new Error(j.error || 'Failed to save');
-      onSaved(j.data as ManualClass);
+      onSaved(j.data as ManualClass, j.bill ?? null);
     } catch (e: any) {
       setError(e?.message || 'Failed to save');
       setSaving(false);

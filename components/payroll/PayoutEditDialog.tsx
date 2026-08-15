@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Icon, IconName } from '../ui/Icon';
 import { authHeader } from '@lib/auth/authHeader';
 import { findTier, PayoutTier } from '@lib/payroll/calculate';
-import { fmtDateRange } from '@lib/payroll/formatDate';
+import { fmtDate, fmtDateRange } from '@lib/payroll/formatDate';
 import DateRangeCell from '../ui/DateRangeCell';
 
 export interface PayoutRow {
@@ -13,7 +13,11 @@ export interface PayoutRow {
   course_title?: string | null;
   course_code?: string | null;
   start_date?: string | null;
+  /** Effective end date: the Payroll override if set, else the class's own. */
   end_date?: string | null;
+  /** The class's own end date, for showing what an override departs from. */
+  class_end_date?: string | null;
+  end_date_override?: string | null;
   class_dates?: string | null; // manual (non-WSQ) classes only
   trainer_id: string;
   trainer_name?: string | null;
@@ -28,11 +32,18 @@ export interface PayoutRow {
   bill_no?: string | null;
 }
 
+/** The invoice a save triggered, when marking a payout completed raised one. */
+export interface RaisedBill {
+  id: string;
+  bill_no: string;
+  status: 'pending' | 'posted' | 'failed' | 'voided';
+}
+
 interface Props {
   row: PayoutRow;
   tiers?: PayoutTier[];
   onClose: () => void;
-  onSaved: (updated: PayoutRow) => void;
+  onSaved: (updated: PayoutRow, bill?: RaisedBill | null) => void;
 }
 
 const computeEstimated = (numLearners: number, courseFee: number, tierPercent: number) => {
@@ -89,6 +100,7 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
     row.actual_payout === null || row.actual_payout === undefined ? '' : String(row.actual_payout)
   );
   const [status, setStatus] = useState<PayoutRow['status']>(row.status);
+  const [endDate, setEndDate] = useState<string>((row.end_date || '').slice(0, 10));
   const [paymentDate, setPaymentDate] = useState<string>(row.payment_date || '');
   const [remark, setRemark] = useState<string>(row.remark || '');
   const [billNo, setBillNo] = useState<string>(row.bill_no || '');
@@ -116,11 +128,12 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
       tierPercent !== String(row.tier_percent ?? '') ||
       actual !== origActual ||
       status !== row.status ||
+      endDate !== (row.end_date || '').slice(0, 10) ||
       paymentDate !== (row.payment_date || '') ||
       remark !== (row.remark || '') ||
       billNo !== (row.bill_no || '')
     );
-  }, [numLearners, courseFee, tierPercent, actual, status, paymentDate, remark, billNo, row]);
+  }, [numLearners, courseFee, tierPercent, actual, status, endDate, paymentDate, remark, billNo, row]);
 
   const requestClose = () => {
     if (saving) return;
@@ -161,6 +174,7 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
           tier_percent: tierPercent === '' ? null : Number(tierPercent),
           actual_payout: actual === '' ? null : Number(actual),
           status,
+          end_date: endDate || null,
           payment_date: paymentDate || null,
           remark: remark || null,
           // Only sent when actually edited — otherwise an empty string would
@@ -170,7 +184,7 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
       });
       const j = await r.json();
       if (!j.success) throw new Error(j.error || 'Failed to save');
-      onSaved(j.data);
+      onSaved(j.data, j.bill ?? null);
     } catch (e: any) {
       setError(e?.message || 'Failed to save');
     } finally {
@@ -361,6 +375,37 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
                   Trainer will only see this payout once status is set to Completed.
                 </p>
               )}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1 gap-2">
+                <label className="text-xs font-medium">Class End Date</label>
+                {row.class_end_date && endDate !== row.class_end_date.slice(0, 10) && (
+                  <button
+                    type="button"
+                    onClick={() => setEndDate(row.class_end_date!.slice(0, 10))}
+                    className="text-[11px] text-primary hover:underline whitespace-nowrap"
+                  >
+                    Reset to class date ({fmtDate(row.class_end_date)})
+                  </button>
+                )}
+              </div>
+              <DateRangeCell
+                singleDate
+                standalone
+                value={endDate}
+                onChange={setEndDate}
+              />
+              <p className="mt-1.5 text-[11px] text-on-surface-secondary">
+                {status === 'completed' && row.end_date ? (
+                  <>
+                    This payout is already confirmed — its bill keeps the number it was issued
+                    with. Changing the date here only moves the payout in the list.
+                  </>
+                ) : (
+                  <>Sets the billing month and the bill number (TX{(endDate || '').replace(/-/g, '').slice(2) || 'YYMMDD'}…). Corrects payroll only — the class itself is unchanged.</>
+                )}
+              </p>
             </div>
 
             <div>
