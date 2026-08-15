@@ -17,6 +17,7 @@
 
 import crypto from 'crypto';
 import pool from './db';
+import { realApplicationId } from './daApplicationId';
 import { getSSGCredentialsService } from './ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from './ssg/utils/http-utils';
 import { getTrainingPartnerIdentifiers } from './trainingPartnerIdentifiers';
@@ -25,6 +26,7 @@ import { searchEnrolment } from './ssg/services/enrolment-service';
 import { isEnrollableDaStatus } from './da-status';
 import {
   createDirectApplicationInvoice,
+  repairDirectApplicationInvoiceDescriptions,
   type DaApplicationForInvoice,
 } from './quickbooks/createDirectApplicationInvoice';
 import {
@@ -1107,18 +1109,7 @@ export async function processDirectApplication(
       }
     }
 
-    if (!invoiceId) {
-      if (invoiceDocNumber || mainInvoiceDriveFileId || row.invoice_drive_web_view_link) {
-        invoiceDocNumber = null;
-        mainInvoiceDriveFileId = null;
-        await updateRow(appId, {
-          invoice_doc_number: null,
-          invoice_drive_file_id: null,
-          invoice_drive_web_view_link: null,
-        });
-      }
-
-      const forInvoice: DaApplicationForInvoice & { enrolment_id?: string } = {
+    const forInvoice: DaApplicationForInvoice & { enrolment_id?: string } = {
         id: row.id,
         trainee_name: row.trainee_name,
         trainee_email: row.trainee_email,
@@ -1141,8 +1132,22 @@ export async function processDirectApplication(
         other_grant_id: null,
         other_scheme_code: null,
         other_amount: null,
-        enrolment_id: enrolmentReference ?? undefined,
-      };
+      enrolment_id: enrolmentReference ?? undefined,
+    };
+
+    if (!invoiceId) {
+      if (invoiceDocNumber || mainInvoiceDriveFileId || row.invoice_drive_web_view_link) {
+        invoiceDocNumber = null;
+        mainInvoiceDriveFileId = null;
+        await updateRow(appId, {
+          invoice_doc_number: null,
+          invoice_drive_file_id: null,
+          invoice_drive_web_view_link: null,
+        });
+      }
+
+      // No override here on purpose: forceInvoice bypasses the status and NRIC
+      // gates, but it must not be able to bill a WSQ learner the full fee.
       const created = await createDirectApplicationInvoice(forInvoice);
       invoiceId = created.invoiceId;
       invoiceDocNumber = created.docNumber || null;
@@ -1157,6 +1162,25 @@ export async function processDirectApplication(
       });
     } else {
       console.log(`auto-enrol [${applicationId}] reusing existing invoice: ${invoiceId}`);
+      // Heal an invoice cut before the row carried its final details — above all
+      // one whose SFC line still cites the internal `MANUAL-…` placeholder as an
+      // Application ID. Non-blocking: a stale description must not fail the run.
+      try {
+        const repaired = await repairDirectApplicationInvoiceDescriptions(invoiceId, forInvoice);
+        if (repaired) {
+          // QuickBooks is corrected; the PDF already archived in Drive is not.
+          // uploadInvoicePdfToDrive dedups by filename, so re-uploading would
+          // just re-link the stale copy — replacing it is a separate step.
+          console.log(
+            `auto-enrol [${applicationId}] corrected line descriptions on invoice ${invoiceId} (Drive PDF copy still shows the old text)`
+          );
+        }
+      } catch (e) {
+        console.warn(
+          `auto-enrol [${applicationId}] could not refresh invoice ${invoiceId} descriptions (non-blocking):`,
+          e instanceof Error ? e.message : e
+        );
+      }
     }
   } catch (err) {
     await markFailed(appId, 'invoice', err);
@@ -1235,7 +1259,9 @@ export async function processDirectApplication(
   const shouldGenerateGrantInvoice = effectiveGrantLines.length > 0 || hasVisibleGrantData;
   const effectiveSfcClaimId = hasIdentifier(row.skillsfuture_credit_claim_id) ? row.skillsfuture_credit_claim_id : '';
   const shouldGenerateSfcInvoice = hasIdentifier(row.skillsfuture_credit_claim_id) || toMoney(row.skillsfuture_credit) > 0;
-  const sfcReferenceId = effectiveSfcClaimId || String(row.application_id || '').trim();
+  // Names the SFC invoice PDF in Drive — the synthetic `MANUAL-…` placeholder
+  // is an internal key, not a reference anyone should see on a filename.
+  const sfcReferenceId = effectiveSfcClaimId || realApplicationId(row.application_id) || '';
   const supplementalErrors: { step: string; message: string }[] = [];
   let existingGrantInvoiceId = hasIdentifier(row.grant_invoice_id) ? row.grant_invoice_id : '';
   let existingGrantDriveFileId = hasIdentifier(row.grant_invoice_drive_file_id) ? row.grant_invoice_drive_file_id : '';
