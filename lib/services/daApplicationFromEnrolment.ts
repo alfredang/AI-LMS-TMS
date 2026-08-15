@@ -31,19 +31,17 @@ import pool from '../db';
  * genuine MySkillsFuture applications — the Excel upload needs to recognise one
  * and upgrade it in place instead of rejecting the real application as a
  * duplicate of its own placeholder.
+ *
+ * The marker is an internal key: never print it as an "Application ID". See
+ * `lib/daApplicationId.ts`, which owns the id rules and is safe to import from
+ * client code (this module pulls in the DB pool).
  */
-const SYNTHETIC_APPLICATION_ID_PREFIX = 'MANUAL-';
+import {
+  buildSyntheticDaApplicationId,
+  isSyntheticDaApplicationId,
+} from '../daApplicationId';
 
-export function buildSyntheticDaApplicationId(enrolmentId: string): string {
-  return `${SYNTHETIC_APPLICATION_ID_PREFIX}${String(enrolmentId).trim().toUpperCase()}`;
-}
-
-export function isSyntheticDaApplicationId(value: unknown): boolean {
-  return String(value || '')
-    .trim()
-    .toUpperCase()
-    .startsWith(SYNTHETIC_APPLICATION_ID_PREFIX);
-}
+export { buildSyntheticDaApplicationId, isSyntheticDaApplicationId };
 
 function isRealSsgEnrolmentId(value: unknown): boolean {
   return /^ENR-/i.test(String(value || '').trim());

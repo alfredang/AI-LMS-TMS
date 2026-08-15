@@ -4,7 +4,9 @@
  *
  * Numbering and shape:
  *   - DocNumber      = SFC-{application_id} from da_application
- *                      (e.g. "SFC-CA-2604-000492")
+ *                      (e.g. "SFC-CA-2604-000492"). Rows carrying only the
+ *                      synthetic `MANUAL-…` placeholder instead of a real
+ *                      MySkillsFuture id fall back to the SSG claim id.
  *   - PO#            = main tax invoice DocNumber (cross-reference)
  *   - Customer       = fixed QB customer "Singapore Workforce Development Agency (WSG)"
  *   - BillAddr       = "Singapore Workforce Development Agency (WSG)"
@@ -21,6 +23,7 @@
  */
 
 import pool from '../db';
+import { buildSfcCreditLineDescription, realApplicationId } from '../daApplicationId';
 import {
   qboCreateInvoice,
   qboFindCustomerByName,
@@ -76,7 +79,10 @@ function resolveSkillsFutureCreditItemName(): string {
 }
 
 function normalizeApplicationId(rawApplicationId: string | null | undefined): string {
-  return String(rawApplicationId || '').trim().toUpperCase();
+  // Only a genuine MySkillsFuture id may number an invoice. Our `MANUAL-…`
+  // placeholder would produce `SFC-MANUAL-ENR-…`, which finance's `SFC-CA-…`
+  // convention does not match — fall through to the SSG claim id instead.
+  return (realApplicationId(rawApplicationId) || '').toUpperCase();
 }
 
 function buildSfcInvoiceDocNumber(
@@ -197,7 +203,7 @@ export async function createDirectApplicationSfcInvoice(
       {
         DetailType: 'SalesItemLineDetail',
         Amount: amount,
-        Description: `SkillsFuture Credit Usage/Claim:\nApplication ID: ${input.applicationId ?? '-'}`,
+        Description: buildSfcCreditLineDescription(input.applicationId, input.enrolmentId),
         SalesItemLineDetail: {
           ItemRef: { value: item.id, name: item.name },
           Qty: 1,

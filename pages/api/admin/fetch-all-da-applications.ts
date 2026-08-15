@@ -130,8 +130,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 FROM ssg_grants
                 GROUP BY LOWER(TRIM(enrollment_id))
             ) sg ON sg.enrolment_key = LOWER(TRIM(da.enrolment_id))
-            WHERE COALESCE(cr.end_date, da.course_end_date) >= CURRENT_DATE - INTERVAL '30 days'
-               OR COALESCE(cr.end_date, da.course_end_date) IS NULL
+            WHERE
+                -- Direct Applications come only from TPG Gateway / MySkillsFuture.
+                -- Rows keyed 'MANUAL-<enrolment id>' are minted by
+                -- lib/services/daApplicationFromEnrolment.ts for learners enrolled
+                -- through TPG Management -> Enrol Learners, who have no application
+                -- at all. They live in da_application because the DA pipeline is
+                -- what drives calendar sync and invoicing — not because they are
+                -- Direct Applications. This view must never list them.
+                -- COALESCE, not a bare NOT LIKE: a NULL application_id would make
+                -- the comparison NULL and silently drop a legitimate row.
+                UPPER(COALESCE(da.application_id, '')) NOT LIKE 'MANUAL-%'
+              AND (
+                    COALESCE(cr.end_date, da.course_end_date) >= CURRENT_DATE - INTERVAL '30 days'
+                 OR COALESCE(cr.end_date, da.course_end_date) IS NULL
+              )
             ORDER BY COALESCE(cr.start_date, da.course_start_date) ASC NULLS LAST
         `);
 

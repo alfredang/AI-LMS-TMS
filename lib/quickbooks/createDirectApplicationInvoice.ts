@@ -4,6 +4,7 @@
  */
 
 import { callQbProxy } from './qbProxyClient';
+import { buildSfcCreditLineDescription } from '../daApplicationId';
 import { getLocalYMD } from '../dateHelpers';
 import { refreshGrantsForEnrolments } from '../services/billingSync';
 import { resolveGrantDeductionLinesForInvoice } from '../services/daInvoiceGrantLines';
@@ -150,6 +151,75 @@ function resolveSkillsFutureCreditItemName(): string {
   ).trim();
 }
 
+/**
+ * Rewrite stale line descriptions on an invoice QuickBooks already holds.
+ *
+ * The case that matters: an SFC line still reading
+ * "Application ID: MANUAL-ENR-…" — the internal placeholder minted for a
+ * manually enrolled learner, which was never an application id and must not sit
+ * on a learner-facing tax invoice.
+ *
+ * Returns the COMPLETE line array to send, or null when nothing needs changing.
+ * The whole array is deliberate: a QBO sparse update treats `Line` as the full
+ * set and drops any line left out of it, which would silently delete the grant
+ * and SFC deduction lines and inflate the balance due.
+ */
+function repairInvoiceLineDescriptions(
+  rawLines: unknown,
+  app: DaApplicationForInvoice,
+  enrolmentId: string
+): any[] | null {
+  const existingLines = Array.isArray(rawLines) ? rawLines : [];
+  if (existingLines.length === 0) return null;
+
+  const desiredCourseDescription = buildDirectApplicationCourseDescription(app);
+  const desiredSfcDescription = buildSfcCreditLineDescription(app.application_id, enrolmentId);
+  const courseLine =
+    existingLines.find(
+      (line: any) => line?.DetailType === 'SalesItemLineDetail' && line?.SalesItemLineDetail?.Qty === 1
+    ) || existingLines[0];
+
+  let changed = false;
+  const repaired = existingLines.map((line: any) => {
+    const description = String(line?.Description ?? '');
+    const desired =
+      courseLine?.Id && line?.Id === courseLine.Id
+        ? desiredCourseDescription
+        : /^SkillsFuture Credit Usage\/Claim:/i.test(description)
+          ? desiredSfcDescription
+          : null;
+    if (desired == null || description === desired) return line;
+    changed = true;
+    return { ...line, Description: desired };
+  });
+
+  return changed ? repaired : null;
+}
+
+/**
+ * Bring an invoice QuickBooks already holds back in line with the DA row.
+ *
+ * Called on the "reusing existing invoice" path so invoices cut before a fix —
+ * notably those carrying a `MANUAL-…` placeholder as their Application ID —
+ * heal themselves the next time the pipeline touches the row, without cutting a
+ * second invoice. A no-op when the descriptions are already correct.
+ */
+export async function repairDirectApplicationInvoiceDescriptions(
+  invoiceId: string,
+  app: DaApplicationForInvoice & { enrolment_id?: string }
+): Promise<boolean> {
+  const invoice = await qboReadInvoice(undefined, invoiceId);
+  const repairedLines = repairInvoiceLineDescriptions(
+    invoice?.raw?.Line,
+    app,
+    (app.enrolment_id || '').trim()
+  );
+  if (!repairedLines || !invoice?.syncToken) return false;
+
+  await qboSparseUpdateInvoice(undefined, invoiceId, invoice.syncToken, { Line: repairedLines });
+  return true;
+}
+
 export async function createDirectApplicationInvoice(
   app: DaApplicationForInvoice & { enrolment_id?: string }
 ): Promise<CreatedInvoice> {
@@ -183,6 +253,32 @@ export async function createDirectApplicationInvoice(
     combinedSubsidy,
     grantIdFallback: app.grant_id,
   });
+
+  // Refuse to bill a WSQ learner the full fee because the grant hasn't landed.
+  //
+  // The grant refresh above is deliberately non-blocking, and an empty
+  // `ssg_grants` result is indistinguishable from "not funded" — so a single
+  // slow or failed grant issuance used to produce a silently correct-looking
+  // invoice at 100% of the fee. That is the worst possible failure here: it
+  // overcharges the learner and gets emailed to them, with every step in the
+  // pipeline reporting success.
+  //
+  // Failing instead leaves auto_enrol_status = 'failed', which the sweep
+  // retries — so the invoice cuts itself once SSG issues the grant, with no
+  // one watching.
+  //
+  // Deliberately NOT bypassable by `forceInvoice`. That flag is set by the
+  // Generate Invoice button, which is a routine bulk action — letting it waive
+  // this check would mean an admin clicking through an amber row reintroduces
+  // the exact overcharge this guard exists to prevent, silently, on any row in
+  // the selection still waiting for its grant. A row that stays amber until
+  // the grant lands is the honest signal.
+  if (grantDeductionLines.length === 0 && subsidy <= 0) {
+    throw new Error(
+      `No SSG grant found for ${enrolmentId} — refusing to invoice the full course fee. ` +
+        `SSG may not have issued the grant yet; this row retries automatically once it does.`
+    );
+  }
 
   const netAmount = Number((fullFee - subsidy - credit + gst).toFixed(2));
 
@@ -274,21 +370,9 @@ export async function createDirectApplicationInvoice(
       ...defaultEmailFields,
     };
 
-    const desiredDescription = buildDirectApplicationCourseDescription(app);
-    const existingLines = Array.isArray(reusableOrphanInvoice?.raw?.Line) ? reusableOrphanInvoice.raw.Line : [];
-    const courseLine =
-      existingLines.find((line: any) => line?.DetailType === 'SalesItemLineDetail' && line?.SalesItemLineDetail?.Qty === 1) ||
-      existingLines[0];
-    if (courseLine?.Id && courseLine.Description !== desiredDescription) {
-      fieldsToUpdate.Line = [
-        {
-          Id: courseLine.Id,
-          DetailType: courseLine.DetailType,
-          Amount: courseLine.Amount,
-          Description: desiredDescription,
-          SalesItemLineDetail: courseLine.SalesItemLineDetail,
-        },
-      ];
+    const repairedLines = repairInvoiceLineDescriptions(reusableOrphanInvoice?.raw?.Line, app, enrolmentId);
+    if (repairedLines) {
+      fieldsToUpdate.Line = repairedLines;
     }
 
     const reusableSyncToken = reusableOrphanInvoice?.syncToken || reusableOrphan.syncToken;
@@ -342,7 +426,7 @@ export async function createDirectApplicationInvoice(
   lines.push({
     DetailType: 'SalesItemLineDetail',
     Amount: -credit,
-    Description: `SkillsFuture Credit Usage/Claim:\nApplication ID: ${app.application_id ?? '-'}`,
+    Description: buildSfcCreditLineDescription(app.application_id, enrolmentId),
     SalesItemLineDetail: {
       ItemRef: await resolveLineItemRef({
         courseItemRef,
