@@ -133,6 +133,9 @@ public/uploads/claims/*
 # Generated course banner PNGs (uploaded to R2 from there)
 public/uploads/course-banners/*
 public/uploads/**/*.pdf
+
+# Local output of scripts/preview-trainer-bill.ts
+bill-preview.pdf
 public/uploads/**/*.xlsx
 public/uploads/**/*.xls
 # server/public/uploads/

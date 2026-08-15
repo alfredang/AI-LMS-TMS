@@ -22,6 +22,27 @@ async function getInvoicesFolderId(): Promise<string> {
 }
 
 /**
+ * Folder for trainer billing invoices (Payroll). Separate from the customer
+ * invoices folder above — these are payables, and Finance keeps them apart.
+ *
+ * Resolved the same way as the customer folder: Company Settings first, then
+ * env, then the Tertiary default. Other tenants override via either of the
+ * first two rather than by changing this default.
+ */
+export async function getTrainerBillsFolderId(): Promise<string> {
+  const r = await pool.query(
+    `SELECT key_value
+     FROM training_provider_api
+     WHERE key_name = 'GOOGLE_DRIVE_TRAINER_BILLS_FOLDER_ID'
+     LIMIT 1`
+  );
+  const fromDb = r.rows[0]?.key_value?.trim();
+  if (fromDb) return fromDb;
+
+  return (process.env.GOOGLE_DRIVE_TRAINER_BILLS_FOLDER_ID || '1HKveQq8thHD-QAYYAltt1fE-L3ogk3dB').trim();
+}
+
+/**
  * Returns true if the given Drive file id resolves to a readable file.
  * Used to detect stale `*_drive_file_id` values (file was deleted / moved /
  * trashed in Drive since we last uploaded) so we can re-upload instead of
@@ -44,12 +65,39 @@ export async function driveFileExists(fileId: string | null | undefined): Promis
   }
 }
 
+/**
+ * Move a Drive file to the bin. Used when the document it represents is
+ * withdrawn — a trainer bill whose payout was un-confirmed, or a CA invoice
+ * deleted so the application can be re-invoiced — so Drive stops serving a PDF
+ * for something that no longer exists.
+ *
+ * Trashed rather than hard-deleted: recoverable for 30 days if the removal was
+ * a mistake. Returns false instead of throwing when the file is already gone,
+ * so callers can treat cleanup as best-effort.
+ */
+export async function trashDriveFile(fileId: string | null | undefined): Promise<boolean> {
+  const id = String(fileId || '').trim();
+  if (!id) return false;
+  try {
+    const drive = await getDriveClient();
+    await drive.files.update({ fileId: id, requestBody: { trashed: true } });
+    return true;
+  } catch (err: any) {
+    const status = err?.code || err?.response?.status;
+    if (status === 404) return false;
+    console.warn('[invoiceDriveUpload] could not trash file', id, err instanceof Error ? err.message : err);
+    return false;
+  }
+}
+
 export async function uploadInvoicePdfToDrive(params: {
   pdf: Buffer;
   fileName: string;
+  /** Target folder. Defaults to the customer invoices folder. */
+  folderId?: string;
 }): Promise<{ fileId: string; webViewLink: string }> {
   const drive = await getDriveClient();
-  const folderId = await getInvoicesFolderId();
+  const folderId = params.folderId?.trim() || (await getInvoicesFolderId());
 
   const safeName = cleanFileName(params.fileName || `invoice_${Date.now()}.pdf`);
 
