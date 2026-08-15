@@ -4,6 +4,7 @@ import { payoutAmount } from '@lib/payroll/calculate';
 import { requireRole } from '@lib/auth/requireRole';
 import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
 import { acquireBillNoLock, ensureBillNoColumn, nextBillNo, normalizeBillNo } from '@lib/payroll/billNo';
+import { onPayoutConfirmed, onPayoutUnconfirmed } from '@lib/payroll/trainerBill';
 
 const numOrNull = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v));
 
@@ -40,6 +41,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method === 'DELETE') {
     try {
+      // Withdraw any billing invoice FIRST. A class can be deleted while its
+      // bill is live in QuickBooks; deleting the class would then leave a real
+      // payable in QBO with a Drive PDF and nothing in the LMS pointing at it.
+      // onPayoutUnconfirmed deletes the QBO bill and bins the PDF.
+      const withdrawal = await onPayoutUnconfirmed({ source: 'manual', payoutId: id });
+      if (!withdrawal.cleared) {
+        // The QuickBooks delete failed, so the payable still exists. Refuse
+        // rather than destroying the last reference to it — the bill row is
+        // left 'failed' and visible so it can be dealt with.
+        return res.status(409).json({
+          success: false,
+          error:
+            withdrawal.blocked.length > 0
+              ? `This class still has a bill in QuickBooks (${withdrawal.blocked.join(', ')}) that could not be removed. Delete it in QuickBooks first, then delete this class.`
+              : 'The billing invoice for this class could not be withdrawn, so it was not deleted. Please try again.',
+        });
+      }
+
       const r = await pool.query(`DELETE FROM payroll_manual_class WHERE id = $1 RETURNING id`, [id]);
       if (r.rowCount === 0) {
         return res.status(404).json({ success: false, error: 'class not found' });
@@ -120,7 +139,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Lock the row so the recompute reads a consistent (learners, fee, percent)
     // even under a concurrent edit — no lost-update on estimated_payout.
     const cur = await client.query(
-      `SELECT num_learners, course_fee, tier_percent, bill_no, start_date::text AS start_date
+      `SELECT num_learners, course_fee, tier_percent, status, bill_no, start_date::text AS start_date
          FROM payroll_manual_class WHERE id = $1 FOR UPDATE`,
       [id]
     );
@@ -204,7 +223,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       params
     );
     await client.query('COMMIT');
-    return res.status(200).json({ success: true, data: r.rows[0] });
+
+    // Billing invoice follows the payout's confirmation state — raised on
+    // pending→completed, voided on the way back. Both helpers swallow their own
+    // errors so QuickBooks can never fail the class update itself. Runs after
+    // COMMIT so the bill is built from the persisted row.
+    const prevStatus = cur.rows[0].status;
+    const newStatus = r.rows[0].status;
+    // See the note in payouts/[id].ts: `bill` lets the UI name the invoice it
+    // just triggered. Only the reserve step has run at this point.
+    let bill: Awaited<ReturnType<typeof onPayoutConfirmed>> = null;
+    if (prevStatus !== 'completed' && newStatus === 'completed') {
+      bill = await onPayoutConfirmed({ source: 'manual', payoutId: id, userId: authed.id });
+    } else if (prevStatus === 'completed' && newStatus !== 'completed') {
+      await onPayoutUnconfirmed({ source: 'manual', payoutId: id });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: r.rows[0],
+      bill: bill ? { id: bill.id, bill_no: bill.bill_no, status: bill.status } : null,
+    });
   } catch (err: any) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('payroll/manual-classes PUT failed', err);
