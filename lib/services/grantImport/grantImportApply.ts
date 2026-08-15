@@ -761,6 +761,23 @@ export async function applyGrantImportBatch(input: {
         );
       }
 
+      // Verify the payment actually linked to the invoice — matching metadata fields alone (above)
+      // is not enough: QB has silently saved a payment's date/ref/deposit/method while dropping its
+      // Line/LinkedTxn, leaving an orphaned unapplied payment while this code reported success.
+      const invoiceBalanceAfter = await qbGetInvoiceBalance(inv.app, inv.id);
+      if (invoiceBalanceAfter == null || invoiceBalanceAfter > invoiceBalance - amount + 0.01) {
+        try {
+          if (saved?.syncToken) await qbVoidPayment(inv.app, saved.id, String(saved.syncToken));
+        } catch {
+          // best-effort
+        }
+        throw new Error(
+          `QuickBooks payment ${created.id} was created but never linked to invoice ${inv.id} ` +
+            `(balance before: ${invoiceBalance.toFixed(2)}, after: ${invoiceBalanceAfter == null ? 'unreadable' : invoiceBalanceAfter.toFixed(2)}, expected ~${(invoiceBalance - amount).toFixed(2)}). ` +
+            `Voided the orphaned payment; not marking this row as applied.`
+        );
+      }
+
       applied += 1;
       const appliedAt = new Date().toISOString();
       await updateRowApplyResult({ rowId, applyStatus: 'applied', applyError: null, appliedAt, matchedQbObjectId: created.id });
