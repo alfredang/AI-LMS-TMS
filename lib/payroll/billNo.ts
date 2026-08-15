@@ -60,13 +60,18 @@ export function normalizeBillNo(raw: any): { ok: true; value: string | null } | 
  * ever exceeds 99 bills). Returns null when the date is missing/unparseable —
  * callers treat that as "leave bill_no unset" rather than inventing a date.
  *
+ * `floor` raises the starting point when a number is known to be taken
+ * somewhere these two tables can't see — specifically QuickBooks, where Finance
+ * raises bills by hand. Defaults to 0, i.e. the tables alone decide.
+ *
  * Pass the transaction's client so the read participates in the caller's
  * transaction; the caller is responsible for serializing concurrent issues
  * (see acquireBillNoLock).
  */
 export async function nextBillNo(
   client: PoolClient | typeof pool,
-  classDate: string | null | undefined
+  classDate: string | null | undefined,
+  floor = 0
 ): Promise<string | null> {
   const day = billNoDayPrefix(classDate);
   if (!day) return null;
@@ -74,7 +79,7 @@ export async function nextBillNo(
   // Suffix = everything after the TXYYMMDD prefix. Compare numerically so
   // "TX260306100" sorts above "TX26030699".
   const r = await client.query(
-    `SELECT COALESCE(MAX(suffix), 0)::int AS max_suffix
+    `SELECT GREATEST(COALESCE(MAX(suffix), 0), $2::bigint)::int AS max_suffix
        FROM (
          SELECT NULLIF(regexp_replace(substring(bill_no FROM 9), '\\D', '', 'g'), '')::bigint AS suffix
            FROM trainer_payout
@@ -84,7 +89,7 @@ export async function nextBillNo(
            FROM payroll_manual_class
           WHERE bill_no LIKE $1 || '%'
        ) s`,
-    [day]
+    [day, Math.max(0, Math.floor(Number(floor) || 0))]
   );
   const next = (Number(r.rows[0]?.max_suffix) || 0) + 1;
   return `${day}${String(next).padStart(2, '0')}`;
