@@ -5,13 +5,14 @@ import Footer from '../components/Footer';
 import { ProfilePage } from '../components/ProfilePage';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import PayoutListView from '../components/payroll/PayoutListView';
+import BillListView from '../components/payroll/BillListView';
 import PayrollSettingsView from '../components/payroll/PayrollSettingsView';
 import AiChatbot from '../components/AiChatbot';
 import { Icon, IconName } from '../components/ui/Icon';
 import { useLms } from '@contexts/LmsContext';
 import { View } from '@app-types/index';
 
-type PayrollPage = 'payouts' | 'settings';
+type PayrollPage = 'payouts' | 'bills' | 'settings';
 
 const PayrollLayout: React.FC = () => {
   const { currentView } = useLms();
@@ -88,6 +89,7 @@ const PayrollLayout: React.FC = () => {
                 </div>
               )}
               <NavItem target="payouts" label="Payout List" icon={IconName.DollarSign} />
+              <NavItem target="bills" label="Billing Invoices" icon={IconName.FileText} />
               <NavItem target="settings" label="Payout Tier Settings" icon={IconName.Settings} />
             </div>
             {isSidebarOpen && (
@@ -101,6 +103,7 @@ const PayrollLayout: React.FC = () => {
         <main className="flex-1 overflow-x-hidden">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {page === 'payouts' && <PayoutListView />}
+            {page === 'bills' && <BillListView />}
             {page === 'settings' && <PayrollSettingsView />}
           </div>
         </main>

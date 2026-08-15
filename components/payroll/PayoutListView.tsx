@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Icon, IconName } from '../ui/Icon';
-import PayoutEditDialog, { PayoutRow } from './PayoutEditDialog';
+import PayoutEditDialog, { PayoutRow, RaisedBill } from './PayoutEditDialog';
+import { ConfirmPopup } from '../admin/ConfirmPopup';
 import ManualClassDialog, { ManualClass } from './ManualClassDialog';
 import { PayoutTier } from '@lib/payroll/calculate';
 import { authHeader } from '@lib/auth/authHeader';
@@ -119,6 +120,14 @@ const PayoutListView: React.FC = () => {
   // Group key currently running a bulk mark/unmark, plus its failure message.
   const [bulkSaving, setBulkSaving] = useState<string | null>(null);
   const [bulkError, setBulkError] = useState<string | null>(null);
+  // Confirmation that marking a class paid raised a billing invoice. Without
+  // this the invoice is generated completely invisibly — the row just turns
+  // green and the document appears in another tab minutes later.
+  //
+  // Shown as the same ConfirmPopup the Company/Direct Application invoice flows
+  // use, not a toast: this posts a real document to QuickBooks, and a toast
+  // slides away before it has been read.
+  const [billNotice, setBillNotice] = useState<{ count: number; billNo?: string } | null>(null);
   // Mirrors bulkSaving synchronously — state updates are async, so the click
   // handler can't rely on them to reject a second concurrent run.
   const bulkRunning = useRef(false);
@@ -340,6 +349,7 @@ const PayoutListView: React.FC = () => {
     setBulkError(null);
     setBulkSaving(groupKey);
     const failed: string[] = [];
+    let raised = 0; // invoices the server reserved during this run
     for (const r of groupRows) {
       if (paid ? r.status === 'completed' : r.status !== 'completed') continue; // already there
       const est = Number(r.estimated_payout) || 0;
@@ -363,6 +373,7 @@ const PayoutListView: React.FC = () => {
         });
         const j = await res.json();
         if (!j.success) throw new Error(j.error || 'save failed');
+        if (j.bill) raised += 1;
         const updated = mergeSaved(r, j.data);
         setRows((rs) => rs.map((x) => (x.id === updated.id ? updated : x)));
       } catch {
@@ -375,6 +386,9 @@ const PayoutListView: React.FC = () => {
       setBulkError(
         `${failed.length} class${failed.length === 1 ? '' : 'es'} failed to update: ${failed.join(', ')}. Please try again.`
       );
+    }
+    if (raised > 0) {
+      setBillNotice({ count: raised });
     }
     load(true); // re-sync the Overview cards
   }, [load]);
@@ -506,7 +520,7 @@ const PayoutListView: React.FC = () => {
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-semibold text-on-surface">Selected window</h2>
           <span className="text-xs text-on-surface-secondary">
-            {windowMode === 'month' ? `${monthLabel} (WSQ)` : `Last ${months} month${months === 1 ? '' : 's'} (WSQ)`} + all non-WSQ, within your active filters
+            {windowMode === 'month' ? monthLabel : `Last ${months} month${months === 1 ? '' : 's'}`} — WSQ and non-WSQ, within your active filters
           </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px rounded-xl border border-default bg-gray-200 dark:bg-slate-700 overflow-hidden shadow-sm">
@@ -749,6 +763,7 @@ const PayoutListView: React.FC = () => {
                 <th className="px-3 py-2 whitespace-nowrap">Run ID</th>
                 <th className="px-3 py-2 whitespace-nowrap">Trainer</th>
                 <th className="px-3 py-2 whitespace-nowrap">Start Date</th>
+                <th className="px-3 py-2 whitespace-nowrap">End Date</th>
                 <th className="px-2 py-2 whitespace-nowrap text-right w-14"># Pax</th>
                 <th className="px-3 py-2 whitespace-nowrap text-right">Course Fee</th>
                 <th className="px-2 py-2 whitespace-nowrap text-right">Est. Pay</th>
@@ -761,10 +776,11 @@ const PayoutListView: React.FC = () => {
             )}
           </thead>
           <tbody>
-            {loading && <LoadingRow colSpan={groupByTrainer ? 5 : 13} label="Loading payouts…" />}
+            {loading && <LoadingRow colSpan={groupByTrainer ? 5 : 14} label="Loading payouts…" />}
             {!loading && totalItems === 0 && (
               <tr>
-                <td colSpan={groupByTrainer ? 5 : 13} className="px-3 py-12 text-center">
+                <td colSpan={groupByTrainer ? 5 : 14} className="px-3 py-12 text-center">
+
                   <div className="flex flex-col items-center gap-2 text-on-surface-secondary">
                     <Icon name={IconName.DollarSign} className="w-10 h-10 opacity-30" />
                     {rows.length === 0 ? (
@@ -828,6 +844,21 @@ const PayoutListView: React.FC = () => {
                       </td>
                     );
                   })()}
+                  <td
+                    className="px-3 py-2.5 whitespace-nowrap text-on-surface-secondary"
+                    title={
+                      r.end_date_override
+                        ? `Payroll end date. Class ends ${fmtDate(r.class_end_date)}.`
+                        : undefined
+                    }
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {fmtDate(r.end_date)}
+                      {r.end_date_override && (
+                        <Icon name={IconName.Edit} className="w-3 h-3 text-primary flex-shrink-0" />
+                      )}
+                    </span>
+                  </td>
                   <td className="px-2 py-2.5 text-right tabular-nums">{r.num_learners}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(r.course_fee)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums">{fmtCurrency(r.estimated_payout)}</td>
@@ -937,6 +968,7 @@ const PayoutListView: React.FC = () => {
                                 <th className="px-2 py-2 whitespace-nowrap">Course Code</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Run ID</th>
                                 <th className="px-2 py-2 whitespace-nowrap">Dates</th>
+                                <th className="px-2 py-2 whitespace-nowrap">End Date</th>
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Pax</th>
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Course Fee</th>
                                 <th className="px-2 py-2 whitespace-nowrap text-right">Est. Pay</th>
@@ -1007,6 +1039,21 @@ const PayoutListView: React.FC = () => {
                                     <td className="px-2 py-2.5 max-w-[12rem] truncate text-on-surface-secondary" title={dateLabel}>
                                       {dateLabel}
                                     </td>
+                                    <td
+                                      className="px-2 py-2.5 whitespace-nowrap text-on-surface-secondary"
+                                      title={
+                                        r.end_date_override
+                                          ? `Payroll end date. Class ends ${fmtDate(r.class_end_date)}.`
+                                          : undefined
+                                      }
+                                    >
+                                      <span className="inline-flex items-center gap-1">
+                                        {fmtDate(r.end_date)}
+                                        {r.end_date_override && (
+                                          <Icon name={IconName.Edit} className="w-3 h-3 text-primary flex-shrink-0" />
+                                        )}
+                                      </span>
+                                    </td>
                                     <td className="px-2 py-2.5 text-right tabular-nums">{r.num_learners}</td>
                                     <td className="px-2 py-2.5 text-right tabular-nums">{fmtCurrency(r.course_fee)}</td>
                                     <td className="px-2 py-2.5 text-right tabular-nums">{fmtCurrency(r.estimated_payout)}</td>
@@ -1076,9 +1123,12 @@ const PayoutListView: React.FC = () => {
           row={editing}
           tiers={tiers}
           onClose={() => setEditing(null)}
-          onSaved={(updated) => {
+          onSaved={(updated, bill?: RaisedBill | null) => {
             setRows((rs) => rs.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
             setEditing(null);
+            if (bill) {
+              setBillNotice({ count: 1, billNo: bill.bill_no });
+            }
             load(true); // re-sync Overview cards after the edit (silent, no flash)
           }}
         />
@@ -1092,9 +1142,12 @@ const PayoutListView: React.FC = () => {
             setCreatingManual(false);
             setEditingManual(null);
           }}
-          onSaved={() => {
+          onSaved={(_row, bill?: RaisedBill | null) => {
             setCreatingManual(false);
             setEditingManual(null);
+            if (bill) {
+              setBillNotice({ count: 1, billNo: bill.bill_no });
+            }
             load(true); // re-fetch so the merged list + overview reflect the change
           }}
           onDeleted={() => {
@@ -1104,6 +1157,29 @@ const PayoutListView: React.FC = () => {
         />
       )}
 
+      {billNotice && (
+        <ConfirmPopup
+          tone="success"
+          icon={IconName.FileText}
+          title={billNotice.count === 1 ? 'Billing invoice raised' : `${billNotice.count} billing invoices raised`}
+          subtitle={billNotice.billNo ? `Bill No ${billNotice.billNo}` : undefined}
+          confirmLabel="Got it"
+          hideCancel
+          onConfirm={() => setBillNotice(null)}
+          onCancel={() => setBillNotice(null)}
+        >
+          <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-1.5 text-xs text-gray-600 dark:text-gray-300">
+            <p>
+              The bill{billNotice.count === 1 ? ' is' : 's are'} being posted to QuickBooks and the PDF filed to Drive.
+              This runs in the background, so it may take a moment to appear.
+            </p>
+            <p>
+              Track {billNotice.count === 1 ? 'it' : 'them'} on the <span className="font-semibold text-on-surface">Billing Invoices</span> tab —
+              anything that fails shows there with the reason and can be retried.
+            </p>
+          </div>
+        </ConfirmPopup>
+      )}
     </div>
   );
 };
