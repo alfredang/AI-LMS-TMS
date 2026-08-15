@@ -342,6 +342,7 @@ GET  /api/admin/search-course-runs # Search course runs
 POST /api/admin/import-course-run # Import from SSG
 GET  /api/admin/course-code-history # Every course reference code a course has carried
 GET  /api/admin/course-change-log   # Chronological audit of course field changes
+PUT  /api/admin/update-course-title # Bulk rename by course_code (title only; supports dryRun)
 ```
 
 **Course code history.** SSG funding renewal issues a *new* course reference code for what
@@ -355,7 +356,9 @@ or superseded, and returns the single course it belongs to; resolving with a bar
 changes — past enrolments and SSG records were created against it. `new_course_code` is the
 code currently in force (kept equal to the original until a renewal issues a new one, so it
 is always populated). The course editor edits them as separate fields; a blank submitted
-value never clears the stored one.
+value never clears the stored one. Both codes are shown as separate fields in view mode as
+well as edit mode — including when the course was never renewed and the two match — so the
+read-only pane and the edit form present the same set of fields.
 
 **Records show the code of their own era.** The SQL function `course_code_at(course_id, at)`
 resolves the code in force at any moment. Class and enrolment listings use it with the

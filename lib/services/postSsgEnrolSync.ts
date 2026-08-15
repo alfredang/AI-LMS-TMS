@@ -3,6 +3,7 @@ import { getTrainingPartnerIdentifiers } from '@/lib/trainingPartnerIdentifiers'
 import { upsertSsgEnrolmentFromLocalEnrollment } from '@/lib/services/billingSync';
 import { isEnrolmentEligibleForAutoInvoice } from '@/lib/services/invoiceEligibility';
 import { enqueueInvoiceJob } from '@/lib/services/invoiceJobs';
+import { ensureDaApplicationForEnrolment } from '@/lib/services/daApplicationFromEnrolment';
 
 export interface PostSsgEnrolSyncInput {
   traineeEmail: string;
@@ -240,16 +241,57 @@ export async function runPostSsgEnrolSync(input: PostSsgEnrolSyncInput): Promise
     const trimmedEnrolmentId = (enrolmentId || '').trim();
     const statusForInvoice = resolvedEnrolmentStatus;
     if (trimmedEnrolmentId && dbEnrollmentId && isEnrolmentEligibleForAutoInvoice(statusForInvoice)) {
+      // Hand the learner to the Direct Application pipeline: it is the only path
+      // that does calendar sync plus the full invoice set (main tax + Grant +
+      // SFC), and rows it owns are covered by the nightly DA sweep if anything
+      // fails. Enrolling here used to stop at a main-invoice-only queue job.
+      let handedToDaPipeline = false;
       try {
-        await enqueueInvoiceJob({
+        const daRow = await ensureDaApplicationForEnrolment({
           enrolmentId: trimmedEnrolmentId,
           userId: learnerId,
           learnerEmail: traineeEmail,
-          courseCode: courseReferenceNumber,
-          batchId: null,
+          courseReferenceNumber,
+          courseRunId,
+          traineeName,
+          traineeNric,
+          sponsorshipType,
         });
+
+        if (daRow) {
+          handedToDaPipeline = true;
+          console.log(
+            `[post-ssg-enrol] ${trimmedEnrolmentId} → DA application ${daRow.applicationId} (${daRow.created ? 'created' : 'refreshed'}); running DA pipeline`
+          );
+          // Fire-and-forget, and imported lazily: the DA pipeline makes slow SSG
+          // and QuickBooks calls, and the caller is an interactive enrol action.
+          void import('../autoEnrolDirectApplications')
+            .then(({ processDirectApplication }) =>
+              processDirectApplication(daRow.daApplicationId, undefined, { sendInvoiceEmail: true })
+            )
+            .catch((e: unknown) =>
+              console.warn('[post-ssg-enrol] DA pipeline run failed (non-blocking):', e)
+            );
+        }
       } catch (e) {
-        console.warn('[post-ssg-enrol] Failed to enqueue invoice job (non-blocking):', e);
+        console.warn('[post-ssg-enrol] DA application bridge failed (non-blocking):', e);
+      }
+
+      // Fallback only. Running both would cut two invoices for one learner —
+      // the DA pipeline creates its own, so the queue job is skipped whenever
+      // the bridge took ownership.
+      if (!handedToDaPipeline) {
+        try {
+          await enqueueInvoiceJob({
+            enrolmentId: trimmedEnrolmentId,
+            userId: learnerId,
+            learnerEmail: traineeEmail,
+            courseCode: courseReferenceNumber,
+            batchId: null,
+          });
+        } catch (e) {
+          console.warn('[post-ssg-enrol] Failed to enqueue invoice job (non-blocking):', e);
+        }
       }
     }
 

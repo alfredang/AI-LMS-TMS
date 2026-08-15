@@ -21,6 +21,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           c.title AS course_title,
           -- current code in force (renewal issues a new code for the same course)
           COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS course_code,
+          c.course_code AS original_course_code,
+          c.new_course_code,
           c.course_type,
           c.tsc_title,
           c.tsc_code,
@@ -65,6 +67,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       id: row.course_id,
       title: row.course_title,
       courseCode: row.course_code || '',
+      originalCourseCode: row.original_course_code || '',
+      newCourseCode: row.new_course_code || '',
+      currentCourseCode: row.course_code || '',
       courseDuration: row.training_hours + row.assessment_hours, // Total duration
       courseType: row.course_type,
       tscTitle: row.tsc_title,

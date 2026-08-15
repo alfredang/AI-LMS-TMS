@@ -107,6 +107,31 @@ function isRealSsgEnrolmentId(value: unknown): value is string {
   return /^ENR-/i.test(String(value || '').trim());
 }
 
+/**
+ * `driveFileExists` returns false for a 404 (deleted / never existed) but
+ * PROPAGATES anything else — an expired token, a 5xx, a socket hang-up. Several
+ * call sites below await it outside any try, so one transient Drive error used
+ * to abort the entire pipeline run mid-way.
+ *
+ * On an unexpected error we answer "yes, it's still there": that skips the
+ * re-upload and lets the run continue to the supplemental invoices and the
+ * email step. Answering "no" would be worse — it would re-upload a PDF we have
+ * no evidence is missing, on the strength of an error that says nothing about
+ * the file.
+ */
+async function driveFileStillPresent(fileId: string | null | undefined): Promise<boolean> {
+  if (!hasIdentifier(fileId)) return false;
+  try {
+    return await driveFileExists(fileId);
+  } catch (err) {
+    console.warn(
+      `⚠️  Drive existence check failed for ${fileId} — assuming the file is still present:`,
+      err instanceof Error ? err.message : err
+    );
+    return true;
+  }
+}
+
 function isMainInvoiceDocNumber(value: unknown): value is string {
   return /^TC\d{2}-\d{4}-\d{6}$/i.test(String(value || '').trim());
 }
@@ -541,7 +566,7 @@ function stripCalendarPrefixes(title: string): string {
  * 'YYYY-MM-DD' string. That coerces to NaN and is ALWAYS false, so that guard
  * has never fired. Compare YMD strings on both sides instead.
  */
-async function addDaLearnerToCalendarGuarded(
+export async function addDaLearnerToCalendarGuarded(
   row: Record<string, any>,
   appId: string,
   applicationId: string
@@ -1007,15 +1032,27 @@ export async function processDirectApplication(
     }
   }
 
+  // Add the learner to the calendar BEFORE any invoicing.
+  //
+  // Ordering is load-bearing. Every invoice step below can bail out with an
+  // early `return` (invoice, invoice_drive, invoice_lookup), and the calendar
+  // step used to sit after all of them — so a QuickBooks problem silently cost
+  // the learner their calendar invite too. The two are unrelated concerns: a
+  // missing course fee or a QBO outage is no reason to leave someone off their
+  // own class. Calendar first, non-fatal, then invoicing.
+  if (autoCalendar && row.trainee_email) {
+    try {
+      await addDaLearnerToCalendarGuarded(row, appId, applicationId);
+    } catch (err) {
+      console.warn(
+        `⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
   // Step 3: QuickBooks invoice
   if (!autoInvoice && !options?.forceInvoice) {
-    if (autoCalendar && row.trainee_email) {
-      try {
-        await addDaLearnerToCalendarGuarded(row, appId, applicationId);
-      } catch (err) {
-        console.warn(`⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`, err instanceof Error ? err.message : err);
-      }
-    }
     try {
       await createNativeEnrolmentForPipeline(appId);
     } catch (err) {
@@ -1138,9 +1175,7 @@ export async function processDirectApplication(
   // Upload main invoice PDF to Drive if we haven't yet — or if the previously
   // stored Drive file is missing (deleted/trashed/moved). `driveFileExists`
   // lets the pipeline self-heal stale `invoice_drive_file_id` values.
-  const mainDriveFileOk = mainInvoiceDriveFileId
-    ? await driveFileExists(mainInvoiceDriveFileId)
-    : false;
+  const mainDriveFileOk = await driveFileStillPresent(mainInvoiceDriveFileId);
   if (invoiceId && !mainDriveFileOk) {
     try {
       if (!invoiceDocNumber) {
@@ -1211,17 +1246,27 @@ export async function processDirectApplication(
     try {
       await qboReadInvoice(undefined, existingGrantInvoiceId);
     } catch (err) {
-      if (!isQboObjectNotFoundError(err)) throw err;
-      console.warn(
-        `auto-enrol [${applicationId}] grant invoice id ${existingGrantInvoiceId} is stale in QBO; clearing and regenerating`
-      );
-      existingGrantInvoiceId = '';
-      existingGrantDriveFileId = '';
-      await updateRow(appId, {
-        grant_invoice_id: null,
-        grant_invoice_drive_file_id: null,
-        grant_invoice_drive_web_view_link: null,
-      });
+      // Only a confirmed "Object Not Found" means the stored id is stale. Any
+      // other QBO error (auth, 5xx, timeout) tells us nothing about the
+      // invoice, so keep the id and carry on — rethrowing here aborted the
+      // whole pipeline run, main invoice and email included.
+      if (!isQboObjectNotFoundError(err)) {
+        console.warn(
+          `auto-enrol [${applicationId}] could not verify grant invoice ${existingGrantInvoiceId} in QBO; keeping it:`,
+          err instanceof Error ? err.message : err
+        );
+      } else {
+        console.warn(
+          `auto-enrol [${applicationId}] grant invoice id ${existingGrantInvoiceId} is stale in QBO; clearing and regenerating`
+        );
+        existingGrantInvoiceId = '';
+        existingGrantDriveFileId = '';
+        await updateRow(appId, {
+          grant_invoice_id: null,
+          grant_invoice_drive_file_id: null,
+          grant_invoice_drive_web_view_link: null,
+        });
+      }
     }
   }
 
@@ -1229,15 +1274,23 @@ export async function processDirectApplication(
     try {
       await qboReadInvoice(undefined, existingSfcInvoiceId);
     } catch (err) {
-      if (!isQboObjectNotFoundError(err)) throw err;
-      console.warn(`auto-enrol [${applicationId}] sfc invoice id ${existingSfcInvoiceId} is stale in QBO; clearing and regenerating`);
-      existingSfcInvoiceId = '';
-      existingSfcDriveFileId = '';
-      await updateRow(appId, {
-        sfc_invoice_id: null,
-        sfc_invoice_drive_file_id: null,
-        sfc_invoice_drive_web_view_link: null,
-      });
+      // Same reasoning as the grant-invoice check above: only a confirmed
+      // "Object Not Found" clears the stored id.
+      if (!isQboObjectNotFoundError(err)) {
+        console.warn(
+          `auto-enrol [${applicationId}] could not verify sfc invoice ${existingSfcInvoiceId} in QBO; keeping it:`,
+          err instanceof Error ? err.message : err
+        );
+      } else {
+        console.warn(`auto-enrol [${applicationId}] sfc invoice id ${existingSfcInvoiceId} is stale in QBO; clearing and regenerating`);
+        existingSfcInvoiceId = '';
+        existingSfcDriveFileId = '';
+        await updateRow(appId, {
+          sfc_invoice_id: null,
+          sfc_invoice_drive_file_id: null,
+          sfc_invoice_drive_web_view_link: null,
+        });
+      }
     }
   }
 
@@ -1336,9 +1389,7 @@ export async function processDirectApplication(
         await updateRow(appId, { grant_invoice_id: grantInvoice.invoiceId });
         existingGrantInvoiceId = grantInvoice.invoiceId;
 
-        const grantDriveFileOk = existingGrantDriveFileId
-          ? await driveFileExists(existingGrantDriveFileId)
-          : false;
+        const grantDriveFileOk = await driveFileStillPresent(existingGrantDriveFileId);
         if (!grantDriveFileOk) {
           const grantPdf = await qboFetchInvoicePdf(undefined, grantInvoice.invoiceId);
           const grantDriveUpload = await uploadInvoicePdfToDrive({
@@ -1362,7 +1413,7 @@ export async function processDirectApplication(
   } else if (
     shouldGenerateGrantInvoice &&
     existingGrantInvoiceId &&
-    !(existingGrantDriveFileId ? await driveFileExists(existingGrantDriveFileId) : false)
+    !(await driveFileStillPresent(existingGrantDriveFileId))
   ) {
     // Recovery path — QB invoice already exists but Drive upload never ran.
     try {
@@ -1402,9 +1453,7 @@ export async function processDirectApplication(
         await updateRow(appId, { sfc_invoice_id: sfcInvoice.invoiceId });
         existingSfcInvoiceId = sfcInvoice.invoiceId;
 
-        const sfcDriveFileOk = existingSfcDriveFileId
-          ? await driveFileExists(existingSfcDriveFileId)
-          : false;
+        const sfcDriveFileOk = await driveFileStillPresent(existingSfcDriveFileId);
         if (!sfcDriveFileOk) {
           const sfcPdf = await qboFetchInvoicePdf(undefined, sfcInvoice.invoiceId);
           const sfcDriveUpload = await uploadInvoicePdfToDrive({
@@ -1428,7 +1477,7 @@ export async function processDirectApplication(
   } else if (
     shouldGenerateSfcInvoice &&
     existingSfcInvoiceId &&
-    !(existingSfcDriveFileId ? await driveFileExists(existingSfcDriveFileId) : false)
+    !(await driveFileStillPresent(existingSfcDriveFileId))
   ) {
     // Recovery path — QB invoice already exists but Drive upload never ran.
     try {
@@ -1451,17 +1500,8 @@ export async function processDirectApplication(
     }
   }
 
-  // Step 5: Add learner to calendar (non-fatal)
-  if (autoCalendar && row.trainee_email) {
-    try {
-      await addDaLearnerToCalendarGuarded(row, appId, applicationId);
-    } catch (err) {
-      console.warn(
-        `⚠️  auto-enrol [${applicationId}] calendar attendee failed (non-fatal):`,
-        err instanceof Error ? err.message : err
-      );
-    }
-  }
+  // (Calendar now runs before the invoice block above, so that an invoice
+  // failure can no longer cost the learner their calendar invite.)
 
   // Step 6: Create Native Enrolment in the LMS
   try {

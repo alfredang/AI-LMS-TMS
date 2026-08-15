@@ -98,7 +98,7 @@ export async function autoShareCourseResourcesWithTrainer(
 ): Promise<void> {
     try {
         const result = await pool.query(
-            `SELECT courseware_link, trainer_slides_url
+            `SELECT courseware_link, trainer_slides_url, assessment_record_link
              FROM course
              WHERE id = $1`,
             [courseId]
@@ -106,7 +106,7 @@ export async function autoShareCourseResourcesWithTrainer(
 
         if (result.rows.length === 0) return;
 
-        const { courseware_link, trainer_slides_url } = result.rows[0];
+        const { courseware_link, trainer_slides_url, assessment_record_link } = result.rows[0];
 
         // Collect all Google links to share
         const linksToShare: { url: string; label: string }[] = [];
@@ -116,6 +116,9 @@ export async function autoShareCourseResourcesWithTrainer(
         }
         if (trainer_slides_url && trainer_slides_url.includes('google.com')) {
             linksToShare.push({ url: trainer_slides_url, label: 'trainer slides' });
+        }
+        if (assessment_record_link && assessment_record_link.includes('google.com')) {
+            linksToShare.push({ url: assessment_record_link, label: 'assessment folder' });
         }
 
         if (linksToShare.length === 0) return;
@@ -153,6 +156,27 @@ export async function autoShareCourseResourcesWithTrainer(
         }
     } catch (error: any) {
         console.warn(`⚠️ Auto-share course resources error (non-blocking): ${error.message}`);
+    }
+}
+
+/**
+ * Run-scoped variant of autoShareCourseResourcesWithTrainer for call sites that
+ * only know the course_run UUID (junction writes). Resolves the run's course and
+ * shares the courseware folder, trainer slides and assessment folder with the
+ * trainer. Non-blocking — errors are logged but never thrown.
+ */
+export async function autoShareCourseResourcesWithTrainerByRun(
+    courseRunUuid: string,
+    trainerEmail: string | null | undefined
+): Promise<void> {
+    if (!trainerEmail) return;
+    try {
+        const r = await pool.query(`SELECT course_id FROM course_run WHERE id = $1`, [courseRunUuid]);
+        const courseId = r.rows[0]?.course_id;
+        if (!courseId) return;
+        await autoShareCourseResourcesWithTrainer(courseId, trainerEmail);
+    } catch (error: any) {
+        console.warn(`⚠️ Auto-share (by run) error (non-blocking): ${error.message}`);
     }
 }
 

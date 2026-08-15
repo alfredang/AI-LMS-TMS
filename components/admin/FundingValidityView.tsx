@@ -71,6 +71,7 @@ const FundingValidityView: React.FC = () => {
   const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '', courseType: 'WSQ', newCourseCode: '' });
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [search, setSearch] = useState('');
 
   const today = startOfDay(new Date());
   const fourMonthsAhead = startOfDay(FOUR_MONTHS_AHEAD(today));
@@ -86,6 +87,16 @@ const FundingValidityView: React.FC = () => {
         return left.getTime() - right.getTime();
       });
   }, [courses]);
+
+  // Matches on title / both ref codes / type so "WSQ", "TGS-2024" or a course name all work.
+  const visibleCourses = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return wsqCourses;
+    return wsqCourses.filter(course =>
+      [course.title, course.newCourseCode, course.courseCode, displayCourseType(course.courseType)]
+        .some(field => (field || '').toLowerCase().includes(term))
+    );
+  }, [search, wsqCourses]);
 
   const expiringSoonIds = useMemo(() => {
     return new Set(
@@ -287,6 +298,32 @@ const FundingValidityView: React.FC = () => {
         </Card>
       </div>
 
+      <div className="mb-4">
+        <div className="relative">
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by course title, ref code or type…"
+            className="w-full pl-4 pr-10 py-2.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-lg leading-none text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            >
+              ×
+            </button>
+          )}
+        </div>
+        {search.trim() && (
+          <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+            Showing {visibleCourses.length} of {wsqCourses.length} courses. The Excel download still contains the full list.
+          </p>
+        )}
+      </div>
+
       <Card className="dark:bg-gray-800 dark:border-gray-700">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4">
           <div>
@@ -320,7 +357,7 @@ const FundingValidityView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {wsqCourses.map(course => {
+              {visibleCourses.map(course => {
                 const validityDate = parseValidityDate(course.fundingValidity);
                 const expiringSoon = !!validityDate && validityDate >= today && validityDate <= fourMonthsAhead;
                 const expired = !!validityDate && validityDate < today;
@@ -361,7 +398,6 @@ const FundingValidityView: React.FC = () => {
                           className={`${inputClass} w-24`}
                         >
                           <option value="WSQ">WSQ</option>
-                          <option value="CASL">CASL</option>
                           <option value="Non-WSQ">Non-WSQ</option>
                         </select>
                       ) : (
@@ -472,9 +508,9 @@ const FundingValidityView: React.FC = () => {
           </table>
         </div>
 
-        {wsqCourses.length === 0 && (
+        {visibleCourses.length === 0 && (
           <div className="px-6 py-10 text-center text-gray-500 dark:text-gray-400">
-            No courses found.
+            {search.trim() ? `No courses match “${search.trim()}”.` : 'No courses found.'}
           </div>
         )}
       </Card>

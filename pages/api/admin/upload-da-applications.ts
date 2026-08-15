@@ -4,10 +4,10 @@ import pool from '../../../lib/db';
 import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
-import { bulkProcessDirectApplications, createNativeEnrolmentFromDA, processDirectApplication } from '../../../lib/autoEnrolDirectApplications';
-import { addDaLearnerToCalendar, removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
-import { getLocalYMD } from '../../../lib/dateHelpers';
+import { addDaLearnerToCalendarGuarded, bulkProcessDirectApplications } from '../../../lib/autoEnrolDirectApplications';
+import { removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
 import { isEnrollableDaStatus } from '../../../lib/da-status';
+import { isSyntheticDaApplicationId } from '../../../lib/services/daApplicationFromEnrolment';
 
 // Increase body size limit to 50MB (default is 1MB, which causes HTTP 413 for large Excel uploads)
 export const config = {
@@ -61,14 +61,6 @@ const columnMapping: Record<string, string> = {
     'Enrolment ID': 'enrolment_id',
     'Status': 'application_status',
 };
-
-function hasRealEnrolmentId(value: unknown): boolean {
-    if (value === null || value === undefined) return false;
-    const enrolmentId = String(value).trim();
-    if (!enrolmentId) return false;
-    const upper = enrolmentId.toUpperCase();
-    return upper !== 'MANUAL' && upper !== 'N/A' && upper !== 'NA' && upper !== '-';
-}
 
 // Parse date from various formats
 function parseDate(value: any): string | null {
@@ -126,6 +118,45 @@ const normalizedColumnMapping: Record<string, string> = Object.entries(columnMap
 );
 
 const NUMERIC_FIELDS = ['payable_fee', 'full_course_fee', 'gst', 'skillsfuture_subsidy', 'skillsfuture_credit'];
+
+// ── Backlog throttle for invoice-only rows ──────────────────────────────────
+//
+// Rows that still need ENROLLING are never throttled — they are the new
+// applications just uploaded, they are naturally few, and holding them back
+// would break the point of the upload.
+//
+// Rows that are already enrolled and only lack an invoice are backlog. A single
+// re-upload of a full TPGateway export can surface hundreds of them at once,
+// and every one cuts a REAL QuickBooks invoice. This caps how many a burst of
+// uploads can trigger; the remainder is left for the nightly sweep or the
+// Generate Invoice button, where it is deliberate and logged.
+//
+// The counter is global and time-windowed on purpose: the DA view uploads in
+// batches of 20 rows per request, so a per-request limit would never bind.
+const INVOICE_BACKLOG_LIMIT = Number(process.env.DA_UPLOAD_INVOICE_BACKLOG_LIMIT || 25);
+const INVOICE_BACKLOG_WINDOW_MS = 60 * 60 * 1000;
+
+const backlogState = globalThis as unknown as {
+    __daInvoiceBacklog?: { windowStart: number; count: number };
+};
+
+function takeInvoiceBacklogAllowance(requested: number): { allowed: number; deferred: number } {
+    if (requested <= 0) return { allowed: 0, deferred: 0 };
+    if (!Number.isFinite(INVOICE_BACKLOG_LIMIT) || INVOICE_BACKLOG_LIMIT <= 0) {
+        return { allowed: requested, deferred: 0 }; // explicitly disabled
+    }
+
+    const now = Date.now();
+    const state = backlogState.__daInvoiceBacklog;
+    if (!state || now - state.windowStart > INVOICE_BACKLOG_WINDOW_MS) {
+        backlogState.__daInvoiceBacklog = { windowStart: now, count: 0 };
+    }
+
+    const current = backlogState.__daInvoiceBacklog!;
+    const allowed = Math.min(requested, Math.max(0, INVOICE_BACKLOG_LIMIT - current.count));
+    current.count += allowed;
+    return { allowed, deferred: requested - allowed };
+}
 
 // Transform Excel row to database format
 function transformRow(excelRow: Record<string, any>): Record<string, any> {
@@ -384,6 +415,32 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 if (tid && crid) {
                     const tcKey = `${tid}||${crid}`;
                     const existingTC = existingTraineeCourseMap.get(tcKey);
+                    if (existingTC && isSyntheticDaApplicationId(existingTC.application_id)) {
+                        // The existing row is the placeholder we mint for a manual
+                        // TPG enrolment, not a real competing application. Adopt it:
+                        // rename it to the genuine MySkillsFuture application id and
+                        // let this row proceed as an update. Rejecting here would
+                        // have blocked the real application as a duplicate of our
+                        // own placeholder — and adopting keeps any invoice already
+                        // cut against it, so the learner is not invoiced twice.
+                        await pool.query(
+                            `UPDATE da_application SET application_id = $1, updated_at = NOW() WHERE application_id = $2`,
+                            [appId, existingTC.application_id]
+                        );
+                        console.log(`🔗 Adopted placeholder ${existingTC.application_id} as Direct Application ${appId}`);
+                        existingTraineeCourseMap.set(tcKey, {
+                            application_id: appId,
+                            application_status: existingTC.application_status,
+                        });
+                        toUpdate.push({
+                            ...transformed,
+                            old_status: existingTC.application_status,
+                            old_enrolment_status: null,
+                            shouldCallWebhook: false,
+                            application_status: transformed.application_status || existingTC.application_status,
+                        });
+                        continue;
+                    }
                     if (existingTC) {
                         const existingTCStatus = (existingTC.application_status || '').toLowerCase();
                         // Only block if the existing row is still active (not cancelled)
@@ -606,6 +663,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             webhookResult = await callSearchEnrolmentSSGBatch(webhookQueue, tp.uen, tp.code);
         }
 
+        // Number of already-enrolled rows whose invoicing was held back by the
+        // backlog cap, so the UI can tell the admin rather than leave them
+        // wondering why some rows have no invoice yet.
+        let invoiceBacklogDeferred = 0;
+
+        // Rows handed to the auto-enrol pipeline. Tracked here so the calendar
+        // pass below can cover exactly the rows the pipeline will NOT touch,
+        // without the two racing each other on the same row.
+        const queuedForPipeline = new Set<string>();
+
         // Fire-and-forget auto-enrol pipeline for all eligible records:
         //   - Newly inserted records
         //   - Updated records (status transitions)
@@ -615,21 +682,59 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             const isRealSsgEnrolmentId = (value: unknown): boolean =>
                 /^ENR-/i.test(String(value || '').trim());
 
-            // Collect IDs from inserted + updated records
-            const processedIds = [...insertedRecords, ...updatedRecords]
-                .filter(r => {
-                    if (!r?.id) return false;
-                    const status = (r.application_status || '').toLowerCase();
-                    const autoStatus = String(r.auto_enrol_status || '').toLowerCase();
-                    const hasTraineeId = String(r.trainee_id || '').trim() !== '';
-                    const alreadyEnrolled = autoStatus && !['failed'].includes(autoStatus) && !(autoStatus === 'pending_identity' && hasTraineeId);
-                    // Only skip if the row already has a real SSG enrolment reference (ENR-...)
-                    // Placeholder values like "N/A", "-", "MANUAL", or empty are NOT real enrolments
-                    return isEnrollableDaStatus(status) && !alreadyEnrolled && !isRealSsgEnrolmentId(r.enrolment_id);
-                })
-                .map(r => r.id as string);
+            // Collect IDs from inserted + updated records.
+            //
+            // Eligibility asks "does this row still need ANY pipeline work?",
+            // not just "does it still need enrolling?". The old filter skipped
+            // every row that already carried a real ENR- reference, so an
+            // application that was inserted on one upload and only gained its
+            // enrolment reference on a later one fell into a dead zone: this
+            // block skipped it as already-enrolled, and the invoice trigger in
+            // the automations block below only ever looked at freshly-inserted
+            // rows. Neither path invoiced it, ever.
+            //
+            // Re-running the pipeline on an enrolled row is cheap and safe: it
+            // skips the SSG call when enrolment_id is present and reuses an
+            // existing invoice rather than cutting a second one.
+            // Split by WHY the row is eligible. New applications must always go
+            // through; already-enrolled rows that only lack an invoice are
+            // backlog and are rate-limited (see takeInvoiceBacklogAllowance).
+            const needsEnrolmentIds: string[] = [];
+            const invoiceOnlyIds: string[] = [];
 
-            const allEligibleIds = [...new Set(processedIds)];
+            for (const r of [...insertedRecords, ...updatedRecords]) {
+                if (!r?.id) continue;
+                const status = (r.application_status || '').toLowerCase();
+                if (!isEnrollableDaStatus(status)) continue;
+
+                // Placeholder values like "N/A", "-", "MANUAL", or empty are NOT
+                // real SSG enrolments.
+                const needsEnrolment = !isRealSsgEnrolmentId(r.enrolment_id);
+                // For the invoice, ANY reference counts as done — including the
+                // 'MANUAL' marker used for invoices raised outside QuickBooks.
+                // Treating MANUAL as "no invoice" here would cut a duplicate QBO
+                // invoice for those rows on the next upload. Matches the nightly
+                // sweep's `invoice_id IS NULL` predicate.
+                const needsInvoice = String(r.invoice_id || '').trim() === '';
+
+                if (needsEnrolment) needsEnrolmentIds.push(r.id as string);
+                else if (needsInvoice) invoiceOnlyIds.push(r.id as string);
+            }
+
+            const uniqueInvoiceOnly = [...new Set(invoiceOnlyIds)];
+            const { allowed, deferred } = takeInvoiceBacklogAllowance(uniqueInvoiceOnly.length);
+            invoiceBacklogDeferred = deferred;
+
+            if (deferred > 0) {
+                console.log(
+                    `🧾 auto-enrol: queuing ${allowed} invoice-only row(s); deferring ${deferred} to the nightly sweep / Generate Invoice button (cap ${INVOICE_BACKLOG_LIMIT}/hour)`
+                );
+            }
+
+            const allEligibleIds = [
+                ...new Set([...needsEnrolmentIds, ...uniqueInvoiceOnly.slice(0, allowed)]),
+            ];
+            allEligibleIds.forEach(id => queuedForPipeline.add(id));
 
             if (allEligibleIds.length > 0) {
                 // Pre-mark as 'pending' so we can distinguish "never triggered" from "triggered but failed"
@@ -652,118 +757,103 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
 
         // ---- DIRECT APPLICATION AUTOMATIONS ----
-        // Fire-and-forget sync for Calendar, Native Enrolments, and DA invoice generation.
+        // Fire-and-forget calendar cleanup for newly-cancelled applications.
+        //
+        // Adding to calendar, creating the native enrolment and generating the
+        // invoice all used to be duplicated here, racing the auto-enrol pipeline
+        // queued above. That was actively harmful, not merely redundant:
+        // createNativeEnrolmentFromDA stamps enrolment_id = 'MANUAL' when the row
+        // has none yet, and a 'MANUAL' marker makes the pipeline treat the row as
+        // already enrolled and skip the SSG call entirely. The pipeline performs
+        // all three steps itself (see lib/autoEnrolDirectApplications.ts), and it
+        // now receives every row that still needs them, so only the cancellation
+        // path — which the pipeline does not handle — remains here.
         try {
-            const allProcessedRecords = [...insertedRecords, ...updatedRecords];
-            const insertedDbIdSet = new Set(
-                insertedRecords
-                    .map(r => r?.id)
-                    .filter((x: unknown): x is string => typeof x === 'string' && x.length > 0)
-            );
-            const daInvoiceTriggerIds: string[] = [];
-            
-            // Background async processing to avoid blocking UI response
+            const cancelledRecords = [...insertedRecords, ...updatedRecords].filter(record => {
+                const appStatus = String(record.application_status || '').toLowerCase();
+                const oldStatus = String(record.old_status || '').toLowerCase();
+                return appStatus === 'cancelled' && oldStatus && oldStatus !== 'cancelled' && record.trainee_email;
+            });
+
+            // Confirmed rows the pipeline will NOT process — already enrolled and
+            // already invoiced, or held back by the invoice backlog cap — that
+            // still have no calendar entry.
+            //
+            // Before the pipeline owned calendar syncing, every upload re-ran a
+            // calendar add for all confirmed rows, which quietly self-healed any
+            // learner whose invite had failed earlier (Google outage, toggle off
+            // at the time). Routing calendar exclusively through the pipeline
+            // lost that: a fully-processed row is never queued again, so its
+            // missing invite would never be retried. This restores the safety
+            // net for exactly the rows the pipeline skips, so the two never
+            // touch the same row.
+            const calendarOnlyRecords = [...insertedRecords, ...updatedRecords].filter(record => {
+                if (!record?.id || queuedForPipeline.has(record.id)) return false;
+                if (!record.trainee_email) return false;
+                if (record.calendar_added === true) return false;
+                return isEnrollableDaStatus(String(record.application_status || '').toLowerCase());
+            });
+
+        // Background async processing to avoid blocking UI response.
+        //
+        // The whole body is wrapped: this callback runs AFTER the response has
+        // been sent, so it is outside the request's try/catch (that one only
+        // guards the synchronous scheduling below). An await that rejects here
+        // would surface as an unhandled promise rejection, which Node treats as
+        // fatal by default — a transient DB error must not be able to take the
+        // server down.
             setImmediate(async () => {
-                for (const record of allProcessedRecords) {
-                    const appStatus = String(record.application_status || '').toLowerCase();
-                    const oldStatus = String(record.old_status || '').toLowerCase();
-
-                    // Automation 1a: Add to Calendar (triggers if application_status is Confirmed,
-                    // incl. "Confirmed (Pending payment)" — see lib/da-status.ts)
-                    if (isEnrollableDaStatus(appStatus) && record.trainee_email) {
-                        try {
-                            // Resolve course_run UUID and check if course run is in the future
-                            const crRes = await pool.query(
-                                `SELECT id, start_date FROM course_run WHERE course_run_id = $1 LIMIT 1`,
-                                [record.course_run_id]
-                            );
-                            const courseRunUuid = crRes.rows[0]?.id || record.course_run_id;
-                            const startDate = crRes.rows[0]?.start_date;
-
-                            // Skip calendar add for past course runs
-                            if (startDate && new Date(startDate) < getLocalYMD(new Date(new Date()))) {
-                                console.log(`⏭️ Skipping calendar add for ${record.trainee_email} — course run ${record.course_run_id} already started`);
-                            } else {
-                                const calResult = await addDaLearnerToCalendar(
-                                    record.trainee_email,
-                                    courseRunUuid,
-                                    record.course_title,
-                                    record.course_start_date
-                                );
-                                if (calResult.addedTo > 0) {
-                                    console.log(`📅 Added ${record.trainee_email} to ${calResult.addedTo} calendar event(s)`);
-                                    await pool.query(
-                                        `UPDATE da_application SET calendar_added = true WHERE application_id = $1`,
-                                        [record.application_id]
-                                    );
-                                }
+              try {
+                if (calendarOnlyRecords.length > 0) {
+                    // Same toggle the pipeline honours.
+                    const calToggle = await pool.query(
+                        `SELECT COALESCE(auto_add_learner_to_calendar, false) AS enabled FROM training_provider LIMIT 1`
+                    );
+                    if (calToggle.rows[0]?.enabled) {
+                        for (const record of calendarOnlyRecords) {
+                            try {
+                                // Reuses the pipeline's guarded helper so behaviour is
+                                // identical — per-session matching, and the past-run
+                                // guard that stops events being created for finished runs.
+                                await addDaLearnerToCalendarGuarded(record, record.id, record.application_id || '');
+                            } catch (calErr) {
+                                console.error(`Calendar top-up failed for ${record.application_id}:`, calErr);
                             }
-                        } catch (calErr) {
-                            console.error('Failed to sync to Calendar:', calErr);
                         }
-                    }
-
-                    // Automation 1b: Remove from Calendar (triggers if status changed TO Cancelled)
-                    if (appStatus === 'cancelled' && oldStatus && oldStatus !== 'cancelled' && record.trainee_email) {
-                        try {
-                            const crRes = await pool.query(
-                                `SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1`,
-                                [record.course_run_id]
-                            );
-                            const courseRunUuid = crRes.rows[0]?.id || record.course_run_id;
-
-                            const removeResult = await removeDaLearnerFromCalendar(
-                                record.trainee_email,
-                                courseRunUuid,
-                                record.course_title,
-                                record.course_start_date
-                            );
-                            if (removeResult.removedFrom > 0) {
-                                console.log(`🗑️ Removed ${record.trainee_email} from ${removeResult.removedFrom} calendar event(s)`);
-                            }
-                            // Untick the CAL column
-                            await pool.query(
-                                `UPDATE da_application SET calendar_added = false WHERE application_id = $1`,
-                                [record.application_id]
-                            );
-                        } catch (calErr) {
-                            console.error('Failed to remove from Calendar:', calErr);
-                        }
-                    }
-
-                    // Automation 2: Native Enrolment Creation (triggers if Enrol Status/enrolment_status is Confirmed)
-                    const isEnrolConfirmed = String(record.enrolment_status || '').toLowerCase() === 'confirmed';
-                    const wasEnrolAlreadyConfirmed = String(record.old_enrolment_status || '').toLowerCase() === 'confirmed';
-
-                    if (isEnrolConfirmed && (!wasEnrolAlreadyConfirmed || !record.old_enrolment_status)) {
-                        await createNativeEnrolmentFromDA(record, pool);
-                        console.log(`✅ Automatically created native enrolment for DA ${record.application_id}`);
-                    }
-
-                    // Automation 3: DA invoice auto-generation trigger
-                    // Fires when enrol is effectively ticked (Confirmed) and there is a real enrolment_id.
-                    const shouldTriggerDaInvoice =
-                        insertedDbIdSet.has(record.id) &&
-                        isEnrolConfirmed &&
-                        hasRealEnrolmentId(record.enrolment_id) &&
-                        !record.invoice_id;
-
-                    if (shouldTriggerDaInvoice && typeof record.id === 'string' && record.id.length > 0) {
-                        daInvoiceTriggerIds.push(record.id);
+                    } else {
+                        console.log('📅 calendar top-up skipped — auto_add_learner_to_calendar is OFF');
                     }
                 }
 
-                for (const applicationDbId of daInvoiceTriggerIds) {
+                for (const record of cancelledRecords) {
                     try {
-                        await processDirectApplication(applicationDbId, undefined, {
-                            forceInvoice: true,
-                            sendInvoiceEmail: true,
-                        });
-                        console.log(`Auto-triggered DA invoice generation + email for application ${applicationDbId}`);
-                    } catch (invoiceErr) {
-                        console.error(`Failed auto-triggered DA invoice generation for ${applicationDbId}:`, invoiceErr);
+                        const crRes = await pool.query(
+                            `SELECT id FROM course_run WHERE course_run_id = $1 LIMIT 1`,
+                            [record.course_run_id]
+                        );
+                        const courseRunUuid = crRes.rows[0]?.id || record.course_run_id;
+
+                        const removeResult = await removeDaLearnerFromCalendar(
+                            record.trainee_email,
+                            courseRunUuid,
+                            record.course_title,
+                            record.course_start_date
+                        );
+                        if (removeResult.removedFrom > 0) {
+                            console.log(`🗑️ Removed ${record.trainee_email} from ${removeResult.removedFrom} calendar event(s)`);
+                        }
+                        // Untick the CAL column
+                        await pool.query(
+                            `UPDATE da_application SET calendar_added = false WHERE application_id = $1`,
+                            [record.application_id]
+                        );
+                    } catch (calErr) {
+                        console.error('Failed to remove from Calendar:', calErr);
                     }
                 }
+              } catch (bgErr) {
+                console.error('⚠️  DA calendar background pass failed (non-fatal):', bgErr);
+              }
             });
         } catch (autoErr) {
             console.error('Error triggering new DA automations', autoErr);
@@ -775,6 +865,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             updated: updatedCount,
             duplicates: duplicates.length,
             duplicateIds: duplicates.slice(0, 10),
+            invoiceBacklogDeferred,
             errors,
             newRecords: insertedRecords,
             updatedRecords,

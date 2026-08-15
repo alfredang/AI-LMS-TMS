@@ -498,7 +498,6 @@ const OngoingClasses: React.FC = () => {
                   >
                     <option value="all">All</option>
                     <option value="WSQ">WSQ</option>
-                    <option value="CASL">CASL</option>
                     <option value="IBF">IBF</option>
                     <option value="Non-WSQ">Non-WSQ</option>
                   </select>

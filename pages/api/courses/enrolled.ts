@@ -62,6 +62,9 @@ async function handler(
         c.id AS course_id,
         c.title AS course_title,
         public.course_code_at(c.id, COALESCE(e.created_at, cr.created_at, now())) AS course_code,
+        c.course_code AS original_course_code,
+        c.new_course_code,
+        COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS current_course_code,
         cr.id AS course_run_id,
         cr.course_run_id AS course_run_code,
         (COALESCE(c.training_hours, 0) + COALESCE(c.assessment_hours, 0)) AS course_duration,
@@ -108,7 +111,12 @@ async function handler(
     const courses = result.rows.map((row: CourseRow) => ({
       id: row.course_id,
       title: row.course_title,
+      // courseCode is the code AT ENROLMENT TIME (course_code_at); the quartet
+      // below carries the course's original / current codes for display.
       courseCode: row.course_code,
+      originalCourseCode: (row as any).original_course_code || '',
+      newCourseCode: (row as any).new_course_code || '',
+      currentCourseCode: (row as any).current_course_code || '',
       courseRunId: row.course_run_id,
       courseRunCode: row.course_run_code,
       courseDuration: parseInt(row.course_duration?.toString() ?? '0') || 0,

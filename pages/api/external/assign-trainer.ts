@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { pushTrainerToTpgForRun, clearTrainerOnTpgForRun } from '../../../lib/ssg/pushTrainerToTpgForRun';
 import { patchRunAttendee } from '../../../lib/calendar/runAttendees';
+import { autoShareCourseResourcesWithTrainerByRun } from '../../../lib/google-drive/drive-helpers';
 
 /**
  * POST /api/external/assign-trainer
@@ -156,6 +157,11 @@ async function handleAssign({
     );
   }
   const lms = { assigned: true, junction_id: junctionRes.id as string, is_official };
+
+  // Auto-share courseware + assessment folders with the trainer (non-blocking)
+  autoShareCourseResourcesWithTrainerByRun(runUuid, resolvedEmail).catch(err => {
+    console.warn(`⚠️ [external/assign-trainer] auto-share failed (non-blocking): ${err?.message}`);
+  });
 
   // Step 2: SSG/TPG push (only the official trainer goes to TPGateway)
   let tpg: any = { status: 'skipped', message: !syncTpg ? 'sync_tpg disabled' : 'is_official is false — only the official trainer is pushed to TPGateway' };

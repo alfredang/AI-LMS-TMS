@@ -61,6 +61,8 @@ async function handler(
         c.title AS course_title,
         -- current code in force (renewal issues a new code for the same course)
         COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS course_code,
+        c.course_code AS original_course_code,
+        c.new_course_code,
         c.tsc_title,
         c.tsc_code,
         COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS tgs_ref,
@@ -103,11 +105,11 @@ async function handler(
     // Add search filter if provided
     if (search && search !== '') {
       searchQuery += ` AND (
-        c.title ILIKE $${paramIndex} OR 
-        c.course_code ILIKE $${paramIndex} OR 
-        c.tsc_title ILIKE $${paramIndex} OR 
+        c.title ILIKE $${paramIndex} OR
+        c.course_code ILIKE $${paramIndex} OR
+        c.tsc_title ILIKE $${paramIndex} OR
         c.tsc_code ILIKE $${paramIndex} OR
-        c.course_code ILIKE $${paramIndex}
+        c.new_course_code ILIKE $${paramIndex}
       )`;
       params.push(`%${search}%`);
       paramIndex++;
@@ -136,6 +138,9 @@ async function handler(
       id: row.course_id,
       title: row.course_title,
       courseCode: row.course_code || '', // Now course_code is tgs_ref
+      originalCourseCode: (row as any).original_course_code || '',
+      newCourseCode: (row as any).new_course_code || '',
+      currentCourseCode: row.course_code || '',
       tscTitle: row.tsc_title,
       tscCode: row.tsc_code,
       courseRunId: row.course_run_id,

@@ -60,7 +60,12 @@ async function handler(
       courseDetailQuery = `
         SELECT
           c.title,
-          c.course_code,
+          -- The code in force: funding renewal parks the new code in
+          -- new_course_code, leaving the original in course_code. Both are
+          -- returned so views can show the pair (same as developer-course-detail).
+          COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS course_code,
+          c.course_code AS original_course_code,
+          c.new_course_code,
           c.tsc_title,
           c.tsc_code,
           cr.course_run_id,
@@ -100,7 +105,12 @@ async function handler(
       courseDetailQuery = `
         SELECT
           c.title,
-          c.course_code,
+          -- The code in force: funding renewal parks the new code in
+          -- new_course_code, leaving the original in course_code. Both are
+          -- returned so views can show the pair (same as developer-course-detail).
+          COALESCE(NULLIF(c.new_course_code, ''), c.course_code) AS course_code,
+          c.course_code AS original_course_code,
+          c.new_course_code,
           c.tsc_title,
           c.tsc_code,
           cr.course_run_id,
@@ -192,6 +202,9 @@ async function handler(
       data: {
         title: courseDetail.title,
         tgsRef: courseDetail.course_code,
+        originalCourseCode: (courseDetail as any).original_course_code || '',
+        newCourseCode: (courseDetail as any).new_course_code || '',
+        currentCourseCode: courseDetail.course_code || '',
         tscTitle: courseDetail.tsc_title,
         tscCode: courseDetail.tsc_code,
         courseRunId: courseDetail.course_run_id,

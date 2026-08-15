@@ -6,6 +6,7 @@ import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/utils/http-utils';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { autoShareCourseResourcesWithTrainerByRun } from '../../../lib/google-drive/drive-helpers';
 
 /**
  * POST /api/admin/sync-from-calendar
@@ -470,6 +471,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                   ON CONFLICT (course_run_id, COALESCE(trainer_id, '00000000-0000-0000-0000-000000000000'::uuid))
                   DO UPDATE SET trainer_name = EXCLUDED.trainer_name, trainer_email = EXCLUDED.trainer_email
                 `, [uuid, ct.id, ct.name, ct.email]);
+
+                // Auto-share courseware + assessment folders with the synced trainer (non-blocking)
+                autoShareCourseResourcesWithTrainerByRun(uuid, ct.email).catch(err => {
+                  console.warn(`⚠️ [sync-from-calendar] auto-share failed (non-blocking): ${err?.message}`);
+                });
               }
 
               // Clean up stale junction rows only when admin explicitly opted into override.

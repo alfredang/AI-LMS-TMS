@@ -263,6 +263,9 @@ export interface Course {
    *  so it must never be replaced with the renewed code -- past enrolments and
    *  SSG records were created against it. */
   courseCode: string;
+  /** The ORIGINAL registration code, unambiguously. Some legacy endpoints fold the
+   *  current code into courseCode; this field always carries the original. */
+  originalCourseCode?: string;
   /** The code issued at funding renewal; blank when the course was never renewed. */
   newCourseCode?: string;
   /** The code currently in force (newCourseCode when set, else courseCode).
