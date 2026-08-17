@@ -68,7 +68,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Certificate download upon completion
 - Job search integration
 - **My Calendar** — personal month calendar of the learner's scheduled classes
-- **Ed Tools** — the same interactive classroom tools as the trainer sidebar (Ice Breaker, Pinboard, Word Cloud, Flash Cards, Live Q&A, Whiteboard, Live Poll, etc.), available from the learner sidebar
+- **Tools** — the full trainer tools catalogue mirrored in the learner sidebar (Ed Tools, Project Mgt, Six Sigma, Cyber Security, Finance, HR, Data Analytics, ML, Statistical, DOE, SPC, Sustainability, Networking, K8s, Blockchain, Quantum, Design, GenAI, Agentic AI, Virtual Tools), shared via `components/toolsData.ts`
 
 ### Trainer Features
 - **My Classes** — View assigned classes (upcoming, ongoing, completed)
