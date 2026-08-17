@@ -6,6 +6,7 @@ import { useAppVersion } from '@hooks/useAppVersion';
 import { useLms } from '../contexts/LmsContext';
 import { View, TrainerPage } from '@app-types';
 import CalendarView from '../components/CalendarView';
+import MyCalendarView from '../components/MyCalendarView';
 import CourseList from '../components/CourseList';
 import CreateView from '../components/CreateView';
 import { ProfilePage } from '@components/ProfilePage';
@@ -58,6 +59,8 @@ const TrainerLayout: React.FC = () => {
         return <AssessmentGrading />;
       case TrainerPage.MyClasses:
         return <CourseList />;
+      case TrainerPage.MyCalendar:
+        return <MyCalendarView role="trainer" />;
       case TrainerPage.TrainingHours:
         return <TrainingHoursPage />;
       case TrainerPage.PastAttendance:

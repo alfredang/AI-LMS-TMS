@@ -222,6 +222,7 @@ export enum DeveloperPage {
 }
 
 export enum TrainerPage {
+  MyCalendar = 'myCalendar',
   EAttendance = 'eAttendance',
   AssessmentGrading = 'assessmentGrading',
   MyClasses = 'myClasses',

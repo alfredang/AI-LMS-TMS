@@ -10,6 +10,7 @@ interface TrainerSidebarProps {
 
 const NAV_ITEMS: { page: TrainerPage; label: string; icon: IconName }[] = [
   { page: TrainerPage.MyClasses,          label: 'My Classes',          icon: IconName.BookOpen       },
+  { page: TrainerPage.MyCalendar,         label: 'My Calendar',         icon: IconName.Calendar       },
   { page: TrainerPage.EAttendance,        label: 'E-Attendance',        icon: IconName.ClipboardCheck },
   { page: TrainerPage.AssessmentGrading,  label: 'Assessment Grading',  icon: IconName.Award          },
   { page: TrainerPage.TrainingHours,      label: 'Training Hours',      icon: IconName.Clock          },
