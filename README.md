@@ -159,6 +159,8 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 ### Developer Features
 - Course content creation and editing
+- **Course Image Generator** — AI course banner generation (shared with Admin, backed by Cloudflare R2)
+- **Funding Validity** — WSQ course validity dates, renewal and whitelist management (shared with Admin)
 - Assessment authoring with multiple assessment methods (Written, Practical, Case Study, Role Play, Oral Questioning, Project, Assignment)
 - Learning unit and subtopic management
 - Course material uploads (lesson plans, slides, guides)
