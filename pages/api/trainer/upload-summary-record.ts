@@ -1,4 +1,4 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, type AuthedApiRequest } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
@@ -126,13 +126,40 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             });
         });
 
-        const studentName = fields.studentName?.[0] || fields.studentName;
+        let studentName = fields.studentName?.[0] || fields.studentName;
         const courseRunId = fields.courseRunId?.[0] || fields.courseRunId;
-        
+
         const uploadedFile = Array.isArray(files.file) ? files.file[0] : files.file;
 
         if (!uploadedFile || !studentName || !courseRunId) {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+
+        // Learners upload their own Assessment Summary Record from the course page,
+        // so this route accepts the learner role — but studentName/courseRunId arrive
+        // from the client. For a non-staff caller, ignore the submitted name and
+        // resolve it from their own account, and only allow runs they are enrolled in.
+        const authUser = (req as AuthedApiRequest).authUser;
+        const isStaff = !!authUser?.isService
+            || ['admin', 'trainingProvider', 'developer', 'trainer'].some(r => authUser?.roles.has(r));
+
+        if (!isStaff) {
+            const self = await pool.query(
+                `SELECT au.full_name
+                   FROM enrollment e
+                   JOIN app_user au ON au.id = e.user_id
+                  WHERE e.user_id = $1
+                    AND e.course_run_id::text = $2
+                    AND LOWER(COALESCE(e.enrolment_status, '')) NOT IN ('admin removed', 'cancelled', 'withdrawn')
+                  LIMIT 1`,
+                [authUser!.id, courseRunId]
+            );
+            if (self.rows.length === 0) {
+                try { fs.unlinkSync(uploadedFile.filepath); } catch {}
+                return res.status(403).json({ success: false, error: 'You are not enrolled in this class' });
+            }
+            // Use the account's name so learner and trainer uploads land in the same folder.
+            studentName = self.rows[0].full_name;
         }
 
         // Fetch course run details
@@ -211,4 +238,4 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 }
 
-export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer', 'learner'] });
