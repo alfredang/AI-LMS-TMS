@@ -21,7 +21,7 @@ const ADMIN_ITEMS: AdminItem[] = [
 
   { id: AdminPage.ViewCourses, page: AdminPage.ViewCourses, label: 'View Courses', section: 'Class Management' },
   { id: AdminPage.ViewTrainers, page: AdminPage.ViewTrainers, label: 'View Trainers', section: 'Class Management' },
-  { id: AdminPage.FundingValidity, page: AdminPage.FundingValidity, label: 'Funding Validity', section: 'Class Management' },
+  { id: AdminPage.FundingValidity, page: AdminPage.FundingValidity, label: 'Course Funding Validity', section: 'Class Management' },
 
   { id: AdminPage.UploadDirectApplication, page: AdminPage.UploadDirectApplication, label: 'Upload Direct Application', section: 'TPG Management → Direct Application' },
   { id: AdminPage.ViewDirectApplication, page: AdminPage.ViewDirectApplication, label: 'View Direct Application', section: 'TPG Management → Direct Application' },

@@ -88,7 +88,7 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({ type }) => {
   const classManagementLinks: NavBoxProps[] = [
     { title: "View Courses", description: "Browse and manage all course templates.", icon: IconName.BookOpen, onClick: () => setAdminPage(AdminPage.ViewCourses) },
     { title: "View Trainers", description: "View details and assignments for all trainers.", icon: IconName.User, onClick: () => setAdminPage(AdminPage.ViewTrainers) },
-    { title: "Funding Validity", description: "Track WSQ course validity dates and renewal planning.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.FundingValidity) },
+    { title: "Course Funding Validity", description: "Track WSQ course validity dates and renewal planning.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.FundingValidity) },
     { title: "View Learners", description: "View learner profiles, status, and contact details.", icon: IconName.MyAccount, onClick: () => setAdminPage(AdminPage.ViewLearners) },
     { title: "Ongoing Classes", description: "Monitor classes that are currently in session.", icon: IconName.Clock, onClick: () => setAdminPage(AdminPage.OngoingClasses) },
     { title: "Upcoming Classes", description: "See all scheduled upcoming classes.", icon: IconName.Calendar, onClick: () => setAdminPage(AdminPage.UpcomingClasses) },
@@ -162,7 +162,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.ViewCourses]: 'View Courses',
   [AdminPage.CourseImageGenerator]: 'Course Image Generator',
   [AdminPage.ViewTrainers]: 'View Trainers',
-  [AdminPage.FundingValidity]: 'Funding Validity',
+  [AdminPage.FundingValidity]: 'Course Funding Validity',
   [AdminPage.ViewLearners]: 'View Learners',
   [AdminPage.CompanyApplication]: 'COMPANY APPLICATION',
   [AdminPage.UploadCompanyApplication]: 'Upload Company Application',
