@@ -67,10 +67,12 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - AI chatbot for personalized course assistance
 - Certificate download upon completion
 - Job search integration
-- Calendar view for scheduled classes
+- **My Calendar** — personal month calendar of the learner's scheduled classes
+- **Ed Tools** — the same interactive classroom tools as the trainer sidebar (Ice Breaker, Pinboard, Word Cloud, Flash Cards, Live Q&A, Whiteboard, Live Poll, etc.), available from the learner sidebar
 
 ### Trainer Features
 - **My Classes** — View assigned classes (upcoming, ongoing, completed)
+- **My Calendar** — personal month calendar of the trainer's assigned classes
 - **E-Attendance** — Digital attendance tracking
 - **Assessment Grading** — Rubric-based grading with Assessment Summary Record support; each learner row shows per-method submission status (WA Written, PP Practical, CS Case Study, RP Role Play, OQ Oral Questioning) ticked when the learner has submitted, with per-method submission counts (e.g. WA 3/7) and a refresh button in the roster header, plus Mark All Competent and bulk certificate sending
 - **Training Hours** — Trainer training hours tracking
@@ -160,7 +162,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 ### Developer Features
 - Course content creation and editing
 - **Course Image Generator** — AI course banner generation (shared with Admin, backed by Cloudflare R2)
-- **Funding Validity** — WSQ course validity dates, renewal and whitelist management (shared with Admin)
+- **Course Funding Validity** — WSQ/IBF course validity dates with funding-type totals, cumulative expiry-window dashboards (3 months / 2 months / 1 month / 1 week), renewal tracking and whitelist management (shared with Admin)
 - Assessment authoring with multiple assessment methods (Written, Practical, Case Study, Role Play, Oral Questioning, Project, Assignment)
 - Learning unit and subtopic management
 - Course material uploads (lesson plans, slides, guides)
@@ -223,6 +225,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Auto-Assign Trainers** — Bot-driven trainer assignment with fallback logic
 - **Course Run Date Sync** — Automatic synchronization of dates with SSG
 - **Enrolment Backfill** — Batch sync of enrollment data from SSG
+- **Funding Renewal Reminder** — Daily 8:00 AM SGT email listing funded courses whose funding validity has expired or expires within 1 month and are not yet marked renewed on the Course Funding Validity page (recipients via `FUNDING_REMINDER_RECIPIENTS`; nothing pending → no email)
 - **Auto-Send Emails** — Configurable auto-send for proforma invoices, confirmation emails, invoices, receipts, certificates, and thank-you emails
 
 ### Singapore-Specific Features
@@ -619,6 +622,9 @@ SSG_API_BASE_URL=https://api.ssg-wsg.sg
 EXTERNAL_API_KEY_FOR_CLAWDBOT=your-external-api-key
 SCHEDULER_SECRET=your-scheduler-secret
 DIRECT_APPLICATION_EMAIL_INGEST_TOKEN=your-direct-application-email-ingest-token
+
+# Funding renewal reminder — comma-separated recipient emails (tenants without it skip the job)
+FUNDING_REMINDER_RECIPIENTS=ops@example.com,finance@example.com
 ```
 
 ## Deployment
