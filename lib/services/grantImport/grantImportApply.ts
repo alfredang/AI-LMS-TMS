@@ -64,27 +64,47 @@ async function qbResolveInvoiceForGrantRow(input: {
   enrolmentId: string | null;
   paymentDate?: string | null;
 }): Promise<
-  | { id: string; customerRef?: string; resolvedBy: 'docNumber' | 'enrolment_grant_docNumber' | 'date_window_scan' }
+  | {
+      id: string;
+      customerRef?: string;
+      resolvedBy: 'docNumber' | 'enrolment_grant_docNumber_ssg' | 'enrolment_grant_docNumber_history' | 'date_window_scan';
+    }
   | null
 > {
   const direct = await qbFindInvoiceByDocNumber(input.app, input.grantId);
   if (direct?.id) return { ...direct, resolvedBy: 'docNumber' };
 
   // A grant that isn't itself the invoice's DocNumber is usually a secondary funding
-  // component (e.g. MCES) billed on another grant's invoice for the same enrolment
-  // (see the invoice screenshot: one invoice, one line per grant ref). QBO's query
-  // language doesn't support filtering by Line.Description at all (confirmed: QBO
-  // rejects it outright with "not queryable", every time — it's not a per-realm quirk),
+  // component (e.g. SME/MCES) billed as extra lines on the SAME grant invoice for this
+  // enrolment — that invoice's own DocNumber is the Baseline grant's GRN (a separate
+  // "Customer Invoice" also exists per enrolment, numbered "TC..."; it can never collide
+  // with a GRN-format DocNumber lookup, so this search structurally never touches it).
+  // QBO's query language doesn't support filtering by Line.Description at all (confirmed:
+  // QBO rejects it outright with "not queryable", every time — it's not a per-realm quirk),
   // so the only reliable way to find that invoice is via a sibling grant_id's DocNumber.
+  //
+  // Two sibling sources exist, and they are NOT equally trustworthy:
+  //   - ssg_grants is synced directly from SSG/TPGateway (same source Consolidated Finance
+  //     reads from) — an exact DocNumber match against one of its GRNs is as trustworthy as
+  //     matching the row's own GRN directly. Tried first.
+  //   - our own grant_import_rows history is self-referential (just "we saw this pairing in
+  //     a past upload"), not externally verified. Tried only if ssg_grants has nothing (it
+  //     frequently lags/is missing for newer enrolments) — but a match found ONLY this way
+  //     is a lower-confidence resolution and must not drive an automatic write (see the
+  //     resolvedBy check in applyGrantImportBatch).
   if (input.enrolmentId) {
-    const [ssgGrns, historyGrns] = await Promise.all([
-      listSsgGrantIdsForEnrolment(input.enrolmentId),
-      listGrantIdsForEnrolmentFromImportHistory(input.enrolmentId),
-    ]);
-    const grns = Array.from(new Set([...ssgGrns, ...historyGrns])).filter((g) => g && g !== input.grantId);
-    for (const grn of grns) {
+    const ssgGrns = (await listSsgGrantIdsForEnrolment(input.enrolmentId)).filter((g) => g && g !== input.grantId);
+    for (const grn of ssgGrns) {
       const hit = await qbFindInvoiceByDocNumber(input.app, grn);
-      if (hit?.id) return { ...hit, resolvedBy: 'enrolment_grant_docNumber' };
+      if (hit?.id) return { ...hit, resolvedBy: 'enrolment_grant_docNumber_ssg' };
+    }
+
+    const historyGrns = (await listGrantIdsForEnrolmentFromImportHistory(input.enrolmentId)).filter(
+      (g) => g && g !== input.grantId && !ssgGrns.includes(g)
+    );
+    for (const grn of historyGrns) {
+      const hit = await qbFindInvoiceByDocNumber(input.app, grn);
+      if (hit?.id) return { ...hit, resolvedBy: 'enrolment_grant_docNumber_history' };
     }
   }
 
@@ -106,7 +126,7 @@ async function qbResolveInvoiceForGrantRowAcrossApps(input: {
       app: string;
       id: string;
       customerRef?: string;
-      resolvedBy: 'docNumber' | 'enrolment_grant_docNumber' | 'date_window_scan';
+      resolvedBy: 'docNumber' | 'enrolment_grant_docNumber_ssg' | 'enrolment_grant_docNumber_history' | 'date_window_scan';
     }
   | null
 > {
@@ -491,6 +511,33 @@ export async function applyGrantImportBatch(input: {
       const customerRef = inv.customerRef;
       if (!customerRef) throw new Error(`QuickBooks invoice ${grantId} has no CustomerRef`);
 
+      // Spillover / wrong-invoice prevention (hard rule, not a suggestion): only ever write a
+      // payment when the invoice was located by an exact, structured-field match AND that match
+      // is backed by an externally-verified source. Two resolution tiers are allowed to write:
+      //   - 'docNumber': this GRN's own DocNumber.
+      //   - 'enrolment_grant_docNumber_ssg': a sibling GRN's DocNumber, where the sibling
+      //     relationship is confirmed by ssg_grants (synced from SSG/TPGateway — the same data
+      //     Consolidated Finance reads from).
+      // Two tiers are NOT allowed to write, and fail the row instead:
+      //   - 'enrolment_grant_docNumber_history': a sibling GRN only known from this app's own
+      //     past uploads (self-referential — never externally re-verified; if a wrong pairing
+      //     were ever uploaded once, this tier would keep trusting it on every future run).
+      //   - 'date_window_scan': a fuzzy scan of nearby invoices' Line.Description text — a
+      //     heuristic, not an identity check, and the exact kind of loose match that previously
+      //     caused a payment to land on the wrong invoice and let QuickBooks' AutoApplyPayments
+      //     setting spill the difference onto that customer's other open invoices.
+      if (inv.resolvedBy === 'date_window_scan' || inv.resolvedBy === 'enrolment_grant_docNumber_history') {
+        const reason =
+          inv.resolvedBy === 'date_window_scan'
+            ? 'could only be located via a fuzzy date-window text scan (no exact DocNumber match on this GRN or any ssg_grants-verified sibling GRN for this enrolment)'
+            : 'could only be located via a sibling GRN seen in this app\'s own past uploads, not confirmed in ssg_grants (SSG/TPGateway-synced data)';
+        throw new Error(
+          `Refusing to auto-apply: invoice for grant ${grantId} ${reason}. Auto-apply is disabled for this match type to ` +
+            `prevent payments from landing on the wrong invoice. Verify the correct invoice in QuickBooks manually, or wait ` +
+            `for ssg_grants to sync this enrolment's grants (or fix the data) and re-upload so it resolves with a verified match.`
+        );
+      }
+
       const refNum = String(row.bank_reference_id || row.financial_transaction_id || '').trim();
 
       // Idempotency: if QB already has a payment linked to this invoice+amount on this payment date, do NOT create another.
@@ -731,6 +778,38 @@ export async function applyGrantImportBatch(input: {
         );
       }
       paymentBody.DepositToAccountRef = { value: dep };
+
+      // Hard invariant, checked immediately before every write: this payment must reference
+      // exactly one Line, linked to exactly the resolved invoice, and TotalAmt must exactly equal
+      // that line's Amount. If TotalAmt ever exceeded the linked line amount — e.g. a future edit
+      // adds a second line, or a rounding path desyncs the two — QuickBooks' AutoApplyPayments
+      // setting would silently apply the leftover to other open invoices under this customer,
+      // which is the exact "spillover" failure mode this row's earlier balance guard exists to
+      // prevent. This assertion makes that class of bug fail loudly instead of shipping silently.
+      const invariantLines = toLineArray(paymentBody.Line);
+      if (invariantLines.length !== 1) {
+        throw new Error(
+          `Internal invariant violated for grant ${grantId}: payment has ${invariantLines.length} line(s), expected exactly 1 — refusing to write (spillover risk)`
+        );
+      }
+      const invariantLine = invariantLines[0];
+      const invariantLinkedInvoices = toLineArray(invariantLine?.LinkedTxn);
+      const linksResolvedInvoiceOnly =
+        invariantLinkedInvoices.length === 1 &&
+        String(invariantLinkedInvoices[0]?.TxnType) === 'Invoice' &&
+        String(invariantLinkedInvoices[0]?.TxnId) === String(inv.id);
+      if (!linksResolvedInvoiceOnly) {
+        throw new Error(
+          `Internal invariant violated for grant ${grantId}: payment line is not linked to exactly the resolved invoice ${inv.id} — refusing to write (spillover risk)`
+        );
+      }
+      if (Math.abs(Number(invariantLine.Amount) - Number(paymentBody.TotalAmt)) > 0.01) {
+        throw new Error(
+          `Internal invariant violated for grant ${grantId}: TotalAmt (${paymentBody.TotalAmt}) must equal the linked line amount ` +
+            `(${invariantLine.Amount}) — a mismatch here is exactly what lets QuickBooks silently redistribute the difference onto ` +
+            `other invoices; refusing to write`
+        );
+      }
 
       const created = await qbCreatePayment(inv.app, paymentBody);
       if (!created?.id) throw new Error('QuickBooks payment creation returned no Id');
