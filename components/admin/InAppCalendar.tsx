@@ -102,6 +102,12 @@ const InAppCalendar: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [range, setRange] = useState<{ start: string; end: string } | null>(null);
 
+  // Google-Calendar match map for the visible range: "<runUuid>|<YYYY-MM-DD>" → matched.
+  // null = not checked (calendar off/unreachable) → no highlights (fail soft).
+  const [gcalMatches, setGcalMatches] = useState<Record<string, boolean> | null>(null);
+  const [onlyUnmatched, setOnlyUnmatched] = useState(false);
+  const gcalReqSeq = useRef(0);
+
   // Click-the-title month/year quick-jump.
   const [pickerOpen, setPickerOpen] = useState(false);
   const [viewYM, setViewYM] = useState<{ y: number; m: number }>(() => { const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }; });
@@ -166,6 +172,13 @@ const InAppCalendar: React.FC = () => {
       const data = await res.json();
       setRawEvents(data?.success ? (data.data?.events || []) : []);
     } catch { setRawEvents([]); } finally { setLoading(false); }
+    // Google-Calendar match for the same range — fire-and-forget so the grid never
+    // waits on Google; a stale response (fast month-hopping) is dropped via seq.
+    const seq = ++gcalReqSeq.current;
+    fetch(getApiUrl(`/api/admin/calendar-match?start=${startIso}&end=${endIso}`))
+      .then((r) => r.json())
+      .then((d) => { if (seq === gcalReqSeq.current) setGcalMatches(d?.success && d?.calendarChecked ? (d.matches || {}) : null); })
+      .catch(() => { if (seq === gcalReqSeq.current) setGcalMatches(null); });
   }, []);
 
   const handleDatesSet = useCallback((arg: DatesSetArg) => {
@@ -177,10 +190,23 @@ const InAppCalendar: React.FC = () => {
     void fetchRange(start, end);
   }, [fetchRange]);
 
+  // A WSQ/IBF run-day the calendar sweep checked and found NO Google event for.
+  // Google Calendar is the source of truth for WSQ classes, so these are drift.
+  const isGcalUnmatched = useCallback((r: ClassDayEvent): boolean => (
+    !!gcalMatches && !r.noSessions && !isNonWsq(r.courseCode) && r.classStatus !== 'Cancelled' &&
+    gcalMatches[`${r.courseRunUuid}|${r.sessionDate}`] === false
+  ), [gcalMatches]);
+
+  const unmatchedCount = useMemo(
+    () => rawEvents.filter(isGcalUnmatched).length,
+    [rawEvents, isGcalUnmatched]
+  );
+
   const allEvents = useMemo<EventInput[]>(() => {
     const q = search.trim().toLowerCase();
     // Each facet NARROWS; an empty facet imposes no constraint. A run shows iff it passes all.
     const evs = rawEvents
+      .filter((r) => !onlyUnmatched || isGcalUnmatched(r))
       .filter((r) => enabledStatuses.size === 0 || enabledStatuses.has(r.classStatus))
       .filter((r) => {
         if (trainerTags.size === 0) return true;
@@ -214,14 +240,16 @@ const InAppCalendar: React.FC = () => {
             extendedProps: { kind: 'runDay', ...r },
           } as EventInput;
         }
+        const unmatched = isGcalUnmatched(r);
         return {
           id: `${r.courseRunUuid}|${r.sessionDate}`,
-          title: `${r.courseTitle} · Day ${r.dayNumber}/${r.allSessionDates?.length || 1}`,
+          title: `${unmatched ? '⚠ ' : ''}${r.courseTitle} · Day ${r.dayNumber}/${r.allSessionDates?.length || 1}`,
           start: t ? `${r.sessionDate}T${t}` : r.sessionDate,
           end: te ? `${r.sessionDate}T${te}` : undefined,
           allDay: !t,
+          classNames: unmatched ? ['fc-gcal-unmatched'] : [],
           backgroundColor: isNonWsq(r.courseCode) ? NON_WSQ_COLOR : colorFor(r.classStatus),
-          borderColor: isNonWsq(r.courseCode) ? NON_WSQ_COLOR : colorFor(r.classStatus),
+          borderColor: unmatched ? '#dc2626' : (isNonWsq(r.courseCode) ? NON_WSQ_COLOR : colorFor(r.classStatus)),
           extendedProps: { kind: 'runDay', ...r },
         } as EventInput;
       });
@@ -244,7 +272,7 @@ const InAppCalendar: React.FC = () => {
       } as EventInput);
     }
     return evs;
-  }, [rawEvents, enabledStatuses, trainerTags, learnerStates, scheduleStates, trainerFilter, search, pendingGhost]);
+  }, [rawEvents, enabledStatuses, trainerTags, learnerStates, scheduleStates, trainerFilter, search, pendingGhost, onlyUnmatched, isGcalUnmatched]);
 
   // ── Open the event details + sessions modal ─────────────────────────────────
   const openEventModal = useCallback(async (ev: ClassDayEvent) => {
@@ -483,8 +511,8 @@ const InAppCalendar: React.FC = () => {
   const toggleLearner = (s: 'has' | 'none') => setLearnerStates((prev) => { const n = new Set(prev); if (n.has(s)) n.delete(s); else n.add(s); return n; });
   const toggleSchedule = (s: 'scheduled' | 'nosession') => setScheduleStates((prev) => { const n = new Set(prev); if (n.has(s)) n.delete(s); else n.add(s); return n; });
   // "Show all" = clear every facet (no constraints) → every class on every day.
-  const showAll = () => { setEnabledStatuses(new Set()); setTrainerTags(new Set()); setLearnerStates(new Set()); setScheduleStates(new Set()); setTrainerFilter(''); setSearch(''); };
-  const resetDefault = () => { setEnabledStatuses(new Set(['Confirmed'])); setTrainerTags(new Set<TrainerTag | 'none'>(['tpg'])); setLearnerStates(new Set<'has' | 'none'>(['has'])); setScheduleStates(new Set<'scheduled' | 'nosession'>(['scheduled'])); };
+  const showAll = () => { setEnabledStatuses(new Set()); setTrainerTags(new Set()); setLearnerStates(new Set()); setScheduleStates(new Set()); setTrainerFilter(''); setSearch(''); setOnlyUnmatched(false); };
+  const resetDefault = () => { setEnabledStatuses(new Set(['Confirmed'])); setTrainerTags(new Set<TrainerTag | 'none'>(['tpg'])); setLearnerStates(new Set<'has' | 'none'>(['has'])); setScheduleStates(new Set<'scheduled' | 'nosession'>(['scheduled'])); setOnlyUnmatched(false); };
   const inputCls = 'border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-sm dark:bg-gray-700 dark:text-white';
   const chipCls = (active: boolean) => `px-2 py-1 rounded-md text-xs font-medium border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 opacity-70'}`;
 
@@ -516,6 +544,10 @@ const InAppCalendar: React.FC = () => {
         .fc-tms .fc-ghost-pending { opacity: 0.85; pointer-events: none; border-style: dashed !important; border-width: 2px !important;
           background: repeating-linear-gradient(45deg, rgba(148,163,184,0.18), rgba(148,163,184,0.18) 5px, transparent 5px, transparent 10px) !important; }
         .fc-tms .fc-ghost-pending .fc-event-title { font-style: italic; }
+
+        /* WSQ run-day with NO matching Google Calendar event — drift from the source of truth. */
+        .fc-tms .fc-gcal-unmatched { outline: 2px dashed #dc2626; outline-offset: 1px; }
+        .fc-tms .fc-gcal-unmatched .fc-event-title { font-weight: 600; }
 
         /* No-session run block (dashed grey all-day marker). */
         .fc-tms .fc-nosession { border-style: dashed !important; opacity: 0.9;
@@ -573,6 +605,17 @@ const InAppCalendar: React.FC = () => {
           <button type="button" onClick={() => toggleSchedule('scheduled')} className={chipCls(scheduleStates.has('scheduled'))}>Scheduled</button>
           <button type="button" onClick={() => toggleSchedule('nosession')} title="Runs with no scheduled sessions" className={chipCls(scheduleStates.has('nosession'))}>No sessions</button>
         </div>
+        {gcalMatches !== null && (
+          <button type="button" onClick={() => setOnlyUnmatched((v) => !v)}
+            title="WSQ run-days with no matching Google Calendar event in the visible range (Google Calendar is the source of truth). Click to show only these."
+            className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors ${onlyUnmatched
+              ? 'bg-red-600 text-white border-red-600'
+              : unmatchedCount > 0
+                ? 'border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+                : 'border-green-300 dark:border-green-700 text-green-700 dark:text-green-400'}`}>
+            {unmatchedCount > 0 ? `⚠ ${unmatchedCount} not on GCal` : '✓ All on GCal'}
+          </button>
+        )}
         <div className="flex items-center gap-1">
           <button type="button" onClick={showAll} title="Clear all filters — show every class on every day" className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">Show all</button>
           <button type="button" onClick={resetDefault} title="Back to the default 'definitely happening' view" className="px-2 py-1 rounded-md text-xs text-gray-500 dark:text-gray-400 hover:underline">Default</button>
@@ -641,7 +684,7 @@ const InAppCalendar: React.FC = () => {
       </div>
       <p className="text-xs text-gray-400 flex items-center gap-1">
         How to use this calendar
-        <HelpTip>Drag a day to reschedule it, or click a class to see details and move single sessions (use a session&apos;s <strong>date picker</strong> to reach another month). By default this shows classes that are <strong>going ahead</strong> (confirmed, with a trainer, learners and scheduled dates). Each filter narrows the view; <strong>Show all</strong> shows everything.</HelpTip>
+        <HelpTip>Drag a day to reschedule it, or click a class to see details and move single sessions (use a session&apos;s <strong>date picker</strong> to reach another month). By default this shows classes that are <strong>going ahead</strong> (confirmed, with a trainer, learners and scheduled dates). Each filter narrows the view; <strong>Show all</strong> shows everything. A <strong>red dashed border + ⚠</strong> marks a WSQ class day with <strong>no matching Google Calendar event</strong> (drift from the source of truth) — open the class and use <strong>Create missing calendar events</strong>, or fix the date via reschedule.</HelpTip>
       </p>
       <p className="text-xs text-gray-400 leading-relaxed">
         <span className="font-medium text-gray-500 dark:text-gray-300">Sync Google Calendar</span>: also move/remove the matching Google Calendar event when you apply a change (off = SSG/LMS only).{' '}

@@ -118,7 +118,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Admin Dashboard** — KPI cards: Ongoing Classes, Upcoming Classes, Completed Classes, Assigned Trainers (Local), Missing Trainers (Local/TPG)
 - **Workflow Guides** — Interactive documentation organized by category (Training, Admin, Finance) with 10+ workflow guides including SSG Process Steps
 - **Support Tickets** — Ticket management system for handling learner, trainer, and user support requests
-- **Calendar & Scheduler** — View and manage training calendar, search by course code/title/name/date
+- **Calendar & Scheduler** — View and manage training calendar (top-level View Calendar), search by course code/title/name/date; WSQ class-days are live-matched against Google Calendar and any day with no matching event is highlighted (red dashed ⚠) with a "not on GCal" filter
 - **Course Management** — View courses, trainers, funding validity
 - **Class Management** — View learners, manage upcoming/ongoing/completed classes, assign trainers and learners, search past learners
 - **Direct Application** — Upload, view, and manage direct applications
