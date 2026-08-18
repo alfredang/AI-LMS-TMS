@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useDeveloperCourses } from '@hooks/useDeveloperCourses';
 import { Card } from '../ui/Card';
 import { getLocalYMD } from '@/lib/dateHelpers';
@@ -71,6 +71,15 @@ const FundingValidityView: React.FC = () => {
   const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '', courseType: 'WSQ', newCourseCode: '' });
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadSummary, setUploadSummary] = useState<{
+    updated: number;
+    unchanged: number;
+    failed: number;
+    results: Array<{ refCode: string; title: string; action: string; message: string }>;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
 
   const today = startOfDay(new Date());
@@ -147,6 +156,26 @@ const FundingValidityView: React.FC = () => {
     const renewed = inWindow.filter(isCourseRenewed).length;
     return { ...window, total: inWindow.length, renewed };
   });
+
+  // Stacked-bar data — one bucket per calendar month from this month through
+  // +6 (e.g. Aug 2026 … Feb 2027): courses whose funding validity ends inside
+  // that month, split into renewed vs pending renewal.
+  const monthlyExpiry = Array.from({ length: 7 }, (_, i) => {
+    const monthStart = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + i + 1, 0, 23, 59, 59);
+    const inMonth = wsqCourses.filter(course => {
+      const validityDate = parseValidityDate(course.fundingValidity);
+      return !!validityDate && validityDate >= monthStart && validityDate <= monthEnd;
+    });
+    const renewed = inMonth.filter(isCourseRenewed).length;
+    return {
+      label: monthStart.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
+      total: inMonth.length,
+      renewed,
+      pending: inMonth.length - renewed,
+    };
+  });
+  const monthlyMax = Math.max(1, ...monthlyExpiry.map(bucket => bucket.total));
 
   // Expired or expiring within 1 month and not yet marked as renewed — the
   // same set the daily reminder email (funding_renewal_reminder cron) sends.
@@ -297,6 +326,123 @@ const FundingValidityView: React.FC = () => {
     }
   };
 
+  // Pre-filled template with only the columns the upload applies. The full
+  // "Download Excel" export also uploads fine — the extra columns are ignored.
+  const handleDownloadTemplate = async () => {
+    setDownloadingTemplate(true);
+    try {
+      const XLSX = await import('xlsx');
+
+      const rows = wsqCourses.map(course => ({
+        'Course Title': course.title,
+        'Course Ref Code (New)': course.newCourseCode || '',
+        'Course Ref Code (Old)': course.courseCode || '',
+        'Validity End Date': parseValidityDate(course.fundingValidity) || '',
+        'CAS': course.casScore != null ? Number(course.casScore) : '',
+        'ES': course.esScore != null ? Number(course.esScore) : '',
+        'Whitelist': (whitelistStateOverrides[course.id] ?? !!course.whitelistStatus) ? 'Yes' : 'No',
+        'Renew': (renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus)) ? 'Yes' : 'No',
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows, { cellDates: true });
+      ws['!autofilter'] = { ref: ws['!ref'] };
+      ws['!cols'] = [{ wch: 60 }, { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }];
+      for (let r = 1; r <= rows.length; r++) {
+        const cell = ws[`D${r + 1}`];
+        if (cell && cell.t === 'd') cell.z = 'dd/mm/yyyy';
+      }
+
+      const instructions = XLSX.utils.aoa_to_sheet([
+        ['Funding Status Upload Template — Instructions'],
+        [''],
+        ['1.', 'Edit the "Funding Status" sheet, then upload this file back with the "Upload Excel" button.'],
+        ['2.', 'Courses are matched by Course Ref Code (New), falling back to Course Ref Code (Old). Do not edit the ref code or title columns.'],
+        ['3.', 'Editable columns: Validity End Date, CAS, ES, Whitelist, Renew.'],
+        ['4.', 'Validity End Date: use a real Excel date (dd/mm/yyyy).'],
+        ['5.', 'Whitelist / Renew: Yes or No.'],
+        ['6.', 'A BLANK cell means "leave unchanged" — it never clears the stored value. To clear a value, use the Edit button on the dashboard.'],
+        ['7.', 'Rows you delete from the sheet are simply not updated.'],
+      ]);
+      instructions['!cols'] = [{ wch: 4 }, { wch: 110 }];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Funding Status');
+      XLSX.utils.book_append_sheet(wb, instructions, 'Instructions');
+      XLSX.writeFile(wb, `funding-status-template-${getLocalYMD(new Date())}.xlsx`);
+    } catch (err) {
+      console.error('Failed to build funding status template:', err);
+      window.alert('Failed to download the template. Please try again.');
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
+  // Accepts a cell that may be an Excel date, dd/mm/yyyy or yyyy-mm-dd text.
+  const cellToYMD = (value: any): string | null => {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return getLocalYMD(value);
+    const s = String(value ?? '').trim();
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+    return s; // let the server report it as invalid, naming the bad value
+  };
+
+  const cellToYesNo = (value: any): boolean | undefined => {
+    const s = String(value ?? '').trim().toLowerCase();
+    if (['yes', 'y', 'true', '1'].includes(s)) return true;
+    if (['no', 'n', 'false', '0'].includes(s)) return false;
+    return undefined;
+  };
+
+  const handleUploadFile = async (file: File) => {
+    setUploading(true);
+    setUploadSummary(null);
+    try {
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+
+      const sheetName =
+        workbook.SheetNames.find(name => name.toLowerCase() !== 'instructions') || workbook.SheetNames[0];
+      const rows: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+
+      const updates = rows
+        .map(row => {
+          const blank = (v: any) => String(v ?? '').trim() === '';
+          const update: any = {
+            newCode: String(row['Course Ref Code (New)'] ?? '').trim(),
+            oldCode: String(row['Course Ref Code (Old)'] ?? '').trim(),
+            title: String(row['Course Title'] ?? '').trim(),
+          };
+          if (!blank(row['Validity End Date'])) update.fundingValidity = cellToYMD(row['Validity End Date']);
+          if (!blank(row['CAS'])) update.casScore = Number(row['CAS']);
+          if (!blank(row['ES'])) update.esScore = Number(row['ES']);
+          const whitelist = cellToYesNo(row['Whitelist']);
+          if (whitelist !== undefined) update.whitelist = whitelist;
+          const renew = cellToYesNo(row['Renew']);
+          if (renew !== undefined) update.renew = renew;
+          return update;
+        })
+        .filter(u => u.newCode || u.oldCode);
+
+      if (updates.length === 0) {
+        window.alert('No usable rows found. The file needs the template columns, including a Course Ref Code.');
+        return;
+      }
+
+      const response = await apiClient.post('/api/admin/bulk-update-funding-status', { updates });
+      const data = response?.data ?? response;
+      setUploadSummary(data);
+      refetch();
+    } catch (err) {
+      console.error('Failed to upload funding status file:', err);
+      window.alert('Failed to process the uploaded file. Please check it matches the template and try again.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-64">
@@ -349,6 +495,64 @@ const FundingValidityView: React.FC = () => {
           </Card>
         ))}
       </div>
+
+      <Card className="mb-8 p-6 dark:bg-gray-800 dark:border-gray-700">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+          <div>
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Funding Expiry — Next 6 Months</h4>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Courses whose funding validity ends each month, split by renewal status.</p>
+          </div>
+          <div className="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-300">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: '#059669' }} />
+              Renewed
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: '#d97706' }} />
+              Pending renewal
+            </span>
+          </div>
+        </div>
+        <div className="flex items-end gap-3 sm:gap-6 h-56">
+          {monthlyExpiry.map(bucket => {
+            const barHeight = (segment: number) => Math.round((segment / monthlyMax) * 176);
+            const renewedPx = barHeight(bucket.renewed);
+            const pendingPx = barHeight(bucket.pending);
+            return (
+              <div
+                key={bucket.label}
+                className="flex-1 flex flex-col items-center justify-end min-w-0"
+                title={`${bucket.label}: ${bucket.total} expiring — ${bucket.renewed} renewed, ${bucket.pending} pending`}
+              >
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 tabular-nums">{bucket.total}</span>
+                {bucket.total === 0 ? (
+                  <div className="w-full max-w-[56px] h-px bg-gray-300 dark:bg-gray-600" />
+                ) : (
+                  <div className="w-full max-w-[56px] flex flex-col">
+                    {bucket.pending > 0 && (
+                      <div
+                        className="w-full rounded-t"
+                        style={{ height: `${Math.max(pendingPx, 3)}px`, backgroundColor: '#d97706', marginBottom: bucket.renewed > 0 ? 2 : 0 }}
+                      >
+                        {pendingPx >= 16 && <p className="text-[10px] font-semibold text-white text-center leading-4 tabular-nums">{bucket.pending}</p>}
+                      </div>
+                    )}
+                    {bucket.renewed > 0 && (
+                      <div
+                        className={`w-full ${bucket.pending === 0 ? 'rounded-t' : ''}`}
+                        style={{ height: `${Math.max(renewedPx, 3)}px`, backgroundColor: '#059669' }}
+                      >
+                        {renewedPx >= 16 && <p className="text-[10px] font-semibold text-white text-center leading-4 tabular-nums">{bucket.renewed}</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <span className="mt-2 text-[11px] text-gray-600 dark:text-gray-400 whitespace-nowrap">{bucket.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
 
       <Card className="mb-8 dark:bg-gray-800 dark:border-gray-700">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -425,19 +629,84 @@ const FundingValidityView: React.FC = () => {
       </div>
 
       <Card className="dark:bg-gray-800 dark:border-gray-700">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Course Validity List</h4>
             <p className="text-sm text-gray-600 dark:text-gray-400">Sorted from earliest validity date to latest. Courses expiring within 4 months are highlighted.</p>
           </div>
-          <button
-            onClick={handleExport}
-            disabled={exporting || wsqCourses.length === 0}
-            className="shrink-0 px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {exporting ? 'Preparing…' : 'Download Excel'}
-          </button>
+          <div className="shrink-0 flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              disabled={exporting || wsqCourses.length === 0}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {exporting ? 'Preparing…' : 'Download Excel'}
+            </button>
+            <button
+              onClick={handleDownloadTemplate}
+              disabled={downloadingTemplate || wsqCourses.length === 0}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              title="Pre-filled template — edit the validity dates, CAS/ES, Whitelist and Renew columns, then upload it back"
+            >
+              {downloadingTemplate ? 'Preparing…' : 'Download Template'}
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+              title="Upload the edited template (or the full Excel export) to update funding status in bulk"
+            >
+              {uploading ? 'Uploading…' : 'Upload Excel'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) handleUploadFile(file);
+              }}
+            />
+          </div>
         </div>
+
+        {uploadSummary && (
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+            <div className="flex items-start justify-between gap-4">
+              <div className="text-sm">
+                <p className="font-semibold text-gray-900 dark:text-white">
+                  Upload complete — {uploadSummary.updated} updated
+                  {uploadSummary.unchanged > 0 && <>, {uploadSummary.unchanged} unchanged</>}
+                  {uploadSummary.failed > 0 && <span className="text-red-600 dark:text-red-400">, {uploadSummary.failed} failed</span>}
+                </p>
+                {uploadSummary.failed > 0 && (
+                  <ul className="mt-2 space-y-1 text-xs text-red-600 dark:text-red-400 list-disc list-inside">
+                    {uploadSummary.results
+                      .filter(r => r.action === 'failed')
+                      .slice(0, 20)
+                      .map((r, i) => (
+                        <li key={i}>
+                          <span className="font-medium">{r.refCode}</span>
+                          {r.title ? ` (${r.title})` : ''}: {r.message}
+                        </li>
+                      ))}
+                    {uploadSummary.results.filter(r => r.action === 'failed').length > 20 && (
+                      <li>…and {uploadSummary.results.filter(r => r.action === 'failed').length - 20} more.</li>
+                    )}
+                  </ul>
+                )}
+              </div>
+              <button
+                onClick={() => setUploadSummary(null)}
+                aria-label="Dismiss upload summary"
+                className="text-lg leading-none text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
