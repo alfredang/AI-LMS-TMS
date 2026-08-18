@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
 import { requireRole } from '@lib/auth/requireRole';
 import { acquireBillNoLock, ensureBillNoColumn, nextBillNo, normalizeBillNo } from '@lib/payroll/billNo';
+import { onPayoutConfirmed, onPayoutUnconfirmed } from '@lib/payroll/trainerBill';
+import { ensurePayoutColumns } from '@lib/payroll/ensurePayoutColumns';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT' && req.method !== 'PATCH') {
@@ -19,13 +21,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   await ensureBillNoColumn();
 
   try {
-    const { num_learners, course_fee, tier_percent, actual_payout, status, payment_date, remark, bill_no } =
+    const { num_learners, course_fee, tier_percent, actual_payout, status, payment_date, remark, bill_no, end_date } =
       req.body || {};
     const updated_by = authed.id;
 
     if (status && !['pending', 'completed', 'cancelled'].includes(status)) {
       return res.status(400).json({ success: false, error: 'invalid status' });
     }
+    if (end_date !== undefined && end_date !== null && end_date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(String(end_date))) {
+      return res.status(400).json({ success: false, error: 'end_date must be YYYY-MM-DD' });
+    }
+    if (end_date !== undefined) await ensurePayoutColumns();
 
     // Explicit bill_no from the edit dialog (may be '' → clear it).
     let billNoOverride: string | null | undefined;
@@ -111,6 +117,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sets.push(`remark = $${i++}`);
       params.push(remark || null);
     }
+    // Payroll-local correction to the class end date — drives which month the
+    // payout falls in and the bill number/date. Blank clears the override so
+    // the class's own end date takes over again; course_run is never touched.
+    if (end_date !== undefined) {
+      sets.push(`end_date_override = $${i++}`);
+      params.push(end_date || null);
+    }
     if (updated_by) {
       sets.push(`updated_by = $${i++}`);
       params.push(updated_by);
@@ -123,12 +136,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Bill-number issuance runs inside a transaction: the allocator reads the
     // day's current max suffix and this UPDATE writes max+1, so the pair must be
     // serialized against a concurrent "mark as paid" on another class the same day.
+    // Declared outside the transaction: the QuickBooks bill hooks below run after
+    // the COMMIT and need both the updated row and its pre-update status.
+    let payout: any;
+    let prevStatus: string | null = null;
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
-      // Current row — needed for the class date the ref is derived from and to
-      // know whether a number was already issued.
+      // Current row — needed for the class date the ref is derived from, to know
+      // whether a number was already issued, and for the PRE-update status that
+      // decides whether this call is the pending→completed transition that raises
+      // a trainer bill (or the reverse, which voids it). Read under FOR UPDATE, so
+      // it is a consistent snapshot against a concurrent edit of the same payout.
       const cur = await client.query(
         `SELECT tp.bill_no, tp.status, cr.start_date::text AS start_date
            FROM trainer_payout tp
@@ -142,6 +163,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(404).json({ success: false, error: 'payout not found' });
       }
       const row = cur.rows[0];
+      prevStatus = row.status;
 
       if (billNoOverride !== undefined) {
         // Explicit edit always wins over auto-issue.
@@ -169,17 +191,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          RETURNING
            id, course_run_id, trainer_id, num_learners, course_fee,
            tier_percent, estimated_payout, actual_payout, status,
-           payment_date::text AS payment_date, remark, bill_no, updated_at, updated_by
+           payment_date::text AS payment_date, remark, bill_no, updated_at, updated_by,
+           end_date_override::text AS end_date_override,
+           -- Effective end date, resolved the same way the list does, so the
+           -- edited row re-renders with the corrected date immediately.
+           (SELECT COALESCE(trainer_payout.end_date_override, cr2.end_date)::text
+              FROM course_run cr2 WHERE cr2.id = trainer_payout.course_run_id) AS end_date
       `;
       const r = await client.query(sql, params);
       await client.query('COMMIT');
-      return res.status(200).json({ success: true, data: r.rows[0] });
+      payout = r.rows[0];
     } catch (e) {
       await client.query('ROLLBACK').catch(() => {});
       throw e;
     } finally {
       client.release();
     }
+
+    // Billing invoice follows the payout's confirmation state. Deliberately AFTER
+    // the COMMIT: these call out to QuickBooks, and an external round-trip must
+    // not be holding a DB transaction (or the bill-number advisory lock) open.
+    // Both helpers swallow their own errors — a QuickBooks problem must never
+    // fail the payout update the user just made.
+    // `bill` is returned so the UI can tell the user an invoice was raised and
+    // name it. Only the reserve step has finished by now — the QuickBooks post
+    // and the PDF run in the background — so the status here is normally
+    // 'pending', and the Billing Invoices tab is where it resolves.
+    let bill: Awaited<ReturnType<typeof onPayoutConfirmed>> = null;
+    if (prevStatus !== 'completed' && payout.status === 'completed') {
+      bill = await onPayoutConfirmed({ source: 'wsq', payoutId: id, userId: authed.id });
+    } else if (prevStatus === 'completed' && payout.status !== 'completed') {
+      await onPayoutUnconfirmed({ source: 'wsq', payoutId: id });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: payout,
+      bill: bill ? { id: bill.id, bill_no: bill.bill_no, status: bill.status } : null,
+    });
   } catch (err: any) {
     console.error('payroll/payouts PUT failed', err);
     // A duplicate bill number is a user-fixable conflict, not a server fault.

@@ -558,6 +558,16 @@ export async function qboFetchInvoicePdf(appOverride: string | undefined, invoic
   return Buffer.from(await resp.arrayBuffer());
 }
 
+// NOTE: there is deliberately no qboFetchBillPdf(). The /pdf resource exists for
+// SALES transactions only — Invoice, Estimate, SalesReceipt, CreditMemo,
+// RefundReceipt, PurchaseOrder. A supplier **Bill** is a purchase transaction
+// and has no PDF endpoint: verified 2026-08-13 against the live realm, where
+// GET /v3/company/{realm}/bill/{id}/pdf returned 400 (empty body) for a Bill id
+// the same API had just resolved by DocNumber, while an Invoice PDF fetched
+// fine on the identical token. The "Print preview" in the QBO web UI is a
+// browser feature on an internal endpoint that OAuth tokens cannot reach.
+// Trainer bill documents are therefore rendered by lib/payroll/trainerBillPdf.ts.
+
 /**
  * Singapore (and similar) QBO companies often require TaxCodeRef on invoice lines:
  * "Make sure all your transactions have a GST rate before you save."

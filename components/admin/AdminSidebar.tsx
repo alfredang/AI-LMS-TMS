@@ -330,7 +330,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <NavItem page={AdminPage.ViewCourses} label="View Courses" isSubItem />
                 <NavItem page={AdminPage.CourseImageGenerator} label="Course Image Generator" isSubItem />
                 <NavItem page={AdminPage.ViewTrainers} label="View Trainers" isSubItem />
-                <NavItem page={AdminPage.FundingValidity} label="Funding Validity" isSubItem />
+                <NavItem page={AdminPage.FundingValidity} label="Course Funding Validity" isSubItem />
             </NavSection>
 
             <NavSection title="Calendar & Crons" icon={IconName.Calendar} collapsed={collapsed} isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>

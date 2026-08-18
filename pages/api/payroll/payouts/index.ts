@@ -4,6 +4,7 @@ import { estimatedPayout, DEFAULT_PAYOUT_TIERS, PayoutTier } from '@lib/payroll/
 import { requireRole } from '@lib/auth/requireRole';
 import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
 import { ensureBillNoColumn, BILL_NO_LOCK_NAMESPACE } from '@lib/payroll/billNo';
+import { ensurePayoutColumns, EFFECTIVE_END_DATE } from '@lib/payroll/ensurePayoutColumns';
 
 async function loadTiers(): Promise<PayoutTier[]> {
   try {
@@ -30,13 +31,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // today), for monthly payroll cycles; otherwise the rolling "last N months".
     const monthParam = typeof req.query.month === 'string' && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : null;
     // Shared end_date window clause. $1 carries either the month string or N.
-    const dateBoundSql = monthParam
-      ? `cr.end_date >= ($1 || '-01')::date
-         AND cr.end_date <= LEAST((($1 || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date, CURRENT_DATE)`
-      : `cr.end_date <= CURRENT_DATE
-         AND cr.end_date >= (CURRENT_DATE - ($1 || ' months')::interval)`;
+    // Built over an expression so the same window can be applied to the raw
+    // class date (when scanning course_run for new payouts to materialize) or
+    // to the payroll-effective date (once a payout row exists and may carry an
+    // end_date_override) — a corrected date has to move the row's month too.
+    const dateBoundOver = (expr: string) =>
+      monthParam
+        ? `${expr} >= ($1 || '-01')::date
+           AND ${expr} <= LEAST((($1 || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date, CURRENT_DATE)`
+        : `${expr} <= CURRENT_DATE
+           AND ${expr} >= (CURRENT_DATE - ($1 || ' months')::interval)`;
+    const dateBoundSql = dateBoundOver('cr.end_date');
+    const effectiveDateBoundSql = dateBoundOver(EFFECTIVE_END_DATE);
     const dateBoundParam = monthParam || String(months);
     await ensureBillNoColumn();
+    await ensurePayoutColumns();
     const tiers = await loadTiers();
 
     // Find every (course_run, trainer) pair for runs whose end_date is within the last N months
@@ -184,7 +193,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         c.title               AS course_title,
         c.course_code         AS course_code,
         cr.start_date::text   AS start_date,
-        cr.end_date::text     AS end_date,
+        ${EFFECTIVE_END_DATE}::text AS end_date,
+        cr.end_date::text     AS class_end_date,
+        tp.end_date_override::text  AS end_date_override,
         tp.trainer_id,
         COALESCE(crt.trainer_name, au.full_name, '') AS trainer_name,
         tp.num_learners,
@@ -203,11 +214,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       LEFT JOIN course_run_trainer crt
              ON crt.course_run_id = tp.course_run_id AND crt.trainer_id = tp.trainer_id
       LEFT JOIN app_user au ON au.id = tp.trainer_id
-      WHERE ${dateBoundSql}
+      WHERE ${effectiveDateBoundSql}
         AND (cr.class_status::text = 'Confirmed' OR tp.status = 'completed')
         AND tp.num_learners > 0
         AND ${stillAssignedSql}
-      ORDER BY cr.end_date DESC, c.course_code ASC
+      ORDER BY ${EFFECTIVE_END_DATE} DESC, c.course_code ASC
     `;
     const list = await pool.query(listQuery, [dateBoundParam]);
 
@@ -228,7 +239,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         COUNT(*) FILTER (WHERE tp.status = 'cancelled')::int                          AS cancelled_count
       FROM trainer_payout tp
       JOIN course_run cr ON cr.id = tp.course_run_id
-      WHERE cr.end_date >= date_trunc('year', CURRENT_DATE)::date
+      WHERE ${EFFECTIVE_END_DATE} >= date_trunc('year', CURRENT_DATE)::date
         -- Match the list's visibility rules so the cards never count a class
         -- that isn't listable (e.g. a run cancelled at the class level, or 0 learners,
         -- or a pending payout whose trainer is no longer assigned to the class).
@@ -249,32 +260,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // --- Non-WSQ (manual) classes ----------------------------------------
     // Hand-entered non-funded classes live in their own table and are merged
-    // into the same list, tagged source:'manual'. They are NOT window-filtered
-    // (they're intentionally curated and may have no dates), so they always show.
+    // into the same list, tagged source:'manual'.
+    //
+    // These are window-filtered on the SAME month/range as the WSQ rows. They
+    // used to be returned unconditionally, which meant a June non-WSQ class sat
+    // inside the July view and silently inflated that month's trainer totals and
+    // the "Selected window" stats.
+    //
+    // Two deliberate differences from the WSQ window:
+    //  1. UNDATED rows (no end_date and no start_date) always show. The table
+    //     allows them, and there is no month to file them under — dropping them
+    //     would make a hand-entered class invisible in every single view.
+    //  2. No CURRENT_DATE upper cap. For WSQ the cap is free (a run that hasn't
+    //     ended yet was never materialized into a payout), but a manual row for
+    //     an upcoming class already exists, so capping would hide it from its own
+    //     month until the date passed.
+    const manualDateExpr = `COALESCE(mc.end_date, mc.start_date)`;
+    const manualWindowSql = monthParam
+      ? `${manualDateExpr} >= ($1 || '-01')::date
+         AND ${manualDateExpr} <= (($1 || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date`
+      : `${manualDateExpr} >= (CURRENT_DATE - ($1 || ' months')::interval)`;
+    const manualBoundSql = `(${manualDateExpr} IS NULL OR (${manualWindowSql}))`;
+
     await ensureClassDatesColumn();
-    const manual = await pool.query(`
+    const manual = await pool.query(
+      `
       SELECT
-        id,
-        class_title,
-        course_code,
-        trainer_id,
-        trainer_name,
-        start_date::text   AS start_date,
-        end_date::text     AS end_date,
-        class_dates,
-        num_learners,
-        course_fee,
-        tier_percent,
-        estimated_payout,
-        actual_payout,
-        status,
-        payment_date::text AS payment_date,
-        remark,
-        bill_no,
-        updated_at
-      FROM payroll_manual_class
-      ORDER BY end_date DESC NULLS LAST, created_at DESC
-    `);
+        mc.id,
+        mc.class_title,
+        mc.course_code,
+        mc.trainer_id,
+        mc.trainer_name,
+        mc.start_date::text   AS start_date,
+        mc.end_date::text     AS end_date,
+        mc.class_dates,
+        mc.num_learners,
+        mc.course_fee,
+        mc.tier_percent,
+        mc.estimated_payout,
+        mc.actual_payout,
+        mc.status,
+        mc.payment_date::text AS payment_date,
+        mc.remark,
+        mc.bill_no,
+        mc.updated_at
+      FROM payroll_manual_class mc
+      WHERE ${manualBoundSql}
+      ORDER BY mc.end_date DESC NULLS LAST, mc.created_at DESC
+    `,
+      [dateBoundParam]
+    );
 
     const manualRows = manual.rows.map((m) => ({
       id: m.id,
@@ -300,7 +335,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       updated_at: m.updated_at,
     }));
 
-    // Combined overview: WSQ (YTD) + all non-WSQ classes.
+    // Combined overview: WSQ (YTD) + non-WSQ, scoped to the SAME year so the two
+    // halves of each card are measured the same way. This used to fold in every
+    // non-WSQ class ever entered, so the top cards drifted further from the WSQ
+    // year-to-date figure with each passing year. Undated rows are kept (they
+    // can't be excluded by year, and they are visible in the list).
     const mo = (
       await pool.query(`
         SELECT
@@ -310,7 +349,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           COUNT(*) FILTER (WHERE status = 'completed')::int                          AS completed_count,
           COALESCE(SUM(actual_payout) FILTER (WHERE status = 'completed'), 0)::float8  AS completed_amount,
           COUNT(*) FILTER (WHERE status = 'cancelled')::int                          AS cancelled_count
-        FROM payroll_manual_class
+        FROM payroll_manual_class mc
+        WHERE COALESCE(mc.end_date, mc.start_date) IS NULL
+           OR COALESCE(mc.end_date, mc.start_date) >= date_trunc('year', CURRENT_DATE)::date
       `)
     ).rows[0] || {};
 

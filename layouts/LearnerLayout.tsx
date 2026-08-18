@@ -6,13 +6,14 @@ import { useAppVersion } from '@hooks/useAppVersion';
 import { useLms } from '../contexts/LmsContext';
 import { View } from '@app-types';
 import CourseList from '../components/CourseList';
-import CalendarView from '../components/CalendarView';
+import MyCalendarView from '../components/MyCalendarView';
 import { ProfilePage } from '@components/ProfilePage';
 import { CourseDetail } from '../components/CourseDetail';
 import HelpAndSupportView from '../components/HelpAndSupportView';
 import BillingHistoryView from '../components/BillingHistoryView';
 import CertificateHistoryView from '../components/CertificateHistoryView';
 import LearnerGrantCalculatorView from '../components/LearnerGrantCalculatorView';
+import ToolsMenu from '../components/ToolsMenu';
 
 interface NavItem {
   view: View;
@@ -23,6 +24,7 @@ interface NavItem {
 
 const sidebarItems: NavItem[] = [
   { view: View.Courses, label: 'My Classes', icon: IconName.Courses },
+  { view: View.Calendar, label: 'My Calendar', icon: IconName.Calendar },
   { view: View.Profile, label: 'My Profile', icon: IconName.MyAccount },
   { view: View.GrantCalculator, label: 'Grant Calculator', icon: IconName.Calculator },
   { view: View.BillingHistory, label: 'Billing History', icon: IconName.DollarSign },
@@ -55,7 +57,7 @@ const LearnerLayout: React.FC = () => {
       case View.CertificateHistory:
         return <CertificateHistoryView />;
       case View.Calendar:
-        return <CalendarView />;
+        return <MyCalendarView role="learner" />;
       case View.Courses:
       case View.Dashboard:
       default:
@@ -112,6 +114,9 @@ const LearnerLayout: React.FC = () => {
                   </a>
                 );
               })}
+
+              {/* Full TOOLS section — same catalogue as the trainer sidebar */}
+              <ToolsMenu collapsed={!isSidebarOpen} />
             </div>
             {isSidebarOpen && <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>}
           </aside>

@@ -190,6 +190,8 @@ export interface FeedbackFormResponse {
 export enum DeveloperPage {
   Dashboard = 'dashboard',
   CourseList = 'courseList',
+  CourseImageGenerator = 'courseImageGenerator',
+  FundingValidity = 'fundingValidity',
   CourseChangeControl = 'courseChangeControl',
   SeoMetadata = 'seoMetadata',
   CoursewareTools = 'coursewareTools',
@@ -220,6 +222,7 @@ export enum DeveloperPage {
 }
 
 export enum TrainerPage {
+  MyCalendar = 'myCalendar',
   EAttendance = 'eAttendance',
   AssessmentGrading = 'assessmentGrading',
   MyClasses = 'myClasses',

@@ -109,20 +109,59 @@ const FundingValidityView: React.FC = () => {
     );
   }, [fourMonthsAhead, today, wsqCourses]);
 
-  const isRenewDateAfterToday = (course: any) => {
-    const validityDate = parseValidityDate(course.fundingValidity);
-    if (!validityDate) return false;
-    const renewDate = new Date(validityDate);
-    renewDate.setMonth(renewDate.getMonth() - 3);
-    return renewDate >= today;
+  const isCourseRenewed = (course: any) =>
+    renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
+
+  // Row 1 — totals by funding type. CASL courses are counted as WSQ (per
+  // ops direction, Aug 2026): everything that isn't IBF rolls into WSQ.
+  const typeTotals = { WSQ: 0, IBF: 0 };
+  for (const course of wsqCourses) {
+    if (displayCourseType(course.courseType) === 'IBF') typeTotals.IBF += 1;
+    else typeTotals.WSQ += 1;
+  }
+  const totalFunded = typeTotals.WSQ + typeTotals.IBF;
+
+  const addMonthsTo = (date: Date, months: number) => {
+    const next = new Date(date);
+    next.setMonth(next.getMonth() + months);
+    return next;
+  };
+  const addDaysTo = (date: Date, days: number) => {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next;
   };
 
-  const toBeRenewed = wsqCourses.filter(isRenewDateAfterToday).length;
+  // Row 2 — cumulative expiry windows: "in 3 months" includes the 2-month,
+  // 1-month and 1-week courses, and so on down the row.
+  const expiryWindows = [
+    { key: '3m', label: 'Expiring in 3 Months', end: startOfDay(addMonthsTo(today, 3)), color: 'text-amber-500' },
+    { key: '2m', label: 'Expiring in 2 Months', end: startOfDay(addMonthsTo(today, 2)), color: 'text-orange-500' },
+    { key: '1m', label: 'Expiring in 1 Month', end: startOfDay(addMonthsTo(today, 1)), color: 'text-red-500' },
+    { key: '1w', label: 'Expiring in 1 Week', end: startOfDay(addDaysTo(today, 7)), color: 'text-purple-600' },
+  ].map(window => {
+    const inWindow = wsqCourses.filter(course => {
+      const validityDate = parseValidityDate(course.fundingValidity);
+      return !!validityDate && validityDate >= today && validityDate <= window.end;
+    });
+    const renewed = inWindow.filter(isCourseRenewed).length;
+    return { ...window, total: inWindow.length, renewed };
+  });
 
-  const yetToReview = wsqCourses.filter(course => {
-    const checked = renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
-    return isRenewDateAfterToday(course) && !checked;
-  }).length;
+  // Expired or expiring within 1 month and not yet marked as renewed — the
+  // same set the daily reminder email (funding_renewal_reminder cron) sends.
+  const oneMonthAhead = startOfDay(addMonthsTo(today, 1));
+  const pendingRenewalCourses = wsqCourses.filter(course => {
+    const validityDate = parseValidityDate(course.fundingValidity);
+    return !!validityDate && validityDate <= oneMonthAhead && !isCourseRenewed(course);
+  });
+
+  const expiryStatusLabel = (validityDate: Date) => {
+    const days = Math.round((validityDate.getTime() - today.getTime()) / 86400000);
+    if (days < 0) return { text: `Expired ${-days}d ago`, cls: 'text-red-600 dark:text-red-400' };
+    if (days === 0) return { text: 'Expires today', cls: 'text-red-600 dark:text-red-400' };
+    return { text: `${days}d left`, cls: 'text-amber-600 dark:text-amber-400' };
+  };
 
   const handleRenewToggle = async (courseId: string, checked: boolean) => {
     setRenewStateOverrides(prev => ({ ...prev, [courseId]: checked }));
@@ -281,22 +320,83 @@ const FundingValidityView: React.FC = () => {
 
   return (
     <div>
-      <h3 className="text-3xl font-bold dark:text-white mb-6">Funding Validity</h3>
+      <h3 className="text-3xl font-bold dark:text-white mb-6">Course Funding Validity</h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-blue-600">{wsqCourses.length}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Courses</p>
+          <p className="text-4xl font-bold text-blue-600">{totalFunded}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Total Funded Courses</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">WSQ + IBF</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-amber-500">{toBeRenewed}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Courses To Be Renewed</p>
+          <p className="text-4xl font-bold text-emerald-600">{typeTotals.WSQ}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Total WSQ Courses</p>
         </Card>
         <Card className="p-6 text-center">
-          <p className="text-4xl font-bold text-purple-600">{yetToReview}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Yet To Renew</p>
+          <p className="text-4xl font-bold text-sky-600">{typeTotals.IBF}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Total IBF Courses</p>
         </Card>
       </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+        {expiryWindows.map(window => (
+          <Card key={window.key} className="p-6 text-center">
+            <p className={`text-4xl font-bold ${window.color}`}>{window.total}</p>
+            <p className="text-gray-600 dark:text-gray-300 mt-1">{window.label}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {window.renewed} renewed · {window.total - window.renewed} pending
+            </p>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="mb-8 dark:bg-gray-800 dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Expiring Within 1 Month — Not Yet Renewed
+            <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+              {pendingRenewalCourses.length}
+            </span>
+          </h4>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Courses whose funding validity has expired or ends within 1 month and are not marked as renewed. This list is emailed daily by the Funding Renewal Reminder task.
+          </p>
+        </div>
+        {pendingRenewalCourses.length === 0 ? (
+          <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+            No courses pending renewal within the next month. 🎉
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-gray-50 dark:bg-gray-900/40">
+                <tr className="text-left text-gray-600 dark:text-gray-300">
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Type</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Validity End Date</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingRenewalCourses.map(course => {
+                  const validityDate = parseValidityDate(course.fundingValidity)!;
+                  const status = expiryStatusLabel(validityDate);
+                  return (
+                    <tr key={course.id} className="border-t border-gray-200 dark:border-gray-700">
+                      <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
+                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.newCourseCode || course.courseCode || '—'}</td>
+                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{displayCourseType(course.courseType)}</td>
+                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{formatValidityDate(course.fundingValidity)}</td>
+                      <td className={`px-3 py-1.5 font-semibold whitespace-nowrap ${status.cls}`}>{status.text}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       <div className="mb-4">
         <div className="relative">

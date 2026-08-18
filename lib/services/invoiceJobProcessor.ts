@@ -1,4 +1,5 @@
 import pool from '../db';
+import { buildSfcCreditLineDescription } from '../daApplicationId';
 import { buildTmsInvoiceNo } from '../utils/tmsInvoiceNo';
 import { isEnrolmentBlockedFromAutoInvoice, isEnrolmentEligibleForAutoInvoice } from './invoiceEligibility';
 import { refreshGrantsForEnrolments, upsertSsgEnrolmentFromLocalEnrollment } from './billingSync';
@@ -309,6 +310,21 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     grantIdFallback: da.grant_id ?? null,
   });
 
+  // Same guard as the DA pipeline: never bill a WSQ learner the full fee just
+  // because the grant hasn't been issued yet. The refresh above is best-effort,
+  // and an empty result reads identically to "not funded" — so without this the
+  // job ships a plausible-looking invoice at 100% of the fee.
+  //
+  // Only enforced for DA-backed rows: those have a Generate Invoice button in
+  // the DA view to override, and this queue path has no override of its own.
+  // Non-DA enrolments keep their existing behaviour.
+  if (hasDa && grantDeductionLines.length === 0 && grantSubsidy <= 0) {
+    throw new Error(
+      `No SSG grant found for ${enrolmentId} — refusing to invoice the full course fee. ` +
+        `Retry once SSG issues the grant, or use Generate Invoice in the DA view if this learner is genuinely unfunded.`
+    );
+  }
+
   // 2) Sequential QB lookups — parallel QB calls race each other for the OAuth token refresh
   //    which causes timeouts. Sequential calls reuse the same cached token after the first refresh.
   const cachedSku = _skuItemCache.get(courseCode);
@@ -441,7 +457,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
         TaxCodeRef: { value: taxCodeOos },
       },
       Description: hasDa
-        ? `SkillsFuture Credit Usage/Claim:\nApplication ID: ${da.application_id ?? '-'}`
+        ? buildSfcCreditLineDescription(da.application_id, enrolmentId)
         : `To Less Skillsfuture Credit : $${sfcCredit.toFixed(2)}`,
     });
   }

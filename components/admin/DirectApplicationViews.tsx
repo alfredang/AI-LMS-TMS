@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { authService } from '@lib/services/authService';
+import { displayApplicationId, realApplicationId } from '@lib/daApplicationId';
 import type { TpgJob } from '@lib/tpg/jobStore';
 
 // Lets the panel re-attach to a TPGateway run that outlived its tab.
@@ -32,6 +33,14 @@ const getStatusColor = (status: string) => {
             return 'bg-gray-100 text-gray-800 border-gray-200';
     }
 };
+
+/**
+ * How to name one application in a message to the admin. A row minted for a
+ * manual TPG enrolment carries only the internal `MANUAL-…` key, never a real
+ * application id — fall through to the learner's name rather than show it.
+ */
+const applicationLabel = (app: any, fallback: string): string =>
+    realApplicationId(app?.application_id) || app?.trainee_name || fallback;
 
 type DaFilterCategory = 'all' | 'inserted' | 'updated' | 'skipped' | 'failed';
 
@@ -1753,7 +1762,7 @@ export const ViewDirectApplicationView: React.FC = () => {
             // rows that produced no invoice and need the admin to act.
             const labelForResult = (r: any) => {
                 const app = applications.find(a => a.id === r.id);
-                return app?.application_id || app?.trainee_name || String(r.id || '').slice(0, 8);
+                return applicationLabel(app, String(r.id || '').slice(0, 8));
             };
             setInvProgressIssues([
                 ...failed.map((r: any) => ({
@@ -1814,7 +1823,7 @@ export const ViewDirectApplicationView: React.FC = () => {
         const cancelled = selectedRows.filter(app => isAppCancelled(app));
         if (cancelled.length > 0) {
             const first = cancelled[0];
-            const label = first.application_id || first.trainee_name || 'one application';
+            const label = applicationLabel(first, 'one application');
             const msg = cancelled.length === 1
                 ? `Cannot send: ${label} enrolment is cancelled (red X in the Enrol column). Re-enrol the learner before emailing.`
                 : `Cannot send: ${cancelled.length} selected application(s) have a cancelled enrolment (red X in the Enrol column). Re-enrol before emailing.`;
@@ -1829,7 +1838,7 @@ export const ViewDirectApplicationView: React.FC = () => {
             if (!isEnrolDone(first)) missing.push('Enrol');
             if (!isCalDone(first)) missing.push('Cal');
             if (!isInvDone(first)) missing.push('Inv');
-            const label = first.application_id || first.trainee_name || 'one application';
+            const label = applicationLabel(first, 'one application');
             const msg = incomplete.length === 1
                 ? `Cannot send: ${label} is missing ${missing.join(' + ')}. All three columns (Enrol, Cal, Inv) must be ticked before emailing.`
                 : `Cannot send: ${incomplete.length} selected application(s) are missing one or more of Enrol/Cal/Inv. All three columns must be ticked first.`;
@@ -1840,7 +1849,7 @@ export const ViewDirectApplicationView: React.FC = () => {
         const alreadySent = selectedRows.filter(app => !!app.invoice_sent_at);
         if (alreadySent.length > 0) {
             const first = alreadySent[0];
-            const label = first.application_id || first.trainee_name || 'this application';
+            const label = applicationLabel(first, 'this application');
             const sentOn = first.invoice_sent_at ? new Date(first.invoice_sent_at).toLocaleString('en-SG') : '';
             const msg = alreadySent.length === 1
                 ? `Cannot send: invoice email for ${label} was already sent${sentOn ? ` on ${sentOn}` : ''}. Re-sending is not allowed.`
@@ -2109,7 +2118,9 @@ export const ViewDirectApplicationView: React.FC = () => {
         if (activeFilter) { if (!(app[activeFilter.column] || '').toString().toLowerCase().includes(activeFilter.value.toLowerCase())) return false; }
         if (!searchQuery.trim()) return true;
         const query = searchQuery.toLowerCase();
-        return (app.trainee_name || '').toLowerCase().includes(query) || (app.application_id || '').toLowerCase().includes(query) || (app.course_title || '').toLowerCase().includes(query) || (app.trainee_email || '').toLowerCase().includes(query) || (app.trainee_id || '').toLowerCase().includes(query) || (app.course_run_id || '').toLowerCase().includes(query);
+        // enrolment_id is searchable too: it is what the Application ID column
+        // shows for a manually enrolled learner.
+        return (app.trainee_name || '').toLowerCase().includes(query) || (app.application_id || '').toLowerCase().includes(query) || (app.enrolment_id || '').toLowerCase().includes(query) || (app.course_title || '').toLowerCase().includes(query) || (app.trainee_email || '').toLowerCase().includes(query) || (app.trainee_id || '').toLowerCase().includes(query) || (app.course_run_id || '').toLowerCase().includes(query);
     });
 
     // Columns holding dates must be compared as dates, not text — "22 Jul 2026"
@@ -2479,7 +2490,22 @@ export const ViewDirectApplicationView: React.FC = () => {
                                     </thead>
                                     <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
                                         {paginatedApplications.map((app, index) => (
-                                            <tr key={app.id || index} className={`hover:bg-gray-50 dark:hover:bg-gray-600 ${selectedIds.has(app.application_id) ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}>
+                                            <tr
+                                                key={app.id || index}
+                                                // Tint rows with no MySkillsFuture application: they were enrolled
+                                                // directly with SSG, so their invoices cite the enrolment reference
+                                                // rather than an application id. Selection still wins — the blue
+                                                // has to stay readable while you pick rows to act on.
+                                                // Each branch carries its own hover colour: a shared grey hover
+                                                // would wash the tint off the moment the cursor crossed the row.
+                                                className={
+                                                    selectedIds.has(app.application_id)
+                                                        ? 'bg-blue-50 dark:bg-blue-900/30 hover:bg-gray-50 dark:hover:bg-gray-600'
+                                                        : !realApplicationId(app.application_id)
+                                                            ? 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
+                                                            : 'hover:bg-gray-50 dark:hover:bg-gray-600'
+                                                }
+                                            >
                                                 <td className="px-2 py-1.5"><input type="checkbox" checked={selectedIds.has(app.application_id)} onChange={() => toggleSelect(app.application_id)} className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300" /></td>
                                                 <td className="px-2 py-1.5 text-center">
                                                     {(() => {
@@ -2513,7 +2539,20 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                         </span>
                                                     )}
                                                 </td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">{app.application_id || 'N/A'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                                                    {(() => {
+                                                        // Rows minted for a manual TPG enrolment have no MySkillsFuture
+                                                        // application, only an internal `MANUAL-…` key. Show the SSG
+                                                        // enrolment reference instead — a real, actionable identifier.
+                                                        const { label, isPlaceholder } = displayApplicationId(app.application_id, app.enrolment_id);
+                                                        return isPlaceholder ? (
+                                                            <span className="inline-flex items-center gap-1.5" title="Enrolled directly with SSG — no MySkillsFuture application. Showing the enrolment reference.">
+                                                                <span>{label}</span>
+                                                                <span className="px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-200">Manual</span>
+                                                            </span>
+                                                        ) : label;
+                                                    })()}
+                                                </td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.application_date ? new Date(app.application_date).toLocaleDateString('en-GB') : '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_id_type || 'N/A'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.trainee_id ? (showPii ? app.trainee_id : `${app.trainee_id.charAt(0)}****${app.trainee_id.slice(-3)}`) : '-'}</td>

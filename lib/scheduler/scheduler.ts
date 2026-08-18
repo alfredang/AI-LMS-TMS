@@ -305,6 +305,13 @@ async function seedDefaults() {
             api_endpoint: '/api/external/sync-learners-to-mailerlite',
         },
         {
+            id: 'funding_renewal_reminder',
+            name: 'Funding Renewal Reminder Email',
+            description: 'Daily email listing funded courses whose funding validity has expired or expires within 1 month and are not yet marked as renewed on the Course Funding Validity page. Recipients come from the FUNDING_REMINDER_RECIPIENTS env var (comma-separated); tenants without it log a skipped run. No email is sent when nothing is pending. Runs daily at 8:00 AM SGT.',
+            cron_expression: '0 8 * * *', // 8:00 AM SGT daily
+            api_endpoint: '/api/external/funding-renewal-reminder',
+        },
+        {
             id: 'auto_generate_da_invoices',
             name: 'Auto Generate DA Invoices',
             description: 'Daily sweep that posts QuickBooks invoices (main tax + Grant + SFC) for every confirmed, SSG-enrolled Direct Application still missing one or more of them, then sends unsent main tax invoice emails once via QuickBooks. Catches rows whose grant wasn\'t yet issued by SSG at manual-generate time and rows left in "failed" state by a transient QBO hiccup. Idempotent. Default 23:00 SGT daily.',
@@ -433,6 +440,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('sync_learners_to_mailerlite', async () => {
             const { runAutomation } = await import('../../pages/api/external/sync-learners-to-mailerlite');
+            return runAutomation();
+        });
+        directHandlers.set('funding_renewal_reminder', async () => {
+            const { runAutomation } = await import('../../pages/api/external/funding-renewal-reminder');
             return runAutomation();
         });
         directHandlers.set('sync_trainers_to_calendar', async () => {
