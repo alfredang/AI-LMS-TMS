@@ -92,15 +92,34 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
         const assessmentFilesResult = await pool.query(assessmentFilesQuery, [courseId]);
 
+        // Deleting a course cascades to its course runs, enrolments, assessments,
+        // calendar events, quiz attempts and code history. Refuse while any run or
+        // enrolment still exists so a mis-click cannot wipe a live course; an empty
+        // record (e.g. a stub left by an earlier import) can still be removed.
+        const { rows: [attached] } = await pool.query(
+            `SELECT (SELECT count(*) FROM course_run WHERE course_id = $1) AS runs,
+                    (SELECT count(*) FROM enrollment WHERE course_id = $1) AS enrolments`,
+            [courseId]
+        );
+        if (Number(attached.runs) > 0 || Number(attached.enrolments) > 0) {
+            return res.status(409).json({
+                success: false,
+                error: `Cannot delete this course: it still has ${attached.runs} course run(s) `
+                     + `and ${attached.enrolments} enrolment(s). Remove those first.`,
+            });
+        }
+
         // Start transaction
         await pool.query('BEGIN');
 
         try {
             // Delete related records first (foreign key constraints)
             
-            // Delete grant applications
-            await pool.query('DELETE FROM grant_application WHERE course_id = $1', [courseId]);
-            
+            // NOTE: a `grant_application` table has never existed in this schema (grants
+            // live in ssg_grants / grant_import_*), so the DELETE that used to sit here
+            // threw on every call and rolled the whole transaction back -- deleting a
+            // course always failed with a 500.
+
             // Delete enrollments
             await pool.query('DELETE FROM enrollment WHERE course_id = $1', [courseId]);
             
