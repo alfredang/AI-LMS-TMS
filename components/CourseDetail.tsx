@@ -12,6 +12,7 @@ import { courseService } from '@lib/services/courseService';
 import { getApiUrl, getDownloadUrl } from '@/lib/urlHelpers';
 import { AssessmentSummarySection } from './trainer/AssessmentSummarySection';
 import { ClassPhotoUpload } from './trainer/ClassPhotoUpload';
+import { VirtualMeetingLinkEditor } from './trainer/VirtualMeetingLinkEditor';
 import QuizTakerModal from './QuizTakerModal';
 
 // --- Types (assuming these exist in your project) ---
@@ -2504,6 +2505,13 @@ export const CourseDetail: React.FC = () => {
     const contextUnits = learningUnits;
 
     const effectiveDetail = (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && developerCourseDetail ? developerCourseDetail : contextDetail;
+
+    // A manually entered meeting link is saved straight to the DB; hold it here
+    // so the panel reflects it without waiting for the course detail to refetch.
+    const [manualMeetingLink, setManualMeetingLink] = useState<string | null | undefined>(undefined);
+    const meetingLinkRunKey = effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || '';
+    useEffect(() => { setManualMeetingLink(undefined); }, [meetingLinkRunKey]);
+
     const effectiveUnits = (userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && developerLearningUnits.length > 0 ? developerLearningUnits : contextUnits;
 
     const convertedCourse: Course & {
@@ -2542,7 +2550,9 @@ export const CourseDetail: React.FC = () => {
         writtenAssessmentLink: effectiveDetail?.writtenAssessmentLink,
         practicalPerformanceAssessmentLink: effectiveDetail?.practicalPerformanceAssessmentLink,
         classType: (effectiveDetail as any)?.classType || selectedCourse.classType || 'Physical',
-        virtualMeetingLink: (effectiveDetail as any)?.virtualMeetingLink || selectedCourse.virtualMeetingLink || null,
+        virtualMeetingLink: manualMeetingLink !== undefined
+            ? manualMeetingLink
+            : ((effectiveDetail as any)?.virtualMeetingLink || selectedCourse.virtualMeetingLink || null),
         virtualMeetingHostLink: (effectiveDetail as any)?.virtualMeetingHostLink || selectedCourse.virtualMeetingHostLink || null,
         virtualMeetingJoinLink: (effectiveDetail as any)?.virtualMeetingJoinLink || selectedCourse.virtualMeetingJoinLink || null,
         virtualMeetingProvider: (effectiveDetail as any)?.virtualMeetingProvider || selectedCourse.virtualMeetingProvider || null,
@@ -2900,7 +2910,9 @@ export const CourseDetail: React.FC = () => {
                                 return (
                             <div id={toId("Google Meet")}>
                                 <ContentSection title={providerLabel} collapsible>
-                                    {(convertedCourse.classType === 'Virtual' || convertedCourse.classType === 'Hybrid') && hasVirtualMeetingLink ? (
+                                    {/* A link that was entered manually shows even on a Physical class —
+                                        the trainer set it deliberately, so surface it either way. */}
+                                    {hasVirtualMeetingLink ? (
                                         isZoom && isTrainerView ? (
                                             <div className="space-y-3">
                                                 {zoomStartUrl && (
@@ -2940,7 +2952,7 @@ export const CourseDetail: React.FC = () => {
                                             </div>
                                         ) : (
                                             <a
-                                                href={convertedCourse.virtualMeetingLink}
+                                                href={convertedCourse.virtualMeetingLink || undefined}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="flex items-center gap-3 p-3 w-full bg-gray-50 dark:bg-gray-700 rounded-md border dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
@@ -2964,6 +2976,13 @@ export const CourseDetail: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
+                                    <VirtualMeetingLinkEditor
+                                        courseRunUuid={effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || ''}
+                                        userRole={userRole}
+                                        providerLabel={providerLabel}
+                                        currentLink={convertedCourse.virtualMeetingLink}
+                                        onSaved={setManualMeetingLink}
+                                    />
                                     <ClassPhotoUpload
                                         courseRunUuid={effectiveDetail?.courseRunUuid || selectedCourse?.courseRunId || ''}
                                         userRole={userRole}
