@@ -7,6 +7,7 @@ import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { refreshGrantsForEnrolments } from '../../../lib/services/billingSync';
 import { tryEnqueueInvoiceFromSsgRecord } from '../../../lib/services/invoiceJobs';
+import { resolveCourseIdByCode } from '../../../lib/courseCode';
 
 const ENROL_PAGE_SIZE = 100;
 
@@ -173,19 +174,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   // ── Upsert course run in database ───────────────────────────────────────────
   const client = await pool.connect();
   try {
-    const courseResult = await client.query(
-      `SELECT id FROM course WHERE LOWER(course_code) = LOWER($1) LIMIT 1`,
-      [courseCode]
-    );
+    // Resolve through every code the course has ever carried. A funding renewal issues
+    // a NEW reference code and SSG returns the current one, so a bare course_code match
+    // either misses the course or hits a stub left by an earlier import.
+    const courseId = await resolveCourseIdByCode(courseCode, client);
 
-    if (courseResult.rows.length === 0) {
+    if (!courseId) {
       return res.status(404).json({
         success: false,
         error: `Course not found in database for code: ${courseCode}. Add the course first before importing the run.`,
       });
     }
-
-    const courseId = courseResult.rows[0].id;
 
     const existingRun = await client.query(`SELECT id FROM course_run WHERE course_run_id = $1`, [
       courseRunId,
@@ -196,14 +195,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (existingRun.rows.length > 0) {
       await client.query(
         `UPDATE course_run
-         SET start_date       = COALESCE($1, start_date),
-             end_date         = COALESCE($2, end_date),
-             mode_of_learning = COALESCE($3, mode_of_learning),
-             digital_attendance_id = COALESCE($4, digital_attendance_id),
+         SET course_id        = $1,
+             start_date       = COALESCE($2, start_date),
+             end_date         = COALESCE($3, end_date),
+             mode_of_learning = COALESCE($4, mode_of_learning),
+             digital_attendance_id = COALESCE($5, digital_attendance_id),
              class_status     = 'Confirmed',
              updated_at       = NOW()
-         WHERE id = $5`,
-        [startDateISO, endDateISO, modeOfLearning, raCode, existingRun.rows[0].id]
+         WHERE id = $6`,
+        [courseId, startDateISO, endDateISO, modeOfLearning, raCode, existingRun.rows[0].id]
       );
       action = 'updated';
     } else {

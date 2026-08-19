@@ -27,6 +27,7 @@ import { withAuth } from '@lib/auth/withAuth';
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../../lib/db';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../../lib/courseCode';
 
 type StageItem = {
   course_code: string;
@@ -64,7 +65,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
     try {
       const courseR = await pool.query<{ id: string }>(
-        `SELECT id FROM course WHERE course_code = $1 LIMIT 1`,
+        COURSE_ID_BY_ANY_CODE_SQL,
         [course_code],
       );
       if (courseR.rows.length === 0) {

@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { autoShareCourseResourcesWithTrainer } from '../../../lib/google-drive/drive-helpers';
 import { ensureTpgTrainerColumns } from '@/lib/trainerInvitations';
+import { resolveCourseIdByCode } from '../../../lib/courseCode';
 
 // Helper function for database queries
 const query = (text: string, params?: any[]) => pool.query(text, params);
@@ -71,14 +72,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
         console.log('🔍 Looking for course with reference number:', courseReferenceNumber);
 
-        // First, find the course record by course_code
-        let courseRecord;
+        // Resolve the course from any code it has ever carried. A funding renewal
+        // issues a NEW reference code for the same course, so a bare course_code
+        // match misses it and the block below would create a duplicate course.
+        let resolvedCourseId: string | null;
         try {
-            courseRecord = await query(
-                `SELECT id FROM course WHERE course_code = $1`,
-                [courseReferenceNumber]
-            );
-            console.log('📋 Course query result:', courseRecord.rows.length > 0 ? 'Found' : 'Not found');
+            resolvedCourseId = await resolveCourseIdByCode(courseReferenceNumber);
+            console.log('📋 Course query result:', resolvedCourseId ? 'Found' : 'Not found');
         } catch (dbError) {
             console.error('❌ Database query error:', dbError);
             return res.status(500).json({ 
@@ -89,7 +89,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
         let courseId: string;
 
-        if (courseRecord.rows.length === 0) {
+        if (!resolvedCourseId) {
             console.log('📝 Creating new course record for:', courseReferenceNumber);
             // Create new course record
             try {
@@ -115,7 +115,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 });
             }
         } else {
-            courseId = courseRecord.rows[0].id;
+            courseId = resolvedCourseId;
             console.log('📋 Using existing course record:', courseId);
         }
 

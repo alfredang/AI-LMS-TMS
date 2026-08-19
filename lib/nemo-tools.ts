@@ -344,7 +344,11 @@ export async function executeTool(name: string, input: Record<string, any>): Pro
                   CASE WHEN funding_validity IS NULL THEN 'unknown'
                        WHEN funding_validity >= CURRENT_DATE THEN 'valid'
                        ELSE 'expired' END AS validity_status
-           FROM course WHERE course_code = $1 LIMIT 1`,
+           FROM course
+           WHERE id = (SELECT course_id FROM course_code_history WHERE code = $1)
+              OR course_code = $1
+              OR NULLIF(new_course_code, '') = $1
+           LIMIT 1`,
           [input.course_code]
         );
 

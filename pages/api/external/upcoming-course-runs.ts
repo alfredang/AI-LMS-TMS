@@ -8,6 +8,7 @@ import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdent
 import { syncEnrolmentToDB } from '../../../lib/ssg/utils/sync-enrolment-to-db';
 import { splitTrainerList } from '../../../lib/trainerInvitations';
 import { getLocalYMD } from '../../../lib/dateHelpers';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
 
 /**
  * External API — Fetch TGS Enrolments & Assign Trainers
@@ -353,7 +354,7 @@ async function _runUpcomingCourseRunsInner() {
               if (crRow.rows.length === 0) {
                 // Insert course_run — need course_id from local course table
                 const cRow = await client.query(
-                  `SELECT id FROM course WHERE course_code = $1 LIMIT 1`,
+                  COURSE_ID_BY_ANY_CODE_SQL,
                   [course_code]
                 );
                 const courseId = cRow.rows[0]?.id;

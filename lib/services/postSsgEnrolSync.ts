@@ -4,6 +4,7 @@ import { upsertSsgEnrolmentFromLocalEnrollment } from '@/lib/services/billingSyn
 import { isEnrolmentEligibleForAutoInvoice } from '@/lib/services/invoiceEligibility';
 import { enqueueInvoiceJob } from '@/lib/services/invoiceJobs';
 import { ensureDaApplicationForEnrolment } from '@/lib/services/daApplicationFromEnrolment';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../courseCode';
 
 export interface PostSsgEnrolSyncInput {
   traineeEmail: string;
@@ -130,7 +131,7 @@ export async function runPostSsgEnrolSync(input: PostSsgEnrolSyncInput): Promise
       learnerId = learnerRow.rows[0].id;
     }
 
-    let courseRow = await client.query(`SELECT id FROM course WHERE course_code = $1 LIMIT 1`, [courseReferenceNumber]);
+    let courseRow = await client.query(COURSE_ID_BY_ANY_CODE_SQL, [courseReferenceNumber]);
 
     let courseId: string;
     let courseCreated = false;
@@ -148,7 +149,7 @@ export async function runPostSsgEnrolSync(input: PostSsgEnrolSyncInput): Promise
         courseId = inserted.rows[0].id;
         courseCreated = true;
       } else {
-        const existing = await client.query(`SELECT id FROM course WHERE course_code = $1 LIMIT 1`, [courseReferenceNumber]);
+        const existing = await client.query(COURSE_ID_BY_ANY_CODE_SQL, [courseReferenceNumber]);
         courseId = existing.rows[0].id;
       }
     } else {

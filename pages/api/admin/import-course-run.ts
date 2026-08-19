@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
 
 function parseToISO(d: number | string | undefined): string | null {
   if (!d) return null;
@@ -99,7 +100,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     // Find course by course_code
     const courseResult = await client.query(
-      `SELECT id FROM course WHERE LOWER(course_code) = LOWER($1) LIMIT 1`,
+      COURSE_ID_BY_ANY_CODE_SQL,
       [courseCode]
     );
 

@@ -5,6 +5,7 @@ import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 import { OptionalSelector } from '../../../lib/ssg/models/course-runs';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
 
 /**
  * GET /api/course-runs/view?courseRunId=XXXXXXX&includeExpired=false
@@ -85,7 +86,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
         if (courseCode) {
           const courseRow = await client.query(
-            `SELECT id FROM course WHERE course_code = $1 LIMIT 1`,
+            COURSE_ID_BY_ANY_CODE_SQL,
             [courseCode]
           );
 
@@ -103,7 +104,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             courseId = ins.rows[0]?.id ?? null;
             if (!courseId) {
               const race = await client.query(
-                `SELECT id FROM course WHERE course_code = $1 LIMIT 1`,
+                COURSE_ID_BY_ANY_CODE_SQL,
                 [courseCode]
               );
               courseId = race.rows[0]?.id ?? null;

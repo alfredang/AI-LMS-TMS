@@ -7,6 +7,7 @@ import { extractRecordsFromViewAttendance, normalizeAttendanceRecord } from '../
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
 
 /**
  * POST /api/admin/sync-completed-classes
@@ -207,7 +208,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           await client.query('BEGIN');
 
           let courseRow = await client.query(
-            `SELECT id FROM course WHERE course_code = $1 LIMIT 1`,
+            COURSE_ID_BY_ANY_CODE_SQL,
             [courseCode]
           );
           let courseUuid: string;
@@ -217,7 +218,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                ON CONFLICT DO NOTHING RETURNING id`,
               [courseTitle, courseCode]
             );
-            courseUuid = ins.rows[0]?.id || (await client.query(`SELECT id FROM course WHERE course_code = $1 LIMIT 1`, [courseCode])).rows[0].id;
+            courseUuid = ins.rows[0]?.id || (await client.query(COURSE_ID_BY_ANY_CODE_SQL, [courseCode])).rows[0].id;
             console.log(`  📚 Created course: ${courseCode} — ${courseTitle}`);
           } else {
             courseUuid = courseRow.rows[0].id;

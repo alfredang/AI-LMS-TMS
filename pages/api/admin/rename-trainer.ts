@@ -22,7 +22,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
     try {
       const result = await pool.query(
-        `UPDATE course SET trainers_list = $1 WHERE course_code = $2 RETURNING id, title, trainers_list`,
+        // Resolve on any code the course has carried -- matching course_code alone
+        // silently updated zero rows once a course was renewed.
+        `UPDATE course SET trainers_list = $1
+          WHERE id = (SELECT c.id FROM course c
+                       WHERE c.id = (SELECT h.course_id FROM course_code_history h WHERE h.code = $2)
+                          OR c.course_code = $2
+                          OR NULLIF(c.new_course_code, '') = $2
+                       LIMIT 1)
+          RETURNING id, title, trainers_list`,
         [trainersList, courseCode]
       );
       if (result.rowCount === 0) {
