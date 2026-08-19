@@ -6,6 +6,7 @@ import fs from 'fs';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
 import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
+import { resolveCourseIdByCode } from '../../../lib/courseCode';
 
 // Configure multer for file uploads
 const storage: StorageEngine = multer.diskStorage({
@@ -179,6 +180,18 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
       
       try {
         await client.query('BEGIN');
+
+        // A renewed course keeps its original course_code, so a code already in use as
+        // another course's current or historic code slips past the course_code unique
+        // constraint and would create a duplicate course record.
+        const existingCourseId = await resolveCourseIdByCode(courseData.courseCode, client);
+        if (existingCourseId) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({
+            success: false,
+            error: `Course code ${courseData.courseCode} already belongs to an existing course.`,
+          });
+        }
 
         // 1. Insert course
         const courseInsertQuery = `

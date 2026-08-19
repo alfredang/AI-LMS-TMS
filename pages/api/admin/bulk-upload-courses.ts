@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
 
 interface CourseRow {
   course_code: string;
@@ -133,7 +134,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         await client.query('BEGIN');
 
         const existing = await client.query(
-          'SELECT id FROM course WHERE course_code = $1',
+          COURSE_ID_BY_ANY_CODE_SQL,
           [course_code.trim()]
         );
 
@@ -183,6 +184,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           toText(course.activities_url),                             // 42
         ];
 
+        // Update by resolved id, not by course_code: the lookup above matches any code
+        // the course has ever carried, so a renewed code finds the course but would
+        // match nothing on course_code and silently update zero rows.
         if (existing.rows.length > 0) {
           await client.query(
             `UPDATE course SET
@@ -203,8 +207,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                practical_performance_assessment_link=$40, written_assessment_link=$41,
                activities_url=$42,
                updated_at=NOW()
-             WHERE course_code=$43`,
-            [...values, course_code.trim()]
+             WHERE id=$43`,
+            [...values, existing.rows[0].id]
           );
 
           await client.query('COMMIT');
