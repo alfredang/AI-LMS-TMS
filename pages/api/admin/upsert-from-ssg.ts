@@ -40,6 +40,7 @@ import type {
   UpsertFromSsgMode,
 } from '../../../types/upsert-from-ssg';
 import { UPSERT_FROM_SSG_MAX_BATCH } from '../../../types/upsert-from-ssg';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -223,7 +224,7 @@ async function fetchAndDiffCourseRun(
 
   if (!courseId && courseCode) {
     const existingCourse = await client.query(
-      `SELECT id FROM course WHERE course_code = $1 LIMIT 1`,
+      COURSE_ID_BY_ANY_CODE_SQL,
       [courseCode]
     );
     if (existingCourse.rows.length > 0) {
@@ -244,7 +245,7 @@ async function fetchAndDiffCourseRun(
       courseId = ins.rows[0]?.id ?? null;
       if (!courseId) {
         const race = await client.query(
-          `SELECT id FROM course WHERE course_code = $1 LIMIT 1`,
+          COURSE_ID_BY_ANY_CODE_SQL,
           [courseCode]
         );
         courseId = race.rows[0]?.id ?? null;
