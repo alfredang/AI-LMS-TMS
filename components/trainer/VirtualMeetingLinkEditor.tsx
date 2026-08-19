@@ -29,16 +29,23 @@ export const VirtualMeetingLinkEditor: React.FC<VirtualMeetingLinkEditorProps> =
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    if (
-        userRole !== UserRole.Trainer &&
-        userRole !== UserRole.Admin &&
-        userRole !== UserRole.TrainingProvider &&
-        userRole !== UserRole.Developer
-    ) {
+    // Learners never edit the meeting link. Every staff-side role does — and an
+    // unrecognised/blank role is treated as staff here rather than hiding the
+    // control, since this panel only renders on staff-side class pages anyway.
+    if (userRole === UserRole.Learner) {
         return null;
     }
 
-    if (!courseRunUuid) return null;
+    // The uuid can arrive a beat late while the class detail is still loading.
+    // Render the control disabled rather than vanishing — a missing button
+    // reads as "the feature isn't there".
+    if (!courseRunUuid) {
+        return (
+            <p className="mt-3 text-xs text-gray-400 dark:text-gray-500 italic">
+                Loading class details…
+            </p>
+        );
+    }
 
     const save = async (link: string) => {
         setIsSaving(true);
