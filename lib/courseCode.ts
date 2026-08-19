@@ -19,6 +19,22 @@ type Queryable = Pool | PoolClient;
  * a miss MUST use this rather than a bare `WHERE course_code = $1`, or a renewed
  * code will create a duplicate course record and split its history.
  */
+/**
+ * `SELECT id` for the course carrying a given code -- history first, then the legacy
+ * course_code / new_course_code columns. Same resolution as resolveCourseIdByCode(),
+ * exposed as SQL so the many call sites shaped
+ * `SELECT -> INSERT on miss -> re-SELECT` can swap their query in place without
+ * restructuring. Takes the code as $1 and returns at most one row.
+ * Prefer resolveCourseIdByCode() in new code.
+ */
+export const COURSE_ID_BY_ANY_CODE_SQL = `
+  SELECT c.id
+    FROM public.course c
+   WHERE c.id = (SELECT h.course_id FROM public.course_code_history h WHERE h.code = $1)
+      OR c.course_code = $1
+      OR NULLIF(c.new_course_code, '') = $1
+   LIMIT 1`;
+
 export async function resolveCourseIdByCode(
   code: string,
   db: Queryable = pool
