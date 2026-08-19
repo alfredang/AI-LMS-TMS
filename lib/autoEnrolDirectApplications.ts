@@ -1123,6 +1123,8 @@ export async function processDirectApplication(
         qb_customer_ref: row.qb_customer_ref,
         // Add missing fields with fallback to null or appropriate value
         trainee_id: row.trainee_id ?? null,
+        // Decides whether a missing grant means "not yet issued" or "never will be".
+        trainee_id_type: row.trainee_id_type ?? null,
         course_end_date: toDateOnlyIso(row.course_end_date),
         course_run_id: row.course_run_id ?? null,
         grant_id: grantId ?? null,

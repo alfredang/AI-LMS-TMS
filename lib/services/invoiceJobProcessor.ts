@@ -1,4 +1,5 @@
 import pool from '../db';
+import { assessGrantEligibility } from '../grantEligibility';
 import { buildSfcCreditLineDescription } from '../daApplicationId';
 import { buildTmsInvoiceNo } from '../utils/tmsInvoiceNo';
 import { isEnrolmentBlockedFromAutoInvoice, isEnrolmentEligibleForAutoInvoice } from './invoiceEligibility';
@@ -242,7 +243,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   const daRes = await pool.query(
     `SELECT full_course_fee, gst, skillsfuture_subsidy, skillsfuture_credit,
             course_title, course_reference_number, course_start_date, course_end_date,
-            trainee_name, trainee_id, course_run_id, grant_id,
+            trainee_name, trainee_id, trainee_id_type, course_run_id, grant_id,
             skillsfuture_credit_claim_id, application_id
      FROM da_application WHERE enrolment_id = $1 LIMIT 1`,
     [enrolmentId]
@@ -318,11 +319,23 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   // Only enforced for DA-backed rows: those have a Generate Invoice button in
   // the DA view to override, and this queue path has no override of its own.
   // Non-DA enrolments keep their existing behaviour.
+  // Foreigners are exempt: SSG funds only Citizens and PRs, so no grant will
+  // ever arrive and the full fee is correct. Only a confident 'ineligible'
+  // waives the guard — an unclassifiable ID stays protected.
+  const eligibility = assessGrantEligibility({
+    nric: da.trainee_id,
+    idType: da.trainee_id_type,
+  });
+  const grantIneligible = eligibility.status === 'ineligible';
+
   if (hasDa && grantDeductionLines.length === 0 && grantSubsidy <= 0) {
-    throw new Error(
-      `No SSG grant found for ${enrolmentId} — refusing to invoice the full course fee. ` +
-        `Retry once SSG issues the grant, or use Generate Invoice in the DA view if this learner is genuinely unfunded.`
-    );
+    if (!grantIneligible) {
+      throw new Error(
+        `No SSG grant found for ${enrolmentId} — refusing to invoice the full course fee. ` +
+          `Retry once SSG issues the grant, or use Generate Invoice in the DA view if this learner is genuinely unfunded.`
+      );
+    }
+    console.log(`[invoice-job] ${enrolmentId}: billing the full course fee — ${eligibility.reason}`);
   }
 
   // 2) Sequential QB lookups — parallel QB calls race each other for the OAuth token refresh
