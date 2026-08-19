@@ -1029,7 +1029,7 @@ export const UploadDirectApplicationView: React.FC = () => {
     );
 
     const TPG_PHASE_LABEL: Record<string, string> = {
-        queued: 'Waiting for the office machine',
+        queued: 'Waiting to start',
         starting: 'Starting…',
         awaiting_login: 'Waiting for Singpass login',
         collecting: 'Finding pending applications',
@@ -1070,7 +1070,7 @@ export const UploadDirectApplicationView: React.FC = () => {
     // null, and disabling the buttons on "not yet known" would make the page
     // look broken for its first second.
     const tpgHelperOffline = !!tpgHelper && !tpgHelper.notNeeded && !tpgHelper.online;
-    const OFFLINE_HINT = 'The office machine that runs this is switched off, so a run cannot start.';
+    const OFFLINE_HINT = 'Not available right now — try again shortly.';
 
     const tpgCheckedAt = tpgJob?.updatedAt
         ? new Date(tpgJob.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -1098,25 +1098,18 @@ export const UploadDirectApplicationView: React.FC = () => {
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Confirm &amp; fetch from TPGateway</h3>
-                                {/* Always says where the browser will open. Hiding this where no
-                                    helper is involved left the most useful fact — that it runs on
-                                    THIS machine — unsaid, and made the badge look broken. */}
-                                {tpgHelper?.notNeeded && (
-                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                        Runs on this computer
-                                    </span>
-                                )}
-                                {tpgHelper && !tpgHelper.notNeeded && (
-                                    tpgHelper.online ? (
+                                {/* Can a run start right now — nothing about where it runs,
+                                    which is our problem to solve and not the operator's. */}
+                                {tpgHelper && (
+                                    tpgHelperOffline ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                            Not ready
+                                        </span>
+                                    ) : (
                                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                             Ready
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                            Office machine offline
                                         </span>
                                     )
                                 )}
@@ -1257,7 +1250,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                             means the helper dropped out mid-click. */}
                         {tpgJob.phase === 'queued' && (
                             <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">
-                                Handing over to the office machine…
+                                Starting…
                             </p>
                         )}
                         {tpgJob.dryRun && !tpgNothingToConfirm && (
