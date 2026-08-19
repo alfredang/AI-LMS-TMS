@@ -136,7 +136,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // ── Resolve the course ──────────────────────────────────────────────────────
     const course = (await pool.query<{ id: string; course_code: string; title: string }>(
-      `SELECT id, course_code, title FROM course WHERE course_code = $1 LIMIT 1`,
+      `SELECT id, course_code, title FROM course
+        WHERE id = (SELECT course_id FROM course_code_history WHERE code = $1)
+           OR course_code = $1
+           OR NULLIF(new_course_code, '') = $1
+        LIMIT 1`,
       [courseCode]
     )).rows[0];
     if (!course) return res.status(404).json({ success: false, error: `Course ${courseCode} not found` });

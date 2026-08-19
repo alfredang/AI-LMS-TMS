@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -16,7 +17,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     // Resolve course_id from course_code
     const courseRow = await pool.query(
-      `SELECT id FROM course WHERE course_code = $1`,
+      COURSE_ID_BY_ANY_CODE_SQL,
       [courseCode.trim()]
     );
 
