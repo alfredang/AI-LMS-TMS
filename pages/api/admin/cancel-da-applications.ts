@@ -5,6 +5,7 @@ import { searchEnrolment, cancelEnrolment } from '../../../lib/ssg/services/enro
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
 import { removeDaLearnerFromCalendar } from '../../../lib/google-calendar/da-calendar-sync';
+import { cleanupDaInvoicesForApplicationId } from '../../../lib/services/daInvoiceCleanup';
 
 /**
  * Build the search enrolment payload for a single DA application record.
@@ -106,7 +107,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const records = applicationRows.map(row => buildEnrolmentPayload(row, tp.uen, tp.code));
         console.log(`📤 Processing ${records.length} record(s) — search then cancel via SSG...`);
 
-        const succeeded: { application_id: string; enrolment_ref: string; enrolment_status: string }[] = [];
+        const succeeded: { application_id: string; enrolment_ref: string; enrolment_status: string; qbWarnings?: string[] }[] = [];
         const failed: { application_id: string; error: string }[] = [];
 
         for (const record of records) {
@@ -222,6 +223,23 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 }
             }
 
+            // Delete the QBO invoices (main / grant / SFC) tagged to each cancelled DA
+            // application. Best-effort — a QBO failure never blocks the cancellation
+            // itself, but the warning is surfaced back in the response.
+            for (const s of succeeded) {
+                try {
+                    const { warnings } = await cleanupDaInvoicesForApplicationId(s.application_id);
+                    if (warnings.length > 0) {
+                        s.qbWarnings = warnings;
+                        console.warn(`⚠️ [cancel-da-applications] ${s.application_id}: QB invoice delete warnings: ${warnings.join('; ')}`);
+                    }
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    s.qbWarnings = [msg];
+                    console.warn(`⚠️ [cancel-da-applications] ${s.application_id}: QB invoice cleanup failed:`, msg);
+                }
+            }
+
             // Remove cancelled learners from Google Calendar (fire-and-forget)
             setImmediate(async () => {
                 for (const s of succeeded) {
@@ -260,15 +278,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             console.log(`⚠️ ${failed.length} application(s) failed to cancel via SSG`);
         }
 
+        const qbWarningCount = succeeded.filter(s => s.qbWarnings && s.qbWarnings.length > 0).length;
+
         return res.status(200).json({
             success: true,
             cancelled: cancelledCount,
             total: records.length,
+            qbWarningCount,
             results: {
                 succeeded: succeeded.map(s => ({
                     application_id: s.application_id,
                     enrolment_ref: s.enrolment_ref,
                     enrolment_status: s.enrolment_status,
+                    ...(s.qbWarnings ? { qbWarnings: s.qbWarnings } : {}),
                 })),
                 failed: failed.map(f => ({
                     application_id: f.application_id,
