@@ -298,28 +298,15 @@ async function runJob(id: string, opts: StartOptions): Promise<void> {
     targets.forEach((appId) => upsertApp(id, { id: appId, status: 'pending' }));
     const limited = targets.length < ids.length;
 
-    // An unlimited LIVE run would confirm everything it found before the
-    // operator ever saw the number — and confirmation on TPGateway cannot be
-    // undone. So park here, show the count and the queued list, and wait for an
-    // explicit approval. A Limit is already an explicit "this many", and a dry
-    // run changes nothing, so neither needs the checkpoint.
-    if (!opts.dryRun && !opts.max) {
-      patchJob(id, {
-        phase: 'awaiting_approval',
-        total: targets.length,
-        message: `Found ${targets.length} application(s) awaiting confirmation. Nothing has been confirmed yet — approve to continue.`,
-      });
-      log(`awaiting your approval to confirm ${targets.length} application(s) — nothing confirmed yet.`);
-      const approved = await waitForApproval(id, APPROVAL_TIMEOUT_MS);
-      if (!approved) {
-        return finishCancelled(
-          id,
-          isCancelled(id)
-            ? 'Cancelled before approving. Nothing was confirmed.'
-            : 'Timed out waiting for approval. Nothing was confirmed.',
-        );
-      }
-    }
+    // An empty Limit means "do all of them" — the operator has already chosen
+    // that by pressing Confirm & Enrol, so the run proceeds without a second
+    // checkpoint. Cancel still stops it between applications, so a run started
+    // by mistake can be halted before it works through the list.
+    //
+    // (Previously an unlimited live run parked at 'awaiting_approval' to show
+    // the count first, since confirming on TPGateway cannot be undone. Removed
+    // at the operator's request; approveTpgConfirmJob remains for the API and
+    // for restoring the checkpoint if it is ever wanted back.)
 
     patchJob(id, {
       phase: 'confirming',
