@@ -2110,8 +2110,14 @@ export const ViewDirectApplicationView: React.FC = () => {
             if (result.success) {
                 const succeededCount = result.results?.succeeded?.length || 0;
                 const failedCount = result.results?.failed?.length || 0;
-                if (failedCount === 0) alert(`Successfully cancelled ${succeededCount} application(s).`);
-                else alert(`${succeededCount} cancelled, ${failedCount} failed.`);
+                const qbWarningCount = result.qbWarningCount || 0;
+                let msg = failedCount === 0
+                    ? `Successfully cancelled ${succeededCount} application(s).`
+                    : `${succeededCount} cancelled, ${failedCount} failed.`;
+                if (qbWarningCount > 0) {
+                    msg += ` Note: ${qbWarningCount} application(s) had a QuickBooks invoice that could not be deleted automatically — check the invoice manually.`;
+                }
+                alert(msg);
                 setSelectedIds(new Set()); fetchApplications();
             } else throw new Error(result.error);
         } catch (err) { alert(`Failed to cancel: ${err instanceof Error ? err.message : 'Unknown error'}`); }

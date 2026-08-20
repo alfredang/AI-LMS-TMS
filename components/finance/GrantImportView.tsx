@@ -80,6 +80,18 @@ const CircularProgress: React.FC<{ pct: number; label?: string }> = ({ pct, labe
   );
 };
 
+const FETCH_PHASE_LABEL: Record<string, string> = {
+  starting: 'Starting…',
+  awaiting_login: 'Waiting for Singpass login…',
+  navigating: 'Navigating to Financial Transactions…',
+  filtering: 'Applying filters…',
+  downloading: 'Downloading export…',
+  processing: 'Parsing & matching…',
+  done: 'Done',
+  cancelled: 'Cancelled',
+  error: 'Error',
+};
+
 function extractDoneTotal(message: string): { done: number; total: number } | null {
   const m = String(message || '').match(/\((\d+)\s*\/\s*(\d+)\)/);
   if (!m) return null;
@@ -117,6 +129,21 @@ const GrantImportView: React.FC = () => {
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // "Fetch from TPGateway" — automated Singpass login + scrape, alternative to manual Upload Excel.
+  const [fetchStartDate, setFetchStartDate] = useState('');
+  const [fetching, setFetching] = useState(false);
+  const [fetchJobId, setFetchJobId] = useState<string | null>(null);
+  const [fetchPhase, setFetchPhase] = useState<string>('');
+  const [fetchMessage, setFetchMessage] = useState('');
+  const [fetchLog, setFetchLog] = useState<Array<{ at: number; text: string }>>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [fetchScreen, setFetchScreen] = useState<{ dataUrl: string; width: number; height: number; at: number } | null>(null);
+  const [fetchNeedsOperator, setFetchNeedsOperator] = useState(false);
+  const [fetchRowsFound, setFetchRowsFound] = useState(0);
+  const [fetchProgress, setFetchProgress] = useState(0);
+  const [fetchStartedAtMs, setFetchStartedAtMs] = useState<number | null>(null);
+  const [fetchNowMs, setFetchNowMs] = useState(() => Date.now());
 
   const fileValidationError = useMemo(() => {
     if (!file) return null;
@@ -273,6 +300,193 @@ const GrantImportView: React.FC = () => {
       cancelled = true;
     };
   }, [uploadJobId, actorUserId]);
+
+  // <input type="date"> gives/needs ISO (YYYY-MM-DD); TPGateway's own Payment From
+  // field uses DD-MM-YYYY, so convert only at the boundary.
+  const isoToDdMmYyyy = (iso: string): string => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+  };
+
+  const startFetch = async () => {
+    if (!actorUserId) {
+      setError('Login required.');
+      return;
+    }
+    const startDateDdMmYyyy = isoToDdMmYyyy(fetchStartDate);
+    if (!startDateDdMmYyyy) {
+      setFetchError('Pick a start date.');
+      return;
+    }
+    setFetchError(null);
+    setError(null);
+    setApplyResult(null);
+    setRowFilter('all');
+    setDateFrom('');
+    setDateTo('');
+    setSearchQuery('');
+    setFetching(true);
+    setFetchJobId(null);
+    setFetchPhase('starting');
+    setFetchMessage('Starting…');
+    setFetchLog([]);
+    setFetchScreen(null);
+    setFetchNeedsOperator(false);
+    setFetchStartedAtMs(Date.now());
+    setFetchProgress(0);
+    try {
+      const res = await fetch('/api/finance/grant-fetch/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-actor-user-id': actorUserId },
+        body: JSON.stringify({ startDate: startDateDdMmYyyy }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success) throw new Error(json?.error || 'Failed to start fetch');
+      const jobId = String(json?.jobId || '').trim();
+      if (!jobId) throw new Error('Fetch job did not start');
+      setFetchJobId(jobId);
+    } catch (e: any) {
+      setFetchError(e?.message || 'Failed to start fetch');
+      setFetching(false);
+    }
+  };
+
+  const cancelFetch = async () => {
+    if (!fetchJobId) return;
+    try {
+      await fetch('/api/finance/grant-fetch/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-actor-user-id': actorUserId },
+        body: JSON.stringify({ jobId: fetchJobId }),
+      });
+    } catch {
+      /* status poll will reflect the outcome regardless */
+    }
+  };
+
+  /** Forward a click/type/key gesture to the headless browser during the Singpass step. */
+  const sendFetchInput = async (input: { kind: 'click'; x: number; y: number } | { kind: 'type'; text: string } | { kind: 'key'; key: string }) => {
+    if (!fetchJobId) return;
+    try {
+      await fetch('/api/finance/grant-fetch/input', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-actor-user-id': actorUserId },
+        body: JSON.stringify({ jobId: fetchJobId, ...input }),
+      });
+    } catch {
+      /* best-effort — the operator can simply try again */
+    }
+  };
+
+  // Poll "Fetch from TPGateway" job progress until it finishes.
+  useEffect(() => {
+    if (!fetchJobId) return;
+    let cancelled = false;
+
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/finance/grant-fetch/status?jobId=${encodeURIComponent(fetchJobId)}`, {
+          headers: { 'x-actor-user-id': actorUserId },
+        });
+        const json = await res.json();
+        if (!res.ok || !json?.success) throw new Error(json?.error || 'Failed to fetch progress');
+        const job = json.data as {
+          phase: string;
+          message: string;
+          log: Array<{ at: number; text: string }>;
+          screen: { dataUrl: string; width: number; height: number; at: number } | null;
+          needsOperator: boolean;
+          rowsFound: number;
+          result?: any;
+          error?: string | null;
+        };
+        if (cancelled) return;
+
+        setFetchPhase(job.phase);
+        setFetchMessage(String(job.message || ''));
+        setFetchLog(job.log || []);
+        setFetchScreen(job.screen || null);
+        setFetchNeedsOperator(!!job.needsOperator);
+        setFetchRowsFound(Number(job.rowsFound) || 0);
+
+        if (job.phase === 'done') {
+          const data = job.result;
+          if (data) {
+            setBatchId(data.batch?.id || null);
+            setPreview({ batch: data.batch, rows: data.rows, enrolmentImpact: data.enrolmentImpact });
+          }
+          setFetching(false);
+          setFetchJobId(null);
+          setFetchScreen(null);
+          setFetchNeedsOperator(false);
+          return;
+        }
+        if (job.phase === 'error' || job.phase === 'cancelled') {
+          if (job.phase === 'error') setFetchError(job.error || 'Fetch failed');
+          setFetching(false);
+          setFetchJobId(null);
+          setFetchScreen(null);
+          setFetchNeedsOperator(false);
+          return;
+        }
+      } catch (e: any) {
+        if (cancelled) return;
+        setFetchError(e?.message || 'Fetch progress failed');
+        setFetching(false);
+        setFetchJobId(null);
+        return;
+      }
+
+      setTimeout(tick, 1500);
+    };
+
+    void tick();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchJobId, actorUserId]);
+
+  // Where the bar "wants" to be for the current phase — the creep eases toward this,
+  // same idea as the Direct Application "Confirm & fetch from TPGateway" panel.
+  const fetchTargetPct = (phase: string): number => {
+    if (phase === 'done') return 100;
+    const base: Record<string, number> = {
+      starting: 4,
+      awaiting_login: 12,
+      navigating: 28,
+      filtering: 38,
+      downloading: 55,
+      processing: 85,
+      error: 100,
+    };
+    return base[phase] ?? 5;
+  };
+
+  // Continuously ease the displayed bar toward its phase target so it always looks like
+  // it's moving (never frozen), and surges forward on phase changes.
+  useEffect(() => {
+    if (!fetching) return;
+    const iv = setInterval(() => {
+      setFetchProgress((prev) => {
+        const target = fetchTargetPct(fetchPhase);
+        const softCap = Math.min(target + 6, 97);
+        if (prev >= softCap) return prev;
+        return Math.min(softCap, prev + Math.max(0.3, (softCap - prev) * 0.08));
+      });
+    }, 180);
+    return () => clearInterval(iv);
+  }, [fetching, fetchPhase]);
+
+  // Ticking clock for the elapsed-time readout while a fetch is running.
+  useEffect(() => {
+    if (!fetching) return;
+    setFetchNowMs(Date.now());
+    const iv = setInterval(() => setFetchNowMs(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, [fetching]);
+
+  const fmtElapsed = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`);
+  const fetchElapsedSec = fetchStartedAtMs ? Math.max(0, Math.round((fetchNowMs - fetchStartedAtMs) / 1000)) : 0;
 
   const handleDragEvents = (e: React.DragEvent<HTMLDivElement>, isOver: boolean) => {
     e.preventDefault();
@@ -465,6 +679,170 @@ const GrantImportView: React.FC = () => {
       <div className="flex items-baseline justify-between gap-4">
         <h2 className="text-2xl font-bold text-on-surface">Bulk Grant Payment Sync</h2>
       </div>
+
+      <Card className="p-4 space-y-4">
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <h4 className="font-semibold text-purple-800 mb-1">Fetch from TPGateway</h4>
+          <p className="text-sm text-purple-700">
+            Scan the Singpass QR right here on this page — this signs in to TPGateway, opens Financial Transactions,
+            filters to Paid from the start date below, and extracts every matching record directly into Step 2 for
+            review. No Excel download/upload needed. Once it lands in Step 2, use the <strong>Payment Date</strong>{' '}
+            filter there to narrow it down further. Runs from your own machine (<code>npm run dev</code>), so it
+            isn&apos;t available on the deployed site yet. Use <strong>Upload Excel</strong> below as a fallback any
+            time.
+          </p>
+        </div>
+
+        {/* TPGateway's own constraint, straight from its Financial Transactions page — worth
+            knowing here since it caps how far back "Fetch from TPGateway" can actually reach. */}
+        <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3">
+          <p className="text-xs text-indigo-800 dark:text-indigo-300">
+            TPGateway itself defaults to the last 30 days and caps how far back it will show at{' '}
+            <strong>180 days</strong> from today, regardless of the start date you pick below.
+          </p>
+        </div>
+
+        <div className="flex items-end gap-3 flex-wrap">
+          <div className="min-w-0">
+            <label className="block text-xs font-semibold text-on-surface-secondary mb-1">Start date</label>
+            <input
+              type="date"
+              value={fetchStartDate}
+              onChange={(e) => setFetchStartDate(e.target.value)}
+              disabled={fetching}
+              className="px-3 py-2 rounded-lg border border-default bg-surface text-sm disabled:opacity-50"
+            />
+          </div>
+          <Button type="button" onClick={() => void startFetch()} disabled={fetching || !actorUserId}>
+            {fetching ? 'Fetching…' : 'Fetch & Upload'}
+          </Button>
+          {fetching && (
+            <Button type="button" variant="outline" onClick={() => void cancelFetch()}>
+              Cancel
+            </Button>
+          )}
+        </div>
+
+        {fetchError && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-sm whitespace-pre-line">
+            {fetchError}
+          </div>
+        )}
+
+        {fetching && (
+          <div className="rounded-lg border border-default bg-surface-elevated p-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm font-semibold text-on-surface">{FETCH_PHASE_LABEL[fetchPhase] || fetchPhase || 'Working…'}</span>
+              </div>
+              <span className="text-xs text-on-surface-secondary text-right">{fetchMessage}</span>
+            </div>
+
+            {fetchRowsFound > 0 && (
+              <p className="text-[11px] mt-1 text-on-surface-secondary">{fetchRowsFound} row(s) extracted so far.</p>
+            )}
+
+            {/* Same eased "always moving" bar as the Direct Application Confirm & fetch panel —
+                Playwright steps have no natural byte/row count, so this is a phase-based estimate. */}
+            <div className="mt-3">
+              <div className="flex justify-between text-[11px] text-on-surface-secondary mb-1">
+                <span>{FETCH_PHASE_LABEL[fetchPhase] || 'Working…'}</span>
+                <span className="tabular-nums">{fmtElapsed(fetchElapsedSec)} · {Math.round(fetchProgress)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-2 rounded-full bg-purple-500 transition-all duration-200 ease-out"
+                  style={{ width: `${fetchProgress}%` }}
+                />
+              </div>
+            </div>
+
+            {/* The Singpass step. The browser is headless, so the operator cannot see it
+                directly — these are live frames of it, streamed into this panel. Clicking
+                the picture forwards a click at the same spot on the real page, which is all
+                this flow needs: a tap or two, then scan the QR. */}
+            {fetchNeedsOperator && fetchScreen && (
+              <div className="mt-4 rounded-lg border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">Sign in with Singpass to continue</p>
+                    <p className="text-xs text-blue-800 dark:text-blue-300 mt-1 max-w-2xl">
+                      This is the live browser running for this fetch. Scan the QR with the Singpass app on your
+                      phone — you are signing in as yourself. Click the picture if you need to press something on
+                      the page.
+                    </p>
+                  </div>
+                  <span className="text-[11px] text-blue-700 dark:text-blue-300 tabular-nums">
+                    updated {new Date(fetchScreen.at).toLocaleTimeString([], { hour12: false })}
+                  </span>
+                </div>
+                <img
+                  src={fetchScreen.dataUrl}
+                  alt="Live view of the TPGateway sign-in page"
+                  onClick={(e) => {
+                    // Map the click from however large the image is rendered back to the page's own coordinate system.
+                    const r = (e.target as HTMLImageElement).getBoundingClientRect();
+                    const x = ((e.clientX - r.left) / r.width) * (fetchScreen.width || 1);
+                    const y = ((e.clientY - r.top) / r.height) * (fetchScreen.height || 1);
+                    void sendFetchInput({ kind: 'click', x: Math.round(x), y: Math.round(y) });
+                  }}
+                  className="w-full rounded border border-blue-200 dark:border-blue-800 cursor-pointer bg-white"
+                />
+              </div>
+            )}
+
+            {/* Activity feed — what the run is touching right now. Threaded dots, newest last,
+                same styling as the Direct Application Confirm & fetch panel. */}
+            {fetchLog.length > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-on-surface-secondary">Activity</p>
+                  <span className="flex items-center gap-1.5 text-[10px] font-medium text-purple-500 dark:text-purple-400">
+                    <span className="relative flex w-1.5 h-1.5">
+                      <span className="absolute inline-flex w-full h-full rounded-full bg-purple-400 opacity-75 animate-ping" />
+                      <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-purple-500" />
+                    </span>
+                    Live
+                  </span>
+                </div>
+                <div className="max-h-44 overflow-y-auto rounded-xl border border-default bg-surface px-4 py-3">
+                  <ol className="space-y-3">
+                    {fetchLog.slice(-12).map((entry, i, shown) => {
+                      const isLast = i === shown.length - 1;
+                      return (
+                        <li key={`${entry.at}-${i}`} className="relative flex gap-3">
+                          {!isLast && (
+                            <span aria-hidden className="absolute left-[4px] top-3 -bottom-3 w-px bg-default" />
+                          )}
+                          <span className="relative flex-shrink-0 mt-1.5 w-[9px] h-[9px]">
+                            {isLast ? (
+                              <>
+                                <span className="absolute inset-0 rounded-full bg-purple-400 opacity-60 animate-ping" />
+                                <span className="relative block w-[9px] h-[9px] rounded-full bg-purple-500" />
+                              </>
+                            ) : (
+                              <span className="block w-[9px] h-[9px] rounded-full bg-gray-300 dark:bg-gray-600 ring-4 ring-surface" />
+                            )}
+                          </span>
+                          <div className="min-w-0 flex-1 flex items-baseline justify-between gap-3">
+                            <span className={`text-xs leading-relaxed ${isLast ? 'font-semibold text-on-surface' : 'text-on-surface-secondary'}`}>
+                              {entry.text}
+                            </span>
+                            <span className="flex-shrink-0 text-[10px] tabular-nums text-on-surface-secondary">
+                              {new Date(entry.at).toLocaleTimeString([], { hour12: false })}
+                            </span>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
 
       <Card className="p-4 space-y-4">
         <form
