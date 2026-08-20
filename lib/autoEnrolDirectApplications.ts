@@ -935,6 +935,10 @@ export async function processDirectApplication(
           enrolment_id: enrolmentReference,
           enrolment_status: 'Confirmed',
           auto_enrol_status: 'enroled',
+          // The retries above routinely record a TGS-403 from SSG before it is
+          // ready. Once the enrolment succeeds that message is history, and
+          // leaving it behind marks a completed row as needing attention.
+          auto_enrol_error: null,
         });
         enrolErr = null;
         break;
@@ -966,6 +970,9 @@ export async function processDirectApplication(
           enrolment_id: enrolmentReference,
           enrolment_status: 'Confirmed',
           auto_enrol_status: 'enroled',
+          // Recovered after a failed create — the enrolment exists, so the
+          // error that led us here is no longer the row's state.
+          auto_enrol_error: null,
         });
       } else {
         await markFailed(appId, 'enrolment', err);
@@ -1063,6 +1070,11 @@ export async function processDirectApplication(
         err instanceof Error ? err.message : err
       );
     }
+    // Invoicing is off for this tenant, so enrolment (plus grant) IS the finished
+    // state — clear any message from a step that was recovered along the way,
+    // for the same reason as the completed path below.
+    await updateRow(appId, { auto_enrol_error: null });
+
     return {
       id: appId,
       applicationId,
@@ -1609,6 +1621,13 @@ export async function processDirectApplication(
       failedStep: supplementalErrors[0]?.step,
     };
   }
+
+  // Everything the pipeline set out to do is done. Any message left over from a
+  // step that was later recovered — an SSG TGS-403 during the retries, a QBO
+  // hiccup on a first attempt — describes history, not this row's state, and
+  // leaving it behind marks a finished application as needing attention. That
+  // is why nearly every completed row was showing "see note".
+  await updateRow(appId, { auto_enrol_error: null });
 
   return {
     id: appId,

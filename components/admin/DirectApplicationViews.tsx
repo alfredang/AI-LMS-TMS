@@ -57,6 +57,47 @@ interface DaResultRow {
     enrolError?: string | null;
 }
 
+/**
+ * What the learner still owes, worked out from the figures on the row.
+ *
+ * `payable_fee` is TPGateway's number from the moment the application was
+ * uploaded. Grants are issued asynchronously afterwards, so a row whose grant
+ * arrived later still displays a pre-grant figure — showing a learner owing
+ * $317.50 whose grant had since reduced it to $292.50, next to the very grant
+ * columns that contradict it.
+ *
+ * SkillsFuture Credit is capped at what is owed, because it draws down a
+ * balance rather than paying out: a learner electing $500 against a pre-grant
+ * bill can only use what the bill has since become. This mirrors the invoice
+ * builder, so the screen and the invoice agree.
+ *
+ * Returns null when the fee is unknown, so the caller can fall back rather than
+ * print a confident $0.00.
+ */
+function computeDaBilling(app: any): { payable: number; creditApplied: number; declaredCredit: number } | null {
+    const num = (v: any) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    if (app?.full_course_fee == null) return null;
+
+    // The grant total lives in whichever of these the row happens to carry.
+    // skillsfuture_subsidy is frequently null even when grants exist — the
+    // amounts arrive from ssg_grants as tg_amount (the total) or as the
+    // baseline/other pair. Preferring tg_amount avoids double counting, since
+    // it already equals bl_amount + other_amount.
+    const grantTotal =
+        num(app.skillsfuture_subsidy) ||
+        num(app.tg_amount) ||
+        num(app.bl_amount) + num(app.other_amount);
+
+    const owedBeforeCredit = num(app.full_course_fee) + num(app.gst) - grantTotal;
+    const declaredCredit = num(app.skillsfuture_credit);
+    const creditApplied = Math.min(declaredCredit, Math.max(0, owedBeforeCredit));
+    return {
+        payable: Math.max(0, Number((owedBeforeCredit - creditApplied).toFixed(2))),
+        creditApplied: Number(creditApplied.toFixed(2)),
+        declaredCredit,
+    };
+}
+
 const RESULTS_PER_PAGE = 10;
 const BATCH_SIZE_DA = 20;
 
@@ -687,6 +728,10 @@ export const UploadDirectApplicationView: React.FC = () => {
     const pollEnrolStatus = async (appIds: string[]) => {
         const appIdSet = new Set(appIds);
         let attempts = 0;
+        // Used to notice when the pipeline has stopped moving — see the stop
+        // condition below.
+        let lastFingerprint = '';
+        let stagnantPolls = 0;
         const poll = async () => {
             attempts++;
             try {
@@ -702,8 +747,34 @@ export const UploadDirectApplicationView: React.FC = () => {
                     const byId = new Map<string, any>();
                     for (const row of json.data) { if (row.application_id && appIdSet.has(row.application_id)) byId.set(row.application_id, row); }
                     setAllResults(prev => prev.map(r => { const dbRow = byId.get(r.application_id); if (!dbRow) return r; return { ...r, enrolStatus: dbRow.auto_enrol_status || null, enrolmentId: dbRow.enrolment_id || null, grantId: dbRow.grant_id || null, enrolError: dbRow.auto_enrol_error || null }; }));
-                    const allDone = [...appIdSet].every(id => { const row = byId.get(id); return row && ['pending_identity', 'enroled', 'grant_found', 'invoiced', 'failed'].includes(row.auto_enrol_status); });
-                    if (allDone || attempts >= 60) { setAutoEnrolPolling(false); return; }
+                    // 'enroled' and 'grant_found' are NOT the end — the pipeline
+                    // carries on to the QuickBooks invoice and only then reaches
+                    // 'invoiced'. Treating them as final stopped the display at
+                    // "Completed" while invoicing was still running, so the invoice
+                    // never appeared without pressing Refresh status.
+                    const isFinal = (st: string) => ['invoiced', 'failed', 'pending_identity'].includes(st);
+                    const allDone = [...appIdSet].every(id => { const row = byId.get(id); return row && isFinal(row.auto_enrol_status); });
+
+                    // Invoicing is optional (training_provider.auto_generate_qb_invoice),
+                    // so a run with it switched off legitimately ends at 'grant_found'
+                    // and would otherwise poll until the attempt cap. Stop once every
+                    // row has at least enrolled AND nothing has moved for a while.
+                    const fingerprint = [...appIdSet].map(id => byId.get(id)?.auto_enrol_status || '').join('|');
+                    if (fingerprint !== lastFingerprint) { lastFingerprint = fingerprint; stagnantPolls = 0; }
+                    else { stagnantPolls++; }
+                    // Must be a state that means the learner actually enrolled. Testing
+                    // for "not pending" also matched 'failed', which a row sits at
+                    // while the SSG retries run — so polling gave up mid-retry and the
+                    // screen froze on a failure the pipeline went on to recover from.
+                    const allAtLeastEnrolled = [...appIdSet].every(id => {
+                        const st = byId.get(id)?.auto_enrol_status;
+                        return st === 'enroled' || st === 'grant_found' || st === 'invoiced';
+                    });
+
+                    if (allDone || (allAtLeastEnrolled && stagnantPolls >= 9) || attempts >= 60) {
+                        setAutoEnrolPolling(false);
+                        return;
+                    }
                 }
             } catch { }
             setTimeout(poll, 5000);
@@ -752,9 +823,19 @@ export const UploadDirectApplicationView: React.FC = () => {
         return {
             done: rows.filter(r => r.enrolStatus && !['pending', 'pending_identity', 'failed'].includes(r.enrolStatus)).length,
             granted: rows.filter(r => r.enrolStatus === 'grant_found' || r.enrolStatus === 'invoiced').length,
+            invoiced: rows.filter(r => r.enrolStatus === 'invoiced').length,
             failed: rows.filter(r => r.enrolStatus === 'failed').length,
+            total: rows.length,
         };
     }, [allResults]);
+    // Name the stage actually in progress. Enrolment finishes well before the
+    // QuickBooks invoice does, and reporting the whole run as "Enrolling" made
+    // the invoice look like it never happened.
+    const enrolStage =
+        enrolCounts.done > 0 && enrolCounts.done >= enrolCounts.total && enrolCounts.invoiced < enrolCounts.done
+            ? 'Generating invoices'
+            : 'Enrolling';
+
     const autoEnrolElapsed = autoEnrolStartedAt
         ? Math.max(0, Math.round(((autoEnrolPolling ? tpgNow : Date.now()) - autoEnrolStartedAt) / 1000))
         : 0;
@@ -810,7 +891,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                     how long it has been running. */}
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                     {autoEnrolPolling
-                                        ? `Enrolling — ${enrolCounts.done} of ${autoEnrolQueued} done${enrolCounts.granted > 0 ? `, ${enrolCounts.granted} with grant` : ''}${enrolCounts.failed > 0 ? `, ${enrolCounts.failed} failed` : ''} · ${fmtElapsed(autoEnrolElapsed)} elapsed`
+                                        ? `${enrolStage} — ${enrolCounts.done} of ${autoEnrolQueued} enrolled${enrolCounts.granted > 0 ? `, ${enrolCounts.granted} with grant` : ''}${enrolCounts.invoiced > 0 ? `, ${enrolCounts.invoiced} invoiced` : ''}${enrolCounts.failed > 0 ? `, ${enrolCounts.failed} failed` : ''} · ${fmtElapsed(autoEnrolElapsed)} elapsed`
                                         : autoEnrolQueued > 0
                                             ? `Completed - ${autoEnrolQueued} application(s) processed${autoEnrolElapsed > 0 ? ` in ${fmtElapsed(autoEnrolElapsed)}` : ''}`
                                             : `${summary.inserted + summary.updated} eligible application(s) ready to enrol`}
@@ -897,19 +978,23 @@ export const UploadDirectApplicationView: React.FC = () => {
                                                     }
                                                     if (s === 'pending_identity') return chip('bg-yellow-100 text-yellow-800', 'needs ID', r.enrolError || 'Pending identity');
                                                     if (s === 'failed') return chip('bg-red-100 text-red-700', 'failed', r.enrolError || 'Failed');
-                                                    // Enrolled, but a later step (invoice, Drive, grant/SFC) failed. Not red
-                                                    // — the learner IS enrolled — but it mustn't read as a clean success either.
-                                                    if (r.enrolError) {
-                                                        return (
-                                                            <span className="inline-flex flex-col items-center gap-0.5">
-                                                                {chip('bg-amber-100 text-amber-800', 'enrolled — see note', `Enrolled but a later step failed — ${r.enrolError}`)}
-                                                                {r.enrolmentId && <span className="font-mono text-[10px] text-gray-500 dark:text-gray-400">{r.enrolmentId}</span>}
-                                                            </span>
-                                                        );
-                                                    }
+                                                    // This column answers one question: did SSG enrol them. It did, so
+                                                    // it is green. A problem in a later step — invoice, Drive, grant —
+                                                    // is not an enrolment problem and belongs to those columns, not
+                                                    // here; reporting it as an amber enrolment made every row that hit
+                                                    // SSG's normal retry look like it needed attention. Any message is
+                                                    // still carried on the tooltip rather than thrown away.
                                                     return (
                                                         <span className="inline-flex flex-col items-center gap-0.5">
-                                                            {chip('bg-green-100 text-green-700', s === 'invoiced' ? 'invoiced' : s === 'grant_found' ? 'grant found' : 'enrolled', s)}
+                                                            {/* Always "enrolled" — 'grant_found' and 'invoiced' are later
+                                                                pipeline stages, not enrolment states, and this column is
+                                                                only asking whether SSG took them. The stage stays on the
+                                                                tooltip for anyone who wants it. */}
+                                                            {chip(
+                                                                'bg-green-100 text-green-700',
+                                                                'enrolled',
+                                                                r.enrolError ? `${s} — a later step reported: ${r.enrolError}` : s
+                                                            )}
                                                             {r.enrolmentId && <span className="font-mono text-[10px] text-gray-500 dark:text-gray-400">{r.enrolmentId}</span>}
                                                         </span>
                                                     );
@@ -1114,9 +1199,25 @@ export const UploadDirectApplicationView: React.FC = () => {
                                     )
                                 )}
                             </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 max-w-xl">
-                                Opens a browser for you to log in with Singpass, confirms pending Direct Applications, then reads each learner's details and enrols them — in one go. <strong>Dry run</strong> finds and checks the pending ones without confirming anything. Leave <strong>Limit</strong> empty and it will show you how many it found and wait for your approval before confirming.
-                            </p>
+                            {/* Read once, then acted on — so it leads with what happens, and
+                                separates the two buttons rather than burying the difference in
+                                a paragraph. Confirming cannot be undone, which is why the safe
+                                option is described first. */}
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-xl space-y-1">
+                                <p>
+                                    Signs in to TPGateway with your Singpass, confirms every Direct Application
+                                    waiting for confirmation, and enrols those learners with SSG — in one go.
+                                </p>
+                                <p>
+                                    <strong>Dry run</strong> shows what it would confirm and changes nothing.
+                                    <span className="mx-1">·</span>
+                                    <strong>Confirm &amp; Enrol</strong> does it for real, and cannot be undone.
+                                </p>
+                                <p>
+                                    Set <strong>Limit</strong> to try a few first, or leave it empty to see the
+                                    full count and approve before anything is confirmed.
+                                </p>
+                            </div>
                             {/* The card is shown in BOTH environments on purpose: hiding it on
                                 the server made a working feature look deleted. What changes is
                                 the action — the server cannot open a Singpass browser, so it
@@ -2567,8 +2668,36 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.other_amount != null ? `$${parseFloat(app.other_amount).toFixed(2)}` : '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.tg_amount != null ? `$${parseFloat(app.tg_amount).toFixed(2)}` : '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit_claim_id || '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.skillsfuture_credit != null ? `$${parseFloat(app.skillsfuture_credit || 0).toFixed(2)}` : '-'}</td>
-                                                <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">${parseFloat(app.payable_fee || 0).toFixed(2)}</td>
+                                                {(() => {
+                                                    // Show the credit that actually applies to this bill, not the
+                                                    // balance the learner holds — otherwise $500 sits beside a
+                                                    // $0.00 payable and the row contradicts itself.
+                                                    const b = computeDaBilling(app);
+                                                    if (app.skillsfuture_credit == null) {
+                                                        return <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">-</td>;
+                                                    }
+                                                    const capped = b != null && b.creditApplied < b.declaredCredit;
+                                                    const shown = b != null ? b.creditApplied : parseFloat(app.skillsfuture_credit || 0);
+                                                    return (
+                                                        <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300"
+                                                            title={capped ? `Learner holds $${b!.declaredCredit.toFixed(2)}; only $${b!.creditApplied.toFixed(2)} applies to this course, the rest stays in their account.` : undefined}>
+                                                            {`$${shown.toFixed(2)}`}
+                                                            {capped && <span className="ml-1 text-amber-500" aria-hidden>*</span>}
+                                                        </td>
+                                                    );
+                                                })()}
+                                                {(() => {
+                                                    const live = computeDaBilling(app)?.payable ?? null;
+                                                    const uploaded = app.payable_fee != null ? parseFloat(app.payable_fee) : null;
+                                                    const stale = live != null && uploaded != null && Math.abs(live - uploaded) >= 0.01;
+                                                    return (
+                                                        <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300"
+                                                            title={stale ? `TPGateway sent $${uploaded!.toFixed(2)} when this was uploaded, before the grant was issued. $${live!.toFixed(2)} is what is owed now.` : undefined}>
+                                                            {live != null ? `$${live.toFixed(2)}` : '-'}
+                                                            {stale && <span className="ml-1 text-amber-500" aria-hidden>*</span>}
+                                                        </td>
+                                                    );
+                                                })()}
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_qualification || '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.highest_relevant_certification || '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap"><span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${getStatusColor(app.application_status || 'Pending')}`}>{app.application_status || 'Pending'}</span></td>
