@@ -1,9 +1,14 @@
 /**
  * POST /api/finance/grant-fetch/run
  *
- * Starts a "Fetch from TPGateway" job for Bulk Grant Payment Sync — opens a
- * headed Chromium on the HOST running this server (local dev only for v1;
- * Singpass needs a display + a human), returns a jobId immediately; poll
+ * Starts a "Fetch from TPGateway" job for Bulk Grant Payment Sync. Where the
+ * browser actually runs depends on where the request can reach TPGateway from:
+ * this server drives Chromium fine, but TPGateway sits behind CloudFront, which
+ * blocks datacentre IP ranges — the request is refused before TPGateway ever
+ * sees it. So the deployed site QUEUES the run and an office-agent script
+ * (scripts/tpg-grant-fetch-agent.mjs) drives it from an address the portal
+ * accepts, reporting progress back into this same job. Locally it just runs
+ * here directly. Either way, returns a jobId immediately; poll
  * /api/finance/grant-fetch/status for progress.
  *
  * Body: { startDate: string }  (DD-MM-YYYY — TPGateway's own Payment From
@@ -15,7 +20,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireFinanceOrAdmin } from '@/lib/services/grantImport/requireFinanceOrAdmin';
-import { startGrantFetchJob } from '@/lib/tpg/fetchGrantDisbursements';
+import { startGrantFetchJob, queueGrantFetchJob } from '@/lib/tpg/fetchGrantDisbursements';
 import { getActiveGrantFetchJob } from '@/lib/tpg/grantFetchJobStore';
 
 export const config = { maxDuration: 300 };
@@ -31,17 +36,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const { actorUserId } = await requireFinanceOrAdmin(req);
 
-    // Local-dev only for v1 — Singpass needs a visible browser + a human on this
-    // machine. Production support (an office-agent relay, like tpg-confirm has)
-    // is a deliberate follow-up, not built yet.
-    if (process.env.NODE_ENV === 'production' && process.env.TPG_SERVER_BROWSER !== 'true') {
-      return res.status(400).json({
-        success: false,
-        error:
-          'Fetch from TPGateway currently only runs from a local dev environment (it needs a visible browser for the Singpass login). Use "Upload Excel" instead, or run this from your own machine with `npm run dev`.',
-      });
-    }
-
     // One run at a time — a second would fight the first for the Chromium profile.
     const active = getActiveGrantFetchJob();
     if (active) {
@@ -55,6 +49,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const startDate = String(req.body?.startDate || '').trim();
     if (!DATE_RE.test(startDate)) {
       return res.status(400).json({ success: false, error: 'startDate is required, in DD-MM-YYYY format.' });
+    }
+
+    const runsHere = process.env.NODE_ENV !== 'production' || process.env.TPG_SERVER_BROWSER === 'true';
+
+    if (!runsHere) {
+      const jobId = queueGrantFetchJob(startDate, actorUserId);
+      return res.status(200).json({
+        success: true,
+        jobId,
+        queued: true,
+        message: 'Queued — waiting for the office machine to pick it up. Progress appears here.',
+      });
     }
 
     const jobId = startGrantFetchJob({ startDate, actorUserId });

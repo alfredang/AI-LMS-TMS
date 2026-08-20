@@ -23,6 +23,13 @@
 import type { GrantImportBatchPreview } from '@/lib/services/grantImport/tpGatewayDisbursementTypes';
 
 export type GrantFetchPhase =
+  /**
+   * Waiting for an office machine to pick this up (production only — see
+   * scripts/tpg-grant-fetch-agent.mjs). TPGateway sits behind CloudFront, which
+   * blocks datacentre IP ranges, so the server queues the run and an agent on
+   * the office network drives it from an address the portal accepts.
+   */
+  | 'queued'
   | 'starting'
   | 'awaiting_login'
   | 'navigating'
@@ -63,6 +70,14 @@ export type GrantFetchInput =
 export interface GrantFetchJob {
   id: string;
   startDate: string; // DD-MM-YYYY, Payment From, as entered
+  /**
+   * The Finance/Admin user who clicked Fetch & Upload. When a queued job is
+   * relayed through the office agent, this is forwarded so the LOCAL run
+   * re-authenticates as the same real person (requireFinanceOrAdmin needs an
+   * actorUserId — the agent's service key alone satisfies withAuth's role
+   * check but not that separate, per-user authorization/audit check).
+   */
+  actorUserId: string | null;
   phase: GrantFetchPhase;
   message: string;
   /** Total rows in the downloaded export, once parsed. */
@@ -92,11 +107,12 @@ const jobs = g.__grantFetchJobs;
 /** Cap retained jobs so a long-lived dev server doesn't leak memory. */
 const MAX_RETAINED = 20;
 
-export function createGrantFetchJob(id: string, startDate: string): GrantFetchJob {
+export function createGrantFetchJob(id: string, startDate: string, actorUserId: string | null = null): GrantFetchJob {
   const now = Date.now();
   const job: GrantFetchJob = {
     id,
     startDate,
+    actorUserId,
     phase: 'starting',
     message: 'Starting…',
     rowsFound: 0,
@@ -160,8 +176,11 @@ const CANCEL_ACK_MS = 12_000;
 
 function isStale(job: GrantFetchJob): boolean {
   if (isFinished(job)) return false;
-  // Waiting on a person to finish Singpass is not staleness.
-  if (!job.cancelRequested && (job.phase === 'awaiting_login' || job.needsOperator)) return false;
+  // Waiting on a person to finish Singpass, or on an agent to pick up a queued
+  // job, is not staleness.
+  if (!job.cancelRequested && (job.phase === 'queued' || job.phase === 'awaiting_login' || job.needsOperator)) {
+    return false;
+  }
   const limit = job.cancelRequested ? CANCEL_ACK_MS : STALE_AFTER_MS;
   return Date.now() - job.updatedAt > limit;
 }
@@ -196,10 +215,15 @@ export function requestGrantFetchCancel(id: string): boolean {
   if (!job) return false;
   if (isFinished(job)) return false;
 
-  if (isStale(job)) {
+  // A queued job has no driver listening yet — an agent may never claim it, so end
+  // it here rather than leaving the operator stuck at "Stopping…" indefinitely.
+  if (job.phase === 'queued' || isStale(job)) {
+    const neverStarted = job.phase === 'queued';
     job.cancelRequested = true;
     job.phase = 'cancelled';
-    job.message = 'Stopped — the machine running it stopped reporting.';
+    job.message = neverStarted
+      ? 'Cancelled before it started. Nothing was fetched.'
+      : 'Stopped — the machine running it stopped reporting.';
     job.updatedAt = Date.now();
     return true;
   }
@@ -232,4 +256,46 @@ export function drainGrantFetchInput(id: string): GrantFetchInput[] {
   const taken = job.pendingInput;
   job.pendingInput = [];
   return taken;
+}
+
+/**
+ * Hand the oldest waiting job to an agent, or null if there is nothing to do.
+ *
+ * Claiming flips it out of 'queued' in the same call, so two agents polling at
+ * once cannot both pick up the same run — Node is single-threaded, so this
+ * check-and-set cannot be interleaved.
+ */
+export function claimQueuedGrantFetchJob(): GrantFetchJob | null {
+  const queued = [...jobs.values()]
+    .filter((j) => j.phase === 'queued')
+    .sort((a, b) => a.startedAt - b.startedAt)[0];
+  if (!queued) return null;
+  queued.phase = 'starting';
+  queued.message = 'Picked up — starting the browser…';
+  queued.updatedAt = Date.now();
+  return queued;
+}
+
+/**
+ * When the office-agent (scripts/tpg-grant-fetch-agent.mjs) last asked for work.
+ *
+ * Whether anything can actually run is invisible from the live site otherwise —
+ * a queued run just sits at "waiting" with no way to tell whether it will be
+ * picked up in five seconds or never. The agent polls every few seconds, so
+ * recent contact is a good proxy for "the agent is on".
+ */
+let lastAgentSeenAt = 0;
+
+/** Generous next to the agent's 5s idle poll, so a slow tick is not "offline". */
+const AGENT_ONLINE_WINDOW_MS = 25_000;
+
+export function markGrantFetchAgentSeen(): void {
+  lastAgentSeenAt = Date.now();
+}
+
+export function grantFetchAgentStatus(): { online: boolean; lastSeenAt: number | null } {
+  return {
+    online: lastAgentSeenAt > 0 && Date.now() - lastAgentSeenAt < AGENT_ONLINE_WINDOW_MS,
+    lastSeenAt: lastAgentSeenAt || null,
+  };
 }

@@ -100,7 +100,7 @@ export interface StartGrantFetchOptions {
 /** Create a job, kick off the driver in the background, return the job id. */
 export function startGrantFetchJob(opts: StartGrantFetchOptions): string {
   const id = `gfetch_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
-  createGrantFetchJob(id, opts.startDate);
+  createGrantFetchJob(id, opts.startDate, opts.actorUserId);
   void runJob(id, opts).catch((err) => {
     patchGrantFetchJob(id, {
       phase: 'error',
@@ -114,6 +114,27 @@ export function startGrantFetchJob(opts: StartGrantFetchOptions): string {
 }
 
 export { getGrantFetchJob };
+
+/**
+ * Register a run for the office agent (scripts/tpg-grant-fetch-agent.mjs) to pick
+ * up, without opening a browser here. Used on the deployed site, whose IP
+ * TPGateway's CDN refuses — mirrors confirmApplications.ts's queueTpgConfirmJob.
+ *
+ * actorUserId is carried on the job so the agent can forward it back to the
+ * LOCAL run — that endpoint's requireFinanceOrAdmin check needs a real,
+ * DB-verified actorUserId, which the agent's service key alone does not
+ * provide (the key only satisfies withAuth's broader role check).
+ */
+export function queueGrantFetchJob(startDate: string, actorUserId: string | null): string {
+  const id = `gfetch_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
+  createGrantFetchJob(id, startDate, actorUserId);
+  patchGrantFetchJob(id, {
+    phase: 'queued',
+    message: 'Queued — waiting for the office machine to pick it up…',
+  });
+  pushGrantFetchLog(id, 'Queued for the office machine.');
+  return id;
+}
 
 /**
  * Ask a running job to stop. Cooperative: the driver only checks between safe

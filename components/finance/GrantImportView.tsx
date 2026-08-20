@@ -81,6 +81,7 @@ const CircularProgress: React.FC<{ pct: number; label?: string }> = ({ pct, labe
 };
 
 const FETCH_PHASE_LABEL: Record<string, string> = {
+  queued: 'Queued — waiting for the office machine…',
   starting: 'Starting…',
   awaiting_login: 'Waiting for Singpass login…',
   navigating: 'Navigating to Financial Transactions…',
@@ -144,6 +145,8 @@ const GrantImportView: React.FC = () => {
   const [fetchProgress, setFetchProgress] = useState(0);
   const [fetchStartedAtMs, setFetchStartedAtMs] = useState<number | null>(null);
   const [fetchNowMs, setFetchNowMs] = useState(() => Date.now());
+  // Whether an office-agent machine is needed/online for this environment — null while unknown.
+  const [fetchHelper, setFetchHelper] = useState<{ notNeeded: boolean; online: boolean } | null>(null);
 
   const fileValidationError = useMemo(() => {
     if (!file) return null;
@@ -450,6 +453,10 @@ const GrantImportView: React.FC = () => {
   // same idea as the Direct Application "Confirm & fetch from TPGateway" panel.
   const fetchTargetPct = (phase: string): number => {
     if (phase === 'done') return 100;
+    // Genuinely 0% — nothing has started. Letting the bar creep here would
+    // suggest progress that does not exist yet (same reasoning as tpgTargetPct
+    // for the Direct Application panel).
+    if (phase === 'queued') return 0;
     const base: Record<string, number> = {
       starting: 4,
       awaiting_login: 12,
@@ -487,6 +494,30 @@ const GrantImportView: React.FC = () => {
 
   const fmtElapsed = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`);
   const fetchElapsedSec = fetchStartedAtMs ? Math.max(0, Math.round((fetchNowMs - fetchStartedAtMs) / 1000)) : 0;
+
+  // Is an office-agent machine listening? On local dev this always reports notNeeded — the
+  // browser opens right here. On the deployed site, staff otherwise click Fetch & Upload and
+  // the run either starts or waits indefinitely with nothing to tell them which.
+  useEffect(() => {
+    if (!actorUserId) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await fetch('/api/finance/grant-fetch/helper', { headers: { 'x-actor-user-id': actorUserId } });
+        const json = await res.json();
+        if (cancelled) return;
+        if (res.ok && json?.success) setFetchHelper({ notNeeded: !!json.notNeeded, online: !!json.online });
+      } catch {
+        /* leave fetchHelper as-is — a transient failure here shouldn't flip the button state */
+      }
+    };
+    void check();
+    const iv = setInterval(check, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [actorUserId]);
 
   const handleDragEvents = (e: React.DragEvent<HTMLDivElement>, isOver: boolean) => {
     e.preventDefault();
@@ -687,9 +718,9 @@ const GrantImportView: React.FC = () => {
             Scan the Singpass QR right here on this page — this signs in to TPGateway, opens Financial Transactions,
             filters to Paid from the start date below, and extracts every matching record directly into Step 2 for
             review. No Excel download/upload needed. Once it lands in Step 2, use the <strong>Payment Date</strong>{' '}
-            filter there to narrow it down further. Runs from your own machine (<code>npm run dev</code>), so it
-            isn&apos;t available on the deployed site yet. Use <strong>Upload Excel</strong> below as a fallback any
-            time.
+            filter there to narrow it down further. On the deployed site this is relayed through an office machine
+            (same as Direct Application &quot;Confirm &amp; fetch from TPGateway&quot;) — see the status below. Use{' '}
+            <strong>Upload Excel</strong> below as a fallback any time.
           </p>
         </div>
 
@@ -702,6 +733,19 @@ const GrantImportView: React.FC = () => {
           </p>
         </div>
 
+        {/* Whether an office machine is listening for queued runs — only meaningful on the
+            deployed site (notNeeded is true on local dev, where the browser opens right here). */}
+        {fetchHelper && !fetchHelper.notNeeded && (
+          <div className="flex items-center gap-2 text-xs">
+            <span
+              className={`inline-block w-2 h-2 rounded-full ${fetchHelper.online ? 'bg-emerald-500' : 'bg-gray-400'}`}
+            />
+            <span className="text-on-surface-secondary">
+              Office machine: {fetchHelper.online ? 'online' : 'offline — a run will queue until one connects'}
+            </span>
+          </div>
+        )}
+
         <div className="flex items-end gap-3 flex-wrap">
           <div className="min-w-0">
             <label className="block text-xs font-semibold text-on-surface-secondary mb-1">Start date</label>
@@ -713,7 +757,11 @@ const GrantImportView: React.FC = () => {
               className="px-3 py-2 rounded-lg border border-default bg-surface text-sm disabled:opacity-50"
             />
           </div>
-          <Button type="button" onClick={() => void startFetch()} disabled={fetching || !actorUserId}>
+          <Button
+            type="button"
+            onClick={() => void startFetch()}
+            disabled={fetching || !actorUserId || (fetchHelper !== null && !fetchHelper.notNeeded && !fetchHelper.online)}
+          >
             {fetching ? 'Fetching…' : 'Fetch & Upload'}
           </Button>
           {fetching && (
