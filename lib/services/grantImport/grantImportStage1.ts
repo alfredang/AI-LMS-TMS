@@ -1,4 +1,4 @@
-import type { GrantImportBatchPreview, GrantImportRowMatched } from './tpGatewayDisbursementTypes';
+import type { GrantImportBatchPreview, GrantImportRowMatched, GrantImportRowParsed } from './tpGatewayDisbursementTypes';
 import { parseTpGatewayDisbursementXlsx, normalizeAndParseTpGatewayRow } from './tpGatewayDisbursementParser';
 import { validateTpGatewayDisbursementRow } from './tpGatewayDisbursementValidator';
 import {
@@ -188,7 +188,27 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
   input.onProgress?.({ pct: 10, message: 'Validating rows' });
   const parsed = rawRows.map((r) => validateTpGatewayDisbursementRow(normalizeAndParseTpGatewayRow(r.rowNumber, r.raw)));
 
-  input.onProgress?.({ pct: 18, message: 'Checking duplicates' });
+  return stage1ValidateMatchAndPersistRows(parsed, input.filename, input.actorUserId, input.onProgress);
+}
+
+/**
+ * Everything after "rows already parsed and validated" — duplicate check,
+ * matching against ssg_grants/ssg_enrolments, optional QB verification, and
+ * persisting to grant_import_batches/grant_import_rows.
+ *
+ * Extracted out of stage1UploadParseValidateMatchAndPersist so a second entry
+ * point (the TPGateway auto-fetch driver, lib/tpg/fetchGrantDisbursements.ts)
+ * can feed it rows scraped directly off the Financial Transactions page —
+ * skipping the xlsx parse step only — while going through the exact same
+ * validation/matching/persist logic as a manual upload, with zero divergence.
+ */
+export async function stage1ValidateMatchAndPersistRows(
+  parsed: GrantImportRowParsed[],
+  filename: string | null,
+  actorUserId: string | null,
+  onProgress?: (p: { pct: number; message: string }) => void
+): Promise<GrantImportBatchPreview> {
+  onProgress?.({ pct: 18, message: 'Checking duplicates' });
   const ftxList = parsed
     .map((r) => r.financialTransactionId)
     .filter((x): x is string => !!x);
@@ -202,7 +222,7 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
   let qbSyncedRows = 0;
   const totalForProgress = Math.max(1, parsed.length);
   let progressed = 0;
-  input.onProgress?.({ pct: 22, message: 'Matching to grants' });
+  onProgress?.({ pct: 22, message: 'Matching to grants' });
 
   // Batch DB lookups: these were previously per-row and dominate runtime on big files.
   const grantIdsUnique = Array.from(
@@ -229,7 +249,7 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
     progressed += 1;
     if (progressed % progressEvery === 0 || progressed === totalForProgress) {
       const pct = 22 + Math.round((progressed / totalForProgress) * 55); // 22..77
-      input.onProgress?.({ pct, message: `Matching rows (${progressed}/${totalForProgress})` });
+      onProgress?.({ pct, message: `Matching rows (${progressed}/${totalForProgress})` });
     }
     if (row.validationStatus !== 'valid') {
       matched.push({
@@ -340,8 +360,8 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
   const invalidRows = matched.filter((r) => r.matchStatus === 'invalid').length;
 
   const batch = await insertGrantImportBatch({
-    uploadedBy: input.actorUserId,
-    filename: input.filename,
+    uploadedBy: actorUserId,
+    filename: filename,
     totals: {
       totalRows,
       validRows,
@@ -352,7 +372,7 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
     },
   });
 
-  input.onProgress?.({ pct: 82, message: 'Saving rows' });
+  onProgress?.({ pct: 82, message: 'Saving rows' });
   await insertGrantImportRows(
     batch.id,
     matched.map((r) => ({
@@ -396,14 +416,14 @@ export async function stage1UploadParseValidateMatchAndPersist(input: {
   // This is still "safe": no QB writes, only enrolment rollup updates.
   if (qbSyncedEnrolments.size > 0) {
     try {
-      input.onProgress?.({ pct: 92, message: 'Updating FMS rollups' });
+      onProgress?.({ pct: 92, message: 'Updating FMS rollups' });
       await recalcAndPersistGrantPaymentRollups(Array.from(qbSyncedEnrolments), new Date());
     } catch {
       // Non-blocking: preview still works even if rollup update fails
     }
   }
 
-  input.onProgress?.({ pct: 96, message: 'Building preview' });
+  onProgress?.({ pct: 96, message: 'Building preview' });
   // Enrolment impact preview (computed in-memory)
   const enrolmentIds = Array.from(
     new Set(matched.map((r) => r.enrolmentId).filter((x): x is string => !!x))
