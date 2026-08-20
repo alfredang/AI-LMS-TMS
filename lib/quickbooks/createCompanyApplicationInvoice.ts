@@ -1030,12 +1030,30 @@ function isCustomerLookupError(message: string): boolean {
 }
 
 /**
- * Group the given application IDs by (employer_uen, course_run_id) and
- * generate one QBO invoice per group. Idempotent — a group is skipped if any
- * row in it already has `invoice_id`.
+ * Billing granularity for a Generate Invoice run.
+ *
+ *  - `consolidated` (default): one QBO invoice per (employer_uen,
+ *    course_run_id) — every selected learner from the same employer on the
+ *    same run lands on a single tax invoice. This is what the automated
+ *    pipeline uses.
+ *  - `per-learner`: one QBO invoice per learner. Admin sometimes needs to bill
+ *    a single person on their own (a late joiner, or an employer who wants the
+ *    learners split), which a consolidated run can't express.
+ *
+ * The mode only changes how selected rows are grouped — every downstream
+ * guard (enrolment, grant, idempotency) is unchanged and still runs per group.
+ */
+export type InvoiceGenerationMode = 'consolidated' | 'per-learner';
+
+/**
+ * Group the given application IDs and generate one QBO invoice per group —
+ * per (employer_uen, course_run_id) by default, or per learner when
+ * `mode: 'per-learner'`. Idempotent — rows that already have an `invoice_id`
+ * are never re-billed, only self-healed.
  */
 export async function generateInvoicesForApplications(
-  applicationIds: string[]
+  applicationIds: string[],
+  mode: InvoiceGenerationMode = 'consolidated'
 ): Promise<GenerateInvoicesResult> {
   const result: GenerateInvoicesResult = {
     generated: 0,
@@ -1083,11 +1101,21 @@ export async function generateInvoicesForApplications(
     [applicationIds]
   );
 
+  // In per-learner mode the application id joins the key, so every row lands
+  // in a group of its own and gets its own invoice. Everything below the
+  // grouping is mode-agnostic — a one-learner group is just a small group.
   const groups = new Map<string, any[]>();
+  // lockKeys stays keyed on (employer, course-run) even in per-learner mode:
+  // the advisory lock must be mode-independent, or a consolidated click and a
+  // per-learner click racing on the same rows would take different locks and
+  // could both POST to QBO.
+  const lockKeys = new Map<string, string>();
   for (const row of rowsRes.rows) {
-    const key = `${(row.employer_uen || '').trim()}|${(row.course_run_id || '').trim()}`;
+    const billingKey = `${(row.employer_uen || '').trim()}|${(row.course_run_id || '').trim()}`;
+    const key = mode === 'per-learner' ? `${billingKey}|${String(row.id)}` : billingKey;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(row);
+    lockKeys.set(key, billingKey);
   }
 
   for (const [key, rows] of groups) {
@@ -1096,7 +1124,7 @@ export async function generateInvoicesForApplications(
     // and both POST to QBO. DocNumber-based orphan recovery already mitigates
     // this (the second caller's POST returns the first's invoice via the LIKE
     // search), but the lock guarantees we never even attempt the second POST.
-    const groupLockKey = `ca-inv:${key}`;
+    const groupLockKey = `ca-inv:${lockKeys.get(key) ?? key}`;
     let groupLockClient;
     try {
       groupLockClient = await pool.connect();
@@ -1131,44 +1159,66 @@ export async function generateInvoicesForApplications(
       }
 
     try {
-      const rowIds = rows.map(r => r.id);
-      const first = rows[0];
-      const existingInvoiceId = String(first.invoice_id || '').trim();
-      const existingDriveFileId = String(first.invoice_drive_file_id || '').trim();
+      // A (employer, course-run) group is often MIXED: some learners were
+      // billed by an earlier click, others weren't. Split on invoice_id.
+      // Without this, one already-invoiced sibling made the WHOLE group report
+      // "already invoiced — cannot regenerate", so a learner added later could
+      // never be billed; and when the uninvoiced learner happened to sort
+      // first, the new invoice_id was written over the sibling's — re-billing
+      // someone who already had an invoice.
+      const invoicedRows = rows.filter(r => String(r.invoice_id || '').trim());
+      const pendingRows = rows.filter(r => !String(r.invoice_id || '').trim());
 
       // Idempotency — already invoiced. Self-heal the Drive PDF link only,
       // and run per-learner grant invoices (fills in any that weren't
-      // generated previously OR repairs their Drive files).
-      if (existingInvoiceId) {
-        const driveOk = existingDriveFileId
-          ? await driveFileExists(existingDriveFileId)
-          : false;
-        const existingDocNumber = String(first.invoice_doc_number || '').trim();
-        if (!driveOk) {
-          try {
-            const driveUpload = await uploadInvoicePdfForRowGroup({
-              invoiceId: existingInvoiceId,
-              docNumber: existingDocNumber,
-            });
-            await pool.query(
-              `UPDATE public.company_application
-                  SET invoice_drive_file_id         = $1,
-                      invoice_drive_web_view_link   = $2,
-                      updated_at                    = now()
-                WHERE id = ANY($3::uuid[])`,
-              [driveUpload.fileId, driveUpload.webViewLink, rowIds]
-            );
-          } catch (err) {
-            console.warn(`[ca-invoice] Drive re-upload for group ${key} failed (non-fatal):`, err instanceof Error ? err.message : err);
-          }
+      // generated previously OR repairs their Drive files). Keyed by
+      // invoice_id because a group can carry several once it's billed in
+      // more than one batch.
+      if (invoicedRows.length > 0) {
+        const byInvoiceId = new Map<string, any[]>();
+        for (const r of invoicedRows) {
+          const id = String(r.invoice_id).trim();
+          if (!byInvoiceId.has(id)) byInvoiceId.set(id, []);
+          byInvoiceId.get(id)!.push(r);
         }
-        await processGrantInvoicesForGroup(rows, existingDocNumber || existingInvoiceId);
+        for (const [existingInvoiceId, invoiceRows] of byInvoiceId) {
+          const head = invoiceRows[0];
+          const existingDriveFileId = String(head.invoice_drive_file_id || '').trim();
+          const existingDocNumber = String(head.invoice_doc_number || '').trim();
+          const driveOk = existingDriveFileId
+            ? await driveFileExists(existingDriveFileId)
+            : false;
+          if (!driveOk) {
+            try {
+              const driveUpload = await uploadInvoicePdfForRowGroup({
+                invoiceId: existingInvoiceId,
+                docNumber: existingDocNumber,
+              });
+              await pool.query(
+                `UPDATE public.company_application
+                    SET invoice_drive_file_id         = $1,
+                        invoice_drive_web_view_link   = $2,
+                        updated_at                    = now()
+                  WHERE id = ANY($3::uuid[])`,
+                [driveUpload.fileId, driveUpload.webViewLink, invoiceRows.map(r => r.id)]
+              );
+            } catch (err) {
+              console.warn(`[ca-invoice] Drive re-upload for group ${key} failed (non-fatal):`, err instanceof Error ? err.message : err);
+            }
+          }
+          await processGrantInvoicesForGroup(invoiceRows, existingDocNumber || existingInvoiceId);
+        }
         result.skipped++;
         result.skippedAlreadyInvoiced++;
-        continue;
       }
 
-      const missing = rows.filter(r => !/^ENR-/i.test(String(r.enrolment_id || '')));
+      // Every selected learner in this group is already billed.
+      if (pendingRows.length === 0) continue;
+
+      const rowIds = pendingRows.map(r => r.id);
+      const first = pendingRows[0];
+
+      const missing = pendingRows.filter(r => !/^ENR-/i.test(String(r.enrolment_id || '')));
       if (missing.length > 0) {
         result.skipped++;
         result.skippedNotEnrolled++;
@@ -1186,7 +1236,7 @@ export async function generateInvoicesForApplications(
       // authoritative — we don't trust ca.grant_id alone because Sync
       // Grants populates ssg_grants without necessarily refreshing the
       // company_application row.
-      const enrolmentIdsLower = rows.map(r => String(r.enrolment_id || '').toLowerCase().trim());
+      const enrolmentIdsLower = pendingRows.map(r => String(r.enrolment_id || '').toLowerCase().trim());
       // Accept either a positive approved amount OR a positive estimated
       // amount. SSG often returns approved=0 + estimated=N while a grant is
       // in "Grant Processing" status — COALESCE(approved, estimated, 0)
@@ -1206,7 +1256,7 @@ export async function generateInvoicesForApplications(
         [enrolmentIdsLower]
       );
       const grantedSet = new Set<string>(grantedRes.rows.map((r: any) => String(r.enrolment_key)));
-      const learnersAwaitingGrants = rows.filter(r => {
+      const learnersAwaitingGrants = pendingRows.filter(r => {
         if (r.grant_ineligible === true) return false; // admin override: bill at full fee
         const key = String(r.enrolment_id || '').toLowerCase().trim();
         return !grantedSet.has(key);
@@ -1260,7 +1310,7 @@ export async function generateInvoicesForApplications(
         courseStartDate: first.run_start_date || first.course_start_date || null,
         courseEndDate: first.run_end_date || null,
         courseFee,
-        learners: rows.map(r => ({
+        learners: pendingRows.map(r => ({
           applicationId: String(r.id),
           fullName: String(r.trainee_full_name || '').trim(),
           nric: String(r.trainee_nric || '').trim(),
@@ -1302,7 +1352,7 @@ export async function generateInvoicesForApplications(
       // Per-learner grant invoices, each cross-referenced via PO# to the
       // group's main DocNumber. Non-fatal — failures here don't roll back
       // the successful main invoice.
-      await processGrantInvoicesForGroup(rows, inv.docNumber);
+      await processGrantInvoicesForGroup(pendingRows, inv.docNumber);
 
       result.generated++;
     } catch (err) {

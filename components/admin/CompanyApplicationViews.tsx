@@ -2084,6 +2084,10 @@ export const ViewCompanyApplicationView: React.FC = () => {
   // Confirm popup for the "generate invoice" action — same custom-modal
   // treatment so all three header buttons share the same UX shape.
   const [confirmGenerateInvoiceOpen, setConfirmGenerateInvoiceOpen] = useState(false);
+  // Billing granularity chosen in the Generate Invoice popup. Consolidated is
+  // the default (one invoice per employer x course-run); per-learner exists
+  // because admin sometimes has to bill a single person on their own.
+  const [invoiceMode, setInvoiceMode] = useState<'consolidated' | 'per-learner'>('consolidated');
   // List of pre-check problems blocking a Send Invoice Email attempt. Surfaced
   // as a popup instead of a cramped inline message so admins can read each
   // reason on its own line.
@@ -2293,6 +2297,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
       return;
     }
     setInvoiceMessage(null);
+    // Always reopen on the safe default rather than inheriting the last run's
+    // choice — a sticky "per-learner" would silently split a later batch.
+    setInvoiceMode('consolidated');
     setConfirmGenerateInvoiceOpen(true);
   };
 
@@ -2305,7 +2312,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const res = await fetch('/api/admin/ca-generate-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationIds: Array.from(selectedIds) }),
+        body: JSON.stringify({ applicationIds: Array.from(selectedIds), mode: invoiceMode }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -2316,18 +2323,21 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const notEnrolled = Number(data.skippedNotEnrolled) || 0;
       const awaitingGrants = Number(data.skippedAwaitingGrants) || 0;
       const failed = Number(data.failed) || 0;
+      // The backend counts per group, and in per-learner mode a group IS one
+      // learner — so name the unit after the mode the user actually picked.
+      const unit = invoiceMode === 'per-learner' ? 'learner' : 'group';
       const parts: string[] = [];
       if (generated) parts.push(`${generated} invoice${generated === 1 ? '' : 's'} generated`);
-      if (alreadyInvoiced) parts.push(`${alreadyInvoiced} group${alreadyInvoiced === 1 ? '' : 's'} already invoiced — cannot regenerate`);
-      if (notEnrolled) parts.push(`${notEnrolled} group${notEnrolled === 1 ? '' : 's'} skipped (not yet enrolled with SSG)`);
-      if (awaitingGrants) parts.push(`${awaitingGrants} group${awaitingGrants === 1 ? '' : 's'} awaiting grants — click "Sync Grants" after stakeholders apply in the SSG portal`);
+      if (alreadyInvoiced) parts.push(`${alreadyInvoiced} ${unit}${alreadyInvoiced === 1 ? '' : 's'} already invoiced — left alone`);
+      if (notEnrolled) parts.push(`${notEnrolled} ${unit}${notEnrolled === 1 ? '' : 's'} skipped (not yet enrolled with SSG)`);
+      if (awaitingGrants) parts.push(`${awaitingGrants} ${unit}${awaitingGrants === 1 ? '' : 's'} awaiting grants — click "Sync Grants" after stakeholders apply in the SSG portal`);
       if (failed) parts.push(`${failed} failed`);
 
       // Treat the all-already-invoiced case as an explicit block: nothing
       // happened because every selected group already has an invoice.
       if (generated === 0 && failed === 0 && alreadyInvoiced > 0 && notEnrolled === 0 && awaitingGrants === 0) {
         setInvoiceMessage(
-          `⚠ ${alreadyInvoiced} invoice${alreadyInvoiced === 1 ? '' : 's'} already generated — cannot regenerate. Open the existing invoice via the Tax Invoice column, or delete it in QBO first if you need to regenerate.`
+          `⚠ ${alreadyInvoiced} ${unit}${alreadyInvoiced === 1 ? '' : 's'} already invoiced — cannot regenerate. Open the existing invoice via the Tax Invoice column, or delete it in QBO first if you need to regenerate.`
         );
       } else {
         setInvoiceMessage(
@@ -3151,12 +3161,21 @@ export const ViewCompanyApplicationView: React.FC = () => {
               return `${uen}::${runId}`;
             })
           ).size;
+          // Rows that will actually be billed — already-invoiced ones are left
+          // alone, so they don't count toward the invoice tally either way.
+          const toBill = totalSelected - withInvoice;
+          const perLearner = invoiceMode === 'per-learner';
+          const newInvoiceCount = perLearner ? toBill : groupCount;
           return (
             <ConfirmPopup
               tone="warning"
               icon={IconName.FileText}
               title="Generate QuickBooks invoice?"
-              subtitle={`${totalSelected} selected row${totalSelected === 1 ? '' : 's'} · ${groupCount} (employer × course-run) group${groupCount === 1 ? '' : 's'}`}
+              subtitle={
+                perLearner
+                  ? `${totalSelected} selected row${totalSelected === 1 ? '' : 's'} · one invoice per learner`
+                  : `${totalSelected} selected row${totalSelected === 1 ? '' : 's'} · ${groupCount} (employer × course-run) group${groupCount === 1 ? '' : 's'}`
+              }
               confirmLabel="Generate invoice"
               busyLabel="Generating…"
               busy={isGeneratingInvoice}
@@ -3165,6 +3184,50 @@ export const ViewCompanyApplicationView: React.FC = () => {
               onConfirm={() => void executeGenerateInvoice()}
               onCancel={() => setConfirmGenerateInvoiceOpen(false)}
             >
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">How should this be billed?</p>
+                {([
+                  {
+                    value: 'consolidated' as const,
+                    label: 'One consolidated invoice per group',
+                    hint: `Learners from the same employer on the same course run share a single tax invoice. ${groupCount} invoice${groupCount === 1 ? '' : 's'} for this selection.`,
+                  },
+                  {
+                    value: 'per-learner' as const,
+                    label: 'One invoice per learner',
+                    hint: 'Each selected learner is billed separately — use this when only one person should be on the invoice.',
+                  },
+                ]).map(opt => {
+                  const active = invoiceMode === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setInvoiceMode(opt.value)}
+                      disabled={isGeneratingInvoice}
+                      className={`w-full text-left flex items-start gap-2.5 rounded-lg border p-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+                        active
+                          ? 'border-orange-400 dark:border-orange-500/70 bg-orange-50 dark:bg-orange-900/20'
+                          : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 hover:border-gray-300 dark:hover:border-gray-600'
+                      }`}
+                    >
+                      <span
+                        className={`mt-0.5 w-3.5 h-3.5 rounded-full border-[3px] flex-shrink-0 ${
+                          active
+                            ? 'border-orange-500 dark:border-orange-400'
+                            : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                      />
+                      <span className="min-w-0">
+                        <span className={`block text-xs font-semibold ${active ? 'text-orange-800 dark:text-orange-200' : 'text-gray-700 dark:text-gray-200'}`}>
+                          {opt.label}
+                        </span>
+                        <span className="block text-[11px] text-gray-500 dark:text-gray-400">{opt.hint}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
               <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-1.5">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Pre-check on selected rows</p>
                 <div className="flex items-center justify-between text-xs">
@@ -3188,15 +3251,20 @@ export const ViewCompanyApplicationView: React.FC = () => {
               ) : withInvoice > 0 ? (
                 <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200 dark:ring-amber-800/60 p-2.5 text-xs text-amber-700 dark:text-amber-300 inline-flex items-start gap-1.5">
                   <Icon name={IconName.Warning} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                  <span>{withInvoice} of {totalSelected} selected row{withInvoice === 1 ? '' : 's'} already invoiced — those groups will be skipped (no duplicates).</span>
+                  <span>
+                    {withInvoice} of {totalSelected} selected row{totalSelected === 1 ? '' : 's'} already invoiced — those learners are left alone (no duplicates).
+                    {' '}The remaining {toBill} will be billed{perLearner ? ` on ${toBill} separate invoice${toBill === 1 ? '' : 's'}` : ''}.
+                  </span>
                 </div>
               ) : (
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  A consolidated tax invoice will be created in QuickBooks for each (employer × course-run) group in your selection.
+                  {perLearner
+                    ? `${newInvoiceCount} separate tax invoice${newInvoiceCount === 1 ? '' : 's'} will be created in QuickBooks — one per selected learner.`
+                    : 'A consolidated tax invoice will be created in QuickBooks for each (employer × course-run) group in your selection.'}
                 </p>
               )}
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Tip: groups whose grants are still awaiting application get flagged and skipped — sync grants first if so.
+                Tip: {perLearner ? 'learners' : 'groups'} whose grants are still awaiting application get flagged and skipped — sync grants first if so.
               </p>
             </ConfirmPopup>
           );
