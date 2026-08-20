@@ -298,7 +298,25 @@ export async function createDirectApplicationInvoice(
     );
   }
 
-  const netAmount = Number((fullFee - subsidy - credit + gst).toFixed(2));
+  // SkillsFuture Credit offsets what the learner owes and stops there — it is a
+  // drawdown against a balance, not a refund, so it can never exceed the amount
+  // payable after the grant. The uploaded figure is what the learner HAS, which
+  // for a cheap course is often more than the fee; deducting it whole produced a
+  // negative invoice and the row failed instead of billing zero.
+  //
+  // Capping matches every invoice already raised: across the existing records,
+  // credit is applied up to the payable amount (GST included) and no further,
+  // with several landing exactly on zero.
+  const payableBeforeCredit = Number((fullFee - subsidy + gst).toFixed(2));
+  const creditApplied = Math.min(credit, Math.max(0, payableBeforeCredit));
+  if (creditApplied < credit) {
+    console.log(
+      `[DA invoice] ${enrolmentId}: SkillsFuture Credit capped at the amount payable — ` +
+        `declared ${credit}, applied ${creditApplied} (fee=${fullFee}, gst=${gst}, subsidy=${subsidy})`
+    );
+  }
+
+  const netAmount = Number((fullFee - subsidy - creditApplied + gst).toFixed(2));
 
   if (!fullFee || fullFee <= 0) {
     throw new Error(
@@ -308,7 +326,7 @@ export async function createDirectApplicationInvoice(
 
   if (!Number.isFinite(netAmount) || netAmount < 0) {
     throw new Error(
-      `computed net amount ${netAmount} is not payable (fee=${fullFee}, gst=${gst}, subsidy=${subsidy}, credit=${credit})`
+      `computed net amount ${netAmount} is not payable (fee=${fullFee}, gst=${gst}, subsidy=${subsidy}, credit=${creditApplied})`
     );
   }
 
@@ -443,7 +461,7 @@ export async function createDirectApplicationInvoice(
 
   lines.push({
     DetailType: 'SalesItemLineDetail',
-    Amount: -credit,
+    Amount: -creditApplied,
     Description: buildSfcCreditLineDescription(app.application_id, enrolmentId),
     SalesItemLineDetail: {
       ItemRef: await resolveLineItemRef({
@@ -451,7 +469,7 @@ export async function createDirectApplicationInvoice(
         itemName: resolveSkillsFutureCreditItemName(),
       }),
       Qty: 1,
-      UnitPrice: -credit,
+      UnitPrice: -creditApplied,
       TaxCodeRef: { value: taxOos },
     },
   });
