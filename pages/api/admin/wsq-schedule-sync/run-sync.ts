@@ -4,6 +4,7 @@ import pool from '../../../../lib/db';
 import { getSSGCredentialsService, SSGCredentials } from '../../../../lib/ssg/services/credentials-service';
 import { HTTPRequestBuilder, HttpMethod, handleRequest, HttpClient } from '../../../../lib/ssg/utils/http-utils';
 import { Cryptography } from '../../../../lib/ssg/utils/cryptography';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../../lib/courseCode';
 
 /**
  * POST /api/admin/wsq-schedule-sync/run-sync
@@ -88,7 +89,7 @@ async function processItem(
   const course_code = (item.course_code ?? '').trim();
 
   const courseRow = await pool.query<{ id: string }>(
-    `SELECT id FROM course WHERE course_code = $1 LIMIT 1`, [course_code],
+    COURSE_ID_BY_ANY_CODE_SQL, [course_code],
   ).catch(() => ({ rows: [] as { id: string }[] }));
   if (!courseRow.rows[0]) {
     return { course_code, start_date, end_date, status: 'no_course', message: 'Course not found in LMS' };

@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { inferIdType } from '../../utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../trainingPartnerIdentifiers';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../courseCode';
 
 function mapSponsorship(type: string | undefined): 'Individual' | 'Employer' {
   if (!type) return 'Individual';
@@ -126,7 +127,7 @@ export async function syncEnrolmentToDB(
 
   // ── 2. Upsert course ─────────────────────────────────────────────────────
   let courseRow = await client.query(
-    `SELECT id FROM course WHERE course_code = $1 LIMIT 1`,
+    COURSE_ID_BY_ANY_CODE_SQL,
     [courseCode]
   );
 
@@ -144,7 +145,7 @@ export async function syncEnrolmentToDB(
       courseId = ins.rows[0].id;
     } else {
       const race = await client.query(
-        `SELECT id FROM course WHERE course_code = $1 LIMIT 1`,
+        COURSE_ID_BY_ANY_CODE_SQL,
         [courseCode]
       );
       courseId = race.rows[0]?.id;

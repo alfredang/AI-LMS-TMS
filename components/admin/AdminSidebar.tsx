@@ -231,6 +231,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         <nav className="space-y-6 p-4 bg-white dark:bg-slate-800 text-gray-900 dark:text-white h-full">
             <NavItem page={AdminPage.Dashboard} label="Admin Dashboard" icon={IconName.Dashboard} />
 
+            <NavItem page={AdminPage.Calendar} label="View Calendar" icon={IconName.Calendar} />
+
             <NavItem page={AdminPage.RescheduleCancel} label="Reschedule & Cancel" icon={IconName.Calendar} />
 
             <NavSection title="Class Management" icon={IconName.Briefcase} collapsed={collapsed} isOpen={openSections.classManagement} onToggle={() => toggleSection('classManagement')}>
@@ -334,7 +336,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
             </NavSection>
 
             <NavSection title="Calendar & Crons" icon={IconName.Calendar} collapsed={collapsed} isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
-                <NavItem page={AdminPage.Calendar} label="View Calendar" isSubItem />
                 <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
                 <NavItem page={AdminPage.SchedulerSummary} label="Schedule Summary" isSubItem />
             </NavSection>

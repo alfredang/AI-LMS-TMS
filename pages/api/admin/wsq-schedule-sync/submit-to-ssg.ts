@@ -4,6 +4,7 @@ import pool from '../../../../lib/db';
 import { getSSGCredentialsService, SSGCredentials } from '../../../../lib/ssg/services/credentials-service';
 import { HTTPRequestBuilder, HttpMethod, handleRequest, HttpClient } from '../../../../lib/ssg/utils/http-utils';
 import { Cryptography } from '../../../../lib/ssg/utils/cryptography';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../../lib/courseCode';
 
 type SubmitItem = {
   course_code: string;
@@ -155,7 +156,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // 1. Look up course
     const courseRow = await pool.query<{ id: string }>(
-      `SELECT id FROM course WHERE course_code = $1 LIMIT 1`,
+      COURSE_ID_BY_ANY_CODE_SQL,
       [course_code],
     ).catch(() => ({ rows: [] as { id: string }[] }));
 

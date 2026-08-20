@@ -53,7 +53,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let where: string;
     if (courseCode) {
       params.push(courseCode);
-      where = `WHERE c.course_code = $1`;
+      // Match any code the course has carried; SSG renewals issue a new reference
+      // number and callers paste whichever one they are holding.
+      where = `WHERE c.id = (SELECT h.course_id FROM course_code_history h WHERE h.code = $1)
+                  OR c.course_code = $1
+                  OR NULLIF(c.new_course_code, '') = $1`;
     } else {
       params.push(`%${search}%`);
       where = `WHERE (c.title ILIKE $1 OR c.course_code ILIKE $1)`;

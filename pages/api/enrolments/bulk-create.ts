@@ -7,6 +7,7 @@ import { inferIdType } from '../../../lib/utils/id-type';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { isEnrolmentEligibleForAutoInvoice } from '../../../lib/services/invoiceEligibility';
 import { enqueueInvoiceJob } from '../../../lib/services/invoiceJobs';
+import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -56,7 +57,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // 1. Check if course exists by course_code
     let courseResult = await client.query(
-      'SELECT id FROM course WHERE course_code = $1',
+      COURSE_ID_BY_ANY_CODE_SQL,
       [courseCode]
     );
 

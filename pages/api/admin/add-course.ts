@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { resolveCourseIdByCode } from '../../../lib/courseCode';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -14,6 +15,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
+    // A renewed course keeps its original course_code, so a code already in use as
+    // another course's current or historic code slips past the course_code unique
+    // constraint and would create a duplicate course record.
+    const existingId = await resolveCourseIdByCode(courseCode.trim());
+    if (existingId) {
+      return res.status(409).json({
+        success: false,
+        error: `Course code ${courseCode.trim()} already belongs to an existing course.`,
+      });
+    }
+
     const result = await pool.query(
       `INSERT INTO course (title, course_code, course_type, tsc_title, tsc_code, training_hours, assessment_hours, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())

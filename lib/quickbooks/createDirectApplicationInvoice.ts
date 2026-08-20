@@ -9,6 +9,7 @@ import { getLocalYMD } from '../dateHelpers';
 import { refreshGrantsForEnrolments } from '../services/billingSync';
 import { resolveGrantDeductionLinesForInvoice } from '../services/daInvoiceGrantLines';
 import { formatDateOnlyEnSg } from '../utils/dateOnly';
+import { assessGrantEligibility } from '../grantEligibility';
 import {
   qboFindCustomerByName,
   qboFindInvoiceByDocNumber,
@@ -53,6 +54,8 @@ export interface DaApplicationForInvoice {
   trainee_name: string | null;
   trainee_email: string | null;
   trainee_id: string | null;
+  /** NRIC / FIN / Foreigner / … — decides whether SSG funding applies at all. */
+  trainee_id_type?: string | null;
   course_title: string | null;
   course_reference_number: string | null;
   course_start_date: string | null;
@@ -273,14 +276,47 @@ export async function createDirectApplicationInvoice(
   // the exact overcharge this guard exists to prevent, silently, on any row in
   // the selection still waiting for its grant. A row that stays amber until
   // the grant lands is the honest signal.
+  // Foreigners are the exception the guard must not catch: SSG funds only
+  // Citizens and PRs, so for them the full fee IS the correct amount and there
+  // is no grant coming to wait for. Only a CONFIDENT 'ineligible' waives the
+  // check — an ID we cannot classify stays protected, because guessing wrong
+  // here overcharges the learner on an invoice that gets emailed to them.
+  const eligibility = assessGrantEligibility({
+    nric: app.trainee_id,
+    idType: app.trainee_id_type,
+  });
+
   if (grantDeductionLines.length === 0 && subsidy <= 0) {
-    throw new Error(
-      `No SSG grant found for ${enrolmentId} — refusing to invoice the full course fee. ` +
-        `SSG may not have issued the grant yet; this row retries automatically once it does.`
+    if (eligibility.status !== 'ineligible') {
+      throw new Error(
+        `No SSG grant found for ${enrolmentId} — refusing to invoice the full course fee. ` +
+          `SSG may not have issued the grant yet; this row retries automatically once it does.`
+      );
+    }
+    console.log(
+      `[DA invoice] ${enrolmentId}: billing the full course fee — ${eligibility.reason}`
     );
   }
 
-  const netAmount = Number((fullFee - subsidy - credit + gst).toFixed(2));
+  // SkillsFuture Credit offsets what the learner owes and stops there — it is a
+  // drawdown against a balance, not a refund, so it can never exceed the amount
+  // payable after the grant. The uploaded figure is what the learner HAS, which
+  // for a cheap course is often more than the fee; deducting it whole produced a
+  // negative invoice and the row failed instead of billing zero.
+  //
+  // Capping matches every invoice already raised: across the existing records,
+  // credit is applied up to the payable amount (GST included) and no further,
+  // with several landing exactly on zero.
+  const payableBeforeCredit = Number((fullFee - subsidy + gst).toFixed(2));
+  const creditApplied = Math.min(credit, Math.max(0, payableBeforeCredit));
+  if (creditApplied < credit) {
+    console.log(
+      `[DA invoice] ${enrolmentId}: SkillsFuture Credit capped at the amount payable — ` +
+        `declared ${credit}, applied ${creditApplied} (fee=${fullFee}, gst=${gst}, subsidy=${subsidy})`
+    );
+  }
+
+  const netAmount = Number((fullFee - subsidy - creditApplied + gst).toFixed(2));
 
   if (!fullFee || fullFee <= 0) {
     throw new Error(
@@ -290,7 +326,7 @@ export async function createDirectApplicationInvoice(
 
   if (!Number.isFinite(netAmount) || netAmount < 0) {
     throw new Error(
-      `computed net amount ${netAmount} is not payable (fee=${fullFee}, gst=${gst}, subsidy=${subsidy}, credit=${credit})`
+      `computed net amount ${netAmount} is not payable (fee=${fullFee}, gst=${gst}, subsidy=${subsidy}, credit=${creditApplied})`
     );
   }
 
@@ -425,7 +461,7 @@ export async function createDirectApplicationInvoice(
 
   lines.push({
     DetailType: 'SalesItemLineDetail',
-    Amount: -credit,
+    Amount: -creditApplied,
     Description: buildSfcCreditLineDescription(app.application_id, enrolmentId),
     SalesItemLineDetail: {
       ItemRef: await resolveLineItemRef({
@@ -433,7 +469,7 @@ export async function createDirectApplicationInvoice(
         itemName: resolveSkillsFutureCreditItemName(),
       }),
       Qty: 1,
-      UnitPrice: -credit,
+      UnitPrice: -creditApplied,
       TaxCodeRef: { value: taxOos },
     },
   });

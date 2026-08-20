@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
+import { resolveCourseIdByCode } from '../../../lib/courseCode';
 
 // Extract the RA###### code from a qrCodeLink URL
 // e.g. "https://www.myskillsfuture.gov.sg/api/take-attendance/RA740761" → "RA740761"
@@ -132,14 +133,20 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             await client.query('BEGIN');
 
             // Upsert course
-            const courseUpsert = await client.query(
-              `INSERT INTO course (course_code, title, course_type, training_hours, assessment_hours)
-               VALUES ($1, $2, $3, 0, 0)
-               ON CONFLICT (course_code) DO UPDATE SET title = EXCLUDED.title
-               RETURNING id`,
-              [courseData.referenceNumber, courseData.title, 'Non-WSQ']
-            );
-            const courseId = courseUpsert.rows[0].id;
+            // Resolve through every code this course has carried before falling back to
+            // an insert. A renewed reference code does not conflict on course_code, so
+            // the upsert on its own would quietly create a duplicate course.
+            let courseId = await resolveCourseIdByCode(courseData.referenceNumber, client);
+            if (!courseId) {
+              const courseUpsert = await client.query(
+                `INSERT INTO course (course_code, title, course_type, training_hours, assessment_hours)
+                 VALUES ($1, $2, $3, 0, 0)
+                 ON CONFLICT (course_code) DO UPDATE SET title = EXCLUDED.title
+                 RETURNING id`,
+                [courseData.referenceNumber, courseData.title, 'Non-WSQ']
+              );
+              courseId = courseUpsert.rows[0].id;
+            }
 
             // Insert course_run
             await client.query(
