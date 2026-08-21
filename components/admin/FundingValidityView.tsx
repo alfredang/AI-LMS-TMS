@@ -43,10 +43,10 @@ const toDateInputValue = (value?: string | null) => {
 
 const isRenewed = (value?: string | null) => !!value && value.trim().length > 0;
 
-const displayCourseType = (value?: string | null) => {
-  if (value === 'Non-WSQ') return 'CASL';
-  return value || 'CASL';
-};
+// Course types are stored literally since the CASL conversion (Aug 2026):
+// funded courses are typed WSQ / CASL / IBF (TGS- codes); Non-WSQ (C- codes)
+// is unfunded and shows as itself — it is no longer folded into CASL.
+const displayCourseType = (value?: string | null) => value || 'Non-WSQ';
 
 // Collapse the stored course_type into the editable buckets. Anything that isn't
 // exactly 'WSQ' or 'CASL' (incl. IBF / non-WSQ) is treated as Non-WSQ here.
@@ -81,7 +81,7 @@ const FundingValidityView: React.FC = () => {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'All' | 'WSQ' | 'CASL' | 'IBF'>('All');
+  const [typeFilter, setTypeFilter] = useState<'All' | 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ'>('All');
   const [endDateFrom, setEndDateFrom] = useState('');
   const [endDateTo, setEndDateTo] = useState('');
 
@@ -136,14 +136,15 @@ const FundingValidityView: React.FC = () => {
   const isCourseRenewed = (course: any) =>
     renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
 
-  // Row 1 — totals by funding type: WSQ, CASL and IBF each get their own tile,
-  // and everything else on this page rolls into WSQ.
+  // Row 1 — totals by funding type: WSQ, CASL and IBF each get their own tile.
+  // Non-WSQ (unfunded) courses stay out of every tile so these totals match the
+  // Course Management KPI cards.
   const typeTotals = { WSQ: 0, CASL: 0, IBF: 0 };
   for (const course of wsqCourses) {
     const t = displayCourseType(course.courseType);
     if (t === 'IBF') typeTotals.IBF += 1;
     else if (t === 'CASL') typeTotals.CASL += 1;
-    else typeTotals.WSQ += 1;
+    else if (t === 'WSQ') typeTotals.WSQ += 1;
   }
   const totalFunded = typeTotals.WSQ + typeTotals.CASL + typeTotals.IBF;
 
@@ -648,13 +649,14 @@ const FundingValidityView: React.FC = () => {
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Type</label>
             <select
               value={typeFilter}
-              onChange={e => setTypeFilter(e.target.value as 'All' | 'WSQ' | 'CASL' | 'IBF')}
+              onChange={e => setTypeFilter(e.target.value as 'All' | 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ')}
               className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             >
               <option value="All">All Types</option>
               <option value="WSQ">WSQ</option>
               <option value="CASL">CASL</option>
               <option value="IBF">IBF</option>
+              <option value="Non-WSQ">Non-WSQ</option>
             </select>
           </div>
           <div>
