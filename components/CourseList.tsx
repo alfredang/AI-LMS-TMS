@@ -502,15 +502,26 @@ const ManagementCourseList: React.FC = () => {
                                 } />
                                 <DetailRow label="Mode of Training" value={course.modeOfLearning.join(', ')} />
                                 {(() => {
-                                    if (!course.fundingValidity) return <DetailRow label="Funding Validity" value="N/A" />;
+                                    const start = (course as any).fundingValidityStart ? new Date((course as any).fundingValidityStart) : null;
+                                    const startRow = (
+                                        <DetailRow label="Funding Validity Start" value={
+                                            start && !isNaN(start.getTime())
+                                                ? start.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })
+                                                : 'N/A'
+                                        } />
+                                    );
+                                    if (!course.fundingValidity) return <>{startRow}<DetailRow label="Funding Validity End" value="N/A" /></>;
                                     const expiry = new Date(course.fundingValidity);
                                     const isExpired = expiry < new Date();
                                     return (
-                                        <DetailRow label="Funding Validity" value={
-                                            <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${isExpired ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'}`}>
-                                                {expiry.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} {isExpired ? '· Expired' : '· Valid'}
-                                            </span>
-                                        } />
+                                        <>
+                                            {startRow}
+                                            <DetailRow label="Funding Validity End" value={
+                                                <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${isExpired ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'}`}>
+                                                    {expiry.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} {isExpired ? '· Expired' : '· Valid'}
+                                                </span>
+                                            } />
+                                        </>
                                     );
                                 })()}
                                 <DetailRow label="Course Duration" value={
