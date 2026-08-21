@@ -12,6 +12,7 @@
  */
 
 import pool from '../db';
+import { RUN_COURSE_CODE_SQL } from '../courseCode';
 import { getSSGCredentialsService } from '../ssg/services/credentials-service';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../ssg/utils/http-utils';
@@ -299,7 +300,12 @@ export async function upsertSsgEnrolmentFromLocalEnrollment(enrolmentId: string)
             e.enrolment_date::text AS enrolment_date_text,
             u.full_name, u.email AS user_email,
             lp.nric AS trainee_nric,
-            c.title AS course_title, c.course_code AS course_reference,
+            c.title AS course_title,
+            -- The RUN's own reference code. This row is written INTO ssg_enrolments,
+            -- which RUN_COURSE_CODE_SQL treats as SSG's authoritative answer, so a
+            -- renewed course's retired c.course_code written here would be fed back
+            -- out to SSG as a TGS-406.
+            ${RUN_COURSE_CODE_SQL} AS course_reference,
             cr.course_run_id::text AS ssg_run_id,
             cr.start_date AS run_start,
             cr.end_date AS run_end
@@ -382,7 +388,8 @@ export async function upsertSsgEnrolmentFromLocalEnrollment(enrolmentId: string)
        trainee_name = EXCLUDED.trainee_name,
        trainee_nric = EXCLUDED.trainee_nric,
        course_title = EXCLUDED.course_title,
-       course_reference = EXCLUDED.course_reference,
+       -- Locally derived: never downgrade a course_reference that came FROM SSG.
+       course_reference = COALESCE(NULLIF(public.ssg_enrolments.course_reference, ''), EXCLUDED.course_reference),
        course_run_id = EXCLUDED.course_run_id,
        enrolment_status = EXCLUDED.enrolment_status,
        sponsorship_type = EXCLUDED.sponsorship_type,
