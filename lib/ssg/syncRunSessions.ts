@@ -97,7 +97,13 @@ async function fetchSsgSessions(ssgRunId: string, courseCode: string): Promise<{
 export async function fetchAndSyncRunSessions(courseRunUuid: string): Promise<{ ok: boolean; upserted: number; error?: string }> {
   try {
     const run = (await pool.query<{ course_run_id: string; course_code: string }>(
-      `SELECT cr.course_run_id, c.course_code FROM course_run cr JOIN course c ON c.id = cr.course_id WHERE cr.id = $1`, [courseRunUuid]
+      `SELECT cr.course_run_id,
+              COALESCE(
+                (SELECT h.code FROM public.course_code_history h WHERE h.course_id = c.id AND h.is_current LIMIT 1),
+                NULLIF(c.new_course_code, ''),
+                c.course_code
+              ) AS course_code
+         FROM course_run cr JOIN course c ON c.id = cr.course_id WHERE cr.id = $1`, [courseRunUuid]
     )).rows[0];
     if (!run?.course_run_id || !run.course_code) return { ok: false, upserted: 0, error: 'run/course not found' };
     const f = await fetchSsgSessions(run.course_run_id, run.course_code);

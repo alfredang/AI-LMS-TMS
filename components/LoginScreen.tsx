@@ -873,6 +873,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 </a>
               </p>
             )}
+            <p className="powered-by mt-3">
+              Powered by{' '}
+              <a href="https://www.tertiaryinfotech.com/" target="_blank" rel="noopener noreferrer" className="hover:underline">
+                Tertiary Infotech Academy Pte Ltd
+              </a>
+            </p>
           </div>
         </Card>
       </div>

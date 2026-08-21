@@ -121,14 +121,16 @@ const FundingValidityView: React.FC = () => {
   const isCourseRenewed = (course: any) =>
     renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
 
-  // Row 1 — totals by funding type. CASL courses are counted as WSQ (per
-  // ops direction, Aug 2026): everything that isn't IBF rolls into WSQ.
-  const typeTotals = { WSQ: 0, IBF: 0 };
+  // Row 1 — totals by funding type: WSQ, CASL and IBF each get their own tile,
+  // and everything else on this page rolls into WSQ.
+  const typeTotals = { WSQ: 0, CASL: 0, IBF: 0 };
   for (const course of wsqCourses) {
-    if (displayCourseType(course.courseType) === 'IBF') typeTotals.IBF += 1;
+    const t = displayCourseType(course.courseType);
+    if (t === 'IBF') typeTotals.IBF += 1;
+    else if (t === 'CASL') typeTotals.CASL += 1;
     else typeTotals.WSQ += 1;
   }
-  const totalFunded = typeTotals.WSQ + typeTotals.IBF;
+  const totalFunded = typeTotals.WSQ + typeTotals.CASL + typeTotals.IBF;
 
   const addMonthsTo = (date: Date, months: number) => {
     const next = new Date(date);
@@ -468,19 +470,23 @@ const FundingValidityView: React.FC = () => {
     <div>
       <h3 className="text-3xl font-bold dark:text-white mb-6">Course Funding Validity</h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-4 gap-6 mb-6">
         <Card className="p-6 text-center">
           <p className="text-4xl font-bold text-blue-600">{totalFunded}</p>
           <p className="text-gray-600 dark:text-gray-300 mt-1">Total Funded Courses</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">WSQ + IBF</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">WSQ + CASL + IBF</p>
         </Card>
         <Card className="p-6 text-center">
           <p className="text-4xl font-bold text-emerald-600">{typeTotals.WSQ}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Total WSQ Courses</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">WSQ Courses</p>
+        </Card>
+        <Card className="p-6 text-center">
+          <p className="text-4xl font-bold text-teal-600">{typeTotals.CASL}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">CASL Courses</p>
         </Card>
         <Card className="p-6 text-center">
           <p className="text-4xl font-bold text-sky-600">{typeTotals.IBF}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Total IBF Courses</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">IBF Courses</p>
         </Card>
       </div>
 
@@ -784,8 +790,8 @@ const FundingValidityView: React.FC = () => {
                       ) : (
                         <>
                           <span>{formatValidityDate(course.fundingValidity)}</span>
-                          {expired && course.courseType === 'WSQ' && <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
-                          {!expired && expiringSoon && course.courseType === 'WSQ' && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
+                          {expired && (course.courseType === 'WSQ' || course.courseType === 'CASL') && <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
+                          {!expired && expiringSoon && (course.courseType === 'WSQ' || course.courseType === 'CASL') && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
                         </>
                       )}
                     </td>

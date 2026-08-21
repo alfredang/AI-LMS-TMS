@@ -37,7 +37,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Multi-Role System**: 7 roles with dedicated dashboards — Learner, Trainer, Admin, Developer, Finance, Payroll, Training Provider
 - **Multi-Tenant**: Same codebase deployed for multiple tenants on Coolify — Tertiary builds via **Dockerfile**, other tenants (Chariot, Intellisoft) build via **Docker Compose**
 - **Financial Operations**: QuickBooks integration, personal/company invoice workflows, grant calculators, claim tracking, billing history
-- **Singapore-Ready**: NRIC/FIN validation, UEN verification, WSQ/IBF course support, funding calculations
+- **Singapore-Ready**: NRIC/FIN validation, UEN verification, WSQ/CASL/IBF course support, funding calculations
 - **Automation**: Task Scheduler, webhooks, n8n workflows for trainer invitations, certificate generation, enrollment sync, and more
 - **Support System**: Built-in ticket system for learner, trainer, and admin support
 - **Workflow Guides**: Interactive documentation for all system workflows (Training, Admin, Finance)
@@ -162,7 +162,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 ### Developer Features
 - Course content creation and editing
 - **Course Image Generator** — AI course banner generation (shared with Admin, backed by Cloudflare R2)
-- **Course Funding Validity** — WSQ/IBF course validity dates with funding-type totals, cumulative expiry-window dashboards (3 months / 2 months / 1 month / 1 week), renewal tracking and whitelist management (shared with Admin). Excel round-trip: full-list export, a pre-filled upload template, and bulk update by uploading the edited file (matched by course ref code; blank cells leave values unchanged)
+- **Course Funding Validity** — WSQ/CASL/IBF course validity dates with funding-type totals (WSQ, CASL and IBF each tiled separately), cumulative expiry-window dashboards (3 months / 2 months / 1 month / 1 week), renewal tracking and whitelist management (shared with Admin). Excel round-trip: full-list export, a pre-filled upload template, and bulk update by uploading the edited file (matched by course ref code; blank cells leave values unchanged)
 - Assessment authoring with multiple assessment methods (Written, Practical, Case Study, Role Play, Oral Questioning, Project, Assignment)
 - Learning unit and subtopic management
 - Course material uploads (lesson plans, slides, guides)
@@ -236,7 +236,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
   - Assessment submission and updates
   - Grant search and status tracking
   - SSG data encryption/decryption
-- **WSQ/IBF Course Support** - Support for WSQ, IBF, and non-WSQ funded courses
+- **WSQ/CASL/IBF Course Support** - Support for WSQ, CASL, IBF, and non-funded courses; CASL courses behave identically to WSQ across enrollment, grants, funding validity and SSG/TPGateway operations
 - **Funding Calculations** - Normal (50%/70%), enhanced (MCES), and GST calculations
 - **Singapore ID Validation** - NRIC/FIN and UEN verification
 
