@@ -31,6 +31,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           c.after_mces_funding,
           c.is_utap_eligible,
           c.funding_validity,
+          (SELECT h.valid_from::text FROM course_code_history h
+            WHERE h.course_id = c.id AND h.is_current LIMIT 1) AS funding_validity_start,
           c.renewed_status,
           c.cas_score,
           c.es_score,
@@ -77,6 +79,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       afterMcesFunding: row.after_mces_funding || null,
       isUtapEligible: !!row.is_utap_eligible,
       fundingValidity: row.funding_validity || null,
+      fundingValidityStart: row.funding_validity_start || null,
       renewedStatus: row.renewed_status || null,
       casScore: row.cas_score != null ? parseFloat(row.cas_score) : null,
       esScore: row.es_score != null ? parseFloat(row.es_score) : null,

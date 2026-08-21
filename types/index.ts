@@ -327,6 +327,8 @@ export interface Course {
   afterMcesFunding?: string | number;
   isUtapEligible?: boolean;
   fundingValidity?: string;
+  /** Start of the current funding validity window (course_code_history.valid_from of the code in force). */
+  fundingValidityStart?: string | null;
   renewedStatus?: string;
   casScore?: number | null;
   esScore?: number | null;

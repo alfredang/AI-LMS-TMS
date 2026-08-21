@@ -68,7 +68,10 @@ async function liveResolveSkillCode(ctx: SsgCtx, courseCode: string, runsPerCour
   const runs = (await pool.query<{ course_run_id: string }>(
     `SELECT cr.course_run_id
        FROM course c JOIN course_run cr ON cr.course_id = c.id
-      WHERE c.course_code = $1 AND NULLIF(btrim(cr.course_run_id), '') IS NOT NULL
+      WHERE (c.id = (SELECT h.course_id FROM public.course_code_history h WHERE h.code = $1)
+             OR c.course_code = $1
+             OR NULLIF(c.new_course_code, '') = $1)
+        AND NULLIF(btrim(cr.course_run_id), '') IS NOT NULL
         AND cr.end_date < CURRENT_DATE
         AND EXISTS (SELECT 1 FROM enrollment e WHERE e.course_run_id = cr.id)
       ORDER BY cr.end_date DESC NULLS LAST
