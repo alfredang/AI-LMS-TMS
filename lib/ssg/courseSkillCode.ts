@@ -148,3 +148,42 @@ export async function resolveAndCacheSkillCodes(courseCodes: string[], opts?: { 
   }
   return map;
 }
+
+/**
+ * Course type per course code, used to decide whether an assessment needs a skill code.
+ *
+ * Funding Validity (course.course_type) is the source of truth. Note that screen DISPLAYS
+ * 'Non-WSQ' as "CASL" — there is no 'CASL' value stored today — so anything that isn't WSQ or
+ * IBF collapses to 'CASL' here, which is the bucket that has no SSG skill code.
+ *
+ * A course code the sheet carries but the LMS doesn't know is simply absent from the result;
+ * callers treat "unknown" as still-required so an unrecognised WSQ course can't slip through.
+ */
+export type AssessmentCourseType = 'WSQ' | 'IBF' | 'CASL';
+
+export async function getCourseTypes(courseCodes: string[]): Promise<Record<string, AssessmentCourseType>> {
+  const out: Record<string, AssessmentCourseType> = {};
+  const codes = Array.from(new Set(courseCodes.map((c) => c.trim()).filter(Boolean)));
+  if (codes.length === 0) return out;
+
+  // Match on either code column: a renewed course keeps records under the original code while
+  // the sheet may carry the new one (same pairing the skill-code cache is keyed on).
+  const r = await pool.query<{ course_code: string; new_course_code: string | null; course_type: string | null }>(
+    `SELECT btrim(course_code) AS course_code,
+            btrim(coalesce(new_course_code, '')) AS new_course_code,
+            course_type::text AS course_type
+       FROM course
+      WHERE btrim(course_code) = ANY($1::text[])
+         OR btrim(coalesce(new_course_code, '')) = ANY($1::text[])`,
+    [codes]
+  );
+
+  const bucket = (t: string | null): AssessmentCourseType =>
+    t === 'WSQ' ? 'WSQ' : t === 'IBF' ? 'IBF' : 'CASL';
+
+  for (const code of codes) {
+    const row = r.rows.find((x) => x.course_code === code || x.new_course_code === code);
+    if (row) out[code] = bucket(row.course_type);
+  }
+  return out;
+}

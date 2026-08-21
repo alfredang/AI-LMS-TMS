@@ -91,10 +91,25 @@ export async function currentCodeForCourse(
  *
  * So: ask SSG. ssg_enrolments is downloaded FROM SSG, and its course_reference
  * is SSG's own answer for that run -- authoritative, and settles both directions.
- * Only a run SSG has no enrolment for yet (a fresh CA upload, the case that
- * exposed all this) falls through to course_code_at(), which infers from the
- * run's date. Checked against all 22k downloaded enrolments: 0 disagreements,
- * versus 17 runs today.
+ * A run SSG has no enrolment for yet (a fresh CA upload, the case that exposed
+ * all this) falls through to course_code_at(), which infers from the run's date.
+ *
+ * Note the fallback is the MAJORITY path, not the exception: on prod today 5,347
+ * runs resolve by date against 2,497 from SSG -- mostly older runs whose
+ * enrolments were never downloaded. Both paths are correct; do not assume a code
+ * here came from SSG. 55 runs currently resolve to something other than bare
+ * c.course_code, and 0 of the 22k downloaded enrolments disagree with SSG.
+ *
+ * The subquery groups rather than taking an arbitrary first row: one run with
+ * two different references would otherwise resolve unpredictably. Majority wins,
+ * ties broken by code, so the result is stable. No run has conflicting
+ * references today -- this keeps it that way if one ever does.
+ *
+ * ssg_enrolments is ALSO written locally (billingSync upserts a shadow row for a
+ * local enrolment), so it is only as authoritative as those writers are careful:
+ * that upsert uses this same expression and will not overwrite a value that came
+ * from SSG. Keep it that way -- writing a bare c.course_code there feeds a
+ * retired code straight back out as a TGS-406.
  *
  * Use for anything travelling OUT to SSG (enrolments, sessions, trainer
  * assignment) and for UI previewing what will be sent -- NOT for display of
@@ -107,6 +122,8 @@ export const RUN_COURSE_CODE_SQL =
         FROM public.ssg_enrolments se
        WHERE se.course_run_id = cr.course_run_id
          AND NULLIF(se.course_reference, '') IS NOT NULL
+       GROUP BY se.course_reference
+       ORDER BY count(*) DESC, se.course_reference
        LIMIT 1),
      public.course_code_at(c.id, COALESCE(cr.start_date::timestamptz, cr.created_at, now()))
    )`;

@@ -65,12 +65,16 @@ async function submitAssessment(item: BulkItem, skillCode: string, ctx: SubmitCt
   if (firstChar === 'S' || firstChar === 'T') traineeIdType = 'NRIC';
   else if (firstChar === 'F' || firstChar === 'G' || firstChar === 'M') traineeIdType = 'FIN';
 
+  // CASL courses have no SSG skill code. Send NO skillCode key at all for them — an empty string
+  // is a value SSG would have to validate, whereas the field is optional when absent.
+  const trimmedSkillCode = (skillCode || '').trim();
+
   const ssgPayload = {
     assessment: {
       course: { run: { id: String(item.courseRunId) }, referenceNumber: String(item.courseReferenceNumber) },
       result: item.result,
       trainee: { id: item.traineeId, idType: traineeIdType, fullName: item.traineeFullName },
-      skillCode,
+      ...(trimmedSkillCode ? { skillCode: trimmedSkillCode } : {}),
       assessmentDate: item.assessmentDate,
       trainingPartner: { uen, code: tpCode },
       enrolment: { referenceNumber: item.enrolmentReferenceNumber },
@@ -199,7 +203,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // ── Silent self-repair: rows that failed on a skill-code error get a fresh live code + retry ──
     const toRepair = items
       .map((it, idx) => ({ it, idx }))
-      .filter(({ idx }) => results[idx]?.status === 'error' && isSkillCodeError(results[idx]?.error));
+      .filter(({ it, idx }) => results[idx]?.status === 'error' && isSkillCodeError(results[idx]?.error)
+        && !!(it.skillCode || '').trim());   // CASL rows have no code to re-resolve — don't burn a lookup
     if (toRepair.length > 0) {
       const courseCodes = Array.from(new Set(toRepair.map(({ it }) => String(it.courseReferenceNumber).trim())));
       const fresh: Record<string, string | null> = {};
