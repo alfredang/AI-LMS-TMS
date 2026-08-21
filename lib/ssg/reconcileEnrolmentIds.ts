@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import pool from '../db';
+import { RUN_COURSE_CODE_SQL } from '../courseCode';
 import { getSSGCredentialsService } from './services/credentials-service';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from './utils/http-utils';
@@ -89,12 +90,7 @@ async function searchRunEnrolments(
 /** Reconcile one run's local enrolment_ids against SSG. enrolment_id ONLY. */
 export async function reconcileEnrolmentIdsForRun(courseRunUuid: string): Promise<ReconcileRunResult> {
   const run = (await pool.query<{ ssg_run_id: string; course_ref: string }>(
-    `SELECT cr.course_run_id AS ssg_run_id,
-            COALESCE(
-              (SELECT h.code FROM public.course_code_history h WHERE h.course_id = c.id AND h.is_current LIMIT 1),
-              NULLIF(c.new_course_code, ''),
-              c.course_code
-            ) AS course_ref
+    `SELECT cr.course_run_id AS ssg_run_id, ${RUN_COURSE_CODE_SQL} AS course_ref
        FROM course_run cr JOIN course c ON c.id = cr.course_id WHERE cr.id = $1`,
     [courseRunUuid]
   )).rows[0];

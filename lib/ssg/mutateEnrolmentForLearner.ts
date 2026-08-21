@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import pool from '../db';
+import { RUN_COURSE_CODE_SQL } from '../courseCode';
 import { getSSGCredentialsService } from './services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from './utils/http-utils';
 import { searchEnrolment } from './services/enrolment-service';
@@ -152,11 +153,7 @@ async function resolveLearnerEnrolmentOnRun(
   return (await pool.query<ResolvedEnrolment>(
     `SELECT e.id AS enrolment_uuid, e.enrolment_id, cr.course_run_id AS ssg_run_id,
             COALESCE(NULLIF(TRIM(e.nric), ''), lp.nric) AS nric,
-            COALESCE(
-              (SELECT h.code FROM public.course_code_history h WHERE h.course_id = c.id AND h.is_current LIMIT 1),
-              NULLIF(c.new_course_code, ''),
-              c.course_code
-            ) AS course_ref, e.course_sponsorship AS sponsorship
+            ${RUN_COURSE_CODE_SQL} AS course_ref, e.course_sponsorship AS sponsorship
        FROM enrollment e
        JOIN course_run cr ON cr.id = e.course_run_id
        JOIN course c ON c.id = cr.course_id

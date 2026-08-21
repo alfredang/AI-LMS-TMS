@@ -78,6 +78,40 @@ export async function currentCodeForCourse(
 }
 
 /**
+ * The reference code a COURSE RUN lives under on SSG, as a SQL expression.
+ *
+ * A run belongs to the course reference that was in force when it was created,
+ * not to whatever code the course carries today. Funding renewal issues a new
+ * code and the LMS keeps the original in course_code, so `c.course_code` alone
+ * is the RETIRED code for any course that has been renewed -- sending it fails
+ * the call with "TGS-406 - Invalid course reference number". Sending the current
+ * code unconditionally is equally wrong in the other direction: a run predating
+ * the renewal really is registered under the old code on SSG, and 12 such runs
+ * (24 learners) would have started failing had this simply read the new code.
+ *
+ * So: ask SSG. ssg_enrolments is downloaded FROM SSG, and its course_reference
+ * is SSG's own answer for that run -- authoritative, and settles both directions.
+ * Only a run SSG has no enrolment for yet (a fresh CA upload, the case that
+ * exposed all this) falls through to course_code_at(), which infers from the
+ * run's date. Checked against all 22k downloaded enrolments: 0 disagreements,
+ * versus 17 runs today.
+ *
+ * Use for anything travelling OUT to SSG (enrolments, sessions, trainer
+ * assignment) and for UI previewing what will be sent -- NOT for display of
+ * historical records, which want course_code_at() on their own date. Expects
+ * `c` (course) and `cr` (course_run) in scope.
+ */
+export const RUN_COURSE_CODE_SQL =
+  `COALESCE(
+     (SELECT se.course_reference
+        FROM public.ssg_enrolments se
+       WHERE se.course_run_id = cr.course_run_id
+         AND NULLIF(se.course_reference, '') IS NOT NULL
+       LIMIT 1),
+     public.course_code_at(c.id, COALESCE(cr.start_date::timestamptz, cr.created_at, now()))
+   )`;
+
+/**
  * Resolve a course by any title it has ever carried, current or former.
  *
  * Unlike codes, titles are not globally unique -- two genuinely different courses

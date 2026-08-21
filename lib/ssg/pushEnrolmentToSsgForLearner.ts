@@ -1,4 +1,5 @@
 import pool from '../db';
+import { RUN_COURSE_CODE_SQL } from '../courseCode';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
 import { buildEnrolmentPayload } from './buildEnrolmentPayload';
 import { createEnrolmentOnSsg } from './mutateEnrolmentForLearner';
@@ -39,12 +40,7 @@ export async function pushEnrolmentToSsgForLearner(
       `SELECT e.id AS enrolment_uuid, e.enrolment_id, e.email AS enrol_email, e.nric AS enrol_nric,
               e.course_sponsorship, au.full_name, au.email AS au_email,
               lp.nric AS lp_nric, lp.dob::text AS dob, lp.tel AS lp_tel,
-              cr.course_run_id AS ssg_run_id,
-              COALESCE(
-                (SELECT h.code FROM public.course_code_history h WHERE h.course_id = c.id AND h.is_current LIMIT 1),
-                NULLIF(c.new_course_code, ''),
-                c.course_code
-              ) AS course_ref
+              cr.course_run_id AS ssg_run_id, ${RUN_COURSE_CODE_SQL} AS course_ref
          FROM enrollment e
          JOIN course_run cr ON cr.id = e.course_run_id
          JOIN course c ON c.id = cr.course_id
