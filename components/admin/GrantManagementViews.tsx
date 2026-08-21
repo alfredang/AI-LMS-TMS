@@ -1272,6 +1272,11 @@ const ALL_COURSE_RUNS_HEADERS = [
 // Columns used by SSG API (highlighted in the table)
 const SSG_USED_COLS = new Set([0, 1, 4, 5, 8, 20, 46, 47, 48]);
 
+// Assessment-relevant course type, from Funding Validity (course.course_type). That screen shows
+// 'Non-WSQ' as "CASL"; CASL courses have no SSG skill code, so the column is optional for them.
+// undefined = the LMS doesn't recognise the pasted course code — treated as still-required.
+type AssessmentCourseType = 'WSQ' | 'IBF' | 'CASL';
+
 interface BulkAssessmentRow {
     rawCols: string[];
     // Editable per-row inputs (primary)
@@ -1279,6 +1284,7 @@ interface BulkAssessmentRow {
     result: string;
     assessmentDate: string;
     skillCode: string;
+    courseType?: AssessmentCourseType;
     // Editable per-row inputs (advanced — auto-filled from paste)
     courseRunId: string;
     courseCode: string;
@@ -1322,20 +1328,43 @@ export const BulkUpdateAssessmentView: React.FC = () => {
     const pasteRef = useRef<HTMLTextAreaElement>(null);
 
     // Auto-fill each row's Skill Code from the saved course→skill-code mapping, but ONLY where the
-    // pasted row didn't already carry one (a pasted skill code always overrides the mapping).
+    // pasted row didn't already carry one (a pasted skill code always overrides the mapping), and
+    // tag every row with its course type so CASL rows can skip the skill-code requirement.
+    //
+    // The two code lists are deliberately different: resolving a skill code can cost a live SSG
+    // lookup, so only rows that actually need one are sent as course_codes — every row's code goes
+    // in type_codes, which is just a DB read.
     const fillSkillCodesFromMapping = async (newRows: BulkAssessmentRow[]): Promise<BulkAssessmentRow[]> => {
+        const allCodes = Array.from(new Set(
+            newRows.map(r => r.courseCode?.trim()).filter(Boolean) as string[]
+        ));
         const needCodes = Array.from(new Set(
             newRows.filter(r => !r.skillCode?.trim() && r.courseCode?.trim()).map(r => r.courseCode.trim())
         ));
-        if (needCodes.length === 0) return newRows;
+        if (allCodes.length === 0) return newRows;
         try {
-            const resp = await fetch(`/api/admin/course-skill-codes?course_codes=${encodeURIComponent(needCodes.join(','))}`);
+            const params = new URLSearchParams();
+            if (needCodes.length > 0) params.set('course_codes', needCodes.join(','));
+            params.set('type_codes', allCodes.join(','));
+            const resp = await fetch(`/api/admin/course-skill-codes?${params.toString()}`);
             const data = await resp.json();
             const map: Record<string, string> = data?.map || {};
-            return newRows.map(r => (!r.skillCode?.trim() && map[r.courseCode?.trim()])
-                ? { ...r, skillCode: map[r.courseCode.trim()] } : r);
+            const types: Record<string, AssessmentCourseType> = data?.types || {};
+            return newRows.map(r => {
+                const cc = r.courseCode?.trim();
+                return {
+                    ...r,
+                    courseType: cc ? types[cc] : undefined,
+                    skillCode: (!r.skillCode?.trim() && cc && map[cc]) ? map[cc] : r.skillCode,
+                };
+            });
         } catch { return newRows; }
     };
+
+    // WSQ and IBF assessments carry an SSG skill code; CASL courses have none, so a blank cell is
+    // correct for them rather than an error. An unrecognised course code stays required.
+    const needsSkillCode = (r: BulkAssessmentRow) => r.courseType !== 'CASL';
+    const missingSkillCodeRows = rows.filter(r => needsSkillCode(r) && !r.skillCode?.trim());
 
     // Persist the current rows' course → skill-code pairs so future pastes auto-fill them.
     const saveSkillCodeMapping = async () => {
@@ -1442,9 +1471,12 @@ export const BulkUpdateAssessmentView: React.FC = () => {
     const handleSubmit = async () => {
         if (rows.length === 0) { setError('No rows to submit.'); return; }
 
-        const missing = rows.filter(r => !r.skillCode || !r.assessmentDate);
-        if (missing.length > 0) {
-            setError(`${missing.length} row(s) missing Skill Code or Assessment Date.`);
+        const missingDate = rows.filter(r => !r.assessmentDate?.trim()).length;
+        if (missingDate > 0 || missingSkillCodeRows.length > 0) {
+            setError([
+                missingDate > 0 ? `${missingDate} row(s) missing Assessment Date.` : '',
+                missingSkillCodeRows.length > 0 ? `${missingSkillCodeRows.length} WSQ/IBF row(s) missing Skill Code.` : '',
+            ].filter(Boolean).join(' '));
             return;
         }
 
@@ -1582,9 +1614,9 @@ export const BulkUpdateAssessmentView: React.FC = () => {
                         </Button>
                     </div>
                     {mappingMsg && <p className="text-xs text-blue-600 dark:text-blue-400 mb-2">{mappingMsg}</p>}
-                    {rows.filter(r => !r.skillCode?.trim()).length > 0 && (
+                    {missingSkillCodeRows.length > 0 && (
                         <p className="text-xs text-yellow-800 dark:text-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded px-2 py-1.5 mb-3">
-                            ⚠️ {rows.filter(r => !r.skillCode?.trim()).length} row(s) have no Skill Code found automatically. <strong>Try the storefront's "Skills Framework" code first. If it fails with TGS-425, submit one assessment for this course directly in SSG TPGateway</strong> — that fixes it automatically. Then enter the working code below and save.
+                            ⚠️ {missingSkillCodeRows.length} WSQ/IBF row(s) have no Skill Code found automatically. <strong>Try the storefront's "Skills Framework" code first. If it fails with TGS-425, submit one assessment for this course directly in SSG TPGateway</strong> — that fixes it automatically. Then enter the working code below and save.
                         </p>
                     )}
 
@@ -1678,9 +1710,11 @@ export const BulkUpdateAssessmentView: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td className="p-1 bg-blue-50/50 dark:bg-blue-900/10 border-r-2 border-blue-300 dark:border-blue-600">
-                                                <input type="text" value={row.skillCode} onChange={(e) => updateRow(idx, 'skillCode', e.target.value)} className={`${cellInputClasses} ${skillChanged ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`} disabled={isSubmitting} />
-                                                <div className={`text-[10px] mt-0.5 ${!existingSkill ? 'text-red-400 italic' : skillChanged ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'}`}>
-                                                    {existingSkill ? `was: ${existingSkill}` : 'existing cell is empty'}
+                                                <input type="text" value={row.skillCode} onChange={(e) => updateRow(idx, 'skillCode', e.target.value)} className={`${cellInputClasses} ${skillChanged ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`} disabled={isSubmitting} placeholder={row.courseType === 'CASL' ? 'not required' : ''} />
+                                                <div className={`text-[10px] mt-0.5 ${row.courseType === 'CASL' && !existingSkill ? 'text-gray-400' : !existingSkill ? 'text-red-400 italic' : skillChanged ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'}`}>
+                                                    {existingSkill ? `was: ${existingSkill}`
+                                                        : row.courseType === 'CASL' ? 'CASL — no skill code'
+                                                        : 'existing cell is empty'}
                                                 </div>
                                             </td>
                                             {/* Advanced editable inputs (hidden by default) */}
