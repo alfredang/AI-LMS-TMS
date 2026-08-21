@@ -4,6 +4,8 @@ import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { authService } from '@lib/services/authService';
+import { useLms } from '@contexts/LmsContext';
+import { AdminPage } from '@app-types';
 import { displayApplicationId, realApplicationId } from '@lib/daApplicationId';
 import type { TpgJob } from '@lib/tpg/jobStore';
 
@@ -105,6 +107,7 @@ const RESULTS_PER_PAGE = 10;
 const BATCH_SIZE_DA = 20;
 
 export const UploadDirectApplicationView: React.FC = () => {
+    const { setAdminPage } = useLms();
     const [file, setFile] = useState<File | null>(null);
     const [viewState, setViewState] = useState<'upload' | 'processing' | 'results'>('upload');
     const [allResults, setAllResults] = useState<DaResultRow[]>([]);
@@ -984,9 +987,24 @@ export const UploadDirectApplicationView: React.FC = () => {
                                 className="flex-shrink-0 w-10 h-10 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white hover:bg-white/60 dark:hover:bg-gray-700/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center">
                                 <Icon name={IconName.Sync} className={`w-4 h-4 ${refreshingStatuses ? 'animate-spin' : ''}`} />
                             </button>
-                            <Button onClick={handleAutoEnrol} disabled={isAutoEnrolling || autoEnrolPolling}>
-                                {isAutoEnrolling ? 'Starting…' : autoEnrolPolling ? 'Working…' : 'Re-run Auto-Enrol'}
-                            </Button>
+                            {/* When it all worked, the next thing anyone wants is to go and
+                                look at the records — not to run it again. Re-run stays, but
+                                demoted; when something failed it becomes the lead action
+                                because that IS the next step. */}
+                            {outcome === 'ok' && !autoEnrolPolling ? (
+                                <>
+                                    <Button variant="outline" onClick={() => handleAutoEnrol()} disabled={isAutoEnrolling}>
+                                        {isAutoEnrolling ? 'Starting…' : 'Re-run'}
+                                    </Button>
+                                    <Button onClick={() => setAdminPage(AdminPage.ViewDirectApplication)}>
+                                        View Direct Applications
+                                    </Button>
+                                </>
+                            ) : (
+                                <Button onClick={() => handleAutoEnrol()} disabled={isAutoEnrolling || autoEnrolPolling}>
+                                    {isAutoEnrolling ? 'Starting…' : autoEnrolPolling ? 'Working…' : 'Re-run Auto-Enrol'}
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -2643,7 +2661,7 @@ export const ViewDirectApplicationView: React.FC = () => {
                             <>
                                 <span className="text-sm text-gray-600 dark:text-gray-300">{selectedIds.size} row(s) selected</span>
                                 {/* [ARCHIVED] Green button for background auto-enrol pipeline
-                                <button onClick={handleAutoEnrol} disabled={isAutoEnrolling || isCancelling || isDeleting || isEnrolling} className="inline-flex items-center px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-green-400">
+                                <button onClick={() => handleAutoEnrol()} disabled={isAutoEnrolling || isCancelling || isDeleting || isEnrolling} className="inline-flex items-center px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-green-400">
                                     {isAutoEnrolling ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1.5" />Queuing...</> : 'Auto Enrol Selected'}
                                 </button>
                                 */}
