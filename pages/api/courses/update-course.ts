@@ -67,6 +67,8 @@ interface CourseData {
   assessmentRecordLink?: string;
   assessmentSummaryRecordUrl?: string;
   fundingValidity?: string;
+  /** Start of the funding validity window — stored on course_code_history.valid_from of the code in force. */
+  fundingValidityStart?: string | null;
   numOfTrainers?: number;
   trainersList?: string;
   trainersEmailList?: string;
@@ -600,6 +602,34 @@ async function handler(
         courseId,
         courseData.newCourseCode === undefined ? null : courseData.newCourseCode
       ]);
+
+      // Persist the funding-validity START date. It lives on the history row of
+      // the code currently in force (course_code_history.valid_from), not on the
+      // course table, so it is written separately from the end date above.
+      if (courseData.fundingValidityStart !== undefined) {
+        const start = String(courseData.fundingValidityStart || '').slice(0, 10) || null;
+        const cur = await client.query(
+          `SELECT COALESCE(
+                    (SELECT h.code FROM public.course_code_history h WHERE h.course_id = c.id AND h.is_current LIMIT 1),
+                    NULLIF(c.new_course_code, ''),
+                    c.course_code
+                  ) AS code
+             FROM course c WHERE c.id = $1`,
+          [courseId]
+        );
+        const currentCode = cur.rows[0]?.code;
+        if (currentCode) {
+          await client.query(
+            `INSERT INTO public.course_code_history (course_id, code, valid_from, is_current)
+             VALUES ($1, $2, $3::date, true)
+             ON CONFLICT (code) DO UPDATE
+                SET valid_from = EXCLUDED.valid_from,
+                    is_current = true,
+                    updated_at = now()`,
+            [courseId, currentCode, start]
+          );
+        }
+      }
 
       // Safely attempt to update assessment_methods column
       // This column may not exist if the migration hasn't been run yet

@@ -103,6 +103,8 @@ async function handler(
         c.is_gamified          AS is_leaderboard_enabled,
         c.image_url,
         c.funding_validity,
+          (SELECT h.valid_from::text FROM course_code_history h
+            WHERE h.course_id = c.id AND h.is_current LIMIT 1) AS funding_validity_start,
         c.num_of_trainers,
         c.trainers_list,
         c.trainers_email_list,
@@ -238,6 +240,7 @@ async function handler(
       isLeaderboardEnabled: courseData.is_leaderboard_enabled,
       imageUrl: courseData.image_url,
       fundingValidity: courseData.funding_validity || null,
+      fundingValidityStart: courseData.funding_validity_start || null,
       numOfTrainers: courseData.num_of_trainers ?? 0,
       trainersList: courseData.trainers_list || '',
       trainersEmailList: courseData.trainers_email_list || '',
