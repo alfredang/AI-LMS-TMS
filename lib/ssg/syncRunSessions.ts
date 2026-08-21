@@ -11,6 +11,7 @@
  * Mirrors the upsert/soft-delete the reschedule flow's `course-sessions/sync-from-ssg` does.
  */
 import pool from '../db';
+import { RUN_COURSE_CODE_SQL } from '../courseCode';
 import { getSSGCredentialsService } from './services/credentials-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from './utils/http-utils';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
@@ -97,7 +98,7 @@ async function fetchSsgSessions(ssgRunId: string, courseCode: string): Promise<{
 export async function fetchAndSyncRunSessions(courseRunUuid: string): Promise<{ ok: boolean; upserted: number; error?: string }> {
   try {
     const run = (await pool.query<{ course_run_id: string; course_code: string }>(
-      `SELECT cr.course_run_id, c.course_code FROM course_run cr JOIN course c ON c.id = cr.course_id WHERE cr.id = $1`, [courseRunUuid]
+      `SELECT cr.course_run_id, ${RUN_COURSE_CODE_SQL} AS course_code FROM course_run cr JOIN course c ON c.id = cr.course_id WHERE cr.id = $1`, [courseRunUuid]
     )).rows[0];
     if (!run?.course_run_id || !run.course_code) return { ok: false, upserted: 0, error: 'run/course not found' };
     const f = await fetchSsgSessions(run.course_run_id, run.course_code);

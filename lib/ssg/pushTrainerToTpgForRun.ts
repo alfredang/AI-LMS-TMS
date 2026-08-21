@@ -1,4 +1,5 @@
 import pool from '../db';
+import { RUN_COURSE_CODE_SQL } from '../courseCode';
 import { getSSGCredentialsService } from './services/credentials-service';
 import { createSSGCourseAPI } from './api/course-api';
 import { TrainerType, type RunTrainerEditInfo } from './models/course-runs';
@@ -82,7 +83,7 @@ export async function pushTrainerToTpgForRun(courseRunUuid: string, opts?: { onl
       course_run_id: string;
       course_code: string;
     }>(
-      `SELECT cr.id, cr.course_run_id, c.course_code
+      `SELECT cr.id, cr.course_run_id, ${RUN_COURSE_CODE_SQL} AS course_code
        FROM course_run cr JOIN course c ON c.id = cr.course_id
        WHERE cr.id = $1`,
       [courseRunUuid]
@@ -252,7 +253,7 @@ export async function pushTrainerToTpgForRun(courseRunUuid: string, opts?: { onl
 export async function clearTrainerOnTpgForRun(courseRunUuid: string): Promise<PushTrainerResult> {
   try {
     const crResult = await pool.query<{ id: string; course_run_id: string; course_code: string; tpg_assigned_trainer_name: string | null; tpg_sync_status: string | null; }>(
-      `SELECT cr.id, cr.course_run_id, c.course_code, cr.tpg_assigned_trainer_name, cr.tpg_sync_status
+      `SELECT cr.id, cr.course_run_id, ${RUN_COURSE_CODE_SQL} AS course_code, cr.tpg_assigned_trainer_name, cr.tpg_sync_status
          FROM course_run cr JOIN course c ON c.id = cr.course_id
         WHERE cr.id = $1`,
       [courseRunUuid]

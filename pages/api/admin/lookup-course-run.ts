@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
-import { resolveCourseIdByCode } from '../../../lib/courseCode';
+import { resolveCourseIdByCode, RUN_COURSE_CODE_SQL } from '../../../lib/courseCode';
 
 function extractRaCode(qrCodeLink: string): string | null {
   if (!qrCodeLink) return null;
@@ -49,7 +49,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
          cr.assigned_trainer_name   AS "assignedTrainerName",
          c.id                       AS "id",
          c.title                    AS "title",
-         c.course_code              AS "courseCode",
+         -- The run's own reference code, not the course's original one. This is
+         -- what the CA upload popup shows an admin before they commit the run,
+         -- so it has to be the code the enrolment will actually carry -- showing
+         -- a superseded code made a TGS-406 rejection look pre-verified.
+         ${RUN_COURSE_CODE_SQL} AS "courseCode",
          c.tsc_code                 AS "tscCode",
          c.tsc_title                AS "tscTitle"
        FROM course_run cr
