@@ -76,6 +76,7 @@ import SoftwareCredentialsView from '../components/admin/SoftwareCredentialsView
 import RescheduleCancelView from '../components/admin/RescheduleCancelView';
 import { UploadCompanyApplicationView, ViewCompanyApplicationView, CheckSupportingDocumentView } from '../components/admin/CompanyApplicationViews';
 import { SyncedEnrolmentsView } from '../components/admin/SyncedEnrolmentsView';
+import { NonDaInvoiceView } from '../components/admin/NonDaInvoiceView';
 
 // Management Dashboard Component
 interface ManagementDashboardProps {
@@ -169,6 +170,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.ViewCompanyApplication]: 'View Company Application',
   [AdminPage.ViewSyncedEnrolments]: 'All Synced Enrolments',
   [AdminPage.CheckSupportingDocument]: 'Check Supporting Document',
+  [AdminPage.NonDaInvoice]: 'Non-DA Invoice',
   [AdminPage.UpcomingClasses]: 'Upcoming Classes',
   [AdminPage.ViewClassByDate]: 'View Class By Date',
   [AdminPage.OngoingClasses]: 'Ongoing Classes',
@@ -433,6 +435,8 @@ const AdminLayout: React.FC = () => {
         return <SyncedEnrolmentsView />;
       case AdminPage.CheckSupportingDocument:
         return <CheckSupportingDocumentView />;
+      case AdminPage.NonDaInvoice:
+        return <NonDaInvoiceView />;
       case AdminPage.UpdateDirectApplication:
         return <UpdateDirectApplicationView />;
       case AdminPage.CheckAttendance:
