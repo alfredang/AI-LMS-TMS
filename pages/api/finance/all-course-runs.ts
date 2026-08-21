@@ -58,6 +58,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const courseRunId = (req.query.courseRunId as string || '').trim();
     const status = (req.query.status as string || '').trim();
     const sort = req.query.sort === 'oldest' ? 'ASC' : 'DESC';
+    // 'individualNonDa' powers the admin "Non-DA Invoice" page — is_da = false
+    // rows (same flag Consolidated Finance already shows) that also aren't a
+    // Company Application, pre-filtered server-side so that page only ever
+    // routes through the standard (non-DA) invoice pipeline.
+    const scope = (req.query.scope as string || '').trim();
+    const individualNonDaOnly = scope === 'individualNonDa';
     const offset = page * limit;
     const includeFuture =
       req.query.includeFuture === '1' ||
@@ -126,6 +132,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         params.push(startTo);
         paramIndex++;
       }
+    }
+
+    if (individualNonDaOnly) {
+      conditions.push(`NOT EXISTS (
+        SELECT 1 FROM public.da_application da2
+        WHERE LOWER(TRIM(COALESCE(da2.enrolment_id,''))) = LOWER(TRIM(COALESCE(se.enrolment_id,'')))
+      )`);
+      conditions.push(`NOT EXISTS (
+        SELECT 1 FROM public.company_application ca2
+        WHERE LOWER(TRIM(COALESCE(ca2.enrolment_id,''))) = LOWER(TRIM(COALESCE(se.enrolment_id,'')))
+      )`);
+      // SSG's own sponsorshipType — only self-sponsored ("Individual") rows belong
+      // on this page; "Employer"-sponsored rows are excluded even without a
+      // company_application row (e.g. employer-sponsored but not yet CA-tracked).
+      conditions.push(`LOWER(TRIM(COALESCE(se.sponsorship_type,''))) = 'individual'`);
     }
 
     let whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -201,7 +222,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         ) AS grn_doc_number,
         ij.drive_web_view_link AS invoice_drive_web_view_link,
         COALESCE(ij.grn_drive_web_view_link, da_chk.grant_invoice_drive_web_view_link) AS grn_drive_web_view_link,
-        (da_chk.found IS NOT NULL) AS is_da
+        (da_chk.found IS NOT NULL) AS is_da,
+        da_chk.da_application_id,
+        da_chk.sfc_invoice_id,
+        da_chk.sfc_invoice_drive_web_view_link
       FROM ssg_enrolments se
       LEFT JOIN LATERAL (
         SELECT inv.invoice_no, inv.qbo_invoice_id, inv.qbo_doc_number, inv.invoice_sent_at, inv.qbo_sfc_status, inv.grn_doc_number, inv.drive_web_view_link, inv.grn_drive_web_view_link
@@ -236,8 +260,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       ) sc ON true
       LEFT JOIN LATERAL (
         SELECT 1 AS found,
+               da.id AS da_application_id,
                da.grant_invoice_drive_web_view_link,
-               da.grant_invoice_drive_file_id
+               da.grant_invoice_drive_file_id,
+               da.sfc_invoice_id,
+               da.sfc_invoice_drive_web_view_link
         FROM public.da_application da
         WHERE LOWER(TRIM(COALESCE(da.enrolment_id,''))) = LOWER(TRIM(COALESCE(se.enrolment_id,'')))
         LIMIT 1

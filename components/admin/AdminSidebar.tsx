@@ -133,6 +133,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
         cmLearnersTrainers: true,
         directApplication: false,
         companyApplication: false,
+        individualApplication: false,
         enrolment: false,
         tpgManagement: false,
         tpgCourseRun: false,
@@ -273,6 +274,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 <NavItem page={AdminPage.CheckSupportingDocument} label="Check Supporting Document" isSubItem />
                 <NavItem page={AdminPage.ViewCompanyApplication} label="View Company Application" isSubItem badge={caStuckCount} />
                 <NavItem page={AdminPage.ViewSyncedEnrolments} label="All Synced Enrolments" isSubItem />
+            </NavSection>
+
+            <NavSection title="Individual Application" icon={IconName.FileText} collapsed={collapsed} isOpen={openSections.individualApplication} onToggle={() => toggleSection('individualApplication')}>
+                <NavItem page={AdminPage.NonDaInvoice} label="Non-DA Invoice" isSubItem />
             </NavSection>
 
             <NavSection title="Enrolment" icon={IconName.Users} collapsed={collapsed} isOpen={openSections.enrolment} onToggle={() => toggleSection('enrolment')}>

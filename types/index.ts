@@ -97,6 +97,7 @@ export enum AdminPage {
   ViewCompanyApplication = 'viewCompanyApplication',
   ViewSyncedEnrolments = 'viewSyncedEnrolments',
   CheckSupportingDocument = 'checkSupportingDocument',
+  NonDaInvoice = 'nonDaInvoice',
   UploadEnrolments = 'uploadEnrolments',
   SearchCourseRuns = 'searchCourseRuns',
   ViewCourseRun = 'viewCourseRun',

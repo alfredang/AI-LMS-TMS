@@ -29,6 +29,8 @@ const ADMIN_ITEMS: AdminItem[] = [
   { id: AdminPage.UploadCompanyApplication, page: AdminPage.UploadCompanyApplication, label: 'Upload Company Application', section: 'TPG Management → COMPANY APPLICATION', keywords: ['sponsorship', 'corporate'] },
   { id: AdminPage.ViewCompanyApplication, page: AdminPage.ViewCompanyApplication, label: 'View Company Application', section: 'TPG Management → COMPANY APPLICATION', keywords: ['sponsorship', 'corporate'] },
 
+  { id: AdminPage.NonDaInvoice, page: AdminPage.NonDaInvoice, label: 'Non-DA Invoice', section: 'Individual Application', keywords: ['invoice', 'individual', 'generate invoice', 'send invoice', 'quickbooks'] },
+
   { id: AdminPage.UpcomingEnrolment, page: AdminPage.UpcomingEnrolment, label: 'Upcoming Enrolment', section: 'TPG Management → Enrolment' },
   { id: AdminPage.NewEnrolment, page: AdminPage.NewEnrolment, label: 'New Enrolment', section: 'TPG Management → Enrolment' },
 

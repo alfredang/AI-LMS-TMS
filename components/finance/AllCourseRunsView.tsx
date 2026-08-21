@@ -55,6 +55,9 @@ interface CourseRunRow {
   invoice_drive_web_view_link?: string | null;
   grn_drive_web_view_link?: string | null;
   is_da?: boolean | null;
+  da_application_id?: string | null;
+  sfc_invoice_id?: string | null;
+  sfc_invoice_drive_web_view_link?: string | null;
 }
 
 interface Stats {
@@ -354,7 +357,7 @@ const StickyHeader: React.FC<{
   );
 };
 
-const TOTAL_COLS = 42; // update if headers change
+const TOTAL_COLS = 43; // update if headers change
 
 const AllCourseRunsView: React.FC = () => {
   const [search, setSearch] = useState('');
@@ -394,6 +397,11 @@ const AllCourseRunsView: React.FC = () => {
   const [fmsSendFailed, setFmsSendFailed] = useState(0);
   const [fmsSendTotal, setFmsSendTotal] = useState(0);
   const [fmsSendStartTime, setFmsSendStartTime] = useState(0);
+  // Maps enrolment_id -> da_application.id for rows seen so far, so a single
+  // "Generate Invoice" click can route each selected row to the right pipeline:
+  // DA rows go through the same /api/admin/da-generate-invoice call the View
+  // Direct Application page uses; non-DA rows keep the existing enqueue flow.
+  const [daAppIdByEnrolmentId, setDaAppIdByEnrolmentId] = useState<Record<string, string>>({});
   const lastVerifiedIdsRef = useRef<string>('');
   const backfillRanRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -433,6 +441,22 @@ const AllCourseRunsView: React.FC = () => {
   }, [page, debouncedSearch, statusFilter, sortOrder, includeFutureCourseRuns, viewFrom, viewTo]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Accumulate enrolment_id -> da_application.id as pages load, so a DA row
+  // selected on an earlier page stays resolvable for "Generate DA Invoice"
+  // even after paging away from it.
+  useEffect(() => {
+    const additions: Record<string, string> = {};
+    for (const r of rows) {
+      const eid = r.enrolment_id?.trim();
+      if (eid && r.da_application_id && daAppIdByEnrolmentId[eid] !== r.da_application_id) {
+        additions[eid] = r.da_application_id;
+      }
+    }
+    if (Object.keys(additions).length > 0) {
+      setDaAppIdByEnrolmentId((prev) => ({ ...prev, ...additions }));
+    }
+  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On first mount: silently backfill QB invoice IDs for all enrolments missing one.
   // Pass 1 fixes local status issues; Pass 2 searches by DocNumber; Pass 3 bulk-scans QB.
@@ -660,8 +684,26 @@ const AllCourseRunsView: React.FC = () => {
     }
   };
 
-  const queueQboInvoices = async () => {
+  /**
+   * Single "Generate Invoice" entry point. Selected rows are split by DA-ness
+   * BEFORE anything is called — a DA enrolment's applicationId only ever goes
+   * to /api/admin/da-generate-invoice (the exact pipeline the View Direct
+   * Application page uses: main + Grant + SFC invoice), and a non-DA
+   * enrolment's id only ever goes to the existing /api/finance/invoice-jobs
+   * enqueue+poll flow. The two lists never mix, so a row can't be routed
+   * through the wrong pipeline and produce the wrong invoice.
+   */
+  const generateInvoices = async () => {
     if (selectedEnrolmentIds.length === 0) return;
+
+    const daApplicationIds = Array.from(
+      new Set(
+        selectedEnrolmentIds
+          .map((eid) => daAppIdByEnrolmentId[eid])
+          .filter((id): id is string => !!id)
+      )
+    );
+    const nonDaEnrolmentIds = selectedEnrolmentIds.filter((eid) => !daAppIdByEnrolmentId[eid]);
 
     setQueueing(true);
     setSyncToast(null);
@@ -672,79 +714,106 @@ const AllCourseRunsView: React.FC = () => {
     setFmsInvProgressTotal(selectedEnrolmentIds.length);
     setFmsInvProgressStartTime(Date.now());
 
+    let succeeded = 0;
+    let failed = 0;
+    const toastParts: string[] = [];
+
     try {
-      const res = await fetch('/api/finance/invoice-jobs/enqueue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enrolmentIds: selectedEnrolmentIds }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Queue failed');
-
-      const results = Array.isArray(json.results)
-        ? (json.results as { enrolmentId: string; ok: boolean; reason?: string }[])
-        : [];
-      const queuedIds = results.filter((r) => r.ok).map((r) => r.enrolmentId);
-      const skippedAtEnqueue = results.filter((r) => !r.ok).length;
-
-      if (queuedIds.length === 0) {
-        setFmsInvProgressFailed(skippedAtEnqueue || selectedEnrolmentIds.length);
-        setFmsInvProgressSucceeded(0);
-        setFmsInvProgressDone(true);
-        const detail = results
-          .filter((r) => !r.ok)
-          .slice(0, 4)
-          .map((r) => `${r.enrolmentId}: ${r.reason || 'skipped'}`)
-          .join(' · ');
-        setSyncToast(detail || 'No invoice jobs were queued for the selected enrolments.');
-        await fetchData();
-        return;
-      }
-
-      setFmsInvProgressTotal(queuedIds.length);
-
-      const s = (v: unknown) => v != null ? String(v).trim() : '';
-      let done = 0;
-      let pollFailed = 0;
-      for (const eid of queuedIds) {
-        const { outcome, jobRow } = await pollInvoiceJobSettled(eid, 180_000);
-        if (outcome === 'done') {
-          done += 1;
-          setFmsInvProgressSucceeded(done);
-          if (jobRow) {
-            setRows(prev => prev.map(r =>
-              r.enrolment_id?.toLowerCase().trim() === eid.toLowerCase().trim()
-                ? {
-                    ...r,
-                    invoice_id: s(jobRow.qbo_invoice_id) || r.invoice_id,
-                    invoice_no: s(jobRow.invoice_no) || s(jobRow.qbo_doc_number) || r.invoice_no,
-                    grn_doc_number: s(jobRow.grn_doc_number) || r.grn_doc_number,
-                    invoice_drive_web_view_link: s(jobRow.drive_web_view_link) || r.invoice_drive_web_view_link,
-                    grn_drive_web_view_link: s(jobRow.grn_drive_web_view_link) || r.grn_drive_web_view_link,
-                    invoice_sent_at: s(jobRow.invoice_sent_at) || r.invoice_sent_at,
-                  }
-                : r
-            ));
-          }
-        } else {
-          pollFailed += 1;
-          setFmsInvProgressFailed(pollFailed + skippedAtEnqueue);
+      // --- DA rows: identical call to the View Direct Application page's
+      // own handleGenerateInvoice. ---
+      if (daApplicationIds.length > 0) {
+        try {
+          const res = await fetch('/api/admin/da-generate-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ applicationIds: daApplicationIds }),
+          });
+          const json = await res.json();
+          const results = Array.isArray(json.results) ? (json.results as { success: boolean }[]) : [];
+          const daSucceeded = results.filter((r) => r.success).length;
+          const daFailed = daApplicationIds.length - daSucceeded;
+          succeeded += daSucceeded;
+          failed += daFailed;
+          setFmsInvProgressSucceeded(succeeded);
+          setFmsInvProgressFailed(failed);
+          toastParts.push(`DA: ${daSucceeded}/${daApplicationIds.length} generated${daFailed ? ` (${daFailed} issue${daFailed !== 1 ? 's' : ''})` : ''}`);
+        } catch (e) {
+          failed += daApplicationIds.length;
+          setFmsInvProgressFailed(failed);
+          toastParts.push(`DA generation failed: ${e instanceof Error ? e.message : 'error'}`);
         }
       }
-      const totalFailed = pollFailed + skippedAtEnqueue;
 
-      setFmsInvProgressSucceeded(done);
-      setFmsInvProgressFailed(totalFailed);
+      // --- Non-DA rows: unchanged enqueue + poll flow. ---
+      if (nonDaEnrolmentIds.length > 0) {
+        try {
+          const res = await fetch('/api/finance/invoice-jobs/enqueue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enrolmentIds: nonDaEnrolmentIds }),
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || 'Queue failed');
+
+          const results = Array.isArray(json.results)
+            ? (json.results as { enrolmentId: string; ok: boolean; reason?: string }[])
+            : [];
+          const queuedIds = results.filter((r) => r.ok).map((r) => r.enrolmentId);
+          const skippedAtEnqueue = results.filter((r) => !r.ok).length;
+          failed += skippedAtEnqueue;
+          setFmsInvProgressFailed(failed);
+
+          if (queuedIds.length === 0) {
+            const detail = results
+              .filter((r) => !r.ok)
+              .slice(0, 4)
+              .map((r) => `${r.enrolmentId}: ${r.reason || 'skipped'}`)
+              .join(' · ');
+            toastParts.push(detail || 'No non-DA invoice jobs were queued.');
+          } else {
+            const s = (v: unknown) => v != null ? String(v).trim() : '';
+            let nonDaDone = 0;
+            for (const eid of queuedIds) {
+              const { outcome, jobRow } = await pollInvoiceJobSettled(eid, 180_000);
+              if (outcome === 'done') {
+                nonDaDone += 1;
+                succeeded += 1;
+                setFmsInvProgressSucceeded(succeeded);
+                if (jobRow) {
+                  setRows(prev => prev.map(r =>
+                    r.enrolment_id?.toLowerCase().trim() === eid.toLowerCase().trim()
+                      ? {
+                          ...r,
+                          invoice_id: s(jobRow.qbo_invoice_id) || r.invoice_id,
+                          invoice_no: s(jobRow.invoice_no) || s(jobRow.qbo_doc_number) || r.invoice_no,
+                          grn_doc_number: s(jobRow.grn_doc_number) || r.grn_doc_number,
+                          invoice_drive_web_view_link: s(jobRow.drive_web_view_link) || r.invoice_drive_web_view_link,
+                          grn_drive_web_view_link: s(jobRow.grn_drive_web_view_link) || r.grn_drive_web_view_link,
+                          invoice_sent_at: s(jobRow.invoice_sent_at) || r.invoice_sent_at,
+                        }
+                      : r
+                  ));
+                }
+              } else {
+                failed += 1;
+                setFmsInvProgressFailed(failed);
+              }
+            }
+            const detail = skippedAtEnqueue > 0 ? ` ${skippedAtEnqueue} not queued (ineligible or already invoiced).` : '';
+            toastParts.push(`Non-DA: ${nonDaDone}/${nonDaEnrolmentIds.length} completed.${detail}`);
+          }
+        } catch (e) {
+          failed += nonDaEnrolmentIds.length;
+          setFmsInvProgressFailed(failed);
+          toastParts.push(e instanceof Error ? e.message : 'Non-DA queue failed');
+        }
+      }
+
+      setFmsInvProgressSucceeded(succeeded);
+      setFmsInvProgressFailed(failed);
       setFmsInvProgressDone(true);
       await fetchData();
-
-      const detail =
-        skippedAtEnqueue > 0 ? ` ${skippedAtEnqueue} not queued (ineligible or already invoiced).` : '';
-      setSyncToast(`QB invoices: ${done} completed.${totalFailed ? ` ${totalFailed} issue(s).` : ''}${detail}`);
-    } catch (e) {
-      setFmsInvProgressFailed(selectedEnrolmentIds.length);
-      setFmsInvProgressDone(true);
-      setSyncToast(e instanceof Error ? e.message : 'Queue failed');
+      setSyncToast(toastParts.join(' | '));
     } finally {
       setQueueing(false);
     }
@@ -982,13 +1051,13 @@ const AllCourseRunsView: React.FC = () => {
                 </span>
               )}
               <Button
-                onClick={() => void queueQboInvoices()}
+                onClick={() => void generateInvoices()}
                 disabled={queueing || sending || selectedEnrolmentIds.length === 0 || loading}
                 className="gap-1.5"
               >
                 {queueing
-                  ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Queueing…</>
-                  : `Queue QB invoices (${selectedEnrolmentIds.length})`
+                  ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Generating…</>
+                  : `Generate Invoice (${selectedEnrolmentIds.length})`
                 }
               </Button>
               <Button
@@ -1003,7 +1072,7 @@ const AllCourseRunsView: React.FC = () => {
 
           {/* Helper text */}
           <p className="text-[11px] text-on-surface-secondary -mt-2">
-            Select enrolments from the table below, then use "Queue QB invoices" to generate invoices. Rows already invoiced or ineligible are automatically skipped.
+            Select enrolments from the table below, then "Generate Invoice". Rows flagged <span className="font-semibold">DA</span> automatically run the same main / Grant / SFC pipeline as the View Direct Application page; non-DA rows use the standard QuickBooks flow — each row only ever goes through its own pipeline. Rows already invoiced or ineligible are skipped automatically.
           </p>
 
         </div>
@@ -1061,7 +1130,7 @@ const AllCourseRunsView: React.FC = () => {
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-blue-300 dark:border-blue-600 ${groupHeaderColors.course}`}>Course</th>
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-green-300 dark:border-green-600 ${groupHeaderColors.trainee}`}>Trainee</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-purple-300 dark:border-purple-600 ${groupHeaderColors.sponsor}`}>Employer</th>
-                <th colSpan={8} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
+                <th colSpan={9} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-amber-300 dark:border-amber-600 ${groupHeaderColors.enrolment}`}>Enrolment</th>
                 <th colSpan={3} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-indigo-300 dark:border-indigo-600 ${groupHeaderColors.bl}`}>BL Grant</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-teal-300 dark:border-teal-600 ${groupHeaderColors.nbl}`}>Non-BL Grant</th>
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-orange-300 dark:border-orange-600 ${groupHeaderColors.tg}`}>TG</th>
@@ -1108,6 +1177,7 @@ const AllCourseRunsView: React.FC = () => {
                 <th className={headerCell}>Sent</th>
                 <th className={headerCell}>Cust Inv</th>
                 <th className={headerCell}>GRN Inv</th>
+                <th className={headerCell}>SFC Inv</th>
                 {/* BL Grant (3) */}
                 <th className={headerCell}>Status</th>
                 <th className={headerCell}>Grant ID</th>
@@ -1227,6 +1297,17 @@ const AllCourseRunsView: React.FC = () => {
                         <button
                           onClick={() => window.open(r.grn_drive_web_view_link!, '_blank', 'noreferrer')}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
+                        >
+                          <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
+                          View
+                        </button>
+                      ) : <span className="text-on-surface-secondary">-</span>}
+                    </td>
+                    <td className={cell}>
+                      {r.sfc_invoice_drive_web_view_link ? (
+                        <button
+                          onClick={() => window.open(r.sfc_invoice_drive_web_view_link!, '_blank', 'noreferrer')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:hover:bg-purple-900/40"
                         >
                           <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
                           View
