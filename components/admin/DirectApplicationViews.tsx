@@ -54,6 +54,9 @@ interface DaResultRow {
     enrolStatus?: 'pending' | 'pending_identity' | 'enroled' | 'grant_found' | 'invoiced' | 'failed' | null;
     enrolmentId?: string | null;
     grantId?: string | null;
+    invoiceId?: string | null;
+    /** Whether the learner reached the course's Google Calendar entry. */
+    calendarAdded?: boolean;
     enrolError?: string | null;
 }
 
@@ -512,6 +515,9 @@ export const UploadDirectApplicationView: React.FC = () => {
         } catch { /* the operator can click again */ }
     };
 
+    // Everything starts ticked: the operator is usually removing a few rather
+    // than picking a few, and an empty list would make the primary button dead
+    // on arrival.
     const cancelTpg = async () => {
         if (!tpgJobId) return;
         setTpgCancelling(true);
@@ -714,6 +720,8 @@ export const UploadDirectApplicationView: React.FC = () => {
                         enrolStatus: dbRow.auto_enrol_status || null,
                         enrolmentId: dbRow.enrolment_id || null,
                         grantId: dbRow.grant_id || null,
+                        invoiceId: dbRow.invoice_id || null,
+                        calendarAdded: dbRow.calendar_added === true,
                         enrolError: dbRow.auto_enrol_error || null,
                     };
                 }));
@@ -746,7 +754,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                 if (json.success && Array.isArray(json.data)) {
                     const byId = new Map<string, any>();
                     for (const row of json.data) { if (row.application_id && appIdSet.has(row.application_id)) byId.set(row.application_id, row); }
-                    setAllResults(prev => prev.map(r => { const dbRow = byId.get(r.application_id); if (!dbRow) return r; return { ...r, enrolStatus: dbRow.auto_enrol_status || null, enrolmentId: dbRow.enrolment_id || null, grantId: dbRow.grant_id || null, enrolError: dbRow.auto_enrol_error || null }; }));
+                    setAllResults(prev => prev.map(r => { const dbRow = byId.get(r.application_id); if (!dbRow) return r; return { ...r, enrolStatus: dbRow.auto_enrol_status || null, enrolmentId: dbRow.enrolment_id || null, grantId: dbRow.grant_id || null, invoiceId: dbRow.invoice_id || null, calendarAdded: dbRow.calendar_added === true, enrolError: dbRow.auto_enrol_error || null }; }));
                     // 'enroled' and 'grant_found' are NOT the end — the pipeline
                     // carries on to the QuickBooks invoice and only then reaches
                     // 'invoiced'. Treating them as final stopped the display at
@@ -772,6 +780,30 @@ export const UploadDirectApplicationView: React.FC = () => {
                     });
 
                     if (allDone || (allAtLeastEnrolled && stagnantPolls >= 9) || attempts >= 60) {
+                        // The pipeline clears auto_enrol_error as its final act, which
+                        // often lands just AFTER the status that satisfies the stop
+                        // condition. Stopping here left the screen showing a message the
+                        // database no longer held — a recovered error reported as a
+                        // live one. Read once more before letting go.
+                        setTimeout(async () => {
+                            try {
+                                const last = await fetch('/api/admin/da-enrol-status', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                                    body: JSON.stringify({ applicationIds: [...appIdSet] }),
+                                });
+                                const lastJson = await last.json();
+                                if (lastJson.success && Array.isArray(lastJson.data)) {
+                                    const fresh = new Map<string, any>();
+                                    for (const row of lastJson.data) { if (row.application_id) fresh.set(row.application_id, row); }
+                                    setAllResults(prev => prev.map(r => {
+                                        const dbRow = fresh.get(r.application_id);
+                                        if (!dbRow) return r;
+                                        return { ...r, enrolStatus: dbRow.auto_enrol_status || null, enrolmentId: dbRow.enrolment_id || null, grantId: dbRow.grant_id || null, invoiceId: dbRow.invoice_id || null, calendarAdded: dbRow.calendar_added === true, enrolError: dbRow.auto_enrol_error || null };
+                                    }));
+                                }
+                            } catch { /* the Refresh button remains */ }
+                        }, 2500);
                         setAutoEnrolPolling(false);
                         return;
                     }
@@ -787,11 +819,14 @@ export const UploadDirectApplicationView: React.FC = () => {
     const paginatedResults = filteredResults.slice((resultsPage - 1) * RESULTS_PER_PAGE, resultsPage * RESULTS_PER_PAGE);
     const progressPct = progressTotal > 0 ? Math.round((progressCurrent / progressTotal) * 100) : 0;
 
-    const categoryCards: { key: DaFilterCategory; label: string; count: number; color: string; activeColor: string; textColor: string }[] = [
-        { key: 'all', label: 'All', count: allResults.length, color: 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600', activeColor: 'bg-gray-200 dark:bg-gray-600 border-gray-400', textColor: 'text-gray-800 dark:text-gray-200' },
-        { key: 'inserted', label: 'Inserted', count: summary.inserted, color: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800', activeColor: 'bg-green-100 dark:bg-green-900/40 border-green-500', textColor: 'text-green-700 dark:text-green-400' },
-        { key: 'updated', label: 'Updated', count: summary.updated, color: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800', activeColor: 'bg-blue-100 dark:bg-blue-900/40 border-blue-500', textColor: 'text-blue-700 dark:text-blue-400' },
-        { key: 'failed', label: 'Failed', count: summary.failed, color: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800', activeColor: 'bg-red-100 dark:bg-red-900/40 border-red-500', textColor: 'text-red-700 dark:text-red-400' },
+    // Muted surfaces with a single accent per state. The previous version gave
+    // each filter its own tinted panel, so four saturated blocks competed at the
+    // top of the page and the numbers — the actual content — came second.
+    const categoryCards: { key: DaFilterCategory; label: string; count: number; accent: string; text: string }[] = [
+        { key: 'all', label: 'All', count: allResults.length, accent: 'bg-gray-400 dark:bg-gray-500', text: 'text-gray-800 dark:text-gray-100' },
+        { key: 'inserted', label: 'Inserted', count: summary.inserted, accent: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-400' },
+        { key: 'updated', label: 'Updated', count: summary.updated, accent: 'bg-sky-500', text: 'text-sky-700 dark:text-sky-400' },
+        { key: 'failed', label: 'Failed', count: summary.failed, accent: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-400' },
     ];
 
     const headerRow = (
@@ -867,153 +902,254 @@ export const UploadDirectApplicationView: React.FC = () => {
     }
 
     if (viewState === 'results') {
+        const failedCount = summary.failed;
+        const okCount = summary.inserted + summary.updated;
+        const outcome = failedCount === 0 ? 'ok' : okCount === 0 ? 'bad' : 'mixed';
+
         return (
-            <div className="space-y-6">
+            <div className="space-y-5">
                 {headerRow}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {categoryCards.map(({ key, label, count, color, activeColor, textColor }) => (
-                        <button key={key} onClick={() => { setFilterCategory(key); setResultsPage(1); }}
-                            className={`rounded-lg p-4 text-center border-2 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${filterCategory === key ? activeColor : `${color} hover:opacity-80`}`}>
-                            <p className={`text-3xl font-bold ${textColor}`}>{count}</p>
-                            <p className={`text-sm font-medium mt-1 ${textColor}`}>{label}</p>
-                            {filterCategory === key && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Showing this filter</p>}
-                        </button>
-                    ))}
-                </div>
-                {(summary.inserted > 0 || summary.updated > 0) && (
-                    <Card className="p-4 dark:bg-gray-800 dark:border-gray-700">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
+
+                {/* One clear statement of how it went. Four equal-weight tiles made
+                    the reader assemble that themselves out of "0 Failed" and "1
+                    Inserted"; the answer to "did it work" should not need arithmetic. */}
+                <div className={`rounded-xl border p-5 ${
+                    outcome === 'ok'
+                        ? 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/60 dark:bg-emerald-900/15'
+                        : outcome === 'bad'
+                            ? 'border-rose-200 dark:border-rose-800/60 bg-rose-50/60 dark:bg-rose-900/15'
+                            : 'border-amber-200 dark:border-amber-800/60 bg-amber-50/60 dark:bg-amber-900/15'
+                }`}>
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="flex items-start gap-3.5">
+                            <span className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                                outcome === 'ok' ? 'bg-emerald-500/15' : outcome === 'bad' ? 'bg-rose-500/15' : 'bg-amber-500/15'
+                            }`}>
+                                {autoEnrolPolling ? (
+                                    <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                ) : outcome === 'ok' ? (
+                                    <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                ) : (
+                                    <svg className={`w-5 h-5 ${outcome === 'bad' ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                                )}
+                            </span>
                             <div>
-                                <h3 className="text-sm font-semibold text-gray-800 dark:text-white">SSG Enrolment & Grant Application</h3>
-                                {/* "Processing 10 application(s)" never changed for minutes.
-                                    Each learner goes through SSG enrolment, then grant, then
-                                    invoice — so report how many have cleared each stage and
-                                    how long it has been running. */}
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                <h2 className="text-lg font-semibold text-gray-900 dark:text-white leading-tight">
                                     {autoEnrolPolling
-                                        ? `${enrolStage} — ${enrolCounts.done} of ${autoEnrolQueued} enrolled${enrolCounts.granted > 0 ? `, ${enrolCounts.granted} with grant` : ''}${enrolCounts.invoiced > 0 ? `, ${enrolCounts.invoiced} invoiced` : ''}${enrolCounts.failed > 0 ? `, ${enrolCounts.failed} failed` : ''} · ${fmtElapsed(autoEnrolElapsed)} elapsed`
-                                        : autoEnrolQueued > 0
-                                            ? `Completed - ${autoEnrolQueued} application(s) processed${autoEnrolElapsed > 0 ? ` in ${fmtElapsed(autoEnrolElapsed)}` : ''}`
-                                            : `${summary.inserted + summary.updated} eligible application(s) ready to enrol`}
+                                        ? `${enrolStage}…`
+                                        : outcome === 'ok'
+                                            ? 'All done'
+                                            : outcome === 'bad'
+                                                ? 'Nothing went through'
+                                                : 'Finished with problems'}
+                                </h2>
+                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                    {autoEnrolPolling
+                                        ? `${enrolCounts.done} of ${autoEnrolQueued} enrolled${enrolCounts.granted > 0 ? `, ${enrolCounts.granted} with grant` : ''}${enrolCounts.invoiced > 0 ? `, ${enrolCounts.invoiced} invoiced` : ''} · ${fmtElapsed(autoEnrolElapsed)}`
+                                        : `${okCount} application${okCount === 1 ? '' : 's'} processed${failedCount > 0 ? `, ${failedCount} failed` : ''}${autoEnrolElapsed > 0 ? ` · ${fmtElapsed(autoEnrolElapsed)}` : ''}`}
                                 </p>
-                                {autoEnrolPolling && (
-                                    <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
-                                        Each learner is submitted to SSG, then its grant is looked up, then the invoice is raised — expect roughly 30–60s each.
+                                {autoEnrolPolling ? (
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                                        Each learner goes to SSG, then their grant is looked up, then the invoice is raised.
                                     </p>
+                                ) : (
+                                    // What actually landed, rather than only how many rows moved.
+                                    // "1 processed" says nothing about whether they were invoiced.
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5">
+                                        {[
+                                            { label: 'enrolled', n: enrolCounts.done },
+                                            { label: 'with grant', n: enrolCounts.granted },
+                                            { label: 'invoiced', n: enrolCounts.invoiced },
+                                        ].filter(x => x.n > 0).map(x => (
+                                            <span key={x.label} className="inline-flex items-baseline gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                                                <span className="font-semibold tabular-nums text-gray-900 dark:text-white">{x.n}</span>
+                                                {x.label}
+                                            </span>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
-                            <Button onClick={handleAutoEnrol} disabled={isAutoEnrolling || autoEnrolPolling}>
-                                {isAutoEnrolling ? 'Triggering...' : autoEnrolPolling ? 'Processing...' : autoEnrolQueued > 0 ? 'Re-run Auto-Enrol' : 'Auto-Enrol to SSG & Apply Grant'}
-                            </Button>
                         </div>
-                    </Card>
-                )}
-                <Card className="p-0 overflow-x-auto dark:bg-gray-800 dark:border-gray-700">
-                    <div className="px-6 py-4 border-b dark:border-gray-700 flex justify-between items-center">
-                        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                            {filterCategory === 'all' ? 'All Results' : `${filterCategory.charAt(0).toUpperCase() + filterCategory.slice(1)} (${filteredResults.length})`}
-                        </h2>
-                        <div className="flex items-center gap-3">
-                            {/* The status column used to freeze the moment polling gave up, with no
-                                way to ask again — so a finished enrolment kept showing as blank. */}
+                        <div className="flex items-center gap-2">
+                            {/* Icon only: it sits beside the primary action and repeats
+                                on every card list, so a full-width word competes with the
+                                button that matters. Square, matched to the primary's
+                                height, and it spins while it works so the state is legible
+                                without a label. */}
                             <button
                                 onClick={refreshEnrolStatuses}
                                 disabled={refreshingStatuses}
-                                className="text-xs font-medium px-2.5 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
-                                title="Re-read the SSG enrolment status for these applications"
-                            >
-                                {refreshingStatuses ? 'Refreshing…' : 'Refresh status'}
+                                title="Re-read enrolment status from SSG"
+                                aria-label="Refresh status"
+                                className="flex-shrink-0 w-10 h-10 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white hover:bg-white/60 dark:hover:bg-gray-700/60 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center">
+                                <Icon name={IconName.Sync} className={`w-4 h-4 ${refreshingStatuses ? 'animate-spin' : ''}`} />
                             </button>
-                            <span className="text-sm text-gray-500 dark:text-gray-400">{filteredResults.length} record{filteredResults.length !== 1 ? 's' : ''}</span>
+                            <Button onClick={handleAutoEnrol} disabled={isAutoEnrolling || autoEnrolPolling}>
+                                {isAutoEnrolling ? 'Starting…' : autoEnrolPolling ? 'Working…' : 'Re-run Auto-Enrol'}
+                            </Button>
                         </div>
                     </div>
-                    {filteredResults.length === 0 ? (
-                        <div className="text-center py-12 text-gray-500 dark:text-gray-400 text-sm">No records in this category.</div>
-                    ) : (
-                        <>
-                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                <thead className="bg-gray-50 dark:bg-gray-700/50">
-                                    <tr>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">-</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Application ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Trainee Name</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Trainee ID</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Action</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Message</th>
-                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">SSG Enrol</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                    {paginatedResults.map((r, i) => (
-                                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td className="px-4 py-3 text-xs text-gray-400">{(resultsPage - 1) * RESULTS_PER_PAGE + i + 1}</td>
-                                            <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{r.application_id || 'N/A'}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.trainee_name || '-'}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="font-mono">{maskTraineeId(r.trainee_id || null)}</span>
-                                                    {r.trainee_id && (<button onClick={() => setShowTraineeId(v => !v)} className="p-0.5 text-gray-400 hover:text-blue-600 rounded transition-colors"><Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-4 h-4" /></button>)}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${r.action === 'inserted' ? 'bg-green-100 text-green-800' : r.action === 'updated' ? 'bg-blue-100 text-blue-800' : r.action === 'skipped' ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-800'}`}>
-                                                    {r.action.charAt(0).toUpperCase() + r.action.slice(1)}
+                </div>
+
+                {/* Filters only earn their place when there is something to filter. */}
+                {allResults.length > 1 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                        {categoryCards.filter(c => c.key === 'all' || c.count > 0).map(({ key, label, count, accent }) => {
+                            const active = filterCategory === key;
+                            return (
+                                <button key={key} onClick={() => { setFilterCategory(key); setResultsPage(1); }}
+                                    aria-pressed={active}
+                                    className={`inline-flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                                        active
+                                            ? 'bg-gray-900 text-white border-gray-900 dark:bg-white dark:text-gray-900 dark:border-white'
+                                            : 'bg-transparent text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                                    }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${accent}`} />
+                                    {label}
+                                    <span className="tabular-nums opacity-70">{count}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* A card per learner. Runs are typically one to a handful, and a
+                    seven-column table for three rows buries the two things anyone
+                    actually looks for: who it was, and how far they got. */}
+                {filteredResults.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 py-14 text-center text-sm text-gray-500 dark:text-gray-400">
+                        Nothing in this filter.
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {paginatedResults.map((r, i) => {
+                            const st = r.enrolStatus;
+                            const isEnrolled = st === 'enroled' || st === 'grant_found' || st === 'invoiced';
+                            // The order an operator thinks in, which is also the order
+                            // these become true. Calendar sits between the grant and the
+                            // invoice in their heads even though the pipeline raises the
+                            // invoice first — what matters here is the checklist, not the
+                            // internal sequence.
+                            const stages = [
+                                { label: 'Enrolled', done: isEnrolled, detail: r.enrolmentId || null },
+                                { label: 'Grant', done: !!r.grantId, detail: r.grantId || null },
+                                { label: 'Calendar', done: r.calendarAdded === true, detail: null },
+                                { label: 'Invoice', done: !!r.invoiceId || st === 'invoiced', detail: r.invoiceId || null },
+                            ];
+                            return (
+                                <div key={i} className="rounded-xl border border-gray-200 dark:border-gray-700/80 bg-white dark:bg-gray-800/50 px-5 py-4 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all">
+                                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                                        <div className="flex items-start gap-3 min-w-0">
+                                            {/* An initial gives the row a fixed anchor point; a list of
+                                                names all starting at different widths reads as a wall. */}
+                                            <span className="flex-shrink-0 w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-sm font-semibold text-gray-600 dark:text-gray-200">
+                                                {(r.trainee_name || '?').trim().charAt(0).toUpperCase()}
+                                            </span>
+                                            <div className="min-w-0">
+                                            <div className="flex items-center gap-2.5 flex-wrap">
+                                                <span className="text-base font-semibold text-gray-900 dark:text-white">{r.trainee_name || '—'}</span>
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
+                                                    r.action === 'inserted' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                                        : r.action === 'updated' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
+                                                            : r.action === 'skipped' ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300'
+                                                                : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'}`}>
+                                                    {r.action}
                                                 </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{r.message}</td>
-                                            <td className="px-4 py-3 text-center">
-                                                {(() => {
-                                                    // Say what happened in words, and show the enrolment reference —
-                                                    // it was being hidden in a tooltip behind a coloured square, so a
-                                                    // successful enrolment was indistinguishable from an unknown one.
-                                                    const chip = (cls: string, label: string, title?: string) => (
-                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${cls}`} title={title}>{label}</span>
-                                                    );
-                                                    if (r.action !== 'inserted' && r.action !== 'updated') return <span className="text-gray-300">-</span>;
-                                                    const s = r.enrolStatus;
-                                                    if (!s || s === 'pending') {
-                                                        return autoEnrolPolling
-                                                            ? <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400"><span className="inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />enrolling…</span>
-                                                            : chip('bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300', 'not checked', 'The page stopped watching this row. Click "Refresh status" to re-read it.');
-                                                    }
-                                                    if (s === 'pending_identity') return chip('bg-yellow-100 text-yellow-800', 'needs ID', r.enrolError || 'Pending identity');
-                                                    if (s === 'failed') return chip('bg-red-100 text-red-700', 'failed', r.enrolError || 'Failed');
-                                                    // This column answers one question: did SSG enrol them. It did, so
-                                                    // it is green. A problem in a later step — invoice, Drive, grant —
-                                                    // is not an enrolment problem and belongs to those columns, not
-                                                    // here; reporting it as an amber enrolment made every row that hit
-                                                    // SSG's normal retry look like it needed attention. Any message is
-                                                    // still carried on the tooltip rather than thrown away.
-                                                    return (
-                                                        <span className="inline-flex flex-col items-center gap-0.5">
-                                                            {/* Always "enrolled" — 'grant_found' and 'invoiced' are later
-                                                                pipeline stages, not enrolment states, and this column is
-                                                                only asking whether SSG took them. The stage stays on the
-                                                                tooltip for anyone who wants it. */}
-                                                            {chip(
-                                                                'bg-green-100 text-green-700',
-                                                                'enrolled',
-                                                                r.enrolError ? `${s} — a later step reported: ${r.enrolError}` : s
+                                            </div>
+                                            <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                                <span className="font-mono text-gray-600 dark:text-gray-300">{r.application_id || '—'}</span>
+                                                <span className="text-gray-300 dark:text-gray-600">·</span>
+                                                <span className="flex items-center gap-1">
+                                                    <span className="font-mono text-gray-400 dark:text-gray-500">{maskTraineeId(r.trainee_id || null)}</span>
+                                                    {r.trainee_id && (
+                                                        <button onClick={() => setShowTraineeId(v => !v)} className="p-0.5 text-gray-400 hover:text-blue-500 rounded">
+                                                            <Icon name={showTraineeId ? IconName.EyeOff : IconName.Eye} className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                </span>
+                                            </div>
+                                            </div>
+                                        </div>
+
+                                        {/* How far this learner got, as a trail rather than one word. */}
+                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                            {st === 'failed' ? (
+                                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300" title={r.enrolError || undefined}>failed</span>
+                                            ) : st === 'pending_identity' ? (
+                                                <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" title={r.enrolError || undefined}>needs ID</span>
+                                            ) : !st || st === 'pending' ? (
+                                                autoEnrolPolling
+                                                    ? <span className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400"><span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />working…</span>
+                                                    : <span className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300">not checked</span>
+                                            ) : (
+                                                <div className="flex items-start pt-0.5">
+                                                    {stages.map((stage, si) => (
+                                                        <div key={stage.label} className="flex items-start">
+                                                            {si > 0 && (
+                                                                <span className={`mt-[9px] h-px w-8 sm:w-10 ${
+                                                                    stage.done ? 'bg-emerald-400/70' : 'bg-gray-200 dark:bg-gray-700'
+                                                                }`} />
                                                             )}
-                                                            {r.enrolmentId && <span className="font-mono text-[10px] text-gray-500 dark:text-gray-400">{r.enrolmentId}</span>}
-                                                        </span>
-                                                    );
-                                                })()}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            {totalResultPages > 1 && (
-                                <div className="p-4 flex justify-between items-center border-t dark:border-gray-700">
-                                    <Button variant="ghost" onClick={() => setResultsPage(p => Math.max(1, p - 1))} disabled={resultsPage === 1}>Previous</Button>
-                                    <span className="text-sm text-gray-500">Page {resultsPage} of {totalResultPages}</span>
-                                    <Button variant="ghost" onClick={() => setResultsPage(p => Math.min(totalResultPages, p + 1))} disabled={resultsPage === totalResultPages}>Next</Button>
+                                                            <div className="flex flex-col items-center gap-1.5 w-[62px]">
+                                                                <span
+                                                                    title={stage.detail || undefined}
+                                                                    className={`w-[19px] h-[19px] rounded-full flex items-center justify-center transition-colors ${
+                                                                        stage.done
+                                                                            ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
+                                                                            : 'border-[1.5px] border-dashed border-gray-300 dark:border-gray-600'
+                                                                    }`}>
+                                                                    {stage.done && (
+                                                                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                                        </svg>
+                                                                    )}
+                                                                </span>
+                                                                <span className={`text-[10px] font-medium tracking-wide whitespace-nowrap ${
+                                                                    stage.done
+                                                                        ? 'text-gray-700 dark:text-gray-200'
+                                                                        : 'text-gray-400 dark:text-gray-500'
+                                                                }`}>
+                                                                    {stage.label}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {(r.enrolmentId || r.grantId) && (
+                                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/60 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px]">
+                                            {r.enrolmentId && <span className="text-gray-500 dark:text-gray-400">Enrolment <span className="font-mono text-gray-700 dark:text-gray-200">{r.enrolmentId}</span></span>}
+                                            {r.grantId && <span className="text-gray-500 dark:text-gray-400">Grant <span className="font-mono text-gray-700 dark:text-gray-200">{r.grantId}</span></span>}
+                                        </div>
+                                    )}
+
+                                    {/* A message deserves its own notice rather than being the third
+                                        item on a row of reference numbers — it is the one thing here
+                                        that might need acting on. */}
+                                    {r.enrolError && !stages.every(x => x.done) && (
+                                        <div className="mt-2.5 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200/70 dark:border-amber-800/50 px-3 py-2">
+                                            <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                                            </svg>
+                                            <span className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300 min-w-0">{r.enrolError}</span>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </>
-                    )}
-                </Card>
+                            );
+                        })}
+
+                        {totalResultPages > 1 && (
+                            <div className="flex justify-between items-center pt-1">
+                                <Button variant="ghost" onClick={() => setResultsPage(p => Math.max(1, p - 1))} disabled={resultsPage === 1}>Previous</Button>
+                                <span className="text-sm text-gray-500 dark:text-gray-400">Page {resultsPage} of {totalResultPages}</span>
+                                <Button variant="ghost" onClick={() => setResultsPage(p => Math.min(totalResultPages, p + 1))} disabled={resultsPage === totalResultPages}>Next</Button>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         );
     }

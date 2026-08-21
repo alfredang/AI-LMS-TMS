@@ -45,7 +45,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               auto_enrol_status,
               auto_enrol_error,
               enrolment_id,
-              grant_id
+              grant_id,
+              invoice_id,
+              calendar_added
          FROM da_application
         WHERE application_id = ANY($1::text[])`,
       [applicationIds]

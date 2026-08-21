@@ -311,14 +311,6 @@ async function seedDefaults() {
             cron_expression: '0 8 * * *', // 8:00 AM SGT daily
             api_endpoint: '/api/external/funding-renewal-reminder',
         },
-        {
-            id: 'auto_generate_da_invoices',
-            name: 'Auto Generate DA Invoices',
-            description: 'Daily sweep that posts QuickBooks invoices (main tax + Grant + SFC) for every confirmed, SSG-enrolled Direct Application still missing one or more of them, then sends unsent main tax invoice emails once via QuickBooks. Catches rows whose grant wasn\'t yet issued by SSG at manual-generate time and rows left in "failed" state by a transient QBO hiccup. Idempotent. Default 23:00 SGT daily.',
-            cron_expression: '0 23 * * *', // 11:00 PM SGT daily
-            api_endpoint: '/api/external/auto-generate-da-invoices',
-            default_enabled: false,
-        },
     ];
 
     const ids = defaults.map(t => t.id);
@@ -432,10 +424,6 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_generate_proforma_invoices', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-generate-proforma-invoices');
-            return runAutomation();
-        });
-        directHandlers.set('auto_generate_da_invoices', async () => {
-            const { runAutomation } = await import('../../pages/api/external/auto-generate-da-invoices');
             return runAutomation();
         });
         directHandlers.set('sync_learners_to_mailerlite', async () => {
