@@ -166,7 +166,34 @@ export async function ensureDaApplicationForEnrolment(
   const traineeName = String(input.traineeName || ctx.full_name || '').trim() || null;
   const traineeNric = String(input.traineeNric || ctx.trainee_nric || '').trim() || null;
   const courseRunId = String(ctx.course_run_id || input.courseRunId || '').trim() || null;
-  const courseRef = String(ctx.course_code || input.courseReferenceNumber || '').trim() || null;
+  // The reference an enrolment is invoiced under belongs to the RUN, not to the
+  // course. A funding renewal issues a new code and SSG registers runs created
+  // after it under that code, while earlier runs keep the retired one — so the
+  // course-level `c.course_code` is wrong for every post-renewal run, and taking
+  // it first stamped a retired reference onto the row. The invoice step then
+  // failed with "QBO item not found for SKU", because QuickBooks carries the
+  // item under the code SSG is actually using.
+  //
+  // Order of trust: what SSG itself records for this enrolment, then the code
+  // the caller enrolled under (the mirror lands after us for a fresh enrolment,
+  // so this is the live value), and only then the course-level column.
+  //
+  // Matched against the bare column, not LOWER(TRIM(col)): `enrolment_id` is
+  // UNIQUE-indexed and SSG's ids are stored canonical (checked: 0 of 22k rows
+  // deviate from UPPER(TRIM(...))). Normalising the column instead would defeat
+  // the index and seq-scan the whole table for a single-row read, so the value
+  // is normalised on the parameter side.
+  const ssgRefRes = await pool.query(
+    `SELECT NULLIF(TRIM(COALESCE(se.course_reference, '')), '') AS course_reference
+       FROM ssg_enrolments se
+      WHERE se.enrolment_id = $1
+      LIMIT 1`,
+    [enrolmentId.toUpperCase()]
+  );
+  const courseRef =
+    String(
+      ssgRefRes.rows[0]?.course_reference || input.courseReferenceNumber || ctx.course_code || ''
+    ).trim() || null;
 
   const upsert = await pool.query(
     `INSERT INTO da_application (
