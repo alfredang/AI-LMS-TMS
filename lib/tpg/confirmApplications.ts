@@ -302,11 +302,6 @@ async function runJob(id: string, opts: StartOptions): Promise<void> {
     // that by pressing Confirm & Enrol, so the run proceeds without a second
     // checkpoint. Cancel still stops it between applications, so a run started
     // by mistake can be halted before it works through the list.
-    //
-    // (Previously an unlimited live run parked at 'awaiting_approval' to show
-    // the count first, since confirming on TPGateway cannot be undone. Removed
-    // at the operator's request; approveTpgConfirmJob remains for the API and
-    // for restoring the checkpoint if it is ever wanted back.)
 
     patchJob(id, {
       phase: 'confirming',

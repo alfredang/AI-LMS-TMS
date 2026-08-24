@@ -87,6 +87,8 @@ async function handler(
           e.certificate,
           c.resource_links,
           c.funding_validity,
+          (SELECT h.valid_from::text FROM course_code_history h
+            WHERE h.course_id = c.id AND h.is_current LIMIT 1) AS funding_validity_start,
           c.skillsfuture_link,
           COALESCE(cr.class_type, 'Physical') AS class_type,
           cr.virtual_meeting_link,
@@ -132,6 +134,8 @@ async function handler(
           e.certificate,
           c.resource_links,
           c.funding_validity,
+          (SELECT h.valid_from::text FROM course_code_history h
+            WHERE h.course_id = c.id AND h.is_current LIMIT 1) AS funding_validity_start,
           c.skillsfuture_link,
           COALESCE(cr.class_type, 'Physical') AS class_type,
           cr.virtual_meeting_link,
@@ -228,6 +232,7 @@ async function handler(
         certificate: courseDetail.certificate,
         resourceLinks: (courseDetail as any).resource_links ? (typeof (courseDetail as any).resource_links === 'string' ? JSON.parse((courseDetail as any).resource_links) : (courseDetail as any).resource_links) : [],
         fundingValidity: (courseDetail as any).funding_validity || null,
+        fundingValidityStart: (courseDetail as any).funding_validity_start || null,
         skillsfutureLink: (courseDetail as any).skillsfuture_link || null,
         classType: (courseDetail as any).class_type || 'Physical',
         virtualMeetingLink: (courseDetail as any).virtual_meeting_link || null,

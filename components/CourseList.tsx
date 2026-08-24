@@ -502,15 +502,26 @@ const ManagementCourseList: React.FC = () => {
                                 } />
                                 <DetailRow label="Mode of Training" value={course.modeOfLearning.join(', ')} />
                                 {(() => {
-                                    if (!course.fundingValidity) return <DetailRow label="Funding Validity" value="N/A" />;
+                                    const start = (course as any).fundingValidityStart ? new Date((course as any).fundingValidityStart) : null;
+                                    const startRow = (
+                                        <DetailRow label="Funding Validity Start" value={
+                                            start && !isNaN(start.getTime())
+                                                ? start.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })
+                                                : 'N/A'
+                                        } />
+                                    );
+                                    if (!course.fundingValidity) return <>{startRow}<DetailRow label="Funding Validity End" value="N/A" /></>;
                                     const expiry = new Date(course.fundingValidity);
                                     const isExpired = expiry < new Date();
                                     return (
-                                        <DetailRow label="Funding Validity" value={
-                                            <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${isExpired ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'}`}>
-                                                {expiry.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} {isExpired ? '· Expired' : '· Valid'}
-                                            </span>
-                                        } />
+                                        <>
+                                            {startRow}
+                                            <DetailRow label="Funding Validity End" value={
+                                                <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${isExpired ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'}`}>
+                                                    {expiry.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} {isExpired ? '· Expired' : '· Valid'}
+                                                </span>
+                                            } />
+                                        </>
                                     );
                                 })()}
                                 <DetailRow label="Course Duration" value={
@@ -775,9 +786,11 @@ const ManagementCourseList: React.FC = () => {
     }
 
     // KPI stats from full dataset
-    // CASL is funded like WSQ, so it counts under the WSQ tile rather than as unfunded.
-    const wsqCourses = (relevantCourses || []).filter(c => c.courseType === 'WSQ' || c.courseType === 'CASL').length;
+    // Funded = WSQ + CASL + IBF (all carry TGS- codes); unfunded courses carry C- codes.
+    const wsqCourses = (relevantCourses || []).filter(c => c.courseType === 'WSQ').length;
+    const caslCourses = (relevantCourses || []).filter(c => c.courseType === 'CASL').length;
     const ibfCourses = (relevantCourses || []).filter(c => c.courseType === 'IBF').length;
+    const fundedCourses = wsqCourses + caslCourses + ibfCourses;
     const unfundedCourses = (relevantCourses || []).filter(c => c.courseType !== 'WSQ' && c.courseType !== 'CASL' && c.courseType !== 'IBF').length;
 
     return (
@@ -785,10 +798,18 @@ const ManagementCourseList: React.FC = () => {
 
             {/* KPI Stat Cards */}
             {(role === UserRole.Admin || role === UserRole.Developer || role === UserRole.TrainingProvider) && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-5 gap-4 mb-6">
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-green-600">{fundedCourses}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">Funded Courses</p>
+                    </Card>
                     <Card className="p-6 text-center">
                         <p className="text-4xl font-bold text-blue-600">{wsqCourses}</p>
                         <p className="text-gray-600 dark:text-gray-300 mt-1">WSQ Courses</p>
+                    </Card>
+                    <Card className="p-6 text-center">
+                        <p className="text-4xl font-bold text-teal-600">{caslCourses}</p>
+                        <p className="text-gray-600 dark:text-gray-300 mt-1">CASL Courses</p>
                     </Card>
                     <Card className="p-6 text-center">
                         <p className="text-4xl font-bold text-purple-600">{ibfCourses}</p>

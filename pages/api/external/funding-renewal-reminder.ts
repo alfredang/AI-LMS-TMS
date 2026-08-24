@@ -41,10 +41,9 @@ function parseValidityDate(value?: string | null): Date | null {
   return parsed;
 }
 
-const displayCourseType = (value?: string | null) => {
-  if (value === 'Non-WSQ') return 'CASL';
-  return value || 'CASL';
-};
+// Types are stored literally since the CASL conversion (Aug 2026) — Non-WSQ is
+// genuinely unfunded and is no longer folded into CASL.
+const displayCourseType = (value?: string | null) => value || 'Non-WSQ';
 
 const formatDate = (date: Date) => date.toLocaleDateString('en-GB');
 

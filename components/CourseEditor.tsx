@@ -1178,6 +1178,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 brochureLink: course.brochureLink || null,
                 skillsfutureLink: course.skillsfutureLink || null,
                 fundingValidity: course.fundingValidity || null,
+                fundingValidityStart: course.fundingValidityStart || null,
                 assessmentRecordLink: course.assessmentRecordLink || null,
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
                 numOfTrainers: selectedApprovedTrainers.length,
@@ -1707,7 +1708,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 })()}
                                 <ReadonlyValueField label="TSC Title" value={course.tscTitle} />
                                 <ReadonlyValueField label="TSC Code" value={course.tscCode} />
-                                <ReadonlyValueField label="Funding Validity" value={course.fundingValidity} />
+                                <ReadonlyValueField label="Funding Validity Start Date" value={course.fundingValidityStart} />
+                                <ReadonlyValueField label="Funding Validity End Date" value={course.fundingValidity} />
                                 <ReadonlyValueField label="Training Hours" value={formatDisplayValue(course.trainingHours)} />
                                 <ReadonlyValueField label="Assessment Hours" value={formatDisplayValue(course.assessmentHours)} />
                                 <ReadonlyValueField label="Total Duration" value={`${Number(course.trainingHours || 0) + Number(course.assessmentHours || 0)} hours`} />
@@ -1977,8 +1979,24 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <input type="text" id="tscCode" name="tscCode" value={course.tscCode} onChange={handleCourseChange} className={inputClasses} placeholder="e.g. ICT-DIT-3011-1.1" />
                             </div>
                             <div>
+                                <label htmlFor="fundingValidityStart" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                    Funding Validity Start Date
+                                </label>
+                                <input type="date" id="fundingValidityStart" name="fundingValidityStart" value={(() => {
+                                    if (!course.fundingValidityStart) return '';
+                                    if (/^\d{4}-\d{2}-\d{2}/.test(course.fundingValidityStart)) return course.fundingValidityStart.slice(0, 10);
+                                    const d = new Date(course.fundingValidityStart);
+                                    if (isNaN(d.getTime())) return '';
+                                    const yyyy = d.getFullYear();
+                                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                                    const dd = String(d.getDate()).padStart(2, '0');
+                                    return `${yyyy}-${mm}-${dd}`;
+                                })()} onChange={handleCourseChange} className={inputClasses} />
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Date from which the course funding is valid</p>
+                            </div>
+                            <div>
                                 <label htmlFor="fundingValidity" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                    Funding Validity
+                                    Funding Validity End Date
                                 </label>
                                 <input type="date" id="fundingValidity" name="fundingValidity" value={(() => {
                                     if (!course.fundingValidity) return '';

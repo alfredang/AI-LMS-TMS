@@ -8,6 +8,7 @@ import { searchEnrolment } from './ssg/services/enrolment-service';
 import { HttpClient, HTTPRequestBuilder, HttpMethod } from './ssg/utils/http-utils';
 import { refreshGrantsForEnrolments } from './services/billingSync';
 import { getTrainingPartnerIdentifiers } from './trainingPartnerIdentifiers';
+import { RUN_COURSE_CODE_SQL } from './courseCode';
 import { addCaLearnerToCalendar } from './google-calendar/ca-calendar-sync';
 
 function isRealSsgEnrolmentId(value: unknown): value is string {
@@ -299,6 +300,12 @@ function assertSingleCourseRun(rows: any[], title: string, startDate: string | n
   );
 }
 
+/**
+ * The reference number comes from RUN_COURSE_CODE_SQL, never bare c.course_code:
+ * for a renewed course that column holds the RETIRED code, and SSG rejects the
+ * enrolment with "TGS-406 - Invalid course reference number" (hit on run 1415270,
+ * where TGS-2020503487 had been superseded by TGS-2026064720).
+ */
 async function resolveCourseRun(row: any): Promise<ResolvedRun | null> {
   const title = String(row.course_title || '').trim();
   const startDate = normalizeDate(row.course_start_date);
@@ -311,7 +318,7 @@ async function resolveCourseRun(row: any): Promise<ResolvedRun | null> {
     const pinned = await pool.query(
       `SELECT cr.id::text AS course_run_uuid,
               cr.course_run_id::text AS course_run_id,
-              c.course_code::text AS course_reference_number,
+              ${RUN_COURSE_CODE_SQL}::text AS course_reference_number,
               c.title::text AS course_title,
               c.course_fee::numeric AS course_fee,
               cr.start_date::text AS start_date
@@ -348,7 +355,7 @@ async function resolveCourseRun(row: any): Promise<ResolvedRun | null> {
   const exact = await pool.query(
     `SELECT cr.id::text AS course_run_uuid,
             cr.course_run_id::text AS course_run_id,
-            c.course_code::text AS course_reference_number,
+            ${RUN_COURSE_CODE_SQL}::text AS course_reference_number,
             c.title::text AS course_title,
             c.course_fee::numeric AS course_fee,
             cr.start_date::text AS start_date
@@ -386,7 +393,7 @@ async function resolveCourseRun(row: any): Promise<ResolvedRun | null> {
     const sameDateRuns = await pool.query(
       `SELECT cr.id::text AS course_run_uuid,
               cr.course_run_id::text AS course_run_id,
-              c.course_code::text AS course_reference_number,
+              ${RUN_COURSE_CODE_SQL}::text AS course_reference_number,
               c.title::text AS course_title,
               c.course_fee::numeric AS course_fee,
               cr.start_date::text AS start_date

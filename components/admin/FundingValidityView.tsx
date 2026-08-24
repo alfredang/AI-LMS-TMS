@@ -43,10 +43,10 @@ const toDateInputValue = (value?: string | null) => {
 
 const isRenewed = (value?: string | null) => !!value && value.trim().length > 0;
 
-const displayCourseType = (value?: string | null) => {
-  if (value === 'Non-WSQ') return 'CASL';
-  return value || 'CASL';
-};
+// Course types are stored literally since the CASL conversion (Aug 2026):
+// funded courses are typed WSQ / CASL / IBF (TGS- codes); Non-WSQ (C- codes)
+// is unfunded and shows as itself — it is no longer folded into CASL.
+const displayCourseType = (value?: string | null) => value || 'Non-WSQ';
 
 // Collapse the stored course_type into the editable buckets. Anything that isn't
 // exactly 'WSQ' or 'CASL' (incl. IBF / non-WSQ) is treated as Non-WSQ here.
@@ -81,6 +81,9 @@ const FundingValidityView: React.FC = () => {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'All' | 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ'>('All');
+  const [endDateFrom, setEndDateFrom] = useState('');
+  const [endDateTo, setEndDateTo] = useState('');
 
   const today = startOfDay(new Date());
   const fourMonthsAhead = startOfDay(FOUR_MONTHS_AHEAD(today));
@@ -97,15 +100,27 @@ const FundingValidityView: React.FC = () => {
       });
   }, [courses]);
 
-  // Matches on title / both ref codes / type so "WSQ", "TGS-2024" or a course name all work.
+  // Matches on title / both ref codes / type so "WSQ", "TGS-2024" or a course name all work,
+  // then narrows by the Type dropdown and the Validity End Date range.
   const visibleCourses = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return wsqCourses;
-    return wsqCourses.filter(course =>
-      [course.title, course.newCourseCode, course.courseCode, displayCourseType(course.courseType)]
-        .some(field => (field || '').toLowerCase().includes(term))
-    );
-  }, [search, wsqCourses]);
+    const from = endDateFrom ? parseValidityDate(endDateFrom) : null;
+    const to = endDateTo ? parseValidityDate(endDateTo) : null;
+    return wsqCourses.filter(course => {
+      if (term && ![course.title, course.newCourseCode, course.courseCode, displayCourseType(course.courseType)]
+        .some(field => (field || '').toLowerCase().includes(term))) return false;
+      if (typeFilter !== 'All' && displayCourseType(course.courseType) !== typeFilter) return false;
+      if (from || to) {
+        const end = parseValidityDate(course.fundingValidity);
+        if (!end) return false;
+        if (from && end < from) return false;
+        if (to && end > to) return false;
+      }
+      return true;
+    });
+  }, [search, typeFilter, endDateFrom, endDateTo, wsqCourses]);
+
+  const filtersActive = !!search.trim() || typeFilter !== 'All' || !!endDateFrom || !!endDateTo;
 
   const expiringSoonIds = useMemo(() => {
     return new Set(
@@ -121,14 +136,17 @@ const FundingValidityView: React.FC = () => {
   const isCourseRenewed = (course: any) =>
     renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
 
-  // Row 1 — totals by funding type. CASL courses are counted as WSQ (per
-  // ops direction, Aug 2026): everything that isn't IBF rolls into WSQ.
-  const typeTotals = { WSQ: 0, IBF: 0 };
+  // Row 1 — totals by funding type: WSQ, CASL and IBF each get their own tile.
+  // Non-WSQ (unfunded) courses stay out of every tile so these totals match the
+  // Course Management KPI cards.
+  const typeTotals = { WSQ: 0, CASL: 0, IBF: 0 };
   for (const course of wsqCourses) {
-    if (displayCourseType(course.courseType) === 'IBF') typeTotals.IBF += 1;
-    else typeTotals.WSQ += 1;
+    const t = displayCourseType(course.courseType);
+    if (t === 'IBF') typeTotals.IBF += 1;
+    else if (t === 'CASL') typeTotals.CASL += 1;
+    else if (t === 'WSQ') typeTotals.WSQ += 1;
   }
-  const totalFunded = typeTotals.WSQ + typeTotals.IBF;
+  const totalFunded = typeTotals.WSQ + typeTotals.CASL + typeTotals.IBF;
 
   const addMonthsTo = (date: Date, months: number) => {
     const next = new Date(date);
@@ -291,6 +309,7 @@ const FundingValidityView: React.FC = () => {
           'Course Ref Code (New)': course.newCourseCode || '',
           'Course Ref Code (Old)': course.courseCode || '',
           'Type': displayCourseType(course.courseType),
+          'Validity Start Date': parseValidityDate(course.fundingValidityStart) || '',
           'Validity End Date': validityDate || '',
           'Renew Date': renewDate || '',
           'Status': !validityDate ? '' : validityDate < today ? 'Expired' : validityDate <= fourMonthsAhead ? 'Expiring Soon' : 'Valid',
@@ -305,7 +324,7 @@ const FundingValidityView: React.FC = () => {
 
       // Header-row dropdowns in Excel — the Type column filters to WSQ / CASL.
       ws['!autofilter'] = { ref: ws['!ref'] };
-      ws['!cols'] = [{ wch: 60 }, { wch: 20 }, { wch: 20 }, { wch: 8 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }];
+      ws['!cols'] = [{ wch: 60 }, { wch: 20 }, { wch: 20 }, { wch: 8 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }];
 
       // Date columns (E, F) render as dd/mm/yyyy like the table.
       for (let r = 1; r <= rows.length; r++) {
@@ -468,19 +487,23 @@ const FundingValidityView: React.FC = () => {
     <div>
       <h3 className="text-3xl font-bold dark:text-white mb-6">Course Funding Validity</h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-4 gap-6 mb-6">
         <Card className="p-6 text-center">
           <p className="text-4xl font-bold text-blue-600">{totalFunded}</p>
           <p className="text-gray-600 dark:text-gray-300 mt-1">Total Funded Courses</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">WSQ + IBF</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">WSQ + CASL + IBF</p>
         </Card>
         <Card className="p-6 text-center">
           <p className="text-4xl font-bold text-emerald-600">{typeTotals.WSQ}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Total WSQ Courses</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">WSQ Courses</p>
+        </Card>
+        <Card className="p-6 text-center">
+          <p className="text-4xl font-bold text-teal-600">{typeTotals.CASL}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">CASL Courses</p>
         </Card>
         <Card className="p-6 text-center">
           <p className="text-4xl font-bold text-sky-600">{typeTotals.IBF}</p>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Total IBF Courses</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">IBF Courses</p>
         </Card>
       </div>
 
@@ -621,7 +644,49 @@ const FundingValidityView: React.FC = () => {
             </button>
           )}
         </div>
-        {search.trim() && (
+        <div className="mt-3 flex flex-wrap items-end gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Type</label>
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value as 'All' | 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ')}
+              className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            >
+              <option value="All">All Types</option>
+              <option value="WSQ">WSQ</option>
+              <option value="CASL">CASL</option>
+              <option value="IBF">IBF</option>
+              <option value="Non-WSQ">Non-WSQ</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">End Date From</label>
+            <input
+              type="date"
+              value={endDateFrom}
+              onChange={e => setEndDateFrom(e.target.value)}
+              className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">End Date To</label>
+            <input
+              type="date"
+              value={endDateTo}
+              onChange={e => setEndDateTo(e.target.value)}
+              className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+          </div>
+          {filtersActive && (
+            <button
+              onClick={() => { setSearch(''); setTypeFilter('All'); setEndDateFrom(''); setEndDateTo(''); }}
+              className="px-3 py-2 text-sm font-medium rounded-lg text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              Reset Filters
+            </button>
+          )}
+        </div>
+        {filtersActive && (
           <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
             Showing {visibleCourses.length} of {wsqCourses.length} courses. The Excel download still contains the full list.
           </p>
@@ -716,6 +781,7 @@ const FundingValidityView: React.FC = () => {
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code (New)</th>
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code (Old)</th>
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Type</th>
+                <th className="px-3 py-2 font-semibold whitespace-nowrap">Validity Start Date</th>
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Validity End Date</th>
                 <th className="px-3 py-2 font-semibold whitespace-nowrap">Renew Date</th>
                 <th className="px-3 py-2 font-semibold text-right whitespace-nowrap">CAS</th>
@@ -774,6 +840,9 @@ const FundingValidityView: React.FC = () => {
                       )}
                     </td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      {course.fundingValidityStart ? formatValidityDate(course.fundingValidityStart) : '—'}
+                    </td>
+                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
                       {isEditing ? (
                         <input
                           type="date"
@@ -784,8 +853,8 @@ const FundingValidityView: React.FC = () => {
                       ) : (
                         <>
                           <span>{formatValidityDate(course.fundingValidity)}</span>
-                          {expired && course.courseType === 'WSQ' && <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
-                          {!expired && expiringSoon && course.courseType === 'WSQ' && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
+                          {expired && (course.courseType === 'WSQ' || course.courseType === 'CASL') && <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
+                          {!expired && expiringSoon && (course.courseType === 'WSQ' || course.courseType === 'CASL') && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
                         </>
                       )}
                     </td>

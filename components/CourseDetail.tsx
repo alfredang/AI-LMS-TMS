@@ -90,6 +90,7 @@ interface Course {
     assessmentMethods?: Record<string, { enabled: boolean; link: string }>;
     publishedAssessmentMethods?: Record<string, boolean>;
     fundingValidity?: string;
+    fundingValidityStart?: string | null;
     assessmentSummaryRecordUrl?: string;
 }
 
@@ -1858,16 +1859,23 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
                 <DetailRow label="TSC Title" value={course.tscTitle || 'N/A'} />
                 <DetailRow label="TSC Code" value={course.tscCode || 'N/A'} />
                 {(() => {
+                    const start = course.fundingValidityStart ? new Date(course.fundingValidityStart) : null;
                     const expiry = course.fundingValidity ? new Date(course.fundingValidity) : null;
                     const isExpired = expiry ? expiry < new Date() : false;
-                    const formatted = expiry ? expiry.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+                    const fmt = (d: Date | null) => d && !isNaN(d.getTime()) ? d.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
                     return (
-                        <div className="flex justify-between items-start gap-4">
-                            <p className="text-gray-500 dark:text-gray-400 flex-shrink-0">Funding Validity</p>
-                            <p className={`font-semibold text-right ${expiry && isExpired ? 'text-red-600 dark:text-red-400' : expiry ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-gray-100'}`}>
-                                {formatted}{expiry ? (isExpired ? ' (Expired)' : ' (Valid)') : ''}
-                            </p>
-                        </div>
+                        <>
+                            <div className="flex justify-between items-start gap-4">
+                                <p className="text-gray-500 dark:text-gray-400 flex-shrink-0">Funding Validity Start Date</p>
+                                <p className="font-semibold text-right text-gray-900 dark:text-gray-100">{fmt(start)}</p>
+                            </div>
+                            <div className="flex justify-between items-start gap-4">
+                                <p className="text-gray-500 dark:text-gray-400 flex-shrink-0">Funding Validity End Date</p>
+                                <p className={`font-semibold text-right ${expiry && isExpired ? 'text-red-600 dark:text-red-400' : expiry ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                                    {fmt(expiry)}{expiry ? (isExpired ? ' (Expired)' : ' (Valid)') : ''}
+                                </p>
+                            </div>
+                        </>
                     );
                 })()}
                 {/* Course run fields — hide for Developer, TP, and Admin (admin views course-level, not run-level) */}

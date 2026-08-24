@@ -83,6 +83,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         cr.end_date,
         c.resource_links,
         c.funding_validity,
+          (SELECT h.valid_from::text FROM course_code_history h
+            WHERE h.course_id = c.id AND h.is_current LIMIT 1) AS funding_validity_start,
         c.skillsfuture_link,
         COALESCE(cr.class_type, 'Physical') AS class_type,
         CASE
@@ -246,6 +248,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           courseCode: courseDetail.course_code,
           resourceLinks: courseDetail.resource_links ? (typeof courseDetail.resource_links === 'string' ? JSON.parse(courseDetail.resource_links) : courseDetail.resource_links) : [],
           fundingValidity: courseDetail.funding_validity || null,
+          fundingValidityStart: courseDetail.funding_validity_start || null,
           skillsfutureLink: courseDetail.skillsfuture_link || null,
           classType: courseDetail.class_type || 'Physical',
           virtualMeetingLink: courseDetail.virtual_meeting_link || null,
