@@ -192,9 +192,6 @@ export const UploadDirectApplicationView: React.FC = () => {
     const [tpgJobId, setTpgJobId] = useState<string | null>(null);
     const [tpgCancelling, setTpgCancelling] = useState(false);
     const [tpgApproving, setTpgApproving] = useState(false);
-    // Which learners are ticked while a "Choose learners" run waits.
-    const [tpgChosen, setTpgChosen] = useState<Set<string>>(new Set());
-    const [tpgSubmittingChoice, setTpgSubmittingChoice] = useState(false);
     // Drives the elapsed clock. Kept separate from the job so the time keeps
     // moving between polls instead of jumping every 2s.
     const [tpgNow, setTpgNow] = useState(() => Date.now());
@@ -579,40 +576,6 @@ export const UploadDirectApplicationView: React.FC = () => {
         } catch { /* the operator can click again */ }
     };
 
-    // Everything starts ticked: the operator is usually removing a few rather
-    // than picking a few, and an empty list would make the primary button dead
-    // on arrival.
-    const tpgSelectableIds = (tpgJob?.phase === 'awaiting_selection'
-        ? (tpgJob.apps || []).filter(a => a.status !== 'failed').map(a => a.id)
-        : []
-    ).join(',');
-
-    // Everything starts ticked: the operator is usually removing a few rather
-    // than picking a few. Keyed on the ids, not their count — keying on the
-    // count meant a list arriving after the phase flipped never got ticked.
-    useEffect(() => {
-        if (!tpgSelectableIds) return;
-        setTpgChosen(new Set(tpgSelectableIds.split(',')));
-    }, [tpgSelectableIds]);
-
-    const submitTpgChoice = async () => {
-        if (!tpgJobId) return;
-        setTpgSubmittingChoice(true);
-        try {
-            const res = await fetch('/api/admin/tpg-confirm/select', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...authHeaders() },
-                body: JSON.stringify({ jobId: tpgJobId, applicationIds: [...tpgChosen] }),
-            });
-            const json = await res.json();
-            if (!json.success) throw new Error(json.error || 'Could not submit your choice');
-        } catch (err) {
-            setTpgError(err instanceof Error ? err.message : 'Could not submit your choice');
-        } finally {
-            setTpgSubmittingChoice(false);
-        }
-    };
-
     const cancelTpg = async () => {
         if (!tpgJobId) return;
         setTpgCancelling(true);
@@ -644,7 +607,7 @@ export const UploadDirectApplicationView: React.FC = () => {
         }
     };
 
-    const runTpg = async (dryRun: boolean, chooseFirst = false) => {
+    const runTpg = async (dryRun: boolean) => {
         setError(null);
         setTpgError(null);
         setTpgJob(null);
@@ -660,7 +623,7 @@ export const UploadDirectApplicationView: React.FC = () => {
             const res = await fetch('/api/admin/tpg-confirm/run', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders() },
-                body: JSON.stringify({ dryRun, max, chooseFirst }),
+                body: JSON.stringify({ dryRun, max }),
             });
             const json = await res.json();
             if (!json.success) throw new Error(json.error || 'Failed to start TPGateway run');
@@ -1361,7 +1324,6 @@ export const UploadDirectApplicationView: React.FC = () => {
 
     const TPG_PHASE_LABEL: Record<string, string> = {
         queued: 'Waiting to start',
-        awaiting_selection: 'Choose who to confirm',
         starting: 'Starting…',
         awaiting_login: 'Waiting for Singpass login',
         collecting: 'Finding pending applications',
@@ -1487,8 +1449,6 @@ export const UploadDirectApplicationView: React.FC = () => {
                             says why. */}
                         <Button variant="outline" onClick={() => runTpg(true)} disabled={tpgRunning || tpgHelperOffline}
                             title={tpgHelperOffline ? OFFLINE_HINT : undefined}>Dry run</Button>
-                        <Button variant="outline" onClick={() => runTpg(false, true)} disabled={tpgRunning || tpgHelperOffline}
-                            title={tpgHelperOffline ? OFFLINE_HINT : 'Read each application first, then pick who to confirm'}>Choose learners</Button>
                         <Button onClick={() => runTpg(false)} disabled={tpgRunning || tpgHelperOffline}
                             title={tpgHelperOffline ? OFFLINE_HINT : undefined}>Confirm &amp; Enrol</Button>
                         {tpgRunning && (
@@ -1739,83 +1699,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                                 </div>
                             </div>
                         )}
-                        {/* Nothing has been confirmed at this point — the run has only
-                            read each application to find out who it is — so this is the
-                            last moment before anything irreversible. */}
-                        {tpgJob.phase === 'awaiting_selection' && (() => {
-                            const selectable = tpgJob.apps.filter(a => a.status !== 'failed');
-                            const allTicked = selectable.length > 0 && selectable.every(a => tpgChosen.has(a.id));
-                            return (
-                                <div className="mt-4 rounded-xl border border-amber-300 dark:border-amber-700/70 bg-amber-50/70 dark:bg-amber-900/15 p-4">
-                                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                                        <div>
-                                            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                                                Choose who to confirm
-                                                <span className="ml-2 font-normal text-xs text-amber-800 dark:text-amber-300">
-                                                    {tpgChosen.size} of {selectable.length} selected
-                                                </span>
-                                            </p>
-                                            <p className="text-xs text-amber-800 dark:text-amber-300 mt-1 max-w-2xl">
-                                                Nothing has been confirmed on TPGateway yet. Untick anyone you are not
-                                                confirming today. Confirming cannot be undone.
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => setTpgChosen(allTicked ? new Set() : new Set(selectable.map(a => a.id)))}
-                                            className="text-xs font-medium px-2.5 py-1.5 rounded-lg border border-amber-400 text-amber-800 dark:text-amber-200 dark:border-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
-                                            {allTicked ? 'Untick all' : 'Tick all'}
-                                        </button>
-                                    </div>
-
-                                    <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-amber-200 dark:border-amber-800/70 divide-y divide-amber-200/60 dark:divide-amber-800/50 bg-white/70 dark:bg-gray-900/40">
-                                        {selectable.map(a => {
-                                            const ticked = tpgChosen.has(a.id);
-                                            return (
-                                                <label key={a.id}
-                                                    className={`flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
-                                                        ticked ? '' : 'opacity-55 hover:opacity-80'}`}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={ticked}
-                                                        onChange={() => setTpgChosen(prev => {
-                                                            const next = new Set(prev);
-                                                            if (next.has(a.id)) next.delete(a.id); else next.add(a.id);
-                                                            return next;
-                                                        })}
-                                                        className="w-4 h-4 mt-0.5 flex-shrink-0 accent-amber-600"
-                                                    />
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">
-                                                            {a.name || '(name not read)'}
-                                                        </div>
-                                                        {(a.course || a.startDate) && (
-                                                            <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
-                                                                {a.course || ''}
-                                                                {a.course && a.startDate ? ' · ' : ''}
-                                                                {a.startDate ? `starts ${a.startDate}` : ''}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <span className="flex-shrink-0 mt-0.5 font-mono text-[11px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-700/70 dark:text-gray-200">
-                                                        {a.id}
-                                                    </span>
-                                                </label>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <div className="flex items-center gap-2 mt-3">
-                                        <Button onClick={submitTpgChoice} disabled={tpgSubmittingChoice || tpgChosen.size === 0}>
-                                            {tpgSubmittingChoice ? 'Starting…' : `Confirm ${tpgChosen.size} selected`}
-                                        </Button>
-                                        <Button variant="outline" onClick={cancelTpg} disabled={tpgCancelling}>
-                                            {tpgCancelling ? 'Stopping…' : 'Cancel'}
-                                        </Button>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-                        {tpgJob.phase !== 'awaiting_selection' && tpgJob.apps.length > 0 && (
+                        {tpgJob.apps.length > 0 && (
                             <div className="mt-3 max-h-64 overflow-y-auto rounded border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
                                 {tpgJob.apps.map(a => (
                                     <div key={a.id} className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs">
