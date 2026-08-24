@@ -1416,6 +1416,7 @@ export async function processDirectApplication(
       const grantInvoice = await createDirectApplicationGrantInvoice({
         enrolmentId: enrolmentReference,
         mainInvoiceDocNumber: invoiceDocNumber,
+        courseReferenceNumber: row.course_reference_number ?? null,
         fallbackGrantId: fallbackGrantId || null,
         fallbackTotalAmount: toMoney(row.tg_amount) || toMoney(row.grant_amount) || toMoney(row.skillsfuture_subsidy),
         fallbackBlGrantId: hasIdentifier(row.bl_grant_id) ? row.bl_grant_id : null,

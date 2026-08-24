@@ -28,6 +28,7 @@ import {
   qboFindCustomerByName,
   qboFindInvoiceByDocNumber,
   qboFindItemByName,
+  qboCreateInvoiceRetryingDuplicateDocNumber,
   qboResolveOosTaxCodeRef,
   qboSparseUpdateInvoice,
 } from '../services/qboInvoiceService';
@@ -37,6 +38,12 @@ import {
   loadSplitGrantDeductionsFromDb,
 } from '../services/daInvoiceGrantLines';
 import { buildPurchaseOrderInvoiceFields } from './directApplicationInvoiceFields';
+import {
+  buildInvoiceLineText,
+  detectFundingFamily,
+  type FundingFamily,
+} from './invoiceLineText';
+import { qboFindItemBySku } from '../services/qboInvoiceService';
 
 /**
  * Fixed QB customer for all Grant + SFC supplemental invoices — the grant is
@@ -65,6 +72,13 @@ async function resolveSupplementalCustomerRef(): Promise<string> {
 export interface GrantInvoiceInput {
   enrolmentId: string;
   mainInvoiceDocNumber: string | null;
+  /**
+   * The course's TGS reference. Used to look up the same QuickBooks product the
+   * main invoice bills against, so this invoice picks the same funding products
+   * (WSQ vs CASL) and the two documents still read alike side by side - which is
+   * the entire reason this invoice exists.
+   */
+  courseReferenceNumber?: string | null;
   fallbackGrantId?: string | null;
   fallbackTotalAmount?: number | null;
   fallbackBlGrantId?: string | null;
@@ -82,17 +96,36 @@ export interface CreatedGrantInvoice {
   reusedExisting: boolean;
 }
 
-async function resolveGrantItemRef(itemName: string): Promise<{ value: string; name?: string } | null> {
+async function resolveGrantItem(itemName: string) {
   const name = String(itemName || '').trim();
   if (!name) return null;
   try {
     const item = await qboFindItemByName(undefined, name);
-    if (item?.id) return { value: item.id, name: item.name };
+    if (item?.id) return item;
     console.warn(`[QBO grant invoice] No Item found for name "${name}" — grant line cannot be created without a Product/Service.`);
   } catch (err) {
     console.warn(`[QBO grant invoice] Item lookup failed for "${name}":`, err);
   }
   return null;
+}
+
+/**
+ * Which funding products this enrolment bills against, read from the course
+ * product exactly as the main invoice reads it. Falls back to WSQ when the
+ * course reference is unknown or has no product - the pre-CASL behaviour.
+ */
+async function resolveFamilyFromCourseProduct(
+  courseReferenceNumber: string | null | undefined
+): Promise<FundingFamily> {
+  const sku = String(courseReferenceNumber || '').trim();
+  if (!sku) return 'WSQ';
+  try {
+    const courseItem = await qboFindItemBySku(undefined, sku);
+    return detectFundingFamily(courseItem?.description, courseItem?.name);
+  } catch (err) {
+    console.warn(`[QBO grant invoice] Could not read course product ${sku}; assuming WSQ:`, err);
+    return 'WSQ';
+  }
 }
 
 export async function createDirectApplicationGrantInvoice(
@@ -103,7 +136,9 @@ export async function createDirectApplicationGrantInvoice(
     throw new Error('createDirectApplicationGrantInvoice: enrolmentId is required');
   }
 
-  let { lines: grantLines } = await loadSplitGrantDeductionsFromDb(enrolmentId);
+  const family = await resolveFamilyFromCourseProduct(input.courseReferenceNumber);
+
+  let { lines: grantLines } = await loadSplitGrantDeductionsFromDb(enrolmentId, family);
   let positiveLines = grantLines.filter(l => Number(l.amount) > 0);
 
   // If ssg_grants has no rows for this enrolment, try to pull them from SSG
@@ -126,13 +161,14 @@ export async function createDirectApplicationGrantInvoice(
       );
     }
 
-    const retry = await loadSplitGrantDeductionsFromDb(enrolmentId);
+    const retry = await loadSplitGrantDeductionsFromDb(enrolmentId, family);
     grantLines = retry.lines;
     positiveLines = grantLines.filter(l => Number(l.amount) > 0);
   }
 
   if (positiveLines.length === 0) {
     const fallbackLines = buildFallbackSplitGrantLines({
+      courseTypeLabel: family,
       blGrantId: input.fallbackBlGrantId,
       blAmount: input.fallbackBlAmount,
       otherGrantId: input.fallbackOtherGrantId,
@@ -169,7 +205,9 @@ export async function createDirectApplicationGrantInvoice(
   // reuse it rather than duplicating. Backfill PONumber if the existing
   // invoice was created before PO linking was added and mainInvoiceDocNumber
   // is now available.
-  const existing = await qboFindInvoiceByDocNumber(undefined, docNumber);
+  // A void is not a reusable invoice. Skipping it lets the grant invoice be
+  // reissued after the admin cancels it from the DA screen.
+  const existing = await qboFindInvoiceByDocNumber(undefined, docNumber, { ignoreVoided: true });
   if (existing?.id) {
     const desiredPo = input.mainInvoiceDocNumber ? input.mainInvoiceDocNumber.trim() : '';
     if (desiredPo && existing.syncToken) {
@@ -198,18 +236,24 @@ export async function createDirectApplicationGrantInvoice(
 
   const lineBodies: any[] = [];
   for (const g of positiveLines) {
-    const itemRef = await resolveGrantItemRef(g.itemName);
-    if (!itemRef) {
+    const item = await resolveGrantItem(g.itemName);
+    if (!item) {
       throw new Error(
         `Grant invoice requires QBO Product/Service "${g.itemName}" to exist. Create it in QuickBooks or adjust the mapping in daInvoiceGrantLines.ts.`
       );
     }
+    // Same wording as the main invoice, from the same product Description box.
+    const built = buildInvoiceLineText({
+      productDescription: item.description,
+      fields: [{ key: 'grantRef', label: 'Grant Ref #', value: `1. ${g.grantId}`, block: true }],
+      fallbackHeading: g.description.split('\n')[0],
+    });
     lineBodies.push({
       DetailType: 'SalesItemLineDetail',
       Amount: g.amount,
-      Description: g.description, // e.g. "Less: WSQ funding (Baseline)\nGrant Ref#: GRN-..."
+      Description: built.text,
       SalesItemLineDetail: {
-        ItemRef: itemRef,
+        ItemRef: { value: item.id, name: item.name },
         Qty: 1,
         UnitPrice: g.amount,
         TaxCodeRef: { value: taxOos },
@@ -234,7 +278,12 @@ export async function createDirectApplicationGrantInvoice(
     Object.assign(invoiceBody, await buildPurchaseOrderInvoiceFields(input.mainInvoiceDocNumber));
   }
 
-  const created = await qboCreateInvoice(undefined, invoiceBody);
+  // The grant reference is the number and carries no date, so a hand-voided
+  // original still occupies it; a rejected duplicate reissues as -R2.
+  const created = await qboCreateInvoiceRetryingDuplicateDocNumber(
+    body => qboCreateInvoice(undefined, body),
+    invoiceBody
+  );
   if (!created.id) {
     throw new Error('QB grant invoice create returned no Id');
   }

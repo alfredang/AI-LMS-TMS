@@ -1,4 +1,5 @@
 import pool from '../db';
+import { resolveFundingItemName, type FundingFamily } from '../quickbooks/invoiceLineText';
 
 /**
  * Negative invoice lines for QuickBooks: Baseline and first Non-Baseline grant,
@@ -7,9 +8,24 @@ import pool from '../db';
 export interface GrantDeductionLine {
   amount: number;
   grantId: string;
-  /** Full Description field for QBO (includes Grant Ref#) */
+  /**
+   * Wording for the line.
+   *
+   * Direct Application invoices no longer print this. They take the text from
+   * the QBO product's Description box (lib/quickbooks/invoiceLineText.ts), so a
+   * course renewed WSQ -> CASL is fixed by editing the product rather than by a
+   * deploy. This stays as the fallback for a product with an empty Description,
+   * and Company Application grant invoices still use it directly.
+   */
   description: string;
-  /** QB Item Name to use for this line (e.g. 'WSQ funding (Baseline)', 'WSQ funding (MCES)') */
+  /**
+   * QB Item Name for this line: 'WSQ Funding (Baseline)', 'CASL Funding
+   * (MCES/SME)', and so on.
+   *
+   * This is the one thing QuickBooks cannot tell us. The product holds the
+   * wording, but only the course says which FAMILY of funding products a
+   * learner's grant belongs to.
+   */
   itemName: string;
 }
 
@@ -23,23 +39,55 @@ function isPositiveMoney(value: unknown): boolean {
   return Number.isFinite(n) && n > 0;
 }
 
+/**
+ * The enrolment's course type, reduced to a family of funding products that
+ * actually exists in QuickBooks.
+ *
+ * `courseTypeLabel` is the real `course.course_type` — 'WSQ', 'CASL', 'IBF' or
+ * 'Non-WSQ' — and using it is the point: non-DA invoices used to hardcode WSQ
+ * and mislabelled every CASL course.
+ *
+ * But the realm holds exactly six funding products, four WSQ and two CASL, so a
+ * type cannot be pasted straight into an item name. `IBF funding (Baseline)` and
+ * `CASL funding (MCES)` name nothing, and an item that does not resolve fails
+ * invoice generation outright. Anything without its own products bills against
+ * the WSQ ones, as it did before course type was consulted at all, and says so
+ * in the log rather than failing the invoice.
+ */
+function familyFromCourseType(courseTypeLabel?: string | null): FundingFamily {
+  const type = String(courseTypeLabel || '').trim().toUpperCase();
+  if (type === 'CASL') return 'CASL';
+  if (type && type !== 'WSQ') {
+    console.warn(
+      `[grant lines] No funding products exist for course type "${courseTypeLabel}"; billing against the WSQ products.`
+    );
+  }
+  return 'WSQ';
+}
+
+/** The label shown in fallback wording — matches the product family actually billed. */
+function labelForFamily(family: FundingFamily): string {
+  return family === 'CASL' ? 'CASL' : 'WSQ';
+}
+
+/**
+ * `courseTypeLabel` defaults to WSQ so callers that predate the CASL split keep
+ * their exact previous behaviour.
+ *
+ * The scheme keyword matching itself lives in resolveFundingItemName, shared
+ * with the course-line builder so the two can never drift apart, and it only
+ * ever returns one of the six names that exist.
+ */
 function resolveGrantItemName(opts: {
+  courseTypeLabel?: string | null;
   fundingSchemeCode?: string | null;
   fundingSchemeDescription?: string | null;
-  /** 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ' — the enrolment's actual course type. Defaults to 'WSQ' for existing DA/CA callers. */
-  courseTypeLabel?: string | null;
 }): string {
-  const haystack = `${opts.fundingSchemeCode || ''} ${opts.fundingSchemeDescription || ''}`.toLowerCase();
-  const type = String(opts.courseTypeLabel || '').trim() || 'WSQ';
-  if (/baseline|\bbl\b/.test(haystack)) return `${type} funding (Baseline)`;
-
-  const hasMces = /\bmces\b|mid-career enhanced subsidy/.test(haystack);
-  const hasSme = /\bsme\b|\bsmes\b|enhanced training support for smes/.test(haystack);
-
-  if (hasMces && hasSme) return `${type} funding (MCES/SME)`;
-  if (hasMces) return `${type} funding (MCES)`;
-  if (hasSme) return `${type} funding (SMEs)`;
-  return `${type} funding (MCES/SME)`;
+  return resolveFundingItemName({
+    family: familyFromCourseType(opts.courseTypeLabel),
+    fundingSchemeCode: opts.fundingSchemeCode,
+    fundingSchemeDescription: opts.fundingSchemeDescription,
+  });
 }
 
 /**
@@ -51,7 +99,6 @@ export async function loadSplitGrantDeductionsFromDb(
 ): Promise<{ lines: GrantDeductionLine[]; totalAmount: number }> {
   const ref = String(enrolmentId || '').trim();
   if (!ref) return { lines: [], totalAmount: 0 };
-  const type = String(courseTypeLabel || '').trim() || 'WSQ';
 
   const [blRes, nblRes] = await Promise.all([
     pool.query(
@@ -94,6 +141,12 @@ export async function loadSplitGrantDeductionsFromDb(
 
   const lines: GrantDeductionLine[] = [];
 
+  // Wording for the fallback `description` below. It only reaches an invoice
+  // when the funding product has an empty Description box in QuickBooks — but it
+  // has to name the same family the line is actually billed against, so it uses
+  // the resolved family rather than the raw course type.
+  const label = labelForFamily(familyFromCourseType(courseTypeLabel));
+
   const bl = blRes.rows[0] as {
     grant_id?: string;
     amt?: number;
@@ -105,11 +158,11 @@ export async function loadSplitGrantDeductionsFromDb(
     lines.push({
       amount: Number(bl.amt),
       grantId: gid,
-      description: `Less: ${type} funding (Baseline)\nGrant Ref#: ${gid}`,
+      description: `Less: ${label} funding (Baseline)\nGrant Ref#: ${gid}`,
       itemName: resolveGrantItemName({
+        courseTypeLabel,
         fundingSchemeCode: bl.funding_scheme_code ?? 'Baseline',
         fundingSchemeDescription: bl.funding_scheme_description ?? 'Baseline',
-        courseTypeLabel: type,
       }),
     });
   }
@@ -122,15 +175,15 @@ export async function loadSplitGrantDeductionsFromDb(
   } | undefined;
   if (nbl && Number(nbl.amt) > 0) {
     const gid = String(nbl.grant_id ?? '-');
-    const label = (nbl.funding_scheme_description || 'Non-Baseline').trim();
+    const scheme = (nbl.funding_scheme_description || 'Non-Baseline').trim();
     lines.push({
       amount: Number(nbl.amt),
       grantId: gid,
-      description: `Less: ${type} funding (${label})\nGrant Ref#: ${gid}`,
+      description: `Less: ${label} funding (${scheme})\nGrant Ref#: ${gid}`,
       itemName: resolveGrantItemName({
+        courseTypeLabel,
         fundingSchemeCode: nbl.funding_scheme_code,
         fundingSchemeDescription: nbl.funding_scheme_description,
-        courseTypeLabel: type,
       }),
     });
   }
@@ -147,13 +200,13 @@ export function buildFallbackCombinedGrantLine(
 ): GrantDeductionLine[] {
   if (combinedSubsidy <= 0) return [];
   const gid = grantId || '-';
-  const type = String(courseTypeLabel || '').trim() || 'WSQ';
+  const label = labelForFamily(familyFromCourseType(courseTypeLabel));
   return [
     {
       amount: combinedSubsidy,
       grantId: gid,
-      description: `Less: ${type} funding (Baseline)\nGrant Ref#: ${gid}`,
-      itemName: `${type} funding (Baseline)`,
+      description: `Less: ${label} funding (Baseline)\nGrant Ref#: ${gid}`,
+      itemName: resolveGrantItemName({ courseTypeLabel, fundingSchemeCode: 'BL' }),
     },
   ];
 }
@@ -169,29 +222,29 @@ export function buildFallbackSplitGrantLines(opts: {
   courseTypeLabel?: string | null;
 }): GrantDeductionLine[] {
   const lines: GrantDeductionLine[] = [];
-  const type = String(opts.courseTypeLabel || '').trim() || 'WSQ';
+  const label = labelForFamily(familyFromCourseType(opts.courseTypeLabel));
 
   const blGrantId = String(opts.blGrantId || '').trim();
   if (blGrantId && isPositiveMoney(opts.blAmount)) {
     lines.push({
       amount: Number(opts.blAmount),
       grantId: blGrantId,
-      description: `Less: ${type} funding (Baseline)\nGrant Ref#: ${blGrantId}`,
-      itemName: `${type} funding (Baseline)`,
+      description: `Less: ${label} funding (Baseline)\nGrant Ref#: ${blGrantId}`,
+      itemName: resolveGrantItemName({ courseTypeLabel: opts.courseTypeLabel, fundingSchemeCode: 'BL' }),
     });
   }
 
   const otherGrantId = String(opts.otherGrantId || '').trim();
   if (otherGrantId && isPositiveMoney(opts.otherAmount)) {
-    const label = String(opts.otherSchemeCode || 'Non-Baseline').trim() || 'Non-Baseline';
+    const scheme = String(opts.otherSchemeCode || 'Non-Baseline').trim() || 'Non-Baseline';
     lines.push({
       amount: Number(opts.otherAmount),
       grantId: otherGrantId,
-      description: `Less: ${type} funding (${label})\nGrant Ref#: ${otherGrantId}`,
+      description: `Less: ${label} funding (${scheme})\nGrant Ref#: ${otherGrantId}`,
       itemName: resolveGrantItemName({
+        courseTypeLabel: opts.courseTypeLabel,
         fundingSchemeCode: String(opts.otherSchemeCode || '').trim() || null,
-        fundingSchemeDescription: label,
-        courseTypeLabel: type,
+        fundingSchemeDescription: scheme,
       }),
     });
   }
@@ -201,7 +254,7 @@ export function buildFallbackSplitGrantLines(opts: {
   return buildFallbackCombinedGrantLine(
     isPositiveMoney(opts.totalGrantAmount) ? Number(opts.totalGrantAmount) : 0,
     opts.grantIdFallback ?? null,
-    type
+    opts.courseTypeLabel
   );
 }
 
@@ -212,14 +265,25 @@ export async function resolveGrantDeductionLinesForInvoice(opts: {
   enrolmentId?: string | null;
   combinedSubsidy: number;
   grantIdFallback: string | null;
-  /** 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ' — defaults to 'WSQ' for existing DA/CA callers. */
+  /**
+   * The enrolment's course type ('WSQ' | 'CASL' | 'IBF' | 'Non-WSQ'). Decides
+   * which family of funding products the deductions bill against. Defaults to
+   * WSQ, which is what every caller did before course type was consulted.
+   */
   courseTypeLabel?: string | null;
 }): Promise<{ lines: GrantDeductionLine[]; totalSubsidy: number }> {
-  const { lines: dbLines, totalAmount } = await loadSplitGrantDeductionsFromDb(opts.enrolmentId, opts.courseTypeLabel);
+  const { lines: dbLines, totalAmount } = await loadSplitGrantDeductionsFromDb(
+    opts.enrolmentId,
+    opts.courseTypeLabel
+  );
   if (dbLines.length > 0) {
     return { lines: dbLines, totalSubsidy: totalAmount };
   }
-  const fallback = buildFallbackCombinedGrantLine(opts.combinedSubsidy, opts.grantIdFallback, opts.courseTypeLabel);
+  const fallback = buildFallbackCombinedGrantLine(
+    opts.combinedSubsidy,
+    opts.grantIdFallback,
+    opts.courseTypeLabel
+  );
   const totalSubsidy = fallback.reduce((s, l) => s + l.amount, 0);
   return { lines: fallback, totalSubsidy };
 }

@@ -47,6 +47,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 da.application_status,
                 da.course_title,
                 da.course_reference_number,
+                ct.course_type::text AS course_type,
+                ct.current_code AS course_current_code,
+                ct.previous_code AS course_previous_code,
                 COALESCE(cr.start_date, da.course_start_date) as course_start_date,
                 COALESCE(cr.end_date, da.course_end_date) as course_end_date,
                 da.highest_qualification,
@@ -81,6 +84,51 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 sg.tg_amount
             FROM da_application da
             LEFT JOIN course_run cr ON da.course_run_id = cr.course_run_id
+            -- WSQ / CASL / IBF for the Type column, resolved in two steps.
+            --
+            -- Step one is the course the run belongs to: a primary-key lookup,
+            -- and it answers 2,903 of 3,367 rows.
+            LEFT JOIN course run_course ON run_course.id = cr.course_id
+            -- Step two only runs for the ~464 rows the first step missed, and
+            -- matches the SSG reference against the course codes instead. A
+            -- renewed course carries its new TGS code in new_course_code while
+            -- older rows still cite the old one, so both are checked.
+            --
+            -- The stored columns are compared DIRECTLY rather than wrapped in
+            -- UPPER/TRIM, which is what keeps the unique index on course_code
+            -- usable — every stored code is already uppercase and trimmed
+            -- (verified: 0 of 312 differ from their normalised form). Wrapping
+            -- them cost a full scan of the course table for every application
+            -- row and added ~2.4s to this endpoint.
+            LEFT JOIN LATERAL (
+                SELECT c.course_type, c.course_code, c.new_course_code
+                  FROM course c
+                 WHERE run_course.id IS NULL
+                   AND (
+                        c.course_code = UPPER(TRIM(COALESCE(da.course_reference_number, '')))
+                     OR c.new_course_code = UPPER(TRIM(COALESCE(da.course_reference_number, '')))
+                   )
+                 LIMIT 1
+            ) code_course ON TRUE
+            -- Whichever step matched, reduced to the two references the screen
+            -- needs. LIMIT 1 above means neither step can duplicate a row.
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(run_course.course_type, code_course.course_type) AS course_type,
+                       COALESCE(run_course.course_code, code_course.course_code) AS base_code,
+                       COALESCE(run_course.new_course_code, code_course.new_course_code) AS renewed_code
+            ) m ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT m.course_type,
+                       -- The reference this course is registered under TODAY.
+                       COALESCE(NULLIF(TRIM(m.renewed_code), ''), m.base_code) AS current_code,
+                       -- The reference it held BEFORE the renewal, or null when
+                       -- it has never been renewed. Both are returned so the
+                       -- screen can show a renewal even for a learner who
+                       -- enrolled after it and was never on the old code.
+                       CASE WHEN NULLIF(TRIM(m.renewed_code), '') IS NOT NULL
+                                 AND TRIM(COALESCE(m.renewed_code, '')) <> TRIM(COALESCE(m.base_code, ''))
+                            THEN m.base_code END AS previous_code
+            ) ct ON TRUE
             LEFT JOIN LATERAL (
                 SELECT ij.invoice_sent_at::text AS invoice_sent_at, ij.invoice_sent_to
                 FROM public.invoice_jobs ij

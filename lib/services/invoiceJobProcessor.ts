@@ -1,11 +1,19 @@
 import pool from '../db';
 import { assessGrantEligibility } from '../grantEligibility';
-import { buildSfcCreditLineDescription } from '../daApplicationId';
+import { realApplicationId } from '../daApplicationId';
 import { buildTmsInvoiceNo } from '../utils/tmsInvoiceNo';
 import { isEnrolmentBlockedFromAutoInvoice, isEnrolmentEligibleForAutoInvoice } from './invoiceEligibility';
 import { refreshGrantsForEnrolments, upsertSsgEnrolmentFromLocalEnrollment } from './billingSync';
 import { uploadInvoicePdfToDrive } from './invoiceDriveUpload';
 import { resolveGrantDeductionLinesForInvoice } from './daInvoiceGrantLines';
+import {
+  buildCourseHeading,
+  buildInvoiceLineText,
+  COURSE_LINE_HEADING_PREFIX,
+  detectFundingFamily,
+  type FundingFamily,
+  type LineField,
+} from '../quickbooks/invoiceLineText';
 import { formatDateOnlyEnSg } from '../utils/dateOnly';
 import {
   qboCreateInvoice,
@@ -25,14 +33,56 @@ import {
 import { shouldSendQboInvoiceEmailFromQuickBooks } from './qboInvoiceEmailPolicy';
 import { getLocalYMD } from '../dateHelpers';
 
-// Grant QB item names are course-type-driven ("WSQ funding (Baseline)", "CASL funding (MCES)", ...).
-// Cache their IDs at module level (keyed by full item name) so subsequent invoice jobs don't re-query QB.
-const _grantItemCache = new Map<string, string>();
-const _skuItemCache = new Map<string, { id: string; name: string; unitPrice: number }>();
+// QB items are cached at module level so subsequent invoice jobs don't re-query
+// QuickBooks. Item NAMES vary by the enrolment's course type ("WSQ Funding
+// (Baseline)", "CASL Funding (MCES/SME)", ...), so the cache is keyed by name.
+//
+// Entries also carry the product's Description, which is the WORDING that prints
+// on the invoice — so unlike an id, it is something an admin edits and expects to
+// see take effect. A cache with no expiry would hold a corrected typo until the
+// container restarted, so entries are short-lived.
+const ITEM_CACHE_TTL_MS = Math.max(60_000, Number(process.env.QBO_ITEM_CACHE_TTL_MS) || 10 * 60_000);
+
+type CachedItem = { id: string; name: string; unitPrice: number; description: string | null; at: number };
+const _grantItemCache = new Map<string, CachedItem>();
+const _skuItemCache = new Map<string, CachedItem>();
+
+function readItemCache(cache: Map<string, CachedItem>, key: string): CachedItem | null {
+  const hit = cache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > ITEM_CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return hit;
+}
+
+function writeItemCache(
+  cache: Map<string, CachedItem>,
+  key: string,
+  item: { id: string; name: string; unitPrice?: number; description?: string | null }
+): void {
+  if (cache.size > 200) cache.clear();
+  cache.set(key, {
+    id: item.id,
+    name: item.name,
+    unitPrice: Number(item.unitPrice ?? 0),
+    description: item.description ?? null,
+    at: Date.now(),
+  });
+}
 let _cachedWsqiCustomerId: string | null = null;
 let _cachedTaxCodeGst: string | null = null;
 let _cachedTaxCodeOos: string | null = null;
-let _cachedSfcItemId: string | null = null;
+/**
+ * The Product/Service the SkillsFuture Credit deduction posts against. Same
+ * default and env overrides as the DA pipeline so the two cannot diverge.
+ */
+const SFC_ITEM_NAME = (
+  process.env.QBO_SFC_DA_ITEM_NAME ||
+  process.env.QBO_SFC_ITEM_NAME ||
+  'SkillsFuture Claim by Direct Application'
+).trim();
 let _cachedDueOnReceiptTermId: string | null = null;
 let _cachedWsg35DaysTermId: string | null = null;
 
@@ -52,17 +102,10 @@ function safeText(v: unknown): string {
   return typeof v === 'string' ? v : String(v ?? '');
 }
 
-const COURSE_TYPE_PREFIX_RE = /^(WSQ|CASL|IBF|Non-WSQ)\s*[-–]\s*/i;
-
-/**
- * Prefix a course title with its actual course type ("CASL - ...", "WSQ - ...").
- * Strips any existing WSQ/CASL/IBF/Non-WSQ prefix first so a mismatched or
- * doubled prefix from upstream data (e.g. a raw SSG title) never survives.
- */
-function withCourseTypePrefix(title: string, courseTypeLabel: string): string {
-  const base = String(title || '').trim().replace(COURSE_TYPE_PREFIX_RE, '');
-  return `${courseTypeLabel} - ${base}`;
-}
+// Course-title prefixing now lives in buildCourseHeading (invoiceLineText.ts),
+// shared with the DA path, and only runs when a product has no Description of
+// its own to take the title from. Its strip-then-apply behaviour came from the
+// withCourseTypePrefix() helper that used to sit here.
 
 function maskNric(nric: string | null | undefined): string {
   const s = String(nric || '').trim();
@@ -335,11 +378,41 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     console.warn('[invoice-job] Grant refresh failed (non-blocking):', e);
   }
 
+  // The course product comes first. Besides pricing the line it decides the
+  // FUNDING FAMILY: whether this learner's grants bill against the WSQ or the
+  // CASL products is read from the product's own title, so a course renewed with
+  // SSG takes effect as soon as QuickBooks is right - no deploy, no course-table
+  // edit. (The lookup used to sit further down; it is only moved, not changed.)
+  const cachedSku = readItemCache(_skuItemCache, courseCode);
+  const item = cachedSku ?? (await qboFindItemBySku(undefined, courseCode));
+  if (!item) throw new Error(`QuickBooks item not found for SKU: ${courseCode}`);
+  if (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0) {
+    throw new Error(
+      `QuickBooks item "${item.name}" (SKU ${courseCode}) has unit price ${item.unitPrice}. Set a positive Unit Price on the Item in QuickBooks.`
+    );
+  }
+  if (!cachedSku) writeItemCache(_skuItemCache, courseCode, item);
+
+  // The QuickBooks product decides this: its title opens "CASL - ..." or
+  // "WSQ - ...", and it is the same product the invoice bills against, so it
+  // cannot disagree with the document. `courseTypeLabel` — the enrolment's real
+  // course_type, read above — is the fallback for a product whose title carries
+  // no prefix, and the DA title after that.
+  const family: FundingFamily = detectFundingFamily(
+    item.description,
+    item.name,
+    courseTypeLabel,
+    da.course_title
+  );
+
   const { lines: grantDeductionLines, totalSubsidy: grantSubsidy } = await resolveGrantDeductionLinesForInvoice({
     enrolmentId,
     combinedSubsidy,
     grantIdFallback: da.grant_id ?? null,
-    courseTypeLabel,
+    // The course type the enrolment actually has. `family` above prefers the
+    // QuickBooks product and falls back to this, so the two agree; passing the
+    // resolved family keeps the deduction lines on products that exist.
+    courseTypeLabel: family,
   });
 
   // Same guard as the DA pipeline: never bill a WSQ learner the full fee just
@@ -371,20 +444,6 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
 
   // 2) Sequential QB lookups — parallel QB calls race each other for the OAuth token refresh
   //    which causes timeouts. Sequential calls reuse the same cached token after the first refresh.
-  const cachedSku = _skuItemCache.get(courseCode);
-  const item = cachedSku ?? (await qboFindItemBySku(undefined, courseCode));
-  if (!item) throw new Error(`QuickBooks item not found for SKU: ${courseCode}`);
-  if (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0) {
-    throw new Error(
-      `QuickBooks item "${item.name}" (SKU ${courseCode}) has unit price ${item.unitPrice}. Set a positive Unit Price on the Item in QuickBooks.`
-    );
-  }
-  if (!cachedSku) {
-    // Keep cache bounded in case of many course codes.
-    if (_skuItemCache.size > 200) _skuItemCache.clear();
-    _skuItemCache.set(courseCode, { id: item.id, name: item.name, unitPrice: item.unitPrice });
-  }
-
   const customerId =
     _cachedWsqiCustomerId ??
     (await qboFindCustomerByDisplayName(undefined, 'WSQ Individual (Not for Company)'));
@@ -408,19 +467,18 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   }
 
   // Grant item lookups — cached at module level so only fetched once per server lifecycle
-  const grantItemIdCache = new Map<string, string>();
+  const grantItems = new Map<string, { id: string; name: string; description: string | null }>();
   for (const g of grantDeductionLines) {
-    if (!grantItemIdCache.has(g.itemName)) {
-      const cached = _grantItemCache.get(g.itemName);
-      if (cached) {
-        grantItemIdCache.set(g.itemName, cached);
-      } else {
-        const found = await qboFindItemByName(undefined, g.itemName);
-        if (!found) throw new Error(`QuickBooks item "${g.itemName}" not found. Create this item in QuickBooks (Sales → Products & Services).`);
-        _grantItemCache.set(g.itemName, found.id);
-        grantItemIdCache.set(g.itemName, found.id);
-      }
+    if (grantItems.has(g.itemName)) continue;
+    const cached = readItemCache(_grantItemCache, g.itemName);
+    if (cached) {
+      grantItems.set(g.itemName, cached);
+      continue;
     }
+    const found = await qboFindItemByName(undefined, g.itemName);
+    if (!found) throw new Error(`QuickBooks item "${g.itemName}" not found. Create this item in QuickBooks (Sales → Products & Services).`);
+    writeItemCache(_grantItemCache, g.itemName, found);
+    grantItems.set(g.itemName, found);
   }
 
   // DB lookups don't need the QB token — run after token is warmed
@@ -443,34 +501,77 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
       UnitPrice: actualFullCourseFee,
       TaxCodeRef: { value: taxCodeGst },
     },
-    Description: [
-      `Course Name: ${hasDa ? `WSQ - ${da.course_title ?? ctx.courseTitle}` : withCourseTypePrefix(ctx.courseTitle, courseTypeLabel)}`,
-      `(${hasDa ? (da.course_reference_number ?? ctx.courseRef) : ctx.courseRef})`,
-      `Participant Name: ${hasDa ? (da.trainee_name ?? ctx.traineeName) : ctx.traineeName}`,
-      `NRIC: ${maskNric(hasDa ? (da.trainee_id ?? ctx.traineeNric) : ctx.traineeNric)}`,
-      (() => {
-        const start = formatDate(hasDa ? da.course_start_date : ctx.startDate);
-        const end = formatDate(hasDa ? da.course_end_date : ctx.endDate);
-        if (start === end || end === '—') return `Course Date: ${start}`;
-        return `Course Date: ${start} - ${end}`;
-      })(),
-      `Course Run: ${hasDa ? (da.course_run_id ?? ctx.runId) : ctx.runId}`,
-    ].join('\n'),
+    Description: (() => {
+      // Same rule as the DA pipeline: the wording is the product's, the values
+      // are ours. Keeping both paths on one builder is the point — this file
+      // used to carry its own copy of the text and the two drifted apart.
+      //
+      // Supersedes the withCourseTypePrefix() approach: the product's own
+      // Description already opens with "CASL - ..." or "WSQ - ...", so the
+      // prefix no longer has to be assembled from course_type. That type is
+      // still consulted, as the fallback signal for `family` above.
+      const courseTitle = hasDa ? (da.course_title ?? ctx.courseTitle) : ctx.courseTitle;
+      const courseRef = hasDa ? (da.course_reference_number ?? ctx.courseRef) : ctx.courseRef;
+      const fields: LineField[] = [
+        {
+          key: 'name',
+          label: 'Participant Name',
+          value: String(hasDa ? (da.trainee_name ?? ctx.traineeName) : ctx.traineeName ?? ''),
+        },
+        {
+          key: 'nric',
+          label: 'NRIC',
+          value: maskNric(hasDa ? (da.trainee_id ?? ctx.traineeNric) : ctx.traineeNric),
+        },
+        {
+          key: 'date',
+          label: 'Course Date',
+          value: (() => {
+            const start = formatDate(hasDa ? da.course_start_date : ctx.startDate);
+            const end = formatDate(hasDa ? da.course_end_date : ctx.endDate);
+            return start === end || end === '—' ? start : `${start} - ${end}`;
+          })(),
+        },
+        {
+          key: 'run',
+          label: 'Course Run',
+          value: String((hasDa ? (da.course_run_id ?? ctx.runId) : ctx.runId) ?? ''),
+        },
+      ];
+      const built = buildInvoiceLineText({
+        productDescription: item.description,
+        fields,
+        fallbackHeading: buildCourseHeading({ family, title: courseTitle, courseCode: courseRef }),
+        expectedCode: courseRef,
+        headingPrefix: COURSE_LINE_HEADING_PREFIX,
+      });
+      if (built.source === 'fallback') {
+        console.warn(
+          `[invoice-job] Course line built from LMS data for ${courseRef}: ${built.reason}.`
+        );
+      }
+      return built.text;
+    })(),
   });
 
-  // Lines 2+: grant deductions — named QB items ("WSQ funding (Baseline)" / "CASL funding (MCES)" / ...),
-  // item name driven by the enrolment's actual course type (see courseTypeLabel above).
+  // Lines 2+: funding deductions, against the WSQ or CASL products chosen above.
+  // The wording is the product's own Description; we add only the grant refs.
   for (const g of grantDeductionLines) {
+    const grantItem = grantItems.get(g.itemName)!;
     lines.push({
       Amount: -g.amount,
       DetailType: 'SalesItemLineDetail',
       SalesItemLineDetail: {
-        ItemRef: { value: grantItemIdCache.get(g.itemName)! },
+        ItemRef: { value: grantItem.id },
         Qty: 1,
         UnitPrice: -g.amount,
         TaxCodeRef: { value: taxCodeOos },
       },
-      Description: g.description,
+      Description: buildInvoiceLineText({
+        productDescription: grantItem.description,
+        fields: [{ key: 'grantRef', label: 'Grant Ref #', value: `1. ${g.grantId}`, block: true }],
+        fallbackHeading: g.description.split('\n')[0],
+      }).text,
     });
   }
 
@@ -481,28 +582,46 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   if (Number.isFinite(sfcCredit) && sfcCredit > 0) {
     // Prefer a dedicated item if it exists in QBO, otherwise fall back to the course item.
     // (Keeps the invoice readable when QBO has an "SFC Credit" / "SkillsFuture Credit" item configured.)
-    let sfcItemId = _cachedSfcItemId;
-    if (!sfcItemId) {
-      const byName =
-        (await qboFindItemByName(undefined, 'SFC Credit')) ||
-        (await qboFindItemByName(undefined, 'SkillsFuture Credit')) ||
-        (await qboFindItemByName(undefined, 'Skillsfuture Credit'));
+    // This used to search for 'SFC Credit' / 'SkillsFuture Credit', none of which
+    // exist in the realm — so every credit deduction silently posted against the
+    // COURSE product instead of its own. The DA pipeline has always used the
+    // right name; both now read it from the same env-overridable constant.
+    let sfcItem = readItemCache(_grantItemCache, SFC_ITEM_NAME);
+    if (!sfcItem) {
+      const byName = await qboFindItemByName(undefined, SFC_ITEM_NAME);
       if (byName?.id) {
-        sfcItemId = byName.id;
-        _cachedSfcItemId = byName.id;
+        writeItemCache(_grantItemCache, SFC_ITEM_NAME, byName);
+        sfcItem = readItemCache(_grantItemCache, SFC_ITEM_NAME);
+      } else {
+        console.warn(
+          `[invoice-job] QuickBooks item "${SFC_ITEM_NAME}" not found; the credit line will post against the course product.`
+        );
       }
     }
     lines.push({
       Amount: -sfcCredit,
       DetailType: 'SalesItemLineDetail',
       SalesItemLineDetail: {
-        ItemRef: { value: sfcItemId || item.id },
+        ItemRef: { value: sfcItem?.id || item.id },
         Qty: 1,
         UnitPrice: -sfcCredit,
         TaxCodeRef: { value: taxCodeOos },
       },
       Description: hasDa
-        ? buildSfcCreditLineDescription(da.application_id, enrolmentId)
+        ? (() => {
+            const real = realApplicationId(da.application_id);
+            return buildInvoiceLineText({
+              productDescription: sfcItem?.description,
+              fields: [
+                {
+                  key: 'claim',
+                  label: real ? 'Application ID' : 'Enrolment ID',
+                  value: real || enrolmentId,
+                },
+              ],
+              fallbackHeading: 'SkillsFuture Credit Usage/Claim',
+            }).text;
+          })()
         : `To Less Skillsfuture Credit : $${sfcCredit.toFixed(2)}`,
     });
   }
@@ -684,17 +803,26 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
           const wsgCustomerId =
             (await qboFindOrCreateCustomerByDisplayName(undefined, 'Singapore Workforce Development Agency (WSG)')) ||
             (await qboFindOrCreateCustomerByDisplayName(undefined, 'WSG'));
-          const grnLines = grantDeductionLines.map((g) => ({
-            Amount: g.amount,
-            DetailType: 'SalesItemLineDetail',
-            SalesItemLineDetail: {
-              ItemRef: { value: grantItemIdCache.get(g.itemName)! },
-              Qty: 1,
-              UnitPrice: g.amount,
-              TaxCodeRef: { value: taxCodeOos },
-            },
-            Description: g.description,
-          }));
+          // The staff-facing GRN invoice mirrors the learner's invoice line for
+          // line, so it takes its wording from the same products.
+          const grnLines = grantDeductionLines.map((g) => {
+            const grantItem = grantItems.get(g.itemName)!;
+            return {
+              Amount: g.amount,
+              DetailType: 'SalesItemLineDetail',
+              SalesItemLineDetail: {
+                ItemRef: { value: grantItem.id },
+                Qty: 1,
+                UnitPrice: g.amount,
+                TaxCodeRef: { value: taxCodeOos },
+              },
+              Description: buildInvoiceLineText({
+                productDescription: grantItem.description,
+                fields: [{ key: 'grantRef', label: 'Grant Ref #', value: `1. ${g.grantId}`, block: true }],
+                fallbackHeading: g.description.split('\n')[0],
+              }).text,
+            };
+          });
 
           const txnDate = getLocalYMD(new Date());
           const dueDate = addDaysIso(txnDate, 35);
