@@ -103,6 +103,64 @@ function computeDaBilling(app: any): { payable: number; creditApplied: number; d
     };
 }
 
+/**
+ * WSQ / CASL / IBF for a DA row - as this enrolment was BILLED, not as the
+ * course is typed today.
+ *
+ * The distinction matters because a renewal is not retroactive. `course_type`
+ * is current state: renewing a course to CASL flips it for every row of that
+ * course, including learners invoiced months earlier under the WSQ reference.
+ * The invoice does not work that way - it resolves the QuickBooks product from
+ * the TGS reference stamped on the DA row at application time, so a pre-renewal
+ * learner's invoice correctly says WSQ forever.
+ *
+ * A column reading CASL next to an invoice reading WSQ would look like a fault.
+ * So the row's own reference decides: cite the course's current code and you get
+ * its current type; cite a superseded one and you were billed under what came
+ * before, which for the Aug 2026 conversion means WSQ.
+ *
+ * The SSG course title is NOT a fallback - checked against all 196 live rows,
+ * none carries a WSQ-/CASL- prefix.
+ */
+const FundingTypeBadge: React.FC<{
+    courseType?: string | null;
+    currentCode?: string | null;
+    rowCode?: string | null;
+    hasInvoice?: boolean;
+}> = ({ courseType, currentCode, rowCode, hasInvoice }) => {
+    const current = String(courseType || '').trim().toUpperCase();
+    if (!current) return <span className="text-gray-400 dark:text-gray-500" title="No course record matches this SSG reference">-</span>;
+
+    const rowRef = String(rowCode || '').trim().toUpperCase();
+    const currentRef = String(currentCode || '').trim().toUpperCase();
+    // "Behind" means this learner's reference is not the one the course carries
+    // today, so they predate its renewal.
+    const behind = !!rowRef && !!currentRef && rowRef !== currentRef;
+
+    // Only the Aug 2026 CASL conversion is known to have changed a type, so it is
+    // the only previous value named. Anything else keeps its current one.
+    const previous = current === 'CASL' ? 'WSQ' : current;
+    const asBilled = behind ? previous : current;
+
+    const tone =
+        asBilled === 'CASL' ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300'
+        : asBilled === 'WSQ' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
+        : asBilled === 'IBF' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+        : 'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-200';
+
+    const title = !behind
+        ? `Course is typed ${current}`
+        : hasInvoice
+            ? `Invoiced as ${previous} under ${rowRef}. The course has since been renewed to ${current} under ${currentRef}; the issued invoice keeps its original wording.`
+            : `Enrolled under ${rowRef}, which the course has since replaced with ${currentRef}. Nothing has been invoiced yet; an invoice generated now would be billed as ${previous}.`;
+
+    return (
+        <span className={`px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded ${tone}`} title={title}>
+            {asBilled}
+        </span>
+    );
+};
+
 const RESULTS_PER_PAGE = 10;
 const BATCH_SIZE_DA = 20;
 
@@ -134,6 +192,9 @@ export const UploadDirectApplicationView: React.FC = () => {
     const [tpgJobId, setTpgJobId] = useState<string | null>(null);
     const [tpgCancelling, setTpgCancelling] = useState(false);
     const [tpgApproving, setTpgApproving] = useState(false);
+    // Which learners are ticked while a "Choose learners" run waits.
+    const [tpgChosen, setTpgChosen] = useState<Set<string>>(new Set());
+    const [tpgSubmittingChoice, setTpgSubmittingChoice] = useState(false);
     // Drives the elapsed clock. Kept separate from the job so the time keeps
     // moving between polls instead of jumping every 2s.
     const [tpgNow, setTpgNow] = useState(() => Date.now());
@@ -521,6 +582,37 @@ export const UploadDirectApplicationView: React.FC = () => {
     // Everything starts ticked: the operator is usually removing a few rather
     // than picking a few, and an empty list would make the primary button dead
     // on arrival.
+    const tpgSelectableIds = (tpgJob?.phase === 'awaiting_selection'
+        ? (tpgJob.apps || []).filter(a => a.status !== 'failed').map(a => a.id)
+        : []
+    ).join(',');
+
+    // Everything starts ticked: the operator is usually removing a few rather
+    // than picking a few. Keyed on the ids, not their count — keying on the
+    // count meant a list arriving after the phase flipped never got ticked.
+    useEffect(() => {
+        if (!tpgSelectableIds) return;
+        setTpgChosen(new Set(tpgSelectableIds.split(',')));
+    }, [tpgSelectableIds]);
+
+    const submitTpgChoice = async () => {
+        if (!tpgJobId) return;
+        setTpgSubmittingChoice(true);
+        try {
+            const res = await fetch('/api/admin/tpg-confirm/select', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ jobId: tpgJobId, applicationIds: [...tpgChosen] }),
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || 'Could not submit your choice');
+        } catch (err) {
+            setTpgError(err instanceof Error ? err.message : 'Could not submit your choice');
+        } finally {
+            setTpgSubmittingChoice(false);
+        }
+    };
+
     const cancelTpg = async () => {
         if (!tpgJobId) return;
         setTpgCancelling(true);
@@ -552,7 +644,7 @@ export const UploadDirectApplicationView: React.FC = () => {
         }
     };
 
-    const runTpg = async (dryRun: boolean) => {
+    const runTpg = async (dryRun: boolean, chooseFirst = false) => {
         setError(null);
         setTpgError(null);
         setTpgJob(null);
@@ -568,7 +660,7 @@ export const UploadDirectApplicationView: React.FC = () => {
             const res = await fetch('/api/admin/tpg-confirm/run', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders() },
-                body: JSON.stringify({ dryRun, max }),
+                body: JSON.stringify({ dryRun, max, chooseFirst }),
             });
             const json = await res.json();
             if (!json.success) throw new Error(json.error || 'Failed to start TPGateway run');
@@ -1269,6 +1361,7 @@ export const UploadDirectApplicationView: React.FC = () => {
 
     const TPG_PHASE_LABEL: Record<string, string> = {
         queued: 'Waiting to start',
+        awaiting_selection: 'Choose who to confirm',
         starting: 'Starting…',
         awaiting_login: 'Waiting for Singpass login',
         collecting: 'Finding pending applications',
@@ -1394,6 +1487,8 @@ export const UploadDirectApplicationView: React.FC = () => {
                             says why. */}
                         <Button variant="outline" onClick={() => runTpg(true)} disabled={tpgRunning || tpgHelperOffline}
                             title={tpgHelperOffline ? OFFLINE_HINT : undefined}>Dry run</Button>
+                        <Button variant="outline" onClick={() => runTpg(false, true)} disabled={tpgRunning || tpgHelperOffline}
+                            title={tpgHelperOffline ? OFFLINE_HINT : 'Read each application first, then pick who to confirm'}>Choose learners</Button>
                         <Button onClick={() => runTpg(false)} disabled={tpgRunning || tpgHelperOffline}
                             title={tpgHelperOffline ? OFFLINE_HINT : undefined}>Confirm &amp; Enrol</Button>
                         {tpgRunning && (
@@ -1644,7 +1739,83 @@ export const UploadDirectApplicationView: React.FC = () => {
                                 </div>
                             </div>
                         )}
-                        {tpgJob.apps.length > 0 && (
+                        {/* Nothing has been confirmed at this point — the run has only
+                            read each application to find out who it is — so this is the
+                            last moment before anything irreversible. */}
+                        {tpgJob.phase === 'awaiting_selection' && (() => {
+                            const selectable = tpgJob.apps.filter(a => a.status !== 'failed');
+                            const allTicked = selectable.length > 0 && selectable.every(a => tpgChosen.has(a.id));
+                            return (
+                                <div className="mt-4 rounded-xl border border-amber-300 dark:border-amber-700/70 bg-amber-50/70 dark:bg-amber-900/15 p-4">
+                                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                                        <div>
+                                            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                                                Choose who to confirm
+                                                <span className="ml-2 font-normal text-xs text-amber-800 dark:text-amber-300">
+                                                    {tpgChosen.size} of {selectable.length} selected
+                                                </span>
+                                            </p>
+                                            <p className="text-xs text-amber-800 dark:text-amber-300 mt-1 max-w-2xl">
+                                                Nothing has been confirmed on TPGateway yet. Untick anyone you are not
+                                                confirming today. Confirming cannot be undone.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => setTpgChosen(allTicked ? new Set() : new Set(selectable.map(a => a.id)))}
+                                            className="text-xs font-medium px-2.5 py-1.5 rounded-lg border border-amber-400 text-amber-800 dark:text-amber-200 dark:border-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
+                                            {allTicked ? 'Untick all' : 'Tick all'}
+                                        </button>
+                                    </div>
+
+                                    <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-amber-200 dark:border-amber-800/70 divide-y divide-amber-200/60 dark:divide-amber-800/50 bg-white/70 dark:bg-gray-900/40">
+                                        {selectable.map(a => {
+                                            const ticked = tpgChosen.has(a.id);
+                                            return (
+                                                <label key={a.id}
+                                                    className={`flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
+                                                        ticked ? '' : 'opacity-55 hover:opacity-80'}`}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={ticked}
+                                                        onChange={() => setTpgChosen(prev => {
+                                                            const next = new Set(prev);
+                                                            if (next.has(a.id)) next.delete(a.id); else next.add(a.id);
+                                                            return next;
+                                                        })}
+                                                        className="w-4 h-4 mt-0.5 flex-shrink-0 accent-amber-600"
+                                                    />
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">
+                                                            {a.name || '(name not read)'}
+                                                        </div>
+                                                        {(a.course || a.startDate) && (
+                                                            <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                                                                {a.course || ''}
+                                                                {a.course && a.startDate ? ' · ' : ''}
+                                                                {a.startDate ? `starts ${a.startDate}` : ''}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <span className="flex-shrink-0 mt-0.5 font-mono text-[11px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-700/70 dark:text-gray-200">
+                                                        {a.id}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="flex items-center gap-2 mt-3">
+                                        <Button onClick={submitTpgChoice} disabled={tpgSubmittingChoice || tpgChosen.size === 0}>
+                                            {tpgSubmittingChoice ? 'Starting…' : `Confirm ${tpgChosen.size} selected`}
+                                        </Button>
+                                        <Button variant="outline" onClick={cancelTpg} disabled={tpgCancelling}>
+                                            {tpgCancelling ? 'Stopping…' : 'Cancel'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                        {tpgJob.phase !== 'awaiting_selection' && tpgJob.apps.length > 0 && (
                             <div className="mt-3 max-h-64 overflow-y-auto rounded border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
                                 {tpgJob.apps.map(a => (
                                     <div key={a.id} className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs">
@@ -2239,6 +2410,9 @@ export const ViewDirectApplicationView: React.FC = () => {
         { value: 'application_id', label: 'Application ID' }, { value: 'trainee_name', label: 'Trainee Name' },
         { value: 'trainee_id', label: 'Trainee ID' }, { value: 'trainee_email', label: 'Email' },
         { value: 'course_title', label: 'Course Title' }, { value: 'course_run_id', label: 'Course Run ID' },
+        { value: 'course_type', label: 'Funding Type' },
+        { value: 'course_current_code', label: 'Renewed To (course ref)' },
+        { value: 'course_previous_code', label: 'Renewed From (course ref)' },
         { value: 'application_status', label: 'Status' }, { value: 'sponsorship_type', label: 'Sponsorship' },
         { value: 'application_date', label: 'Application Date' }, { value: 'highest_qualification', label: 'Highest Qualification' },
         { value: 'auto_enrol_status', label: 'Auto-Enrol Status' },
@@ -2697,6 +2871,29 @@ export const ViewDirectApplicationView: React.FC = () => {
 
                     {paginatedApplications.length > 0 ? (
                         <>
+                            {/* The Type and Renewal columns encode meaning in colour and weight,
+                                which nobody can be expected to infer. Spelled out here rather
+                                than left to hover-only tooltips. */}
+                            <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10px] text-gray-500 dark:text-gray-400">
+                                <span className="font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Reading the columns</span>
+                                <span className="inline-flex items-center gap-1.5">
+                                    <span className="px-1.5 py-0.5 font-semibold uppercase tracking-wide rounded bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">WSQ</span>
+                                    <span className="px-1.5 py-0.5 font-semibold uppercase tracking-wide rounded bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300">CASL</span>
+                                    <span>Type &mdash; how this enrolment is billed, not how the course is typed today</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1.5">
+                                    <span className="font-mono font-bold text-amber-700 dark:text-amber-400">TGS-old</span>
+                                    <span aria-hidden>&rarr;</span>
+                                    <span className="font-mono text-gray-400 dark:text-gray-500">TGS-new</span>
+                                    <span>enrolled before the course was renewed</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1.5">
+                                    <span className="font-mono text-gray-400 dark:text-gray-500">TGS-old</span>
+                                    <span aria-hidden>&rarr;</span>
+                                    <span className="font-mono font-bold text-teal-700 dark:text-teal-400">TGS-new</span>
+                                    <span>enrolled after it &mdash; <strong className="font-semibold">bold is the reference this learner is on</strong></span>
+                                </span>
+                            </div>
                             <div className="overflow-x-auto">
                                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600 text-[11px]">
                                     <thead className="bg-gray-50 dark:bg-gray-800">
@@ -2715,7 +2912,9 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Email</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Phone</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Course Title</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Course Ref No.</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="The SSG reference this learner was enrolled under. It never changes once the application exists.">Course Ref No.</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="Old and new SSG reference for courses that have been renewed. The side this learner is enrolled under is shown in bold.">Renewal (old &rarr; new)</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="WSQ or CASL as this enrolment is billed. Rows enrolled before a renewal keep the older type; the Renewal column shows which reference they are on.">Type</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Start Date</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Run ID</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Sponsor</th>
@@ -2816,6 +3015,31 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.trainee_phone_country_code && app.trainee_phone ? `+${app.trainee_phone_country_code} ${app.trainee_phone}` : app.trainee_phone || '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 max-w-[180px] truncate" title={app.course_title}>{app.course_title || '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300 font-mono">{app.course_reference_number || '-'}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap font-mono">{(() => {
+                                                    // Shows the renewal itself, not this row's position in it. A learner
+                                                    // who enrolled AFTER the renewal is on the current code and has
+                                                    // nothing "outdated" about them - but the course was still renewed,
+                                                    // and hiding that made the column read as "never renewed".
+                                                    const previous = String(app.course_previous_code || '').trim();
+                                                    const current = String(app.course_current_code || '').trim();
+                                                    if (!previous || !current || previous.toUpperCase() === current.toUpperCase()) {
+                                                        return <span className="text-gray-400 dark:text-gray-500">-</span>;
+                                                    }
+                                                    const rowRef = String(app.course_reference_number || '').trim().toUpperCase();
+                                                    const onPrevious = rowRef === previous.toUpperCase();
+                                                    const onCurrent = rowRef === current.toUpperCase();
+                                                    return (
+                                                        <span
+                                                            className="inline-flex items-center gap-1"
+                                                            title={`This course was renewed from ${previous} to ${current}. This learner is enrolled under ${rowRef || '(no reference)'}.`}
+                                                        >
+                                                            <span className={onPrevious ? 'font-bold text-amber-700 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}>{previous}</span>
+                                                            <span className="text-gray-400 text-[9px]" aria-hidden>&rarr;</span>
+                                                            <span className={onCurrent ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}>{current}</span>
+                                                        </span>
+                                                    );
+                                                })()}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap"><FundingTypeBadge courseType={app.course_type} currentCode={app.course_current_code} rowCode={app.course_reference_number} hasInvoice={hasRealInvoice(app.invoice_id)} /></td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_run_id || '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.sponsorship_type || '-'}</td>
