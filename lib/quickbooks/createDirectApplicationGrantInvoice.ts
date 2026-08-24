@@ -168,7 +168,7 @@ export async function createDirectApplicationGrantInvoice(
 
   if (positiveLines.length === 0) {
     const fallbackLines = buildFallbackSplitGrantLines({
-      family,
+      courseTypeLabel: family,
       blGrantId: input.fallbackBlGrantId,
       blAmount: input.fallbackBlAmount,
       otherGrantId: input.fallbackOtherGrantId,

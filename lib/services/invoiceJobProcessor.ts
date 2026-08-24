@@ -34,10 +34,11 @@ import { shouldSendQboInvoiceEmailFromQuickBooks } from './qboInvoiceEmailPolicy
 import { getLocalYMD } from '../dateHelpers';
 
 // QB items are cached at module level so subsequent invoice jobs don't re-query
-// QuickBooks.
+// QuickBooks. Item NAMES vary by the enrolment's course type ("WSQ Funding
+// (Baseline)", "CASL Funding (MCES/SME)", ...), so the cache is keyed by name.
 //
-// They now carry the product's Description, which is the WORDING that prints on
-// the invoice — so unlike an id, it is something an admin edits and expects to
+// Entries also carry the product's Description, which is the WORDING that prints
+// on the invoice — so unlike an id, it is something an admin edits and expects to
 // see take effect. A cache with no expiry would hold a corrected typo until the
 // container restarted, so entries are short-lived.
 const ITEM_CACHE_TTL_MS = Math.max(60_000, Number(process.env.QBO_ITEM_CACHE_TTL_MS) || 10 * 60_000);
@@ -100,6 +101,11 @@ function addDaysIso(isoDate: string, days: number): string {
 function safeText(v: unknown): string {
   return typeof v === 'string' ? v : String(v ?? '');
 }
+
+// Course-title prefixing now lives in buildCourseHeading (invoiceLineText.ts),
+// shared with the DA path, and only runs when a product has no Description of
+// its own to take the title from. Its strip-then-apply behaviour came from the
+// withCourseTypePrefix() helper that used to sit here.
 
 function maskNric(nric: string | null | undefined): string {
   const s = String(nric || '').trim();
@@ -332,6 +338,24 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   );
   const ssgStatus = ssgStatusRow.rows[0]?.enrolment_status as string | undefined;
 
+  // Course type (WSQ / CASL / IBF / Non-WSQ) decides the "<TYPE> - <title>" description
+  // prefix and the "<TYPE> funding (...)" QB item/description below — must be resolved
+  // before the grant deduction lines, since it feeds their QB item name. DA rows keep the
+  // historical hardcoded "WSQ" (da_application has no course_type of its own).
+  let courseTypeLabel = 'WSQ';
+  if (!hasDa) {
+    const courseTypeRow = await pool.query(
+      `SELECT c.course_type::text AS course_type
+       FROM enrollment e
+       JOIN course c ON c.id = e.course_id
+       WHERE e.user_id = $1::uuid
+         AND LOWER(TRIM(COALESCE(e.enrolment_id::text, ''))) = LOWER(TRIM($2::text))
+       LIMIT 1`,
+      [userId, enrolmentId]
+    );
+    courseTypeLabel = String(courseTypeRow.rows[0]?.course_type || '').trim() || 'WSQ';
+  }
+
   if (isEnrolmentBlockedFromAutoInvoice(enrStatus) || isEnrolmentBlockedFromAutoInvoice(ssgStatus)) {
     throw new Error('Skipped: enrolment is cancelled or removed — invoice is not sent.');
   }
@@ -369,13 +393,26 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   }
   if (!cachedSku) writeItemCache(_skuItemCache, courseCode, item);
 
-  const family: FundingFamily = detectFundingFamily(item.description, item.name, da.course_title);
+  // The QuickBooks product decides this: its title opens "CASL - ..." or
+  // "WSQ - ...", and it is the same product the invoice bills against, so it
+  // cannot disagree with the document. `courseTypeLabel` — the enrolment's real
+  // course_type, read above — is the fallback for a product whose title carries
+  // no prefix, and the DA title after that.
+  const family: FundingFamily = detectFundingFamily(
+    item.description,
+    item.name,
+    courseTypeLabel,
+    da.course_title
+  );
 
   const { lines: grantDeductionLines, totalSubsidy: grantSubsidy } = await resolveGrantDeductionLinesForInvoice({
     enrolmentId,
     combinedSubsidy,
     grantIdFallback: da.grant_id ?? null,
-    family,
+    // The course type the enrolment actually has. `family` above prefers the
+    // QuickBooks product and falls back to this, so the two agree; passing the
+    // resolved family keeps the deduction lines on products that exist.
+    courseTypeLabel: family,
   });
 
   // Same guard as the DA pipeline: never bill a WSQ learner the full fee just
@@ -468,6 +505,11 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
       // Same rule as the DA pipeline: the wording is the product's, the values
       // are ours. Keeping both paths on one builder is the point — this file
       // used to carry its own copy of the text and the two drifted apart.
+      //
+      // Supersedes the withCourseTypePrefix() approach: the product's own
+      // Description already opens with "CASL - ..." or "WSQ - ...", so the
+      // prefix no longer has to be assembled from course_type. That type is
+      // still consulted, as the fallback signal for `family` above.
       const courseTitle = hasDa ? (da.course_title ?? ctx.courseTitle) : ctx.courseTitle;
       const courseRef = hasDa ? (da.course_reference_number ?? ctx.courseRef) : ctx.courseRef;
       const fields: LineField[] = [

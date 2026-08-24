@@ -66,4 +66,4 @@ async function getCachedAll(): Promise<Record<string, string>> {
   return map;
 }
 
-export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer'] });
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'finance'] });

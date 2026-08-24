@@ -379,7 +379,9 @@ async function buildAndPostDirectApplicationInvoice(
     enrolmentId: enrolmentId || null,
     combinedSubsidy,
     grantIdFallback: app.grant_id,
-    family,
+    // The family resolved from the QuickBooks product, passed as the course-type
+    // label the shared resolver takes.
+    courseTypeLabel: family,
   });
 
   // Refuse to bill a WSQ learner the full fee because the grant hasn't landed.

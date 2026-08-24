@@ -298,7 +298,12 @@ export function buildCourseHeading(opts: {
   const title = String(opts.title || '').trim();
   const code = String(opts.courseCode || '').trim();
   if (!title) return code;
-  const prefixed = /^(wsq|casl|ibf)\b/i.test(title) ? title : `${opts.family} - ${title}`;
+  // Strip any prefix the stored title already carries before applying the right
+  // one. Keeping it would preserve a WRONG one: a course renewed to CASL often
+  // still has "WSQ - ..." in the title we hold, and that is exactly the case
+  // this heading exists to get right.
+  const base = title.replace(/^(WSQ|CASL|IBF|Non-WSQ)\s*[-–]\s*/i, '');
+  const prefixed = `${opts.family} - ${base}`;
   return code && !prefixed.includes(code) ? `${prefixed} (${code})` : prefixed;
 }
 

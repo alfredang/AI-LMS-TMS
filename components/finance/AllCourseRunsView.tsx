@@ -6,6 +6,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { ssgFetch } from '../../lib/ssgAppState';
+import { UpdateAssessmentPanel } from './UpdateAssessmentModal';
 
 interface CourseRunRow {
   enrolment_id: string | null;
@@ -158,6 +159,7 @@ const groupHeaderColors: Record<string, string> = {
   sfc: 'bg-pink-50 dark:bg-pink-950 text-pink-700 dark:text-pink-300',
   grant_pay: 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300',
   fees: 'bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300',
+  assessment: 'bg-cyan-50 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300',
 };
 
 /**
@@ -357,7 +359,7 @@ const StickyHeader: React.FC<{
   );
 };
 
-const TOTAL_COLS = 43; // update if headers change
+const TOTAL_COLS = 44; // update if headers change
 
 const AllCourseRunsView: React.FC = () => {
   const [search, setSearch] = useState('');
@@ -383,6 +385,7 @@ const AllCourseRunsView: React.FC = () => {
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ success: boolean; message: string; detail?: string } | null>(null);
   const [selectedEnrolmentIds, setSelectedEnrolmentIds] = useState<string[]>([]);
+  const [selectedAssessmentEnrolmentIds, setSelectedAssessmentEnrolmentIds] = useState<string[]>([]);
   const [queueing, setQueueing] = useState(false);
   const [sending, setSending] = useState(false);
   const [showFmsInvProgress, setShowFmsInvProgress] = useState(false);
@@ -681,6 +684,28 @@ const AllCourseRunsView: React.FC = () => {
       setSelectedEnrolmentIds((prev) => prev.filter((id) => !pageEnrolmentIds.includes(id)));
     } else {
       setSelectedEnrolmentIds((prev) => [...new Set([...prev, ...pageEnrolmentIds])]);
+    }
+  };
+
+  // Separate selection for "Update Assessment" — independent of the QB invoice checkbox above,
+  // so an enrolment can be picked for one action without the other.
+  const allAssessmentPageSelected =
+    pageEnrolmentIds.length > 0 && pageEnrolmentIds.every((id) => selectedAssessmentEnrolmentIds.includes(id));
+
+  const toggleSelectAssessment = (enrolmentId: string | null) => {
+    if (!enrolmentId?.trim()) return;
+    const id = enrolmentId.trim();
+    setSelectedAssessmentEnrolmentIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllAssessmentOnPage = () => {
+    if (pageEnrolmentIds.length === 0) return;
+    if (allAssessmentPageSelected) {
+      setSelectedAssessmentEnrolmentIds((prev) => prev.filter((id) => !pageEnrolmentIds.includes(id)));
+    } else {
+      setSelectedAssessmentEnrolmentIds((prev) => [...new Set([...prev, ...pageEnrolmentIds])]);
     }
   };
 
@@ -1047,7 +1072,12 @@ const AllCourseRunsView: React.FC = () => {
             <div className="flex items-center gap-2 flex-wrap sm:ml-auto">
               {selectedEnrolmentIds.length > 0 && (
                 <span className="text-xs text-on-surface-secondary px-2 py-1 rounded-full bg-surface border border-default font-medium">
-                  {selectedEnrolmentIds.length} selected
+                  {selectedEnrolmentIds.length} QB selected
+                </span>
+              )}
+              {selectedAssessmentEnrolmentIds.length > 0 && (
+                <span className="text-xs text-cyan-700 dark:text-cyan-300 px-2 py-1 rounded-full bg-cyan-50 dark:bg-cyan-950 border border-cyan-300 dark:border-cyan-600 font-medium">
+                  {selectedAssessmentEnrolmentIds.length} for assessment
                 </span>
               )}
               <Button
@@ -1072,7 +1102,7 @@ const AllCourseRunsView: React.FC = () => {
 
           {/* Helper text */}
           <p className="text-[11px] text-on-surface-secondary -mt-2">
-            Select enrolments from the table below, then "Generate Invoice". Rows flagged <span className="font-semibold">DA</span> automatically run the same main / Grant / SFC pipeline as the View Direct Application page; non-DA rows use the standard QuickBooks flow — each row only ever goes through its own pipeline. Rows already invoiced or ineligible are skipped automatically.
+            Select enrolments from the table below, then "Generate Invoice". Rows flagged <span className="font-semibold">DA</span> automatically run the same main / Grant / SFC pipeline as the View Direct Application page; non-DA rows use the standard QuickBooks flow — each row only ever goes through its own pipeline. Rows already invoiced or ineligible are skipped automatically. Ticking the separate <span className="font-semibold">Assessment</span> checkbox opens an editable preview above the table for that enrolment — no extra button needed.
           </p>
 
         </div>
@@ -1115,6 +1145,14 @@ const AllCourseRunsView: React.FC = () => {
         </div>
       )}
 
+      {selectedAssessmentEnrolmentIds.length > 0 && (
+        <UpdateAssessmentPanel
+          enrolmentIds={selectedAssessmentEnrolmentIds}
+          onRemove={(id) => setSelectedAssessmentEnrolmentIds((prev) => prev.filter((x) => x !== id))}
+          onClose={() => setSelectedAssessmentEnrolmentIds([])}
+        />
+      )}
+
       {/* Sticky header + scrollbar — fixed via portals */}
       <StickyHeader tableRef={tableScrollRef} theadRef={theadRef} />
       <StickyScrollbar tableRef={tableScrollRef} />
@@ -1127,6 +1165,7 @@ const AllCourseRunsView: React.FC = () => {
             <thead ref={theadRef}>
               <tr className="bg-surface dark:bg-slate-900">
                 <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-slate-300 dark:border-slate-600 ${groupHeaderColors.fees}`}>QB</th>
+                <th colSpan={1} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-cyan-300 dark:border-cyan-600 ${groupHeaderColors.assessment}`}>Assessment</th>
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-blue-300 dark:border-blue-600 ${groupHeaderColors.course}`}>Course</th>
                 <th colSpan={5} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-green-300 dark:border-green-600 ${groupHeaderColors.trainee}`}>Trainee</th>
                 <th colSpan={4} className={`text-center text-[10px] uppercase tracking-wider px-2 py-1.5 border-b-2 border-purple-300 dark:border-purple-600 ${groupHeaderColors.sponsor}`}>Employer</th>
@@ -1148,6 +1187,16 @@ const AllCourseRunsView: React.FC = () => {
                     onChange={() => toggleSelectAllOnPage()}
                     disabled={pageEnrolmentIds.length === 0 || loading}
                     aria-label="Select all enrolments on this page"
+                  />
+                </th>
+                <th className={`${headerCell} w-10 text-center`} title="Select enrolments, then Update Assessment">
+                  <input
+                    type="checkbox"
+                    className="rounded border-default"
+                    checked={allAssessmentPageSelected}
+                    onChange={() => toggleSelectAllAssessmentOnPage()}
+                    disabled={pageEnrolmentIds.length === 0 || loading}
+                    aria-label="Select all enrolments on this page for assessment update"
                   />
                 </th>
                 {/* Course (5) */}
@@ -1220,6 +1269,7 @@ const AllCourseRunsView: React.FC = () => {
                 const enrolmentKey = r.enrolment_id ?? `row-${i}`;
                 const enrId = r.enrolment_id?.trim() || null;
                 const isSelected = enrId ? selectedEnrolmentIds.includes(enrId) : false;
+                const isAssessmentSelected = enrId ? selectedAssessmentEnrolmentIds.includes(enrId) : false;
                 const isSent = !!(r.invoice_sent_at && String(r.invoice_sent_at).trim());
                 const isCancelled = String(r.enrolment_status || '').toLowerCase().includes('cancelled');
                 const fullyPaid = String(r.grant_payment_status || '').toUpperCase() === 'FULLY_PAID';
@@ -1246,6 +1296,16 @@ const AllCourseRunsView: React.FC = () => {
                         onChange={() => toggleSelectEnrolment(enrId)}
                         disabled={!enrId || loading || isSent || isCancelled}
                         aria-label={enrId ? `Select ${enrId}` : 'No enrolment id'}
+                      />
+                    </td>
+                    <td className={`${cell} text-center align-middle`}>
+                      <input
+                        type="checkbox"
+                        className="rounded border-default"
+                        checked={isAssessmentSelected}
+                        onChange={() => toggleSelectAssessment(enrId)}
+                        disabled={!enrId || loading || isCancelled}
+                        aria-label={enrId ? `Select ${enrId} for assessment update` : 'No enrolment id'}
                       />
                     </td>
                     {/* Course */}
@@ -1680,6 +1740,7 @@ const AllCourseRunsView: React.FC = () => {
           </div>
         </div>
       )}
+
     </div>
   );
 };
