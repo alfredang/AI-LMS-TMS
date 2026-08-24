@@ -25,8 +25,8 @@ import {
 import { shouldSendQboInvoiceEmailFromQuickBooks } from './qboInvoiceEmailPolicy';
 import { getLocalYMD } from '../dateHelpers';
 
-// Grant QB items are fixed ("WSQ funding (Baseline)", "WSQ funding (MCES)").
-// Cache their IDs at module level so subsequent invoice jobs don't re-query QB.
+// Grant QB item names are course-type-driven ("WSQ funding (Baseline)", "CASL funding (MCES)", ...).
+// Cache their IDs at module level (keyed by full item name) so subsequent invoice jobs don't re-query QB.
 const _grantItemCache = new Map<string, string>();
 const _skuItemCache = new Map<string, { id: string; name: string; unitPrice: number }>();
 let _cachedWsqiCustomerId: string | null = null;
@@ -50,6 +50,18 @@ function addDaysIso(isoDate: string, days: number): string {
 
 function safeText(v: unknown): string {
   return typeof v === 'string' ? v : String(v ?? '');
+}
+
+const COURSE_TYPE_PREFIX_RE = /^(WSQ|CASL|IBF|Non-WSQ)\s*[-–]\s*/i;
+
+/**
+ * Prefix a course title with its actual course type ("CASL - ...", "WSQ - ...").
+ * Strips any existing WSQ/CASL/IBF/Non-WSQ prefix first so a mismatched or
+ * doubled prefix from upstream data (e.g. a raw SSG title) never survives.
+ */
+function withCourseTypePrefix(title: string, courseTypeLabel: string): string {
+  const base = String(title || '').trim().replace(COURSE_TYPE_PREFIX_RE, '');
+  return `${courseTypeLabel} - ${base}`;
 }
 
 function maskNric(nric: string | null | undefined): string {
@@ -283,6 +295,24 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   );
   const ssgStatus = ssgStatusRow.rows[0]?.enrolment_status as string | undefined;
 
+  // Course type (WSQ / CASL / IBF / Non-WSQ) decides the "<TYPE> - <title>" description
+  // prefix and the "<TYPE> funding (...)" QB item/description below — must be resolved
+  // before the grant deduction lines, since it feeds their QB item name. DA rows keep the
+  // historical hardcoded "WSQ" (da_application has no course_type of its own).
+  let courseTypeLabel = 'WSQ';
+  if (!hasDa) {
+    const courseTypeRow = await pool.query(
+      `SELECT c.course_type::text AS course_type
+       FROM enrollment e
+       JOIN course c ON c.id = e.course_id
+       WHERE e.user_id = $1::uuid
+         AND LOWER(TRIM(COALESCE(e.enrolment_id::text, ''))) = LOWER(TRIM($2::text))
+       LIMIT 1`,
+      [userId, enrolmentId]
+    );
+    courseTypeLabel = String(courseTypeRow.rows[0]?.course_type || '').trim() || 'WSQ';
+  }
+
   if (isEnrolmentBlockedFromAutoInvoice(enrStatus) || isEnrolmentBlockedFromAutoInvoice(ssgStatus)) {
     throw new Error('Skipped: enrolment is cancelled or removed — invoice is not sent.');
   }
@@ -309,6 +339,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     enrolmentId,
     combinedSubsidy,
     grantIdFallback: da.grant_id ?? null,
+    courseTypeLabel,
   });
 
   // Same guard as the DA pipeline: never bill a WSQ learner the full fee just
@@ -413,7 +444,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
       TaxCodeRef: { value: taxCodeGst },
     },
     Description: [
-      `Course Name: WSQ - ${hasDa ? (da.course_title ?? ctx.courseTitle) : ctx.courseTitle}`,
+      `Course Name: ${hasDa ? `WSQ - ${da.course_title ?? ctx.courseTitle}` : withCourseTypePrefix(ctx.courseTitle, courseTypeLabel)}`,
       `(${hasDa ? (da.course_reference_number ?? ctx.courseRef) : ctx.courseRef})`,
       `Participant Name: ${hasDa ? (da.trainee_name ?? ctx.traineeName) : ctx.traineeName}`,
       `NRIC: ${maskNric(hasDa ? (da.trainee_id ?? ctx.traineeNric) : ctx.traineeNric)}`,
@@ -427,7 +458,8 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     ].join('\n'),
   });
 
-  // Lines 2+: WSQ grants — named QB items ("WSQ funding (Baseline)" / "WSQ funding (MCES)")
+  // Lines 2+: grant deductions — named QB items ("WSQ funding (Baseline)" / "CASL funding (MCES)" / ...),
+  // item name driven by the enrolment's actual course type (see courseTypeLabel above).
   for (const g of grantDeductionLines) {
     lines.push({
       Amount: -g.amount,

@@ -26,27 +26,32 @@ function isPositiveMoney(value: unknown): boolean {
 function resolveGrantItemName(opts: {
   fundingSchemeCode?: string | null;
   fundingSchemeDescription?: string | null;
+  /** 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ' — the enrolment's actual course type. Defaults to 'WSQ' for existing DA/CA callers. */
+  courseTypeLabel?: string | null;
 }): string {
   const haystack = `${opts.fundingSchemeCode || ''} ${opts.fundingSchemeDescription || ''}`.toLowerCase();
-  if (/baseline|\bbl\b/.test(haystack)) return 'WSQ funding (Baseline)';
+  const type = String(opts.courseTypeLabel || '').trim() || 'WSQ';
+  if (/baseline|\bbl\b/.test(haystack)) return `${type} funding (Baseline)`;
 
   const hasMces = /\bmces\b|mid-career enhanced subsidy/.test(haystack);
   const hasSme = /\bsme\b|\bsmes\b|enhanced training support for smes/.test(haystack);
 
-  if (hasMces && hasSme) return 'WSQ funding (MCES/SME)';
-  if (hasMces) return 'WSQ funding (MCES)';
-  if (hasSme) return 'WSQ funding (SMEs)';
-  return 'WSQ funding (MCES/SME)';
+  if (hasMces && hasSme) return `${type} funding (MCES/SME)`;
+  if (hasMces) return `${type} funding (MCES)`;
+  if (hasSme) return `${type} funding (SMEs)`;
+  return `${type} funding (MCES/SME)`;
 }
 
 /**
  * Loads up to two grant rows from `ssg_grants` for an SSG enrolment reference (ENR-...).
  */
 export async function loadSplitGrantDeductionsFromDb(
-  enrolmentId: string | null | undefined
+  enrolmentId: string | null | undefined,
+  courseTypeLabel?: string | null
 ): Promise<{ lines: GrantDeductionLine[]; totalAmount: number }> {
   const ref = String(enrolmentId || '').trim();
   if (!ref) return { lines: [], totalAmount: 0 };
+  const type = String(courseTypeLabel || '').trim() || 'WSQ';
 
   const [blRes, nblRes] = await Promise.all([
     pool.query(
@@ -100,10 +105,11 @@ export async function loadSplitGrantDeductionsFromDb(
     lines.push({
       amount: Number(bl.amt),
       grantId: gid,
-      description: `Less: WSQ funding (Baseline)\nGrant Ref#: ${gid}`,
+      description: `Less: ${type} funding (Baseline)\nGrant Ref#: ${gid}`,
       itemName: resolveGrantItemName({
         fundingSchemeCode: bl.funding_scheme_code ?? 'Baseline',
         fundingSchemeDescription: bl.funding_scheme_description ?? 'Baseline',
+        courseTypeLabel: type,
       }),
     });
   }
@@ -120,10 +126,11 @@ export async function loadSplitGrantDeductionsFromDb(
     lines.push({
       amount: Number(nbl.amt),
       grantId: gid,
-      description: `Less: WSQ funding (${label})\nGrant Ref#: ${gid}`,
+      description: `Less: ${type} funding (${label})\nGrant Ref#: ${gid}`,
       itemName: resolveGrantItemName({
         fundingSchemeCode: nbl.funding_scheme_code,
         fundingSchemeDescription: nbl.funding_scheme_description,
+        courseTypeLabel: type,
       }),
     });
   }
@@ -135,16 +142,18 @@ export async function loadSplitGrantDeductionsFromDb(
 /** Legacy single line when `ssg_grants` has not been populated yet. */
 export function buildFallbackCombinedGrantLine(
   combinedSubsidy: number,
-  grantId: string | null
+  grantId: string | null,
+  courseTypeLabel?: string | null
 ): GrantDeductionLine[] {
   if (combinedSubsidy <= 0) return [];
   const gid = grantId || '-';
+  const type = String(courseTypeLabel || '').trim() || 'WSQ';
   return [
     {
       amount: combinedSubsidy,
       grantId: gid,
-      description: `Less: WSQ funding (Baseline)\nGrant Ref#: ${gid}`,
-      itemName: 'WSQ funding (Baseline)',
+      description: `Less: ${type} funding (Baseline)\nGrant Ref#: ${gid}`,
+      itemName: `${type} funding (Baseline)`,
     },
   ];
 }
@@ -157,16 +166,18 @@ export function buildFallbackSplitGrantLines(opts: {
   otherAmount?: unknown;
   totalGrantAmount?: unknown;
   grantIdFallback?: string | null;
+  courseTypeLabel?: string | null;
 }): GrantDeductionLine[] {
   const lines: GrantDeductionLine[] = [];
+  const type = String(opts.courseTypeLabel || '').trim() || 'WSQ';
 
   const blGrantId = String(opts.blGrantId || '').trim();
   if (blGrantId && isPositiveMoney(opts.blAmount)) {
     lines.push({
       amount: Number(opts.blAmount),
       grantId: blGrantId,
-      description: `Less: WSQ funding (Baseline)\nGrant Ref#: ${blGrantId}`,
-      itemName: 'WSQ funding (Baseline)',
+      description: `Less: ${type} funding (Baseline)\nGrant Ref#: ${blGrantId}`,
+      itemName: `${type} funding (Baseline)`,
     });
   }
 
@@ -176,10 +187,11 @@ export function buildFallbackSplitGrantLines(opts: {
     lines.push({
       amount: Number(opts.otherAmount),
       grantId: otherGrantId,
-      description: `Less: WSQ funding (${label})\nGrant Ref#: ${otherGrantId}`,
+      description: `Less: ${type} funding (${label})\nGrant Ref#: ${otherGrantId}`,
       itemName: resolveGrantItemName({
         fundingSchemeCode: String(opts.otherSchemeCode || '').trim() || null,
         fundingSchemeDescription: label,
+        courseTypeLabel: type,
       }),
     });
   }
@@ -188,7 +200,8 @@ export function buildFallbackSplitGrantLines(opts: {
 
   return buildFallbackCombinedGrantLine(
     isPositiveMoney(opts.totalGrantAmount) ? Number(opts.totalGrantAmount) : 0,
-    opts.grantIdFallback ?? null
+    opts.grantIdFallback ?? null,
+    type
   );
 }
 
@@ -199,12 +212,14 @@ export async function resolveGrantDeductionLinesForInvoice(opts: {
   enrolmentId?: string | null;
   combinedSubsidy: number;
   grantIdFallback: string | null;
+  /** 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ' — defaults to 'WSQ' for existing DA/CA callers. */
+  courseTypeLabel?: string | null;
 }): Promise<{ lines: GrantDeductionLine[]; totalSubsidy: number }> {
-  const { lines: dbLines, totalAmount } = await loadSplitGrantDeductionsFromDb(opts.enrolmentId);
+  const { lines: dbLines, totalAmount } = await loadSplitGrantDeductionsFromDb(opts.enrolmentId, opts.courseTypeLabel);
   if (dbLines.length > 0) {
     return { lines: dbLines, totalSubsidy: totalAmount };
   }
-  const fallback = buildFallbackCombinedGrantLine(opts.combinedSubsidy, opts.grantIdFallback);
+  const fallback = buildFallbackCombinedGrantLine(opts.combinedSubsidy, opts.grantIdFallback, opts.courseTypeLabel);
   const totalSubsidy = fallback.reduce((s, l) => s + l.amount, 0);
   return { lines: fallback, totalSubsidy };
 }
