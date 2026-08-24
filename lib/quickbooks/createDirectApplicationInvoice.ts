@@ -5,12 +5,22 @@
 
 import pool from '../db';
 import { callQbProxy } from './qbProxyClient';
-import { buildSfcCreditLineDescription } from '../daApplicationId';
+import { buildSfcCreditLineDescription, realApplicationId } from '../daApplicationId';
 import { getLocalYMD } from '../dateHelpers';
 import { refreshGrantsForEnrolments } from '../services/billingSync';
 import { resolveGrantDeductionLinesForInvoice } from '../services/daInvoiceGrantLines';
+import {
+  buildCourseHeading,
+  buildInvoiceLineText,
+  COURSE_LINE_HEADING_PREFIX,
+  detectFundingFamily,
+  resolveFundingItemName,
+  type FundingFamily,
+  type LineField,
+} from './invoiceLineText';
 import { formatDateOnlyEnSg } from '../utils/dateOnly';
 import { assessGrantEligibility } from '../grantEligibility';
+import type { QboItem } from '../services/qboInvoiceService';
 import {
   qboFindCustomerByName,
   qboFindInvoiceByDocNumber,
@@ -21,6 +31,7 @@ import {
   qboGetDefaultInvoiceEmailFields,
   qboReadInvoice,
   qboResolveInvoiceLineTaxCodeRef,
+  qboCreateInvoiceRetryingDuplicateDocNumber,
   qboResolveOosTaxCodeRef,
   qboSparseUpdateInvoice,
 } from '../services/qboInvoiceService';
@@ -106,45 +117,92 @@ function maskNric(value: string | null | undefined): string {
   return 'X'.repeat(raw.length - 4) + raw.slice(-4);
 }
 
-export function buildDirectApplicationCourseDescription(app: Pick<
-  DaApplicationForInvoice,
-  'course_title' | 'course_reference_number' | 'trainee_name' | 'trainee_id' | 'course_start_date' | 'course_end_date' | 'course_run_id'
->): string {
-  return [
-    `Course Name: WSQ - ${app.course_title ?? app.course_reference_number}`,
-    `(${app.course_reference_number ?? ''})`,
-    `Participant Name: ${app.trainee_name ?? '-'}`,
-    `NRIC: ${maskNric(app.trainee_id)}`,
-    (() => {
-      const start = formatDate(app.course_start_date);
-      const end = formatDate(app.course_end_date);
-      if (start === end || !app.course_end_date) {
-        return `Course Date: ${start}`;
-      }
-      return `Course Date: ${start} - ${end}`;
-    })(),
-    `Course Run: ${app.course_run_id ?? '-'}`,
-  ].join('\n');
+/** The course date as one field: a single day, or a range. */
+function courseDateValue(app: Pick<DaApplicationForInvoice, 'course_start_date' | 'course_end_date'>): string {
+  const start = formatDate(app.course_start_date);
+  const end = formatDate(app.course_end_date);
+  if (start === end || !app.course_end_date) return start;
+  return `${start} - ${end}`;
 }
 
-async function resolveLineItemRef(opts: {
+/**
+ * The per-learner values that fill the blanks in a course product's template.
+ *
+ * `label` is only a fallback: when the product's own template has a line for the
+ * field, that product's wording wins - which is why a CASL invoice reads `Name:`
+ * and a WSQ one reads `Participant Name:`.
+ */
+function courseLineFields(app: DaApplicationForInvoice): LineField[] {
+  return [
+    { key: 'name', label: 'Participant Name', value: app.trainee_name ?? '-' },
+    { key: 'nric', label: 'NRIC', value: maskNric(app.trainee_id) },
+    { key: 'date', label: 'Course Date', value: courseDateValue(app) },
+    { key: 'run', label: 'Course Run', value: app.course_run_id ?? '-' },
+  ];
+}
+
+/**
+ * The course line, worded by the QuickBooks product.
+ *
+ * `courseItem` is the product resolved by SKU. Its Description box holds the
+ * course title and the blank labels; we fill them in. A product with no usable
+ * text falls back to a heading built from the DA row, and says why in the log so
+ * the product can be corrected.
+ */
+export function buildDirectApplicationCourseLine(
+  app: DaApplicationForInvoice,
+  courseItem: Pick<QboItem, 'name' | 'description'> | null,
+  family: FundingFamily
+): string {
+  const built = buildInvoiceLineText({
+    productDescription: courseItem?.description,
+    fields: courseLineFields(app),
+    fallbackHeading: buildCourseHeading({
+      family,
+      title: app.course_title,
+      courseCode: app.course_reference_number,
+    }),
+    expectedCode: app.course_reference_number,
+    headingPrefix: COURSE_LINE_HEADING_PREFIX,
+  });
+
+  if (built.source === 'fallback') {
+    console.warn(
+      `[DA invoice] Course line built from LMS data for ${app.course_reference_number}: ${built.reason}. ` +
+        `Fix the Description on the QuickBooks product to control this wording.`
+    );
+  }
+  return built.text;
+}
+
+/**
+ * Resolve a QBO product by name, keeping its Description - that text is the
+ * line's wording, so a lookup that returns only an id is no longer enough.
+ *
+ * Falls back to the course product when the named one is missing, exactly as
+ * before: a deduction posted against the wrong product is recoverable, a missing
+ * deduction line overcharges the learner.
+ */
+async function resolveLineItem(opts: {
   courseItemRef: { value: string; name?: string };
+  courseItem: QboItem | null;
   itemName: string;
-}): Promise<{ value: string; name?: string }> {
+}): Promise<{ ref: { value: string; name?: string }; item: Pick<QboItem, 'name' | 'description'> | null }> {
   const targetName = String(opts.itemName || '').trim();
-  if (!targetName) return opts.courseItemRef;
+  const fallback = { ref: opts.courseItemRef, item: null };
+  if (!targetName) return fallback;
 
   try {
     const item = await qboFindItemByName(undefined, targetName);
     if (item?.id) {
-      return { value: item.id, name: item.name };
+      return { ref: { value: item.id, name: item.name }, item };
     }
     console.warn(`[QBO] No item found for name: ${targetName}. Falling back to course item.`);
   } catch (e) {
     console.warn(`[QBO] Item lookup failed for name ${targetName}:`, e);
   }
 
-  return opts.courseItemRef;
+  return fallback;
 }
 
 function resolveSkillsFutureCreditItemName(): string {
@@ -156,12 +214,20 @@ function resolveSkillsFutureCreditItemName(): string {
 }
 
 /**
- * Rewrite stale line descriptions on an invoice QuickBooks already holds.
+ * Repair a defect on an invoice QuickBooks already holds. Wording is NOT a
+ * defect.
  *
- * The case that matters: an SFC line still reading
- * "Application ID: MANUAL-ENR-…" — the internal placeholder minted for a
- * manually enrolled learner, which was never an application id and must not sit
- * on a learner-facing tax invoice.
+ * This used to restate the course line too, so an invoice re-touched by the
+ * nightly sweep silently adopted whatever our code currently said. Once the
+ * wording comes from the QuickBooks product that becomes actively wrong: editing
+ * a product would rewrite invoices already sent to learners, and a course renewed
+ * WSQ -> CASL would retro-relabel every historical invoice for it. An issued
+ * invoice keeps the words it was issued with (decision 2026-08-24), so the
+ * learner's copy and QuickBooks always agree.
+ *
+ * What still gets fixed is the one thing that was never legitimate: an SFC line
+ * citing `MANUAL-…`, the internal placeholder minted for a manually enrolled
+ * learner. That is not an Application ID and must not sit on a tax invoice.
  *
  * Returns the COMPLETE line array to send, or null when nothing needs changing.
  * The whole array is deliberate: a QBO sparse update treats `Line` as the full
@@ -176,25 +242,15 @@ function repairInvoiceLineDescriptions(
   const existingLines = Array.isArray(rawLines) ? rawLines : [];
   if (existingLines.length === 0) return null;
 
-  const desiredCourseDescription = buildDirectApplicationCourseDescription(app);
   const desiredSfcDescription = buildSfcCreditLineDescription(app.application_id, enrolmentId);
-  const courseLine =
-    existingLines.find(
-      (line: any) => line?.DetailType === 'SalesItemLineDetail' && line?.SalesItemLineDetail?.Qty === 1
-    ) || existingLines[0];
 
   let changed = false;
   const repaired = existingLines.map((line: any) => {
     const description = String(line?.Description ?? '');
-    const desired =
-      courseLine?.Id && line?.Id === courseLine.Id
-        ? desiredCourseDescription
-        : /^SkillsFuture Credit Usage\/Claim:/i.test(description)
-          ? desiredSfcDescription
-          : null;
-    if (desired == null || description === desired) return line;
+    if (!/\bMANUAL-/i.test(description)) return line;
+    if (description === desiredSfcDescription) return line;
     changed = true;
-    return { ...line, Description: desired };
+    return { ...line, Description: desiredSfcDescription };
   });
 
   return changed ? repaired : null;
@@ -300,10 +356,30 @@ async function buildAndPostDirectApplicationInvoice(
     }
   }
 
+  // The course product is resolved first because it decides more than the course
+  // line: whether this learner's grants bill against the WSQ or the CASL funding
+  // products is read from the product's own title, not from our course table, so
+  // that a renewal takes effect the moment QuickBooks is right.
+  const courseItem = await qboFindItemBySku(undefined, app.course_reference_number || '');
+  const itemId = courseItem?.id ?? process.env.QBO_DEFAULT_ITEM_REF ?? null;
+
+  if (!itemId) {
+    throw new Error(
+      `QBO item not found for SKU: ${app.course_reference_number}. Please create the item in QuickBooks or set QBO_DEFAULT_ITEM_REF.`
+    );
+  }
+
+  const family: FundingFamily = detectFundingFamily(
+    courseItem?.description,
+    courseItem?.name,
+    app.course_title
+  );
+
   const { lines: grantDeductionLines, totalSubsidy: subsidy } = await resolveGrantDeductionLinesForInvoice({
     enrolmentId: enrolmentId || null,
     combinedSubsidy,
     grantIdFallback: app.grant_id,
+    family,
   });
 
   // Refuse to bill a WSQ learner the full fee because the grant hasn't landed.
@@ -383,15 +459,6 @@ async function buildAndPostDirectApplicationInvoice(
     throw new Error('trainee_email is required to create invoice');
   }
 
-  const courseItem = await qboFindItemBySku(undefined, app.course_reference_number || '');
-  const itemId = courseItem?.id ?? process.env.QBO_DEFAULT_ITEM_REF ?? null;
-
-  if (!itemId) {
-    throw new Error(
-      `QBO item not found for SKU: ${app.course_reference_number}. Please create the item in QuickBooks or set QBO_DEFAULT_ITEM_REF.`
-    );
-  }
-
   const courseItemRef = { value: itemId, name: courseItem?.name };
 
   // Customer is always the fixed "WSQ Individual (Not for Company)" bucket
@@ -424,10 +491,14 @@ async function buildAndPostDirectApplicationInvoice(
   }
   const defaultEmailFields = await qboGetDefaultInvoiceEmailFields(undefined);
 
-  const existingByToday = await qboFindInvoiceByDocNumber(undefined, docNumber);
+  // `ignoreVoided` is what makes reissuing possible. Both searches exist to
+  // adopt an invoice a previous attempt created but failed to record; a voided
+  // one is not that - it is a document an admin deliberately cancelled, and
+  // adopting it would silently point the row back at a zeroed invoice.
+  const existingByToday = await qboFindInvoiceByDocNumber(undefined, docNumber, { ignoreVoided: true });
   const existingByLast6 =
     !existingByToday?.id && last6
-      ? await qboFindInvoiceByDocNumberLike(undefined, `TC%-${last6}`)
+      ? await qboFindInvoiceByDocNumberLike(undefined, `TC%-${last6}`, { ignoreVoided: true })
       : null;
   const orphan = existingByToday ?? existingByLast6;
   let reusableOrphan = orphan;
@@ -481,7 +552,7 @@ async function buildAndPostDirectApplicationInvoice(
   lines.push({
     DetailType: 'SalesItemLineDetail',
     Amount: fullFee,
-    Description: buildDirectApplicationCourseDescription(app),
+    Description: buildDirectApplicationCourseLine(app, courseItem, family),
     SalesItemLineDetail: {
       ItemRef: courseItemRef,
       Qty: 1,
@@ -491,16 +562,25 @@ async function buildAndPostDirectApplicationInvoice(
   });
 
   for (const g of grantDeductionLines) {
-    const grantItemRef = await resolveLineItemRef({
-      courseItemRef,
-      itemName: g.itemName,
+    const grant = await resolveLineItem({ courseItemRef, courseItem, itemName: g.itemName });
+    // `g.description` carries the pre-CASL wording and is now only the fallback;
+    // the funding product's own Description box is what prints.
+    const built = buildInvoiceLineText({
+      productDescription: grant.item?.description,
+      fields: [{ key: 'grantRef', label: 'Grant Ref #', value: `1. ${g.grantId}`, block: true }],
+      fallbackHeading: g.description.split('\n')[0],
     });
+    if (built.source === 'fallback') {
+      console.warn(
+        `[DA invoice] Funding line built from LMS data for "${g.itemName}": ${built.reason}.`
+      );
+    }
     lines.push({
       DetailType: 'SalesItemLineDetail',
       Amount: -g.amount,
-      Description: g.description,
+      Description: built.text,
       SalesItemLineDetail: {
-        ItemRef: grantItemRef,
+        ItemRef: grant.ref,
         Qty: 1,
         UnitPrice: -g.amount,
         TaxCodeRef: { value: taxOos },
@@ -508,15 +588,31 @@ async function buildAndPostDirectApplicationInvoice(
     });
   }
 
+  const sfc = await resolveLineItem({
+    courseItemRef,
+    courseItem,
+    itemName: resolveSkillsFutureCreditItemName(),
+  });
+  const sfcReference = realApplicationId(app.application_id);
+  const sfcBuilt = buildInvoiceLineText({
+    productDescription: sfc.item?.description,
+    fields: [
+      {
+        key: 'claim',
+        // Without a genuine MySkillsFuture application there is nothing to cite
+        // but the SSG enrolment reference - never the internal `MANUAL-` key.
+        label: sfcReference ? 'Application ID' : 'Enrolment ID',
+        value: sfcReference || enrolmentId,
+      },
+    ],
+    fallbackHeading: 'SkillsFuture Credit Usage/Claim',
+  });
   lines.push({
     DetailType: 'SalesItemLineDetail',
     Amount: -creditApplied,
-    Description: buildSfcCreditLineDescription(app.application_id, enrolmentId),
+    Description: sfcBuilt.text,
     SalesItemLineDetail: {
-      ItemRef: await resolveLineItemRef({
-        courseItemRef,
-        itemName: resolveSkillsFutureCreditItemName(),
-      }),
+      ItemRef: sfc.ref,
       Qty: 1,
       UnitPrice: -creditApplied,
       TaxCodeRef: { value: taxOos },
@@ -560,11 +656,11 @@ async function buildAndPostDirectApplicationInvoice(
 
   console.log('[QBO invoice body]', JSON.stringify(invoiceBody, null, 2));
 
-  const createResp = await callQbProxy({
-    action: 'create',
-    entity: 'invoice',
-    body: invoiceBody,
-  });
+  // Posts as-is; only a rejected duplicate number costs a second attempt.
+  const createResp = await qboCreateInvoiceRetryingDuplicateDocNumber(
+    body => callQbProxy({ action: 'create', entity: 'invoice', body }),
+    invoiceBody
+  );
 
   const invoice = createResp.data?.Invoice;
   if (!invoice?.Id) {

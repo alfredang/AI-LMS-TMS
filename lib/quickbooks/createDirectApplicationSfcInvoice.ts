@@ -29,11 +29,13 @@ import {
   qboFindCustomerByName,
   qboFindInvoiceByDocNumber,
   qboFindItemByName,
+  qboCreateInvoiceRetryingDuplicateDocNumber,
   qboFindTermByName,
   qboResolveOosTaxCodeRef,
   qboSparseUpdateInvoice,
 } from '../services/qboInvoiceService';
 import { buildPurchaseOrderInvoiceFields } from './directApplicationInvoiceFields';
+import { buildInvoiceLineText } from './invoiceLineText';
 
 export interface SfcInvoiceInput {
   enrolmentId: string;
@@ -68,6 +70,34 @@ async function resolveSupplementalCustomerRef(): Promise<string> {
   }
   cachedSupplementalCustomerId = found.id;
   return cachedSupplementalCustomerId;
+}
+
+/**
+ * The credit line, worded by the QuickBooks product - the same
+ * `SkillsFuture Claim by Direct Application` product the main invoice uses, so
+ * the two documents match. WSQ and CASL share it; there is no CASL variant and
+ * none is needed.
+ *
+ * The value is the genuine MySkillsFuture application id, or the SSG enrolment
+ * reference when the row only carries our internal `MANUAL-` placeholder. The
+ * placeholder itself never reaches an invoice.
+ */
+function buildSfcCreditLineText(
+  applicationId: string | null,
+  enrolmentId: string,
+  productDescription: string | null | undefined
+): string {
+  const real = realApplicationId(applicationId);
+  const value = real || String(enrolmentId || '').trim();
+  if (!value) return buildSfcCreditLineDescription(applicationId, enrolmentId);
+
+  return buildInvoiceLineText({
+    productDescription,
+    fields: [
+      { key: 'claim', label: real ? 'Application ID' : 'Enrolment ID', value },
+    ],
+    fallbackHeading: 'SkillsFuture Credit Usage/Claim',
+  }).text;
 }
 
 function resolveSkillsFutureCreditItemName(): string {
@@ -143,10 +173,11 @@ export async function createDirectApplicationSfcInvoice(
   }
 
   // Idempotency first. Also reuse older invoices keyed by the raw claim id.
-  const existing = await qboFindInvoiceByDocNumber(undefined, docNumber);
+  // A void is not a reusable invoice; skipping it allows a reissue.
+  const existing = await qboFindInvoiceByDocNumber(undefined, docNumber, { ignoreVoided: true });
   const legacyExisting =
     !existing?.id && rawClaimId && rawClaimId !== docNumber
-      ? await qboFindInvoiceByDocNumber(undefined, rawClaimId)
+      ? await qboFindInvoiceByDocNumber(undefined, rawClaimId, { ignoreVoided: true })
       : null;
   const existingInvoice = existing?.id ? existing : legacyExisting;
   if (existingInvoice?.id) {
@@ -203,7 +234,7 @@ export async function createDirectApplicationSfcInvoice(
       {
         DetailType: 'SalesItemLineDetail',
         Amount: amount,
-        Description: buildSfcCreditLineDescription(input.applicationId, input.enrolmentId),
+        Description: buildSfcCreditLineText(input.applicationId, input.enrolmentId, item.description),
         SalesItemLineDetail: {
           ItemRef: { value: item.id, name: item.name },
           Qty: 1,
@@ -218,7 +249,12 @@ export async function createDirectApplicationSfcInvoice(
     Object.assign(invoiceBody, await buildPurchaseOrderInvoiceFields(input.mainInvoiceDocNumber));
   }
 
-  const created = await qboCreateInvoice(undefined, invoiceBody);
+  // As with the grant invoice: the claim reference is the number, so a reissue
+  // after a hand-void lands on -R2 rather than failing.
+  const created = await qboCreateInvoiceRetryingDuplicateDocNumber(
+    body => qboCreateInvoice(undefined, body),
+    invoiceBody
+  );
   if (!created.id) {
     throw new Error('QB SFC invoice create returned no Id');
   }

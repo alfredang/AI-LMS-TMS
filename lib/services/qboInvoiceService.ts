@@ -198,16 +198,33 @@ export function formatQboFaultMessage(data: unknown): string {
     .join(' | ');
 }
 
+// `fetch` never times out on its own; without this a connection Intuit does not
+// answer hangs the caller indefinitely.
+const QBO_TIMEOUT_MS = Math.max(5_000, Number(process.env.QBO_TIMEOUT_MS) || 60_000);
+
 async function qboFetchJson(opts: { token: string; url: string; method?: string; body?: any; accept?: string }): Promise<any> {
-  const resp = await fetch(opts.url, {
-    method: opts.method || 'GET',
-    headers: {
-      Authorization: `Bearer ${opts.token}`,
-      Accept: opts.accept || 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), QBO_TIMEOUT_MS);
+  let resp: Response;
+  try {
+    resp = await fetch(opts.url, {
+      method: opts.method || 'GET',
+      headers: {
+        Authorization: `Bearer ${opts.token}`,
+        Accept: opts.accept || 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+      signal: abort.signal,
+    });
+  } catch (e) {
+    if (abort.signal.aborted) {
+      throw new Error(`QuickBooks did not respond within ${Math.round(QBO_TIMEOUT_MS / 1000)}s.`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   const data = await resp.json().catch(() => null);
   if (!resp.ok) {
     throw new Error(formatQboFaultMessage(data) || `QBO error ${resp.status}`);
@@ -351,9 +368,32 @@ export async function qboReadInvoice(
   };
 }
 
+/**
+ * Is this invoice a void?
+ *
+ * QuickBooks voids in place: the document keeps its number and its place in the
+ * ledger, but the amounts go to zero and "Voided" is written into PrivateNote.
+ * BOTH conditions are required - a legitimately zero invoice (SkillsFuture Credit
+ * covering the whole balance is common) has a zero total and must not be mistaken
+ * for a void.
+ *
+ * This matters on the READ side, not just when voiding. The invoice creators
+ * search QuickBooks before posting, to adopt an invoice a previous attempt
+ * managed to create but failed to record. Once voiding became possible from the
+ * DA screen, that search could hand back the document the admin had just
+ * cancelled, and the pipeline would adopt it as if it were healthy - leaving the
+ * row pointing at a zeroed invoice with no error anywhere.
+ */
+export function isVoidedQboInvoice(raw: any): boolean {
+  if (!raw) return false;
+  const note = String(raw.PrivateNote || '');
+  return /voided/i.test(note) && Number(raw.TotalAmt || 0) === 0;
+}
+
 export async function qboFindInvoiceByDocNumber(
   appOverride: string | undefined,
-  docNumber: string
+  docNumber: string,
+  opts?: { ignoreVoided?: boolean }
 ): Promise<{ id: string; customerRef?: string; syncToken?: string; raw: any } | null> {
   const safe = String(docNumber || '').replace(/'/g, "''").trim();
   if (!safe) return null;
@@ -361,12 +401,62 @@ export async function qboFindInvoiceByDocNumber(
   const inv = data?.QueryResponse?.Invoice;
   const row = Array.isArray(inv) ? inv[0] : inv;
   if (!row?.Id) return null;
+  if (opts?.ignoreVoided && isVoidedQboInvoice(row)) return null;
   return {
     id: String(row.Id),
     customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined,
     syncToken: row?.SyncToken ? String(row.SyncToken) : undefined,
     raw: row,
   };
+}
+
+/** QuickBooks rejecting a document number that is already in use (fault 6140). */
+function isDuplicateDocNumberError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err || '');
+  return /duplicate document number|\b6140\b/i.test(message);
+}
+
+/**
+ * Post an invoice, and if QuickBooks says the document number is taken, reissue
+ * it as `-R2`, `-R3`, ... until one lands.
+ *
+ * REACTS rather than asks. The obvious implementation checks first — query
+ * QuickBooks for the number, then create — but that is an extra round trip on
+ * EVERY invoice to guard against something that almost never happens. A DA
+ * learner gets three invoices, so a 100-row Excel upload paid 300 extra calls
+ * against Intuit's rate limit to discover 300 times that the number was free.
+ *
+ * Creating first costs nothing in the normal case, and the failure it is
+ * guarding against is self-announcing: QuickBooks returns fault 6140 and no
+ * invoice is created, so retrying with the next number is safe — there is no
+ * half-made document to clean up.
+ *
+ * A number is normally only occupied when someone voided or deleted the
+ * original by hand in QuickBooks: a void keeps its number, so the reissue needs
+ * a new one, and the suffix keeps it recognisably related to the original.
+ */
+export async function qboCreateInvoiceRetryingDuplicateDocNumber<T>(
+  create: (body: Record<string, any>) => Promise<T>,
+  body: Record<string, any>,
+  maxRevisions = 9
+): Promise<T> {
+  const base = String(body?.DocNumber || '').trim();
+  if (!base) return create(body);
+
+  for (let revision = 1; revision <= maxRevisions; revision++) {
+    const docNumber = revision === 1 ? base : `${base}-R${revision}`;
+    try {
+      return await create({ ...body, DocNumber: docNumber });
+    } catch (err) {
+      if (!isDuplicateDocNumberError(err) || revision === maxRevisions) throw err;
+      console.log(
+        `[QBO] DocNumber ${docNumber} is already used in QuickBooks; retrying as ${base}-R${revision + 1}`
+      );
+    }
+  }
+
+  // Unreachable: the final iteration rethrows.
+  throw new Error(`Could not issue an invoice: ${base} and its revisions are all in use.`);
 }
 
 /**
@@ -378,16 +468,23 @@ export async function qboFindInvoiceByDocNumber(
  */
 export async function qboFindInvoiceByDocNumberLike(
   appOverride: string | undefined,
-  pattern: string
+  pattern: string,
+  opts?: { ignoreVoided?: boolean }
 ): Promise<{ id: string; docNumber?: string; customerRef?: string; syncToken?: string; raw: any } | null> {
   const safe = String(pattern || '').replace(/'/g, "''").trim();
   if (!safe) return null;
+  // MAXRESULTS 5, not 1: the newest match may be a void, and the point of this
+  // search is to find a REUSABLE invoice. Taking only the newest would hand back
+  // the voided one and stop looking.
   const data = await qboQuery(
     appOverride,
-    `SELECT * FROM Invoice WHERE DocNumber LIKE '${safe}' ORDERBY MetaData.CreateTime DESC MAXRESULTS 1`
+    `SELECT * FROM Invoice WHERE DocNumber LIKE '${safe}' ORDERBY MetaData.CreateTime DESC MAXRESULTS 5`
   );
   const inv = data?.QueryResponse?.Invoice;
-  const row = Array.isArray(inv) ? inv[0] : inv;
+  const rows = Array.isArray(inv) ? inv : inv ? [inv] : [];
+  const row = opts?.ignoreVoided
+    ? rows.find((r: any) => r?.Id && !isVoidedQboInvoice(r))
+    : rows.find((r: any) => r?.Id);
   if (!row?.Id) return null;
   return {
     id: String(row.Id),
@@ -566,7 +663,10 @@ export async function qboFetchInvoicePdf(appOverride: string | undefined, invoic
 // the same API had just resolved by DocNumber, while an Invoice PDF fetched
 // fine on the identical token. The "Print preview" in the QBO web UI is a
 // browser feature on an internal endpoint that OAuth tokens cannot reach.
-// Trainer bill documents are therefore rendered by lib/payroll/trainerBillPdf.ts.
+// Trainer bills therefore have no downloadable document at all: Payroll opens
+// them in QuickBooks itself (the "View in QuickBooks" link on Billing Invoices).
+// A locally rendered PDF existed for a while and was dropped — one more artefact
+// to keep in step with the bill for no benefit.
 
 /**
  * Singapore (and similar) QBO companies often require TaxCodeRef on invoice lines:
@@ -652,21 +752,39 @@ function escapeQboStringLiteral(value: string): string {
   return String(value || '').replace(/'/g, "''");
 }
 
+/**
+ * A QuickBooks Product/Service, including its sales `Description`.
+ *
+ * `description` is the text an admin types into the product's Description box
+ * in QBO. It is the SOURCE OF THE WORDING on Direct Application invoice lines
+ * (see lib/quickbooks/invoiceLineText.ts) — the line's fixed text is no longer
+ * written in code, so a course renewed WSQ -> CASL is corrected by editing the
+ * product rather than by a deploy. `null` when the box is empty.
+ */
+export interface QboItem {
+  id: string;
+  name: string;
+  unitPrice: number;
+  description: string | null;
+}
+
 function pickFirstQboItem(
   data: any,
   fallbackName: string
-): { id: string; name: string; unitPrice: number } | null {
+): QboItem | null {
   const raw = data?.QueryResponse?.Item;
   const item = Array.isArray(raw) ? raw[0] : raw;
   if (!item?.Id) return null;
+  const description = typeof item.Description === 'string' ? item.Description.trim() : '';
   return {
     id: String(item.Id),
     name: String(item.Name || fallbackName),
     unitPrice: Number(item.UnitPrice || 0),
+    description: description || null,
   };
 }
 
-export async function qboFindItemBySku(appOverride: string | undefined, sku: string): Promise<{ id: string; name: string; unitPrice: number } | null> {
+export async function qboFindItemBySku(appOverride: string | undefined, sku: string): Promise<QboItem | null> {
   const safeSku = escapeQboStringLiteral(sku);
   if (!safeSku) return null;
   const q = `SELECT * FROM Item WHERE Sku = '${safeSku}' MAXRESULTS 1`;
@@ -677,7 +795,7 @@ export async function qboFindItemBySku(appOverride: string | undefined, sku: str
 export async function qboFindItemByName(
   appOverride: string | undefined,
   itemName: string
-): Promise<{ id: string; name: string; unitPrice: number } | null> {
+): Promise<QboItem | null> {
   const safeName = escapeQboStringLiteral(itemName);
   if (!safeName) return null;
   const q = `SELECT * FROM Item WHERE Name = '${safeName}' MAXRESULTS 1`;
