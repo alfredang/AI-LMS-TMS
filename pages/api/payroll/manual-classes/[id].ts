@@ -2,14 +2,17 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
 import { payoutAmount } from '@lib/payroll/calculate';
 import { requireRole } from '@lib/auth/requireRole';
+import { requirePayrollEnabled } from '@lib/payroll/requireEnabled';
 import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
+import { ensureTrainerUnlinkedColumn } from '@lib/payroll/ensureTrainerUnlinked';
 import { acquireBillNoLock, ensureBillNoColumn, nextBillNo, normalizeBillNo } from '@lib/payroll/billNo';
 import { onPayoutConfirmed, onPayoutUnconfirmed } from '@lib/payroll/trainerBill';
+import { resolveTrainerId } from '@lib/payroll/resolveTrainer';
 
 const numOrNull = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v));
 
 const SELECT_COLS = `
-  id, class_title, course_code, trainer_id, trainer_name,
+  id, class_title, course_code, trainer_id, trainer_name, trainer_unlinked,
   start_date::text  AS start_date,
   end_date::text    AS end_date,
   class_dates,
@@ -30,9 +33,24 @@ function normalizeClassDates(raw: any): { classDates: string | null; startDate: 
   return { classDates: uniq.join(','), startDate: uniq[0], endDate: uniq[uniq.length - 1] };
 }
 
+/**
+ * The name currently stored on a class, for the case where an edit supplies a
+ * trainer_id but no name — the resolver still needs something to fall back on
+ * if that id turns out not to be a trainer account.
+ */
+async function currentTrainerName(id: string): Promise<string | null> {
+  try {
+    const r = await pool.query(`SELECT trainer_name FROM payroll_manual_class WHERE id = $1`, [id]);
+    return r.rows[0]?.trainer_name ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const authed = await requireRole(req, res, ['payroll', 'admin']);
   if (!authed) return;
+  if (!(await requirePayrollEnabled(res))) return;
 
   const { id } = req.query;
   if (!id || typeof id !== 'string') {
@@ -43,8 +61,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       // Withdraw any billing invoice FIRST. A class can be deleted while its
       // bill is live in QuickBooks; deleting the class would then leave a real
-      // payable in QBO with a Drive PDF and nothing in the LMS pointing at it.
-      // onPayoutUnconfirmed deletes the QBO bill and bins the PDF.
+      // payable in QBO with nothing in the LMS pointing at it.
+      // onPayoutUnconfirmed deletes the QBO bill.
       const withdrawal = await onPayoutUnconfirmed({ source: 'manual', payoutId: id });
       if (!withdrawal.cleared) {
         // The QuickBooks delete failed, so the payable still exists. Refuse
@@ -77,12 +95,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   await ensureClassDatesColumn();
   await ensureBillNoColumn();
+  await ensureTrainerUnlinkedColumn();
 
   const {
     class_title,
     course_code,
     trainer_id,
     trainer_name,
+    trainer_unlinked,
     start_date,
     end_date,
     class_dates,
@@ -158,7 +178,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (class_title !== undefined) set('class_title', String(class_title).trim());
     if (course_code !== undefined) set('course_code', course_code ? String(course_code).trim() : null);
-    if (trainer_id !== undefined) set('trainer_id', trainer_id || null);
+    // Keep the ACCOUNT link in step with the name. Re-resolved whenever either
+    // changes: renaming the trainer on a class must not leave it pointing at the
+    // previous person, and a class saved before the picker existed picks up its
+    // link the first time it is edited. See lib/payroll/resolveTrainer.ts.
+    if (trainer_id !== undefined || trainer_name !== undefined) {
+      const nameForLookup =
+        trainer_name !== undefined ? trainer_name : (await currentTrainerName(id));
+      set('trainer_id', await resolveTrainerId(trainer_id, nameForLookup, trainer_unlinked === true));
+      // Persisted alongside the id, so a later save doesn't re-apply the name
+      // match that was refused here.
+      if (trainer_unlinked !== undefined) set('trainer_unlinked', trainer_unlinked === true);
+    }
     if (trainer_name !== undefined) set('trainer_name', String(trainer_name).trim());
     // An explicit date list wins and derives start/end; otherwise fall back to
     // the individual start_date/end_date fields.

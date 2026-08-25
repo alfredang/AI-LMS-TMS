@@ -15,6 +15,8 @@ export interface TrainerPayoutRow {
   remark?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  /** Which payout table the row came from — non-WSQ classes are tagged. */
+  source?: 'wsq' | 'manual';
 }
 
 interface Props {
@@ -283,7 +285,19 @@ const TrainerPayoutTable: React.FC<Props> = ({ trainerUserId }) => {
                 <tr key={r.id} className="border-t border-default hover:bg-gray-50 dark:hover:bg-slate-700/40">
                   <td className="px-3 py-2 whitespace-nowrap">{fmtDateRange(r.start_date, r.end_date)}</td>
                   <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{r.course_code || '-'}</td>
-                  <td className="px-3 py-2">{r.course_title || '-'}</td>
+                  <td className="px-3 py-2">
+                    {r.course_title || '-'}
+                    {/* Non-WSQ classes have no run code, so without a marker they
+                        just look like a row with missing data. */}
+                    {r.source === 'manual' && (
+                      <span
+                        title="Non-WSQ class, entered manually in Payroll"
+                        className="ml-2 align-middle inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                      >
+                        Non-WSQ
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{r.course_run_code || '-'}</td>
                   <td className="px-3 py-2 text-right">{r.num_learners ?? '-'}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{fmtDate(r.payment_date)}</td>

@@ -4,6 +4,7 @@ import { findTier, payoutAmount, PayoutTier } from '@lib/payroll/calculate';
 import { authHeader } from '@lib/auth/authHeader';
 import { fmtCurrency } from './shared';
 import DateRangeCell from '../ui/DateRangeCell';
+import TrainerPicker from './TrainerPicker';
 import type { RaisedBill } from './PayoutEditDialog';
 
 export interface ManualClass {
@@ -11,6 +12,8 @@ export interface ManualClass {
   class_title: string;
   course_code: string | null;
   trainer_id: string | null;
+  /** Payroll declined to link this class to a trainer account — see TrainerPicker. */
+  trainer_unlinked?: boolean;
   trainer_name: string;
   start_date: string | null;
   end_date: string | null;
@@ -24,6 +27,9 @@ export interface ManualClass {
   payment_date: string | null;
   remark: string | null;
   bill_no?: string | null;
+  /** Amount on the live billing invoice, when this class has one. */
+  bill_amount?: number | string | null;
+  bill_status?: 'pending' | 'posted' | 'failed' | 'voided' | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -79,6 +85,14 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
   const [classTitle, setClassTitle] = useState(initial?.class_title ?? '');
   const [courseCode, setCourseCode] = useState(initial?.course_code ?? '');
   const [trainerName, setTrainerName] = useState(initial?.trainer_name ?? '');
+  // The trainer ACCOUNT this class belongs to. Sent on save so the class turns
+  // up in that trainer's own payout history — matching by name alone left every
+  // manually-entered class invisible to the person who taught it. Null is a
+  // valid answer: external trainers have no account.
+  const [trainerId, setTrainerId] = useState<string | null>(initial?.trainer_id ?? null);
+  // A deliberate "this is not that person" — kept apart from simply having no
+  // id, which means "not matched yet" and SHOULD pick up a link on save.
+  const [trainerUnlinked, setTrainerUnlinked] = useState<boolean>(initial?.trainer_unlinked === true);
   // Class dates as a comma-separated ISO list (supports non-consecutive days).
   // Falls back to expanding the legacy start_date..end_date range for old rows.
   const initialClassDates = (() => {
@@ -111,11 +125,20 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
     initial?.actual_payout === null || initial?.actual_payout === undefined ? '' : String(initial.actual_payout)
   );
   const [status, setStatus] = useState<ManualClass['status']>(initial?.status ?? 'pending');
-  const [paymentDate, setPaymentDate] = useState<string>(initial?.payment_date ?? '');
+  // Always opens on today, whatever the class's status is and whatever date a
+  // previous confirmation left behind — a payout is recorded on the day it is
+  // made, so the current date is the default and a backdate is typed in
+  // deliberately. Doubles as the dirty baseline so the default alone doesn't
+  // register as an edit.
+  const [initialPaymentDate] = useState<string>(() => todayIso());
+  const [paymentDate, setPaymentDate] = useState<string>(initialPaymentDate);
   const [remark, setRemark] = useState<string>(initial?.remark ?? '');
   const [billNo, setBillNo] = useState<string>(initial?.bill_no ?? '');
 
   const [saving, setSaving] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [billMismatch, setBillMismatch] = useState<{ payout: number; bill: number } | null>(null);
+  const [regenNote, setRegenNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -137,13 +160,15 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
       classTitle: initial?.class_title ?? '',
       courseCode: initial?.course_code ?? '',
       trainerName: initial?.trainer_name ?? '',
+      trainerId: initial?.trainer_id ?? null,
+      trainerUnlinked: initial?.trainer_unlinked === true,
       classDates: initialClassDates,
       numLearners: initial ? String(initial.num_learners ?? '') : '',
       courseFee: initial ? String(initial.course_fee ?? '') : '',
       tierPercent: initial ? String(initial.tier_percent ?? '') : '',
       actual: initial?.actual_payout === null || initial?.actual_payout === undefined ? '' : String(initial.actual_payout),
       status: initial?.status ?? 'pending',
-      paymentDate: initial?.payment_date ?? '',
+      paymentDate: initialPaymentDate,
       remark: initial?.remark ?? '',
       billNo: initial?.bill_no ?? '',
     };
@@ -151,6 +176,8 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
       classTitle !== orig.classTitle ||
       courseCode !== orig.courseCode ||
       trainerName !== orig.trainerName ||
+      trainerId !== orig.trainerId ||
+      trainerUnlinked !== orig.trainerUnlinked ||
       classDates !== orig.classDates ||
       numLearners !== orig.numLearners ||
       courseFee !== orig.courseFee ||
@@ -161,7 +188,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
       remark !== orig.remark ||
       billNo !== orig.billNo
     );
-  }, [classTitle, courseCode, trainerName, classDates, numLearners, courseFee, tierPercent, actual, status, paymentDate, remark, billNo, initial, initialClassDates]);
+  }, [classTitle, courseCode, trainerName, trainerId, trainerUnlinked, classDates, numLearners, courseFee, tierPercent, actual, status, paymentDate, remark, billNo, initial, initialClassDates, initialPaymentDate]);
 
   const requestClose = () => {
     if (saving) return;
@@ -185,18 +212,73 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty, saving, confirmDiscard]);
 
-  const save = async () => {
+  /**
+   * Raise the billing invoice again for a class already marked paid — the
+   * recovery path after deleting a bill from the Billing Invoices tab. Safe to
+   * press twice; the server returns the existing live bill rather than a second.
+   */
+  const regenerateInvoice = async () => {
+    if (!initial?.id) return;
+    setError(null);
+    setRegenNote(null);
+    setRegenerating(true);
+    try {
+      const r = await fetch('/api/payroll/bills/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify({ source: 'manual', payoutId: initial.id }),
+      });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.error || 'Could not raise the invoice');
+      setRegenNote(
+        j.alreadyExisted
+          ? `${j.data.bill_no} already has a live invoice — nothing to raise.`
+          : `Invoice ${j.data.bill_no} raised. It appears under Billing Invoices once QuickBooks confirms it.`
+      );
+    } catch (e: any) {
+      setError(e?.message || 'Could not raise the invoice');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  // What this class would be billed at — the server's rule: the actual payout
+  // if one is set, else the estimate.
+  const billableAmount = actual !== '' ? Number(actual) || 0 : estimatedNum;
+  const liveBillAmount =
+    initial?.bill_amount === null || initial?.bill_amount === undefined
+      ? null
+      : Number(initial.bill_amount);
+
+  /** @param rebuildBill replace the QuickBooks bill after saving. */
+  const save = async (rebuildBill = false) => {
     setError(null);
     if (!classTitle.trim()) return setError('Class title is required.');
     if (!trainerName.trim()) return setError('Trainer name is required.');
     if (Number(tierPercent) < 0 || Number(tierPercent) > 100) return setError('Tier % must be between 0 and 100.');
     if (actual !== '' && !(Number(actual) >= 0)) return setError('Actual payout must be 0 or more.');
 
+    // A bill's amount is frozen when it is raised, so editing a paid class
+    // afterwards would leave the list and QuickBooks disagreeing in silence.
+    if (
+      !rebuildBill &&
+      !billMismatch &&
+      status === 'completed' &&
+      initial?.bill_no &&
+      liveBillAmount !== null &&
+      Math.abs(liveBillAmount - billableAmount) >= 0.005
+    ) {
+      setBillMismatch({ payout: billableAmount, bill: liveBillAmount });
+      return;
+    }
+    setBillMismatch(null);
     setSaving(true);
     const body = {
       class_title: classTitle.trim(),
       course_code: courseCode.trim() || null,
       trainer_name: trainerName.trim(),
+      trainer_id: trainerId,
+      trainer_unlinked: trainerUnlinked,
       class_dates: classDates || null,
       start_date: startDate || null,
       end_date: endDate || null,
@@ -220,7 +302,24 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
       });
       const j = await r.json();
       if (!j.success) throw new Error(j.error || 'Failed to save');
-      onSaved(j.data as ManualClass, j.bill ?? null);
+
+      // Rebuilt AFTER the save so the invoice is raised from the persisted row.
+      let raised = j.bill ?? null;
+      if (rebuildBill) {
+        const rb = await fetch('/api/payroll/bills/regenerate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeader() },
+          body: JSON.stringify({ source: 'manual', payoutId: j.data.id, rebuild: true }),
+        });
+        const rj = await rb.json();
+        if (!rj.success) {
+          setSaving(false);
+          setError(`Class saved, but the invoice was not updated. ${rj.error || ''}`.trim());
+          return;
+        }
+        raised = rj.data;
+      }
+      onSaved(j.data as ManualClass, raised);
     } catch (e: any) {
       setError(e?.message || 'Failed to save');
       setSaving(false);
@@ -312,13 +411,16 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
                 <label htmlFor="mc-trainer" className="block text-[11px] uppercase tracking-wider text-on-surface-secondary mb-1">
                   Trainer Name *
                 </label>
-                <input
-                  id="mc-trainer"
-                  type="text"
-                  value={trainerName}
-                  onChange={(e) => setTrainerName(e.target.value)}
-                  placeholder="e.g. Jane Tan"
-                  className={inputCls}
+                <TrainerPicker
+                  name={trainerName}
+                  trainerId={trainerId}
+                  unlinked={trainerUnlinked}
+                  onChange={({ name, trainerId: nextId, unlinked }) => {
+                    setTrainerName(name);
+                    setTrainerId(nextId);
+                    setTrainerUnlinked(unlinked);
+                  }}
+                  inputClassName={inputCls}
                 />
               </div>
             </div>
@@ -485,16 +587,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="mc-date" className="text-xs font-medium">Payment Date</label>
-                <button
-                  type="button"
-                  onClick={() => setPaymentDate(todayIso())}
-                  className="text-[11px] text-primary hover:underline"
-                >
-                  Today
-                </button>
-              </div>
+              <label htmlFor="mc-date" className="block text-xs font-medium mb-1">Payment Date</label>
               <DateRangeCell singleDate standalone value={paymentDate} onChange={setPaymentDate} />
             </div>
 
@@ -513,6 +606,41 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
               <p className="mt-1 text-[11px] text-on-surface-secondary">
                 Format TX + YYMMDD + running no. (e.g. TX26030605). Edit to match an existing QuickBooks bill.
               </p>
+
+              {/* Saved, already-paid classes only: an invoice is normally raised
+                  by the pending→completed transition, so a deleted bill has no
+                  other way back short of un-marking and re-marking the class. */}
+              {initial?.id && initial.status === 'completed' && (
+                /* Its own tinted panel with a solid button: as a plain bordered
+                   button it read as another input in the stack and got missed.
+                   Kept out of the footer so it never competes with Save. */
+                <div className="mt-3 rounded-lg border border-primary/40 bg-primary/5 dark:bg-primary/10 px-3 py-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-on-surface">Billing invoice</p>
+                      <p className="text-[11px] text-on-surface-secondary">
+                        Raise the QuickBooks bill for this class again.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={regenerateInvoice}
+                      disabled={regenerating || saving}
+                      title="Raise the QuickBooks bill for this class again"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-primary text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+                    >
+                      <Icon
+                        name={regenerating ? IconName.Spinner : IconName.Sync}
+                        className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`}
+                      />
+                      {regenerating ? 'Raising…' : 'Regenerate invoice'}
+                    </button>
+                  </div>
+                  {regenNote && (
+                    <p className="mt-2 text-[11px] font-medium text-green-700 dark:text-green-400">{regenNote}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
@@ -555,7 +683,7 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
             Cancel
           </button>
           <button
-            onClick={save}
+            onClick={() => save()}
             disabled={saving}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-md text-sm hover:opacity-90 disabled:opacity-50"
           >
@@ -617,6 +745,59 @@ const ManualClassDialog: React.FC<Props> = ({ initial, tiers, onClose, onSaved, 
                 ) : (
                   'Delete'
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {billMismatch && (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setBillMismatch(null);
+          }}
+        >
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-default w-full max-w-sm p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+                <Icon name={IconName.Warning} className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">This class no longer matches its invoice</h3>
+                <p className="text-xs text-on-surface-secondary mt-1">
+                  Payout is <strong className="text-on-surface">{fmtCurrency(billMismatch.payout)}</strong>, but
+                  bill <span className="font-mono">{initial?.bill_no}</span> in QuickBooks is for{' '}
+                  <strong className="text-on-surface">{fmtCurrency(billMismatch.bill)}</strong>.
+                </p>
+                <p className="text-xs text-on-surface-secondary mt-1.5">
+                  Updating it deletes that bill in QuickBooks and raises it again at the new
+                  amount, keeping the same number. If it has already been paid there,
+                  QuickBooks will refuse and nothing changes.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setBillMismatch(null)}
+                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => save(false)}
+                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700"
+              >
+                Save only
+              </button>
+              <button
+                type="button"
+                onClick={() => save(true)}
+                className="px-3 py-1.5 rounded-md text-sm font-semibold bg-primary text-white hover:bg-primary/90"
+              >
+                Save &amp; update the bill
               </button>
             </div>
           </div>
