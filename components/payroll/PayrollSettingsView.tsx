@@ -13,6 +13,12 @@ const tierRangeLabel = (t: PayoutTier) => {
 };
 
 const PayrollSettingsView: React.FC = () => {
+  // Whether the signed-in USER holds the admin role — reported by the API,
+  // because inside this dashboard the ACTIVE role is always Payroll and a
+  // client-side check would be false even for an administrator. The server
+  // enforces the same rule on write; this only mirrors it in the UI.
+  const [canToggle, setCanToggle] = useState(false);
+  const [confirmDisable, setConfirmDisable] = useState(false);
   const [tiers, setTiers] = useState<PayoutTier[]>([]);
   const [enabled, setEnabled] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
@@ -33,6 +39,7 @@ const PayrollSettingsView: React.FC = () => {
       if (j.success) {
         setTiers(j.data.tiers || []);
         setEnabled(!!j.data.enabled);
+        setCanToggle(!!j.data.canToggle);
       } else setError(j.error || 'Failed to load tiers');
     } catch (e: any) {
       setError(e?.message || 'Failed to load tiers');
@@ -47,6 +54,13 @@ const PayrollSettingsView: React.FC = () => {
   };
 
   const toggleEnabled = async (next: boolean) => {
+    // Turning it OFF locks every Payroll user out at their next sign-in, so it
+    // asks first. Turning it back on is harmless and goes straight through.
+    if (!next && !confirmDisable) {
+      setConfirmDisable(true);
+      return;
+    }
+    setConfirmDisable(false);
     setTogglingEnabled(true);
     setError(null);
     setSuccess(null);
@@ -170,9 +184,42 @@ const PayrollSettingsView: React.FC = () => {
           <div>
             <div className="font-semibold">Enable Payroll Role</div>
             <p className="text-xs text-on-surface-secondary mt-1 max-w-md">
-              When off, the Payroll role is hidden from login/role pickers and the Payroll
-              dashboard is inaccessible. Existing payout data is preserved either way.
+              When off, the Payroll role is hidden from login/role pickers, the Payroll
+              dashboard is inaccessible and every payroll API call is refused. Existing
+              payout data is preserved either way.
             </p>
+            {!canToggle && (
+              <p className="text-[11px] text-on-surface-secondary mt-1.5 italic">
+                Only an administrator can change this.
+              </p>
+            )}
+            {confirmDisable && (
+              <div className="mt-3 rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5">
+                <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+                  Switch the Payroll role off?
+                </p>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-1">
+                  Every Payroll user loses access at their next sign-in, and only an
+                  administrator can turn it back on. Payout data is kept.
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleEnabled(false)}
+                    className="px-2.5 py-1 text-xs font-semibold rounded-md bg-amber-600 text-white hover:bg-amber-700"
+                  >
+                    Switch it off
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDisable(false)}
+                    className="px-2.5 py-1 text-xs font-medium rounded-md border border-default hover:bg-white dark:hover:bg-slate-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -195,11 +242,12 @@ const PayrollSettingsView: React.FC = () => {
             role="switch"
             aria-checked={enabled}
             aria-label="Enable Payroll role"
-            disabled={togglingEnabled}
+            disabled={togglingEnabled || !canToggle}
+            title={canToggle ? undefined : 'Only an administrator can change this'}
             onClick={() => toggleEnabled(!enabled)}
             className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-200 ${
               enabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
-            } ${togglingEnabled ? 'opacity-50' : ''}`}
+            } ${togglingEnabled || !canToggle ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <span
               className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
