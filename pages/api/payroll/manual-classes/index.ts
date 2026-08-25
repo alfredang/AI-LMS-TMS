@@ -7,8 +7,12 @@ import {
   PayoutTier,
 } from '@lib/payroll/calculate';
 import { requireRole } from '@lib/auth/requireRole';
+import { requirePayrollEnabled } from '@lib/payroll/requireEnabled';
 import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
+import { ensureTrainerUnlinkedColumn } from '@lib/payroll/ensureTrainerUnlinked';
 import { acquireBillNoLock, ensureBillNoColumn, nextBillNo, normalizeBillNo } from '@lib/payroll/billNo';
+import { onPayoutConfirmed } from '@lib/payroll/trainerBill';
+import { resolveTrainerId } from '@lib/payroll/resolveTrainer';
 
 async function loadTiers(): Promise<PayoutTier[]> {
   try {
@@ -25,7 +29,7 @@ const numOrNull = (v: any) => (v === null || v === undefined || v === '' ? null 
 
 // Columns returned to the client. Shared by list + create so the shapes match.
 const SELECT_COLS = `
-  id, class_title, course_code, trainer_id, trainer_name,
+  id, class_title, course_code, trainer_id, trainer_name, trainer_unlinked,
   start_date::text  AS start_date,
   end_date::text    AS end_date,
   class_dates,
@@ -52,18 +56,26 @@ function normalizeClassDates(raw: any): { classDates: string | null; startDate: 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const authed = await requireRole(req, res, ['payroll', 'admin']);
   if (!authed) return;
+  if (!(await requirePayrollEnabled(res))) return;
 
   await ensureClassDatesColumn();
   await ensureBillNoColumn();
+  await ensureTrainerUnlinkedColumn();
 
   if (req.method === 'GET') {
     try {
       const tiers = await loadTiers();
 
+      // Bounded. This returned every class ever entered, unpaginated — harmless
+      // today (the Payout List reads the merged /payouts endpoint instead, which
+      // windows by month) but a landmine for whatever picks this up next.
+      const limit = Math.max(1, Math.min(1000, parseInt((req.query.limit as string) || '500')));
       const list = await pool.query(
         `SELECT ${SELECT_COLS}
            FROM payroll_manual_class
-          ORDER BY end_date DESC NULLS LAST, created_at DESC`
+          ORDER BY end_date DESC NULLS LAST, created_at DESC
+          LIMIT $1`,
+        [limit]
       );
 
       const ov = (
@@ -106,6 +118,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         course_code,
         trainer_id,
         trainer_name,
+        trainer_unlinked,
         start_date,
         end_date,
         class_dates,
@@ -167,8 +180,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const estimated = payoutAmount(learners, fee, percent);
 
+      // Link the class to a real trainer ACCOUNT, not just a name. Without this
+      // the trainer's own payout history — which finds their classes by account
+      // id — silently omits every non-WSQ class they taught. Resolved before the
+      // transaction opens: it is a read, and it must not hold the bill-number
+      // lock while it runs.
+      const resolvedTrainerId = await resolveTrainerId(trainer_id, trainer_name, trainer_unlinked === true);
+
       // Transaction so the bill-number read-modify-write is serialized against a
       // concurrent create/mark-as-paid for the same class date.
+      let created: any;
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -184,16 +205,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const r = await client.query(
           `INSERT INTO payroll_manual_class
-              (class_title, course_code, trainer_id, trainer_name, start_date, end_date, class_dates,
+              (class_title, course_code, trainer_id, trainer_name, trainer_unlinked,
+               start_date, end_date, class_dates,
                num_learners, course_fee, tier_percent, estimated_payout, actual_payout,
                status, payment_date, remark, bill_no, created_by, updated_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$18)
            RETURNING ${SELECT_COLS}`,
           [
             String(class_title).trim(),
             course_code ? String(course_code).trim() : null,
-            trainer_id || null,
+            resolvedTrainerId,
             String(trainer_name).trim(),
+            trainer_unlinked === true,
             finalStart,
             finalEnd,
             finalClassDates,
@@ -210,13 +233,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ]
         );
         await client.query('COMMIT');
-        return res.status(201).json({ success: true, data: r.rows[0] });
+        created = r.rows[0];
       } catch (e) {
         await client.query('ROLLBACK').catch(() => {});
         throw e;
       } finally {
         client.release();
       }
+
+      // A class can be entered as ALREADY paid — the bill has to be raised here
+      // too. The PUT path only raises one on a pending→completed transition, so
+      // a class created straight into 'completed' never crosses that edge and
+      // used to end up marked paid with no invoice anywhere, silently.
+      // After the COMMIT, for the same reason as the PUT path: this calls out
+      // to QuickBooks and must not hold a transaction open.
+      let bill: Awaited<ReturnType<typeof onPayoutConfirmed>> = null;
+      if (created.status === 'completed') {
+        bill = await onPayoutConfirmed({ source: 'manual', payoutId: created.id, userId: authed.id });
+      }
+
+      return res.status(201).json({
+        success: true,
+        data: created,
+        bill: bill ? { id: bill.id, bill_no: bill.bill_no, status: bill.status } : null,
+      });
     } catch (err: any) {
       console.error('payroll/manual-classes POST failed', err);
       if (err?.code === '23505' && String(err?.constraint || '').includes('bill_no')) {

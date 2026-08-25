@@ -23,25 +23,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Both payout tables. This used to read trainer_payout alone, so a trainer's
+    // own payout history silently omitted every non-WSQ class they were paid for
+    // — and the total on the card was short by that amount. The Payroll list has
+    // merged the two since it was built; this endpoint never caught up.
     const r = await pool.query(
-      `SELECT
-         tp.id,
-         tp.course_run_id,
-         cr.course_run_id AS course_run_code,
-         c.title          AS course_title,
-         c.course_code    AS course_code,
-         tp.num_learners,
-         tp.actual_payout,
-         tp.payment_date::text AS payment_date,
-         tp.remark,
-         cr.start_date::text AS start_date,
-         cr.end_date::text   AS end_date
-       FROM trainer_payout tp
-       JOIN course_run cr ON cr.id = tp.course_run_id
-       LEFT JOIN course c ON c.id = cr.course_id
-       WHERE tp.trainer_id = $1
-         AND tp.status = 'completed'
-       ORDER BY tp.payment_date DESC NULLS LAST, tp.updated_at DESC`,
+      `SELECT * FROM (
+         SELECT
+           tp.id,
+           tp.course_run_id,
+           cr.course_run_id AS course_run_code,
+           c.title          AS course_title,
+           c.course_code    AS course_code,
+           tp.num_learners,
+           tp.actual_payout,
+           tp.payment_date::text AS payment_date,
+           tp.remark,
+           cr.start_date::text AS start_date,
+           cr.end_date::text   AS end_date,
+           tp.updated_at,
+           'wsq'::text AS source
+         FROM trainer_payout tp
+         JOIN course_run cr ON cr.id = tp.course_run_id
+         LEFT JOIN course c ON c.id = cr.course_id
+         WHERE tp.trainer_id = $1
+           AND tp.status = 'completed'
+         UNION ALL
+         SELECT
+           mc.id,
+           -- Non-WSQ classes have no course run; the row's own id stands in so
+           -- the key stays unique across the merged list.
+           mc.id            AS course_run_id,
+           NULL             AS course_run_code,
+           mc.class_title   AS course_title,
+           mc.course_code,
+           mc.num_learners,
+           mc.actual_payout,
+           mc.payment_date::text AS payment_date,
+           mc.remark,
+           mc.start_date::text AS start_date,
+           mc.end_date::text   AS end_date,
+           mc.updated_at,
+           'manual'::text AS source
+         FROM payroll_manual_class mc
+         WHERE mc.trainer_id = $1
+           AND mc.status = 'completed'
+       ) rows
+       ORDER BY payment_date DESC NULLS LAST, updated_at DESC`,
       [id]
     );
     return res.status(200).json({ success: true, data: r.rows });

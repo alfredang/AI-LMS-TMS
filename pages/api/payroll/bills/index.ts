@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
 import { requireRole } from '@lib/auth/requireRole';
+import { requirePayrollEnabled } from '@lib/payroll/requireEnabled';
 import { ensureTrainerBillTable } from '@lib/payroll/ensureTrainerBillTable';
 import { BILL_COLS } from '@lib/payroll/trainerBill';
 
@@ -12,7 +13,20 @@ import { BILL_COLS } from '@lib/payroll/trainerBill';
  *   ?month=YYYY-MM   a single calendar month of bill dates
  *   ?months=N        the rolling last N months (default 12)
  *   ?all=1           everything ever issued
+ *
+ * Also returns `qboBaseUrl` — the QuickBooks *web app* host, so the UI can deep
+ * link a bill without hardcoding it. Derived from the API host each tenant is
+ * configured with (QBO_BASE_URL), so a sandbox realm links into sandbox rather
+ * than sending Payroll to a production bill that doesn't exist there.
  */
+
+function qboWebAppBaseUrl(): string {
+  const explicit = process.env.QBO_APP_BASE_URL;
+  if (explicit) return explicit.replace(/\/+$/, '');
+  const api = process.env.QBO_BASE_URL || '';
+  return /sandbox/i.test(api) ? 'https://sandbox.qbo.intuit.com' : 'https://qbo.intuit.com';
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -21,6 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const authed = await requireRole(req, res, ['payroll', 'admin']);
   if (!authed) return;
+  if (!(await requirePayrollEnabled(res))) return;
 
   try {
     await ensureTrainerBillTable();
@@ -70,10 +85,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
     const s = sum.rows[0] || {};
 
+    // Live bills across ALL time, so an empty window can say "there are 24
+    // elsewhere" rather than implying none have ever been raised. The tab
+    // defaults to the current calendar month, which read as "no bills at all"
+    // when the month happened to be empty.
+    const allTime = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM trainer_bill WHERE status <> 'voided'`
+    );
+
     return res.status(200).json({
       success: true,
       data: {
         bills: list.rows,
+        qboBaseUrl: qboWebAppBaseUrl(),
         summary: {
           total: Number(s.total) || 0,
           posted: Number(s.posted) || 0,
@@ -81,6 +105,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           failed: Number(s.failed) || 0,
           voided: Number(s.voided) || 0,
           totalAmount: Number(s.total_amount) || 0,
+          allTimeTotal: Number(allTime.rows[0]?.total) || 0,
         },
       },
     });

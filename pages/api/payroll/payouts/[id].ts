@@ -1,9 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
 import { requireRole } from '@lib/auth/requireRole';
+import { requirePayrollEnabled } from '@lib/payroll/requireEnabled';
 import { acquireBillNoLock, ensureBillNoColumn, nextBillNo, normalizeBillNo } from '@lib/payroll/billNo';
 import { onPayoutConfirmed, onPayoutUnconfirmed } from '@lib/payroll/trainerBill';
 import { ensurePayoutColumns } from '@lib/payroll/ensurePayoutColumns';
+import { payoutAmount } from '@lib/payroll/calculate';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT' && req.method !== 'PATCH') {
@@ -12,6 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const authed = await requireRole(req, res, ['payroll', 'admin']);
   if (!authed) return;
+  if (!(await requirePayrollEnabled(res))) return;
 
   const { id } = req.query;
   if (!id || typeof id !== 'string') {
@@ -60,41 +63,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const params: any[] = [];
     let i = 1;
 
-    // If any of the three drivers changed, persist them and recompute estimated_payout
-    // atomically in the same UPDATE. The estimate is derived from the *effective*
-    // values — the new value where provided, else the row's current column — so there
-    // is no separate read-modify-write (no lost-update race on concurrent edits).
-    if (newLearners !== undefined || newFee !== undefined || newTier !== undefined) {
-      if (newLearners !== undefined) {
-        sets.push(`num_learners = $${i++}`);
-        params.push(newLearners);
-      }
-      if (newFee !== undefined) {
-        sets.push(`course_fee = $${i++}`);
-        params.push(newFee);
-      }
-      if (newTier !== undefined) {
-        sets.push(`tier_percent = $${i++}`);
-        params.push(newTier);
-      }
-      // Placeholders for the estimate (null when a driver wasn't provided → COALESCE
-      // falls back to the existing column). Postgres evaluates the RHS against the
-      // pre-update row, so these effective values are correct.
-      const lp = i++; params.push(newLearners ?? null);
-      const fp = i++; params.push(newFee ?? null);
-      const tp = i++; params.push(newTier ?? null);
-      sets.push(
-        `estimated_payout = CASE
-            WHEN COALESCE($${lp}, num_learners) <= 0
-              OR COALESCE($${fp}, course_fee) <= 0
-              OR COALESCE($${tp}, tier_percent) <= 0 THEN 0
-            ELSE round(
-              COALESCE($${fp}, course_fee)
-              * COALESCE($${lp}, num_learners)
-              * COALESCE($${tp}, tier_percent)
-            ) / 100
-          END`
-      );
+    // Persist whichever of the three drivers changed. estimated_payout is
+    // recomputed from them inside the transaction below, once the row is locked
+    // — see there for why it is no longer derived in SQL.
+    if (newLearners !== undefined) {
+      sets.push(`num_learners = $${i++}`);
+      params.push(newLearners);
+    }
+    if (newFee !== undefined) {
+      sets.push(`course_fee = $${i++}`);
+      params.push(newFee);
+    }
+    if (newTier !== undefined) {
+      sets.push(`tier_percent = $${i++}`);
+      params.push(newTier);
     }
 
     if (actual_payout !== undefined) {
@@ -151,7 +133,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // a trainer bill (or the reverse, which voids it). Read under FOR UPDATE, so
       // it is a consistent snapshot against a concurrent edit of the same payout.
       const cur = await client.query(
-        `SELECT tp.bill_no, tp.status, cr.start_date::text AS start_date
+        `SELECT tp.bill_no, tp.status, tp.num_learners, tp.course_fee, tp.tier_percent,
+                cr.start_date::text AS start_date
            FROM trainer_payout tp
            JOIN course_run cr ON cr.id = tp.course_run_id
           WHERE tp.id = $1
@@ -164,6 +147,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       const row = cur.rows[0];
       prevStatus = row.status;
+
+      // Recompute the estimate from the EFFECTIVE drivers — the new value where
+      // one was supplied, else the row's current one. Computed here rather than
+      // in SQL so payoutAmount() stays the single definition of the formula for
+      // both payout tables; the row is held under FOR UPDATE, so reading it and
+      // writing the result below is still free of a lost-update race.
+      if (newLearners !== undefined || newFee !== undefined || newTier !== undefined) {
+        const effLearners = newLearners ?? Number(row.num_learners);
+        const effFee = newFee ?? Number(row.course_fee);
+        const effTier = newTier ?? Number(row.tier_percent);
+        sets.push(`estimated_payout = $${i++}`);
+        params.push(payoutAmount(effLearners, effFee, effTier));
+      }
 
       if (billNoOverride !== undefined) {
         // Explicit edit always wins over auto-issue.
@@ -215,8 +211,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // fail the payout update the user just made.
     // `bill` is returned so the UI can tell the user an invoice was raised and
     // name it. Only the reserve step has finished by now — the QuickBooks post
-    // and the PDF run in the background — so the status here is normally
-    // 'pending', and the Billing Invoices tab is where it resolves.
+    // runs in the background — so the status here is normally 'pending', and
+    // the Billing Invoices tab is where it resolves.
     let bill: Awaited<ReturnType<typeof onPayoutConfirmed>> = null;
     if (prevStatus !== 'completed' && payout.status === 'completed') {
       bill = await onPayoutConfirmed({ source: 'wsq', payoutId: id, userId: authed.id });

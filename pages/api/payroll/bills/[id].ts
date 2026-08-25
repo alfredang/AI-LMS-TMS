@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
 import { requireRole } from '@lib/auth/requireRole';
+import { requirePayrollEnabled } from '@lib/payroll/requireEnabled';
 import { ensureTrainerBillTable } from '@lib/payroll/ensureTrainerBillTable';
 import { BILL_COLS, enqueueBillPush } from '@lib/payroll/trainerBill';
 import { deleteTrainerBill } from '@lib/quickbooks/createTrainerBill';
@@ -14,9 +15,7 @@ import { trashDriveFile } from '@lib/services/invoiceDriveUpload';
  * createTrainerBill also looks the number up in QBO first, so a bill that
  * actually did land last time is adopted rather than duplicated.
  *
- * Doubles as "generate the PDF again": a bill that is already posted skips the
- * QuickBooks call and just re-files its Drive PDF if that is missing or the
- * file has been deleted. That is what the Payroll "Generate PDF" button hits.
+ * A bill that is already posted is a no-op, so pressing Re-send twice is safe.
  *
  * This waits for the push (unlike the auto-push on confirm) because the user is
  * sitting in front of the button and wants the outcome.
@@ -29,6 +28,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const authed = await requireRole(req, res, ['payroll', 'admin']);
   if (!authed) return;
+  if (!(await requirePayrollEnabled(res))) return;
 
   const { id } = req.query;
   if (!id || typeof id !== 'string') {
@@ -38,8 +38,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   /**
    * DELETE /api/payroll/bills/[id]
    *
-   * Remove the billing invoice: delete the Bill in QuickBooks, bin its Drive
-   * PDF, drop the row. The CLASS and its payout are deliberately untouched —
+   * Remove the billing invoice: delete the Bill in QuickBooks, bin any PDF left
+   * in Drive by an older bill, drop the row. The CLASS and its payout are
+   * deliberately untouched —
    * the payout stays marked as paid, it simply no longer has a bill.
    *
    * Nothing re-raises it automatically (bills are only raised on a

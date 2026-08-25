@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Icon, IconName } from '../ui/Icon';
 import { authHeader } from '@lib/auth/authHeader';
-import { findTier, PayoutTier } from '@lib/payroll/calculate';
+import { findTier, payoutAmount, PayoutTier } from '@lib/payroll/calculate';
 import { fmtDate, fmtDateRange } from '@lib/payroll/formatDate';
 import DateRangeCell from '../ui/DateRangeCell';
 
@@ -20,6 +20,8 @@ export interface PayoutRow {
   end_date_override?: string | null;
   class_dates?: string | null; // manual (non-WSQ) classes only
   trainer_id: string;
+  /** Payroll declined to link this class to a trainer account (non-WSQ only). */
+  trainer_unlinked?: boolean;
   trainer_name?: string | null;
   num_learners: number;
   course_fee: number | string;
@@ -30,6 +32,11 @@ export interface PayoutRow {
   payment_date: string | null;
   remark: string | null;
   bill_no?: string | null;
+  /** Amount on the live billing invoice, when this payout has one. */
+  bill_amount?: number | string | null;
+  bill_status?: 'pending' | 'posted' | 'failed' | 'voided' | null;
+  /** Current enrolment count for the class — may differ from the frozen figure. */
+  live_learners?: number | null;
 }
 
 /** The invoice a save triggered, when marking a payout completed raised one. */
@@ -46,10 +53,9 @@ interface Props {
   onSaved: (updated: PayoutRow, bill?: RaisedBill | null) => void;
 }
 
-const computeEstimated = (numLearners: number, courseFee: number, tierPercent: number) => {
-  if (numLearners <= 0 || courseFee <= 0 || tierPercent <= 0) return 0;
-  return Math.round(courseFee * numLearners * tierPercent) / 100;
-};
+// Canonical formula, shared with the server and the non-WSQ dialog — a local
+// re-implementation is how the estimate drifts from what actually gets billed.
+const computeEstimated = payoutAmount;
 
 const fmtCurrency = (n: number | string | null | undefined) => {
   if (n === null || n === undefined || n === '') return '-';
@@ -101,10 +107,20 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
   );
   const [status, setStatus] = useState<PayoutRow['status']>(row.status);
   const [endDate, setEndDate] = useState<string>((row.end_date || '').slice(0, 10));
-  const [paymentDate, setPaymentDate] = useState<string>(row.payment_date || '');
+  // Payment Date always opens on today, whatever the payout's status is and
+  // whatever date a previous confirmation left behind — Payroll records a payout
+  // on the day they do it, so the current date is the default and a backdate is
+  // typed in deliberately. Held as the dirty baseline too, so merely opening the
+  // dialog doesn't register as an edit.
+  const [initialPaymentDate] = useState<string>(() => todayIso());
+  const [paymentDate, setPaymentDate] = useState<string>(initialPaymentDate);
   const [remark, setRemark] = useState<string>(row.remark || '');
   const [billNo, setBillNo] = useState<string>(row.bill_no || '');
   const [saving, setSaving] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  // Set when saving would leave the payout disagreeing with its invoice.
+  const [billMismatch, setBillMismatch] = useState<{ payout: number; bill: number } | null>(null);
+  const [regenNote, setRegenNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
@@ -129,11 +145,11 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
       actual !== origActual ||
       status !== row.status ||
       endDate !== (row.end_date || '').slice(0, 10) ||
-      paymentDate !== (row.payment_date || '') ||
+      paymentDate !== initialPaymentDate ||
       remark !== (row.remark || '') ||
       billNo !== (row.bill_no || '')
     );
-  }, [numLearners, courseFee, tierPercent, actual, status, endDate, paymentDate, remark, billNo, row]);
+  }, [numLearners, courseFee, tierPercent, actual, status, endDate, paymentDate, remark, billNo, row, initialPaymentDate]);
 
   const requestClose = () => {
     if (saving) return;
@@ -157,12 +173,72 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty, saving, confirmDiscard]);
 
-  const save = async () => {
+  /**
+   * Raise the billing invoice again for a payout that is already marked paid —
+   * the recovery path after deleting a bill from the Billing Invoices tab.
+   * Without it the only way back is un-mark, save, re-mark, save.
+   *
+   * Safe to press twice: the server hands back the payout's existing live bill
+   * instead of raising a second one, and says which happened.
+   */
+  const regenerateInvoice = async () => {
+    setError(null);
+    setRegenNote(null);
+    setRegenerating(true);
+    try {
+      const r = await fetch('/api/payroll/bills/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify({ source: row.source || 'wsq', payoutId: row.id }),
+      });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.error || 'Could not raise the invoice');
+      setRegenNote(
+        j.alreadyExisted
+          ? `${j.data.bill_no} already has a live invoice — nothing to raise.`
+          : `Invoice ${j.data.bill_no} raised. It appears under Billing Invoices once QuickBooks confirms it.`
+      );
+    } catch (e: any) {
+      setError(e?.message || 'Could not raise the invoice');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  // What this payout would be billed at — the same rule the server uses to
+  // build a bill: the actual payout if one is set, else the estimate.
+  const billableAmount = actual !== '' ? Number(actual) || 0 : estimatedNum;
+  const liveBillAmount =
+    row.bill_amount === null || row.bill_amount === undefined ? null : Number(row.bill_amount);
+
+  /**
+   * @param rebuildBill replace the QuickBooks bill after saving.
+   *
+   * A bill is only ever raised on the pending→completed edge, and its amount is
+   * frozen at that moment. Editing a paid payout afterwards would therefore
+   * leave the list and QuickBooks quietly disagreeing, with nothing on screen
+   * saying so — so a save that would cause that stops and asks first.
+   */
+  const save = async (rebuildBill = false) => {
     setError(null);
     if (actual !== '' && !(Number(actual) >= 0)) {
       setError('Actual payout must be 0 or more.');
       return;
     }
+    // Ask before letting the payout drift away from the invoice already raised
+    // for it. Only when a live bill exists and the figure genuinely differs.
+    if (
+      !rebuildBill &&
+      !billMismatch &&
+      status === 'completed' &&
+      row.bill_no &&
+      liveBillAmount !== null &&
+      Math.abs(liveBillAmount - billableAmount) >= 0.005
+    ) {
+      setBillMismatch({ payout: billableAmount, bill: liveBillAmount });
+      return;
+    }
+    setBillMismatch(null);
     setSaving(true);
     try {
       const r = await fetch(`/api/payroll/payouts/${row.id}`, {
@@ -184,7 +260,28 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
       });
       const j = await r.json();
       if (!j.success) throw new Error(j.error || 'Failed to save');
-      onSaved(j.data, j.bill ?? null);
+
+      // Replace the invoice with one for the new amount. Deliberately after the
+      // payout save: the bill is rebuilt from the persisted row, so the saved
+      // figure is the one that reaches QuickBooks.
+      let raised = j.bill ?? null;
+      if (rebuildBill) {
+        const rb = await fetch('/api/payroll/bills/regenerate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeader() },
+          body: JSON.stringify({ source: row.source || 'wsq', payoutId: row.id, rebuild: true }),
+        });
+        const rj = await rb.json();
+        // The payout IS saved at this point, so a QuickBooks refusal must not
+        // read as "nothing happened" — say what saved and what didn't.
+        if (!rj.success) {
+          setSaving(false);
+          setError(`Payout saved, but the invoice was not updated. ${rj.error || ''}`.trim());
+          return;
+        }
+        raised = rj.data;
+      }
+      onSaved(j.data, raised);
     } catch (e: any) {
       setError(e?.message || 'Failed to save');
     } finally {
@@ -409,16 +506,7 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="payout-date" className="text-xs font-medium">Payment Date</label>
-                <button
-                  type="button"
-                  onClick={() => setPaymentDate(todayIso())}
-                  className="text-[11px] text-primary hover:underline"
-                >
-                  Today
-                </button>
-              </div>
+              <label htmlFor="payout-date" className="block text-xs font-medium mb-1">Payment Date</label>
               <DateRangeCell
                 singleDate
                 standalone
@@ -442,6 +530,42 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
               <p className="mt-1 text-[11px] text-on-surface-secondary">
                 Format TX + YYMMDD + running no. (e.g. TX26030605). Edit to match an existing QuickBooks bill.
               </p>
+
+              {/* Only for a payout that is already paid: an invoice is normally
+                  raised by the pending→completed transition, so once a bill has
+                  been deleted there is otherwise no way to get it back without
+                  un-marking and re-marking the payout. */}
+              {row.status === 'completed' && (
+                /* Its own tinted panel with a solid button: as a plain bordered
+                   button it read as another input in the stack and got missed.
+                   Kept out of the footer so it never competes with Save. */
+                <div className="mt-3 rounded-lg border border-primary/40 bg-primary/5 dark:bg-primary/10 px-3 py-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-on-surface">Billing invoice</p>
+                      <p className="text-[11px] text-on-surface-secondary">
+                        Raise the QuickBooks bill for this payout again.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={regenerateInvoice}
+                      disabled={regenerating || saving}
+                      title="Raise the QuickBooks bill for this payout again"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-primary text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+                    >
+                      <Icon
+                        name={regenerating ? IconName.Spinner : IconName.Sync}
+                        className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`}
+                      />
+                      {regenerating ? 'Raising…' : 'Regenerate invoice'}
+                    </button>
+                  </div>
+                  {regenNote && (
+                    <p className="mt-2 text-[11px] font-medium text-green-700 dark:text-green-400">{regenNote}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
@@ -473,7 +597,7 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
             Cancel
           </button>
           <button
-            onClick={save}
+            onClick={() => save()}
             disabled={saving}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-md text-sm hover:opacity-90 disabled:opacity-50"
           >
@@ -491,6 +615,59 @@ const PayoutEditDialog: React.FC<Props> = ({ row, tiers, onClose, onSaved }) => 
           </button>
         </div>
       </div>
+
+      {billMismatch && (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setBillMismatch(null);
+          }}
+        >
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-default w-full max-w-sm p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+                <Icon name={IconName.Warning} className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">This payout no longer matches its invoice</h3>
+                <p className="text-xs text-on-surface-secondary mt-1">
+                  Payout is <strong className="text-on-surface">{fmtCurrency(billMismatch.payout)}</strong>, but
+                  bill <span className="font-mono">{row.bill_no}</span> in QuickBooks is for{' '}
+                  <strong className="text-on-surface">{fmtCurrency(billMismatch.bill)}</strong>.
+                </p>
+                <p className="text-xs text-on-surface-secondary mt-1.5">
+                  Updating it deletes that bill in QuickBooks and raises it again at the new
+                  amount, keeping the same number. If it has already been paid there,
+                  QuickBooks will refuse and nothing changes.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setBillMismatch(null)}
+                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => save(false)}
+                className="px-3 py-1.5 border border-default rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700"
+              >
+                Save only
+              </button>
+              <button
+                type="button"
+                onClick={() => save(true)}
+                className="px-3 py-1.5 rounded-md text-sm font-semibold bg-primary text-white hover:bg-primary/90"
+              >
+                Save &amp; update the bill
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmDiscard && (
         <div
