@@ -6,6 +6,8 @@ import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { ConfirmPopup } from './ConfirmPopup';
 import SupportingDocsModal from './SupportingDocsModal';
+// Shared with the Direct Application screen so both read the same way.
+import { FundingTypeBadge, InvoiceGeneratedOnCell, RenewedOnCell } from './DirectApplicationViews';
 import { authHeader } from '../../lib/auth/authHeader';
 
 // Shape returned by GET /api/admin/list-employers (QBO customers ∪ CA history ∪
@@ -27,6 +29,10 @@ export const COMPANY_APPLICATION_COLUMNS = [
   'Course Title*',
   'Course Start Date (DD-MM-YYYY)*',
   'Course Reference Number',
+  'Renewal (old to new)',
+  'Renewed On',
+  'Invoice Generated On',
+  'Type',
   'Course Run ID',
   'Trainee Identity Type*',
   'Trainee FULL Name as on government ID*',
@@ -106,6 +112,10 @@ const COLUMN_DISPLAY_LABELS: Record<string, string> = {
   'Declaration that all grant application information is true and accurate': 'Declaration',
   'Consent to receive marketing information via newsletter': 'Marketing Consent',
   'Course Reference Number': 'Course Ref',
+  'Renewal (old to new)': 'Renewal (old \u2192 new)',
+  'Renewed On': 'Renewed On',
+  'Invoice Generated On': 'Invoice Generated On',
+  'Type': 'Type',
   'Course Run ID': 'Run ID',
   'Enrolment ID': 'Enrolment ID',
   'Enrolment Status': 'Enrolment Status',
@@ -132,6 +142,10 @@ const COLUMN_GROUPS: Array<{ label: string; columns: string[]; className: string
       'Course Title*',
       'Course Start Date (DD-MM-YYYY)*',
       'Course Reference Number',
+      'Renewal (old to new)',
+      'Renewed On',
+      'Invoice Generated On',
+      'Type',
       'Course Run ID',
     ],
   },
@@ -2022,8 +2036,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
   // Employer enrolments that are enrolled but not yet registered as Company
   // Applications (the "Synced Enrolments" gap) — surfaced as a banner so they
   // are never silently invisible on this view.
-  const [syncedCount, setSyncedCount] = useState(0);
-  const [isRegisteringSynced, setIsRegisteringSynced] = useState(false);
   // Popup used by Auto-Process for both the "nothing to do" guard and any
   // API/network error. Inline messages were easy to miss next to the four
   // action buttons; admins asked for a blocking popup so they actually see
@@ -2195,49 +2207,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
   };
 
   // How many employer enrolments are enrolled but not yet registered as CA rows.
-  const refreshSyncedCount = async () => {
-    try {
-      const res = await fetch('/api/admin/fetch-synced-enrolments');
-      const data = await res.json();
-      setSyncedCount(Array.isArray(data?.rows) ? data.rows.length : Number(data?.total || 0));
-    } catch {
-      /* non-fatal — the banner just won't show */
-    }
-  };
-
-  // One-click: register every synced employer enrolment as a Company Application
-  // so they appear on this view (employer name auto-filled from the learner's
-  // profile; QBO linking still happens at invoice time).
-  const registerAllSynced = async () => {
-    setIsRegisteringSynced(true);
-    try {
-      const res = await fetch('/api/admin/ca-auto-register-synced', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader() },
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || `Request failed (${res.status})`);
-      setPipelineMessage(data.message || `Registered ${data.created ?? 0} synced enrolment(s).`);
-      await Promise.all([reloadRows(), refreshSyncedCount()]);
-    } catch (err) {
-      setAutoProcessPopup({
-        tone: 'danger',
-        title: 'Could not register synced enrolments',
-        subtitle: 'No rows were changed.',
-        message: err instanceof Error ? err.message : 'Unknown error — check the server console.',
-      });
-    } finally {
-      setIsRegisteringSynced(false);
-    }
-  };
-
   const reloadRows = async () => {
     setIsLoading(true);
     setLoadError(null);
     try {
       const fetched = await fetchRows();
       setRows(fetched);
-      void refreshSyncedCount();
     } catch (err) {
       console.error('Failed to load company applications:', err);
       setLoadError(err instanceof Error ? err.message : 'Failed to load company applications.');
@@ -2881,26 +2856,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
         )}
       </Card>
 
-      {syncedCount > 0 && (
-        <Card className="p-4 mb-6 border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-start gap-3">
-              <Icon name={IconName.Warning} className="w-5 h-5 text-amber-600 dark:text-amber-300 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                  {syncedCount} employer enrolment{syncedCount === 1 ? ' is' : 's are'} enrolled but not yet on this list
-                </p>
-                <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5 max-w-2xl">
-                  These arrived via manual / SSG-sync enrolment and never got a Company Application row — that&apos;s why they don&apos;t appear here. Register them to add them to this list (employer name is taken from the learner&apos;s profile; link the QuickBooks customer at invoice time if needed).
-                </p>
-              </div>
-            </div>
-            <Button onClick={() => void registerAllSynced()} disabled={isRegisteringSynced}>
-              {isRegisteringSynced ? 'Registering…' : `Register all (${syncedCount})`}
-            </Button>
-          </div>
-        </Card>
-      )}
+      {/* The "Register all" banner used to sit here. It promoted every synced
+          employer enrolment in one click, taking the employer name from
+          learner_profile.company — which is blank for most learners, so a stray
+          click on 22 Aug 2026 added 1,952 rows with no employer, none of which
+          can ever be invoiced. Adding to this list now happens on All Synced
+          Enrolments, where the admin picks the employer deliberately. */}
 
       <Card className="p-6 mb-6">
         <div className="flex flex-col md:flex-row gap-4 items-end">
@@ -3481,6 +3442,62 @@ export const ViewCompanyApplicationView: React.FC = () => {
                     })()}
                   </td>
                   {VISIBLE_COLUMNS.map(column => {
+                    if (column === 'Invoice Generated On') {
+                      return (
+                        <td key={column} className="px-2 py-1.5 whitespace-nowrap text-[11px]">
+                          <InvoiceGeneratedOnCell
+                            docNumber={row['Invoice Doc Number']}
+                            renewedOn={row._course_renewed_on}
+                          />
+                        </td>
+                      );
+                    }
+                    if (column === 'Renewed On') {
+                      return (
+                        <td key={column} className="px-2 py-1.5 whitespace-nowrap text-[11px]">
+                          <RenewedOnCell
+                            renewedOn={row._course_renewed_on}
+                            exact={row._course_renewed_on_exact === '1'}
+                          />
+                        </td>
+                      );
+                    }
+                    if (column === 'Type') {
+                      return (
+                        <td key={column} className="px-2 py-1.5 whitespace-nowrap">
+                          <FundingTypeBadge
+                            courseType={row._course_type}
+                            currentCode={row._course_current_code}
+                            rowCode={row['Course Reference Number']}
+                          />
+                        </td>
+                      );
+                    }
+                    if (column === 'Renewal (old to new)') {
+                      // Blank unless the course has actually moved on: repeating
+                      // the same code twice on every unrenewed row would bury the
+                      // ones that matter.
+                      const previous = String(row._course_previous_code || '').trim();
+                      const current = String(row._course_current_code || '').trim();
+                      if (!previous || !current || previous.toUpperCase() === current.toUpperCase()) {
+                        return <td key={column} className="px-2 py-1.5 whitespace-nowrap font-mono text-gray-400 dark:text-gray-500">-</td>;
+                      }
+                      const rowRef = String(row['Course Reference Number'] || '').trim().toUpperCase();
+                      const onPrevious = rowRef === previous.toUpperCase();
+                      const onCurrent = rowRef === current.toUpperCase();
+                      return (
+                        <td key={column} className="px-2 py-1.5 whitespace-nowrap font-mono">
+                          <span
+                            className="inline-flex items-center gap-1"
+                            title={`This course was renewed from ${previous} to ${current}. This group is enrolled under ${rowRef || '(no reference)'}.`}
+                          >
+                            <span className={onPrevious ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}>{previous}</span>
+                            <span className="text-gray-400 text-[9px]" aria-hidden>&rarr;</span>
+                            <span className={onCurrent ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}>{current}</span>
+                          </span>
+                        </td>
+                      );
+                    }
                     if (column === 'Amt (BL)' || column === 'Amount' || column === 'TG Amt') {
                       const raw = (row[column] || '').trim();
                       const num = Number(raw);
@@ -3800,6 +3817,11 @@ interface RowErrorPopupProps {
 const RowErrorPopup: React.FC<RowErrorPopupProps> = ({ row, onClose }) => {
   const warnings = parseRowWarnings(row);
   const autoEnrolError = String(row['Auto-Enrol Error'] || '').trim();
+  // "Auto-enrol failed" used to be hardcoded here, so a row that hit a warning,
+  // recovered and went on to invoice still announced a failure. Say that only
+  // when the pipeline actually gave up.
+  const hasFailed = row._failed === '1';
+  const title = hasFailed ? 'Auto-enrol failed' : 'Warnings from earlier attempts';
   const traineeName = String(row['Trainee FULL Name as on government ID*'] || '').trim() || '(no name)';
   const courseTitle = String(row['Course Title*'] || '').trim() || '(no course title)';
   const employerOrg = String(row['Employer Organization Name*'] || '').trim();
@@ -3810,11 +3832,11 @@ const RowErrorPopup: React.FC<RowErrorPopupProps> = ({ row, onClose }) => {
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
         <div className="flex items-start justify-between gap-3 p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-              <Icon name={IconName.Warning} className="w-5 h-5 text-red-600 dark:text-red-400" />
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${hasFailed ? 'bg-red-100 dark:bg-red-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+              <Icon name={IconName.Warning} className={`w-5 h-5 ${hasFailed ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`} />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Auto-enrol failed</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                 {traineeName}
                 {employerOrg ? ` · ${employerOrg}` : ''}
