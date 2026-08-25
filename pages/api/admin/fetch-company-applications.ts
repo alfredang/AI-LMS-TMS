@@ -79,9 +79,65 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         ca.supporting_doc_drive_file_id, ca.supporting_doc_drive_web_view_link,
         ca.supporting_doc_uploaded_at, ca.supporting_doc_verification_status,
         ca.supporting_doc_verified_at, ca.supporting_doc_verified_by,
+        ca.attention_ignored_at,
         ca.created_at, ca.updated_at,
+        ct.course_type::text AS course_type,
+        ct.current_code AS course_current_code,
+        ct.previous_code AS course_previous_code,
+        rn.renewed_on AS course_renewed_on,
+        rn.renewed_on_exact AS course_renewed_on_exact,
         sg.bl_grant_id, sg.bl_amount, sg.other_grant_id, sg.other_scheme_code, sg.other_amount, sg.tg_amount
       FROM public.company_application ca
+      -- WSQ / CASL / IBF for the Type column, and the SSG references either side
+      -- of a renewal. Matched on the course code directly rather than wrapped in
+      -- UPPER/TRIM, which keeps the unique index on course_code usable — every
+      -- stored code is already uppercase and trimmed.
+      LEFT JOIN LATERAL (
+          SELECT c.id AS course_id,
+                 c.course_type,
+                 -- What the course is registered under today. A renewal issues a
+                 -- new TGS code and parks it in new_course_code, so a row citing
+                 -- anything else was enrolled before that renewal.
+                 COALESCE(NULLIF(TRIM(c.new_course_code), ''), c.course_code) AS current_code,
+                 -- What it held before, or null when never renewed. Both are
+                 -- returned so the screen can show a renewal even for a group
+                 -- that enrolled after it and was never on the old code.
+                 CASE WHEN NULLIF(TRIM(c.new_course_code), '') IS NOT NULL
+                           AND TRIM(COALESCE(c.new_course_code, '')) <> TRIM(COALESCE(c.course_code, ''))
+                      THEN c.course_code END AS previous_code
+            FROM course c
+           WHERE c.course_code = UPPER(TRIM(COALESCE(ca.course_reference_number, '')))
+              OR c.new_course_code = UPPER(TRIM(COALESCE(ca.course_reference_number, '')))
+           LIMIT 1
+      ) ct ON TRUE
+      -- When the course stopped being WSQ-funded — the date that decides whether
+      -- an invoice raised then SHOULD have said WSQ or CASL.
+      --
+      -- Two sources, in order of trust:
+      --   1. the funding validity that was replaced at renewal (an exact date,
+      --      logged as the old value of the fundingValidity change)
+      --   2. failing that, when the new TGS code was first recorded — a proxy,
+      --      flagged as approximate so nobody reads it as fact
+      LEFT JOIN LATERAL (
+          SELECT
+            COALESCE(
+              (SELECT l.old_value
+                 FROM course_change_log l
+                WHERE l.course_id = ct.course_id
+                  AND l.field = 'fundingValidity'
+                  AND l.old_value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                ORDER BY l.changed_at DESC
+                LIMIT 1),
+              (SELECT MIN(l.changed_at)::date::text
+                 FROM course_change_log l
+                WHERE l.course_id = ct.course_id
+                  AND l.field = 'newCourseCode')
+            ) AS renewed_on,
+            EXISTS (SELECT 1 FROM course_change_log l
+                     WHERE l.course_id = ct.course_id
+                       AND l.field = 'fundingValidity'
+                       AND l.old_value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') AS renewed_on_exact
+      ) rn ON TRUE
       LEFT JOIN (
         SELECT
           LOWER(TRIM(enrollment_id)) AS enrolment_key,
@@ -118,19 +174,40 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const v = r[dbCol];
         out[label] = v == null ? '' : String(v);
       });
-      // Meta fields used by the UI to highlight rows that need admin
-      // attention. _pipeline_warnings carries the raw warning array so the
-      // UI can render a tooltip listing every failed step; _stuck is a
-      // pre-computed flag combining hard failures (auto_enrol_status =
-      // 'failed') with any non-empty warnings — letting the UI add a
-      // single "stuck-only" filter without re-deriving the logic.
+      // Meta fields used by the UI to highlight rows that need admin attention.
+      //
+      // `pipeline_warnings` is an APPEND-ONLY history: a step that failed once
+      // and succeeded on retry leaves its warning behind forever, and the
+      // pipeline even writes non-failures into it ("row recovered ... and
+      // restored"). Flagging on "has any warning" therefore marked rows as stuck
+      // for the rest of their lives — three fully invoiced learners were showing
+      // a red "Auto-enrol failed" while holding a tax invoice, a grant invoice
+      // and a calendar entry.
+      //
+      // A row needs attention when the pipeline gave up on it (`failed`), or
+      // when it carries warnings AND has not reached the finish line — no
+      // invoice — AND nobody has dismissed it. Anything invoiced is done,
+      // whatever it went through on the way.
       const warnings = Array.isArray(r.pipeline_warnings)
         ? r.pipeline_warnings
         : (r.pipeline_warnings ? [] : []);
       const isFailed = String(r.auto_enrol_status || '').trim().toLowerCase() === 'failed';
-      const isStuck = isFailed || warnings.length > 0;
+      const isInvoiced = String(r.invoice_id || '').trim().length > 0;
+      const isDismissed = r.attention_ignored_at != null;
+      const isStuck = isFailed || (warnings.length > 0 && !isInvoiced && !isDismissed);
+
+      // Read by the Type and Renewal columns.
+      out._course_type = String(r.course_type || '');
+      out._course_current_code = String(r.course_current_code || '');
+      out._course_previous_code = String(r.course_previous_code || '');
+      out._course_renewed_on = String(r.course_renewed_on || '');
+      out._course_renewed_on_exact = r.course_renewed_on_exact ? '1' : '';
+
       out._pipeline_warnings = JSON.stringify(warnings);
       out._stuck = isStuck ? '1' : '';
+      // Lets the UI title the dialog honestly: a hard failure reads differently
+      // from warnings left over from an attempt that eventually worked.
+      out._failed = isFailed ? '1' : '';
       return out;
     });
     const stuckCount = rows.filter((r) => r._stuck === '1').length;

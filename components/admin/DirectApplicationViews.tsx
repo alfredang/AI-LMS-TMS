@@ -122,7 +122,69 @@ function computeDaBilling(app: any): { payable: number; creditApplied: number; d
  * The SSG course title is NOT a fallback - checked against all 196 live rows,
  * none carries a WSQ-/CASL- prefix.
  */
-const FundingTypeBadge: React.FC<{
+/**
+ * When the course stopped being WSQ-funded.
+ *
+ * This is the date that settles whether an invoice was right: one raised before
+ * it correctly reads WSQ, one raised after it should read CASL. Blank when the
+ * course was never renewed.
+ *
+ * A trailing ~ means the date is inferred from when the new TGS code was first
+ * recorded, because no funding-validity change was logged for that course. Shown
+ * rather than hidden: an approximate date still tells you roughly when, and
+ * marking it stops anyone treating it as exact.
+ */
+/**
+ * When the invoice was raised, read from its own document number.
+ *
+ * Invoice numbers are minted as TC{yy}-{mmdd}-{suffix}, so the date is already
+ * in the row — no extra column, no call to QuickBooks.
+ *
+ * Sits beside Renewed On so the pair can be read together, and that is the
+ * point: an invoice raised BEFORE the renewal correctly says WSQ, one raised
+ * AFTER it should say CASL. When the second case applies the date is marked, so
+ * a mislabelled invoice is visible without opening QuickBooks.
+ */
+export const InvoiceGeneratedOnCell: React.FC<{ docNumber?: string | null; renewedOn?: string | null }> = ({ docNumber, renewedOn }) => {
+    const m = String(docNumber || '').trim().match(/^TC(\d{2})-(\d{2})(\d{2})-/i);
+    if (!m) return <span className="text-gray-400 dark:text-gray-500">-</span>;
+
+    const iso = `20${m[1]}-${m[2]}-${m[3]}`;
+    const shown = `${m[3]}/${m[2]}/20${m[1]}`;
+    const renewal = String(renewedOn || '').trim().slice(0, 10);
+    const afterRenewal = !!renewal && iso > renewal;
+
+    return (
+        <span
+            className={afterRenewal ? 'text-amber-700 dark:text-amber-400 font-semibold' : 'text-gray-600 dark:text-gray-300'}
+            title={afterRenewal
+                ? `Raised on ${shown}, after this course was renewed (${renewal.split('-').reverse().join('/')}). If this invoice reads WSQ it should read CASL.`
+                : renewal
+                    ? `Raised on ${shown}, before the renewal — WSQ is correct for this invoice.`
+                    : `Raised on ${shown}.`}
+        >
+            {shown}{afterRenewal && <span className="ml-1" aria-hidden>&#9888;</span>}
+        </span>
+    );
+};
+
+export const RenewedOnCell: React.FC<{ renewedOn?: string | null; exact?: boolean }> = ({ renewedOn, exact }) => {
+    const raw = String(renewedOn || '').trim();
+    if (!raw) return <span className="text-gray-400 dark:text-gray-500">-</span>;
+    const shown = raw.slice(0, 10).split('-').reverse().join('/');
+    return (
+        <span
+            className="text-gray-600 dark:text-gray-300"
+            title={exact
+                ? `WSQ funding for this course ran to ${shown}. An invoice raised after that should read CASL.`
+                : `Approximate: no funding-validity change was logged, so this is when the new SSG reference was first recorded (${shown}).`}
+        >
+            {shown}{!exact && <span className="ml-0.5 text-amber-500" aria-hidden>~</span>}
+        </span>
+    );
+};
+
+export const FundingTypeBadge: React.FC<{
     courseType?: string | null;
     currentCode?: string | null;
     rowCode?: string | null;
@@ -2766,16 +2828,10 @@ export const ViewDirectApplicationView: React.FC = () => {
                                     <span>Type &mdash; how this enrolment is billed, not how the course is typed today</span>
                                 </span>
                                 <span className="inline-flex items-center gap-1.5">
-                                    <span className="font-mono font-bold text-amber-700 dark:text-amber-400">TGS-old</span>
+                                    <span className="font-mono font-bold text-teal-700 dark:text-teal-400">TGS-old</span>
                                     <span aria-hidden>&rarr;</span>
                                     <span className="font-mono text-gray-400 dark:text-gray-500">TGS-new</span>
-                                    <span>enrolled before the course was renewed</span>
-                                </span>
-                                <span className="inline-flex items-center gap-1.5">
-                                    <span className="font-mono text-gray-400 dark:text-gray-500">TGS-old</span>
-                                    <span aria-hidden>&rarr;</span>
-                                    <span className="font-mono font-bold text-teal-700 dark:text-teal-400">TGS-new</span>
-                                    <span>enrolled after it &mdash; <strong className="font-semibold">bold is the reference this learner is on</strong></span>
+                                    <span><strong className="font-semibold">The highlighted code is the one this learner is enrolled under.</strong> Old on the left, new on the right.</span>
                                 </span>
                             </div>
                             <div className="overflow-x-auto">
@@ -2797,7 +2853,9 @@ export const ViewDirectApplicationView: React.FC = () => {
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Phone</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Course Title</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="The SSG reference this learner was enrolled under. It never changes once the application exists.">Course Ref No.</th>
-                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="Old and new SSG reference for courses that have been renewed. The side this learner is enrolled under is shown in bold.">Renewal (old &rarr; new)</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="Old and new SSG reference for courses that have been renewed. The side this learner is enrolled under is highlighted.">Renewal (old &rarr; new)</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="When the course stopped being WSQ-funded. An invoice raised before this date correctly reads WSQ; one raised after should read CASL.">Renewed On</th>
+                                            <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="When this invoice was raised, from its document number. Marked when it was raised after the renewal.">Invoice Generated On</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap" title="WSQ or CASL as this enrolment is billed. Rows enrolled before a renewal keep the older type; the Renewal column shows which reference they are on.">Type</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Start Date</th>
                                             <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase whitespace-nowrap">Run ID</th>
@@ -2917,12 +2975,14 @@ export const ViewDirectApplicationView: React.FC = () => {
                                                             className="inline-flex items-center gap-1"
                                                             title={`This course was renewed from ${previous} to ${current}. This learner is enrolled under ${rowRef || '(no reference)'}.`}
                                                         >
-                                                            <span className={onPrevious ? 'font-bold text-amber-700 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'}>{previous}</span>
+                                                            <span className={onPrevious ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}>{previous}</span>
                                                             <span className="text-gray-400 text-[9px]" aria-hidden>&rarr;</span>
                                                             <span className={onCurrent ? 'font-bold text-teal-700 dark:text-teal-400' : 'text-gray-400 dark:text-gray-500'}>{current}</span>
                                                         </span>
                                                     );
                                                 })()}</td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-[11px]"><RenewedOnCell renewedOn={app.course_renewed_on} exact={app.course_renewed_on_exact === true || app.course_renewed_on_exact === 't'} /></td>
+                                                <td className="px-2 py-1.5 whitespace-nowrap text-[11px]"><InvoiceGeneratedOnCell docNumber={app.invoice_doc_number} renewedOn={app.course_renewed_on} /></td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap"><FundingTypeBadge courseType={app.course_type} currentCode={app.course_current_code} rowCode={app.course_reference_number} hasInvoice={hasRealInvoice(app.invoice_id)} /></td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_start_date ? new Date(app.course_start_date).toLocaleDateString('en-GB') : '-'}</td>
                                                 <td className="px-2 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-300">{app.course_run_id || '-'}</td>

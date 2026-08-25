@@ -26,6 +26,7 @@ import { refreshGrantsForEnrolments } from '../services/billingSync';
 import {
   loadSplitGrantDeductionsFromDb,
 } from '../services/daInvoiceGrantLines';
+import { buildInvoiceLineText } from './invoiceLineText';
 import {
   qboCreateInvoice,
   qboFindCustomerByName,
@@ -60,12 +61,12 @@ async function resolveSupplementalCustomerRef(): Promise<string> {
   return cachedSupplementalCustomerId;
 }
 
-async function resolveGrantItemRef(itemName: string): Promise<{ value: string; name?: string } | null> {
+async function resolveGrantItem(itemName: string) {
   const name = String(itemName || '').trim();
   if (!name) return null;
   try {
     const item = await qboFindItemByName(undefined, name);
-    if (item?.id) return { value: item.id, name: item.name };
+    if (item?.id) return item;
     console.warn(`[QBO CA grant invoice] No Item found for name "${name}" — grant line cannot be created without a Product/Service.`);
   } catch (err) {
     console.warn(`[QBO CA grant invoice] Item lookup failed for "${name}":`, err);
@@ -76,6 +77,13 @@ async function resolveGrantItemRef(itemName: string): Promise<{ value: string; n
 export interface CaGrantInvoiceInput {
   enrolmentId: string;
   mainInvoiceDocNumber: string | null;
+  /**
+   * The course type this group is billed as ('WSQ' | 'CASL'), resolved by the
+   * main invoice from the QuickBooks product. Passed through so this invoice
+   * uses the SAME funding products and wording — the two documents are meant to
+   * be read side by side, and would otherwise disagree for a CASL course.
+   */
+  courseTypeLabel?: string | null;
 }
 
 export interface CreatedCaGrantInvoice {
@@ -99,7 +107,7 @@ export async function createCompanyApplicationGrantInvoice(
     );
   }
 
-  let { lines: grantLines } = await loadSplitGrantDeductionsFromDb(enrolmentId);
+  let { lines: grantLines } = await loadSplitGrantDeductionsFromDb(enrolmentId, input.courseTypeLabel);
   let positiveLines = grantLines.filter(l => Number(l.amount) > 0);
 
   // Force a single SSG refresh if the DB has nothing — the upstream pipeline's
@@ -119,7 +127,7 @@ export async function createCompanyApplicationGrantInvoice(
         `CA grant invoice requires ssg_grants data but SSG refresh threw for enrolment ${enrolmentId}: ${err instanceof Error ? err.message : String(err)}`
       );
     }
-    const retry = await loadSplitGrantDeductionsFromDb(enrolmentId);
+    const retry = await loadSplitGrantDeductionsFromDb(enrolmentId, input.courseTypeLabel);
     grantLines = retry.lines;
     positiveLines = grantLines.filter(l => Number(l.amount) > 0);
   }
@@ -172,7 +180,8 @@ export async function createCompanyApplicationGrantInvoice(
 
   const lineBodies: any[] = [];
   for (const g of positiveLines) {
-    const itemRef = await resolveGrantItemRef(g.itemName);
+    const item = await resolveGrantItem(g.itemName);
+    const itemRef = item?.id ? { value: item.id, name: item.name } : null;
     if (!itemRef) {
       throw new Error(
         `CA grant invoice requires QBO Product/Service "${g.itemName}" to exist. Create it in QuickBooks.`
@@ -181,7 +190,13 @@ export async function createCompanyApplicationGrantInvoice(
     lineBodies.push({
       DetailType: 'SalesItemLineDetail',
       Amount: g.amount,
-      Description: g.description,
+      // Same wording as the main invoice: from the funding product's own
+      // Description box, with the grant refs appended.
+      Description: buildInvoiceLineText({
+        productDescription: item?.description,
+        fields: [{ key: 'grantRef', label: 'Grant Ref #', value: `1. ${g.grantId}`, block: true }],
+        fallbackHeading: g.description.split('\n')[0],
+      }).text,
       SalesItemLineDetail: {
         ItemRef: itemRef,
         Qty: 1,
