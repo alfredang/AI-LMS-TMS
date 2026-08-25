@@ -2,9 +2,12 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@lib/db';
 import { estimatedPayout, DEFAULT_PAYOUT_TIERS, PayoutTier } from '@lib/payroll/calculate';
 import { requireRole } from '@lib/auth/requireRole';
+import { requirePayrollEnabled } from '@lib/payroll/requireEnabled';
 import { ensureClassDatesColumn } from '@lib/payroll/ensureClassDates';
+import { ensureTrainerUnlinkedColumn } from '@lib/payroll/ensureTrainerUnlinked';
 import { ensureBillNoColumn, BILL_NO_LOCK_NAMESPACE } from '@lib/payroll/billNo';
 import { ensurePayoutColumns, EFFECTIVE_END_DATE } from '@lib/payroll/ensurePayoutColumns';
+import { ensureTrainerBillTable } from '@lib/payroll/ensureTrainerBillTable';
 
 async function loadTiers(): Promise<PayoutTier[]> {
   try {
@@ -24,6 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const authed = await requireRole(req, res, ['payroll', 'admin']);
   if (!authed) return;
+  if (!(await requirePayrollEnabled(res))) return;
 
   try {
     const months = Math.max(1, Math.min(24, parseInt((req.query.months as string) || '2')));
@@ -46,6 +50,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const dateBoundParam = monthParam || String(months);
     await ensureBillNoColumn();
     await ensurePayoutColumns();
+    // The list joins trainer_bill to expose what each payout was actually
+    // billed at; without this the join would fail on a deploy that has not
+    // touched the Billing Invoices tab yet.
+    await ensureTrainerBillTable();
+    // The manual branch selects trainer_unlinked; without this it fails on a
+    // deploy whose migration hasn't been applied by hand yet.
+    await ensureTrainerUnlinkedColumn();
     const tiers = await loadTiers();
 
     // Find every (course_run, trainer) pair for runs whose end_date is within the last N months
@@ -207,9 +218,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tp.payment_date::text AS payment_date,
         tp.remark,
         tp.bill_no,
-        tp.updated_at
+        tp.updated_at,
+        -- The live billing invoice, if any. At most one row can match: a
+        -- partial unique index enforces one non-voided bill per payout.
+        tb.amount AS bill_amount,
+        tb.status AS bill_status,
+        -- Live enrolment count for the class, so the UI can point out a payout
+        -- whose pax figure has since gone stale. A payout is materialized once
+        -- and then frozen — deliberately, so a paid-out figure can't move under
+        -- Payroll — but a learner withdrawing afterwards used to leave the row
+        -- quietly out of date with nothing on screen saying so.
+        (SELECT COUNT(*) FROM enrollment e
+          WHERE e.course_run_id = tp.course_run_id
+            AND COALESCE(e.enrolment_status,'') NOT IN ('Withdrawn','Cancelled','Admin Removed')
+        )::int AS live_learners
       FROM trainer_payout tp
       JOIN course_run cr ON cr.id = tp.course_run_id
+      LEFT JOIN trainer_bill tb ON tb.payout_id = tp.id AND tb.status <> 'voided'
       LEFT JOIN course c ON c.id = cr.course_id
       LEFT JOIN course_run_trainer crt
              ON crt.course_run_id = tp.course_run_id AND crt.trainer_id = tp.trainer_id
@@ -290,6 +315,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         mc.class_title,
         mc.course_code,
         mc.trainer_id,
+        mc.trainer_unlinked,
         mc.trainer_name,
         mc.start_date::text   AS start_date,
         mc.end_date::text     AS end_date,
@@ -303,8 +329,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         mc.payment_date::text AS payment_date,
         mc.remark,
         mc.bill_no,
-        mc.updated_at
+        mc.updated_at,
+        tb.amount AS bill_amount,
+        tb.status AS bill_status
       FROM payroll_manual_class mc
+      LEFT JOIN trainer_bill tb ON tb.manual_class_id = mc.id AND tb.status <> 'voided'
       WHERE ${manualBoundSql}
       ORDER BY mc.end_date DESC NULLS LAST, mc.created_at DESC
     `,
@@ -322,6 +351,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       end_date: m.end_date,
       class_dates: m.class_dates,
       trainer_id: m.trainer_id,
+      trainer_unlinked: m.trainer_unlinked,
       trainer_name: m.trainer_name,
       num_learners: m.num_learners,
       course_fee: m.course_fee,
@@ -333,6 +363,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       remark: m.remark,
       bill_no: m.bill_no,
       updated_at: m.updated_at,
+      bill_amount: m.bill_amount,
+      bill_status: m.bill_status,
     }));
 
     // Combined overview: WSQ (YTD) + non-WSQ, scoped to the SAME year so the two

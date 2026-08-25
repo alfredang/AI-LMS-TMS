@@ -31,6 +31,7 @@ const toManualClass = (r: PayoutRow): ManualClass => ({
   class_title: r.course_title || '',
   course_code: r.course_code ?? null,
   trainer_id: r.trainer_id || null,
+  trainer_unlinked: r.trainer_unlinked === true,
   trainer_name: r.trainer_name || '',
   start_date: r.start_date ?? null,
   end_date: r.end_date ?? null,
@@ -44,7 +45,64 @@ const toManualClass = (r: PayoutRow): ManualClass => ({
   payment_date: r.payment_date,
   remark: r.remark,
   bill_no: r.bill_no ?? null,
+  bill_amount: r.bill_amount ?? null,
+  bill_status: r.bill_status ?? null,
 });
+
+/**
+ * Pax, flagged when the payout's frozen figure no longer matches the class's
+ * live enrolment count.
+ *
+ * Payouts are materialized once and never re-read, on purpose — a figure that
+ * has been paid out must not move underneath Payroll. The cost is that a
+ * withdrawal after materialization leaves a pending row quietly out of date, so
+ * the difference is surfaced rather than left to be discovered in the bill.
+ */
+const PaxCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
+  const frozen = Number(row.num_learners) || 0;
+  const live =
+    row.live_learners === null || row.live_learners === undefined ? null : Number(row.live_learners);
+  // Only worth flagging while the payout can still be corrected.
+  const stale = row.status === 'pending' && live !== null && live !== frozen;
+  if (!stale) return <>{frozen}</>;
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400"
+      title={`This payout was worked out from ${frozen} learner${frozen === 1 ? '' : 's'}, but the class now has ${live}. Edit the payout to bring it up to date.`}
+    >
+      <Icon name={IconName.Warning} className="w-3 h-3 flex-shrink-0" />
+      {frozen}
+    </span>
+  );
+};
+
+/**
+ * Estimated payout — or a flag when it could not be worked out at all.
+ *
+ * estimatedPayout() returns zero whenever the course fee is missing or zero, so
+ * such a payout is stored as $0.00 with no tier and reads on screen as "this
+ * class is worth nothing". It isn't: nothing can be calculated until the course
+ * carries a fee. Saying so is the difference between a figure to accept and a
+ * record to go and fix.
+ */
+const EstimateCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
+  const fee = Number(row.course_fee) || 0;
+  // An actual payout that has been entered by hand settles the question — the
+  // estimate not being computable no longer matters, so don't nag about it.
+  const hasActual =
+    row.actual_payout !== null && row.actual_payout !== undefined && Number(row.actual_payout) > 0;
+  const uncalculable = row.status !== 'cancelled' && fee <= 0 && !hasActual;
+  if (!uncalculable) return <>{fmtCurrency(row.estimated_payout)}</>;
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400"
+      title="This course has no fee recorded, so the payout can't be worked out. Add the course fee, or enter the actual payout by hand."
+    >
+      <Icon name={IconName.Warning} className="w-3 h-3 flex-shrink-0" />
+      No fee
+    </span>
+  );
+};
 
 // Compact, low-emphasis stat used for the secondary "Selected window" strip.
 const CompactStat: React.FC<{
@@ -358,7 +416,9 @@ const PayoutListView: React.FC = () => {
         ? {
             status: 'completed',
             actual_payout: hasActual ? r.actual_payout : est > 0 ? est.toFixed(2) : null,
-            payment_date: r.payment_date || todayIso(),
+            // Today, not the row's existing date: un-marking keeps the old
+            // payment date, so re-confirming must not resurrect it.
+            payment_date: todayIso(),
           }
         : { status: 'pending' }; // amounts and dates are kept
       try {
@@ -375,7 +435,7 @@ const PayoutListView: React.FC = () => {
         if (!j.success) throw new Error(j.error || 'save failed');
         if (j.bill) raised += 1;
         const updated = mergeSaved(r, j.data);
-        setRows((rs) => rs.map((x) => (x.id === updated.id ? updated : x)));
+        setRows((rs) => rs.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)));
       } catch {
         failed.push(r.course_title || r.course_code || 'a class');
       }
@@ -859,9 +919,9 @@ const PayoutListView: React.FC = () => {
                       )}
                     </span>
                   </td>
-                  <td className="px-2 py-2.5 text-right tabular-nums">{r.num_learners}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums"><PaxCell row={r} /></td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(r.course_fee)}</td>
-                  <td className="px-2 py-2.5 text-right tabular-nums">{fmtCurrency(r.estimated_payout)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums"><EstimateCell row={r} /></td>
                   <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${r.actual_payout != null && r.actual_payout !== '' ? 'text-green-600 dark:text-green-400' : ''}`}>{fmtCurrency(r.actual_payout)}</td>
                   <td className="px-3 py-2.5"><StatusBadge status={r.status} /></td>
                   <td className="px-3 py-2.5 whitespace-nowrap"><BillNo value={r.bill_no} /></td>
@@ -1054,9 +1114,9 @@ const PayoutListView: React.FC = () => {
                                         )}
                                       </span>
                                     </td>
-                                    <td className="px-2 py-2.5 text-right tabular-nums">{r.num_learners}</td>
+                                    <td className="px-2 py-2.5 text-right tabular-nums"><PaxCell row={r} /></td>
                                     <td className="px-2 py-2.5 text-right tabular-nums">{fmtCurrency(r.course_fee)}</td>
-                                    <td className="px-2 py-2.5 text-right tabular-nums">{fmtCurrency(r.estimated_payout)}</td>
+                                    <td className="px-2 py-2.5 text-right tabular-nums"><EstimateCell row={r} /></td>
                                     <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${hasActual ? 'text-green-600 dark:text-green-400' : ''}`}>
                                       {fmtCurrency(r.actual_payout)}
                                     </td>
@@ -1170,7 +1230,7 @@ const PayoutListView: React.FC = () => {
         >
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-1.5 text-xs text-gray-600 dark:text-gray-300">
             <p>
-              The bill{billNotice.count === 1 ? ' is' : 's are'} being posted to QuickBooks and the PDF filed to Drive.
+              The bill{billNotice.count === 1 ? ' is' : 's are'} being posted to QuickBooks.
               This runs in the background, so it may take a moment to appear.
             </p>
             <p>
