@@ -34,6 +34,13 @@ import {
 } from './createCompanyApplicationGrantInvoice';
 import { driveFileExists, uploadInvoicePdfToDrive } from '../services/invoiceDriveUpload';
 import {
+  buildInvoiceLineText,
+  COURSE_LINE_HEADING_PREFIX,
+  detectFundingFamily,
+  resolveFundingItemName,
+  type FundingFamily,
+} from './invoiceLineText';
+import {
   qboFetchInvoicePdf,
   qboFindCustomerByName,
   qboFindInvoiceByDocNumber,
@@ -122,18 +129,20 @@ function buildCaDocNumber(enrolmentIds: string[], now: Date = new Date()): { doc
 
 const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/**
+ * Which funding product a scheme bills against, for this course's family.
+ *
+ * Was hardcoded to the WSQ products, so a company invoice for a renewed CASL
+ * course deducted against `WSQ Funding (Baseline)` and read "WSQ" throughout.
+ * Now shares resolveFundingItemName with the Direct Application path, which
+ * only ever returns one of the six products that exist in the realm.
+ */
 function resolveGrantItemName(opts: {
+  family: FundingFamily;
   fundingSchemeCode?: string | null;
   fundingSchemeDescription?: string | null;
 }): string {
-  const haystack = `${opts.fundingSchemeCode || ''} ${opts.fundingSchemeDescription || ''}`.toLowerCase();
-  if (/baseline|\bbl\b/.test(haystack)) return 'WSQ funding (Baseline)';
-  const hasMces = /\bmces\b|mid-career enhanced subsidy/.test(haystack);
-  const hasSme = /\bsme\b|\bsmes\b|enhanced training support for smes/.test(haystack);
-  if (hasMces && hasSme) return 'WSQ funding (MCES/SME)';
-  if (hasMces) return 'WSQ funding (MCES)';
-  if (hasSme) return 'WSQ funding (SMEs)';
-  return 'WSQ funding (MCES/SME)';
+  return resolveFundingItemName(opts);
 }
 
 function resolveSchemeLabel(opts: {
@@ -607,7 +616,7 @@ export interface CreatedCaInvoice {
   total: number;
 }
 
-interface SchemeAggregate {
+export interface SchemeAggregate {
   itemName: string;
   schemeLabel: string;
   totalAmount: number;
@@ -641,7 +650,10 @@ async function fetchLearnerGrantTotals(
   return totals;
 }
 
-async function aggregateGrantsByScheme(enrolmentIds: string[]): Promise<SchemeAggregate[]> {
+async function aggregateGrantsByScheme(
+  enrolmentIds: string[],
+  family: FundingFamily
+): Promise<SchemeAggregate[]> {
   if (enrolmentIds.length === 0) return [];
 
   // Pull the latest grants from SSG before reading — non-blocking on failure.
@@ -703,6 +715,7 @@ async function aggregateGrantsByScheme(enrolmentIds: string[]): Promise<SchemeAg
       if (!Number.isFinite(amt) || amt <= 0) continue;
 
       const itemName = resolveGrantItemName({
+        family,
         fundingSchemeCode: row.funding_scheme_code,
         fundingSchemeDescription: row.funding_scheme_description,
       });
@@ -732,53 +745,87 @@ async function aggregateGrantsByScheme(enrolmentIds: string[]): Promise<SchemeAg
   // (ETSS/MCES/IBF STS). Map-insertion order is whichever scheme the first
   // participant happened to have first, which is not stable — sort explicitly.
   return Array.from(byScheme.values()).sort((a, b) => {
-    const aBaseline = a.itemName === 'WSQ funding (Baseline)' ? 0 : 1;
-    const bBaseline = b.itemName === 'WSQ funding (Baseline)' ? 0 : 1;
+    // Match on the scheme, not a literal product name: the name is now
+    // "WSQ Funding (Baseline)" or "CASL Funding (Baseline)" depending on the
+    // course, and comparing against one of them silently stopped sorting.
+    const aBaseline = /\(baseline\)/i.test(a.itemName) ? 0 : 1;
+    const bBaseline = /\(baseline\)/i.test(b.itemName) ? 0 : 1;
     return aBaseline - bBaseline;
   });
 }
 
-function prefixWsq(title: string): string {
-  const trimmed = String(title || '').trim();
-  if (!trimmed) return trimmed;
-  if (/^WSQ\s*[-–]/i.test(trimmed)) return trimmed;
-  return `WSQ - ${trimmed}`;
-}
-
-function buildCourseLineDescription(input: CreateCaInvoiceInput): string {
-  const parts: string[] = [];
-  const titleWithCode = input.courseReferenceNumber
-    ? `${prefixWsq(input.courseTitle)} (${input.courseReferenceNumber})`
-    : prefixWsq(input.courseTitle);
-  parts.push(`Course Name: ${titleWithCode}`);
-  // Single-line-per-participant format: "1. NAME (XXXXX123A)". Replaces the
-  // previous two-line block (name on one line, NRIC: XXXXX123A on the next)
-  // so the invoice description stays compact for groups with many learners.
-  parts.push('Participant Name:');
-  input.learners.forEach((learner, i) => {
-    parts.push(`${i + 1}. ${learner.fullName || '-'} (${maskNric(learner.nric)})`);
-  });
-
+/**
+ * The course line, worded by the QuickBooks product.
+ *
+ * The title, its course code and the participant label all come from the
+ * product's Description box; only the learner list, dates and run id are ours.
+ * This is what makes a renewed course read "CASL - ..." without a deploy — the
+ * hardcoded `WSQ - ` prefix it replaces was the reason company invoices for
+ * CASL courses were labelled WSQ.
+ *
+ * Participants stay on one line each ("1. NAME (XXXXX123A)"), which keeps the
+ * description compact for large groups.
+ */
+export function buildCourseLineDescription(
+  input: CreateCaInvoiceInput,
+  courseItem: { name?: string; description?: string | null } | null,
+  family: FundingFamily
+): string {
+  const participants = input.learners
+    .map((learner, i) => `${i + 1}. ${learner.fullName || '-'} (${maskNric(learner.nric)})`)
+    .join('\n');
   const dateRange = formatCourseDateRange(input.courseStartDate, input.courseEndDate);
-  if (dateRange) parts.push(`Course Date: ${dateRange}`);
-  if (input.courseRunId) parts.push(`Course Run: ${input.courseRunId}`);
 
-  return parts.join('\n');
+  const title = String(input.courseTitle || '').trim();
+  const fallbackTitle = title.replace(/^(WSQ|CASL|IBF|Non-WSQ)\s*[-–]\s*/i, '');
+  const fallbackHeading = input.courseReferenceNumber
+    ? `${family} - ${fallbackTitle} (${input.courseReferenceNumber})`
+    : `${family} - ${fallbackTitle}`;
+
+  const built = buildInvoiceLineText({
+    productDescription: courseItem?.description,
+    fields: [
+      { key: 'name', label: 'Participant Name', value: participants, block: true },
+      { key: 'date', label: 'Course Date', value: dateRange },
+      { key: 'run', label: 'Course Run', value: String(input.courseRunId || '') },
+    ],
+    fallbackHeading,
+    expectedCode: input.courseReferenceNumber,
+    headingPrefix: COURSE_LINE_HEADING_PREFIX,
+  });
+
+  if (built.source === 'fallback') {
+    console.warn(
+      `[ca-invoice] Course line built from LMS data for ${input.courseReferenceNumber}: ${built.reason}. ` +
+        `Fix the Description on the QuickBooks product to control this wording.`
+    );
+  }
+  return built.text;
 }
 
-function buildGrantLineDescription(scheme: SchemeAggregate): string {
-  const parts: string[] = [];
-  parts.push(`Less: WSQ funding (${scheme.schemeLabel})`);
-  // Single "Grant Ref#:" header followed by a numbered list of refs.
-  // Positionally aligned with the Participant list in
-  // buildCourseLineDescription (grant 1 ↔ participant 1, etc.) as long as
-  // all participants share the same scheme. Across-scheme groups list per
-  // scheme, so alignment within each scheme block still holds.
-  parts.push('Grant Ref#:');
-  scheme.grantRefs.forEach((ref, i) => {
-    parts.push(`${i + 1}. ${ref}`);
+/**
+ * A funding deduction line, worded by its own QuickBooks product.
+ *
+ * The refs stay a numbered list under the product's own "Grant Ref #:" label,
+ * positionally aligned with the participant list in the course line (grant 1
+ * matches participant 1) as long as the group shares one scheme. Across-scheme
+ * groups list per scheme, so alignment holds within each block.
+ */
+export function buildGrantLineDescription(
+  scheme: SchemeAggregate,
+  grantItem: { description?: string | null } | null,
+  family: FundingFamily
+): string {
+  const refs = scheme.grantRefs.map((ref, i) => `${i + 1}. ${ref}`).join('\n');
+  const built = buildInvoiceLineText({
+    productDescription: grantItem?.description,
+    fields: [{ key: 'grantRef', label: 'Grant Ref #', value: refs, block: true }],
+    fallbackHeading: `Less: ${family} funding (${scheme.schemeLabel})`,
   });
-  return parts.join('\n');
+  if (built.source === 'fallback') {
+    console.warn(`[ca-invoice] Funding line built from LMS data for "${scheme.itemName}": ${built.reason}.`);
+  }
+  return built.text;
 }
 
 export async function createCompanyApplicationInvoice(
@@ -831,8 +878,26 @@ export async function createCompanyApplicationInvoice(
   });
   input.learners = learnersWithOrder.map(x => x.learner);
 
+  // The course product comes first. Besides pricing the line it decides the
+  // FUNDING FAMILY — whether this group's grants bill against the WSQ or the
+  // CASL products — read from the product's own title rather than our course
+  // table, so a course renewed with SSG takes effect as soon as QuickBooks is
+  // right. (The lookup used to sit further down; it is only moved, not changed.)
+  const courseItem = await qboFindItemBySku(undefined, input.courseReferenceNumber);
+  if (!courseItem?.id) {
+    throw new Error(
+      `QBO item not found for SKU: ${input.courseReferenceNumber}. Create the product/service in QuickBooks first.`
+    );
+  }
+
+  const family: FundingFamily = detectFundingFamily(
+    courseItem.description,
+    courseItem.name,
+    input.courseTitle
+  );
+
   const enrolmentIds = input.learners.map(l => l.enrolmentId);
-  const schemes = await aggregateGrantsByScheme(enrolmentIds);
+  const schemes = await aggregateGrantsByScheme(enrolmentIds, family);
 
   const customerRef = await resolveEmployerCustomerRef({
     employerOrgName: input.employerOrgName,
@@ -856,13 +921,6 @@ export async function createCompanyApplicationInvoice(
   }
   console.log(`[ca-invoice] Customer ${customerRef} → ${hasPriorInvoices ? 'has prior invoices' : 'no prior invoices (new)'} → using term "${termName}"`);
 
-  const courseItem = await qboFindItemBySku(undefined, input.courseReferenceNumber);
-  if (!courseItem?.id) {
-    throw new Error(
-      `QBO item not found for SKU: ${input.courseReferenceNumber}. Create the product/service in QuickBooks first.`
-    );
-  }
-
   const taxGst = await qboResolveInvoiceLineTaxCodeRef(undefined);
   const taxOos = await qboResolveOosTaxCodeRef(undefined);
   const defaultEmailFields = await qboGetDefaultInvoiceEmailFields(undefined);
@@ -876,7 +934,7 @@ export async function createCompanyApplicationInvoice(
   lines.push({
     DetailType: 'SalesItemLineDetail',
     Amount: courseTotal,
-    Description: buildCourseLineDescription(input),
+    Description: buildCourseLineDescription(input, courseItem, family),
     SalesItemLineDetail: {
       ItemRef: { value: courseItem.id, name: courseItem.name },
       Qty: qty,
@@ -896,7 +954,7 @@ export async function createCompanyApplicationInvoice(
     lines.push({
       DetailType: 'SalesItemLineDetail',
       Amount: -Number(scheme.totalAmount.toFixed(2)),
-      Description: buildGrantLineDescription(scheme),
+      Description: buildGrantLineDescription(scheme, grantItem, family),
       SalesItemLineDetail: {
         ItemRef: itemRef,
         Qty: scheme.qty,
@@ -1401,6 +1459,22 @@ async function processGrantInvoicesForGroup(
   rows: any[],
   mainInvoiceDocNumber: string
 ): Promise<void> {
+  // Resolve the funding family once for the group, the same way the main
+  // invoice does: from the course product. Both documents must bill against the
+  // same products, or a CASL group gets a CASL main invoice and a WSQ grant one.
+  // Called from two places that do not have it to hand, so it is derived here
+  // rather than threaded through both.
+  const groupCourseRef = String(rows.find(r => r?.course_reference_number)?.course_reference_number || '').trim();
+  let grantInvoiceFamily: FundingFamily = 'WSQ';
+  if (groupCourseRef) {
+    try {
+      const courseItem = await qboFindItemBySku(undefined, groupCourseRef);
+      grantInvoiceFamily = detectFundingFamily(courseItem?.description, courseItem?.name);
+    } catch (err) {
+      console.warn(`[ca-grant-invoice] Could not read course product ${groupCourseRef}; assuming WSQ:`, err instanceof Error ? err.message : err);
+    }
+  }
+
   for (const r of rows) {
     const applicationId = String(r.id || '');
     const enrolmentId = String(r.enrolment_id || '').trim();
@@ -1470,6 +1544,7 @@ async function processGrantInvoicesForGroup(
       const grantInv = await createCompanyApplicationGrantInvoice({
         enrolmentId,
         mainInvoiceDocNumber: mainInvoiceDocNumber || null,
+        courseTypeLabel: grantInvoiceFamily,
       });
       if (!grantInv) {
         const grantId = String(r.grant_id || '').trim();
