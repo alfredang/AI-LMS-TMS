@@ -50,6 +50,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 ct.course_type::text AS course_type,
                 ct.current_code AS course_current_code,
                 ct.previous_code AS course_previous_code,
+                rn.renewed_on AS course_renewed_on,
+                rn.renewed_on_exact AS course_renewed_on_exact,
                 COALESCE(cr.start_date, da.course_start_date) as course_start_date,
                 COALESCE(cr.end_date, da.course_end_date) as course_end_date,
                 da.highest_qualification,
@@ -101,7 +103,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             -- them cost a full scan of the course table for every application
             -- row and added ~2.4s to this endpoint.
             LEFT JOIN LATERAL (
-                SELECT c.course_type, c.course_code, c.new_course_code
+                SELECT c.id, c.course_type, c.course_code, c.new_course_code
                   FROM course c
                  WHERE run_course.id IS NULL
                    AND (
@@ -113,12 +115,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             -- Whichever step matched, reduced to the two references the screen
             -- needs. LIMIT 1 above means neither step can duplicate a row.
             LEFT JOIN LATERAL (
-                SELECT COALESCE(run_course.course_type, code_course.course_type) AS course_type,
+                SELECT COALESCE(run_course.id, code_course.id) AS course_id,
+                       COALESCE(run_course.course_type, code_course.course_type) AS course_type,
                        COALESCE(run_course.course_code, code_course.course_code) AS base_code,
                        COALESCE(run_course.new_course_code, code_course.new_course_code) AS renewed_code
             ) m ON TRUE
             LEFT JOIN LATERAL (
-                SELECT m.course_type,
+                SELECT m.course_id,
+                       m.course_type,
                        -- The reference this course is registered under TODAY.
                        COALESCE(NULLIF(TRIM(m.renewed_code), ''), m.base_code) AS current_code,
                        -- The reference it held BEFORE the renewal, or null when
@@ -129,6 +133,34 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                                  AND TRIM(COALESCE(m.renewed_code, '')) <> TRIM(COALESCE(m.base_code, ''))
                             THEN m.base_code END AS previous_code
             ) ct ON TRUE
+            -- When the course stopped being WSQ-funded — the date that decides whether
+            -- an invoice raised then SHOULD have said WSQ or CASL.
+            --
+            -- Two sources, in order of trust:
+            --   1. the funding validity that was replaced at renewal (an exact date,
+            --            logged as the old value of the fundingValidity change)
+            --   2. failing that, when the new TGS code was first recorded — a proxy,
+            --            flagged as approximate so nobody reads it as fact
+            LEFT JOIN LATERAL (
+                SELECT
+                        COALESCE(
+                          (SELECT l.old_value
+                             FROM course_change_log l
+                            WHERE l.course_id = ct.course_id
+                                    AND l.field = 'fundingValidity'
+                                    AND l.old_value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                            ORDER BY l.changed_at DESC
+                            LIMIT 1),
+                          (SELECT MIN(l.changed_at)::date::text
+                             FROM course_change_log l
+                            WHERE l.course_id = ct.course_id
+                                    AND l.field = 'newCourseCode')
+                        ) AS renewed_on,
+                        EXISTS (SELECT 1 FROM course_change_log l
+                                       WHERE l.course_id = ct.course_id
+                                         AND l.field = 'fundingValidity'
+                                         AND l.old_value ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') AS renewed_on_exact
+            ) rn ON TRUE
             LEFT JOIN LATERAL (
                 SELECT ij.invoice_sent_at::text AS invoice_sent_at, ij.invoice_sent_to
                 FROM public.invoice_jobs ij
