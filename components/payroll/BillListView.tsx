@@ -81,7 +81,7 @@ const csvEscape = (v: unknown): string => {
 
 /** Reconciliation export: the rows currently on screen, in QuickBooks' terms. */
 const toCsv = (rows: TrainerBill[]): string => {
-  const header = ['Bill No', 'Bill Date', 'Supplier', 'Trainer', 'Course', 'Course Code', 'Amount', 'Status', 'QuickBooks ID', 'PDF'];
+  const header = ['Bill No', 'Bill Date', 'Supplier', 'Trainer', 'Course', 'Course Code', 'Amount', 'Status', 'QuickBooks ID'];
   const lines = rows.map((r) =>
     [
       r.bill_no,
@@ -93,7 +93,6 @@ const toCsv = (rows: TrainerBill[]): string => {
       Number(r.amount).toFixed(2),
       STATUS_META[r.status].label,
       r.qb_bill_id || '',
-      r.drive_view_link || '',
     ].map(csvEscape).join(',')
   );
   return [header.join(','), ...lines].join('\r\n');
@@ -108,6 +107,8 @@ const BillListView: React.FC = () => {
     failed: 0,
     voided: 0,
     totalAmount: 0,
+    // Live bills across all time, not just this window.
+    allTimeTotal: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -115,9 +116,12 @@ const BillListView: React.FC = () => {
   const [retryError, setRetryError] = useState<string | null>(null);
   // Bill number most recently copied, for the transient "Copied" tick.
   const [copied, setCopied] = useState<string | null>(null);
-  // Bulk delete: chosen bill ids, the confirm step, and progress/errors.
+  // Ticked rows. Selecting is separate from deleting: the header's Delete
+  // button acts on this set, the row trash button acts on its own row alone.
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Bills the confirm dialog is currently asking about — one from a row trash,
+  // or the whole selection from the header button. Null when nothing is pending.
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteProgress, setDeleteProgress] = useState(0);
 
@@ -127,6 +131,9 @@ const BillListView: React.FC = () => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
   const [months, setMonths] = useState(12);
+  // QuickBooks web-app host for the deep link, from the API — the tenant's
+  // realm decides whether that is production or sandbox, so it is not a constant.
+  const [qboBaseUrl, setQboBaseUrl] = useState('https://qbo.intuit.com');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -141,6 +148,7 @@ const BillListView: React.FC = () => {
       const j = await r.json();
       if (!j.success) throw new Error(j.error || 'Failed to load billing invoices');
       setBills(j.data.bills || []);
+      if (j.data.qboBaseUrl) setQboBaseUrl(j.data.qboBaseUrl);
       if (j.data.summary) setSummary(j.data.summary);
     } catch (e: any) {
       setError(e?.message || 'Failed to load');
@@ -190,46 +198,6 @@ const BillListView: React.FC = () => {
       load(true); // re-sync the summary cards
     } catch (e: any) {
       setRetryError(`${bill.bill_no}: ${e?.message || 'Could not send to QuickBooks'}`);
-    } finally {
-      setRetrying(null);
-    }
-  }, [load]);
-
-  /**
-   * "View Bill" — open the bill's PDF in Google Drive.
-   *
-   * A bill can be posted to QuickBooks without a document yet (Drive was
-   * unreachable at the time, or the file was deleted since), so rather than
-   * showing a second button for that case, the first click files the PDF and
-   * then opens it. The window is opened up-front and pointed at the link once
-   * we have it — opening it inside the async callback would be swallowed by the
-   * browser's popup blocker, since the user gesture is long gone by then.
-   */
-  const viewBill = useCallback(async (bill: TrainerBill) => {
-    if (bill.drive_view_link) {
-      window.open(bill.drive_view_link, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    const pending = window.open('', '_blank');
-    setRetrying(bill.id);
-    setRetryError(null);
-    try {
-      const r = await fetch(`/api/payroll/bills/${bill.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader() },
-        body: JSON.stringify({ action: 'retry' }),
-      });
-      const j = await r.json();
-      if (j.data) setBills((bs) => bs.map((b) => (b.id === j.data.id ? j.data : b)));
-      if (!j.success) throw new Error(j.error || 'Could not prepare the bill PDF');
-      const link = j.data?.drive_view_link;
-      if (!link) throw new Error('The bill PDF could not be saved to Google Drive');
-      if (pending) pending.location.href = link;
-      else window.open(link, '_blank', 'noopener,noreferrer');
-      load(true);
-    } catch (e: any) {
-      pending?.close();
-      setRetryError(`${bill.bill_no}: ${e?.message || 'Could not open the bill PDF'}`);
     } finally {
       setRetrying(null);
     }
@@ -307,20 +275,22 @@ const BillListView: React.FC = () => {
   }, []);
 
   /**
-   * Delete the selected billing invoices — the QuickBooks bill and its Drive
-   * PDF. The class and its payout are NOT touched: the payout stays marked as
-   * paid, it just no longer has a bill.
+   * Delete the pending bills — the QuickBooks bill, and any PDF an older bill
+   * left in Drive. The class and its payout are NOT touched: the payout stays
+   * marked as paid, it just no longer has a bill.
    *
    * Sequential on purpose. Each delete is a QuickBooks round trip, and firing
    * them in parallel would both hammer Intuit's rate limit and make a partial
-   * failure impossible to report precisely.
+   * failure impossible to report precisely. A failure is reported rather than
+   * swallowed: the API refuses to drop the row when QuickBooks would not delete
+   * the bill, so it is still live there and Payroll has to know.
    */
-  const deleteSelected = useCallback(async () => {
-    if (deleting || selected.size === 0) return;
+  const deletePending = useCallback(async () => {
+    const ids = pendingDeleteIds;
+    if (deleting || !ids || ids.length === 0) return;
     setDeleting(true);
     setDeleteProgress(0);
     setRetryError(null);
-    const ids = Array.from(selected);
     const failedRefs: string[] = [];
     let done = 0;
 
@@ -334,6 +304,9 @@ const BillListView: React.FC = () => {
         const j = await r.json();
         if (!j.success) throw new Error(j.error || 'delete failed');
         setBills((bs) => bs.filter((b) => b.id !== id));
+        // Drop it from the selection as it goes, so a partial failure leaves
+        // exactly the bills that survived still ticked.
+        setSelected((sel) => { const next = new Set(sel); next.delete(id); return next; });
       } catch (e: any) {
         failedRefs.push(`${ref}${e?.message ? ` (${e.message})` : ''}`);
       }
@@ -341,14 +314,17 @@ const BillListView: React.FC = () => {
       setDeleteProgress(done);
     }
 
-    setSelected(new Set());
-    setConfirmDelete(false);
+    setPendingDeleteIds(null);
     setDeleting(false);
     if (failedRefs.length > 0) {
-      setRetryError(`Could not delete ${failedRefs.length} of ${ids.length}: ${failedRefs.join('; ')}`);
+      setRetryError(
+        ids.length === 1
+          ? `Could not delete ${failedRefs[0]}`
+          : `Could not delete ${failedRefs.length} of ${ids.length}: ${failedRefs.join('; ')}`
+      );
     }
     load(true);
-  }, [deleting, selected, bills, load]);
+  }, [deleting, pendingDeleteIds, bills, load]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages - 1);
@@ -375,10 +351,11 @@ const BillListView: React.FC = () => {
   }, [statusFilter, search, windowMode, month, months]);
 
   // Changing the window or filters changes what "selected" could even mean —
-  // clear it rather than silently holding rows that are no longer on screen.
+  // clear it, and drop any pending delete, rather than silently holding rows
+  // that are no longer on screen.
   useEffect(() => {
     setSelected(new Set());
-    setConfirmDelete(false);
+    setPendingDeleteIds(null);
   }, [statusFilter, search, windowMode, month, months]);
 
   const FilterPill: React.FC<{ value: StatusFilter; label: string }> = ({ value, label }) => {
@@ -547,57 +524,22 @@ const BillListView: React.FC = () => {
         </div>
       )}
 
-      {selected.size > 0 && (
-        /* Count reads left-to-right with the table; actions sit hard right,
-           where the eye lands last and where destructive buttons are least
-           likely to be hit by accident on the way to something else. */
-        <div className="rounded-lg border border-primary/40 bg-primary/5 px-3 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span className="text-sm font-medium whitespace-nowrap" aria-live="polite">
-            {selected.size} bill{selected.size === 1 ? '' : 's'} selected
-          </span>
-
-          {/* Icon-only actions. Both carry title + aria-label because an icon
-              alone is ambiguous to anyone who has not used the page before, and
-              one of the two destroys a QuickBooks document. */}
-          <div className="flex items-center gap-1 ml-auto">
-            <button
-              type="button"
-              onClick={() => setSelected(new Set())}
-              title="Clear selection"
-              aria-label="Clear selection"
-              className="inline-flex items-center justify-center w-8 h-8 rounded-md text-on-surface-secondary hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-            >
-              <Icon name={IconName.Close} className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmDelete(true)}
-              title={`Delete billing invoice${selected.size === 1 ? '' : 's'}`}
-              aria-label={`Delete ${selected.size} billing invoice${selected.size === 1 ? '' : 's'}`}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/25 transition-colors"
-            >
-              <Icon name={IconName.Delete} className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {confirmDelete && (
+      {pendingDeleteIds && (
         /* Shared destructive-delete dialog, same one the Company Application and
            Direct Application lists use — it lists exactly which rows go, which
            an inline "are you sure?" strip could not do. */
         <DeleteConfirmModal
-          rows={bills.filter((b) => selected.has(b.id))}
+          rows={bills.filter((b) => pendingDeleteIds.includes(b.id))}
           entityLabel="billing invoice"
           isDeleting={deleting}
-          onConfirm={deleteSelected}
-          onClose={() => { if (!deleting) setConfirmDelete(false); }}
+          onConfirm={deletePending}
+          onClose={() => { if (!deleting) setPendingDeleteIds(null); }}
           description={
             <>
-              Deletes the bill in QuickBooks and its PDF in Drive.
+              Deletes the bill in QuickBooks.
               <strong className="text-on-surface"> The class and its payout are not changed</strong> — the payout
               stays marked as paid.
-              {deleting && ` · Deleting ${deleteProgress}/${selected.size}…`}
+              {deleting && ` · Deleting ${deleteProgress}/${pendingDeleteIds.length}…`}
             </>
           }
           columns={[
@@ -629,7 +571,23 @@ const BillListView: React.FC = () => {
               <th className="px-3 py-2 whitespace-nowrap">Course</th>
               <th className="px-3 py-2 whitespace-nowrap text-right">Amount</th>
               <th className="px-3 py-2 whitespace-nowrap">Status</th>
-              <th className="px-3 py-2 whitespace-nowrap"></th>
+              <th className="px-3 py-2 whitespace-nowrap text-right">
+                {/* Bulk delete sits in the column it acts on, appearing only
+                    once something is ticked. In the header rather than above
+                    the table so showing it never shifts the rows down. */}
+                {selected.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setPendingDeleteIds(Array.from(selected))}
+                    disabled={deleting}
+                    title={`Delete ${selected.size} billing invoice${selected.size === 1 ? '' : 's'} — removes them from QuickBooks too`}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md normal-case tracking-normal text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/25 disabled:opacity-40"
+                  >
+                    <Icon name={IconName.Delete} className="w-3.5 h-3.5" />
+                    Delete {selected.size}
+                  </button>
+                )}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -641,10 +599,32 @@ const BillListView: React.FC = () => {
                     <Icon name={IconName.FileText} className="w-10 h-10 opacity-30" />
                     {bills.length === 0 ? (
                       <>
-                        <p className="text-sm font-medium">No bills in this window</p>
-                        <p className="text-xs">
-                          Confirm a payout in the Payout List — marking it as paid raises its bill automatically.
+                        <p className="text-sm font-medium">
+                          No bills in {windowMode === 'month' ? monthLabel : windowMode === 'all' ? 'any period' : `the last ${months} months`}
                         </p>
+                        {/* The tab opens on the current calendar month, so an
+                            empty month used to read as "no bills exist" even
+                            with two dozen sitting one month back. Say how many
+                            are elsewhere, and offer to go there. */}
+                        {summary.allTimeTotal > 0 ? (
+                          <>
+                            <p className="text-xs">
+                              {summary.allTimeTotal} bill{summary.allTimeTotal === 1 ? '' : 's'} exist
+                              {summary.allTimeTotal === 1 ? 's' : ''} in other periods.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setWindowMode('all')}
+                              className="mt-1 px-2.5 py-1 text-xs font-semibold rounded-md border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
+                            >
+                              Show all bills
+                            </button>
+                          </>
+                        ) : (
+                          <p className="text-xs">
+                            Confirm a payout in the Payout List — marking it as paid raises its bill automatically.
+                          </p>
+                        )}
                       </>
                     ) : (
                       <>
@@ -660,9 +640,26 @@ const BillListView: React.FC = () => {
             {!loading && pageRows.map((b) => (
               <tr
                 key={b.id}
-                className={`border-t border-default transition-colors even:bg-gray-50/40 dark:even:bg-slate-900/20 hover:bg-primary/5 dark:hover:bg-primary/10 ${
-                  b.status === 'voided' ? 'opacity-60' : ''
-                }`}
+                // Clicking anywhere on the row ticks its checkbox — hitting a
+                // 4mm box for every bill is the slow part of selecting several.
+                onClick={(e) => {
+                  // Leave clicks that landed on something already interactive
+                  // (the checkbox itself, Copy, View in QuickBooks, Re-send,
+                  // the trash) to that control, and ignore a click that was
+                  // really the end of a text drag — otherwise copying a course
+                  // title would toggle the row.
+                  if ((e.target as HTMLElement).closest('button, a, input, label')) return;
+                  if (window.getSelection()?.toString()) return;
+                  toggleOne(b.id);
+                }}
+                // Zebra striping is dropped on a ticked row rather than layered
+                // under it: `even:` wins over a plain `bg-*` in Tailwind's output,
+                // so keeping both would hide the highlight on every other row.
+                className={`border-t border-default transition-colors cursor-pointer hover:bg-primary/5 dark:hover:bg-primary/10 ${
+                  selected.has(b.id)
+                    ? 'bg-primary/10 dark:bg-primary/20'
+                    : 'even:bg-gray-50/40 dark:even:bg-slate-900/20'
+                } ${b.status === 'voided' ? 'opacity-60' : ''}`}
               >
                 <td className="pl-3 pr-1 py-2.5">
                   <input
@@ -733,31 +730,28 @@ const BillListView: React.FC = () => {
                 </td>
                 <td className="px-3 py-2.5 whitespace-nowrap text-right">
                   <div className="inline-flex items-center gap-1.5">
-                    {/* One action in the normal case: open this bill's PDF in
-                        Drive. If it has no document yet, the click files it
-                        first, so there is never a second button to reason about. */}
-                    {b.status === 'posted' && (
-                      <button
-                        type="button"
-                        onClick={() => viewBill(b)}
-                        disabled={retrying !== null}
-                        title={
-                          b.drive_view_link
-                            ? `Open the ${b.bill_no} bill PDF in Google Drive`
-                            : `Save the ${b.bill_no} bill to Google Drive and open it`
-                        }
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border border-primary/40 rounded-md bg-primary/5 hover:bg-primary/10 text-primary font-medium disabled:opacity-50"
+                    {/* Straight to the bill in QuickBooks. Only offered when we
+                        hold its QBO id — a voided or failed bill has none, and
+                        the link would land on an empty transaction. Opens in the
+                        company the user is signed into. */}
+                    {b.qb_bill_id && b.status === 'posted' && (
+                      <a
+                        href={`${qboBaseUrl}/app/bill?txnId=${encodeURIComponent(b.qb_bill_id)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Open ${b.bill_no} in QuickBooks`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border border-default rounded-md bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-on-surface font-medium"
                       >
-                        <Icon
-                          name={retrying === b.id ? IconName.Spinner : IconName.FileText}
-                          className={`w-3.5 h-3.5 ${retrying === b.id ? 'animate-spin' : ''}`}
-                        />
-                        {retrying === b.id ? 'Preparing…' : 'View Bill'}
-                      </button>
+                        <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5" />
+                        View in QuickBooks
+                      </a>
                     )}
-                    {/* Error recovery only — a failed bill never reached
-                        QuickBooks, so there is no document to view yet. */}
-                    {b.status === 'failed' && (
+                    {/* Recovery. 'failed' is the obvious case; 'pending' matters
+                        just as much — the push runs on an in-process queue, so a
+                        restart between reserving the bill and posting it strands
+                        the row on "Sending…" with nothing to retry it. Pressing
+                        this on a bill that did post is a no-op. */}
+                    {(b.status === 'failed' || b.status === 'pending') && (
                       <button
                         type="button"
                         onClick={() => retry(b)}
@@ -768,9 +762,23 @@ const BillListView: React.FC = () => {
                           name={retrying === b.id ? IconName.Spinner : IconName.Sync}
                           className={`w-3.5 h-3.5 ${retrying === b.id ? 'animate-spin' : ''}`}
                         />
-                        {retrying === b.id ? 'Sending…' : 'Re-send'}
+                        {retrying === b.id ? 'Sending…' : b.status === 'pending' ? 'Send now' : 'Re-send'}
                       </button>
                     )}
+                    {/* Delete this one bill. Routed through the same selection +
+                        confirm dialog as the bulk bar rather than a second delete
+                        path, so a single row gets the identical warning, the same
+                        sequential QuickBooks delete and the same failure report. */}
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeleteIds([b.id])}
+                      disabled={deleting}
+                      title={`Delete ${b.bill_no} — removes it from QuickBooks too`}
+                      aria-label={`Delete bill ${b.bill_no}`}
+                      className="inline-flex items-center justify-center p-1.5 border border-transparent rounded-md text-on-surface-secondary hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50 dark:hover:text-rose-400 dark:hover:border-rose-500/40 dark:hover:bg-rose-900/20 disabled:opacity-40"
+                    >
+                      <Icon name={IconName.Delete} className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </td>
               </tr>

@@ -10,6 +10,12 @@
  *                 to 'posted' (with the QBO bill id) or 'failed' (with the
  *                 reason, retryable from the Billing Invoices tab).
  *
+ * QuickBooks is the only home for the document. Confirming a payout used to also
+ * render a PDF and file it in Drive; that was dropped — Payroll reads the bill in
+ * QuickBooks itself, so a second copy was one more thing to keep in step with it.
+ * The `drive_*` columns are kept for rows filed before the change, and those files
+ * are still binned when their bill is withdrawn.
+ *
  * Bill numbers are NOT allocated here. `lib/payroll/billNo.ts` is the single
  * allocator: it stamps every payout with a TX ref at creation, numbering both
  * payout tables off one per-day sequence. This module reuses that ref verbatim,
@@ -34,15 +40,7 @@ import { getLocalYMD } from '../dateHelpers';
 import { ensureTrainerBillTable } from './ensureTrainerBillTable';
 import { ensurePayoutColumns } from './ensurePayoutColumns';
 import { acquireBillNoLock, billNoDayPrefix, nextBillNo } from './billNo';
-import { buildTrainerBillPdf, buildTrainerBillPdfFileName } from './trainerBillPdf';
-import { loadBillBranding } from './billBranding';
-import { qboQuery } from '../services/qboInvoiceService';
-import {
-  driveFileExists,
-  getTrainerBillsFolderId,
-  trashDriveFile,
-  uploadInvoicePdfToDrive,
-} from '../services/invoiceDriveUpload';
+import { trashDriveFile } from '../services/invoiceDriveUpload';
 import {
   BillNumberTakenError,
   createTrainerBill,
@@ -85,71 +83,6 @@ export const BILL_COLS = `
   status, error,
   created_at, updated_at
 `;
-
-/**
- * Generate the bill's PDF and file it in the Payroll invoices folder on Drive,
- * then record the link so Payroll can open it.
- *
- * Never throws — a Drive or credentials problem must not fail a bill that is
- * otherwise fine in QuickBooks. Self-healing: it re-uploads when the row has no
- * link yet, or when the file it points at has been deleted or trashed in Drive.
- * Uploading dedups by file name, so a re-run adopts the existing file rather
- * than leaving a second copy behind.
- */
-export async function ensureBillPdfOnDrive(billId: string): Promise<TrainerBillRow | null> {
-  try {
-    const r = await pool.query(`SELECT ${BILL_COLS} FROM trainer_bill WHERE id = $1`, [billId]);
-    const bill: TrainerBillRow | undefined = r.rows[0];
-    if (!bill || bill.status === 'voided') return bill || null;
-
-    if (bill.drive_file_id && bill.drive_view_link) {
-      if (await driveFileExists(bill.drive_file_id)) return bill;
-      console.warn(`[payroll] Drive PDF for ${bill.bill_no} is gone; re-uploading.`);
-    }
-
-    // Payment state comes from QuickBooks when the bill is live there, so a
-    // re-filed PDF shows what has actually been settled rather than always
-    // claiming the full amount is outstanding.
-    let paidAmount = 0;
-    if (bill.qb_bill_id) {
-      try {
-        const q = await qboQuery(undefined, `SELECT * FROM Bill WHERE Id = '${bill.qb_bill_id}'`);
-        const qb = q?.QueryResponse?.Bill?.[0];
-        if (qb) paidAmount = Math.max(0, (Number(qb.TotalAmt) || 0) - (Number(qb.Balance) || 0));
-      } catch (e) {
-        console.warn('[payroll] could not read bill payment state:', e instanceof Error ? e.message : e);
-      }
-    }
-
-    const pdf = await buildTrainerBillPdf({
-      billNo: bill.bill_no,
-      billDate: bill.bill_date,
-      trainerName: bill.vendor_name || bill.trainer_name,
-      courseTitle: bill.course_title,
-      courseCode: bill.course_code,
-      amount: Number(bill.amount) || 0,
-      paidAmount,
-      branding: await loadBillBranding(),
-    });
-
-    const uploaded = await uploadInvoicePdfToDrive({
-      pdf,
-      fileName: buildTrainerBillPdfFileName(bill.bill_no, bill.trainer_name),
-      folderId: await getTrainerBillsFolderId(),
-    });
-
-    const updated = await pool.query(
-      `UPDATE trainer_bill SET drive_file_id = $2, drive_view_link = $3
-        WHERE id = $1 RETURNING ${BILL_COLS}`,
-      [billId, uploaded.fileId, uploaded.webViewLink]
-    );
-    console.log(`[payroll] Bill ${bill.bill_no} PDF saved to Drive (${uploaded.fileId})`);
-    return updated.rows[0];
-  } catch (e) {
-    console.error('[payroll] ensureBillPdfOnDrive failed:', e instanceof Error ? e.message : e);
-    return null;
-  }
-}
 
 interface PayoutDetail {
   trainer_id: string | null;
@@ -373,10 +306,9 @@ export async function pushBillToQuickBooks(billId: string): Promise<TrainerBillR
     let bill: TrainerBillRow | undefined = r.rows[0];
     if (!bill) return null;
     if (bill.status === 'voided') return bill;
-    // Already in QuickBooks — nothing to post, but the PDF may still be missing
-    // (Drive was down when it posted, or the file was deleted since). Retrying
-    // a posted bill is therefore how a missing document gets re-filed.
-    if (bill.status === 'posted') return (await ensureBillPdfOnDrive(billId)) || bill;
+    // Already in QuickBooks — nothing to post. A retry on a posted bill is a
+    // no-op rather than an error, so the Re-send button is safe to press twice.
+    if (bill.status === 'posted') return bill;
 
     try {
       let posted: Awaited<ReturnType<typeof createTrainerBill>> | null = null;
@@ -409,12 +341,7 @@ export async function pushBillToQuickBooks(billId: string): Promise<TrainerBillR
         [billId, posted.qbBillId, posted.vendorRef, posted.vendorName]
       );
       console.log(`[payroll] Bill ${bill.bill_no} posted to QuickBooks (${posted.qbBillId})`);
-
-      // File the PDF once the number is FINAL — a clash above may have
-      // renumbered the bill, and the document has to carry the number that
-      // actually reached QuickBooks. Non-fatal: a Drive failure leaves the bill
-      // posted and link-less, and the next retry re-files it.
-      return (await ensureBillPdfOnDrive(billId)) || updated.rows[0];
+      return updated.rows[0];
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.error(`[payroll] Bill ${bill.bill_no} failed to post:`, message);
@@ -528,11 +455,10 @@ export async function onPayoutUnconfirmed(
         }
         note = result.message;
       }
-      // Bin the generated PDF too. Leaving it in Drive would keep an invoice
-      // available for a payout that is no longer confirmed — the same mismatch
-      // the QBO delete above exists to prevent. Best-effort: the row is
-      // withdrawn either way, and the link is cleared so Payroll stops
-      // offering it.
+      // Bin any PDF filed before bills stopped being rendered to Drive: leaving
+      // one there would keep a document available for a payout that is no longer
+      // confirmed. No-op for bills raised since. Best-effort — the row is
+      // withdrawn either way and the link is cleared.
       await trashDriveFile(bill.drive_file_id);
 
       // A bill that never reached QuickBooks leaves NOTHING behind — no
