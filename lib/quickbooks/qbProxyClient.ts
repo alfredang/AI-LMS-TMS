@@ -33,6 +33,19 @@ function proxyBaseUrl(): string {
   );
 }
 
+/**
+ * Hard ceiling on a QuickBooks call.
+ *
+ * `fetch` has no default timeout, so a connection Intuit never answers hangs
+ * forever. That matters most for trainer bills, which are pushed through a
+ * single global promise chain — one wedged request there blocks every later
+ * bill in the process, stranding them on "Sending…" with no error to show.
+ * Aborting turns that into an ordinary failure the UI can surface and retry;
+ * createTrainerBill already adopts a bill that posted but wasn't recorded, so
+ * retrying after a timeout cannot double-bill.
+ */
+const PROXY_TIMEOUT_MS = Math.max(5_000, Number(process.env.QBO_PROXY_TIMEOUT_MS) || 60_000);
+
 function serviceAuthHeaders(): Record<string, string> {
   // Same server-side keys isServiceRequest() accepts. NEXT_PUBLIC_* is never
   // used — those are compiled into the browser bundle.
@@ -54,11 +67,26 @@ export async function callQbProxy<T = any>(body: Record<string, any>): Promise<Q
     );
   }
 
-  const resp = await fetch(`${proxyBaseUrl()}/api/quickbooks/proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders },
-    body: JSON.stringify(body),
-  });
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), PROXY_TIMEOUT_MS);
+  let resp: Response;
+  try {
+    resp = await fetch(`${proxyBaseUrl()}/api/quickbooks/proxy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify(body),
+      signal: abort.signal,
+    });
+  } catch (e) {
+    // Name the timeout explicitly — "The operation was aborted" on its own
+    // sends people looking for a bug that isn't there.
+    if (abort.signal.aborted) {
+      throw new Error(`QuickBooks did not respond within ${Math.round(PROXY_TIMEOUT_MS / 1000)}s.`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const data = (await resp.json().catch(() => null)) as QbProxyResponse<T> | null;
   if (!resp.ok || !data?.success) {
