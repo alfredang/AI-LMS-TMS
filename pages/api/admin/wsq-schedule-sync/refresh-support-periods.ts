@@ -91,8 +91,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   const total = Number(totalR.rows[0]?.total ?? 0);
   const staleCount = Number(totalR.rows[0]?.stale ?? 0);
 
-  const coursesResult = await pool.query<{ id: string; course_code: string }>(
-    `SELECT id, course_code FROM course WHERE ${STALE_WHERE} ORDER BY course_code LIMIT $2`,
+  // Ask SSG about the code CURRENTLY in force. A renewed course keeps its old
+  // course_code, and querying that returns the superseded funding window — which
+  // is why courses renewed in 2026 still showed "funding expired August 2026"
+  // while their new code was funded for years to come.
+  const coursesResult = await pool.query<{ id: string; course_code: string; lookup_code: string }>(
+    `SELECT id, course_code,
+            COALESCE(
+              (SELECT h.code FROM public.course_code_history h
+                WHERE h.course_id = course.id AND h.is_current LIMIT 1),
+              NULLIF(new_course_code, ''),
+              course_code
+            ) AS lookup_code
+       FROM course WHERE ${STALE_WHERE} ORDER BY course_code LIMIT $2`,
     [String(maxAgeHours), batchSize],
   );
   const courses = coursesResult.rows;
@@ -154,9 +165,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (msLeft() <= 0) { stoppedEarly = true; break; }
     const round = courses.slice(i, i + CONCURRENCY);
     attempted += round.length;
-    await Promise.allSettled(round.map(async ({ id, course_code }) => {
+    await Promise.allSettled(round.map(async ({ id, course_code, lookup_code }) => {
       try {
-        const period = await fetchSupport(course_code);
+        const period = await fetchSupport(lookup_code || course_code);
 
         if (!period) {
           summary.no_wsq_support++;
