@@ -109,6 +109,7 @@ const WsqScheduleSyncView: React.FC = () => {
   const [notice, setNotice] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
+  const [refreshingSupport, setRefreshingSupport] = useState(false);
   const [allJobs, setAllJobs] = useState<SharedJob[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [cronLogs, setCronLogs] = useState<CronLog[]>([]);
@@ -307,6 +308,71 @@ const stopPolling = useCallback(() => {
     }
   };
 
+  /**
+   * Pull each course's WSQ funding support window from SSG into
+   * course.ssg_wsq_support_from/to. SSG is only READ — nothing is submitted to
+   * or changed there. Without this every group header reads "WSQ support: not
+   * loaded", so a run blocked on "outside support period" looks unexplained.
+   */
+  const refreshSupportPeriods = async () => {
+    if (!confirm(
+      'Refresh WSQ funding support periods from SSG?\n\n' +
+      'Reads every TGS course from SSG and stores its funding window locally. ' +
+      'Nothing is submitted to or changed in SSG.\n\n' +
+      'SSG throttles this, so it runs in paced batches and can take a few minutes. ' +
+      'Keep this page open.'
+    )) return;
+
+    setRefreshingSupport(true);
+    setNotice('Refreshing support periods from SSG…');
+
+    const tally = { updated: 0, no_support: 0, failed: 0 };
+    let lastErr = '';
+    try {
+      // The endpoint is resumable and rate-limit paced, so it returns after a
+      // batch with however many courses are still stale. Loop until it reports
+      // nothing left — bounded, and we stop early if a round makes no progress
+      // (otherwise a persistently failing batch would spin).
+      for (let round = 0; round < 20; round++) {
+        const resp = await fetch('/api/admin/wsq-schedule-sync/refresh-support-periods', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ batch_size: 50 }),
+        });
+        const json = await resp.json();
+        if (!resp.ok) {
+          setNotice(`Could not refresh support periods: ${json.error || json.message || resp.status}`);
+          return;
+        }
+        const sum = json.summary || {};
+        const progress = (sum.updated ?? 0) + (sum.no_wsq_support ?? 0);
+        tally.updated += sum.updated ?? 0;
+        tally.no_support += sum.no_wsq_support ?? 0;
+        // Last round only: a course that failed earlier is retried in a later
+        // round, so summing would double-count courses that eventually succeeded.
+        tally.failed = sum.ssg_error ?? 0;
+
+        if (Array.isArray(json.errors) && json.errors.length) {
+          lastErr = `${json.errors[0].course_code}: ${json.errors[0].message}`;
+          console.warn('[support-periods] SSG errors:', json.errors);
+        }
+
+        setNotice(`Refreshing support periods… ${tally.updated} done, ${json.remaining ?? 0} to go.`);
+        if (!json.remaining || progress === 0) break;
+      }
+
+      setNotice(
+        `Support periods refreshed — ${tally.updated} updated, ${tally.no_support} with no WSQ support, ` +
+        `${tally.failed} still failing.` + (lastErr ? ` Last error — ${lastErr}` : ''),
+      );
+      await load(true);
+    } catch (e: any) {
+      setNotice(`Support period refresh failed: ${e?.message || e}`);
+    } finally {
+      setRefreshingSupport(false);
+    }
+  };
+
   const syncAll = () => {
     const items = filtered.flatMap((g) =>
       g.rows
@@ -349,6 +415,14 @@ const stopPolling = useCallback(() => {
             className={`px-3 py-2 text-sm rounded-md text-white hover:opacity-90 disabled:opacity-50 ${filter === 'blocked' ? 'bg-orange-600' : 'bg-primary'}`}
           >
             {isJobRunning ? 'Syncing…' : filter === 'blocked' ? `Retry All (${totalSyncable})` : `Sync All to SSG (${totalSyncable})`}
+          </button>
+          <button
+            onClick={refreshSupportPeriods}
+            disabled={refreshingSupport || isJobRunning}
+            title="Load each course's WSQ funding window from SSG so blocked dates are explainable"
+            className="px-3 py-2 text-sm rounded-md bg-surface-elevated text-on-surface border border-gray-300 dark:border-gray-700 hover:opacity-90 disabled:opacity-50"
+          >
+            {refreshingSupport ? 'Refreshing support…' : 'Refresh Support Periods'}
           </button>
           <button
             onClick={() => load(true)}
