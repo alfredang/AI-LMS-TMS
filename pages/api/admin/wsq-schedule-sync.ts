@@ -159,6 +159,30 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     [today, includePast],
   );
 
+  // Every OTHER code a course carries (renewal codes from course_code_history and
+  // the legacy new_course_code column) -> its canonical course.course_code.
+  //
+  // SSG issues a new reference number when funding is renewed, and the storefront
+  // switches to it immediately. Keying the comparison on course.course_code alone
+  // therefore reported 36 renewed courses as "Course not found in LMS" and every
+  // one of their dates as missing, while their runs sat in SSG all along.
+  const aliasResult = await pool.query<{ canonical: string; alias: string }>(
+    `SELECT c.course_code AS canonical, h.code AS alias
+        FROM public.course c
+        JOIN public.course_code_history h ON h.course_id = c.id
+       WHERE c.course_code LIKE 'TGS-%' AND h.code <> c.course_code
+       UNION
+      SELECT c.course_code, NULLIF(c.new_course_code, '')
+        FROM public.course c
+       WHERE c.course_code LIKE 'TGS-%'
+         AND NULLIF(c.new_course_code, '') IS NOT NULL
+         AND c.new_course_code <> c.course_code`,
+  );
+  const canonicalByAlias = new Map<string, string>();
+  for (const row of aliasResult.rows) {
+    if (row.alias) canonicalByAlias.set(row.alias, row.canonical);
+  }
+
   // Index local rows by course_code, carrying the support period from the course row
   const localByCode = new Map<string, { course_id: string; title: string; runs: LocalRun[]; wsq_support_from: string | null; wsq_support_to: string | null }>();
   for (const row of localResult.rows) {
@@ -186,8 +210,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // MMS occasionally sends course codes with stray whitespace (e.g. a trailing
     // tab), which breaks exact-match lookups against the local course table.
     const courseCode = (m.course_code ?? '').trim();
-    const local = localByCode.get(courseCode);
-    seenLocalCodes.add(courseCode);
+    // Resolve a renewal code back to the course row that owns it. seenLocalCodes
+    // is keyed on the CANONICAL code so the "present locally but not in Magento"
+    // pass below doesn't then report the same course a second time as extra.
+    const canonicalCode = canonicalByAlias.get(courseCode) ?? courseCode;
+    const local = localByCode.get(canonicalCode);
+    seenLocalCodes.add(canonicalCode);
 
     // Match Magento schedules against local runs by (start, end)
     const localRuns = local?.runs ?? [];
