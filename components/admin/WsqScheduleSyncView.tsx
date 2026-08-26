@@ -326,6 +326,10 @@ const stopPolling = useCallback(() => {
     setRefreshingSupport(true);
     setNotice('Refreshing support periods from SSG…');
 
+    // Stamped ONCE: every round is measured against the same instant, so clicking
+    // the button re-checks every course however recently it last ran, while courses
+    // written during this run drop out and the loop still finishes.
+    const runStartedAt = new Date().toISOString();
     const tally = { updated: 0, no_support: 0, failed: 0 };
     let lastErr = '';
     try {
@@ -337,7 +341,13 @@ const stopPolling = useCallback(() => {
         const resp = await fetch('/api/admin/wsq-schedule-sync/refresh-support-periods', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ batch_size: 50 }),
+          // max_age_hours 1, not the endpoint default of 12: clicking a button
+          // labelled "Refresh" should actually refresh, and after a code change
+          // to how the funding window is looked up the stored dates are wrong
+          // rather than merely old. Deliberately not 0 — with no age floor the
+          // rows just written would still count as stale, so the same batch
+          // would be re-fetched every round and the loop would never advance.
+          body: JSON.stringify({ batch_size: 50, refreshed_before: runStartedAt }),
         });
         const json = await resp.json();
         if (!resp.ok) {
