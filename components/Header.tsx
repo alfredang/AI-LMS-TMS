@@ -278,7 +278,8 @@ const Header: React.FC = () => {
   const navConfig = {
     [UserRole.Learner]: [
       { view: View.Courses, label: 'My Classes', icon: IconName.BookOpen },
-      { view: View.BillingHistory, label: 'Billing', icon: IconName.DollarSign },
+      { view: View.Calendar, label: 'My Calendar', icon: IconName.Calendar },
+      { view: View.EdTools, label: 'Ed Tools', icon: IconName.BookOpen },
     ],
     [UserRole.Trainer]: [
       { view: View.Dashboard, label: 'My Classes', icon: IconName.BookOpen, trainerPage: TrainerPage.MyClasses },

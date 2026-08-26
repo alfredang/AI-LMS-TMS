@@ -69,6 +69,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Certificate download after completion — issued only once the class has ended (from 6:00 PM SGT on the last day, or earlier if the trainer marks the learner Competent) and the minimum attendance is met; admins/trainers can still issue manually
 - Job search integration
 - **My Calendar** — personal month calendar of the learner's scheduled classes
+- **Header quick nav** — My Classes, My Calendar and Ed Tools links in the top header (Billing remains in the sidebar as Billing History)
 - **Tools** — the full trainer tools catalogue mirrored in the learner sidebar (Ed Tools, Project Mgt, Six Sigma, Cyber Security, Finance, HR, Data Analytics, ML, Statistical, DOE, SPC, Sustainability, Networking, K8s, Blockchain, Quantum, Design, GenAI, Agentic AI, Virtual Tools), shared via `components/toolsData.ts`
 
 ### Trainer Features

@@ -36,7 +36,8 @@ export enum View {
   SsgApiSummary = 'ssgApiSummary',
   WorkflowGuides = 'workflowGuides',
   FeedbackForm = 'feedbackForm',
-  FeedbackFormResponses = 'feedbackFormResponses'
+  FeedbackFormResponses = 'feedbackFormResponses',
+  EdTools = 'edTools'
 }
 
 export enum UserRole {

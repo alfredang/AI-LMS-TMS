@@ -14,6 +14,7 @@ import BillingHistoryView from '../components/BillingHistoryView';
 import CertificateHistoryView from '../components/CertificateHistoryView';
 import LearnerGrantCalculatorView from '../components/LearnerGrantCalculatorView';
 import ToolsMenu from '../components/ToolsMenu';
+import EdToolsPage from '../components/trainer/EdToolsPage';
 
 interface NavItem {
   view: View;
@@ -58,6 +59,8 @@ const LearnerLayout: React.FC = () => {
         return <CertificateHistoryView />;
       case View.Calendar:
         return <MyCalendarView role="learner" />;
+      case View.EdTools:
+        return <EdToolsPage />;
       case View.Courses:
       case View.Dashboard:
       default:
