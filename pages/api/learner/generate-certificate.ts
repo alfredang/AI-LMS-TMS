@@ -2,7 +2,7 @@ import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { Pool } from 'pg';
 import { generateAndUploadCertificate } from '../../../lib/services/certificateService';
-import { checkCertificateEligibility } from '../../../lib/services/enrolmentEligibility';
+import { checkCertificateIssuance } from '../../../lib/services/certificateIssuance';
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -20,13 +20,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     try {
-        // Guard: a cancelled class or cancelled/withdrawn enrolment must not
-        // produce a certificate.
-        const eligibility = await checkCertificateEligibility(enrolmentId);
-        if (!eligibility.eligible) {
+        // Guard: this is the learner-facing, self-service path. A certificate may
+        // only be minted once the class has actually ended (or the trainer marked
+        // the learner Competent) AND the minimum attendance is met — otherwise a
+        // learner could download a certificate on the morning of their class.
+        // Also covers cancelled classes / cancelled enrolments.
+        const decision = await checkCertificateIssuance(enrolmentId);
+        if (!decision.allowed) {
             return res.status(409).json({
                 success: false,
-                message: `Certificate unavailable because ${eligibility.reason}.`,
+                message: decision.reason,
+                code: decision.code,
                 blockedByEligibility: true,
             });
         }

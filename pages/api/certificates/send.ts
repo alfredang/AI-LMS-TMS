@@ -2,7 +2,7 @@ import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { generateAndUploadCertificate } from '../../../lib/services/certificateService';
-import { checkCertificateEligibility } from '../../../lib/services/enrolmentEligibility';
+import { checkCertificateIssuance } from '../../../lib/services/certificateIssuance';
 
 /**
  * POST /api/certificates/send
@@ -79,9 +79,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       try {
         // Guard: do not issue a certificate for a cancelled class or a
         // cancelled/withdrawn enrolment. Skip this learner, continue the rest.
-        const eligibility = await checkCertificateEligibility(learner.enrolment_id);
-        if (!eligibility.eligible) {
-          results.push({ name: learner.learner_name, status: 'skipped', error: `Skipped — ${eligibility.reason}` });
+        // `manual: true` — this route is the admin/trainer "issue now" action, an
+        // explicit accountable decision, so it deliberately bypasses the
+        // end-of-class wait and the attendance minimum.
+        const decision = await checkCertificateIssuance(learner.enrolment_id, { manual: true });
+        if (!decision.allowed) {
+          results.push({ name: learner.learner_name, status: 'skipped', error: `Skipped — ${decision.reason}` });
           continue;
         }
 

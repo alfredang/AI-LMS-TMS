@@ -23,7 +23,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
          cr.start_date,
          cr.end_date,
          e.assessment_status,
-         e.certificate AS certificate_url
+         -- '__generating__' is the in-flight claim marker the auto-create cron
+         -- writes before the real Drive URL lands; it is not a downloadable URL.
+         NULLIF(e.certificate, '__generating__') AS certificate_url
        FROM enrollment e
        JOIN course c ON c.id = e.course_id
        JOIN course_run cr ON cr.id = e.course_run_id

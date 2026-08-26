@@ -25,7 +25,6 @@ const CertificateHistoryView: React.FC = () => {
   const [records, setRecords] = useState<CertificateRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -49,30 +48,13 @@ const CertificateHistoryView: React.FC = () => {
     fetchCertificates();
   }, [currentUser?.id]);
 
-  const handleDownloadCertificate = async (record: CertificateRecord) => {
-    setDownloadingId(record.enrollment_id);
-    try {
-      if (record.certificate_url) {
-        window.open(record.certificate_url, '_blank');
-      } else {
-        const res = await fetch('/api/learner/generate-certificate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enrolmentId: record.enrollment_id }),
-        });
-        const data = await res.json();
-        if (data.success && data.fileUrl) {
-          window.open(data.fileUrl, '_blank');
-          setRecords(prev => prev.map(r =>
-            r.enrollment_id === record.enrollment_id ? { ...r, certificate_url: data.fileUrl } : r
-          ));
-        }
-      }
-    } catch (err) {
-      console.error('Certificate download error:', err);
-    } finally {
-      setDownloadingId(null);
-    }
+  // Only opens an already-issued certificate. Certificates are issued by the
+  // scheduler after the class ends (or by a trainer/admin) — never minted on
+  // demand from here, which previously let learners download a certificate on
+  // the morning of their class.
+  const handleDownloadCertificate = (record: CertificateRecord) => {
+    if (!record.certificate_url) return;
+    window.open(record.certificate_url, '_blank');
   };
 
   const getStatusBadge = (status: string, certUrl: string | null) => {
@@ -135,27 +117,26 @@ const CertificateHistoryView: React.FC = () => {
                         {record.start_date ? `${formatDate(record.start_date)} - ${formatDate(record.end_date)}` : '-'}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => handleDownloadCertificate(record)}
-                          disabled={downloadingId === record.enrollment_id}
-                          title="Download PDF"
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
-                            bg-blue-50 text-blue-700 hover:bg-blue-100
-                            dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40
-                            disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {downloadingId === record.enrollment_id ? (
-                            <>
-                              <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" />
-                              <span>Generating...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
-                              <span>Download</span>
-                            </>
-                          )}
-                        </button>
+                        {record.certificate_url ? (
+                          <button
+                            onClick={() => handleDownloadCertificate(record)}
+                            title="Download PDF"
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors
+                              bg-blue-50 text-blue-700 hover:bg-blue-100
+                              dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
+                          >
+                            <Icon name={IconName.FilePdf} className="w-3.5 h-3.5" />
+                            <span>Download</span>
+                          </button>
+                        ) : (
+                          <span
+                            title="Your certificate is issued after the class ends and once the minimum attendance is met."
+                            className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold ${status.className}`}
+                          >
+                            <Icon name={IconName.Clock} className="w-3.5 h-3.5" />
+                            <span>{status.label}</span>
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
