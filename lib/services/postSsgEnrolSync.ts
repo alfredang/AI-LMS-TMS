@@ -205,7 +205,27 @@ export async function runPostSsgEnrolSync(input: PostSsgEnrolSyncInput): Promise
       },
     });
 
-    const enrollResult = await client.query(
+    // Same SSG enrolment may already exist under a different app_user (email
+    // corrected upstream). Update that row instead of inserting a duplicate.
+    let enrollResult;
+    const dupe = enrolmentId
+      ? await client.query(
+          `SELECT id, user_id FROM enrollment WHERE course_run_id = $1 AND enrolment_id = $2 LIMIT 1`,
+          [courseRunUuid, enrolmentId]
+        )
+      : { rows: [] as any[] };
+    if (dupe.rows.length > 0 && dupe.rows[0].user_id !== learnerId) {
+      enrollResult = await client.query(
+        `UPDATE enrollment SET
+           enrolment_status = COALESCE($2, enrolment_status),
+           nric             = COALESCE($3, nric),
+           raw_data         = COALESCE($4::jsonb, raw_data),
+           updated_at       = NOW()
+         WHERE id = $1
+         RETURNING id`,
+        [dupe.rows[0].id, resolvedEnrolmentStatus, traineeNric || null, rawData]
+      );
+    } else enrollResult = await client.query(
       `INSERT INTO enrollment
          (user_id, course_id, course_run_id, payment_status, assessment_status,
           progress_percent, course_sponsorship, enrolment_date,

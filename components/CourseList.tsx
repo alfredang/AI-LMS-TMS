@@ -613,7 +613,7 @@ const ManagementCourseList: React.FC = () => {
                             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="UTAP" /></th>
                         )}
                         {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
-                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Validity" /></th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Validity" fullLabel="Funding Validity (From – To)" /></th>
                         )}
                         {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
                             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-on-surface-secondary uppercase tracking-wider"><HeaderCell shortLabel="Trainers" /></th>
@@ -705,7 +705,18 @@ const ManagementCourseList: React.FC = () => {
                                 )}
                                 {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
                                     <td className="px-4 py-4 whitespace-nowrap text-sm text-on-surface-secondary">
-                                        {course.fundingValidity || '—'}
+                                        {(() => {
+                                            // Show the full funding window (from – to), matching the course card detail.
+                                            const fmt = (v?: string | null) => {
+                                                if (!v) return null;
+                                                const d = new Date(v);
+                                                return isNaN(d.getTime()) ? null : d.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' });
+                                            };
+                                            const start = fmt((course as any).fundingValidityStart);
+                                            const end = fmt(course.fundingValidity);
+                                            if (!start && !end) return '—';
+                                            return `${start || '—'} – ${end || '—'}`;
+                                        })()}
                                     </td>
                                 )}
                                 {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (

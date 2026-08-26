@@ -37,7 +37,24 @@ const METHOD_INFO: Record<string, { abbr: string; label: string }> = {
 };
 
 const AssessmentGrading: React.FC = () => {
-  const { currentUser, pendingGradingCourseRunId, setPendingGradingCourseRunId } = useLms();
+  const { currentUser, pendingGradingCourseRunId, setPendingGradingCourseRunId, setSelectedCourse } = useLms();
+  // Course the trainer navigated from (stashed by CourseDetail's Assessment Grading
+  // link) — drives the "Back to Class" button, same pattern as E-Attendance.
+  const [sourceCourse, setSourceCourse] = useState<any | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = sessionStorage.getItem('gradingSourceCourse');
+      if (raw) setSourceCourse(JSON.parse(raw));
+    } catch {}
+  }, []);
+  const handleBackToClass = () => {
+    if (!sourceCourse) return;
+    if (typeof window !== 'undefined') {
+      try { sessionStorage.removeItem('gradingSourceCourse'); } catch {}
+    }
+    setSelectedCourse(sourceCourse);
+  };
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
   const [selectedCourseRunId, setSelectedCourseRunId] = useState('');
@@ -299,7 +316,22 @@ const AssessmentGrading: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold dark:text-white">Assessment Grading</h1>
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-2xl font-bold dark:text-white">Assessment Grading</h1>
+        {sourceCourse && (
+          <button
+            type="button"
+            onClick={handleBackToClass}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-default bg-surface hover:bg-surface-elevated text-on-surface transition-colors flex-shrink-0"
+            title={`Back to ${sourceCourse?.title || 'class'}`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Class
+          </button>
+        )}
+      </div>
 
       {/* Class Selection */}
       <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">

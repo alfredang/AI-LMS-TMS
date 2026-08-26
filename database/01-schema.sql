@@ -4581,6 +4581,13 @@ CREATE INDEX idx_enrollment_enrolment_id ON public.enrollment USING btree (enrol
 
 
 --
+-- Name: enrollment_course_run_enrolment_id_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX enrollment_course_run_enrolment_id_key ON public.enrollment USING btree (course_run_id, enrolment_id) WHERE (enrolment_id IS NOT NULL);
+
+
+--
 -- Name: idx_enrollment_nric; Type: INDEX; Schema: public; Owner: -
 --
 

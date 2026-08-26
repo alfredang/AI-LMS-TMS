@@ -210,6 +210,36 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const sponsorship = mapSponsorship(trainee?.sponsorshipType);
         const payStatus = mapPaymentStatus(trainee?.fees?.collectionStatus);
 
+        // SSG sometimes corrects a trainee's email between syncs, which resolves
+        // to a different app_user above. The (user_id, course_run_id) conflict
+        // target then misses and a second row is inserted for the same SSG
+        // enrolment (seen live: duplicate learners in Assessment Grading).
+        // Never insert a second row for the same enrolment_id — update the
+        // original row in place; it keeps the learner's existing account,
+        // grades and certificates.
+        if (enrolmentId) {
+          const dupe = await client.query(
+            `SELECT id, user_id FROM enrollment WHERE course_run_id = $1 AND enrolment_id = $2 LIMIT 1`,
+            [cr.uuid, enrolmentId]
+          );
+          if (dupe.rows.length > 0 && dupe.rows[0].user_id !== userId) {
+            await client.query(
+              `UPDATE enrollment SET
+                 nric               = COALESCE($2, nric),
+                 enrolment_status   = COALESCE($3, enrolment_status),
+                 course_sponsorship = COALESCE($4::public.course_sponsorship, course_sponsorship),
+                 enrolment_date     = COALESCE($5::date, enrolment_date),
+                 payment_status     = COALESCE($6::public.learner_payment_status, payment_status),
+                 raw_data           = COALESCE($7::jsonb, raw_data),
+                 updated_at         = NOW()
+               WHERE id = $1`,
+              [dupe.rows[0].id, nric, enrolStatus, sponsorship, enrolDate || null, payStatus, JSON.stringify(enrolment)]
+            );
+            skipped++;
+            continue;
+          }
+        }
+
         const upsertRes = await client.query(
           `INSERT INTO enrollment
              (user_id, course_id, course_run_id, enrolment_id, nric, email,

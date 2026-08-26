@@ -62,6 +62,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 ### Learner Features
 - Course browsing and enrollment
+- Courseware access — Learner Guide, Learner Slides, Activities/Lab and SkillsFuture link cards, unlocked from 8:30 AM SGT on the course start date
 - Progress tracking through learning units and subtopics
 - Assessment submission and grade viewing
 - AI chatbot for personalized course assistance
