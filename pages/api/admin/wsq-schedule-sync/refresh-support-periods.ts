@@ -25,8 +25,16 @@ import { HTTPRequestBuilder, HttpMethod, HttpClient, handleRequest } from '../..
  * call picks it up again. Only a successful lookup stamps the timestamp.
  *
  * Body (all optional):
- *   batch_size      courses to process this call (default 50, max 150)
- *   max_age_hours   treat a course as done if refreshed within this window (default 12)
+ *   batch_size        courses to process this call (default 50, max 150)
+ *   max_age_hours     treat a course as done if refreshed within this window (default 12)
+ *   refreshed_before  ISO timestamp — treat a course as done if refreshed AFTER this
+ *                     instant, overriding max_age_hours. A caller looping over batches
+ *                     stamps this ONCE at the start and resends it, which forces a full
+ *                     pass (however recently a course last ran) while still converging:
+ *                     rows written during the run are newer than the cutoff, so they
+ *                     drop out and the next batch moves on. Do not emulate this with
+ *                     max_age_hours: 0 — nothing would ever count as done and the same
+ *                     batch would be re-fetched forever.
  *
  * Each call is also capped at TIME_BUDGET_MS of wall clock, so it always returns
  * promptly even when SSG is throttling every request.
@@ -45,16 +53,27 @@ const TIME_BUDGET_MS = 45_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// SSG returns a supports[] entry per funding scheme, each with its own window.
+// Two of them answer "may a run be scheduled on this date at all":
+//   1000  WSQ
+//   1001  Non WSQ   <- what a course converted to CASL carries
+// Reading only 1000 left every CASL course with no window at all, which then
+// read as "funding expired" — verified 26 Aug 2026 on Data Analytics with Excel:
+// the WSQ code ran to 2026-08-08 and its CASL successor picks up 2026-08-09.
+// The other tags (SFC, MCES, SFEC, Absentee Payroll, WSS, ETSS, LTVP+) are
+// learner-side subsidies and say nothing about whether the run may exist.
+const SUPPORT_TAGS = new Set(['1000', '1001']);
+
 /** SSG signals throttling as "Too Many Requests" / HTTP 429. */
 function isThrottled(err: any): boolean {
   const t = [err?.code, err?.message, err?.status].join(' ').toLowerCase();
   return t.includes('too many requests') || t.includes('429') || t.includes('rate limit');
 }
 
-// Courses we have not refreshed recently — this is what makes the call resumable.
+// Courses not refreshed since the cutoff — this is what makes the call resumable.
 const STALE_WHERE = `course_code LIKE 'TGS-%'
      AND (ssg_wsq_support_refreshed_at IS NULL
-          OR ssg_wsq_support_refreshed_at < NOW() - ($1 || ' hours')::interval)`;
+          OR ssg_wsq_support_refreshed_at < $1::timestamptz)`;
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -67,6 +86,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   const batchSize = Math.min(Math.max(Number(req.body?.batch_size) || 50, 1), 150);
   const maxAgeHours = Math.max(Number(req.body?.max_age_hours) || 12, 0);
+  const explicit = Date.parse(String(req.body?.refreshed_before ?? ''));
+  const cutoff = Number.isFinite(explicit)
+    ? new Date(explicit).toISOString()
+    : new Date(Date.now() - maxAgeHours * 3600_000).toISOString();
 
   // Load SSG credentials
   let credentials: Awaited<ReturnType<ReturnType<typeof getSSGCredentialsService>['getSSGCredentials']>>;
@@ -86,7 +109,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   const totalR = await pool.query<{ total: string; stale: string }>(
     `SELECT (SELECT count(*) FROM course WHERE course_code LIKE 'TGS-%') AS total,
             (SELECT count(*) FROM course WHERE ${STALE_WHERE}) AS stale`,
-    [String(maxAgeHours)],
+    [cutoff],
   );
   const total = Number(totalR.rows[0]?.total ?? 0);
   const staleCount = Number(totalR.rows[0]?.stale ?? 0);
@@ -104,7 +127,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
               course_code
             ) AS lookup_code
        FROM course WHERE ${STALE_WHERE} ORDER BY course_code LIMIT $2`,
-    [String(maxAgeHours), batchSize],
+    [cutoff, batchSize],
   );
   const courses = coursesResult.rows;
 
@@ -145,15 +168,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
 
       const supports: any[] = (result.data as any)?.course?.supports ?? [];
-      const wsq = supports.find((s: any) => s?.period?.taggingCode === '1000');
-      if (!wsq?.period?.from || !wsq?.period?.to) return null;
+      // A course can in principle carry both tags; take whichever runs latest,
+      // since that is the one that decides how far ahead a run may be scheduled.
+      const scheme = supports
+        .filter((s: any) => SUPPORT_TAGS.has(String(s?.period?.taggingCode)) && s?.period?.from && s?.period?.to)
+        .sort((a: any, b: any) => Number(b.period.to) - Number(a.period.to))[0];
+      if (!scheme) return null;
 
       // Convert YYYYMMDD integer to YYYY-MM-DD string
       const toDate = (n: number) => {
         const s = String(n);
         return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
       };
-      return { from: toDate(wsq.period.from), to: toDate(wsq.period.to) };
+      return { from: toDate(scheme.period.from), to: toDate(scheme.period.to) };
     }
     throw new Error(lastErr?.message || 'SSG error');
   }
