@@ -8,6 +8,40 @@ import { OptionalSelector, Vacancy, ModeOfTraining } from '../../../lib/ssg/mode
 import { AddRunInfo, AddCourseRunUtils } from '../../../lib/ssg/models/add-course-run';
 
 /**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * BROKEN — DOES NOT WORK AGAINST PRODUCTION SSG. Use
+ * POST /api/external/wsq-submit-runs instead.
+ *
+ * Verified 27 Aug 2026: every call is rejected with SSG 400 "Invalid input
+ * parameter(s)", on every course. The payload below is assembled in a different
+ * SHAPE from the one SSG accepts — compare against the payload built in
+ * pages/api/admin/wsq-schedule-sync/run-sync.ts, which SSG has accepted for
+ * months:
+ *
+ *   run-sync (works)                     this file (rejected)
+ *   { course: { … } } wrapper            no wrapper
+ *   trainingProvider.uen included        absent
+ *   courseDates:{start:20260919} ints    courseStartDate:"2026-09-19" strings
+ *   venue:{…} nested                     venue flattened into block/floor/unit
+ *   courseVacancy:{code:"A",…}           courseVacancy:"available"
+ *   scheduleInfoType:{code,description}  scheduleInfoTypeCode + …Description
+ *
+ * SSG names no field in its rejection, so this looked for a long time like
+ * callers getting the request wrong rather than the endpoint being wrong. An
+ * OpenClaw agent spent a morning on it against a live customer request.
+ *
+ * NOT deleted on purpose: it is advertised in README.md and in the Training
+ * Provider "API Endpoints" screen, and other agents may still call it. It fails
+ * safely — SSG refuses, nothing is created, no duplicate, no bad data. Removing
+ * the route would turn a clear rejection into a 404 and send the next caller
+ * chasing the wrong problem.
+ *
+ * To fix: rebuild the payload to match run-sync's shape. The rest of this file —
+ * cloning venue and session pattern per course rather than defaulting to one
+ * fixed venue — is worth keeping and is better than the replacement in that
+ * respect.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * External API — Create a NEW course run (+ sessions) and submit it to SSG.
  *
  * Intended caller: OpenClaw automations acting for training staff ("create a new
