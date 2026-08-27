@@ -13,6 +13,17 @@ import pool from '../../../lib/db';
  * selected, so returning the unmasked NRIC here (needed for SSG's traineeIdType detection) does
  * not widen exposure beyond what the paste-from-Google-Sheet flow already showed on screen.
  */
+/** Normalizes an SSG run date (YYYYMMDD or DD/MM/YYYY) to YYYY-MM-DD text, matching all-course-runs.ts. */
+const normDateSql = (jsonPathExpr: string) => `(
+  CASE
+    WHEN (${jsonPathExpr}) ~ '^[0-9]{8}$' THEN
+      substr((${jsonPathExpr}), 1, 4) || '-' || substr((${jsonPathExpr}), 5, 2) || '-' || substr((${jsonPathExpr}), 7, 2)
+    WHEN (${jsonPathExpr}) ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$' THEN
+      substr((${jsonPathExpr}), 7, 4) || '-' || substr((${jsonPathExpr}), 4, 2) || '-' || substr((${jsonPathExpr}), 1, 2)
+    ELSE NULLIF(trim(${jsonPathExpr}), '')
+  END
+)`;
+
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -36,8 +47,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
          se.course_title,
          se.enrolment_status,
          se.raw_data->'course'->'run'->>'id' AS course_run_number,
-         se.raw_data->'course'->'run'->>'startDate' AS start_date,
-         se.raw_data->'course'->'run'->>'endDate' AS end_date
+         ${normDateSql(`se.raw_data->'course'->'run'->>'startDate'`)} AS start_date,
+         ${normDateSql(`se.raw_data->'course'->'run'->>'endDate'`)} AS end_date
        FROM ssg_enrolments se
        WHERE se.enrolment_id = ANY($1::text[])`,
       [enrolmentIds]

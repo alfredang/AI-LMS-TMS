@@ -25,6 +25,9 @@ interface BulkResult {
   traineeFullName: string;
   status: 'success' | 'error' | 'skipped';
   assessmentReferenceNumber?: string;
+  /** The Assessment Date we actually submitted — distinct from createdOn/updatedOn, which are
+   *  SSG's own record-creation timestamps and will always read as "today". */
+  assessmentDate?: string;
   createdOn?: string;
   updatedOn?: string;
   error?: string;
@@ -165,7 +168,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         traineeId: String(item.traineeId || ''),
       });
       if (!eligibility.eligible) {
-        results.push({ enrolmentReferenceNumber: item.enrolmentReferenceNumber, traineeFullName: item.traineeFullName, status: 'skipped', error: `Skipped — ${eligibility.reason}` });
+        results.push({ enrolmentReferenceNumber: item.enrolmentReferenceNumber, traineeFullName: item.traineeFullName, status: 'skipped', assessmentDate: item.assessmentDate, error: `Skipped — ${eligibility.reason}` });
         continue;
       }
 
@@ -178,6 +181,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           traineeFullName: item.traineeFullName,
           status: o.status,
           assessmentReferenceNumber: o.assessmentReferenceNumber,
+          assessmentDate: item.assessmentDate,
           createdOn: o.createdOn,
           updatedOn: o.updatedOn,
           error: o.error,
@@ -196,7 +200,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
         results.push(bulkResult);
       } catch (err) {
-        results.push({ enrolmentReferenceNumber: item.enrolmentReferenceNumber, traineeFullName: item.traineeFullName, status: 'error', error: err instanceof Error ? err.message : 'Unknown error' });
+        results.push({ enrolmentReferenceNumber: item.enrolmentReferenceNumber, traineeFullName: item.traineeFullName, status: 'error', assessmentDate: item.assessmentDate, error: err instanceof Error ? err.message : 'Unknown error' });
       }
     }
 
@@ -222,6 +226,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
               traineeFullName: it.traineeFullName,
               status: 'success',
               assessmentReferenceNumber: retry.assessmentReferenceNumber,
+              assessmentDate: it.assessmentDate,
               createdOn: retry.createdOn,
               updatedOn: retry.updatedOn,
             };
