@@ -63,11 +63,21 @@ export interface BulkAssessmentResult {
     traineeFullName: string;
     status: 'success' | 'error' | 'pending';
     assessmentReferenceNumber?: string;
+    /** The Assessment Date actually submitted — NOT the same as createdOn/updatedOn below, which
+     *  are SSG's own record-creation timestamps and always read as "today". */
+    assessmentDate?: string;
     createdOn?: string;
     updatedOn?: string;
     error?: string;
     paymentWarning?: string;
 }
+
+// Format YYYY-MM-DD to DD/MM/YYYY (matches how the editable table and TPGateway itself show dates).
+const formatDateDisplay = (d?: string): string => {
+    if (!d) return '';
+    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : d;
+};
 
 const BRAILLE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 export const BrailleSpinner: React.FC = () => {
@@ -183,6 +193,7 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
         setResults(rows.map(r => ({
             enrolmentId: r.enrolmentId,
             traineeFullName: r.traineeFullName,
+            assessmentDate: r.assessmentDate,
             status: 'pending' as const,
         })));
         setSummary(null);
@@ -317,12 +328,6 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                                 {rows.map((row, idx) => {
                                     const existingDate = row.rawCols[COL.ASSESSMENT_ID_DATE] || '';
                                     const existingSkill = row.rawCols[COL.SKILL_CODE] || '';
-                                    // Format YYYY-MM-DD to DD/MM/YYYY
-                                    const formatDateDisplay = (d: string) => {
-                                        if (!d) return '';
-                                        const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-                                        return m ? `${m[3]}/${m[2]}/${m[1]}` : d;
-                                    };
                                     const dateChanged = row.assessmentDate !== existingDate;
                                     const skillChanged = row.skillCode !== existingSkill;
 
@@ -439,7 +444,7 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                                     <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Trainee</th>
                                     <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Status</th>
                                     <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Assessment Ref #</th>
-                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Date</th>
+                                    <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Assessment Date</th>
                                     <th className="text-left p-2 font-bold text-gray-600 dark:text-gray-300">Error / Warning</th>
                                 </tr>
                             </thead>
@@ -455,7 +460,14 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
                                             {r.status === 'pending' && <span className="text-gray-400 italic">Pending...</span>}
                                         </td>
                                         <td className="p-2 font-mono text-xs">{r.assessmentReferenceNumber || '-'}</td>
-                                        <td className="p-2 text-xs">{r.createdOn ? `${r.createdOn}${r.updatedOn ? ` (updated ${r.updatedOn})` : ''}` : '-'}</td>
+                                        <td className="p-2 text-xs">
+                                            <div>{r.assessmentDate ? formatDateDisplay(r.assessmentDate) : '-'}</div>
+                                            {r.createdOn && (
+                                                <div className="text-[10px] text-gray-400" title="When SSG created/updated this assessment record">
+                                                    SSG record: {r.createdOn}{r.updatedOn ? ` (updated ${r.updatedOn})` : ''}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="p-2 text-xs">
                                             {r.error && <span className="text-red-600 dark:text-red-400">{r.error}</span>}
                                             {r.error && /TGS-?425/i.test(r.error) && (
