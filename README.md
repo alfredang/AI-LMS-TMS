@@ -294,7 +294,10 @@ POST /api/external/auto-create-learners   # Auto-create learner accounts
 POST /api/external/sync-course-run-dates  # Sync dates with SSG
 GET  /api/external/backfill-enrollments   # Preview enrollment backfill
 POST /api/external/backfill-enrollments   # Execute enrollment backfill
-POST /api/external/create-course-run      # Create a new course run (+ sessions) and submit to SSG
+POST /api/external/wsq-submit-runs        # Create specific course runs in SSG (previews unless confirm:true)
+GET  /api/external/wsq-schedule-gap       # What course runs are missing, and why
+GET  /api/external/wsq-sync-status        # Outcome of the last schedule sync
+POST /api/external/create-course-run      # BROKEN (27 Aug 2026) — SSG rejects the payload shape. Use wsq-submit-runs.
 ```
 
 ### Authentication
