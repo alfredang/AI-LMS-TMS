@@ -108,8 +108,24 @@ async function processItem(
       ssg_run_id: existingRow.rows[0].course_run_id, local_run_id: existingRow.rows[0].id };
   }
 
+  // Resolve the timing template through the COURSE, not the literal code we were
+  // handed. Funding renewal issues a new course reference number and the
+  // storefront switches to it at once, but the timing template stays filed under
+  // whichever code it was created with — measured 26 Aug 2026, all 36 renewed
+  // courses had their template under the OLD code and none under the new one, so
+  // a literal match found nothing and every one of them failed here as
+  // "No session timing template found" without ever reaching SSG.
+  // Prefer an exact match on the supplied code, then fall back to any other code
+  // the same course carries.
   const timingRow = await pool.query<Record<string, any>>(
-    `SELECT * FROM course_session_timing WHERE course_code = $1 LIMIT 1`, [course_code],
+    `SELECT t.*
+       FROM course_session_timing t
+      WHERE t.course_code = $1
+         OR t.course_code = (SELECT c.course_code FROM course c WHERE c.id = $2)
+         OR t.course_code IN (SELECT h.code FROM course_code_history h WHERE h.course_id = $2)
+      ORDER BY (t.course_code = $1) DESC
+      LIMIT 1`,
+    [course_code, courseId],
   ).catch(() => ({ rows: [] as Record<string, any>[] }));
   if (!timingRow.rows[0]) {
     return { course_code, start_date, end_date, status: 'no_session_timing', message: 'No session timing template found' };
