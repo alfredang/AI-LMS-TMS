@@ -48,7 +48,11 @@ import { AddRunInfo, AddCourseRunUtils } from '../../../lib/ssg/models/add-cours
  *
  * Responses:
  *   200 { success:true, course_run_id, ssg, run, sessions, cloned_from, warnings }
- *   400 { success:false, error, details? }  — bad input / validation / SSG rejection with detail
+ *   400 { success:false, error, details?, submitted_payload?, cloned_from? }
+ *       bad input / validation / SSG rejection. On any payload-level rejection the
+ *       exact normalised SSG payload is echoed back, because SSG replies with a bare
+ *       "Invalid input parameter(s)" naming no field — without it the caller can only
+ *       guess, and will guess wrong.
  *   401 { success:false, error }            — bad/missing API key
  *   404 { success:false, error }            — course_code not found
  *   422 { success:false, error }            — no template run to clone and no venue supplied
@@ -190,6 +194,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let scheduleInfo = '';
     let modeCode = '';
     let templateSessions: TemplateSession[] = [];
+    const templateIntake: { intakeSize?: number; threshold?: number } = {};
 
     // Pull run-level fields that aren't stored locally (schedule) + a mode fallback
     // from the template run's live SSG record.
@@ -221,6 +226,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             scheduleInfoTypeDescription = String(ssgRun.scheduleInfoType?.description ?? '').trim();
             scheduleInfo = String(ssgRun.scheduleInfo ?? '').trim();
             modeCode = String(ssgRun.modeOfTraining ?? '').trim();
+            if (Number.isFinite(Number(ssgRun.intakeSize))) templateIntake.intakeSize = Number(ssgRun.intakeSize);
+            if (Number.isFinite(Number(ssgRun.threshold))) templateIntake.threshold = Number(ssgRun.threshold);
             const v = ssgRun.venue;
             if (v) {
               // Fill any venue gaps from the SSG record (local columns win when present).
@@ -337,6 +344,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         postalCode: venue.postalCode,
         room: venue.room,
         wheelChairAccess: venue.wheelChair ? OptionalSelector.YES : OptionalSelector.NO,
+        // SSG's own records carry these on every run (all zeros for this provider),
+        // and omitting them draws a bare "Invalid input parameter(s)" naming no field.
+        // Cloned from the template run where available so an intake that IS set is
+        // carried forward rather than silently reset to 0.
+        intakeSize: Number.isFinite(Number(body.intake_size)) ? Number(body.intake_size) : (templateIntake.intakeSize ?? 0),
+        threshold: Number.isFinite(Number(body.threshold)) ? Number(body.threshold) : (templateIntake.threshold ?? 0),
+        registeredUserCount: 0,
         modeOfTraining: modeCode as ModeOfTraining,
         courseAdminEmail: adminEmail,
         courseVacancy: vacancy,
@@ -360,7 +374,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Validate before hitting SSG for a clean 400.
     const validation = AddCourseRunUtils.validateAddRunInfo(runInfo);
     if (validation.errors.length > 0) {
-      return res.status(400).json({ success: false, error: 'Payload validation failed', details: validation.errors, warnings });
+      return res.status(400).json({
+        success: false,
+        error: 'Payload validation failed',
+        details: validation.errors,
+        warnings,
+        submitted_payload: runInfo,
+        cloned_from: template?.course_run_id ?? null,
+      });
     }
     warnings.push(...validation.warnings);
 
@@ -376,7 +397,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (ssgResult.error) {
       return res.status(ssgResult.status && ssgResult.status >= 400 ? ssgResult.status : 400).json({
-        success: false, error: 'SSG rejected the course run', ssg: ssgResult.error, warnings,
+        success: false,
+        error: 'SSG rejected the course run',
+        ssg: ssgResult.error,
+        warnings,
+        // SSG names no field in its rejection, so echo what we actually sent.
+        // Behind the API key, and it carries no secrets — only course/run values.
+        submitted_payload: runInfo,
+        cloned_from: template?.course_run_id ?? null,
       });
     }
 
