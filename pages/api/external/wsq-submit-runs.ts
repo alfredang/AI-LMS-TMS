@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import { startWsqSyncJob } from '../admin/wsq-schedule-sync/run-sync';
+import { startWsqSyncJob, buildRunSessions, newSessionBuildCache, VENUE, modeOfTrainingName }
+  from '../admin/wsq-schedule-sync/run-sync';
 import { fetchMagentoSchedules, sgtToday } from '../../../lib/wsqScheduleSync';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
@@ -98,9 +99,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ── Reference data ────────────────────────────────────────────────────────
     const courses = new Map((await pool.query<{
-      course_code: string; title: string | null; funding_to: string | null; has_timing: boolean;
+      id: string; course_code: string; title: string | null; funding_to: string | null; has_timing: boolean;
     }>(
-      `SELECT c.course_code, c.title,
+      `SELECT c.id, c.course_code, c.title,
               to_char(c.ssg_wsq_support_to, 'YYYY-MM-DD') AS funding_to,
               EXISTS (SELECT 1 FROM course_session_timing t WHERE t.course_code = c.course_code) AS has_timing
          FROM course c WHERE c.course_code LIKE 'TGS-%'`,
@@ -285,10 +286,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    if (confirmed.length === 0) {
+    // Build each run's ACTUAL sessions now, using the same function the real
+    // submission uses. Two reasons this belongs in the preview and not only at
+    // submit time:
+    //   1. A person approving a run is accountable for what reaches a government
+    //      system. Approving bare dates and taking the times on trust is not an
+    //      informed approval - they need to see that "1/4 Jan (Fri/Mon)" produces
+    //      sessions on the 1st and the 4th, and at what times.
+    //   2. It makes the preview honest. Anything whose sessions cannot be built
+    //      is refused HERE with its reason, rather than being previewed as ready
+    //      and then failing silently inside the background job.
+    const sessionCache = newSessionBuildCache();
+    const previewed: (Item & {
+      venue: typeof VENUE;
+      teaching_days: number;
+      sessions: { date: string; start_time: string; end_time: string; mode_of_training: string; mode: string }[];
+    })[] = [];
+    for (const it of confirmed) {
+      const canonical = canonicalByAlias.get(it.course_code) ?? it.course_code;
+      const course = courses.get(canonical);
+      if (!course) { rejected.push({ ...it, reason: 'course not found in LMS' }); continue; }
+      const built = await buildRunSessions(
+        course.id, it.course_code, it.start_date, it.end_date, it.raw, sessionCache,
+      );
+      if (!built.ok) { rejected.push({ ...it, reason: built.reason }); continue; }
+      previewed.push({
+        ...it,
+        venue: VENUE,
+        teaching_days: new Set(built.sessions.map((x) => x.startDate)).size,
+        sessions: built.sessions.map((x) => ({
+          date: x.startDate,
+          start_time: x.startTime,
+          end_time: x.endTime,
+          mode_of_training: x.modeOfTraining,
+          mode: modeOfTrainingName(x.modeOfTraining),
+        })),
+      });
+    }
+
+    if (previewed.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Nothing left to submit — SSG already has a run for every date requested.',
+        error: confirmed.length === 0
+          ? 'Nothing left to submit — SSG already has a run for every date requested.'
+          : 'Nothing left to submit — no run could have its sessions built. See rejected for the reason on each.',
         rejected,
       });
     }
@@ -299,25 +340,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         success: true,
         dry_run: true,
         message:
-          `${confirmed.length} run(s) would be submitted to SSG. Nothing has been sent. ` +
-          `Show this to a human, and re-send the same request with "confirm": true only if they agree.`,
-        would_submit: confirmed,
+          `${previewed.length} run(s) would be submitted to SSG. Nothing has been sent. ` +
+          `Each entry lists the exact teaching dates, session times and venue that would be created — ` +
+          `show those to a human, and re-send the same request with "confirm": true only if they agree.`,
+        would_submit: previewed,
         rejected,
       });
     }
 
     // Positive branch first so the discriminated union narrows cleanly.
-    const result = await startWsqSyncJob(confirmed, 'user');
+    const result = await startWsqSyncJob(
+      previewed.map(({ course_code, start_date, end_date, raw }) => ({ course_code, start_date, end_date, raw })),
+      'user',
+    );
 
     if (result.started) {
       return res.status(200).json({
         success: true,
         dry_run: false,
         job_id: result.jobId,
-        submitting: confirmed.length,
+        submitting: previewed.length,
         rejected,
         message:
-          `Submitting ${confirmed.length} run(s) to SSG in the background. ` +
+          `Submitting ${previewed.length} run(s) to SSG in the background. ` +
           `Poll GET /api/external/wsq-sync-status?job_id=${result.jobId} for the outcome — ` +
           `do not report success until that says the job completed.`,
       });

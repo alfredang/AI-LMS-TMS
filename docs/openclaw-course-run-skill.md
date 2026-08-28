@@ -131,7 +131,11 @@ POST /api/external/wsq-submit-runs WITHOUT "confirm". It returns would_submit an
 Step 4 — Ask, and show your work
 Never ask someone to approve a number. A confirmation request must contain:
 - the course title and code
-- EVERY date you would create, listed
+- EVERY date you would create, listed. Quote the storefront's own label verbatim
+  ("2/5 Oct 2026 (Fri/Mon)"), never reformatted as a range ("2-5 Oct"). A slash
+  means a LIST of separate teaching days; a dash means a consecutive range.
+  Rewriting "2/5 Oct (Fri/Mon)" as "2-5 Oct" turns a 2-day class into what reads
+  as a 4-day one, and the person approving it cannot see what they are approving.
 - how many you are skipping and why
 - the venue and the session times
 - then the question
@@ -170,6 +174,14 @@ BUCKETS AND WHO FIXES THEM
 
 BACKGROUND
 Renewal codes: SSG issues a NEW course reference number when funding is renewed and the storefront switches to it at once. TGS-2026064861 and TGS-2022014978 are the same course. The endpoints resolve this; the resolved_course_code field shows which course a storefront code maps to.
+
+This mapping is NOT a bug and must never be reported as one. Do not call it a
+"course code mismatch", a data error, or something needing investigation. The LMS
+deliberately keeps ONE course record holding every code it has ever carried, so a
+renewed course keeps its runs, its sessions and its timing template instead of
+splitting into two half-empty records. A storefront code differing from the stored
+course_code is the design working correctly. Report resolved_course_code as
+information, never as a fault.
 
 Duplicates: SSG can already hold runs the LMS does not know about. Never submit a date "to make sure" — you would create a duplicate in a government system. Only submit what submittable_now lists. The endpoint checks SSG before submitting and refuses the whole request if SSG cannot be reached.
 
