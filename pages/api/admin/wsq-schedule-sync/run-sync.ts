@@ -42,6 +42,19 @@ const normalizeModeOfTraining = (raw: any): string => {
   return '1';
 };
 
+// SSG mode-of-training codes, in words. The codes are what SSG wants; a person
+// approving a run in WhatsApp should not have to know that 8 means assessment.
+export const MODE_OF_TRAINING_NAMES: Record<string, string> = {
+  '1': 'Classroom',
+  '2': 'Asynchronous e-learning',
+  '4': 'On-the-job',
+  '8': 'Assessment',
+  '9': 'Synchronous e-learning',
+  '10': 'Practical / workplace',
+};
+export const modeOfTrainingName = (code: string): string =>
+  MODE_OF_TRAINING_NAMES[String(code)] ?? `Mode ${code}`;
+
 const addDays = (dateStr: string, n: number): string => {
   const d = new Date(dateStr + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + n);
@@ -374,7 +387,152 @@ const buildSessions = (
   });
 };
 
-const VENUE = { floor: '07', unit: '85-87', postalCode: '737715', room: 'Training room' };
+export const VENUE = { floor: '07', unit: '85-87', postalCode: '737715', room: 'Training room' };
+
+/**
+ * Work out the sessions a run would be given - without submitting anything.
+ *
+ * Exported so the dry-run preview shows the SAME times the real submission uses.
+ * A preview that omits them asks a person to approve dates and take the times on
+ * trust, which is not an informed approval; and a second implementation of this
+ * logic would drift from the one that actually runs.
+ *
+ * `cache` lets one request cost a couple of queries instead of one per date when
+ * previewing many dates for the same course.
+ */
+export type SessionBuildCache = {
+  timing: Map<string, Record<string, any> | null>;
+  pattern: Map<string, PastPattern | null>;
+};
+export const newSessionBuildCache = (): SessionBuildCache => ({ timing: new Map(), pattern: new Map() });
+
+export type BuiltRunSessions =
+  | { ok: true; sessions: BuiltSession[] }
+  | { ok: false; reason: string };
+
+export async function buildRunSessions(
+  courseId: string,
+  course_code: string,
+  start_date: string,
+  end_date: string,
+  raw?: string,
+  cache?: SessionBuildCache,
+): Promise<BuiltRunSessions> {
+  // Resolve the timing template through the COURSE, not the literal code we were
+  // handed. Funding renewal issues a new course reference number and the
+  // storefront switches to it at once, but the timing template stays filed under
+  // whichever code it was created with - measured 26 Aug 2026, all 36 renewed
+  // courses had their template under the OLD code and none under the new one, so
+  // a literal match found nothing and every one of them failed here as
+  // "No session timing template found" without ever reaching SSG.
+  // Prefer an exact match on the supplied code, then fall back to any other code
+  // the same course carries.
+  const timingKey = `${courseId}|${course_code}`;
+  let timing: Record<string, any> | null;
+  if (cache && cache.timing.has(timingKey)) {
+    timing = cache.timing.get(timingKey)!;
+  } else {
+    const timingRow = await pool.query<Record<string, any>>(
+      `SELECT t.*
+         FROM course_session_timing t
+        WHERE t.course_code = $1
+           OR t.course_code = (SELECT c.course_code FROM course c WHERE c.id = $2)
+           OR t.course_code IN (SELECT h.code FROM course_code_history h WHERE h.course_id = $2)
+        ORDER BY (t.course_code = $1) DESC
+        LIMIT 1`,
+      [course_code, courseId],
+    ).catch(() => ({ rows: [] as Record<string, any>[] }));
+    // A missing template is NOT fatal on its own. Cloning the course's own last run
+    // is the preferred source of session times and needs no template at all, so the
+    // "no timing" verdict is deferred until that has been tried too - bailing here
+    // refused courses with a full history of real sessions purely because a form had
+    // never been filled in.
+    timing = timingRow.rows[0] ?? null;
+    if (cache) cache.timing.set(timingKey, timing);
+  }
+
+  // How many days is this run taught over, and is it an evening class? Both come
+  // from the storefront label; the dates are the fallback when it cannot be read.
+  const wantEvening = /\bevening\b/i.test(raw ?? '');
+  const labelDates = parseRawDates(raw ?? '');
+  const teachingDays = labelDates
+    && labelDates[0] === start_date
+    && labelDates[labelDates.length - 1] === end_date
+      ? labelDates.length
+      : null;
+
+  // Clone the shape this course last actually ran, matched on day count and
+  // day/evening. Falls back to the template only for daytime runs - the template
+  // IS the daytime pattern, so using it for an evening class would put a 09:15
+  // session on a class that starts at 18:00.
+  let pattern: PastPattern | null = null;
+  if (teachingDays) {
+    const patternKey = `${courseId}|${teachingDays}|${wantEvening}`;
+    if (cache && cache.pattern.has(patternKey)) {
+      pattern = cache.pattern.get(patternKey)!;
+    } else {
+      pattern = await pastSessionPattern(courseId, teachingDays, wantEvening);
+      if (cache) cache.pattern.set(patternKey, pattern);
+    }
+  }
+
+  // Now both sources have been tried: nothing to clone and nothing to build from.
+  if (!timing && !pattern) {
+    return { ok: false, reason: 'No session timing template found, and this course has no past run of the same shape to copy' };
+  }
+
+  // No evening history for this course - derive the pattern from its daytime
+  // template instead of refusing. Cloning real history is still preferred; this
+  // only fills the gap for a course running its first evening class.
+  // Deriving repacks the DAYTIME template's session lengths into evenings, so it
+  // needs a template - a course with neither template nor evening history cannot
+  // be derived and falls through to the refusal below.
+  let effectivePattern = pattern;
+  if (wantEvening && !effectivePattern && teachingDays && timing) {
+    const daySlots: { startTime: string; endTime: string; modeOfTraining: string }[] = [];
+    for (let i = 1; i <= 11; i++) {
+      const st = (timing[`session_${i}_start_time`] || '').trim();
+      const en = (timing[`session_${i}_end_time`] || '').trim();
+      if (!st && !en) break;
+      daySlots.push({
+        startTime: st,
+        endTime: en,
+        modeOfTraining: normalizeModeOfTraining(timing[`session_${i}_mode_of_training`]),
+      });
+    }
+    const derived = deriveEveningPattern(daySlots, teachingDays);
+    if (derived.length > 0) effectivePattern = derived;
+  }
+
+  if (wantEvening && !effectivePattern) {
+    return {
+      ok: false,
+      reason:
+        `This run is sold as an evening class (${raw}) but this course has no ` +
+        `evening history to clone, and its daytime timings do not fit into evening ` +
+        `sessions - the course is too long for the number of evenings offered. ` +
+        `Create one evening run by hand so the rest can be cloned from it.`,
+    };
+  }
+
+  const built = buildSessions(timing ?? {}, start_date, end_date, raw, effectivePattern);
+  if ('mismatch' in built) {
+    const { templateDays, runDays } = built.mismatch;
+    const when = raw || `${start_date} to ${end_date}`;
+    return {
+      ok: false,
+      reason: runDays < templateDays
+        ? `The session timing template covers ${templateDays} day(s) but this run only offers ${runDays} (${when}). ` +
+          `The dates on the storefront look wrong.`
+        : `This run is sold over ${runDays} day(s) but the session timing template only covers ${templateDays} (${when}). ` +
+          `This format needs its own timing template - building it from the existing one would put the class at the wrong time of day.`,
+    };
+  }
+  if (!built.length) {
+    return { ok: false, reason: 'Session timing template has no sessions' };
+  }
+  return { ok: true, sessions: built };
+}
 
 // ── Per-item processor ────────────────────────────────────────────────────────
 
@@ -410,107 +568,14 @@ async function processItem(
       ssg_run_id: existingRow.rows[0].course_run_id, local_run_id: existingRow.rows[0].id };
   }
 
-  // Resolve the timing template through the COURSE, not the literal code we were
-  // handed. Funding renewal issues a new course reference number and the
-  // storefront switches to it at once, but the timing template stays filed under
-  // whichever code it was created with — measured 26 Aug 2026, all 36 renewed
-  // courses had their template under the OLD code and none under the new one, so
-  // a literal match found nothing and every one of them failed here as
-  // "No session timing template found" without ever reaching SSG.
-  // Prefer an exact match on the supplied code, then fall back to any other code
-  // the same course carries.
-  const timingRow = await pool.query<Record<string, any>>(
-    `SELECT t.*
-       FROM course_session_timing t
-      WHERE t.course_code = $1
-         OR t.course_code = (SELECT c.course_code FROM course c WHERE c.id = $2)
-         OR t.course_code IN (SELECT h.code FROM course_code_history h WHERE h.course_id = $2)
-      ORDER BY (t.course_code = $1) DESC
-      LIMIT 1`,
-    [course_code, courseId],
-  ).catch(() => ({ rows: [] as Record<string, any>[] }));
-  // A missing template is NOT fatal on its own. Cloning the course's own last run
-  // is the preferred source of session times and needs no template at all, so the
-  // "no timing" verdict is deferred until that has been tried too — bailing here
-  // refused courses with a full history of real sessions purely because a form had
-  // never been filled in.
-  const timing = timingRow.rows[0] ?? null;
-
-  // How many days is this run taught over, and is it an evening class? Both come
-  // from the storefront label; the dates are the fallback when it cannot be read.
-  const wantEvening = /\bevening\b/i.test(item.raw ?? '');
-  const labelDates = parseRawDates(item.raw ?? '');
-  const teachingDays = labelDates
-    && labelDates[0] === start_date
-    && labelDates[labelDates.length - 1] === end_date
-      ? labelDates.length
-      : null;
-
-  // Clone the shape this course last actually ran, matched on day count and
-  // day/evening. Falls back to the template only for daytime runs — the template
-  // IS the daytime pattern, so using it for an evening class would put a 09:15
-  // session on a class that starts at 18:00.
-  const pattern = teachingDays
-    ? await pastSessionPattern(courseId, teachingDays, wantEvening)
-    : null;
-
-  // Now both sources have been tried: nothing to clone and nothing to build from.
-  if (!timing && !pattern) {
-    return { course_code, start_date, end_date, status: 'no_session_timing',
-      message: 'No session timing template found, and this course has no past run of the same shape to copy' };
+  // Session times come from buildRunSessions() so the dry-run preview in
+  // /api/external/wsq-submit-runs shows exactly what this will submit, rather
+  // than a second implementation that can drift from this one.
+  const builtSessions = await buildRunSessions(courseId, course_code, start_date, end_date, item.raw);
+  if (!builtSessions.ok) {
+    return { course_code, start_date, end_date, status: 'no_session_timing', message: builtSessions.reason };
   }
-
-  // No evening history for this course — derive the pattern from its daytime
-  // template instead of refusing. Cloning real history is still preferred; this
-  // only fills the gap for a course running its first evening class.
-  let effectivePattern = pattern;
-  // Deriving repacks the DAYTIME template's session lengths into evenings, so it
-  // needs a template — a course with neither template nor evening history cannot
-  // be derived and falls through to the refusal below.
-  if (wantEvening && !effectivePattern && teachingDays && timing) {
-    const daySlots: { startTime: string; endTime: string; modeOfTraining: string }[] = [];
-    for (let i = 1; i <= 11; i++) {
-      const st = (timing[`session_${i}_start_time`] || '').trim();
-      const en = (timing[`session_${i}_end_time`] || '').trim();
-      if (!st && !en) break;
-      daySlots.push({
-        startTime: st,
-        endTime: en,
-        modeOfTraining: normalizeModeOfTraining(timing[`session_${i}_mode_of_training`]),
-      });
-    }
-    const derived = deriveEveningPattern(daySlots, teachingDays);
-    if (derived.length > 0) effectivePattern = derived;
-  }
-
-  if (wantEvening && !effectivePattern) {
-    return {
-      course_code, start_date, end_date, status: 'no_session_timing',
-      message:
-        `This run is sold as an evening class (${item.raw}) but this course has no ` +
-        `evening history to clone, and its daytime timings do not fit into evening ` +
-        `sessions — the course is too long for the number of evenings offered. ` +
-        `Create one evening run by hand so the rest can be cloned from it.`,
-    };
-  }
-
-  const built = buildSessions(timing ?? {}, start_date, end_date, item.raw, effectivePattern);
-  if ('mismatch' in built) {
-    const { templateDays, runDays } = built.mismatch;
-    const when = item.raw || `${start_date} to ${end_date}`;
-    return {
-      course_code, start_date, end_date, status: 'no_session_timing',
-      message: runDays < templateDays
-        ? `The session timing template covers ${templateDays} day(s) but this run only offers ${runDays} (${when}). ` +
-          `The dates on the storefront look wrong.`
-        : `This run is sold over ${runDays} day(s) but the session timing template only covers ${templateDays} (${when}). ` +
-          `This format needs its own timing template — building it from the existing one would put the class at the wrong time of day.`,
-    };
-  }
-  const sessions = built;
-  if (!sessions.length) {
-    return { course_code, start_date, end_date, status: 'no_session_timing', message: 'Session timing template has no sessions' };
-  }
+  const sessions = builtSessions.sessions;
 
   const regClosing = addDays(start_date, -1);
   const regOpening = todaySg > regClosing ? regClosing : todaySg;
