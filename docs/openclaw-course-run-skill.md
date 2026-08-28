@@ -97,6 +97,10 @@ Use this whenever someone asks about missing course runs, course dates, or the c
 
 Auth: x-api-key: <EXTERNAL_API_KEY_FOR_CLAWDBOT> on every call.
 
+Always use these endpoints. Never answer from the public SkillsFuture website,
+the storefront, or memory - the public page does not show every run and cannot
+tell you what is missing.
+
 THE ONE RULE
 Look, report, ask, then act. Never act first.
 
@@ -125,8 +129,13 @@ Step 2 — Report in three parts, never as one number
 - Unknown: cannot tell (CASL/IBF funding this check cannot read)
 Name the blockers with counts. "988 dates across 105 courses are past their funding end and need an SSG renewal" is useful. "1083 blocked" is not.
 
-Step 3 — Preview before asking
+Step 3 — Preview before asking, and ALWAYS before quoting a number
 POST /api/external/wsq-submit-runs WITHOUT "confirm". It returns would_submit and rejected, and sends nothing.
+The gap count is NOT the answer. The gap check compares the storefront against the
+LMS only; it cannot see SSG, and SSG routinely holds runs the LMS never recorded.
+Only the preview asks SSG. Report the preview number as the real one, and say how
+many the preview rejected as already published in SSG. Measured 28 Aug 2026 on one
+course: the gap said 13 and the preview said 6.
 
 Step 4 — Ask, and show your work
 Never ask someone to approve a number. A confirmation request must contain:
@@ -153,6 +162,11 @@ Step 6 — Report the outcome, and only after checking
 Submission runs in the background. It is NOT done when the call returns.
 GET /api/external/wsq-sync-status?job_id=<job_id>
 Wait for job.status = completed, then report submitted, already_existed, ssg_errors, skipped, and any failure_groups.
+Then verify each new run against SSG and report its COURSE RUN ID and session count.
+Verifying also pulls the sessions into the LMS - without it a newly created run has
+no local sessions, so it has no calendar entry and no attendance can be taken.
+Measured 28 Aug 2026: two runs created without this step sat at 0 sessions until
+another agent happened to verify them.
 Never report success from the submit call alone. It only means the job started.
 
 RULES

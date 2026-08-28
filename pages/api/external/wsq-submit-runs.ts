@@ -256,6 +256,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return null;
     };
 
+    // SSG runs whose dates match NOTHING the storefront sells. These are not
+    // duplicates and never appear in `rejected`, so without this the preview reads
+    // "0 already published" while SSG quietly holds a different schedule entirely.
+    //
+    // Seen 28 Aug 2026 on TGS-2026064717 (Application of BIM using Revit): the
+    // storefront sold 18 dates, SSG held 8, and not one date matched. Submitting
+    // the 18 would have left the course with 26 runs in a government system, 8 of
+    // them on dates nobody can book. TGS-2026064719 has the same divergence.
+    //
+    // Whether the storefront or SSG is right is a human decision - somebody
+    // changed a schedule and did not update the other side - so this is surfaced,
+    // never acted on.
+    const schedule_drift: { course_code: string; ssg_run_id: string | null; start_date: string; end_date: string }[] = [];
+
     const ssgDates = new Map<string, Set<string>>();
     for (const code of new Set(accepted.map((a) => a.course_code))) {
       const r = await ssgApi.searchCourseRunsByCode(code, { pageSize: 100, includeExpired: true });
@@ -269,13 +283,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const data: any = (r.data as any)?.data ?? r.data;
       const runs: any[] = data?.course?.runs ?? data?.runs ?? [];
       const set = new Set<string>();
+      const soldForCode = soldDates.get(code);
       for (const run of runs) {
         const st = toISO(run?.courseStartDate ?? run?.courseDates?.start);
         const en = toISO(run?.courseEndDate ?? run?.courseDates?.end);
-        if (st && en) set.add(st + '|' + en);
+        if (!st || !en) continue;
+        set.add(st + '|' + en);
+        // Only future runs matter: a past run on a date no longer sold is just history.
+        if (st >= today && !soldForCode?.has(st + '|' + en)) {
+          const id = run?.runId ?? run?.id ?? null;
+          schedule_drift.push({
+            course_code: code,
+            ssg_run_id: id == null ? null : String(id),
+            start_date: st,
+            end_date: en,
+          });
+        }
       }
       ssgDates.set(code, set);
     }
+    schedule_drift.sort((a, b) => a.start_date.localeCompare(b.start_date));
 
     const confirmed: Item[] = [];
     for (const it of accepted) {
@@ -331,6 +358,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? 'Nothing left to submit — SSG already has a run for every date requested.'
           : 'Nothing left to submit — no run could have its sessions built. See rejected for the reason on each.',
         rejected,
+        schedule_drift,
+        schedule_drift_warning: schedule_drift.length > 0
+          ? `WARNING: nothing needs creating, but SSG holds ${schedule_drift.length} future run(s) for this course on ` +
+            `dates the storefront does not sell. Report this — somebody needs to decide whether those SSG runs should ` +
+            `be cancelled or the storefront updated.`
+          : null,
       });
     }
 
@@ -345,6 +378,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           `show those to a human, and re-send the same request with "confirm": true only if they agree.`,
         would_submit: previewed,
         rejected,
+        schedule_drift,
+        schedule_drift_warning: schedule_drift.length > 0
+          ? `WARNING: SSG holds ${schedule_drift.length} future run(s) for this course on dates the storefront does not sell. ` +
+            `They are not duplicates of anything above, so submitting would leave the course with two different schedules ` +
+            `in a government system. Report this to the person asking and do NOT submit until they decide which schedule is ` +
+            `correct — the storefront's or SSG's. This is a human decision.`
+          : null,
       });
     }
 
@@ -361,6 +401,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         job_id: result.jobId,
         submitting: previewed.length,
         rejected,
+        schedule_drift,
         message:
           `Submitting ${previewed.length} run(s) to SSG in the background. ` +
           `Poll GET /api/external/wsq-sync-status?job_id=${result.jobId} for the outcome — ` +
