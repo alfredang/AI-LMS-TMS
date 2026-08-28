@@ -59,7 +59,12 @@ import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 
 const MAX_ITEMS = 250;
 
-type Item = { course_code: string; start_date: string; end_date: string };
+// `raw` is the storefront's own label for the run ("5/12/13/19/26 Sep 2026
+// (Sat/Sun)"). It is the ONLY thing that states the individual teaching days —
+// start and end alone cannot express a run taught on five scattered Saturdays —
+// and run-sync reads it when building sessions. Dropping it here would silently
+// put three of that run's five classes on days nobody attends.
+type Item = { course_code: string; start_date: string; end_date: string; raw?: string };
 type Rejected = Item & { reason: string };
 
 const isDate = (s: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(s ?? ''));
@@ -143,34 +148,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         error: `Could not read the storefront schedule: ${e instanceof Error ? e.message : String(e)}`,
       });
     }
-    const soldDates = new Map<string, Set<string>>();
+    // date-pair -> the label describing it, so an explicit items[] request can
+    // recover the label the caller had no way of supplying.
+    const soldDates = new Map<string, Map<string, string>>();
     for (const m of magento.courses || []) {
       const code = (m.course_code ?? '').trim();
       if (!code) continue;
-      const set = soldDates.get(code) ?? new Set<string>();
+      const byDates = soldDates.get(code) ?? new Map<string, string>();
       for (const s of m.schedules || []) {
         const st = s.course_start_date?.slice(0, 10);
         const en = s.course_end_date?.slice(0, 10);
-        if (st && en) set.add(`${st}|${en}`);
+        if (st && en) byDates.set(`${st}|${en}`, String(s.raw ?? ''));
       }
-      soldDates.set(code, set);
+      soldDates.set(code, byDates);
     }
 
     // ── Build the candidate list ──────────────────────────────────────────────
     let candidates: Item[];
     if (rawItems.length > 0) {
-      candidates = rawItems.map((i) => ({
-        course_code: String(i?.course_code ?? '').trim(),
-        start_date: String(i?.start_date ?? '').trim(),
-        end_date: String(i?.end_date ?? '').trim(),
-      }));
+      candidates = rawItems.map((i) => {
+        const course_code = String(i?.course_code ?? '').trim();
+        const start_date = String(i?.start_date ?? '').trim();
+        const end_date = String(i?.end_date ?? '').trim();
+        return {
+          course_code,
+          start_date,
+          end_date,
+          raw: soldDates.get(course_code)?.get(`${start_date}|${end_date}`),
+        };
+      });
     } else {
       candidates = [];
-      for (const [code, dates] of soldDates.entries()) {
+      for (const [code, byDates] of soldDates.entries()) {
         if (code.toUpperCase() !== onlyCourse) continue;
-        for (const d of dates) {
+        for (const [d, raw] of byDates.entries()) {
           const [start_date, end_date] = d.split('|');
-          candidates.push({ course_code: code, start_date, end_date });
+          candidates.push({ course_code: code, start_date, end_date, raw });
         }
       }
       if (candidates.length === 0) {
@@ -198,6 +211,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!soldDates.get(it.course_code)?.has(`${it.start_date}|${it.end_date}`)) {
         reject('not sold on the storefront for these exact dates'); continue;
       }
+      // Prefer the storefront's label over anything the caller supplied.
+      it.raw = soldDates.get(it.course_code)!.get(`${it.start_date}|${it.end_date}`) || it.raw;
 
       const canonical = canonicalByAlias.get(it.course_code) ?? it.course_code;
       const course = courses.get(canonical);
