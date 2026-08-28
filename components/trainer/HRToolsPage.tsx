@@ -10,16 +10,22 @@ const HR_TOOLS = [
     href: 'https://alfredang.github.io/mbti/#landing',
   },
   {
-    title: 'AI Interview Coach',
+    title: 'AI Interviewing',
     description: 'Practice interview questions and receive AI-powered feedback to sharpen your responses',
     icon: IconName.Chat,
-    href: 'https://alfredang.github.io/ai-interviewing/',
+    href: 'https://alfredang.github.io/AIInterviewing/',
   },
   {
     title: 'HR Interview Gen',
     description: 'Generate tailored HR interview questions to streamline candidate screening and evaluation',
     icon: IconName.Assignment,
     href: 'https://alfredang.github.io/hr-interviewing/',
+  },
+  {
+    title: 'AI Coaching',
+    description: 'AI-guided coaching conversations to support staff development, goal setting and performance growth',
+    icon: IconName.Chat,
+    href: 'https://alfredang.github.io/AICoaching/',
   },
 ];
 

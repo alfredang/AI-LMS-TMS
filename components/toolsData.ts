@@ -87,8 +87,9 @@ export const FINANCE_TOOL_ITEMS: ToolLinkItem[] = [
 
 export const HR_TOOL_ITEMS: ToolLinkItem[] = [
   { label: 'MBTI', icon: IconName.Analytics, href: 'https://alfredang.github.io/mbti/#landing' },
-  { label: 'AI Interview Coach', icon: IconName.Chat, href: 'https://alfredang.github.io/ai-interviewing/' },
+  { label: 'AI Interviewing', icon: IconName.Chat, href: 'https://alfredang.github.io/AIInterviewing/' },
   { label: 'HR Interview Gen', icon: IconName.Assignment, href: 'https://alfredang.github.io/hr-interviewing/' },
+  { label: 'AI Coaching', icon: IconName.Chat, href: 'https://alfredang.github.io/AICoaching/' },
 ];
 
 export const STAT_TOOL_ITEMS: ToolLinkItem[] = [
