@@ -4,10 +4,10 @@ import { Icon, IconName } from '../ui/Icon';
 
 const HR_TOOLS = [
   {
-    title: 'MBTI',
-    description: 'Myers-Briggs personality type assessment to explore preferences across 16 personality types',
-    icon: IconName.Analytics,
-    href: 'https://alfredang.github.io/mbti/#landing',
+    title: 'HR Recruitment',
+    description: 'Plan and run the recruitment cycle, from role definition and sourcing through to candidate shortlisting',
+    icon: IconName.Assignment,
+    href: 'https://alfredang.github.io/hr-recruitment/',
   },
   {
     title: 'AI Interviewing',
@@ -16,16 +16,16 @@ const HR_TOOLS = [
     href: 'https://alfredang.github.io/AIInterviewing/',
   },
   {
-    title: 'HR Interview Gen',
-    description: 'Generate tailored HR interview questions to streamline candidate screening and evaluation',
-    icon: IconName.Assignment,
-    href: 'https://alfredang.github.io/hr-interviewing/',
-  },
-  {
-    title: 'AI Coaching',
-    description: 'AI-guided coaching conversations to support staff development, goal setting and performance growth',
+    title: 'AI Job Coaching',
+    description: 'AI-guided coaching conversations to support career development, goal setting and performance growth',
     icon: IconName.Chat,
     href: 'https://alfredang.github.io/AICoaching/',
+  },
+  {
+    title: 'MBTI',
+    description: 'Myers-Briggs personality type assessment to explore preferences across 16 personality types',
+    icon: IconName.Analytics,
+    href: 'https://alfredang.github.io/mbti/#landing',
   },
 ];
 
