@@ -267,7 +267,11 @@ const stopPolling = useCallback(() => {
   const expandAll = () => setExpanded(new Set(filtered.map((g) => g.course_code)));
   const collapseAll = () => setExpanded(new Set());
 
-  const syncToSSG = async (items: { course_code: string; start_date: string; end_date: string }[], label: string) => {
+  // `raw` is the storefront's own label for the run ("1/4 Jan 2027 (Fri/Mon)").
+  // It is the ONLY thing that states the individual teaching days — start and end
+  // alone read as a consecutive range, so a Fri/Mon class becomes Fri/Sat. Pass it
+  // through; run-sync builds the sessions from it.
+  const syncToSSG = async (items: { course_code: string; start_date: string; end_date: string; raw?: string }[], label: string) => {
     // Only sync/retry past-dated classes when "Show past classes" is on. This gates
     // Retry-All + per-course + per-row retries at the action level — a safety net in
     // case stale (past-included) data is briefly present during a toggle reload.
@@ -387,7 +391,7 @@ const stopPolling = useCallback(() => {
     const items = filtered.flatMap((g) =>
       g.rows
         .filter((r) => r.start_date && r.end_date)
-        .map((r) => ({ course_code: g.course_code, start_date: r.start_date!, end_date: r.end_date! })),
+        .map((r) => ({ course_code: g.course_code, start_date: r.start_date!, end_date: r.end_date!, raw: r.raw })),
     );
     void syncToSSG(items, 'all courses, current filter');
   };
@@ -395,14 +399,14 @@ const stopPolling = useCallback(() => {
   const syncCourse = (g: CourseGroup) => {
     const items = g.rows
       .filter((r) => r.start_date && r.end_date)
-      .map((r) => ({ course_code: g.course_code, start_date: r.start_date!, end_date: r.end_date! }));
+      .map((r) => ({ course_code: g.course_code, start_date: r.start_date!, end_date: r.end_date!, raw: r.raw }));
     void syncToSSG(items, g.course_code);
   };
 
   const syncRow = (group: CourseGroup, row: Row) => {
     if (!row.start_date || !row.end_date) return;
     void syncToSSG(
-      [{ course_code: group.course_code, start_date: row.start_date, end_date: row.end_date }],
+      [{ course_code: group.course_code, start_date: row.start_date, end_date: row.end_date, raw: row.raw }],
       `${group.course_code} ${row.start_date}`,
     );
   };
