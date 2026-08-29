@@ -70,7 +70,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Job search integration
 - **My Calendar** — personal month calendar of the learner's scheduled classes
 - **Header quick nav** — My Classes, My Calendar and Ed Tools links in the top header (Billing remains in the sidebar as Billing History)
-- **Tools** — the full trainer tools catalogue mirrored in the learner sidebar (Ed Tools, Project Mgt, Six Sigma, Cyber Security, Finance, HR, Data Analytics, ML, Statistical, DOE, SPC, Sustainability, Networking, K8s, Blockchain, Quantum, Design, GenAI, Agentic AI, Virtual Tools), shared via `components/toolsData.ts`
+- **Tools** — the full trainer tools catalogue mirrored in the learner sidebar (Ed Tools, Project Mgt, Six Sigma, Cyber Security, Networking, Finance, HR, Data Analytics, ML, Statistical, DOE, SPC, Sustainability, K8s, Blockchain, Quantum, Design, GenAI, Agentic AI, Virtual Tools), shared via `components/toolsData.ts`; clicking a tools group opens the same tool card page as the trainer role (GenAI Tools stays link-only for learners)
 
 ### Trainer Features
 - **My Classes** — View assigned classes (upcoming, ongoing, completed)

@@ -14,7 +14,50 @@ import BillingHistoryView from '../components/BillingHistoryView';
 import CertificateHistoryView from '../components/CertificateHistoryView';
 import LearnerGrantCalculatorView from '../components/LearnerGrantCalculatorView';
 import ToolsMenu from '../components/ToolsMenu';
+// Tools card pages shared with the trainer role (all static card grids).
 import EdToolsPage from '../components/trainer/EdToolsPage';
+import ProjectMgtToolsPage from '../components/trainer/ProjectMgtToolsPage';
+import ProblemSolvingToolsPage from '../components/trainer/ProblemSolvingToolsPage';
+import CyberSecurityToolsPage from '../components/trainer/CyberSecurityToolsPage';
+import FinanceToolsPage from '../components/trainer/FinanceToolsPage';
+import HRToolsPage from '../components/trainer/HRToolsPage';
+import DataAnalyticsToolsPage from '../components/trainer/DataAnalyticsToolsPage';
+import MLToolsPage from '../components/trainer/MLToolsPage';
+import StatToolsPage from '../components/trainer/StatToolsPage';
+import DoeToolsPage from '../components/trainer/DoeToolsPage';
+import SpcToolsPage from '../components/trainer/SpcToolsPage';
+import SustainabilityToolsPage from '../components/trainer/SustainabilityToolsPage';
+import NetworkingToolsPage from '../components/trainer/NetworkingToolsPage';
+import K8sToolsPage from '../components/trainer/K8sToolsPage';
+import BlockchainToolsPage from '../components/trainer/BlockchainToolsPage';
+import QuantumToolsPage from '../components/trainer/QuantumToolsPage';
+import DesignToolsPage from '../components/trainer/DesignToolsPage';
+import AgenticAIToolsPage from '../components/trainer/AgenticAIToolsPage';
+import VirtualToolsPage from '../components/trainer/VirtualToolsPage';
+
+// Tools card page per sidebar TOOL_GROUPS key (components/toolsData.ts).
+// Groups without an entry (e.g. GenAI Tools) just expand their links.
+const TOOLS_PAGES: Record<string, React.FC> = {
+  edTools: EdToolsPage,
+  projectMgt: ProjectMgtToolsPage,
+  sixSigma: ProblemSolvingToolsPage,
+  cyberSecurity: CyberSecurityToolsPage,
+  finance: FinanceToolsPage,
+  hr: HRToolsPage,
+  dataAnalytics: DataAnalyticsToolsPage,
+  ml: MLToolsPage,
+  stat: StatToolsPage,
+  doe: DoeToolsPage,
+  spc: SpcToolsPage,
+  sustainability: SustainabilityToolsPage,
+  networking: NetworkingToolsPage,
+  k8s: K8sToolsPage,
+  blockchain: BlockchainToolsPage,
+  quantum: QuantumToolsPage,
+  design: DesignToolsPage,
+  agenticAi: AgenticAIToolsPage,
+  virtual: VirtualToolsPage,
+};
 
 interface NavItem {
   view: View;
@@ -36,9 +79,18 @@ const LearnerLayout: React.FC = () => {
   const { currentView, selectedCourse, handleNavigation } = useLms();
   const appVersion = useAppVersion();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // Which sidebar tools group's card page is shown when currentView === View.Tools
+  const [toolsGroup, setToolsGroup] = useState<string | null>(null);
 
   const navigateTo = (view: View) => {
     handleNavigation(view);
+  };
+
+  const handleToolsGroupSelect = (key: string) => {
+    if (TOOLS_PAGES[key]) {
+      setToolsGroup(key);
+      handleNavigation(View.Tools);
+    }
   };
 
   const renderContent = () => {
@@ -61,6 +113,10 @@ const LearnerLayout: React.FC = () => {
         return <MyCalendarView role="learner" />;
       case View.EdTools:
         return <EdToolsPage />;
+      case View.Tools: {
+        const ToolsPage = toolsGroup ? TOOLS_PAGES[toolsGroup] : undefined;
+        return ToolsPage ? <ToolsPage /> : <CourseList />;
+      }
       case View.Courses:
       case View.Dashboard:
       default:
@@ -119,7 +175,11 @@ const LearnerLayout: React.FC = () => {
               })}
 
               {/* Full TOOLS section — same catalogue as the trainer sidebar */}
-              <ToolsMenu collapsed={!isSidebarOpen} />
+              <ToolsMenu
+                collapsed={!isSidebarOpen}
+                activeGroupKey={currentView === View.Tools && !selectedCourse ? toolsGroup : null}
+                onSelectGroup={handleToolsGroupSelect}
+              />
             </div>
             {isSidebarOpen && <p className="px-3 py-2 text-[10px] text-gray-400 dark:text-gray-300 font-mono border-t border-gray-200 dark:border-gray-700">version {appVersion}</p>}
           </aside>

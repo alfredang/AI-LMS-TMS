@@ -4,6 +4,10 @@ import { TOOL_GROUPS, ToolLinkItem } from '@components/toolsData';
 
 interface ToolsMenuProps {
   collapsed?: boolean;
+  /** Group key whose tools page is currently shown in the main content (highlights the header). */
+  activeGroupKey?: string | null;
+  /** Called with the group key when a group header is clicked, so the host layout can show its tools card page. */
+  onSelectGroup?: (key: string) => void;
 }
 
 const inactiveClass = 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white';
@@ -24,10 +28,11 @@ const ToolLink: React.FC<ToolLinkItem> = ({ label, icon, href }) => (
 
 /**
  * The full sidebar TOOLS section (same catalogue as the trainer sidebar,
- * sourced from components/toolsData.ts) as pure expand/collapse external
- * links — no page navigation, so any role's layout can embed it.
+ * sourced from components/toolsData.ts) as expand/collapse external links.
+ * Optionally page-aware: pass onSelectGroup/activeGroupKey and the host
+ * layout can render that group's tools card page (as the trainer role does).
  */
-const ToolsMenu: React.FC<ToolsMenuProps> = ({ collapsed = false }) => {
+const ToolsMenu: React.FC<ToolsMenuProps> = ({ collapsed = false, activeGroupKey = null, onSelectGroup }) => {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [openSubGroups, setOpenSubGroups] = useState<Record<string, boolean>>({});
 
@@ -51,13 +56,20 @@ const ToolsMenu: React.FC<ToolsMenuProps> = ({ collapsed = false }) => {
       {TOOL_GROUPS.map(group => (
         <React.Fragment key={group.key}>
           <button
-            onClick={() => toggleGroup(group.key)}
+            onClick={() => {
+              toggleGroup(group.key);
+              onSelectGroup?.(group.key);
+            }}
             title={collapsed ? group.label : undefined}
-            className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${inactiveClass}`}
+            className={`group flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} w-full rounded-xl py-2.5 text-sm font-medium transition-all duration-150 ${
+              activeGroupKey === group.key ? 'bg-primary/10 text-primary' : inactiveClass
+            }`}
           >
             <Icon
               name={group.icon}
-              className="w-[18px] h-[18px] flex-shrink-0 text-gray-400 dark:text-gray-500 transition-colors"
+              className={`w-[18px] h-[18px] flex-shrink-0 transition-colors ${
+                activeGroupKey === group.key ? 'text-primary' : 'text-gray-400 dark:text-gray-500'
+              }`}
             />
             {!collapsed && <span className="truncate">{group.label}</span>}
             {!collapsed && (
@@ -65,7 +77,7 @@ const ToolsMenu: React.FC<ToolsMenuProps> = ({ collapsed = false }) => {
                 name={IconName.ChevronDown}
                 className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform duration-200 ${
                   openGroups[group.key] ? 'rotate-0' : '-rotate-90'
-                } text-gray-400 dark:text-gray-500`}
+                } ${activeGroupKey === group.key ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}`}
               />
             )}
           </button>
