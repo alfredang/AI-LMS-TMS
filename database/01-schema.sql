@@ -3041,13 +3041,17 @@ CREATE TABLE public.feedback_form_response (
     learner_email text,
     learner_name text,
     answers jsonb NOT NULL,
-    submitted_at timestamp with time zone NOT NULL DEFAULT NOW()
+    submitted_at timestamp with time zone NOT NULL DEFAULT NOW(),
+    trainer_emailed_at timestamp with time zone
 );
 
 CREATE INDEX idx_feedback_response_course_run
     ON public.feedback_form_response(course_run_id);
 CREATE INDEX idx_feedback_response_submitted
     ON public.feedback_form_response(submitted_at);
+CREATE INDEX idx_feedback_response_trainer_emailed
+    ON public.feedback_form_response(trainer_emailed_at)
+    WHERE trainer_emailed_at IS NULL;
 
 
 --

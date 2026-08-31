@@ -219,7 +219,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Quiz Generator** — AI-generated quizzes based on course content
 
 ### Automation Features
-- **Task Scheduler** — Schedule and run automated tasks: Auto Create Certificates, Auto Send Course Confirmation, Auto Create Learners, Auto Create Assessment Records, etc.
+- **Task Scheduler** — Schedule and run automated tasks: Auto Create Certificates, Auto Send Course Confirmation, Auto Create Learners, Auto Create Assessment Records, Auto Send Class Evaluation to Trainers (compiles learner feedback for ended classes and emails trainers daily at 6:30 PM SGT), etc.
 - **Webhook System** — Configure webhooks with full logging for external integrations
 - **Trainer Invitation Workflow** — Automated cascading trainer invitations with accept/decline webhooks; if a trainer declines, system auto-sends to next available trainer
 - **Certificate Workflow** — Auto-generate certificates after class completion, upload to Google Drive, and email to learners
