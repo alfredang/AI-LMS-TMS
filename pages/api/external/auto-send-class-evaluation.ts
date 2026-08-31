@@ -137,6 +137,10 @@ async function _runAutomationInner() {
     const tp = tpResult.rows[0];
     const shortname: string = tp.company_shortname || tp.company_name || 'LMS';
     const companyName: string = tp.company_name || shortname;
+    // Subject tag: initials of a multi-word name ("Tertiary Infotech Academy" → "TIA"),
+    // otherwise the shortname as-is.
+    const initials = shortname.split(/\s+/).map((w: string) => w[0]).join('').toUpperCase();
+    const subjectTag = initials.length >= 2 ? initials : shortname;
     const ccList: string[] = (tp.feedback_email_cc || '')
       .split(',')
       .map((e: string) => e.trim())
@@ -226,7 +230,7 @@ async function _runAutomationInner() {
 
         const result = await sendViaGmailOAuth({
           to: [...trainers.map(t => t.email), ...ccList].join(', '),
-          subject: `[${shortname}] Class Evaluation - ${course_title} (${run_code})`,
+          subject: `[${subjectTag}] Class Evaluation - ${course_title} (${run_code})`,
           text,
         });
 
