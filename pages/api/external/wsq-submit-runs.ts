@@ -99,11 +99,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ── Reference data ────────────────────────────────────────────────────────
     const courses = new Map((await pool.query<{
-      id: string; course_code: string; title: string | null; funding_to: string | null; has_timing: boolean;
+      id: string; course_code: string; title: string | null; funding_to: string | null;
     }>(
       `SELECT c.id, c.course_code, c.title,
-              to_char(c.ssg_wsq_support_to, 'YYYY-MM-DD') AS funding_to,
-              EXISTS (SELECT 1 FROM course_session_timing t WHERE t.course_code = c.course_code) AS has_timing
+              to_char(c.ssg_wsq_support_to, 'YYYY-MM-DD') AS funding_to
          FROM course c WHERE c.course_code LIKE 'TGS-%'`,
     )).rows.map((r) => [r.course_code, r]));
 
@@ -218,7 +217,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const canonical = canonicalByAlias.get(it.course_code) ?? it.course_code;
       const course = courses.get(canonical);
       if (!course) { reject('course does not resolve to any LMS course, even via course_code_history'); continue; }
-      if (!course.has_timing) { reject('course has no session timing template — no sessions could be built'); continue; }
       if (!course.funding_to) { reject('no funding window on record (CASL/IBF funding may not be readable yet)'); continue; }
       if (it.start_date > course.funding_to) {
         reject(`start date is after the funding support period ends (${course.funding_to}) — SSG will reject it`); continue;
