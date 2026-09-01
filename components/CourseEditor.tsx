@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { Course, Topic, Subtopic, ModeOfLearning, UserRole, AssessmentMethodKey, ASSESSMENT_METHOD_LABELS, DEFAULT_ASSESSMENT_METHODS } from '@app-types';
 import { Button } from './ui/Button';
@@ -38,6 +38,7 @@ interface TrainerOption {
     user_id: string;
     trainer_name: string;
     email: string;
+    telephone?: string | null;
     status: string | null;
     account_status: string | null;
 }
@@ -188,17 +189,23 @@ const EditableTopicAccordion: React.FC<{
     // signal value carries the desired open state.
     collapseSignal?: number;
     expandSignal?: number;
+    /** Initial open state (developer edit mode mounts topics collapsed). */
+    defaultOpen?: boolean;
 }> = ({
     topic, onUpdateTitle, onDelete, onAddSubtopic, onUpdateSubtopic, onDeleteSubtopic,
     draggedSubtopic, dropTargetSubtopic, onSubtopicDragStart, onSubtopicDrop, onSubtopicDropAtEnd, onSubtopicDragOver, onSubtopicDragLeave, onSubtopicDragEnd, isSubtopicDragging,
     onSelfDragStart, onSelfDragEnd,
     resourceLinks, onAddResourceLink, onUpdateResourceLink, onUpdateResourceLinkQuiz, onDeleteResourceLink, onReorderResourceLink, onMoveResourceLink,
     draggedResourceLinkId, onResourceLinkDragStart, onResourceLinkDragEnd,
-    collapseSignal, expandSignal
+    collapseSignal, expandSignal, defaultOpen
 }) => {
-        const [isSubtopicsOpen, setSubtopicsOpen] = useState(true);
-        useEffect(() => { if (collapseSignal !== undefined) setSubtopicsOpen(false); }, [collapseSignal]);
-        useEffect(() => { if (expandSignal !== undefined) setSubtopicsOpen(true); }, [expandSignal]);
+        const [isSubtopicsOpen, setSubtopicsOpen] = useState(defaultOpen !== false);
+        // Skip the signal effects on mount so `defaultOpen` governs the initial
+        // state — signals only act on later Collapse/Expand All clicks.
+        const signalsArmed = useRef(false);
+        useEffect(() => { if (signalsArmed.current && collapseSignal !== undefined) setSubtopicsOpen(false); }, [collapseSignal]);
+        useEffect(() => { if (signalsArmed.current && expandSignal !== undefined) setSubtopicsOpen(true); }, [expandSignal]);
+        useEffect(() => { signalsArmed.current = true; }, []);
         // Tracks which Quiz-type resource link row has its editor modal open.
         // Only one modal at a time; clicking Edit Quiz on a row sets this to
         // the row id. Closing the modal clears it.
@@ -597,12 +604,17 @@ const CourseEditor: React.FC = () => {
     // Bumped to broadcast a collapse/expand-all action to every topic accordion.
     const [collapseAllSignal, setCollapseAllSignal] = useState(0);
     const [expandAllSignal, setExpandAllSignal] = useState(0);
-    const [allTopicsCollapsed, setAllTopicsCollapsed] = useState(false);
+    // Developer edit mode starts with every lesson topic collapsed (so the
+    // button reads "Expand All Topics"); other roles keep topics open.
+    const [allTopicsCollapsed, setAllTopicsCollapsed] = useState(role === UserRole.Developer);
 
     // Developer-only: each editor section is collapsible and reachable via the
-    // side nav. A section id present in this set is collapsed (default: all open).
+    // side nav. A section id present in this set is collapsed. Developer edit
+    // mode starts with Assessment + Approved Trainers collapsed — expand on demand.
     const isDeveloperView = role === UserRole.Developer;
-    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+        () => isDeveloperView ? new Set(['assessment-methods', 'approved-trainers']) : new Set()
+    );
     const toggleSection = (id: string) => setCollapsedSections(prev => {
         const next = new Set(prev);
         if (next.has(id)) next.delete(id); else next.add(id);
@@ -704,6 +716,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 skillsfutureLink: editingCourse.skillsfutureLink,
                 brochureLink: editingCourse.brochureLink,
                 approvedTrainers: normalizedApprovedTrainers,
+                favoriteTrainers: (editingCourse.favoriteTrainers || []).map((t: string) => normalizeApprovedTrainerName(t)).filter(Boolean),
                 numOfTrainers: normalizedApprovedTrainers.length,
                 trainersList: normalizedApprovedTrainers.join(' | '),
                 trainersEmailList: editingCourse.trainersEmailList || '',
@@ -738,10 +751,50 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     };
 
     const selectedApprovedTrainers = (course.approvedTrainers || []).map(normalizeApprovedTrainerName).filter(Boolean);
-    const availableTrainerChoices = availableTrainers.filter(trainer => {
-        const matchesSearch = !trainerSearch || trainer.trainer_name.toLowerCase().includes(trainerSearch.toLowerCase()) || trainer.email.toLowerCase().includes(trainerSearch.toLowerCase());
-        return matchesSearch && !selectedApprovedTrainers.includes(trainer.trainer_name);
+    const favoriteTrainers = (course.favoriteTrainers || []).map(normalizeApprovedTrainerName).filter(Boolean);
+    // Search results only appear once the admin starts typing — the full
+    // directory is never listed by default.
+    const availableTrainerChoices = trainerSearch.trim()
+        ? availableTrainers.filter(trainer => {
+            const q = trainerSearch.toLowerCase();
+            const matchesSearch = trainer.trainer_name.toLowerCase().includes(q) || trainer.email.toLowerCase().includes(q);
+            return matchesSearch && !selectedApprovedTrainers.includes(trainer.trainer_name);
+        })
+        : [];
+
+    // Contact details for the approved-trainers table, resolved from the
+    // trainer directory by name.
+    const trainerContactByName = new Map<string, { email: string; telephone: string }>();
+    availableTrainers.forEach(t => {
+        if (t.trainer_name) {
+            trainerContactByName.set(t.trainer_name, {
+                email: t.email || '',
+                telephone: (t.telephone && t.telephone !== 'N/A') ? t.telephone : '',
+            });
+        }
     });
+
+    // Star/unstar a trainer as a favorite for THIS course. Favorites are kept
+    // at the FRONT of the approved order (stable within each group), so the
+    // invitation cascade prefers them.
+    const toggleFavoriteTrainer = (trainerName: string) => {
+        const name = normalizeApprovedTrainerName(trainerName);
+        const newFavs = favoriteTrainers.includes(name)
+            ? favoriteTrainers.filter(n => n !== name)
+            : [...favoriteTrainers, name];
+        const reordered = [
+            ...selectedApprovedTrainers.filter(n => newFavs.includes(n)),
+            ...selectedApprovedTrainers.filter(n => !newFavs.includes(n)),
+        ];
+        setCourse(prev => ({
+            ...prev,
+            favoriteTrainers: newFavs,
+            approvedTrainers: reordered,
+            numOfTrainers: reordered.length,
+            trainersList: reordered.join(' | '),
+            trainersEmailList: buildTrainersEmailList(reordered),
+        }));
+    };
 
     const addApprovedTrainer = (trainerName: string) => {
         const normalizedTrainerName = normalizeApprovedTrainerName(trainerName);
@@ -763,6 +816,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         setCourse(prev => ({
             ...prev,
             approvedTrainers: updated,
+            favoriteTrainers: (prev.favoriteTrainers || []).filter(name => normalizeApprovedTrainerName(name) !== normalizedTrainerName),
             numOfTrainers: updated.length,
             trainersList: updated.join(' | '),
             trainersEmailList: buildTrainersEmailList(updated),
@@ -1183,6 +1237,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
                 numOfTrainers: selectedApprovedTrainers.length,
                 trainersList: selectedApprovedTrainers.join(' | '),
+                favoriteTrainers: favoriteTrainers.join(' | '),
                 // Sync assessmentMethods links to legacy columns so view mode always shows latest.
                 // A disabled method clears its legacy column, otherwise the stale link keeps showing.
                 writtenAssessmentLink: course.assessmentMethods?.writtenAssessment?.enabled
@@ -2343,6 +2398,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         onResourceLinkDragEnd={() => setDraggedResourceLinkId(null)}
                                         collapseSignal={collapseAllSignal}
                                         expandSignal={expandAllSignal}
+                                        defaultOpen={!isDeveloperView}
                                     />
                                 </div>
                             ))}
@@ -2412,6 +2468,93 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             onToggle={toggleSection}
                         >
                             <div className="space-y-4">
+                                {/* Approved trainers — ORDERED table (order = invitation preference).
+                                    ★ pins a favorite for this course to the front; rows drag to reorder. */}
+                                <div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                                        {selectedApprovedTrainers.length} approved trainer{selectedApprovedTrainers.length === 1 ? '' : 's'} — order is the invitation preference (drag rows to reorder; ★ favorites stay on top)
+                                    </div>
+                                    {selectedApprovedTrainers.length > 0 ? (
+                                        <div className={`overflow-x-auto rounded-md border border-gray-300 dark:border-gray-600 ${selectedApprovedTrainers.length > 10 ? 'max-h-[26rem] overflow-y-auto' : ''}`}>
+                                            <table className="min-w-full text-sm">
+                                                <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800 text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+                                                    <tr>
+                                                        <th className="px-3 py-2 w-10">#</th>
+                                                        <th className="px-2 py-2 w-10" title="Favorite for this course">★</th>
+                                                        <th className="px-3 py-2">Trainer</th>
+                                                        <th className="px-3 py-2">Telephone</th>
+                                                        <th className="px-3 py-2">Email</th>
+                                                        <th className="px-2 py-2 w-10"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                                    {selectedApprovedTrainers.map((trainerName, index) => {
+                                                        const contact = trainerContactByName.get(trainerName);
+                                                        const isFavorite = favoriteTrainers.includes(trainerName);
+                                                        return (
+                                                            <tr
+                                                                key={trainerName}
+                                                                draggable
+                                                                onDragStart={() => handleApprovedTrainerDragStart(trainerName)}
+                                                                onDragEnd={handleApprovedTrainerDragEnd}
+                                                                onDragOver={(e) => {
+                                                                    e.preventDefault();
+                                                                    if (trainerName !== draggedApprovedTrainer) {
+                                                                        setApprovedTrainerDropTarget(trainerName);
+                                                                    }
+                                                                }}
+                                                                onDragLeave={() => {
+                                                                    if (approvedTrainerDropTarget === trainerName) {
+                                                                        setApprovedTrainerDropTarget(null);
+                                                                    }
+                                                                }}
+                                                                onDrop={() => handleApprovedTrainerDrop(trainerName)}
+                                                                className={`cursor-grab ${
+                                                                    approvedTrainerDropTarget === trainerName
+                                                                        ? 'bg-blue-100 dark:bg-blue-900/40'
+                                                                        : isFavorite
+                                                                        ? 'bg-amber-50 dark:bg-amber-900/10'
+                                                                        : 'bg-white dark:bg-gray-900/40'
+                                                                } ${draggedApprovedTrainer === trainerName ? 'opacity-60' : ''}`}
+                                                                title="Drag to reorder trainer"
+                                                            >
+                                                                <td className="px-3 py-2 font-semibold text-gray-500 dark:text-gray-400">{index + 1}.</td>
+                                                                <td className="px-2 py-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => toggleFavoriteTrainer(trainerName)}
+                                                                        className={`text-lg leading-none ${isFavorite ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600 hover:text-amber-400'}`}
+                                                                        title={isFavorite ? 'Unstar favorite' : 'Star as favorite for this course (moves to top)'}
+                                                                        aria-label={`${isFavorite ? 'Unstar' : 'Star'} ${trainerName}`}
+                                                                    >
+                                                                        {isFavorite ? '★' : '☆'}
+                                                                    </button>
+                                                                </td>
+                                                                <td className="px-3 py-2 font-medium dark:text-white whitespace-nowrap">{trainerName}</td>
+                                                                <td className="px-3 py-2 text-gray-600 dark:text-gray-300 whitespace-nowrap">{contact?.telephone || '—'}</td>
+                                                                <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{contact?.email || '—'}</td>
+                                                                <td className="px-2 py-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeApprovedTrainer(trainerName)}
+                                                                        className="font-bold leading-none text-gray-400 hover:text-red-500"
+                                                                        aria-label={`Remove ${trainerName}`}
+                                                                    >
+                                                                        ×
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm text-gray-500 dark:text-gray-400">No approved trainers yet — add one below.</div>
+                                    )}
+                                </div>
+
+                                {/* Add trainer — results appear only while typing */}
                                 <div>
                                     <label htmlFor="trainerSearch" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Add Trainer</label>
                                     <input
@@ -2420,71 +2563,30 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         value={trainerSearch}
                                         onChange={(e) => setTrainerSearch(e.target.value)}
                                         className={inputClasses}
-                                        placeholder="Search active trainer by name or email"
+                                        placeholder="Type a trainer name or email to search…"
                                     />
                                 </div>
-                                {availableTrainerChoices.length > 0 && (
-                                    <div className="max-h-80 overflow-y-auto rounded-md border border-gray-300 dark:border-gray-600">
-                                        {availableTrainerChoices.map((trainer) => (
-                                            <button
-                                                key={trainer.user_id}
-                                                type="button"
-                                                onClick={() => addApprovedTrainer(trainer.trainer_name)}
-                                                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                                            >
-                                                <span className="dark:text-white">{trainer.trainer_name}</span>
-                                                <span className="text-gray-500 dark:text-gray-400">{trainer.email}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                                <div className="space-y-2">
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                                        {selectedApprovedTrainers.length} assigned trainer{selectedApprovedTrainers.length === 1 ? '' : 's'}
-                                    </div>
-                                    {selectedApprovedTrainers.length > 0 ? (
-                                        <div className="flex flex-wrap gap-2">
-                                            {selectedApprovedTrainers.map((trainerName) => (
-                                                <span
-                                                    key={trainerName}
-                                                    draggable
-                                                    onDragStart={() => handleApprovedTrainerDragStart(trainerName)}
-                                                    onDragEnd={handleApprovedTrainerDragEnd}
-                                                    onDragOver={(e) => {
-                                                        e.preventDefault();
-                                                        if (trainerName !== draggedApprovedTrainer) {
-                                                            setApprovedTrainerDropTarget(trainerName);
-                                                        }
-                                                    }}
-                                                    onDragLeave={() => {
-                                                        if (approvedTrainerDropTarget === trainerName) {
-                                                            setApprovedTrainerDropTarget(null);
-                                                        }
-                                                    }}
-                                                    onDrop={() => handleApprovedTrainerDrop(trainerName)}
-                                                    className={`inline-flex cursor-grab items-center gap-2 rounded-full px-3 py-1 text-sm ${
-                                                        approvedTrainerDropTarget === trainerName
-                                                            ? 'bg-blue-200 text-blue-900 dark:bg-blue-800/60 dark:text-blue-100'
-                                                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                                                    } ${draggedApprovedTrainer === trainerName ? 'opacity-60' : ''}`}
-                                                    title="Drag to reorder trainer"
+                                {trainerSearch.trim() !== '' && (
+                                    availableTrainerChoices.length > 0 ? (
+                                        <div className="max-h-80 overflow-y-auto rounded-md border border-gray-300 dark:border-gray-600">
+                                            {availableTrainerChoices.map((trainer) => (
+                                                <button
+                                                    key={trainer.user_id}
+                                                    type="button"
+                                                    onClick={() => addApprovedTrainer(trainer.trainer_name)}
+                                                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
                                                 >
-                                                    {trainerName}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeApprovedTrainer(trainerName)}
-                                                        className="font-bold leading-none"
-                                                        aria-label={`Remove ${trainerName}`}
-                                                    >
-                                                        ×
-                                                    </button>
-                                                </span>
+                                                    <span className="dark:text-white">{trainer.trainer_name}</span>
+                                                    <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                                        {(trainer.telephone && trainer.telephone !== 'N/A') ? `${trainer.telephone} · ` : ''}{trainer.email}
+                                                    </span>
+                                                </button>
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="text-sm text-gray-500 dark:text-gray-400">No assigned trainers selected.</div>
-                                    )}
-                                </div>
+                                        <div className="text-sm text-gray-500 dark:text-gray-400">No matching active trainer.</div>
+                                    )
+                                )}
                             </div>
                         </CollapsibleSection>
                     )}

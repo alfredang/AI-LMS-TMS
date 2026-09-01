@@ -348,6 +348,8 @@ export interface Course {
   trainersList?: string;
   trainersEmailList?: string;
   approvedTrainers?: string[];
+  /** Trainers starred as favorites for THIS course (admin/developer) — kept at the front of the approved order. */
+  favoriteTrainers?: string[];
 }
 
 export interface CourseDetail {
