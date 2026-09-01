@@ -17,6 +17,7 @@
 
 import { google } from 'googleapis';
 import pool from './db';
+import { queueTrainerWhatsAppNotification } from './trainerWhatsapp';
 import {
   buildInvitationReplacements,
   createInvitationToken,
@@ -501,6 +502,15 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
   );
 
   console.log(`📨 Trainer invitation ${allowResend ? '(resend) ' : ''}sent to ${nextTrainerName} (${trainer.email}) for course run ${classRow.course_run_id}`);
+
+  // Queue the WhatsApp nudge ("check your email to Accept/Decline") for the
+  // OpenClaw agent to deliver from the WhatsApp Business number. Fire-and-forget.
+  queueTrainerWhatsAppNotification({
+    courseRunUuid,
+    trainerName: trainer.full_name || nextTrainerName,
+    trainerEmail: trainer.email,
+    kind: 'invitation',
+  }).catch(() => { /* logged inside; never blocks the invitation */ });
 
   // Re-arm the exhausted-list alert: a fresh invitation means the run is no
   // longer exhausted, so a future exhaustion is allowed to alert again.

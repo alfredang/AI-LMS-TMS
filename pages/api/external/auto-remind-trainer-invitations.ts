@@ -5,6 +5,7 @@ import {
   sendGmail,
   TrainingProviderEmailConfig,
 } from '../../../lib/trainerInvitationSender';
+import { queueTrainerWhatsAppNotification } from '../../../lib/trainerWhatsapp';
 import {
   buildInvitationReplacements,
   DEFAULT_TRAINER_INVITATION_BODY,
@@ -124,16 +125,14 @@ async function sendReminderForInvitation(
     declineUrl,
   });
 
+  // The reminder is an exact duplicate of the Monday invitation email — same
+  // body, same Accept/Decline buttons and links — with only the subject
+  // prefixed "Reminder:".
   const subject = 'Reminder: ' + renderInvitationTemplate(
     tp.trainer_invitation_email_subject || DEFAULT_TRAINER_INVITATION_SUBJECT,
     replacements
   );
-  // Same body as the original, with a short reminder preamble on top.
-  const reminderPreamble =
-    `**Gentle reminder** — we have not yet received your response to the invitation below. ` +
-    `If you are available to conduct this class, please click **Accept Invitation**; ` +
-    `otherwise click **Decline Invitation** so we can arrange another trainer.\n\n`;
-  const bodyTemplate = reminderPreamble + (tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY);
+  const bodyTemplate = tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY;
   const htmlBody = renderInvitationHtmlEmail(bodyTemplate, replacements, acceptUrl, declineUrl);
 
   try {
@@ -159,6 +158,16 @@ async function sendReminderForInvitation(
   console.log(
     `🔔 [auto-remind-trainer-invitations] reminder sent to ${inv.trainer_name} (${inv.trainer_email}) for course run ${inv.external_course_run_id}`
   );
+
+  // WhatsApp nudge for the same reminder — delivered by the OpenClaw agent
+  // from the WhatsApp Business number. Fire-and-forget.
+  queueTrainerWhatsAppNotification({
+    courseRunUuid: inv.course_run_id,
+    trainerName: inv.trainer_name,
+    trainerEmail: inv.trainer_email,
+    kind: 'reminder',
+  }).catch(() => { /* logged inside; never blocks the reminder */ });
+
   return { ...base, message: `Reminder sent to ${inv.trainer_name}` };
 }
 
