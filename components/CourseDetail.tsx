@@ -2102,11 +2102,13 @@ interface TopicAccordionProps {
     courseId?: string;
     latestQuizScores?: Record<string, { score: number; total: number }>;
     onQuizSubmitted?: (quizId: string, result: { score: number; total: number }) => void;
+    /** Initial open state (default true). Course view mode mounts topics collapsed. */
+    defaultOpen?: boolean;
 }
 
-export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [], userId, courseId, latestQuizScores, onQuizSubmitted }) => {
+export const TopicAccordion: React.FC<TopicAccordionProps> = ({ topic, progress, bookmarkedSubtopics, onToggleBookmark, userRole, completedSubtopics, onToggleCompletion, completedTopics, onToggleTopicCompletion, resourceLinks = [], userId, courseId, latestQuizScores, onQuizSubmitted, defaultOpen }) => {
     const [openQuizId, setOpenQuizId] = React.useState<string | null>(null);
-    const [isOpen, setIsOpen] = React.useState(true);
+    const [isOpen, setIsOpen] = React.useState(defaultOpen !== false);
     const displayTitle = topic.title.replace('Module', 'Learning Unit');
 
     const hasSubtopics = topic.subtopics.length > 0;

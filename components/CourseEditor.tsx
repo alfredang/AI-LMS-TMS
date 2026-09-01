@@ -1770,18 +1770,28 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <ReadonlyValueField label="Total Duration" value={`${Number(course.trainingHours || 0) + Number(course.assessmentHours || 0)} hours`} />
                                 <ReadonlyValueField label="Mode of Learning" value={course.modeOfLearning?.join(', ')} />
                                 <ReadonlyValueField label="Course Type" value={course.courseType} />
-                                <ReadonlyValueField
-                                    label="Approved Trainers"
-                                    value={
-                                        selectedApprovedTrainers.length > 0 ? (
-                                            <div className="space-y-1">
-                                                {selectedApprovedTrainers.map((trainerName) => (
-                                                    <div key={trainerName}>{trainerName}</div>
-                                                ))}
-                                            </div>
-                                        ) : '—'
-                                    }
-                                />
+                                {/* Section menu — jumps to the matching card in the right column */}
+                                <div>
+                                    <span className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">On This Page</span>
+                                    <nav className="rounded-md border border-gray-300 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-700">
+                                        {([
+                                            ['view-learning-outcomes', 'Learning Outcomes'],
+                                            ['view-courseware', 'Courseware'],
+                                            ['section-lesson', 'Lesson'],
+                                            ['view-assessment-links', 'Assessment Links'],
+                                            ['view-approved-trainers', 'Approved Trainers'],
+                                        ] as Array<[string, string]>).map(([id, label]) => (
+                                            <button
+                                                key={id}
+                                                type="button"
+                                                onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                                                className="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-gray-50 dark:hover:bg-gray-700"
+                                            >
+                                                {label}
+                                            </button>
+                                        ))}
+                                    </nav>
+                                </div>
                             </div>
                         </Card>
 
@@ -1804,14 +1814,14 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 </div>
 
                     <div className="md:col-span-1 xl:col-span-2 space-y-6">
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <Card id="view-learning-outcomes" className="scroll-mt-6 p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-3">Learning Outcomes</h3>
                             <div className="whitespace-pre-wrap rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
                                 {course.learningOutcomes || '—'}
                             </div>
                         </Card>
 
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <Card id="view-courseware" className="scroll-mt-6 p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Courseware</h3>
                             <div className="space-y-3">
                                 <LinkCard label="Lesson Plan" value={course.lessonPlanUrl} />
@@ -1856,6 +1866,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                         userId={currentUser?.id}
                                         courseId={course.id}
                                         latestQuizScores={{}}
+                                        defaultOpen={false}
                                     />
                                 )) : (
                                     <div className="text-gray-500 dark:text-gray-400">No lessons available.</div>
@@ -1863,7 +1874,7 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                             </div>
                         </CollapsibleSection>
 
-                        <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                        <Card id="view-assessment-links" className="scroll-mt-6 p-6 dark:bg-gray-800 dark:border-gray-700">
                             <h3 className="text-xl font-bold mb-4">Assessment Links</h3>
                             <div className="space-y-4">
                                 {(Object.keys(ASSESSMENT_METHOD_LABELS) as AssessmentMethodKey[]).map((key) => {
@@ -1879,6 +1890,45 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                     <div className="text-gray-500 dark:text-gray-400">No assessment methods selected.</div>
                                 )}
                             </div>
+                        </Card>
+
+                        {/* Approved Trainers — same table format as edit mode (read-only) */}
+                        <Card id="view-approved-trainers" className="scroll-mt-6 p-6 dark:bg-gray-800 dark:border-gray-700">
+                            <h3 className="text-xl font-bold mb-4">Approved Trainers</h3>
+                            {selectedApprovedTrainers.length > 0 ? (
+                                <div className={`overflow-x-auto rounded-md border border-gray-300 dark:border-gray-600 ${selectedApprovedTrainers.length > 10 ? 'max-h-[26rem] overflow-y-auto' : ''}`}>
+                                    <table className="min-w-full text-sm">
+                                        <thead className="sticky top-0 bg-gray-50 dark:bg-gray-800 text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+                                            <tr>
+                                                <th className="px-3 py-2 w-10">#</th>
+                                                <th className="px-2 py-2 w-10" title="Favorite for this course">★</th>
+                                                <th className="px-3 py-2">Trainer</th>
+                                                <th className="px-3 py-2">Telephone</th>
+                                                <th className="px-3 py-2">Email</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                            {selectedApprovedTrainers.map((trainerName, index) => {
+                                                const contact = trainerContactByName.get(trainerName);
+                                                const isFavorite = favoriteTrainers.includes(trainerName);
+                                                return (
+                                                    <tr key={trainerName} className={isFavorite ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-white dark:bg-gray-900/40'}>
+                                                        <td className="px-3 py-2 font-semibold text-gray-500 dark:text-gray-400">{index + 1}.</td>
+                                                        <td className="px-2 py-2 text-lg leading-none">
+                                                            <span className={isFavorite ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600'}>{isFavorite ? '★' : '☆'}</span>
+                                                        </td>
+                                                        <td className="px-3 py-2 font-medium dark:text-white whitespace-nowrap">{trainerName}</td>
+                                                        <td className="px-3 py-2 text-gray-600 dark:text-gray-300 whitespace-nowrap">{contact?.telephone || '—'}</td>
+                                                        <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{contact?.email || '—'}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="text-gray-500 dark:text-gray-400">No approved trainers.</div>
+                            )}
                         </Card>
                     </div>
                 </div>

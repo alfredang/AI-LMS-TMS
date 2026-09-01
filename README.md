@@ -165,10 +165,12 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Course content creation and editing
 - **Course Image Generator** — AI course banner generation (shared with Admin, backed by Cloudflare R2)
 - **Course Funding Validity** — WSQ/CASL/IBF course validity dates with funding-type totals (WSQ, CASL and IBF each tiled separately), cumulative expiry-window dashboards (3 months / 2 months / 1 month / 1 week), renewal tracking and whitelist management (shared with Admin). Excel round-trip: full-list export, a pre-filled upload template, and bulk update by uploading the edited file (matched by course ref code; blank cells leave values unchanged)
+- **Expired Course List** — WSQ and CASL courses whose funding validity end date has already passed, oldest first, with course code, expired date (and days ago) and funding type; searchable and filterable by funding type
 - Assessment authoring with multiple assessment methods (Written, Practical, Case Study, Role Play, Oral Questioning, Project, Assignment)
 - Learning unit and subtopic management
 - Course material uploads (lesson plans, slides, guides)
 - **Courseware link cards** — in course view mode, courseware documents (lesson plan, guides, slides, brochure, SkillsFuture link, etc.) render as click-to-open cards; empty links are hidden
+- **"On This Page" section menu** — course view mode shows a jump menu (Learning Outcomes, Courseware, Lesson, Assessment Links, Approved Trainers) that smooth-scrolls to the matching card; topics mount collapsed for a compact overview
 - **SEO Metadata Generator** — AI-powered SEO metadata generation for WSQ and non-WSQ courses using Claude Agent SDK
   - WSQ: Meta title (with WSQ prefix), keywords, description with 70% funding subsidy, course description, and 20 job roles
   - Non-WSQ: Region-specific meta titles (Singapore, Malaysia with HRD Corp, International), keywords, description, course description, and 20 job roles
