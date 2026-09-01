@@ -7,7 +7,9 @@ import {
   recomputeSfcBatchApplyCounts,
 } from './sfcImportDb';
 import { createDirectApplicationSfcInvoice } from '@/lib/quickbooks/createDirectApplicationSfcInvoice';
+import { repairDirectApplicationMainInvoiceSfcLine } from '@/lib/quickbooks/repairDirectApplicationMainInvoice';
 import { backfillDaSfcClaimIds } from '@/lib/daSfcClaimBackfill';
+import { verifySfcInvoiceMatch } from './sfcInvoiceVerify';
 
 // Unwrapped variant — these call sites want the QBO payload, not the envelope.
 import { callQbProxyData as callQbProxy } from '@/lib/quickbooks/qbProxyClient';
@@ -65,6 +67,8 @@ async function qbReadInvoice(app: string, invoiceId: string): Promise<{
   id: string;
   balance: number;
   customerRef: string;
+  docNumber: string | null;
+  raw: any;
 } | null> {
   try {
     const data = await callQbProxy({ action: 'read', entity: 'invoice', id: invoiceId, app });
@@ -74,6 +78,8 @@ async function qbReadInvoice(app: string, invoiceId: string): Promise<{
       id: String(inv.Id),
       balance: Number(inv.Balance ?? 0),
       customerRef: inv?.CustomerRef?.value ? String(inv.CustomerRef.value) : '',
+      docNumber: inv?.DocNumber ? String(inv.DocNumber) : null,
+      raw: inv,
     };
   } catch {
     return null;
@@ -203,6 +209,36 @@ export async function applySfcImportRows(input: {
       if (!txnDate) throw new Error('Missing disbursement_date_iso');
       if (!payoutRequestId) throw new Error('Missing payout_request_id');
 
+      // DA rows only: keep the main (Customer/TC) invoice's own SkillsFuture Claim deduction
+      // line correct BEFORE touching the separate SFC-CA supplemental invoice — bookkeeping only,
+      // this never receives a payment itself. Runs whenever the main invoice is known (populated
+      // by Sync QB Invoice IDs' verified search); skipped otherwise rather than guessing at an
+      // invoice we haven't confirmed. Idempotent — a no-op once the line is already correct.
+      const mainQboInvoiceId = String(row.main_qbo_invoice_id || '').trim() || null;
+      if (isDa && !syncOnly && daApplicationId && mainQboInvoiceId) {
+        try {
+          const repair = await repairDirectApplicationMainInvoiceSfcLine({
+            apps,
+            mainInvoiceId: mainQboInvoiceId,
+            applicationId: daApplicationId,
+            claimAmount,
+          });
+          if (repair.repaired) {
+            await insertSfcImportAuditLog({
+              batchId: input.batchId, rowId, event: 'main_invoice_sfc_line_repaired',
+              details: { main_invoice_id: mainQboInvoiceId, app: repair.app, reason: repair.reason, deleted_payment_id: repair.deletedPaymentId ?? null },
+            });
+          }
+        } catch (e) {
+          // Non-blocking: a bookkeeping correction failing must not stop the actual SFC payment
+          // from being applied. Surfaced in the audit log so it's visible, not silent.
+          await insertSfcImportAuditLog({
+            batchId: input.batchId, rowId, event: 'main_invoice_sfc_line_repair_failed',
+            details: { main_invoice_id: mainQboInvoiceId, error: e instanceof Error ? e.message : String(e) },
+          });
+        }
+      }
+
       // DA rows: if the supplemental SFC invoice doesn't exist yet, create it now (only when we're actually applying).
       if (!qboInvoiceId && isDa && !syncOnly) {
         if (!enrolmentId) throw new Error('Missing matched_enrolment_id (required for DA)');
@@ -262,6 +298,25 @@ export async function applySfcImportRows(input: {
           resolvedApp = app;
           invoiceCustomerRef = inv.customerRef;
           invoiceBalanceBefore = inv.balance;
+
+          // Hard gate, re-checked every apply run regardless of how the invoice id was
+          // resolved (fresh match or cached from a prior upload): refuse to treat this
+          // invoice as this claim's target — whether to skip-as-already-paid below or to
+          // create a payment further down — unless its content actually verifies against
+          // this specific claim. This is what stops a cached wrong-invoice link from ever
+          // silently reaching "applied".
+          const verify = await verifySfcInvoiceMatch({
+            invoiceRaw: inv.raw,
+            docNumber: inv.docNumber,
+            matchedEnrolmentId: enrolmentId,
+            excelNric: String(row.individual_nric || ''),
+            excelCourseRef: String(row.course_reference_number || ''),
+            daApplicationId,
+          });
+          if (!verify.ok) {
+            throw new Error(`Refusing to apply: resolved invoice ${qboInvoiceId} failed content verification — ${verify.reason}`);
+          }
+
           if (inv.balance === 0) {
             skipped++;
             const alreadyPaidRemark = 'Invoice already fully paid in QB — SFC payment not applied';

@@ -12,6 +12,8 @@ type SfcPreviewRow = {
   individual_nric: string | null;
   individual_name: string | null;
   course_name: string | null;
+  course_reference_number: string | null;
+  course_start_date: string | null;
   disbursement_date: string | null;
   disbursement_date_iso: string | null;
   claim_amount: string | null;
@@ -24,6 +26,10 @@ type SfcPreviewRow = {
   matched_qbo_doc_number: string | null;
   matched_qbo_invoice_balance: string | null;
   matched_qb_payment_id: string | null;
+  da_application_id: string | null;
+  da_sfc_invoice_id: string | null;
+  main_qbo_invoice_id: string | null;
+  main_qbo_doc_number: string | null;
   fms_updated: boolean;
   qb_updated: boolean;
   is_da: boolean;
@@ -66,6 +72,7 @@ const matchBadgeClass = (s: string) => {
     case 'unmatched': return 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-300';
     case 'invalid': return 'bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-300';
     case 'skipped_da': return 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300';
+    case 'needs_review': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
     default: return 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300';
   }
 };
@@ -77,6 +84,7 @@ const matchBadgeLabel = (s: string) => {
     case 'unmatched': return 'Unmatched';
     case 'invalid': return 'Invalid';
     case 'skipped_da': return 'DA-Skipped';
+    case 'needs_review': return 'Needs Review';
     default: return s;
   }
 };
@@ -107,7 +115,7 @@ const CircularProgress: React.FC<{ pct: number; label?: string }> = ({ pct, labe
   );
 };
 
-const NON_APPLICABLE_MATCH_STATUSES = ['unmatched', 'invalid', 'skipped_da', 'already_applied'];
+const NON_APPLICABLE_MATCH_STATUSES = ['unmatched', 'invalid', 'skipped_da', 'already_applied', 'needs_review'];
 
 const SfcPaymentSyncView: React.FC = () => {
   const { currentUser } = useLms();
@@ -143,7 +151,10 @@ const SfcPaymentSyncView: React.FC = () => {
   const [invoiceGenErrors, setInvoiceGenErrors] = useState<Map<number, string>>(new Map());
 
   const [syncingInvoiceIds, setSyncingInvoiceIds] = useState(false);
-  const [syncInvoiceResult, setSyncInvoiceResult] = useState<{ resolved: number; notFound: number; errors: number; total: number } | null>(null);
+  const [syncInvoiceResult, setSyncInvoiceResult] = useState<{ resolved: number; notFound: number; rejected: number; errors: number; total: number; warnings?: string[] } | null>(null);
+
+  const [bulkGeneratingSfc, setBulkGeneratingSfc] = useState(false);
+  const [bulkGenerateSfcResult, setBulkGenerateSfcResult] = useState<{ total: number; generated: number; failed: number; errors: Array<{ rowId: number; claimId: string | null; error: string }> } | null>(null);
 
   const fileValidationError = useMemo(() => {
     if (!file) return null;
@@ -161,6 +172,7 @@ const SfcPaymentSyncView: React.FC = () => {
       da: rows.filter((r) => r.is_da).length,
       unmatched: by('unmatched'),
       invalid: by('invalid'),
+      needs_review: by('needs_review'),
     };
   }, [rows]);
 
@@ -344,6 +356,9 @@ const SfcPaymentSyncView: React.FC = () => {
       if (!res.ok || !json?.success) throw new Error(json?.error || 'Apply failed');
       setApplyResult(json.data);
       await loadPreview(batchId);
+      // Applied rows move to match_status='already_applied' and become non-selectable — clear the
+      // selection so it doesn't keep counting rows that can no longer be re-applied.
+      setSelectedIds(new Set());
     } catch (e: any) {
       setError(e?.message || 'Apply failed');
     } finally {
@@ -395,6 +410,62 @@ const SfcPaymentSyncView: React.FC = () => {
       setInvoiceGenLoading((prev) => { const s = new Set(prev); s.delete(rowId); return s; });
     }
   };
+
+  // DA-only counterpart: creates the SFC-CA supplemental invoice (not the main Customer invoice
+  // generateInvoice above creates), for a DA row that has none yet.
+  const generateSfcInvoice = async (row: SfcPreviewRow) => {
+    if (!batchId || !row.matched_enrolment_id || !row.claim_id || !row.da_application_id) return;
+    setInvoiceGenLoading((prev) => new Set(prev).add(row.id));
+    setInvoiceGenErrors((prev) => { const m = new Map(prev); m.delete(row.id); return m; });
+    try {
+      const res = await fetch(`/api/sfc-import/batches/${batchId}/generate-sfc-invoice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-actor-user-id': actorUserId },
+        body: JSON.stringify({
+          rowId: row.id,
+          enrolmentId: row.matched_enrolment_id,
+          claimId: row.claim_id,
+          applicationId: row.da_application_id,
+          mainInvoiceDocNumber: row.main_qbo_doc_number,
+          fallbackAmount: row.claim_amount ? Number(row.claim_amount) : 0,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success) throw new Error(json?.error || 'SFC invoice generation failed');
+      await loadPreview(batchId);
+    } catch (e: any) {
+      setInvoiceGenErrors((prev) => new Map(prev).set(row.id, e?.message || 'SFC invoice generation failed'));
+    } finally {
+      setInvoiceGenLoading((prev) => { const s = new Set(prev); s.delete(row.id); return s; });
+    }
+  };
+
+  // Bulk counterpart to generateSfcInvoice above — same underlying call, run one row at a time
+  // server-side (not in parallel), for every Ready DA row missing its SFC-CA invoice.
+  const bulkGenerateSfcInvoices = async () => {
+    if (!batchId) return;
+    setBulkGeneratingSfc(true);
+    setBulkGenerateSfcResult(null);
+    try {
+      const res = await fetch(`/api/sfc-import/batches/${batchId}/generate-sfc-invoices-bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-actor-user-id': actorUserId },
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success) throw new Error(json?.error || 'Bulk SFC invoice generation failed');
+      setBulkGenerateSfcResult(json.data);
+      await loadPreview(batchId);
+    } catch (e: any) {
+      setError(e?.message || 'Bulk SFC invoice generation failed');
+    } finally {
+      setBulkGeneratingSfc(false);
+    }
+  };
+
+  const daReadyMissingSfc = useMemo(
+    () => rows.filter((r) => r.is_da && r.match_status === 'ready' && !(r.matched_qbo_doc_number && /^SFC-/i.test(r.matched_qbo_doc_number))),
+    [rows]
+  );
 
   // Dry run first, always: it reports the count without writing, so the number
   // is visible before anything changes. Filling only ever populates a blank.
@@ -555,9 +626,16 @@ const SfcPaymentSyncView: React.FC = () => {
                       Click <strong>Sync QB Invoice IDs</strong> to search QuickBooks for existing invoices and automatically resolve these rows.
                     </p>
                     {syncInvoiceResult && (
-                      <p className="text-xs mt-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
-                        Last sync: {syncInvoiceResult.resolved} resolved, {syncInvoiceResult.notFound} not found in QB, {syncInvoiceResult.errors} errors (of {syncInvoiceResult.total} processed)
-                      </p>
+                      <>
+                        <p className="text-xs mt-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                          Last sync: {syncInvoiceResult.resolved} resolved, {syncInvoiceResult.notFound} not found in QB, {syncInvoiceResult.rejected} rejected (failed content verification), {syncInvoiceResult.errors} errors (of {syncInvoiceResult.total} processed)
+                        </p>
+                        {!!syncInvoiceResult.warnings?.length && (
+                          <p className="text-xs mt-1 font-semibold text-red-600 dark:text-red-400">
+                            {syncInvoiceResult.warnings.join(' · ')}
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -573,7 +651,51 @@ const SfcPaymentSyncView: React.FC = () => {
             </Card>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {/* Bulk Generate SFC Invoice banner */}
+          {daReadyMissingSfc.length > 0 && (
+            <Card className="p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                <div className="flex items-start gap-3">
+                  <Icon name={IconName.InfoCircle} className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-on-surface">
+                      {daReadyMissingSfc.length} Ready DA row{daReadyMissingSfc.length !== 1 ? 's' : ''} with no SFC-CA invoice yet.
+                    </p>
+                    <p className="text-xs text-on-surface-secondary mt-0.5">
+                      Click <strong>Generate SFC Invoices</strong> to create them all in QuickBooks, one at a time.
+                    </p>
+                    {bulkGenerateSfcResult && (
+                      <>
+                        <p className="text-xs mt-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                          Last run: {bulkGenerateSfcResult.generated} generated, {bulkGenerateSfcResult.failed} failed (of {bulkGenerateSfcResult.total} processed)
+                        </p>
+                        {bulkGenerateSfcResult.errors.slice(0, 5).map((e) => (
+                          <p key={e.rowId} className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
+                            Claim {e.claimId || e.rowId}: {e.error}
+                          </p>
+                        ))}
+                        {bulkGenerateSfcResult.errors.length > 5 && (
+                          <p className="text-[11px] text-on-surface-secondary mt-0.5">
+                            +{bulkGenerateSfcResult.errors.length - 5} more error{bulkGenerateSfcResult.errors.length - 5 !== 1 ? 's' : ''}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  disabled={bulkGeneratingSfc}
+                  onClick={() => void bulkGenerateSfcInvoices()}
+                  className="flex-shrink-0"
+                >
+                  {bulkGeneratingSfc ? 'Generating…' : `Generate SFC Invoices (${daReadyMissingSfc.length})`}
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
             <Card className="p-3 text-center">
               <div className="text-lg font-bold text-on-surface">{counts.total}</div>
               <div className="text-[11px] text-on-surface-secondary">Total Rows</div>
@@ -589,6 +711,10 @@ const SfcPaymentSyncView: React.FC = () => {
             <Card className="p-3 text-center border border-purple-500/30 bg-purple-50/40 dark:bg-purple-900/10">
               <div className="text-lg font-bold text-purple-700 dark:text-purple-300">{counts.da}</div>
               <div className="text-[11px] text-purple-700/80 dark:text-purple-300/80">DA Enrolments</div>
+            </Card>
+            <Card className="p-3 text-center border border-yellow-500/30 bg-yellow-50/40 dark:bg-yellow-900/10">
+              <div className="text-lg font-bold text-yellow-700 dark:text-yellow-300">{counts.needs_review}</div>
+              <div className="text-[11px] text-yellow-700/80 dark:text-yellow-300/80">Needs Review</div>
             </Card>
             <Card className="p-3 text-center border border-red-500/30 bg-red-50/40 dark:bg-red-900/10">
               <div className="text-lg font-bold text-red-700 dark:text-red-300">{counts.unmatched + counts.invalid}</div>
@@ -645,6 +771,7 @@ const SfcPaymentSyncView: React.FC = () => {
                   { key: 'ready', label: 'Ready', count: counts.ready, cls: 'bg-emerald-600 text-white' },
                   { key: 'already_applied', label: 'Already Applied', count: counts.already_applied, cls: 'bg-blue-600 text-white' },
                   { key: 'da', label: 'DA', count: counts.da, cls: 'bg-purple-600 text-white' },
+                  { key: 'needs_review', label: 'Needs Review', count: counts.needs_review, cls: 'bg-yellow-500 text-white' },
                   { key: 'unmatched', label: 'Unmatched', count: counts.unmatched, cls: 'bg-red-500 text-white' },
                   { key: 'invalid', label: 'Invalid', count: counts.invalid, cls: 'bg-orange-500 text-white' },
                   ...(applyResult ? [
@@ -699,10 +826,14 @@ const SfcPaymentSyncView: React.FC = () => {
                     <th className="px-3 py-2 text-xs text-left">Trainee</th>
                     <th className="px-3 py-2 text-xs text-left">NRIC</th>
                     <th className="px-3 py-2 text-xs text-left">Course</th>
+                    <th className="px-3 py-2 text-xs text-left">Course Ref No</th>
+                    <th className="px-3 py-2 text-xs text-left">Course Start Date</th>
                     <th className="px-3 py-2 text-xs text-left">Disbursement Date</th>
                     <th className="px-3 py-2 text-xs text-right">Amount</th>
                     <th className="px-3 py-2 text-xs text-left">Payout Req ID</th>
-                    <th className="px-3 py-2 text-xs text-left">Invoice No</th>
+                    <th className="px-3 py-2 text-xs text-left">Enrolment ID</th>
+                    <th className="px-3 py-2 text-xs text-left">Customer Invoice No</th>
+                    <th className="px-3 py-2 text-xs text-left">SFC Invoice No</th>
                     <th className="px-3 py-2 text-xs text-right">QB Balance</th>
                     <th className="px-3 py-2 text-xs text-left">FMS Status</th>
                     <th className="px-3 py-2 text-xs text-left">QB Status</th>
@@ -714,7 +845,7 @@ const SfcPaymentSyncView: React.FC = () => {
                 <tbody className="divide-y divide-default">
                   {filteredRows.length === 0 && (
                     <tr>
-                      <td colSpan={15} className="px-4 py-6 text-center text-xs text-on-surface-secondary">
+                      <td colSpan={19} className="px-4 py-6 text-center text-xs text-on-surface-secondary">
                         No rows match the selected filter.
                       </td>
                     </tr>
@@ -761,12 +892,42 @@ const SfcPaymentSyncView: React.FC = () => {
                         <td className="px-3 py-2 text-xs max-w-[180px] truncate" title={r.course_name || ''}>
                           {r.course_name || '-'}
                         </td>
+                        <td className="px-3 py-2 text-xs font-mono">{r.course_reference_number || '-'}</td>
+                        <td className="px-3 py-2 text-xs font-mono">{r.course_start_date || '-'}</td>
                         <td className="px-3 py-2 text-xs font-mono">{r.disbursement_date || '-'}</td>
                         <td className="px-3 py-2 text-xs text-right font-mono">{fmtMoney(r.claim_amount)}</td>
                         <td className="px-3 py-2 text-xs font-mono max-w-[120px] truncate" title={r.payout_request_id || ''}>
                           {r.payout_request_id || '-'}
                         </td>
-                        <td className="px-3 py-2 text-xs font-mono">{r.matched_qbo_doc_number || '-'}</td>
+                        <td className="px-3 py-2 text-xs font-mono max-w-[140px] truncate" title={r.matched_enrolment_id || ''}>
+                          {r.matched_enrolment_id || '-'}
+                        </td>
+                        {/* main_qbo_doc_number is a dedicated, always-content-verified field — it
+                            persists independently of matched_qbo_doc_number, which for a DA row
+                            gets overwritten once its SFC-CA invoice is generated. Never sourced
+                            from the raw, unverified cache lookup stage-1 matching used to use. */}
+                        <td className="px-3 py-2 text-xs font-mono">{r.main_qbo_doc_number || '-'}</td>
+                        <td className="px-3 py-2 text-xs font-mono">
+                          {!r.is_da ? (
+                            '-'
+                          ) : r.matched_qbo_doc_number && /^SFC-/i.test(r.matched_qbo_doc_number) ? (
+                            r.matched_qbo_doc_number
+                          ) : (
+                            <div className="space-y-1">
+                              <button
+                                type="button"
+                                disabled={invoiceGenLoading.has(r.id) || !r.claim_id || !r.da_application_id}
+                                onClick={() => void generateSfcInvoice(r)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-300 dark:hover:bg-purple-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                {invoiceGenLoading.has(r.id) ? 'Generating…' : 'Generate Invoice'}
+                              </button>
+                              {invoiceGenErrors.has(r.id) && (
+                                <p className="text-[10px] text-red-600 dark:text-red-400 max-w-[200px] whitespace-pre-wrap">{invoiceGenErrors.get(r.id)}</p>
+                              )}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-xs text-right font-mono">{fmtMoney(r.matched_qbo_invoice_balance)}</td>
                         <td className="px-3 py-2">
                           <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${r.fms_updated ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-300'}`}>
@@ -779,7 +940,10 @@ const SfcPaymentSyncView: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-3 py-2">
-                          <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${matchBadgeClass(r.match_status)}`}>
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded text-[11px] font-semibold ${matchBadgeClass(r.match_status)}`}
+                            title={r.match_status === 'needs_review' && r.validation_errors?.length ? r.validation_errors.join('\n') : ''}
+                          >
                             {matchBadgeLabel(r.match_status)}
                           </span>
                         </td>
@@ -798,7 +962,7 @@ const SfcPaymentSyncView: React.FC = () => {
                             >
                               {r.apply_status.charAt(0).toUpperCase() + r.apply_status.slice(1)}
                             </span>
-                          ) : r.match_status === 'unmatched' && r.matched_enrolment_id && !r.matched_qbo_invoice_id ? (
+                          ) : r.match_status === 'unmatched' && r.matched_enrolment_id && !r.matched_qbo_invoice_id && !r.is_da ? (
                             <div className="space-y-1">
                               <button
                                 type="button"
@@ -813,6 +977,9 @@ const SfcPaymentSyncView: React.FC = () => {
                               )}
                             </div>
                           ) : (
+                            // DA rows with no invoice linked yet show the "Generate Invoice" action
+                            // under the SFC Invoice No column instead — that's the button that actually
+                            // creates the SFC-CA supplemental invoice.
                             <span className="text-[11px] text-on-surface-secondary">—</span>
                           )}
                           {r.apply_status === 'failed' && r.apply_error && (

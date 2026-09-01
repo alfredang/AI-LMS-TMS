@@ -30,6 +30,7 @@ export async function ensureSfcImportSchema(): Promise<void> {
 
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_sfc_import_batches_created_at ON public.sfc_import_batches(created_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_sfc_import_batches_status ON public.sfc_import_batches(status)`);
+  await pool.query(`ALTER TABLE public.sfc_import_batches ADD COLUMN IF NOT EXISTS needs_review_count INT DEFAULT 0`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS public.sfc_import_rows (
@@ -134,6 +135,7 @@ export async function updateSfcImportBatchCounts(
     unmatched_count: number;
     skipped_da_count: number;
     invalid_count: number;
+    needs_review_count?: number;
   },
   status: 'processing' | 'completed' | 'failed'
 ): Promise<void> {
@@ -147,7 +149,8 @@ export async function updateSfcImportBatchCounts(
        skipped_da_count = $6::int,
        invalid_count = $7::int,
        status = $8::varchar,
-       completed_at = CASE WHEN $9::boolean THEN NOW() ELSE NULL END
+       completed_at = CASE WHEN $9::boolean THEN NOW() ELSE NULL END,
+       needs_review_count = $10::int
      WHERE id = $1::int`,
     [
       batchId,
@@ -159,6 +162,7 @@ export async function updateSfcImportBatchCounts(
       counts.invalid_count,
       status,
       isTerminal,
+      counts.needs_review_count ?? 0,
     ]
   );
 }
@@ -246,6 +250,7 @@ export async function getSfcImportBatch(batchId: number): Promise<any | null> {
   const r = await pool.query(
     `SELECT id, filename, uploaded_by, status, total_rows, ready_count, already_applied_count,
             unmatched_count, skipped_da_count, invalid_count, applied_count, skipped_count, failed_count,
+            COALESCE(needs_review_count, 0) AS needs_review_count,
             created_at::text AS created_at, completed_at::text AS completed_at
      FROM public.sfc_import_batches WHERE id = $1 LIMIT 1`,
     [batchId]
@@ -285,12 +290,16 @@ export async function updateSfcImportRowApplyResult(input: {
   applyError: string | null;
   matchedQbPaymentId?: string | null;
 }): Promise<void> {
+  // A successful apply must also move match_status to 'already_applied' — otherwise the row
+  // stays 'ready' forever (until the next re-upload happens to re-derive it from QB balance),
+  // which left just-applied rows sitting in the Ready tab, still selectable for a second apply.
   await pool.query(
     `UPDATE public.sfc_import_rows SET
        apply_status = $2::varchar,
        apply_error = $3::varchar,
        matched_qb_payment_id = COALESCE($4::varchar, matched_qb_payment_id),
-       applied_at = CASE WHEN $2::varchar = 'applied' THEN NOW() ELSE applied_at END
+       applied_at = CASE WHEN $2::varchar = 'applied' THEN NOW() ELSE applied_at END,
+       match_status = CASE WHEN $2::varchar = 'applied' THEN 'already_applied' ELSE match_status END
      WHERE id = $1::int`,
     [input.rowId, input.applyStatus, input.applyError, input.matchedQbPaymentId ?? null]
   );
@@ -314,12 +323,16 @@ export async function recomputeSfcBatchApplyCounts(batchId: number): Promise<voi
     `UPDATE public.sfc_import_batches b SET
        applied_count = x.applied_count,
        skipped_count = x.skipped_count,
-       failed_count = x.failed_count
+       failed_count = x.failed_count,
+       ready_count = x.ready_count,
+       already_applied_count = x.already_applied_count
      FROM (
        SELECT batch_id,
          COUNT(*) FILTER (WHERE apply_status = 'applied')::int AS applied_count,
          COUNT(*) FILTER (WHERE apply_status = 'skipped')::int AS skipped_count,
-         COUNT(*) FILTER (WHERE apply_status = 'failed')::int AS failed_count
+         COUNT(*) FILTER (WHERE apply_status = 'failed')::int AS failed_count,
+         COUNT(*) FILTER (WHERE match_status = 'ready')::int AS ready_count,
+         COUNT(*) FILTER (WHERE match_status = 'already_applied')::int AS already_applied_count
        FROM public.sfc_import_rows
        WHERE batch_id = $1
        GROUP BY batch_id
@@ -364,6 +377,7 @@ export async function getSfcImportRowsForApply(batchId: number, rowIds: number[]
   const r = await pool.query(
     `SELECT id, batch_id, row_index,
             claim_id, individual_nric, individual_name,
+            course_reference_number,
             disbursement_date_iso, claim_amount::float AS claim_amount,
             payout_request_id, match_status, apply_status,
             matched_enrolment_id, matched_ssg_claim_id,

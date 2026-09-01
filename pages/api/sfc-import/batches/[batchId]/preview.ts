@@ -50,16 +50,27 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       for (const row of daRes.rows) daEnrolmentSet.add(String(row.enrolment_id));
     }
 
-    const enrichedRows = rows.map((r: any) => ({
-      ...r,
-      fms_updated: fmsStatusMap.get(String(r.claim_id || '')) === 'PAID',
-      qb_updated:
-        String(r.match_status || '') === 'already_applied' ||
-        String(r.apply_status || '') === 'applied' ||
-        !!r.matched_qb_payment_id ||
-        (r.matched_qbo_invoice_balance != null && Number(r.matched_qbo_invoice_balance) === 0),
-      is_da: daEnrolmentSet.has(String(r.matched_enrolment_id || '')),
-    }));
+    const enrichedRows = rows.map((r: any) => {
+      // "Paid"/"Applied" must only ever be shown when THIS row currently has a verified invoice
+      // backing it up — i.e. match_status is 'ready' or 'already_applied'. ssg_claims.claim_
+      // payment_status is a historical field that can still say PAID from an earlier run even
+      // when this row can't currently resolve any invoice at all (unmatched/invalid/needs_review)
+      // — a claim cannot be "paid in QuickBooks" if we have no current QuickBooks invoice to
+      // point at, so showing Paid there would be exactly the "confident badge, no evidence behind
+      // it" problem already fixed for needs_review, just via a different match_status.
+      const hasCurrentInvoiceEvidence = ['ready', 'already_applied'].includes(String(r.match_status || ''));
+      return {
+        ...r,
+        fms_updated: hasCurrentInvoiceEvidence && fmsStatusMap.get(String(r.claim_id || '')) === 'PAID',
+        qb_updated:
+          hasCurrentInvoiceEvidence &&
+          (String(r.match_status || '') === 'already_applied' ||
+            String(r.apply_status || '') === 'applied' ||
+            !!r.matched_qb_payment_id ||
+            (r.matched_qbo_invoice_balance != null && Number(r.matched_qbo_invoice_balance) === 0)),
+        is_da: daEnrolmentSet.has(String(r.matched_enrolment_id || '')),
+      };
+    });
 
     return res.status(200).json({ success: true, data: { batch, rows: enrichedRows } });
   } catch (e: unknown) {

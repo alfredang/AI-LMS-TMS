@@ -593,6 +593,16 @@ export async function qboDeleteInvoice(appOverride: string | undefined, invoiceI
   await qboFetchJson({ token, url, method: 'POST', body: { Id: invoiceId, SyncToken: syncToken } });
 }
 
+/** Hard delete (not void) — used only where the payment must not survive even as a zeroed record. */
+export async function qboDeletePayment(appOverride: string | undefined, paymentId: string, syncToken: string): Promise<void> {
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/payment?operation=delete&minorversion=${MINOR_VERSION}`;
+  await qboFetchJson({ token, url, method: 'POST', body: { Id: paymentId, SyncToken: syncToken } });
+}
+
 export async function qboSendInvoice(appOverride: string | undefined, invoiceId: string, sendTo?: string): Promise<void> {
   const creds = await getQBOCredentials(appOverride);
   if (!creds) throw new Error('QuickBooks credentials not configured');

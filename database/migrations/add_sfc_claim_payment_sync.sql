@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS public.sfc_import_batches (
 CREATE INDEX IF NOT EXISTS idx_sfc_import_batches_created_at ON public.sfc_import_batches(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sfc_import_batches_status ON public.sfc_import_batches(status);
 
+-- 2b. needs_review_count — rows whose resolved invoice failed content verification
+-- (wrong invoice type, or content that doesn't match this claim's learner/course).
+ALTER TABLE public.sfc_import_batches
+  ADD COLUMN IF NOT EXISTS needs_review_count INT DEFAULT 0;
+
 -- 3. Per-row import detail table
 CREATE TABLE IF NOT EXISTS public.sfc_import_rows (
   id SERIAL PRIMARY KEY,
