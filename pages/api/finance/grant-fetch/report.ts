@@ -18,6 +18,13 @@ import { getAuthedUser } from '@lib/auth/requireRole';
 import { getGrantFetchJob, patchGrantFetchJob, pushGrantFetchLog } from '@lib/tpg/grantFetchJobStore';
 import type { GrantFetchJob } from '@lib/tpg/grantFetchJobStore';
 
+// The final patch carries the whole parsed/matched result (every disbursement row,
+// including its raw source JSON, plus per-enrolment impact) — for a real TPGateway
+// export this routinely exceeds Next's default 1mb API body limit, which silently
+// 413s the request. The agent then retries the same oversized payload forever and
+// the job never reaches the browser, even though parsing succeeded locally.
+export const config = { api: { bodyParser: { sizeLimit: '20mb' } } };
+
 /** Only these may be set by an agent. */
 const ALLOWED_PATCH_KEYS: (keyof GrantFetchJob)[] = [
   'phase',
