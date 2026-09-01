@@ -542,12 +542,12 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
   // So every attempt is verified by reading the field back, and a second attempt
   // (via .fill, which dispatches a proper input/change event rather than simulating
   // keystrokes) is made before giving up.
+  let confirmedValue = '';
   try {
     const dateInputs = page.locator('input[type="text"][class*="date" i], input[placeholder*="DD-MM-YYYY" i], input[class*="datepicker" i]');
     const dateCount = await dateInputs.count().catch(() => 0);
     if (dateCount >= 1) {
       const startDateField = dateInputs.last(); // field next to Bank Reference Id = Payment From
-      let confirmedValue = '';
 
       await startDateField.click({ timeout: 5000 });
       await startDateField.fill('');
@@ -569,13 +569,6 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
         log(`Payment From did not stick — field shows "${confirmedValue}" after setting "${startDate}". Continuing without the date filter.`);
         ok = false;
       }
-
-      // Captured every run, not just on failure: the input's raw DOM value matching
-      // what was typed does NOT prove the widget's real bound state updated — some
-      // date pickers only sync that on an actual day-cell click. If results still
-      // come back windowed to TPGateway's own default range despite this looking
-      // "successful", this file is the next thing to check before guessing again.
-      await dumpDateFilterDiagnostics(page, startDate, confirmedValue);
     } else {
       log('expected at least 1 date filter input, found 0 — Payment From was not set.');
       ok = false;
@@ -583,6 +576,15 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
   } catch {
     ok = false;
   }
+
+  // Unconditional, every run — not gated behind dateCount >= 1. Two attempts at
+  // fixing the "field not found"/"value doesn't stick" symptom (the wait-for-row
+  // race, then Promise.all instead of .race) have not changed the outcome, which
+  // means the CSS selector this whole block is built on may simply not match
+  // TPGateway's real date-picker markup at all — not a timing issue. Dumping every
+  // <input> on the page (not just ones already matching that possibly-wrong
+  // selector) is the only way to get real ground truth instead of another guess.
+  await dumpDateFilterDiagnostics(page, startDate, confirmedValue);
 
   // Apply / Search. A short pause first in case the date widget syncs its real
   // bound state asynchronously after blur — clicking Apply immediately could
@@ -662,7 +664,7 @@ async function dumpDateFilterDiagnostics(page: Page, intended: string, confirmed
     const info = await page.evaluate(
       ({ intended, confirmed }) => {
         const clean = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim();
-        const describe = (el: Element | null, depth: number) => {
+        const describeChain = (el: Element | null, depth: number) => {
           const chain: Array<{ tag: string; class: string | null; attrs: Record<string, string> }> = [];
           let cur = el;
           for (let i = 0; cur && i < depth; i++) {
@@ -673,24 +675,51 @@ async function dumpDateFilterDiagnostics(page: Page, intended: string, confirmed
           }
           return chain;
         };
-        const dateLike = Array.from(document.querySelectorAll('input')).filter((i) =>
-          /date|from|payment/i.test(`${i.id} ${i.name} ${i.placeholder} ${i.className}`)
+        const describeInput = (i: HTMLInputElement) => ({
+          tag: i.tagName.toLowerCase(),
+          type: i.type,
+          id: i.id || null,
+          name: i.getAttribute('name'),
+          placeholder: i.placeholder || null,
+          className: i.className || null,
+          value: i.value,
+          readOnly: i.readOnly,
+          hidden: i.type === 'hidden' || i.hidden,
+        });
+
+        // Every previous attempt filtered inputs by name/id/placeholder/class containing
+        // "date" — if the real field's attributes never contain that substring at all
+        // (plausible for OutSystems' generated wt### ids, same pattern as the Status
+        // select), every one of those filtered dumps would ALSO come up empty. So this
+        // time: literally every input on the page, unfiltered, plus every element
+        // (input or not) physically near the "Bank Reference Id" label — the one
+        // reliable anchor confirmed by screenshot — since the real control might not be
+        // an <input> at all (e.g. a div-based custom widget with a hidden bound value).
+        const allInputs = Array.from(document.querySelectorAll('input')).map(describeInput);
+
+        const bankRefLabel = Array.from(document.querySelectorAll('body *')).find(
+          (el) => /bank\s*reference\s*id/i.test(clean(el.textContent)) && el.children.length === 0
         );
-        const lastDateInput = dateLike[dateLike.length - 1] || null;
+        // Walk up from the label to a reasonable "filter field" container, then describe
+        // everything inside it — whatever sibling control actually holds Payment From.
+        let container: Element | null = bankRefLabel || null;
+        for (let i = 0; container && i < 3; i++) container = container.parentElement;
+        const nearBankRef = container
+          ? Array.from(container.querySelectorAll('input, [role="textbox"], [contenteditable]')).map((el) => ({
+              tag: el.tagName.toLowerCase(),
+              class: (el as HTMLElement).className || null,
+              outerHTMLSnippet: el.outerHTML.slice(0, 400),
+            }))
+          : [];
+
         return {
           intended,
           confirmedFromPlaywright: confirmed,
-          matchedDateLikeInputCount: dateLike.length,
-          allDateLikeInputs: dateLike.map((i) => ({
-            tag: i.tagName.toLowerCase(),
-            type: i.type,
-            id: i.id || null,
-            name: i.getAttribute('name'),
-            placeholder: i.placeholder || null,
-            value: i.value,
-            hidden: i.type === 'hidden' || i.hidden,
-          })),
-          lastDateInputParentChain: describe(lastDateInput, 5),
+          totalInputsOnPage: allInputs.length,
+          allInputs,
+          bankReferenceLabelFound: !!bankRefLabel,
+          bankReferenceLabelParentChain: describeChain(bankRefLabel || null, 4),
+          controlsNearBankReference: nearBankRef,
         };
       },
       { intended, confirmed }
