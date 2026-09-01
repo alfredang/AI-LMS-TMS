@@ -39,6 +39,44 @@ export async function ensureTrainerWhatsappTable() {
     `CREATE INDEX IF NOT EXISTS idx_trainer_whatsapp_status
      ON trainer_whatsapp_notification(status, created_at)`
   );
+  // Stamped when a row is RELEASED to the agent (dispatch mode). The
+  // Facebook-safety rate limits (max 5/day, 15 min apart) are computed from
+  // this timestamp so every release counts, whatever its final outcome.
+  await pool.query(
+    `ALTER TABLE trainer_whatsapp_notification ADD COLUMN IF NOT EXISTS dispatched_at TIMESTAMPTZ`
+  );
+}
+
+/**
+ * HARD anti-ban limits for the WhatsApp Business number (+65 8866 6375).
+ * Facebook can ban numbers that blast messages — so the queue NEVER releases
+ * more than MAX_PER_DAY trainer messages per SGT day, and never two messages
+ * less than MIN_GAP_MINUTES apart. Enforced server-side in the dispatch
+ * endpoint, independent of how often the agent polls.
+ */
+export const WHATSAPP_MAX_PER_DAY = 5;
+export const WHATSAPP_MIN_GAP_MINUTES = 15;
+/** Messages may only be released between these SGT hours (10:00 ≤ t < 15:00). */
+export const WHATSAPP_WINDOW_START_HOUR_SGT = 10;
+export const WHATSAPP_WINDOW_END_HOUR_SGT = 15;
+/** Pending rows older than this are expired unsent — a stale nudge is worse than none. */
+export const WHATSAPP_PENDING_TTL_HOURS = 72;
+
+/**
+ * Sending-window check (10:00–15:00 SGT — never at night or after 3pm).
+ * Returns null when inside the window, else the number of seconds until the
+ * window next opens (10:00 SGT today or tomorrow).
+ */
+export function secondsUntilWhatsappWindow(now: Date = new Date()): number | null {
+  // Derive SGT wall-clock from UTC (SGT = UTC+8, no DST).
+  const sgtMs = now.getTime() + 8 * 60 * 60 * 1000;
+  const sgt = new Date(sgtMs);
+  const hour = sgt.getUTCHours();
+  if (hour >= WHATSAPP_WINDOW_START_HOUR_SGT && hour < WHATSAPP_WINDOW_END_HOUR_SGT) return null;
+  const next = new Date(sgtMs);
+  next.setUTCHours(WHATSAPP_WINDOW_START_HOUR_SGT, 0, 0, 0);
+  if (hour >= WHATSAPP_WINDOW_END_HOUR_SGT) next.setUTCDate(next.getUTCDate() + 1);
+  return Math.max(60, Math.ceil((next.getTime() - sgtMs) / 1000));
 }
 
 /**
