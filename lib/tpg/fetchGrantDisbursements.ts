@@ -474,22 +474,27 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
   // The filter row (Status select, date inputs, everything else) is rendered by an
   // async OutSystems AJAX call after the page itself has loaded — proceeding
   // immediately races it and intermittently finds zero matching elements, even
-  // though the same selectors work fine a few hundred ms later. Wait for either
-  // half of the row to actually exist before touching anything (whichever answers
-  // first — no need to know which loads first as long as one confirms the row is up).
-  await Promise.race([
+  // though the same selectors work fine a few hundred ms later.
+  //
+  // Wait for BOTH pieces independently (Promise.all, not .race) — the Status
+  // select and the date inputs are rendered by separate, not-necessarily-
+  // simultaneous AJAX calls, confirmed by a live run where Status appeared (its
+  // diagnostics file got written) but the date input still didn't (zero found)
+  // — a .race() on "whichever answers first" was resolving on Status alone and
+  // moving on before the date input had actually attached.
+  await Promise.all([
     page
       .locator('select')
       .filter({ has: page.locator('option', { hasText: /^\s*paid\s*$/i }) })
       .first()
-      .waitFor({ state: 'attached', timeout: 15000 }),
+      .waitFor({ state: 'attached', timeout: 15000 })
+      .catch(() => log('Status select did not attach within 15s.')),
     page
       .locator('input[type="text"][class*="date" i], input[placeholder*="DD-MM-YYYY" i], input[class*="datepicker" i]')
       .first()
-      .waitFor({ state: 'attached', timeout: 15000 }),
-  ]).catch(() => {
-    log('filter row did not appear within 15s — proceeding anyway, but Status/Payment From will likely both fail to find their elements.');
-  });
+      .waitFor({ state: 'attached', timeout: 15000 })
+      .catch(() => log('date filter input did not attach within 15s.')),
+  ]);
 
   try {
     const statusSelect = page
