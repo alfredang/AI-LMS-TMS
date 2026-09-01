@@ -29,45 +29,61 @@ const formatValidityDate = (date: Date) => date.toLocaleDateString('en-GB');
 const daysAgo = (date: Date, today: Date) =>
   Math.round((today.getTime() - date.getTime()) / 86400000);
 
-// Only the funded types carry a funding validity that can lapse.
-type FundingType = 'WSQ' | 'CASL';
-const FUNDING_TYPES: FundingType[] = ['WSQ', 'CASL'];
+// renewed_status stores rich statuses ('Approved / Renewed', 'Waiting For
+// Renewal', 'Rejected / Expired') or is blank when never processed. Classify
+// for tiles/filtering; the table shows the stored text verbatim.
+type RenewClass = 'Approved' | 'Waiting' | 'Rejected' | 'Not Set';
 
-const isFundedType = (value?: string | null): value is FundingType =>
-  value === 'WSQ' || value === 'CASL';
+const classifyRenewStatus = (value?: string | null): RenewClass => {
+  const v = (value || '').trim().toLowerCase();
+  if (!v) return 'Not Set';
+  if (v.includes('approved') || v.includes('renewed')) return 'Approved';
+  if (v.includes('waiting') || v.includes('pending')) return 'Waiting';
+  if (v.includes('rejected') || v.includes('expired')) return 'Rejected';
+  return 'Waiting';
+};
+
+const RENEW_BADGE_CLASSES: Record<RenewClass, string> = {
+  Approved: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  Waiting: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+  Rejected: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+  'Not Set': 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+};
+
+type RenewFilter = 'All' | RenewClass;
 
 const ExpiredCourseListView: React.FC = () => {
   const { courses, loading, error } = useDeveloperCourses();
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'All' | FundingType>('All');
+  const [renewFilter, setRenewFilter] = useState<RenewFilter>('All');
 
   const today = startOfDay(new Date());
 
-  // Expired = a WSQ/CASL course whose funding validity end date is before today.
-  // Non-WSQ and IBF are excluded by request; courses with no validity date at
+  // Expired = any course whose funding validity end date is before today,
+  // regardless of its current course type — courses re-typed to Non-WSQ when
+  // their funding lapsed stay listed here. Courses with no validity date at
   // all are not expired (the course card renders those as "N/A").
   const expiredCourses = useMemo(() => {
     return (courses || [])
       .map(course => ({ course, expiry: parseValidityDate(course.fundingValidity) }))
-      .filter(({ course, expiry }) => isFundedType(course.courseType) && !!expiry && expiry < today)
-      .sort((a, b) => a.expiry!.getTime() - b.expiry!.getTime());
+      .filter((entry): entry is { course: (typeof entry)['course']; expiry: Date } => !!entry.expiry && entry.expiry < today)
+      .sort((a, b) => a.expiry.getTime() - b.expiry.getTime());
   }, [courses, today]);
 
   const visibleCourses = useMemo(() => {
     const term = search.trim().toLowerCase();
     return expiredCourses.filter(({ course }) => {
-      if (typeFilter !== 'All' && course.courseType !== typeFilter) return false;
+      if (renewFilter !== 'All' && classifyRenewStatus(course.renewedStatus) !== renewFilter) return false;
       if (term && ![course.title, course.currentCourseCode, course.newCourseCode, course.courseCode]
         .some(field => (field || '').toLowerCase().includes(term))) return false;
       return true;
     });
-  }, [expiredCourses, search, typeFilter]);
+  }, [expiredCourses, search, renewFilter]);
 
-  const typeTotals = useMemo(() => {
-    const totals: Record<FundingType, number> = { WSQ: 0, CASL: 0 };
-    for (const { course } of expiredCourses) totals[course.courseType as FundingType] += 1;
-    return totals;
-  }, [expiredCourses]);
+  const renewedCount = useMemo(
+    () => expiredCourses.filter(({ course }) => classifyRenewStatus(course.renewedStatus) === 'Approved').length,
+    [expiredCourses]
+  );
 
   if (loading) {
     return <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">Loading courses…</div>;
@@ -90,12 +106,14 @@ const ExpiredCourseListView: React.FC = () => {
           <p className="text-4xl font-bold text-red-600 dark:text-red-400">{expiredCourses.length}</p>
           <p className="text-gray-600 dark:text-gray-300 mt-1">Expired Courses</p>
         </Card>
-        {FUNDING_TYPES.map(type => (
-          <Card key={type} className="p-5 dark:bg-gray-800 dark:border-gray-700">
-            <p className="text-4xl font-bold text-gray-700 dark:text-gray-200">{typeTotals[type]}</p>
-            <p className="text-gray-600 dark:text-gray-300 mt-1">Expired {type}</p>
-          </Card>
-        ))}
+        <Card className="p-5 dark:bg-gray-800 dark:border-gray-700">
+          <p className="text-4xl font-bold text-green-600 dark:text-green-400">{renewedCount}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Renewed</p>
+        </Card>
+        <Card className="p-5 dark:bg-gray-800 dark:border-gray-700">
+          <p className="text-4xl font-bold text-gray-700 dark:text-gray-200">{expiredCourses.length - renewedCount}</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Not Renewed</p>
+        </Card>
       </div>
 
       <Card className="mb-8 dark:bg-gray-800 dark:border-gray-700">
@@ -107,7 +125,7 @@ const ExpiredCourseListView: React.FC = () => {
             </span>
           </h4>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            WSQ and CASL courses whose funding validity end date has already passed, oldest first.
+            Courses whose funding validity end date has already passed, oldest first — including courses re-typed to Non-WSQ when their funding lapsed.
           </p>
 
           <div className="mt-4 flex flex-col sm:flex-row gap-3">
@@ -119,12 +137,15 @@ const ExpiredCourseListView: React.FC = () => {
               className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
             />
             <select
-              value={typeFilter}
-              onChange={e => setTypeFilter(e.target.value as 'All' | FundingType)}
+              value={renewFilter}
+              onChange={e => setRenewFilter(e.target.value as RenewFilter)}
               className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
             >
-              <option value="All">All Funding Types</option>
-              {FUNDING_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+              <option value="All">All Renew Statuses</option>
+              <option value="Approved">Approved / Renewed</option>
+              <option value="Waiting">Waiting For Renewal</option>
+              <option value="Rejected">Rejected / Expired</option>
+              <option value="Not Set">Not Set</option>
             </select>
           </div>
         </div>
@@ -132,7 +153,7 @@ const ExpiredCourseListView: React.FC = () => {
         {visibleCourses.length === 0 ? (
           <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
             {expiredCourses.length === 0
-              ? 'No WSQ or CASL courses have expired funding validity. 🎉'
+              ? 'No courses have expired funding validity. 🎉'
               : 'No expired courses match the current filters.'}
           </div>
         ) : (
@@ -142,26 +163,29 @@ const ExpiredCourseListView: React.FC = () => {
                 <tr className="text-left text-gray-600 dark:text-gray-300">
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Code</th>
-                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Expired Date</th>
-                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Funding Type</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Expiry Date</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Renew Status</th>
                 </tr>
               </thead>
               <tbody>
-                {visibleCourses.map(({ course, expiry }) => (
-                  <tr key={course.id} className="border-t border-gray-200 dark:border-gray-700">
-                    <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
-                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.currentCourseCode || course.newCourseCode || course.courseCode || '—'}</td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">
-                      <span className="font-semibold text-red-600 dark:text-red-400">{formatValidityDate(expiry!)}</span>
-                      <span className="ml-2 text-gray-500 dark:text-gray-400">({daysAgo(expiry!, today)}d ago)</span>
-                    </td>
-                    <td className="px-3 py-1.5 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
-                        {course.courseType}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {visibleCourses.map(({ course, expiry }) => {
+                  const renewClass = classifyRenewStatus(course.renewedStatus);
+                  return (
+                    <tr key={course.id} className="border-t border-gray-200 dark:border-gray-700">
+                      <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
+                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.currentCourseCode || course.newCourseCode || course.courseCode || '—'}</td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">
+                        <span className="font-semibold text-red-600 dark:text-red-400">{formatValidityDate(expiry)}</span>
+                        <span className="ml-2 text-gray-500 dark:text-gray-400">({daysAgo(expiry, today)}d ago)</span>
+                      </td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${RENEW_BADGE_CLASSES[renewClass]}`}>
+                          {(course.renewedStatus || '').trim() || 'Not Set'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

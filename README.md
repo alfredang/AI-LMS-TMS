@@ -165,7 +165,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Course content creation and editing
 - **Course Image Generator** — AI course banner generation (shared with Admin, backed by Cloudflare R2)
 - **Course Funding Validity** — WSQ/CASL/IBF course validity dates with funding-type totals (WSQ, CASL and IBF each tiled separately), cumulative expiry-window dashboards (3 months / 2 months / 1 month / 1 week), renewal tracking and whitelist management (shared with Admin). Excel round-trip: full-list export, a pre-filled upload template, and bulk update by uploading the edited file (matched by course ref code; blank cells leave values unchanged)
-- **Expired Course List** — WSQ and CASL courses whose funding validity end date has already passed, oldest first, with course code, expired date (and days ago) and funding type; searchable and filterable by funding type
+- **Expired Course List** — courses whose funding validity end date has already passed (any course type, including those re-typed to Non-WSQ when funding lapsed), oldest first, with course code, expiry date (and days ago) and renew status; searchable and filterable by renew status, with renewed/not-renewed totals tiled
 - Assessment authoring with multiple assessment methods (Written, Practical, Case Study, Role Play, Oral Questioning, Project, Assignment)
 - Learning unit and subtopic management
 - Course material uploads (lesson plans, slides, guides)
