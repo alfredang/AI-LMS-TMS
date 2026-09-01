@@ -217,7 +217,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 ### Automation Features
 - **Task Scheduler** — Schedule and run automated tasks: Auto Create Certificates, Auto Send Course Confirmation, Auto Create Learners, Auto Create Assessment Records, Auto Send Class Evaluation to Trainers (compiles learner feedback for ended classes and emails trainers daily at 6:30 PM SGT), etc.
 - **Webhook System** — Configure webhooks with full logging for external integrations
-- **Trainer Invitation Workflow** — Automated cascading trainer invitations with accept/decline webhooks; if a trainer declines, system auto-sends to next available trainer
+- **Trainer Invitation Workflow** — Weekly cycle for classes without a trainer: Monday sweep invites the next trainer in the course's approved-list order, Thursday sends a reminder (same accept/decline links) to anyone still pending, and the following Monday expires no-response invitations and moves to the next trainer. On accept the class is Confirmed, the trainer is synced to SSG/TPG, added to the Google Calendar event (real invite, Course Run ID stamped in the description, Google Meet auto-generated for Virtual classes), and sent a confirmation email with the class details. Declines auto-cascade immediately; admins can pause per class or reset the cycle back to the first approved trainer
 - **Certificate Workflow** — Auto-generate certificates after class completion, upload to Google Drive, and email to learners
 - **Auto-Create Learners** — Automatically creates learner accounts for course runs starting today (via n8n)
 - **Auto-Assign Trainers** — Bot-driven trainer assignment with fallback logic

@@ -250,6 +250,38 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [classStatus, setClassStatus] = useState(courseToEdit?.classStatus || 'Pending');
     const [invitationPaused, setInvitationPaused] = useState(!!(courseToEdit as any)?.invitationPaused);
     const [repliesBlocked, setRepliesBlocked] = useState(!!(courseToEdit as any)?.invitationRepliesBlocked);
+
+    // Trainer-panel hydration: some editors (ClassDetailView "Edit Course Run",
+    // the calendar day view) pass a MINIMAL courseToEdit without trainersList /
+    // nextAvailableTrainer / trainerInvitations, which made the Trainer tab
+    // wrongly show "No next available trainer in the approved list". When the
+    // fields are missing, load them from /api/admin/run-trainer-panel.
+    const [trainerPanelData, setTrainerPanelData] = useState<any | null>(null);
+    useEffect(() => {
+        if (!courseToEdit?.id || (courseToEdit as any)?.trainersList !== undefined) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(getApiUrl(`/api/admin/run-trainer-panel?courseRunUuid=${encodeURIComponent(courseToEdit.id)}`));
+                const json = await res.json();
+                if (!cancelled && json?.success && json.data) {
+                    setTrainerPanelData(json.data);
+                    setInvitationPaused(!!json.data.invitationPaused);
+                    setRepliesBlocked(!!json.data.invitationRepliesBlocked);
+                    if (json.data.assignedTrainerName && !localAssignedTrainerName) {
+                        setLocalAssignedTrainerName(json.data.assignedTrainerName);
+                        setLocalAssignedTrainerEmail(json.data.assignedTrainerEmail || '');
+                    }
+                }
+            } catch { /* panel stays minimal */ }
+        })();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [courseToEdit?.id]);
+    if (trainerPanelData && courseToEdit) {
+        // Merge for everything rendered below (approved list, next available, history)
+        courseToEdit = { ...courseToEdit, ...trainerPanelData };
+    }
     const [coursewareEmailDisabled, setCoursewareEmailDisabled] = useState(!!(courseToEdit as any)?.coursewareEmailDisabled);
     const [classType, setClassType] = useState(() => {
         // Use DB class_type first, then fallback to modeOfTraining
@@ -4265,6 +4297,41 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                                         No next available trainer in the approved list.
                                     </div>
                                 )}
+
+                                {/* Reset cascade — restart invitations from the FIRST approved trainer */}
+                                <div className="mt-3 flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-md p-3">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        Stuck without a trainer? Reset clears every previous invitation for this class (pending links stop working) and immediately re-invites the <span className="font-semibold">first</span> trainer in the approved list.
+                                    </p>
+                                    <Button
+                                        onClick={async () => {
+                                            if (!courseToEdit?.id) return;
+                                            if (!window.confirm('Reset the trainer invitation cycle for this class?\n\nAll previous invitations (pending/declined) will be cleared and a fresh invitation will be sent to the FIRST approved trainer.')) return;
+                                            try {
+                                                setLoading(true);
+                                                const res = await fetch(getApiUrl('/api/admin/reset-trainer-invitations'), {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ courseRunUuid: courseToEdit.id }),
+                                                });
+                                                const data = await res.json();
+                                                if (data.success) {
+                                                    showSuccessPopup(data.message || 'Trainer invitations reset — first trainer re-invited');
+                                                } else {
+                                                    showErrorPopup(data.error || 'Failed to reset trainer invitations');
+                                                }
+                                            } catch {
+                                                showErrorPopup('Failed to reset trainer invitations');
+                                            } finally {
+                                                setLoading(false);
+                                            }
+                                        }}
+                                        disabled={loading}
+                                        className="bg-slate-600 hover:bg-slate-700 text-white whitespace-nowrap"
+                                    >
+                                        {loading ? 'Working...' : 'Reset to First Trainer'}
+                                    </Button>
+                                </div>
                             </div>
                             ) : null}
 

@@ -39,10 +39,11 @@ Course Schedule Confirmation
 Course Title: {COURSE_TITLE}
 Course Code: {COURSE_CODE}
 Course Run ID: {COURSE_RUN_ID}
+Training Mode: {TRAINING_MODE}{MEET_LINK_LINE}
 Start Date: {START_DATE}
 End Date: {END_DATE}
 
-We will send you a Google Calendar invite with the confirmed training details shortly. Please kindly ensure you accept the RSVP on Google Calendar to officially confirm your participation.
+A Google Calendar invite with the confirmed training details has been sent to this email address. Please kindly accept the Google Calendar invite (RSVP "Yes") to officially confirm your participation.
 
 A reminder will be sent closer to the course date to keep you updated.
 

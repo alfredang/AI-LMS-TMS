@@ -14,11 +14,9 @@ import {
   DEFAULT_TRAINER_DECLINE_BODY,
 } from '@/lib/trainerInvitations';
 import { sendNextTrainerInvitationForCourseRun, sendExhaustedListAlert } from '@/lib/trainerInvitationSender';
-import { getGoogleCredentials } from '@/lib/google-auth/googleAuth';
 import { pushTrainerToTpgForRun } from '@/lib/ssg/pushTrainerToTpgForRun';
 import { autoShareCourseResourcesWithTrainerByRun } from '@/lib/google-drive/drive-helpers';
-import { calendarWritesAllowed } from '@/lib/calendar/calendarGuard';
-import { getLocalYMD } from '../../../../lib/dateHelpers';
+import { confirmTrainerOnCalendar } from '@/lib/calendar/confirmTrainerOnCalendar';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
   const colors = {
@@ -135,6 +133,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `SELECT ti.*, cr.course_run_id AS external_course_run_id,
               c.title AS course_title, c.course_code,
               cr.start_date, cr.end_date,
+              cr.class_type, cr.mode_of_learning::text AS mode_of_learning,
+              cr.virtual_meeting_link,
               COALESCE(cr.invitation_replies_blocked, false) AS replies_blocked
        FROM trainer_invitation ti
        JOIN course_run cr ON cr.id = ti.course_run_id
@@ -157,6 +157,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? `This invitation was declined. The class may have been assigned to another trainer.`
         : invitation.status === 'blocked'
         ? `Thank you for your response, ${invitation.trainer_name}. Unfortunately, this class has already been assigned. We appreciate your willingness and will reach out for future opportunities.`
+        : invitation.status === 'expired'
+        ? `This invitation has expired, ${invitation.trainer_name} — we did not receive a response within a week, so the class has been offered to another trainer. We hope to work with you on a future session.`
         : `This invitation for ${invitation.trainer_name} was already marked as ${invitation.status}.`;
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.status(200).send(renderPage('Already Responded', msg, 'gray'));
@@ -336,6 +338,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // Meet link surfaced in the accept confirmation email. Seeded from the run
+    // (may already exist); the calendar confirm step below can generate a fresh
+    // one for Virtual classes.
+    let acceptMeetLink: string | null = (invitation.virtual_meeting_link || '').trim() || null;
+
     // If accepted, assign trainer to course run. Isolated in its own
     // try/catch so a failure here does NOT break the trainer-facing
     // "Invitation Accepted" page — the invitation status has already been
@@ -343,10 +350,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Refresh button. Every branch logs loudly so prod failures are visible.
     if (action === 'accept') {
       try {
+        // Prefer an account with a trainer_profile, but fall back to any user
+        // account matching the email — trainer_id must be set whenever possible
+        // because the trainer's My Calendar scopes classes by trainer_id.
         const trainerLookup = await pool.query(
           `SELECT au.id FROM app_user au
-           JOIN trainer_profile tp ON tp.user_id = au.id
+           LEFT JOIN trainer_profile tp ON tp.user_id = au.id
            WHERE LOWER(au.email) = LOWER($1) OR LOWER(au.secondary_email) = LOWER($1)
+           ORDER BY (tp.user_id IS NULL), au.created_at ASC
            LIMIT 1`,
           [invitation.trainer_email]
         );
@@ -391,6 +402,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log(
           `✅ [trainer-invitation/respond] course_run_trainer ${row?.was_inserted ? 'INSERTED' : 'UPDATED'} ` +
           `id=${row?.id} for course_run=${invitation.course_run_id}`
+        );
+
+        // Keep the legacy scalar representation consistent with the junction
+        // table (repo invariant: trainer-assignment writes update BOTH).
+        await pool.query(
+          `UPDATE course_run
+           SET assigned_trainer_id = $2,
+               assigned_trainer_name = $3,
+               assigned_trainer_email = $4,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [invitation.course_run_id, trainerId, invitation.trainer_name, invitation.trainer_email]
         );
 
         // Auto-share courseware + assessment folders with the accepting trainer (non-blocking)
@@ -439,177 +462,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
       }
 
-      // #77: Add trainer to Google Calendar event on accept.
-      // Uses robust multi-strategy matching similar to DA calendar add:
-      //   1. courseRunId in event description/location (most reliable)
-      //   2. Title substring match + date match
-      //   3. Word-overlap title match + date match (fuzzy fallback)
+      // Calendar: ensure the class's events exist, stamp the Course Run ID into
+      // their descriptions, add the trainer as an attendee (with a real Google
+      // Calendar invite email so they can RSVP), and — for Virtual classes —
+      // generate the Google Meet link. All in the shared helper so this stays
+      // consistent with the rest of the calendar pipeline.
       try {
-        const tpCalRes = await pool.query(
-          `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
+        const calResult = await confirmTrainerOnCalendar(invitation.course_run_id, invitation.trainer_email);
+        console.log(
+          `📅 [trainer-invitation/respond] calendar confirm: status=${calResult.status}` +
+          `${calResult.reason ? ` (${calResult.reason})` : ''} events=${calResult.eventsFound} ` +
+          `trainerOn=${calResult.trainerAddedTo} runIdStamped=${calResult.descriptionsStamped} ` +
+          `meet=${calResult.meetLink || 'n/a'}`
         );
-        const tpCalRow = tpCalRes.rows[0];
-        if (!tpCalRow?.sync_google_calendar || !calendarWritesAllowed()) {
-          console.log(`📅 [trainer-invitation/respond] sync_google_calendar is off — skipping`);
-        } else {
-          const calCredentials = await getGoogleCredentials(pool);
-          let calendarId = 'primary';
-          const calUrl = tpCalRow.google_calendar_url || '';
-          if (calUrl) {
-            const cidMatch = calUrl.match(/[?&]cid=([^&]+)/);
-            if (cidMatch) {
-              try { calendarId = Buffer.from(cidMatch[1], 'base64').toString('utf-8'); }
-              catch { calendarId = cidMatch[1]; }
-            } else if (calUrl.includes('@')) { calendarId = calUrl; }
-          }
-
-          const calOAuth = new google.auth.OAuth2(
-            calCredentials.clientId,
-            calCredentials.clientSecret,
-            'https://developers.google.com/oauthplayground'
-          );
-          calOAuth.setCredentials({ refresh_token: calCredentials.refreshToken });
-          const calendar = google.calendar({ version: 'v3', auth: calOAuth });
-
-          // pg returns DATE columns as JS Date at midnight SGT (= 16:00 UTC
-          // previous day). .toISOString() gives the UTC date which is off by
-          // one day. Add +8h to get the SGT date, matching the sgtDate()
-          // pattern used in auto-add-today-enrolments-to-calendar.ts.
-          const toSgtDate = (v: any): string => {
-            if (!v) return '';
-            const s = String(v);
-            // Already an ISO date string from the query? Use as-is.
-            if (/^\d{4}-\d{2}-\d{2}$/.test(s.trim())) return s.trim();
-            if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-            // Date object or locale string — parse + shift to SGT
-            const d = v instanceof Date ? v : new Date(s);
-            if (isNaN(d.getTime())) return '';
-            return getLocalYMD(d)          };
-          const startDateIso = toSgtDate(invitation.start_date);
-
-          if (!startDateIso) {
-            console.log(`📅 [trainer-invitation/respond] No start_date — skipping calendar add`);
-          } else {
-            // Search window: use end_date if available for multi-day classes
-            const dayBefore = new Date(startDateIso);
-            dayBefore.setDate(dayBefore.getDate() - 1);
-            const dayAfter = new Date(startDateIso);
-            if (invitation.end_date) {
-              const endIso = toSgtDate(invitation.end_date);
-              if (endIso) {
-                const endD = new Date(endIso);
-                dayAfter.setTime(Math.max(dayAfter.getTime(), endD.getTime()));
-              }
-            }
-            dayAfter.setDate(dayAfter.getDate() + 2);
-
-            const eventsRes = await calendar.events.list({
-              calendarId,
-              timeMin: dayBefore.toISOString(),
-              timeMax: dayAfter.toISOString(),
-              singleEvents: true,
-              maxResults: 200,
-            });
-            const allEvents = eventsRes.data.items || [];
-            const courseRunIdStr = invitation.external_course_run_id || '';
-            const stripPrefixes = (t: string) =>
-              (t || '').replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '')
-                       .replace(/^\s*\[?(WSQ|VIRTUAL|EXTERNAL|HYBRID)\]?\s*/gi, '').trim();
-            const strippedTitle = stripPrefixes(invitation.course_title || '').toLowerCase();
-            const titleWords = new Set(strippedTitle.split(/\s+/).filter((w: string) => w.length > 2));
-
-            // Strategy 1: Match by courseRunId in event description/location
-            let matchedEvent = courseRunIdStr
-              ? allEvents.find(evt => {
-                  const desc = ((evt.description || '') + ' ' + (evt.location || '')).toLowerCase();
-                  return desc.includes(courseRunIdStr.toLowerCase());
-                })
-              : undefined;
-
-            // Strategy 2: Exact title substring match + date match
-            if (!matchedEvent) {
-              matchedEvent = allEvents.find(evt => {
-                const evtSummary = stripPrefixes(evt.summary || '').toLowerCase();
-                const titleMatch = evtSummary.includes(strippedTitle) || strippedTitle.includes(evtSummary);
-                if (!titleMatch) return false;
-                const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
-                return evtDate === startDateIso;
-              });
-            }
-
-            // Strategy 3: Word-overlap title match + date match (fuzzy)
-            if (!matchedEvent && titleWords.size > 0) {
-              matchedEvent = allEvents.find(evt => {
-                const evtSummary = stripPrefixes(evt.summary || '').toLowerCase();
-                const evtWords = evtSummary.split(/\s+/).filter((w: string) => w.length > 2);
-                const overlap = evtWords.filter((w: string) => titleWords.has(w));
-                if (overlap.length < Math.ceil(titleWords.size * 0.6)) return false;
-                const evtDate = (evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '');
-                return evtDate === startDateIso;
-              });
-              if (matchedEvent) {
-                console.log(`📅 [trainer-invitation/respond] Fuzzy word-overlap match: "${matchedEvent.summary}"`);
-              }
-            }
-
-            if (!matchedEvent || !matchedEvent.id) {
-              console.log(`📅 [trainer-invitation/respond] No matching calendar event for "${invitation.course_title}" on ${startDateIso}`);
-            } else {
-              // Check for recurring events and patch all siblings
-              const baseId = matchedEvent.id.includes('_') ? matchedEvent.id.split('_')[0] : null;
-              let eventsToUpdate: Array<{ id: string; attendees: any[] }> = [];
-
-              if (baseId) {
-                const wideStart = new Date(startDateIso);
-                wideStart.setDate(wideStart.getDate() - 7);
-                const wideEnd = new Date(startDateIso);
-                wideEnd.setDate(wideEnd.getDate() + 60);
-                const recurringRes = await calendar.events.list({
-                  calendarId,
-                  timeMin: wideStart.toISOString(),
-                  timeMax: wideEnd.toISOString(),
-                  singleEvents: true,
-                  maxResults: 2500,
-                });
-                eventsToUpdate = (recurringRes.data.items || [])
-                  .filter(evt => evt.id && evt.id.startsWith(baseId + '_'))
-                  .map(evt => ({ id: evt.id!, attendees: evt.attendees || [] }));
-              }
-              if (eventsToUpdate.length === 0) {
-                eventsToUpdate = [{ id: matchedEvent.id, attendees: matchedEvent.attendees || [] }];
-              }
-
-              const emailLower = invitation.trainer_email.trim().toLowerCase();
-              let addedCount = 0;
-              for (const evt of eventsToUpdate) {
-                if (evt.attendees.some((a: any) => (a.email || '').toLowerCase() === emailLower)) {
-                  addedCount++;
-                  continue;
-                }
-                await calendar.events.patch({
-                  calendarId,
-                  eventId: evt.id,
-                  requestBody: {
-                    attendees: [...evt.attendees, { email: invitation.trainer_email, responseStatus: 'needsAction' }],
-                  },
-                  sendUpdates: 'none',
-                });
-                addedCount++;
-              }
-              console.log(
-                `📅 [trainer-invitation/respond] Added ${invitation.trainer_email} to ${addedCount}/${eventsToUpdate.length} calendar events for "${invitation.course_title}"`
-              );
-              
-              if (addedCount > 0) {
-                await pool.query(
-                  `UPDATE course_run SET trainer_in_calendar = true, updated_at = NOW() WHERE id = $1`,
-                  [invitation.course_run_id]
-                );
-                console.log(`✅ [trainer-invitation/respond] Updated trainer_in_calendar=true for course_run=${invitation.course_run_id}`);
-              }
-            }
-          }
-        }
+        if (calResult.meetLink) acceptMeetLink = calResult.meetLink;
       } catch (calErr) {
         console.error(`❌ [trainer-invitation/respond] Calendar add failed:`, calErr);
       }
@@ -630,6 +496,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Send the accept/decline acknowledgement email (best-effort; depends on
     // Gmail OAuth being configured on the training provider).
     if (tp?.email_user && tp?.google_client_id && tp?.google_client_secret && tp?.google_refresh_token) {
+      // Training Mode: Classroom or Virtual (Hybrid preserved as-is).
+      const rawMode = String(invitation.class_type || invitation.mode_of_learning || '');
+      const trainingMode = /virtual/i.test(rawMode)
+        ? 'Virtual'
+        : /hybrid/i.test(rawMode)
+        ? 'Hybrid'
+        : 'Classroom';
+
       const replacements: Record<string, string> = {
         COMPANY_SHORT_NAME: tp.company_shortname || tp.company_name || 'Training Provider',
         TRAINER_NAME: invitation.trainer_name,
@@ -638,6 +512,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         COURSE_RUN_ID: invitation.external_course_run_id || '',
         START_DATE: formatDateLabel(invitation.start_date),
         END_DATE: formatDateLabel(invitation.end_date),
+        TRAINING_MODE: trainingMode,
+        MEET_LINK: acceptMeetLink || '',
+        // Rendered directly after the Training Mode line (leading \n) only for
+        // Virtual/Hybrid classes with a link — Classroom confirmations show no
+        // empty "Google Meet Link:" row and no stray blank line.
+        MEET_LINK_LINE: trainingMode !== 'Classroom' && acceptMeetLink
+          ? `\nGoogle Meet Link: ${acceptMeetLink}`
+          : '',
       };
 
       if (action === 'accept') {

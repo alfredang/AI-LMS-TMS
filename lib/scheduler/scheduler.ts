@@ -263,10 +263,17 @@ async function seedDefaults() {
         {
             id: 'auto_send_trainer_invitations',
             name: 'Auto Send Trainer Invitations',
-            description: 'Scans all upcoming course runs within the lookahead window and, for any class that has no locally-assigned trainer, sends an invitation email to the next approved trainer who has not already been invited, declined, or assigned. Default schedule is Monday and Thursday at 10:00 AM SGT — adjust days and time from the Task Scheduler UI.',
-            cron_expression: '0 10 * * 1,4', // 10:00 AM SGT every Mon & Thu
+            description: 'Weekly Monday sweep: first EXPIRES any invitation still pending after a week with no response (its links stop working), then, for every upcoming class with no locally-assigned trainer, invites the next approved trainer in the course\'s preference order. Together with the Thursday reminder task this forms the weekly cycle: invite Monday → remind Thursday → expire & move to the next trainer the following Monday. Default schedule is Monday at 10:00 AM SGT.',
+            cron_expression: '0 10 * * 1', // 10:00 AM SGT every Monday
             api_endpoint: '/api/external/auto-send-trainer-invitations',
             days_in_advance: 30,
+        },
+        {
+            id: 'auto_remind_trainer_invitations',
+            name: 'Remind Pending Trainer Invitations',
+            description: 'Thursday follow-up to the Monday invitation sweep: re-emails every trainer whose invitation is still PENDING (not accepted/declined) for an upcoming class, using the same accept/decline links as the original email. Sends nothing when there are no pending invitations. Default schedule is Thursday at 10:00 AM SGT.',
+            cron_expression: '0 10 * * 4', // 10:00 AM SGT every Thursday
+            api_endpoint: '/api/external/auto-remind-trainer-invitations',
         },
         {
             id: 'sync_ssg_enrolments',
@@ -415,6 +422,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('auto_send_trainer_invitations', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-send-trainer-invitations');
+            return runAutomation();
+        });
+        directHandlers.set('auto_remind_trainer_invitations', async () => {
+            const { runAutomation } = await import('../../pages/api/external/auto-remind-trainer-invitations');
             return runAutomation();
         });
         directHandlers.set('sync_ssg_enrolments', async () => {

@@ -100,7 +100,7 @@ export async function loadTrainingProviderEmailConfig(): Promise<TrainingProvide
   return row as TrainingProviderEmailConfig;
 }
 
-async function sendGmail(
+export async function sendGmail(
   tp: TrainingProviderEmailConfig,
   to: string,
   subject: string,
@@ -347,6 +347,7 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
     const latestInvitedResult = await pool.query(
       `SELECT trainer_name FROM trainer_invitation
        WHERE course_run_id = $1
+         AND status <> 'reset'
        ORDER BY COALESCE(responded_at, created_at) DESC, created_at DESC
        LIMIT 1`,
       [courseRunUuid]

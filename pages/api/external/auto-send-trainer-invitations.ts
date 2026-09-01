@@ -171,6 +171,43 @@ async function _runAutomationInner(): Promise<AutomationSummary> {
   // Ensure invitation_paused column exists (idempotent)
   await pool.query(`ALTER TABLE course_run ADD COLUMN IF NOT EXISTS invitation_paused BOOLEAN DEFAULT false`);
 
+  // ── Weekly no-response expiry ────────────────────────────────────────────
+  // An invitation left PENDING for a week (sent last Monday, reminded Thursday,
+  // still no answer by this Monday's sweep) is EXPIRED: its accept/decline
+  // links stop working and the cascade below moves on to the next approved
+  // trainer. 6-day threshold so the Mon→Mon cycle can't miss by cron jitter.
+  // Runs that meanwhile got a trainer are left alone (nothing to escalate).
+  try {
+    const expired = await pool.query(
+      `UPDATE trainer_invitation ti
+          SET status = 'expired', updated_at = NOW()
+         FROM course_run cr
+        WHERE cr.id = ti.course_run_id
+          AND ti.status = 'pending'
+          AND ti.sent_at <= NOW() - INTERVAL '6 days'
+          AND NOT EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = ti.course_run_id)
+        RETURNING ti.trainer_name, ti.trainer_email, ti.course_run_id, cr.course_run_id AS external_run_id`
+    );
+    for (const row of expired.rows) {
+      console.log(
+        `⌛ [auto-send-trainer-invitations] expired no-response invitation: ${row.trainer_name} on run ${row.external_run_id}`
+      );
+      await insertLogRow(runId, {
+        status: 'invitation_expired',
+        courseRunUuid: row.course_run_id,
+        courseRunId: row.external_run_id,
+        trainerName: row.trainer_name,
+        trainerEmail: row.trainer_email,
+        message: 'Invitation expired after 1 week without a response — escalating to the next approved trainer',
+      } as unknown as TrainerInvitationSendResult);
+    }
+    if (expired.rowCount) {
+      console.log(`⌛ [auto-send-trainer-invitations] ${expired.rowCount} pending invitation(s) expired (no response in a week)`);
+    }
+  } catch (expErr) {
+    console.error('❌ [auto-send-trainer-invitations] expiry pass failed:', expErr);
+  }
+
   // Lower bound = today + minLeadDays (default 1 → excludes same-day starts so the
   // trainer has time to respond/prepare). Upper bound = today + windowDays.
   const eligibleRes = await pool.query(
