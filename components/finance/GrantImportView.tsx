@@ -385,14 +385,28 @@ const GrantImportView: React.FC = () => {
   useEffect(() => {
     if (!fetchJobId) return;
     let cancelled = false;
+    // A single bad poll (proxy restart, brief network blip) must not kill a job that's
+    // still running for another 1-2 minutes server-side — only give up after several
+    // consecutive failures in a row. Reset on every successful poll.
+    let consecutiveFailures = 0;
+    const MAX_CONSECUTIVE_FAILURES = 5;
 
     const tick = async () => {
       try {
         const res = await fetch(`/api/finance/grant-fetch/status?jobId=${encodeURIComponent(fetchJobId)}`, {
           headers: { 'x-actor-user-id': actorUserId },
         });
-        const json = await res.json();
+        // A reverse-proxy hiccup (container restart, brief outage) returns a plain-text
+        // "Bad Gateway" body, not JSON — read as text first so that doesn't crash res.json().
+        const bodyText = await res.text();
+        let json: any;
+        try {
+          json = JSON.parse(bodyText);
+        } catch {
+          throw new Error(res.ok ? 'Server returned a non-JSON response' : `Server temporarily unavailable (HTTP ${res.status})`);
+        }
         if (!res.ok || !json?.success) throw new Error(json?.error || 'Failed to fetch progress');
+        consecutiveFailures = 0;
         const job = json.data as {
           phase: string;
           message: string;
@@ -434,6 +448,13 @@ const GrantImportView: React.FC = () => {
         }
       } catch (e: any) {
         if (cancelled) return;
+        consecutiveFailures += 1;
+        if (consecutiveFailures < MAX_CONSECUTIVE_FAILURES) {
+          // Transient — the job is likely still running server-side. Keep polling;
+          // don't surface an error or stop for a single bad response.
+          setTimeout(tick, 1500);
+          return;
+        }
         setFetchError(e?.message || 'Fetch progress failed');
         setFetching(false);
         setFetchJobId(null);
