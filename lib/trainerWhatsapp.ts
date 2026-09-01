@@ -54,8 +54,12 @@ export async function ensureTrainerWhatsappTable() {
  * gap between any two releases (both channels share the same number).
  * Server-side, independent of how often the agent polls.
  *
- *   invitation      — trainer invitation/reminder nudges: ≤5/day, 10:00–15:00 SGT
+ *   invitation      — trainer invitation/reminder nudges: ≤5/day, 10:00–13:00 SGT
  *   class_reminder  — upcoming-class reminders (3 days ahead): ≤7/day, 13:00–17:00 SGT
+ *
+ * The windows deliberately do NOT overlap (invitation nudges finish by 1pm,
+ * class reminders start at 1pm) so the two streams never interleave on the
+ * Business number.
  */
 export interface WhatsappChannelConfig {
   kinds: string[];
@@ -64,7 +68,7 @@ export interface WhatsappChannelConfig {
   windowEndHourSgt: number;
 }
 export const WHATSAPP_CHANNELS: Record<string, WhatsappChannelConfig> = {
-  invitation: { kinds: ['invitation', 'reminder'], maxPerDay: 5, windowStartHourSgt: 10, windowEndHourSgt: 15 },
+  invitation: { kinds: ['invitation', 'reminder'], maxPerDay: 5, windowStartHourSgt: 10, windowEndHourSgt: 13 },
   class_reminder: { kinds: ['class_reminder'], maxPerDay: 7, windowStartHourSgt: 13, windowEndHourSgt: 17 },
 };
 export const WHATSAPP_MIN_GAP_MINUTES = 15; // global, across ALL channels

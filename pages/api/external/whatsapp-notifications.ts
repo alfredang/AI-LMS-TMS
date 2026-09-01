@@ -20,7 +20,7 @@ import {
  * enforced per CHANNEL, server-side — an over-eager poller just gets
  * rateLimited responses:
  *   - channel=invitation (default; kinds invitation+reminder):
- *       max 5/SGT day, window 10:00–15:00 SGT
+ *       max 5/SGT day, window 10:00–13:00 SGT
  *   - channel=class_reminder (upcoming-class reminders):
  *       max 7/SGT day, window 13:00–17:00 SGT
  *   - GLOBAL: at least 15 minutes between ANY two releases (same WABA
