@@ -54,8 +54,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   if (req.method === 'GET') {
     const status = typeof req.query.status === 'string' ? req.query.status : 'pending';
-    if (!['pending', 'sent', 'failed', 'no_phone', 'dispatched', 'expired'].includes(status)) {
-      return res.status(400).json({ success: false, error: 'status must be pending|dispatched|sent|failed|no_phone|expired' });
+    if (!['pending', 'sent', 'failed', 'no_phone', 'dispatched', 'expired', 'cancelled'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'status must be pending|dispatched|sent|failed|no_phone|expired|cancelled' });
     }
 
     const mapRow = (r: any) => ({
@@ -114,6 +114,47 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           SET status = 'failed', error = COALESCE(error, 'Dispatch not confirmed by agent within 6h')
         WHERE status = 'dispatched' AND dispatched_at < NOW() - INTERVAL '6 hours'`
     );
+    // Housekeeping 3: staleness guards — nudges are queued at email-send time
+    // but released later, so re-check the LMS state at dispatch time and
+    // cancel anything that no longer applies.
+    if (channelName === 'invitation') {
+      // (a) The class already has a trainer accepted/assigned in the LMS —
+      //     "please accept the invitation" would be wrong for everyone.
+      await pool.query(
+        `UPDATE trainer_whatsapp_notification n
+            SET status = 'cancelled', error = 'Class already has an assigned trainer — nudge no longer needed'
+          WHERE n.status = 'pending' AND n.kind IN ('invitation', 'reminder')
+            AND EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = n.course_run_id)`
+      );
+      // (b) This trainer's invitation is no longer pending (they responded,
+      //     it expired, or it was superseded/reset) — nothing to nudge about.
+      await pool.query(
+        `UPDATE trainer_whatsapp_notification n
+            SET status = 'cancelled', error = 'Invitation is no longer pending (responded / expired / superseded)'
+          WHERE n.status = 'pending' AND n.kind IN ('invitation', 'reminder')
+            AND NOT EXISTS (
+              SELECT 1 FROM trainer_invitation ti
+              WHERE ti.course_run_id = n.course_run_id
+                AND LOWER(ti.trainer_email) = LOWER(n.trainer_email)
+                AND ti.status = 'pending'
+            )`
+      );
+    } else if (channelName === 'class_reminder') {
+      // Symmetric guard: a class reminder only goes to a trainer of a class
+      // that is STILL Confirmed with that trainer still assigned.
+      await pool.query(
+        `UPDATE trainer_whatsapp_notification n
+            SET status = 'cancelled', error = 'Class is no longer Confirmed with this trainer assigned'
+          WHERE n.status = 'pending' AND n.kind = 'class_reminder'
+            AND NOT EXISTS (
+              SELECT 1 FROM course_run cr
+              JOIN course_run_trainer crt ON crt.course_run_id = cr.id
+              WHERE cr.id = n.course_run_id
+                AND cr.class_status = 'Confirmed'
+                AND LOWER(crt.trainer_email) = LOWER(COALESCE(n.trainer_email, ''))
+            )`
+      );
+    }
 
     // Sending window for THIS channel.
     const windowWait = secondsUntilWhatsappWindow(channel.windowStartHourSgt, channel.windowEndHourSgt);
