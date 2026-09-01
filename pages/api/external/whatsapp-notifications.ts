@@ -3,11 +3,9 @@ import pool from '../../../lib/db';
 import {
   ensureTrainerWhatsappTable,
   secondsUntilWhatsappWindow,
-  WHATSAPP_MAX_PER_DAY,
+  WHATSAPP_CHANNELS,
   WHATSAPP_MIN_GAP_MINUTES,
   WHATSAPP_PENDING_TTL_HOURS,
-  WHATSAPP_WINDOW_START_HOUR_SGT,
-  WHATSAPP_WINDOW_END_HOUR_SGT,
 } from '../../../lib/trainerWhatsapp';
 
 /**
@@ -18,17 +16,20 @@ import {
  * reports the outcome back. The LMS only queues; it never sends WhatsApp
  * itself (architecture invariant: agents integrate over the HTTPS API).
  *
- * HARD ANTI-BAN RULES (Dr Ang, 2026-09-01 — Facebook bans bursty WABA numbers):
- *   - AT MOST 5 trainer messages per SGT day
- *   - AT LEAST 15 minutes apart, one message per poll
- *   - ONLY between 10:00 and 15:00 SGT (never at night or after 3pm)
- * Enforced here, server-side — an over-eager poller just gets rateLimited
- * responses. Pending rows older than 72h are expired unsent (stale nudges
- * are noise).
+ * HARD ANTI-BAN RULES (Dr Ang, 2026-09-01 — Facebook bans bursty WABA numbers),
+ * enforced per CHANNEL, server-side — an over-eager poller just gets
+ * rateLimited responses:
+ *   - channel=invitation (default; kinds invitation+reminder):
+ *       max 5/SGT day, window 10:00–15:00 SGT
+ *   - channel=class_reminder (upcoming-class reminders):
+ *       max 7/SGT day, window 13:00–17:00 SGT
+ *   - GLOBAL: at least 15 minutes between ANY two releases (same WABA
+ *     number), one message per poll
+ * Pending rows older than 72h are expired unsent (stale nudges are noise).
  *
- * GET  /api/external/whatsapp-notifications            (dispatch mode)
+ * GET  /api/external/whatsapp-notifications?channel=invitation|class_reminder
  *   → releases 0 or 1 message: { success, notifications:[...1], sentToday, dailyCap, minGapMinutes }
- *     or { success, notifications:[], rateLimited:true, reason:'daily_cap'|'min_gap', retryAfterSeconds? }
+ *     or { success, notifications:[], rateLimited:true, reason:'daily_cap'|'min_gap'|'outside_window', retryAfterSeconds? }
  * GET  ?status=dispatched|sent|failed|no_phone|expired (read-only audit listing)
  *
  * POST /api/external/whatsapp-notifications
@@ -88,13 +89,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     // ── Dispatch mode (status=pending) — HARD anti-ban gate ─────────────────
-    // Facebook can ban a WhatsApp Business number for bursty sending, so the
-    // queue enforces the limits SERVER-SIDE regardless of poll frequency:
-    //   - at most WHATSAPP_MAX_PER_DAY messages released per SGT day
-    //   - at least WHATSAPP_MIN_GAP_MINUTES between releases
-    //   - at most ONE message per poll
+    // Per-channel caps/windows + a GLOBAL 15-min gap (same WABA number).
     // Every released row is stamped dispatched_at and counts toward the caps
     // whatever its final outcome (sent/failed) — the WABA hit already happened.
+    const channelName = typeof req.query.channel === 'string' ? req.query.channel : 'invitation';
+    const channel = WHATSAPP_CHANNELS[channelName];
+    if (!channel) {
+      return res.status(400).json({
+        success: false,
+        error: `channel must be one of: ${Object.keys(WHATSAPP_CHANNELS).join(', ')}`,
+      });
+    }
 
     // Housekeeping 1: expire stale pending rows (a days-late nudge is noise).
     await pool.query(
@@ -110,34 +115,40 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         WHERE status = 'dispatched' AND dispatched_at < NOW() - INTERVAL '6 hours'`
     );
 
-    // Sending window: 10:00–15:00 SGT only — never at night or after 3pm.
-    const windowWait = secondsUntilWhatsappWindow();
+    // Sending window for THIS channel.
+    const windowWait = secondsUntilWhatsappWindow(channel.windowStartHourSgt, channel.windowEndHourSgt);
     if (windowWait !== null) {
       return res.status(200).json({
         success: true, count: 0, notifications: [],
+        channel: channelName,
         rateLimited: true, reason: 'outside_window',
         retryAfterSeconds: windowWait,
-        message: `WhatsApp messages are only sent between ${WHATSAPP_WINDOW_START_HOUR_SGT}:00 and ${WHATSAPP_WINDOW_END_HOUR_SGT}:00 SGT`,
+        message: `${channelName} WhatsApp messages are only sent between ${channel.windowStartHourSgt}:00 and ${channel.windowEndHourSgt}:00 SGT`,
       });
     }
 
     const gate = await pool.query(
       `SELECT
          COUNT(*) FILTER (
-           WHERE (dispatched_at AT TIME ZONE 'Asia/Singapore')::date = (NOW() AT TIME ZONE 'Asia/Singapore')::date
+           WHERE kind = ANY($1::text[])
+             AND (dispatched_at AT TIME ZONE 'Asia/Singapore')::date = (NOW() AT TIME ZONE 'Asia/Singapore')::date
          )::int AS today_count,
          MAX(dispatched_at) AS last_dispatched_at
        FROM trainer_whatsapp_notification
-       WHERE dispatched_at IS NOT NULL`
+       WHERE dispatched_at IS NOT NULL`,
+      [channel.kinds]
     );
+    // Daily cap is per channel; the 15-min gap is GLOBAL across channels —
+    // both go out from the same WhatsApp Business number.
     const todayCount = gate.rows[0]?.today_count ?? 0;
     const lastAt = gate.rows[0]?.last_dispatched_at ? new Date(gate.rows[0].last_dispatched_at) : null;
 
-    if (todayCount >= WHATSAPP_MAX_PER_DAY) {
+    if (todayCount >= channel.maxPerDay) {
       return res.status(200).json({
         success: true, count: 0, notifications: [],
+        channel: channelName,
         rateLimited: true, reason: 'daily_cap',
-        message: `Daily cap of ${WHATSAPP_MAX_PER_DAY} WhatsApp trainer messages reached — try again tomorrow (SGT)`,
+        message: `Daily cap of ${channel.maxPerDay} ${channelName} WhatsApp messages reached — try again tomorrow (SGT)`,
         sentToday: todayCount,
       });
     }
@@ -147,33 +158,36 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       if (elapsedMs < gapMs) {
         return res.status(200).json({
           success: true, count: 0, notifications: [],
+          channel: channelName,
           rateLimited: true, reason: 'min_gap',
           retryAfterSeconds: Math.ceil((gapMs - elapsedMs) / 1000),
-          message: `Messages must be ${WHATSAPP_MIN_GAP_MINUTES} minutes apart — retry later`,
+          message: `Messages must be ${WHATSAPP_MIN_GAP_MINUTES} minutes apart (any channel) — retry later`,
           sentToday: todayCount,
         });
       }
     }
 
-    // Release exactly ONE message, race-safe (SKIP LOCKED under concurrency).
+    // Release exactly ONE message from this channel, race-safe (SKIP LOCKED).
     const released = await pool.query(
       `UPDATE trainer_whatsapp_notification n
           SET status = 'dispatched', dispatched_at = NOW()
         WHERE n.id = (
           SELECT id FROM trainer_whatsapp_notification
-           WHERE status = 'pending'
+           WHERE status = 'pending' AND kind = ANY($1::text[])
            ORDER BY created_at ASC
            LIMIT 1
            FOR UPDATE SKIP LOCKED
         )
-        RETURNING n.*, (SELECT cr.course_run_id FROM course_run cr WHERE cr.id = n.course_run_id) AS course_run_id`
+        RETURNING n.*, (SELECT cr.course_run_id FROM course_run cr WHERE cr.id = n.course_run_id) AS course_run_id`,
+      [channel.kinds]
     );
     return res.status(200).json({
       success: true,
       count: released.rows.length,
       notifications: released.rows.map(mapRow),
+      channel: channelName,
       sentToday: todayCount + released.rows.length,
-      dailyCap: WHATSAPP_MAX_PER_DAY,
+      dailyCap: channel.maxPerDay,
       minGapMinutes: WHATSAPP_MIN_GAP_MINUTES,
     });
   }

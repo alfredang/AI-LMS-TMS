@@ -49,33 +49,45 @@ export async function ensureTrainerWhatsappTable() {
 
 /**
  * HARD anti-ban limits for the WhatsApp Business number (+65 8866 6375).
- * Facebook can ban numbers that blast messages — so the queue NEVER releases
- * more than MAX_PER_DAY trainer messages per SGT day, and never two messages
- * less than MIN_GAP_MINUTES apart. Enforced server-side in the dispatch
- * endpoint, independent of how often the agent polls.
+ * Facebook can ban numbers that blast messages, so the dispatch endpoint
+ * enforces per-CHANNEL daily caps + sending windows, and a GLOBAL minimum
+ * gap between any two releases (both channels share the same number).
+ * Server-side, independent of how often the agent polls.
+ *
+ *   invitation      — trainer invitation/reminder nudges: ≤5/day, 10:00–15:00 SGT
+ *   class_reminder  — upcoming-class reminders (3 days ahead): ≤7/day, 13:00–17:00 SGT
  */
-export const WHATSAPP_MAX_PER_DAY = 5;
-export const WHATSAPP_MIN_GAP_MINUTES = 15;
-/** Messages may only be released between these SGT hours (10:00 ≤ t < 15:00). */
-export const WHATSAPP_WINDOW_START_HOUR_SGT = 10;
-export const WHATSAPP_WINDOW_END_HOUR_SGT = 15;
+export interface WhatsappChannelConfig {
+  kinds: string[];
+  maxPerDay: number;
+  windowStartHourSgt: number;
+  windowEndHourSgt: number;
+}
+export const WHATSAPP_CHANNELS: Record<string, WhatsappChannelConfig> = {
+  invitation: { kinds: ['invitation', 'reminder'], maxPerDay: 5, windowStartHourSgt: 10, windowEndHourSgt: 15 },
+  class_reminder: { kinds: ['class_reminder'], maxPerDay: 7, windowStartHourSgt: 13, windowEndHourSgt: 17 },
+};
+export const WHATSAPP_MIN_GAP_MINUTES = 15; // global, across ALL channels
 /** Pending rows older than this are expired unsent — a stale nudge is worse than none. */
 export const WHATSAPP_PENDING_TTL_HOURS = 72;
 
 /**
- * Sending-window check (10:00–15:00 SGT — never at night or after 3pm).
- * Returns null when inside the window, else the number of seconds until the
- * window next opens (10:00 SGT today or tomorrow).
+ * Sending-window check for a channel. Returns null when inside the window,
+ * else the number of seconds until the window next opens (today or tomorrow).
  */
-export function secondsUntilWhatsappWindow(now: Date = new Date()): number | null {
+export function secondsUntilWhatsappWindow(
+  startHour: number,
+  endHour: number,
+  now: Date = new Date()
+): number | null {
   // Derive SGT wall-clock from UTC (SGT = UTC+8, no DST).
   const sgtMs = now.getTime() + 8 * 60 * 60 * 1000;
   const sgt = new Date(sgtMs);
   const hour = sgt.getUTCHours();
-  if (hour >= WHATSAPP_WINDOW_START_HOUR_SGT && hour < WHATSAPP_WINDOW_END_HOUR_SGT) return null;
+  if (hour >= startHour && hour < endHour) return null;
   const next = new Date(sgtMs);
-  next.setUTCHours(WHATSAPP_WINDOW_START_HOUR_SGT, 0, 0, 0);
-  if (hour >= WHATSAPP_WINDOW_END_HOUR_SGT) next.setUTCDate(next.getUTCDate() + 1);
+  next.setUTCHours(startHour, 0, 0, 0);
+  if (hour >= endHour) next.setUTCDate(next.getUTCDate() + 1);
   return Math.max(60, Math.ceil((next.getTime() - sgtMs) / 1000));
 }
 
@@ -107,6 +119,56 @@ const fmtDate = (v: any): string => {
  * Queue one WhatsApp nudge for a trainer about a course run. Resolves the
  * phone from trainer_profile.tel via the trainer's email. Never throws.
  */
+/**
+ * Queue the "upcoming class in 3 days" reminder for one trainer of a
+ * CONFIRMED class. The LMS composes the message from its own record (the
+ * single source of truth) — this replaced Tael's self-assembled reminders,
+ * which had wrong/blank Course Duration and Mode of Training fields.
+ * Deduped per (run, trainer): queued at most once per run/trainer within 10
+ * days. Never throws.
+ */
+export async function queueClassReminderWhatsApp(opts: {
+  courseRunUuid: string;
+  trainerName: string;
+  trainerEmail: string | null;
+  trainerPhone: string | null; // already E.164-normalized, or null
+  message: string;
+}): Promise<'queued' | 'skipped_duplicate' | 'error'> {
+  const { courseRunUuid, trainerName, trainerEmail, trainerPhone, message } = opts;
+  try {
+    await ensureTrainerWhatsappTable();
+    const dup = await pool.query(
+      `SELECT 1 FROM trainer_whatsapp_notification
+        WHERE course_run_id = $1
+          AND kind = 'class_reminder'
+          AND LOWER(COALESCE(trainer_email, trainer_name)) = LOWER(COALESCE($2, $3))
+          AND created_at > NOW() - INTERVAL '10 days'
+        LIMIT 1`,
+      [courseRunUuid, trainerEmail, trainerName]
+    );
+    if (dup.rows.length > 0) return 'skipped_duplicate';
+
+    await pool.query(
+      `INSERT INTO trainer_whatsapp_notification
+         (course_run_id, trainer_name, trainer_email, trainer_phone, kind, message, status, error)
+       VALUES ($1, $2, $3, $4, 'class_reminder', $5, $6, $7)`,
+      [
+        courseRunUuid,
+        trainerName,
+        trainerEmail,
+        trainerPhone,
+        message,
+        trainerPhone ? 'pending' : 'no_phone',
+        trainerPhone ? null : 'No usable phone number on trainer profile',
+      ]
+    );
+    return 'queued';
+  } catch (err) {
+    console.error('❌ [trainerWhatsapp] class-reminder queue failed:', err);
+    return 'error';
+  }
+}
+
 export async function queueTrainerWhatsAppNotification(opts: {
   courseRunUuid: string;
   trainerName: string;

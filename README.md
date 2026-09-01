@@ -223,6 +223,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Auto-Assign Trainers** — Bot-driven trainer assignment with fallback logic
 - **Course Run Date Sync** — Automatic synchronization of dates with SSG
 - **Enrolment Backfill** — Batch sync of enrollment data from SSG
+- **Trainer WhatsApp Notifications** — Rate-gated queue consumed by the external WhatsApp Business agent: invitation/reminder nudges (max 5/day, 10:00–15:00 SGT) and upcoming-class reminders composed from the LMS record 3 days ahead (max 7/day, 13:00–17:00 SGT), all ≥15 min apart; plus a read-only `confirmed-classes` feed of authoritative class data
 - **Funding Renewal Reminder** — Daily 8:00 AM SGT email listing funded courses whose funding validity has expired or expires within 1 month and are not yet marked renewed on the Course Funding Validity page (recipients via `FUNDING_REMINDER_RECIPIENTS`; nothing pending → no email)
 - **Auto-Send Emails** — Configurable auto-send for proforma invoices, confirmation emails, invoices, receipts, certificates, and thank-you emails
 
