@@ -4,22 +4,28 @@ import { Icon, IconName } from '../ui/Icon';
 
 const HR_TOOLS = [
   {
+    title: 'HR Recruitment',
+    description: 'Plan and run the recruitment cycle, from role definition and sourcing through to candidate shortlisting',
+    icon: IconName.Assignment,
+    href: 'https://alfredang.github.io/hr-recruitment/',
+  },
+  {
+    title: 'AI Interviewing',
+    description: 'Practice interview questions and receive AI-powered feedback to sharpen your responses',
+    icon: IconName.Chat,
+    href: 'https://alfredang.github.io/AIInterviewing/',
+  },
+  {
+    title: 'AI Job Coaching',
+    description: 'AI-guided coaching conversations to support career development, goal setting and performance growth',
+    icon: IconName.Chat,
+    href: 'https://alfredang.github.io/AICoaching/',
+  },
+  {
     title: 'MBTI',
     description: 'Myers-Briggs personality type assessment to explore preferences across 16 personality types',
     icon: IconName.Analytics,
     href: 'https://alfredang.github.io/mbti/#landing',
-  },
-  {
-    title: 'AI Interview Coach',
-    description: 'Practice interview questions and receive AI-powered feedback to sharpen your responses',
-    icon: IconName.Chat,
-    href: 'https://alfredang.github.io/ai-interviewing/',
-  },
-  {
-    title: 'HR Interview Gen',
-    description: 'Generate tailored HR interview questions to streamline candidate screening and evaluation',
-    icon: IconName.Assignment,
-    href: 'https://alfredang.github.io/hr-interviewing/',
   },
 ];
 

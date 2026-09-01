@@ -37,7 +37,8 @@ export enum View {
   WorkflowGuides = 'workflowGuides',
   FeedbackForm = 'feedbackForm',
   FeedbackFormResponses = 'feedbackFormResponses',
-  EdTools = 'edTools'
+  EdTools = 'edTools',
+  Tools = 'tools'
 }
 
 export enum UserRole {

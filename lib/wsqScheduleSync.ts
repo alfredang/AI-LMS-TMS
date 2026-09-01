@@ -9,7 +9,10 @@ export type MagentoSchedule = { raw?: string; course_start_date: string | null; 
 export type MagentoCourse = { course_code: string; course_title?: string; schedules: MagentoSchedule[] };
 export type MagentoResponse = { courses: MagentoCourse[]; generated_at?: string; count?: number; store?: string };
 
-export type SyncItem = { course_code: string; start_date: string; end_date: string };
+// `raw` is the storefront's human label ("5/12/13/19/26 Sep 2026 (Sat/Sun)").
+// It is the only source that states the individual teaching days — start/end
+// alone cannot express a run taught on five scattered Saturdays.
+export type SyncItem = { course_code: string; start_date: string; end_date: string; raw?: string };
 
 /** Current date (YYYY-MM-DD) in Asia/Singapore — the single "today" for UI + crons. */
 export function sgtToday(): string {
@@ -61,7 +64,7 @@ export function futureScheduleItems(magento: MagentoResponse, today: string): Sy
       if (!start || !end) continue;      // unparsed
       if (end < today) continue;          // already ended
       if (start < today) continue;        // already started (SSG rejects past start)
-      items.push({ course_code: code, start_date: start, end_date: end });
+      items.push({ course_code: code, start_date: start, end_date: end, raw: s.raw });
     }
   }
   return items;

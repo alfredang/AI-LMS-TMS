@@ -86,9 +86,10 @@ export const FINANCE_TOOL_ITEMS: ToolLinkItem[] = [
 ];
 
 export const HR_TOOL_ITEMS: ToolLinkItem[] = [
+  { label: 'HR Recruitment', icon: IconName.Assignment, href: 'https://alfredang.github.io/hr-recruitment/' },
+  { label: 'AI Interviewing', icon: IconName.Chat, href: 'https://alfredang.github.io/AIInterviewing/' },
+  { label: 'AI Job Coaching', icon: IconName.Chat, href: 'https://alfredang.github.io/AICoaching/' },
   { label: 'MBTI', icon: IconName.Analytics, href: 'https://alfredang.github.io/mbti/#landing' },
-  { label: 'AI Interview Coach', icon: IconName.Chat, href: 'https://alfredang.github.io/ai-interviewing/' },
-  { label: 'HR Interview Gen', icon: IconName.Assignment, href: 'https://alfredang.github.io/hr-interviewing/' },
 ];
 
 export const STAT_TOOL_ITEMS: ToolLinkItem[] = [
@@ -263,6 +264,7 @@ export const TOOL_GROUPS: ToolGroupEntry[] = [
   { key: 'projectMgt',     label: 'Project Mgt Tools',    icon: IconName.ClipboardCheck, items: PROJECT_MGT_TOOL_ITEMS },
   { key: 'sixSigma',       label: 'Six Sigma Tools',      icon: IconName.Help,           items: PROBLEM_SOLVING_TOOL_ITEMS },
   { key: 'cyberSecurity',  label: 'Cyber Security Tools', icon: IconName.Shield,         items: CYBER_SECURITY_TOOL_ITEMS },
+  { key: 'networking',     label: 'Networking Tools',     icon: IconName.Analytics,      items: NETWORKING_TOOL_ITEMS },
   { key: 'finance',        label: 'Finance Tools',        icon: IconName.Analytics,      items: FINANCE_TOOL_ITEMS },
   { key: 'hr',             label: 'HR Tools',             icon: IconName.Analytics,      items: HR_TOOL_ITEMS },
   { key: 'dataAnalytics',  label: 'Data Analytics Tools', icon: IconName.Analytics,      items: DATA_ANALYTICS_ITEMS },
@@ -271,7 +273,6 @@ export const TOOL_GROUPS: ToolGroupEntry[] = [
   { key: 'doe',            label: 'DOE Tools',            icon: IconName.Analytics,      items: DOE_TOOL_ITEMS },
   { key: 'spc',            label: 'SPC Tools',            icon: IconName.Analytics,      items: SPC_TOOL_ITEMS },
   { key: 'sustainability', label: 'Sustainability Tools', icon: IconName.Analytics,      items: SUSTAINABILITY_TOOL_ITEMS },
-  { key: 'networking',     label: 'Networking Tools',     icon: IconName.Analytics,      items: NETWORKING_TOOL_ITEMS },
   { key: 'k8s',            label: 'K8s Tools',            icon: IconName.Analytics,      items: K8S_TOOL_ITEMS },
   { key: 'blockchain',     label: 'Blockchain Tools',     icon: IconName.Award,          items: BLOCKCHAIN_TOOL_ITEMS },
   { key: 'quantum',        label: 'Quantum Tools',        icon: IconName.Sync,           items: QUANTUM_TOOL_ITEMS },

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import { startWsqSyncJob } from '../admin/wsq-schedule-sync/run-sync';
+import { startWsqSyncJob, buildRunSessions, newSessionBuildCache, VENUE, modeOfTrainingName }
+  from '../admin/wsq-schedule-sync/run-sync';
 import { fetchMagentoSchedules, sgtToday } from '../../../lib/wsqScheduleSync';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
@@ -59,7 +60,12 @@ import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 
 const MAX_ITEMS = 250;
 
-type Item = { course_code: string; start_date: string; end_date: string };
+// `raw` is the storefront's own label for the run ("5/12/13/19/26 Sep 2026
+// (Sat/Sun)"). It is the ONLY thing that states the individual teaching days —
+// start and end alone cannot express a run taught on five scattered Saturdays —
+// and run-sync reads it when building sessions. Dropping it here would silently
+// put three of that run's five classes on days nobody attends.
+type Item = { course_code: string; start_date: string; end_date: string; raw?: string };
 type Rejected = Item & { reason: string };
 
 const isDate = (s: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(s ?? ''));
@@ -93,11 +99,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ── Reference data ────────────────────────────────────────────────────────
     const courses = new Map((await pool.query<{
-      course_code: string; title: string | null; funding_to: string | null; has_timing: boolean;
+      id: string; course_code: string; title: string | null; funding_to: string | null;
     }>(
-      `SELECT c.course_code, c.title,
-              to_char(c.ssg_wsq_support_to, 'YYYY-MM-DD') AS funding_to,
-              EXISTS (SELECT 1 FROM course_session_timing t WHERE t.course_code = c.course_code) AS has_timing
+      `SELECT c.id, c.course_code, c.title,
+              to_char(c.ssg_wsq_support_to, 'YYYY-MM-DD') AS funding_to
          FROM course c WHERE c.course_code LIKE 'TGS-%'`,
     )).rows.map((r) => [r.course_code, r]));
 
@@ -143,34 +148,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         error: `Could not read the storefront schedule: ${e instanceof Error ? e.message : String(e)}`,
       });
     }
-    const soldDates = new Map<string, Set<string>>();
+    // date-pair -> the label describing it, so an explicit items[] request can
+    // recover the label the caller had no way of supplying.
+    const soldDates = new Map<string, Map<string, string>>();
     for (const m of magento.courses || []) {
       const code = (m.course_code ?? '').trim();
       if (!code) continue;
-      const set = soldDates.get(code) ?? new Set<string>();
+      const byDates = soldDates.get(code) ?? new Map<string, string>();
       for (const s of m.schedules || []) {
         const st = s.course_start_date?.slice(0, 10);
         const en = s.course_end_date?.slice(0, 10);
-        if (st && en) set.add(`${st}|${en}`);
+        if (st && en) byDates.set(`${st}|${en}`, String(s.raw ?? ''));
       }
-      soldDates.set(code, set);
+      soldDates.set(code, byDates);
     }
 
     // ── Build the candidate list ──────────────────────────────────────────────
     let candidates: Item[];
     if (rawItems.length > 0) {
-      candidates = rawItems.map((i) => ({
-        course_code: String(i?.course_code ?? '').trim(),
-        start_date: String(i?.start_date ?? '').trim(),
-        end_date: String(i?.end_date ?? '').trim(),
-      }));
+      candidates = rawItems.map((i) => {
+        const course_code = String(i?.course_code ?? '').trim();
+        const start_date = String(i?.start_date ?? '').trim();
+        const end_date = String(i?.end_date ?? '').trim();
+        return {
+          course_code,
+          start_date,
+          end_date,
+          raw: soldDates.get(course_code)?.get(`${start_date}|${end_date}`),
+        };
+      });
     } else {
       candidates = [];
-      for (const [code, dates] of soldDates.entries()) {
+      for (const [code, byDates] of soldDates.entries()) {
         if (code.toUpperCase() !== onlyCourse) continue;
-        for (const d of dates) {
+        for (const [d, raw] of byDates.entries()) {
           const [start_date, end_date] = d.split('|');
-          candidates.push({ course_code: code, start_date, end_date });
+          candidates.push({ course_code: code, start_date, end_date, raw });
         }
       }
       if (candidates.length === 0) {
@@ -198,11 +211,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!soldDates.get(it.course_code)?.has(`${it.start_date}|${it.end_date}`)) {
         reject('not sold on the storefront for these exact dates'); continue;
       }
+      // Prefer the storefront's label over anything the caller supplied.
+      it.raw = soldDates.get(it.course_code)!.get(`${it.start_date}|${it.end_date}`) || it.raw;
 
       const canonical = canonicalByAlias.get(it.course_code) ?? it.course_code;
       const course = courses.get(canonical);
       if (!course) { reject('course does not resolve to any LMS course, even via course_code_history'); continue; }
-      if (!course.has_timing) { reject('course has no session timing template — no sessions could be built'); continue; }
       if (!course.funding_to) { reject('no funding window on record (CASL/IBF funding may not be readable yet)'); continue; }
       if (it.start_date > course.funding_to) {
         reject(`start date is after the funding support period ends (${course.funding_to}) — SSG will reject it`); continue;
@@ -240,6 +254,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return null;
     };
 
+    // SSG runs whose dates match NOTHING the storefront sells. These are not
+    // duplicates and never appear in `rejected`, so without this the preview reads
+    // "0 already published" while SSG quietly holds a different schedule entirely.
+    //
+    // Seen 28 Aug 2026 on TGS-2026064717 (Application of BIM using Revit): the
+    // storefront sold 18 dates, SSG held 8, and not one date matched. Submitting
+    // the 18 would have left the course with 26 runs in a government system, 8 of
+    // them on dates nobody can book. TGS-2026064719 has the same divergence.
+    //
+    // Whether the storefront or SSG is right is a human decision - somebody
+    // changed a schedule and did not update the other side - so this is surfaced,
+    // never acted on.
+    const schedule_drift: { course_code: string; ssg_run_id: string | null; start_date: string; end_date: string }[] = [];
+
     const ssgDates = new Map<string, Set<string>>();
     for (const code of new Set(accepted.map((a) => a.course_code))) {
       const r = await ssgApi.searchCourseRunsByCode(code, { pageSize: 100, includeExpired: true });
@@ -253,13 +281,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const data: any = (r.data as any)?.data ?? r.data;
       const runs: any[] = data?.course?.runs ?? data?.runs ?? [];
       const set = new Set<string>();
+      const soldForCode = soldDates.get(code);
       for (const run of runs) {
         const st = toISO(run?.courseStartDate ?? run?.courseDates?.start);
         const en = toISO(run?.courseEndDate ?? run?.courseDates?.end);
-        if (st && en) set.add(st + '|' + en);
+        if (!st || !en) continue;
+        set.add(st + '|' + en);
+        // Only future runs matter: a past run on a date no longer sold is just history.
+        if (st >= today && !soldForCode?.has(st + '|' + en)) {
+          const id = run?.runId ?? run?.id ?? null;
+          schedule_drift.push({
+            course_code: code,
+            ssg_run_id: id == null ? null : String(id),
+            start_date: st,
+            end_date: en,
+          });
+        }
       }
       ssgDates.set(code, set);
     }
+    schedule_drift.sort((a, b) => a.start_date.localeCompare(b.start_date));
 
     const confirmed: Item[] = [];
     for (const it of accepted) {
@@ -270,11 +311,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    if (confirmed.length === 0) {
+    // Build each run's ACTUAL sessions now, using the same function the real
+    // submission uses. Two reasons this belongs in the preview and not only at
+    // submit time:
+    //   1. A person approving a run is accountable for what reaches a government
+    //      system. Approving bare dates and taking the times on trust is not an
+    //      informed approval - they need to see that "1/4 Jan (Fri/Mon)" produces
+    //      sessions on the 1st and the 4th, and at what times.
+    //   2. It makes the preview honest. Anything whose sessions cannot be built
+    //      is refused HERE with its reason, rather than being previewed as ready
+    //      and then failing silently inside the background job.
+    const sessionCache = newSessionBuildCache();
+    const previewed: (Item & {
+      venue: typeof VENUE;
+      teaching_days: number;
+      sessions: { date: string; start_time: string; end_time: string; mode_of_training: string; mode: string }[];
+    })[] = [];
+    for (const it of confirmed) {
+      const canonical = canonicalByAlias.get(it.course_code) ?? it.course_code;
+      const course = courses.get(canonical);
+      if (!course) { rejected.push({ ...it, reason: 'course not found in LMS' }); continue; }
+      const built = await buildRunSessions(
+        course.id, it.course_code, it.start_date, it.end_date, it.raw, sessionCache,
+      );
+      if (!built.ok) { rejected.push({ ...it, reason: built.reason }); continue; }
+      previewed.push({
+        ...it,
+        venue: VENUE,
+        teaching_days: new Set(built.sessions.map((x) => x.startDate)).size,
+        sessions: built.sessions.map((x) => ({
+          date: x.startDate,
+          start_time: x.startTime,
+          end_time: x.endTime,
+          mode_of_training: x.modeOfTraining,
+          mode: modeOfTrainingName(x.modeOfTraining),
+        })),
+      });
+    }
+
+    if (previewed.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Nothing left to submit — SSG already has a run for every date requested.',
+        error: confirmed.length === 0
+          ? 'Nothing left to submit — SSG already has a run for every date requested.'
+          : 'Nothing left to submit — no run could have its sessions built. See rejected for the reason on each.',
         rejected,
+        schedule_drift,
+        schedule_drift_warning: schedule_drift.length > 0
+          ? `WARNING: nothing needs creating, but SSG holds ${schedule_drift.length} future run(s) for this course on ` +
+            `dates the storefront does not sell. Report this — somebody needs to decide whether those SSG runs should ` +
+            `be cancelled or the storefront updated.`
+          : null,
       });
     }
 
@@ -284,25 +371,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         success: true,
         dry_run: true,
         message:
-          `${confirmed.length} run(s) would be submitted to SSG. Nothing has been sent. ` +
-          `Show this to a human, and re-send the same request with "confirm": true only if they agree.`,
-        would_submit: confirmed,
+          `${previewed.length} run(s) would be submitted to SSG. Nothing has been sent. ` +
+          `Each entry lists the exact teaching dates, session times and venue that would be created — ` +
+          `show those to a human, and re-send the same request with "confirm": true only if they agree.`,
+        would_submit: previewed,
         rejected,
+        schedule_drift,
+        schedule_drift_warning: schedule_drift.length > 0
+          ? `WARNING: SSG holds ${schedule_drift.length} future run(s) for this course on dates the storefront does not sell. ` +
+            `They are not duplicates of anything above, so submitting would leave the course with two different schedules ` +
+            `in a government system. Report this to the person asking and do NOT submit until they decide which schedule is ` +
+            `correct — the storefront's or SSG's. This is a human decision.`
+          : null,
       });
     }
 
     // Positive branch first so the discriminated union narrows cleanly.
-    const result = await startWsqSyncJob(confirmed, 'user');
+    const result = await startWsqSyncJob(
+      previewed.map(({ course_code, start_date, end_date, raw }) => ({ course_code, start_date, end_date, raw })),
+      'user',
+    );
 
     if (result.started) {
       return res.status(200).json({
         success: true,
         dry_run: false,
         job_id: result.jobId,
-        submitting: confirmed.length,
+        submitting: previewed.length,
         rejected,
+        schedule_drift,
         message:
-          `Submitting ${confirmed.length} run(s) to SSG in the background. ` +
+          `Submitting ${previewed.length} run(s) to SSG in the background. ` +
           `Poll GET /api/external/wsq-sync-status?job_id=${result.jobId} for the outcome — ` +
           `do not report success until that says the job completed.`,
       });

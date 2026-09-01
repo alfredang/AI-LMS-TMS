@@ -109,7 +109,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               c.title,
               c.course_type::text AS course_type,
               to_char(c.ssg_wsq_support_to, 'YYYY-MM-DD') AS funding_to,
-              EXISTS (SELECT 1 FROM course_session_timing t WHERE t.course_code = c.course_code) AS has_timing
+              -- Mirror run-sync's own timing lookup, or this report contradicts the
+              -- thing it is reporting on. Two reasons a literal match is too strict:
+              --   1. Funding renewal issues a NEW course reference number and the
+              --      storefront switches to it at once, but the template stays filed
+              --      under whichever code it was created with — measured 26 Aug 2026,
+              --      all 36 renewed courses had theirs under the OLD code.
+              --   2. run-sync no longer requires a template at all: it prefers cloning
+              --      the course's own last run of the same shape, which needs none.
+              -- Reporting either case as "no_session_timing" hides work that would in
+              -- fact submit cleanly.
+              (EXISTS (SELECT 1 FROM course_session_timing t
+                        WHERE t.course_code = c.course_code
+                           OR t.course_code IN (SELECT h.code FROM course_code_history h
+                                                 WHERE h.course_id = c.id))
+               OR EXISTS (SELECT 1 FROM course_run cr
+                            JOIN course_session ss ON ss.course_run_id = cr.id
+                                                  AND COALESCE(ss.deleted, false) = false
+                           WHERE cr.course_id = c.id
+                             AND COALESCE(cr.is_deleted, false) = false)) AS has_timing
          FROM course c
         WHERE c.course_code LIKE 'TGS-%'`,
     )).rows;

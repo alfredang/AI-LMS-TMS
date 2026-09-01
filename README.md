@@ -70,7 +70,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Job search integration
 - **My Calendar** — personal month calendar of the learner's scheduled classes
 - **Header quick nav** — My Classes, My Calendar and Ed Tools links in the top header (Billing remains in the sidebar as Billing History)
-- **Tools** — the full trainer tools catalogue mirrored in the learner sidebar (Ed Tools, Project Mgt, Six Sigma, Cyber Security, Finance, HR, Data Analytics, ML, Statistical, DOE, SPC, Sustainability, Networking, K8s, Blockchain, Quantum, Design, GenAI, Agentic AI, Virtual Tools), shared via `components/toolsData.ts`
+- **Tools** — the full trainer tools catalogue mirrored in the learner sidebar (Ed Tools, Project Mgt, Six Sigma, Cyber Security, Networking, Finance, HR, Data Analytics, ML, Statistical, DOE, SPC, Sustainability, K8s, Blockchain, Quantum, Design, GenAI, Agentic AI, Virtual Tools), shared via `components/toolsData.ts`; clicking a tools group opens the same tool card page as the trainer role (GenAI Tools stays link-only for learners)
 
 ### Trainer Features
 - **My Classes** — View assigned classes (upcoming, ongoing, completed)
@@ -90,7 +90,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Six Sigma Tools** — [5 Whys](https://alfredang.github.io/5whys/), [Fishbone Diagram](https://alfredang.github.io/fishbone/), [Pareto Chart](https://alfredang.github.io/paretochart/), [System Thinking](https://alfredang.github.io/systemloop/), [SIPOC](https://alfredang.github.io/sipoc/)
 - **Cyber Security Tools** — [Cyber Labs](https://alfredang.github.io/cybersecuritysimulator/), [Ethical Hacking Labs](https://alfredang.github.io/ethnicalhacking/), [Pentest Labs](https://pentest-fauxbank.vercel.app/), [Cryptography](https://alfredang.github.io/cryptography-toolkit/)
 - **Finance Tools** — [Tax Calculator](https://alfredang.github.io/novataxsg/), [Financial Planning & Analysis](https://alfredang.github.io/novafinance/), [Financial Ratio Calculators](https://alfredang.github.io/novafinancialratiocalculator/), [Financial Trend Analysis](https://alfredang.github.io/financialtrend/), [Credit Loan Analysis](https://creditloananalysis.streamlit.app/)
-- **HR Tools** — [MBTI](https://alfredang.github.io/mbti/#landing), [AI Interview Coach](https://alfredang.github.io/ai-interviewing/), [HR Interview Gen](https://alfredang.github.io/hr-interviewing/)
+- **HR Tools** — [HR Recruitment](https://alfredang.github.io/hr-recruitment/), [AI Interviewing](https://alfredang.github.io/AIInterviewing/), [AI Job Coaching](https://alfredang.github.io/AICoaching/), [MBTI](https://alfredang.github.io/mbti/#landing)
 - **Data Analytics Tools** — [Pivot Visualization](https://alfredang.github.io/novapivot/), [Anomaly Detection](https://alfredang.github.io/anamolydetection2/), [Factor Analysis](https://multifactoranalysis.streamlit.app/), [Mock Data Generator](https://alfredang.github.io/mockdatagen/)
 - **ML Tools** — [Classification](https://ml-classification-888.streamlit.app/), [Clustering](https://mlclustering-888.streamlit.app/)
 - **Statistical Tools** — Probability, Descriptive, Correlation, Regression, Hypothesis, Confidence Interval, Bayesian Inference ([NovaStats](https://alfredang.github.io/novastats/))
@@ -219,7 +219,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Quiz Generator** — AI-generated quizzes based on course content
 
 ### Automation Features
-- **Task Scheduler** — Schedule and run automated tasks: Auto Create Certificates, Auto Send Course Confirmation, Auto Create Learners, Auto Create Assessment Records, etc.
+- **Task Scheduler** — Schedule and run automated tasks: Auto Create Certificates, Auto Send Course Confirmation, Auto Create Learners, Auto Create Assessment Records, Auto Send Class Evaluation to Trainers (compiles learner feedback for ended classes and emails trainers daily at 6:30 PM SGT), etc.
 - **Webhook System** — Configure webhooks with full logging for external integrations
 - **Trainer Invitation Workflow** — Automated cascading trainer invitations with accept/decline webhooks; if a trainer declines, system auto-sends to next available trainer
 - **Certificate Workflow** — Auto-generate certificates after class completion, upload to Google Drive, and email to learners
@@ -294,7 +294,10 @@ POST /api/external/auto-create-learners   # Auto-create learner accounts
 POST /api/external/sync-course-run-dates  # Sync dates with SSG
 GET  /api/external/backfill-enrollments   # Preview enrollment backfill
 POST /api/external/backfill-enrollments   # Execute enrollment backfill
-POST /api/external/create-course-run      # Create a new course run (+ sessions) and submit to SSG
+POST /api/external/wsq-submit-runs        # Create specific course runs in SSG (previews unless confirm:true)
+GET  /api/external/wsq-schedule-gap       # What course runs are missing, and why
+GET  /api/external/wsq-sync-status        # Outcome of the last schedule sync
+POST /api/external/create-course-run      # BROKEN (27 Aug 2026) — SSG rejects the payload shape. Use wsq-submit-runs.
 ```
 
 ### Authentication
