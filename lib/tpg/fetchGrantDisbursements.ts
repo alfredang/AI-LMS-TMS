@@ -509,16 +509,41 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
     ok = false;
   }
 
-  // Payment From (start date only — see function doc comment for the field mapping)
+  // Payment From (start date only — see function doc comment for the field mapping).
+  // Typing alone isn't trusted here: on a datepicker widget, characters can land in
+  // the DOM without ever updating the component's actual bound value (only a real
+  // date-picked event does), and Escape — the previous way this field was dismissed
+  // — closes some picker widgets as "cancel", silently reverting what was just typed.
+  // So every attempt is verified by reading the field back, and a second attempt
+  // (via .fill, which dispatches a proper input/change event rather than simulating
+  // keystrokes) is made before giving up.
   try {
     const dateInputs = page.locator('input[type="text"][class*="date" i], input[placeholder*="DD-MM-YYYY" i], input[class*="datepicker" i]');
     const dateCount = await dateInputs.count().catch(() => 0);
     if (dateCount >= 1) {
       const startDateField = dateInputs.last(); // field next to Bank Reference Id = Payment From
+      let confirmedValue = '';
+
       await startDateField.click({ timeout: 5000 });
       await startDateField.fill('');
       await startDateField.type(startDate, { delay: 20 });
-      await page.keyboard.press('Escape').catch(() => {});
+      await page.keyboard.press('Tab').catch(() => {}); // commit via blur, not Escape (which some pickers treat as cancel)
+      confirmedValue = await startDateField.inputValue().catch(() => '');
+
+      if (confirmedValue !== startDate) {
+        // Retry with .fill(), which sets the value directly and fires input/change —
+        // more likely to register with a controlled-component date field than typed
+        // keystrokes were.
+        await startDateField.click({ timeout: 5000 }).catch(() => {});
+        await startDateField.fill(startDate).catch(() => {});
+        await page.keyboard.press('Tab').catch(() => {});
+        confirmedValue = await startDateField.inputValue().catch(() => '');
+      }
+
+      if (confirmedValue !== startDate) {
+        log(`Payment From did not stick — field shows "${confirmedValue}" after setting "${startDate}". Continuing without the date filter.`);
+        ok = false;
+      }
     } else {
       log('expected at least 1 date filter input, found 0 — Payment From was not set.');
       ok = false;
