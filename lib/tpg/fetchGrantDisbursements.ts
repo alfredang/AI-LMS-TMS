@@ -544,6 +544,13 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
         log(`Payment From did not stick — field shows "${confirmedValue}" after setting "${startDate}". Continuing without the date filter.`);
         ok = false;
       }
+
+      // Captured every run, not just on failure: the input's raw DOM value matching
+      // what was typed does NOT prove the widget's real bound state updated — some
+      // date pickers only sync that on an actual day-cell click. If results still
+      // come back windowed to TPGateway's own default range despite this looking
+      // "successful", this file is the next thing to check before guessing again.
+      await dumpDateFilterDiagnostics(page, startDate, confirmedValue);
     } else {
       log('expected at least 1 date filter input, found 0 — Payment From was not set.');
       ok = false;
@@ -552,7 +559,10 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
     ok = false;
   }
 
-  // Apply / Search
+  // Apply / Search. A short pause first in case the date widget syncs its real
+  // bound state asynchronously after blur — clicking Apply immediately could
+  // otherwise race ahead of that and submit with the pre-typed default.
+  await page.waitForTimeout(400);
   try {
     const applyBtn = page.getByRole('button', { name: /^\s*(apply|search|filter)\s*$/i }).first();
     if (await applyBtn.count().catch(() => 0)) {
@@ -610,6 +620,65 @@ async function dumpStatusFilterDiagnostics(page: Page): Promise<void> {
     log('Status filter diagnostics saved to scratch/grant-fetch-status-filter-diagnostics.json');
   } catch (e) {
     log('could not write status filter diagnostics:', e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * Write out the date field's real DOM structure — its own outerHTML, its parent
+ * chain (a datepicker library usually wraps the visible <input> in its own
+ * component div, which is where a separate bound value would actually live),
+ * and every hidden input on the page whose name/id/placeholder hints at a date —
+ * because "the visible input's value matches what we typed" does not prove the
+ * widget's real bound state (the one an Apply click actually reads) changed too.
+ * Same reasoning/shape as dumpStatusFilterDiagnostics for the Status control.
+ */
+async function dumpDateFilterDiagnostics(page: Page, intended: string, confirmed: string): Promise<void> {
+  try {
+    const info = await page.evaluate(
+      ({ intended, confirmed }) => {
+        const clean = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim();
+        const describe = (el: Element | null, depth: number) => {
+          const chain: Array<{ tag: string; class: string | null; attrs: Record<string, string> }> = [];
+          let cur = el;
+          for (let i = 0; cur && i < depth; i++) {
+            const attrs: Record<string, string> = {};
+            for (const a of Array.from(cur.attributes)) attrs[a.name] = a.value.slice(0, 200);
+            chain.push({ tag: cur.tagName.toLowerCase(), class: (cur as HTMLElement).className || null, attrs });
+            cur = cur.parentElement;
+          }
+          return chain;
+        };
+        const dateLike = Array.from(document.querySelectorAll('input')).filter((i) =>
+          /date|from|payment/i.test(`${i.id} ${i.name} ${i.placeholder} ${i.className}`)
+        );
+        const lastDateInput = dateLike[dateLike.length - 1] || null;
+        return {
+          intended,
+          confirmedFromPlaywright: confirmed,
+          matchedDateLikeInputCount: dateLike.length,
+          allDateLikeInputs: dateLike.map((i) => ({
+            tag: i.tagName.toLowerCase(),
+            type: i.type,
+            id: i.id || null,
+            name: i.getAttribute('name'),
+            placeholder: i.placeholder || null,
+            value: i.value,
+            hidden: i.type === 'hidden' || i.hidden,
+          })),
+          lastDateInputParentChain: describe(lastDateInput, 5),
+        };
+      },
+      { intended, confirmed }
+    );
+    fs.mkdirSync(SHOT_DIR, { recursive: true });
+    fs.writeFileSync(
+      path.join(SHOT_DIR, 'grant-fetch-date-filter-diagnostics.json'),
+      JSON.stringify(info, null, 2),
+      'utf8'
+    );
+    log('Date filter diagnostics saved to scratch/grant-fetch-date-filter-diagnostics.json');
+  } catch (e) {
+    log('could not write date filter diagnostics:', e instanceof Error ? e.message : e);
   }
 }
 
