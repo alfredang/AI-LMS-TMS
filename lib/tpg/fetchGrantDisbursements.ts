@@ -471,6 +471,26 @@ async function waitForTableRows(page: Page, timeoutMs: number): Promise<boolean>
 async function applyFilters(page: Page, startDate: string): Promise<boolean> {
   let ok = true;
 
+  // The filter row (Status select, date inputs, everything else) is rendered by an
+  // async OutSystems AJAX call after the page itself has loaded — proceeding
+  // immediately races it and intermittently finds zero matching elements, even
+  // though the same selectors work fine a few hundred ms later. Wait for either
+  // half of the row to actually exist before touching anything (whichever answers
+  // first — no need to know which loads first as long as one confirms the row is up).
+  await Promise.race([
+    page
+      .locator('select')
+      .filter({ has: page.locator('option', { hasText: /^\s*paid\s*$/i }) })
+      .first()
+      .waitFor({ state: 'attached', timeout: 15000 }),
+    page
+      .locator('input[type="text"][class*="date" i], input[placeholder*="DD-MM-YYYY" i], input[class*="datepicker" i]')
+      .first()
+      .waitFor({ state: 'attached', timeout: 15000 }),
+  ]).catch(() => {
+    log('filter row did not appear within 15s — proceeding anyway, but Status/Payment From will likely both fail to find their elements.');
+  });
+
   try {
     const statusSelect = page
       .locator('select')
