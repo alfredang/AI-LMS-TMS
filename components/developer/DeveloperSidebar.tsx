@@ -12,6 +12,7 @@ const TOP_NAV_ITEMS: { page: DeveloperPage; label: string; icon: IconName }[] = 
     { page: DeveloperPage.CourseList, label: 'Course Management', icon: IconName.Courses },
     { page: DeveloperPage.CourseImageGenerator, label: 'Course Image Generator', icon: IconName.Create },
     { page: DeveloperPage.FundingValidity, label: 'Course Funding Validity', icon: IconName.Calendar },
+    { page: DeveloperPage.ExpiredCourseList, label: 'Expired Course List', icon: IconName.Clock },
     { page: DeveloperPage.CourseChangeControl, label: 'Course Change Control', icon: IconName.Clock },
 ];
 

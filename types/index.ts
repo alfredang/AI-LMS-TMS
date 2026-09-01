@@ -195,6 +195,7 @@ export enum DeveloperPage {
   CourseList = 'courseList',
   CourseImageGenerator = 'courseImageGenerator',
   FundingValidity = 'fundingValidity',
+  ExpiredCourseList = 'expiredCourseList',
   CourseChangeControl = 'courseChangeControl',
   SeoMetadata = 'seoMetadata',
   CoursewareTools = 'coursewareTools',
