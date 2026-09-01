@@ -32,7 +32,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 ### Why AI-LMS-TMS?
 
-- **AI-Powered Learning**: Nemo AI agent (Claude Agent SDK) with persistent memory and tool use, SEO metadata generator, external agent hand-off via WhatsApp/Telegram, plus GenAI authoring tools
+- **AI-Powered Learning**: AI chatbot powered by an external OpenClaw or Hermes agent, reached over WhatsApp/Telegram, plus a SEO metadata generator and GenAI authoring tools
 - **SSG Integration**: Full SkillsFuture Singapore API support for course runs, enrolments, assessments, grants, and claims
 - **Multi-Role System**: 7 roles with dedicated dashboards — Learner, Trainer, Admin, Developer, Finance, Payroll, Training Provider
 - **Multi-Tenant**: Same codebase deployed for multiple tenants on Coolify — Tertiary builds via **Dockerfile**, other tenants (Chariot, Intellisoft) build via **Docker Compose**
@@ -65,7 +65,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Courseware access — Learner Guide, Learner Slides, Activities/Lab and SkillsFuture link cards, unlocked from 8:30 AM SGT on the course start date
 - Progress tracking through learning units and subtopics
 - Assessment submission and grade viewing
-- AI chatbot for personalized course assistance
+- AI chatbot for personalized course assistance (external OpenClaw/Hermes agent via WhatsApp/Telegram)
 - Certificate download after completion — issued only once the class has ended (from 6:00 PM SGT on the last day, or earlier if the trainer marks the learner Competent) and the minimum attendance is met; admins/trainers can still issue manually
 - Job search integration
 - **My Calendar** — personal month calendar of the learner's scheduled classes
@@ -203,11 +203,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Contact Information** — Direct access to company address, hotline (+65 6100 0613), support email (enquiry@tertiaryinfotech.com), and opening hours
 
 ### AI-Powered Features
-- **Nemo AI Agent** — Claude Agent SDK-powered operational assistant with:
-  - Persistent memory via Markdown files and Claude skills (`.claude/skills/nemo-agent/SKILL.md`)
-  - Role-based tool access (read-only for learners, full access for admin/finance/training provider)
-  - 18 tools including dashboard queries, course run search, trainer management, enrollment operations, proforma/invoice generation, QuickBooks operations, SSG course operations
-  - Agentic tool-use loop (up to 10 iterations per request)
+- **AI Chatbot (external agent)** — The operational assistant is **not** built into the platform. The app hands off to an external agent — **OpenClaw** (Kael/Jarvis/Orion) or **Hermes** — reached over WhatsApp or Telegram, which acts on the platform through the authenticated `/api/external/*` HTTPS API. Keeping the agent outside the app means it upgrades independently of a deploy and never needs direct database access. See the chat launcher below for how requests are composed.
 - **SEO Metadata Generator** — Claude-powered SEO content generation for WSQ and non-WSQ courses
 - **External Agent Chat Launcher** — Floating WhatsApp/Telegram widget that hands off to an external agent such as OpenClaw/Kael or Hermes. Two role-scoped variants, each pointing at its own group:
   - **Ops widget** (green — Admin, Finance, Training Provider, Developer, Payroll): 5 starter suggestions, with search or "Browse all" revealing the full catalogue of **40 fill-in-the-blank templates** across Trainers, Learners, Classes, Sessions, SSG/TPGateway, Finance and Reports

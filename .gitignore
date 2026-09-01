@@ -22,9 +22,6 @@ service-account.json
 # Backlog (local planning file, not shared)
 .project/backlog.md
 
-# Nemo AI memory (runtime-generated)
-data/nemo-memory.md
-
 # IDE and editor files
 .vscode/
 .idea/

@@ -15,9 +15,10 @@ import { getApiUrl } from '@/lib/urlHelpers';
 /**
  * Floating external-agent chat launcher.
  *
- * Replaces the former in-app Nemo chat window. Rather than a built-in agent, the
- * platform hands off to an external channel (WhatsApp or Telegram) which in turn
- * fronts an external agent such as OpenClaw or Hermes.
+ * The platform has no built-in chat agent. It hands off to an external channel
+ * (WhatsApp or Telegram) which in turn fronts an external agent — OpenClaw or
+ * Hermes — that acts on the platform through the authenticated /api/external/*
+ * HTTPS API.
  *
  * Clicking the launcher opens a searchable template picker: each template is a
  * fill-in-the-blank TMS request (add trainer to a class, submit a run to SSG, …)
