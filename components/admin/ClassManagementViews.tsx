@@ -8,6 +8,7 @@ import { useSessionReschedule } from '@/hooks/useSessionReschedule';
 import { useScheduleChangeConfirm } from '@/hooks/useScheduleChangeConfirm';
 import SessionRescheduleModal from './SessionRescheduleModal';
 import SearchableSelect from '../ui/SearchableSelect';
+import { extractCourseRun, normalizeCourseRunResponse } from '@/lib/ssg/course-run-response';
 
 // Helper to safely extract local YYYY-MM-DD from a date string (avoids timezone shift bugs from .slice(0, 10) on UTC strings)
 const extractLocalDate = (dateVal: string | Date | undefined | null): string => {
@@ -18,6 +19,20 @@ const extractLocalDate = (dateVal: string | Date | undefined | null): string => 
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+};
+
+const getSsgErrorMessage = (response: any, status?: number): string => {
+    const error = response?.error;
+    const details = Array.isArray(error?.details)
+        ? error.details.map((detail: any) => detail?.message).filter(Boolean).join(' ')
+        : '';
+
+    return error?.message
+        || response?.message
+        || details
+        || (typeof error === 'string' ? error : '')
+        || error?.code
+        || `SSG request failed${status ? ` (HTTP ${status})` : ''}`;
 };
 
 // Import SSG constants for ViewCourseSessions
@@ -334,6 +349,8 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [ssgApiLoading, setSsgApiLoading] = useState(false);
     const [showSsgResponse, setShowSsgResponse] = useState(false);
     const [ssgDataPopulated, setSsgDataPopulated] = useState(false);
+    const [ssgApiError, setSsgApiError] = useState<{ status?: number; message: string } | null>(null);
+    const automaticallyFetchedCourseRef = useRef<string | null>(null);
 
     // ViewCourseSessions state management
     const [includeExpiredSessions, setIncludeExpiredSessions] = useState(false);
@@ -719,6 +736,8 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         }
 
         setSsgApiLoading(true);
+        setSsgApiError(null);
+        setSsgDataPopulated(false);
         try {
             const params = new URLSearchParams({
                 runId: runIdToUse,
@@ -733,15 +752,37 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
                 }
             });
 
-            const data = await response.json();
-            setSsgApiResponse(data);
+            let data: any;
+            try {
+                data = await response.json();
+            } catch {
+                throw new Error(`SSG endpoint returned an invalid response (HTTP ${response.status})`);
+            }
+
+            const normalizedData = normalizeCourseRunResponse(data);
+            setSsgApiResponse(normalizedData);
             setShowSsgResponse(true);
 
-            // Automatically populate form with SSG data
-            populateFormFromSsgData(data);
+            if (!response.ok) {
+                setSsgApiError({
+                    status: response.status,
+                    message: getSsgErrorMessage(normalizedData, response.status),
+                });
+                return;
+            }
+
+            // Automatically populate form with normalized SSG data.
+            if (!populateFormFromSsgData(normalizedData)) {
+                setSsgApiError({
+                    status: response.status,
+                    message: 'SSG returned a successful response without course run data',
+                });
+            }
         } catch (error) {
-            setSsgApiResponse({ error: 'Failed to fetch course run details' });
+            const message = error instanceof Error ? error.message : 'Failed to fetch course run details';
+            setSsgApiResponse({ error: { message } });
             setShowSsgResponse(true);
+            setSsgApiError({ message });
         } finally {
             setSsgApiLoading(false);
         }
@@ -1312,20 +1353,21 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     };
 
     // Function to populate form data from SSG API response
-    const populateFormFromSsgData = (ssgResponse: any) => {
+    const populateFormFromSsgData = (ssgResponse: any): boolean => {
         if (!ssgResponse) {
             console.warn('populateFormFromSsgData: No SSG response provided');
-            return;
+            return false;
         }
 
-        if (!ssgResponse?.data?.course?.run) {
+        const normalizedResponse = normalizeCourseRunResponse(ssgResponse);
+        const run = extractCourseRun(normalizedResponse);
+        if (!run) {
             console.warn('populateFormFromSsgData: No course run data in response');
-            return;
+            return false;
         }
 
-        const run = ssgResponse.data.course.run;
-        const virtualMeetingLinkFromResponse = run.virtualMeetingLink || ssgResponse.data.virtualMeetingLink || '';
-        const virtualMeetingProviderFromResponse = run.virtualMeetingProvider || ssgResponse.data.virtualMeetingProvider || '';
+        const virtualMeetingLinkFromResponse = run.virtualMeetingLink || normalizedResponse.data?.virtualMeetingLink || '';
+        const virtualMeetingProviderFromResponse = run.virtualMeetingProvider || normalizedResponse.data?.virtualMeetingProvider || '';
 
         // Update form data with the actual SSG response structure, falling back to local database data
         const updatedFormData = {
@@ -1412,6 +1454,7 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
         }
 
         setSsgDataPopulated(true);
+        return true;
     };
 
     // Function to handle course run update
@@ -2222,31 +2265,47 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
 
     // Initialize form data when courseToEdit changes
     useEffect(() => {
-        if (courseToEdit && isEditMode) {
-            const runId = courseToEdit.courseRunId || courseToEdit.id || '';
-            const refNumber = courseToEdit.courseCode || courseToEdit.referenceNumber || ''; // Use courseCode (TGS REF)
-
-            setCourseRunId(runId);
-            setCourseReferenceNumber(refNumber);
-            setStartDate(courseToEdit.startDate || '');
-            setEndDate(courseToEdit.endDate || '');
-            setEditFormData(prev => ({
-                ...prev,
-                courseReferenceNumber: refNumber,
-                courseStartDate: extractLocalDate(courseToEdit.startDate),
-                courseEndDate: extractLocalDate(courseToEdit.endDate),
-                openingRegistrationDate: extractLocalDate((courseToEdit as any).registrationOpeningDate),
-                closingRegistrationDate: extractLocalDate((courseToEdit as any).registrationClosingDate)
-            }));
-
-            // Automatically fetch course run data and course sessions, then switch to Course Run tab
-            if (runId && refNumber) {
-                fetchCourseRunData(runId);
-                fetchCourseSessions(runId, refNumber);
-                setActiveTab('courseRun'); // Auto-switch to Course Run tab for data population
-            }
+        if (!courseToEdit || !isEditMode) {
+            automaticallyFetchedCourseRef.current = null;
+            return;
         }
-    }, [courseToEdit, isEditMode]);
+
+        const runId = courseToEdit.courseRunId || courseToEdit.id || '';
+        const refNumber = courseToEdit.courseCode || courseToEdit.referenceNumber || ''; // Use courseCode (TGS REF)
+
+        setCourseRunId(runId);
+        setCourseReferenceNumber(refNumber);
+        setStartDate(courseToEdit.startDate || '');
+        setEndDate(courseToEdit.endDate || '');
+        setEditFormData(prev => ({
+            ...prev,
+            courseReferenceNumber: refNumber,
+            courseStartDate: extractLocalDate(courseToEdit.startDate),
+            courseEndDate: extractLocalDate(courseToEdit.endDate),
+            openingRegistrationDate: extractLocalDate((courseToEdit as any).registrationOpeningDate),
+            closingRegistrationDate: extractLocalDate((courseToEdit as any).registrationClosingDate)
+        }));
+
+        // Automatically fetch each course once. Depending on the whole object
+        // caused repeat requests when URL restoration rebuilt courseToEdit.
+        const fetchKey = `${runId}::${refNumber}`;
+        if (runId && refNumber && automaticallyFetchedCourseRef.current !== fetchKey) {
+            automaticallyFetchedCourseRef.current = fetchKey;
+            fetchCourseRunData(runId);
+            fetchCourseSessions(runId, refNumber);
+            setActiveTab('courseRun'); // Auto-switch to Course Run tab for data population
+        }
+    }, [
+        courseToEdit?.id,
+        courseToEdit?.courseRunId,
+        courseToEdit?.courseCode,
+        courseToEdit?.referenceNumber,
+        courseToEdit?.startDate,
+        courseToEdit?.endDate,
+        courseToEdit?.registrationOpeningDate,
+        courseToEdit?.registrationClosingDate,
+        isEditMode,
+    ]);
 
     // Fetch existing sessions when Sessions tab is activated
     useEffect(() => {
@@ -2413,7 +2472,25 @@ POST /api/ssg/courses/courseRuns/${courseRunId}?action=assign-trainer
                             </div>
                         )}
 
-                        {isEditMode && ssgApiResponse && !ssgApiLoading && !ssgDataPopulated && (
+                        {isEditMode && ssgApiError && !ssgApiLoading && (
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
+                                <p className="text-sm text-red-800 dark:text-red-300 flex-1">
+                                    <strong>Unable to load SSG course run</strong>
+                                    {ssgApiError.status ? ` (HTTP ${ssgApiError.status})` : ''} - {ssgApiError.message}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => fetchCourseRunData(courseRunId)}
+                                    disabled={ssgApiLoading || !courseRunId}
+                                    className="flex-shrink-0 px-3 py-1 text-xs font-medium rounded border border-red-300 dark:border-red-600 text-red-800 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
+                                    title="Re-fetch this course run from SSG. Switch SSG App above if the selected certificate cannot access this run."
+                                >
+                                    Refetch
+                                </button>
+                            </div>
+                        )}
+
+                        {isEditMode && ssgApiResponse && !ssgApiLoading && !ssgDataPopulated && !ssgApiError && (
                             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md p-3 mb-4 flex items-start justify-between gap-3">
                                 <p className="text-sm text-yellow-800 dark:text-yellow-300 flex-1">
                                     <strong>⚠ SSG data retrieved but form not populated</strong> - The SSG API returned data, but the form fields could not be filled. The response may have an unexpected structure.

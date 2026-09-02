@@ -16,6 +16,11 @@ import {
 } from '../../../lib/ssg/models/course-runs';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import {
+  extractCourseRun,
+  normalizeCourseRunResponse,
+  toHttpErrorStatus,
+} from '../../../lib/ssg/course-run-response';
 import pool from '../../../lib/db';
 
 // Get base URL from credentials (DB-first, env fallback)
@@ -126,12 +131,43 @@ async function handleGetCourseRun(
   );
 
   if (hasSsgError) {
-    return res.status(result.status || 400).json(result);
+    const errorStatus = toHttpErrorStatus(result.status);
+
+    return res.status(errorStatus).json({
+      ...result,
+      status: errorStatus,
+    });
   }
 
-  await enrichCourseRunWithLocalVirtualMeeting(result, runId);
+  const normalizedResult = normalizeCourseRunResponse(result);
 
-  res.status(200).json(result);
+  if (!extractCourseRun(normalizedResult)) {
+    const missingRunStatus = toHttpErrorStatus(normalizedResult?.status);
+    const data = normalizedResult?.data && typeof normalizedResult.data === 'object'
+      ? normalizedResult.data as Record<string, unknown>
+      : null;
+
+    console.warn('[api/ssg/courses] SSG response did not contain a course run:', {
+      runId,
+      responseKeys: normalizedResult && typeof normalizedResult === 'object'
+        ? Object.keys(normalizedResult)
+        : [],
+      dataKeys: data ? Object.keys(data) : [],
+    });
+
+    return res.status(missingRunStatus).json({
+      ...normalizedResult,
+      error: {
+        code: 'SSG_COURSE_RUN_MISSING',
+        message: 'SSG returned a response without course run data',
+      },
+      status: missingRunStatus,
+    });
+  }
+
+  await enrichCourseRunWithLocalVirtualMeeting(normalizedResult, runId);
+
+  res.status(200).json(normalizedResult);
 }
 
 async function enrichCourseRunWithLocalVirtualMeeting(result: any, runId: string) {
