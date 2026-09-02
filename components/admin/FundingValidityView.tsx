@@ -3,6 +3,13 @@ import { useDeveloperCourses } from '@hooks/useDeveloperCourses';
 import { Card } from '../ui/Card';
 import { getLocalYMD } from '@/lib/dateHelpers';
 import { apiClient } from '@lib/services/apiClient';
+import {
+  classifyRenewStatus,
+  isKnownRenewStatus,
+  RENEW_STATUS_OPTIONS,
+  renewStatusLabel,
+  type RenewClass,
+} from '@lib/courseRenewalStatus';
 
 const FOUR_MONTHS_AHEAD = (date: Date) => {
   const next = new Date(date);
@@ -43,6 +50,31 @@ const toDateInputValue = (value?: string | null) => {
 
 const isRenewed = (value?: string | null) => !!value && value.trim().length > 0;
 
+// Which pill an expiring / expired funded course shows.
+//
+// 'Approved / Renewed' does NOT clear the warning: an approved renewal comes with
+// a new validity end date, so a course that is still counting down has either not
+// had that date keyed in yet or is carrying a stale flag from an earlier round.
+// Either way it still needs a human, so it keeps Expiring Soon and explains
+// itself on hover.
+const validityPill = (renewClass: RenewClass, expired: boolean): { text: string; cls: string; title?: string } => {
+  if (renewClass === 'Waiting') {
+    return { text: 'Renewal Pending', cls: 'text-blue-600 dark:text-blue-400', title: 'Renewal submitted — waiting on SSG approval' };
+  }
+  if (renewClass === 'Rejected') {
+    return { text: 'Renewal Rejected', cls: 'text-red-600 dark:text-red-400', title: 'The renewal came back rejected' };
+  }
+  const base = expired
+    ? { text: 'Expired', cls: 'text-red-600 dark:text-red-400' }
+    : { text: 'Expiring Soon', cls: 'text-amber-600 dark:text-amber-400' };
+  if (renewClass === 'ToDo') {
+    return { ...base, title: 'Marked "To Renew" — the renewal has not gone to SSG yet.' };
+  }
+  return renewClass === 'Approved'
+    ? { ...base, title: 'Marked "Approved / Renewed", but the funding validity end date has not been extended — either the new date is not keyed in yet, or the status is left over from an earlier renewal.' }
+    : base;
+};
+
 // Course types are stored literally since the CASL conversion (Aug 2026):
 // funded courses are typed WSQ / CASL / IBF (TGS- codes); Non-WSQ (C- codes)
 // is unfunded and shows as itself — it is no longer folded into CASL.
@@ -64,7 +96,13 @@ interface EditState {
 const FundingValidityView: React.FC = () => {
   const { courses, loading, error, refetch } = useDeveloperCourses();
   const [renewingIds, setRenewingIds] = useState<Record<string, boolean>>({});
-  const [renewStateOverrides, setRenewStateOverrides] = useState<Record<string, boolean>>({});
+  // Optimistic renewal status per course, held until the refetch lands.
+  const [renewStatusOverrides, setRenewStatusOverrides] = useState<Record<string, string | null>>({});
+  // Bulk selection — for setting the same Renew Status across many rows, e.g.
+  // marking a batch as 'Renewed — Processing' after they go to SSG together.
+  const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
+  const [bulkStatus, setBulkStatus] = useState<string>('Waiting For Renewal');
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [whitelistingIds, setWhitelistingIds] = useState<Record<string, boolean>>({});
   const [whitelistStateOverrides, setWhitelistStateOverrides] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -133,8 +171,12 @@ const FundingValidityView: React.FC = () => {
     );
   }, [fourMonthsAhead, today, wsqCourses]);
 
-  const isCourseRenewed = (course: any) =>
-    renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
+  const effectiveRenewStatus = (course: any): string | null => {
+    const override = renewStatusOverrides[course.id];
+    return override === undefined ? (course.renewedStatus || null) : override;
+  };
+
+  const isCourseRenewed = (course: any) => isRenewed(effectiveRenewStatus(course));
 
   // Row 1 — totals by funding type: WSQ, CASL and IBF each get their own tile.
   // Non-WSQ (unfunded) courses stay out of every tile so these totals match the
@@ -210,18 +252,72 @@ const FundingValidityView: React.FC = () => {
     return { text: `${days}d left`, cls: 'text-amber-600 dark:text-amber-400' };
   };
 
-  const handleRenewToggle = async (courseId: string, checked: boolean) => {
-    setRenewStateOverrides(prev => ({ ...prev, [courseId]: checked }));
+  // Selection is always scoped to what is on screen: filter first, tick what you
+  // see, apply. A row that scrolls out of the filter is never quietly included.
+  const selectedVisible = visibleCourses.filter(course => selectedIds[course.id]);
+  const allVisibleSelected = visibleCourses.length > 0 && selectedVisible.length === visibleCourses.length;
+
+  const toggleAllVisible = () => {
+    setSelectedIds(prev => {
+      const next = { ...prev };
+      if (allVisibleSelected) visibleCourses.forEach(course => { delete next[course.id]; });
+      else visibleCourses.forEach(course => { next[course.id] = true; });
+      return next;
+    });
+  };
+
+  const toggleOne = (courseId: string) => {
+    setSelectedIds(prev => {
+      const next = { ...prev };
+      if (next[courseId]) delete next[courseId];
+      else next[courseId] = true;
+      return next;
+    });
+  };
+
+  const applyBulkStatus = async () => {
+    const targets = selectedVisible;
+    if (targets.length === 0) return;
+    const nextStatus = bulkStatus.trim() ? bulkStatus : null;
+    const label = renewStatusLabel(nextStatus);
+    if (!window.confirm(`Set Renew Status to "${label}" for ${targets.length} course${targets.length === 1 ? '' : 's'}?`)) return;
+
+    setBulkProgress({ done: 0, total: targets.length });
+    const failed: string[] = [];
+    // One at a time, so a failure part-way leaves the rest untouched and the
+    // count on screen is always what has actually been written.
+    for (let i = 0; i < targets.length; i++) {
+      const course = targets[i];
+      try {
+        await apiClient.put('/api/admin/course-renewal-status', { courseId: course.id, status: nextStatus });
+        setRenewStatusOverrides(prev => ({ ...prev, [course.id]: nextStatus }));
+      } catch (err) {
+        console.error('Bulk renewal status failed for', course.title, err);
+        failed.push(course.title);
+      }
+      setBulkProgress({ done: i + 1, total: targets.length });
+    }
+    setBulkProgress(null);
+    setSelectedIds({});
+    if (failed.length > 0) {
+      window.alert(`${failed.length} course${failed.length === 1 ? '' : 's'} could not be updated:\n\n${failed.slice(0, 10).join('\n')}`);
+    }
+    refetch();
+  };
+
+  const handleRenewStatusChange = async (courseId: string, value: string) => {
+    const nextStatus = value.trim() ? value : null;
+    setRenewStatusOverrides(prev => ({ ...prev, [courseId]: nextStatus }));
     setRenewingIds(prev => ({ ...prev, [courseId]: true }));
 
     try {
       await apiClient.put('/api/admin/course-renewal-status', {
         courseId,
-        renew: checked,
+        status: nextStatus,
       });
     } catch (err) {
       console.error('Failed to update renewal status:', err);
-      setRenewStateOverrides(prev => {
+      setRenewStatusOverrides(prev => {
         const next = { ...prev };
         delete next[courseId];
         return next;
@@ -316,7 +412,7 @@ const FundingValidityView: React.FC = () => {
           'CAS': course.casScore != null ? Number(course.casScore) : '',
           'ES': course.esScore != null ? Number(course.esScore) : '',
           'Whitelist': (whitelistStateOverrides[course.id] ?? !!course.whitelistStatus) ? 'Yes' : 'No',
-          'Renew': (renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus)) ? 'Yes' : 'No',
+          'Renew': isCourseRenewed(course) ? 'Yes' : 'No',
         };
       });
 
@@ -360,7 +456,7 @@ const FundingValidityView: React.FC = () => {
         'CAS': course.casScore != null ? Number(course.casScore) : '',
         'ES': course.esScore != null ? Number(course.esScore) : '',
         'Whitelist': (whitelistStateOverrides[course.id] ?? !!course.whitelistStatus) ? 'Yes' : 'No',
-        'Renew': (renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus)) ? 'Yes' : 'No',
+        'Renew': isCourseRenewed(course) ? 'Yes' : 'No',
       }));
 
       const ws = XLSX.utils.json_to_sheet(rows, { cellDates: true });
@@ -480,6 +576,11 @@ const FundingValidityView: React.FC = () => {
       </div>
     );
   }
+
+  // Sticky header cells: opaque background (a translucent one lets scrolled rows
+  // show through) and the divider carried on the cell, since a border on a
+  // sticky row does not travel with it.
+  const stickyTh = "sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-3 py-2";
 
   const inputClass = "w-full px-1.5 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
 
@@ -773,22 +874,72 @@ const FundingValidityView: React.FC = () => {
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        {selectedVisible.length > 0 && (
+          <div className="px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20 flex flex-wrap items-center gap-3">
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">
+              {selectedVisible.length} selected
+            </span>
+            <span className="text-sm text-gray-600 dark:text-gray-300">Set Renew Status to</span>
+            <select
+              value={bulkStatus}
+              onChange={e => setBulkStatus(e.target.value)}
+              disabled={!!bulkProgress}
+              className="px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+            >
+              {RENEW_STATUS_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={applyBulkStatus}
+              disabled={!!bulkProgress}
+              className="px-3 py-1.5 text-sm font-semibold rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {bulkProgress ? `Applying ${bulkProgress.done} of ${bulkProgress.total}…` : 'Apply'}
+            </button>
+            <button
+              onClick={() => setSelectedIds({})}
+              disabled={!!bulkProgress}
+              className="px-3 py-1.5 text-sm font-medium rounded text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+            >
+              Clear selection
+            </button>
+          </div>
+        )}
+
+        {/* Fixed-height scroller so only the rows move; the header sticks to the
+            top of it (sticky lives on each th — a sticky thead is unreliable). */}
+        <div className="overflow-auto max-h-[70vh]">
           <table className="min-w-full text-xs">
-            <thead className="bg-gray-50 dark:bg-gray-900/40">
+            <thead>
               <tr className="text-left text-gray-600 dark:text-gray-300">
-                <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code (New)</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code (Old)</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap">Type</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap">Validity Start Date</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap">Validity End Date</th>
-                <th className="px-3 py-2 font-semibold whitespace-nowrap">Renew Date</th>
-                <th className="px-3 py-2 font-semibold text-right whitespace-nowrap">CAS</th>
-                <th className="px-3 py-2 font-semibold text-right whitespace-nowrap">ES</th>
-                <th className="px-3 py-2 font-semibold text-center whitespace-nowrap">Whitelist</th>
-                <th className="px-3 py-2 font-semibold text-center whitespace-nowrap">Renew</th>
-                <th className="px-3 py-2 font-semibold text-center w-20"></th>
+                <th className={`${stickyTh} w-8`}>
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleAllVisible}
+                    disabled={visibleCourses.length === 0}
+                    className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                    aria-label="Select all courses shown"
+                  />
+                </th>
+                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Course Title</th>
+                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Course Ref Code (New)</th>
+                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Course Ref Code (Old)</th>
+                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Type</th>
+                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Validity Start Date</th>
+                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Validity End Date</th>
+                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Renew Date</th>
+                <th
+                  className={`${stickyTh} font-semibold whitespace-nowrap`}
+                  title="Where this course's renewal stands. Set it to Renewed — Processing once the renewal is with SSG: the course then reads as Renewal Pending instead of Expiring Soon / Expired, until the new validity end date comes through."
+                >
+                  Renew Status
+                </th>
+                <th className={`${stickyTh} font-semibold text-right whitespace-nowrap`}>CAS</th>
+                <th className={`${stickyTh} font-semibold text-right whitespace-nowrap`}>ES</th>
+                <th className={`${stickyTh} font-semibold text-center whitespace-nowrap`}>Whitelist</th>
+                <th className={`${stickyTh} font-semibold text-center w-20`}></th>
               </tr>
             </thead>
             <tbody>
@@ -796,20 +947,39 @@ const FundingValidityView: React.FC = () => {
                 const validityDate = parseValidityDate(course.fundingValidity);
                 const expiringSoon = !!validityDate && validityDate >= today && validityDate <= fourMonthsAhead;
                 const expired = !!validityDate && validityDate < today;
-                const checked = renewStateOverrides[course.id] ?? isRenewed(course.renewedStatus);
+                const renewStatus = effectiveRenewStatus(course);
+                const renewClass = classifyRenewStatus(renewStatus);
+                // A value the dropdown doesn't offer ('To Renew', 'Processing') is
+                // shown as a disabled option so the row still reports what it holds
+                // and rendering never rewrites it — the selectable options stay
+                // identical on every row.
+                const legacyRenewStatus = renewStatus && !isKnownRenewStatus(renewStatus) ? renewStatus : null;
+                // Only a renewal still with SSG calms the row down — see validityPill.
+                const awaitingSsg = renewClass === 'Waiting';
                 const isEditing = editingId === course.id;
 
                 return (
                   <tr
                     key={course.id}
                     className={`border-t border-gray-200 dark:border-gray-700 ${
-                      expired
-                        ? 'bg-red-50/70 dark:bg-red-900/10'
-                        : expiringSoon
-                          ? 'bg-amber-50/80 dark:bg-amber-900/10'
-                          : ''
+                      awaitingSsg
+                        ? (expired || expiringSoon ? 'bg-blue-50/70 dark:bg-blue-900/10' : '')
+                        : expired
+                          ? 'bg-red-50/70 dark:bg-red-900/10'
+                          : expiringSoon
+                            ? 'bg-amber-50/80 dark:bg-amber-900/10'
+                            : ''
                     }`}
                   >
+                    <td className="px-3 py-1.5">
+                      <input
+                        type="checkbox"
+                        checked={!!selectedIds[course.id]}
+                        onChange={() => toggleOne(course.id)}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        aria-label={`Select ${course.title}`}
+                      />
+                    </td>
                     <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
                     <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
                       {isEditing ? (
@@ -853,8 +1023,18 @@ const FundingValidityView: React.FC = () => {
                       ) : (
                         <>
                           <span>{formatValidityDate(course.fundingValidity)}</span>
-                          {expired && (course.courseType === 'WSQ' || course.courseType === 'CASL') && <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Expired</span>}
-                          {!expired && expiringSoon && (course.courseType === 'WSQ' || course.courseType === 'CASL') && <span className="ml-2 text-[10px] font-semibold uppercase text-amber-600 dark:text-amber-400">Expiring Soon</span>}
+                          {(expired || expiringSoon) && (course.courseType === 'WSQ' || course.courseType === 'CASL') && (() => {
+                            const pill = validityPill(renewClass, expired);
+                            const stored = (renewStatus || '').trim();
+                            return (
+                              <span
+                                className={`ml-2 text-[10px] font-semibold uppercase ${pill.cls}`}
+                                title={[stored && `Renew status: ${stored}`, pill.title].filter(Boolean).join(' — ') || undefined}
+                              >
+                                {pill.text}
+                              </span>
+                            );
+                          })()}
                         </>
                       )}
                     </td>
@@ -865,6 +1045,20 @@ const FundingValidityView: React.FC = () => {
                         const isPast = renewDate < new Date();
                         return <span className={isPast ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-300'}>{renewDate.toLocaleDateString('en-GB')}</span>;
                       })() : '—'}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <select
+                        value={renewStatus || ''}
+                        disabled={!!renewingIds[course.id]}
+                        onChange={(e) => handleRenewStatusChange(course.id, e.target.value)}
+                        className={`${inputClass} w-40`}
+                        aria-label={`Renewal status for ${course.title}`}
+                      >
+                        {legacyRenewStatus && <option value={legacyRenewStatus} disabled>{legacyRenewStatus}</option>}
+                        {RENEW_STATUS_OPTIONS.map(option => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
                       {isEditing ? (
@@ -900,16 +1094,6 @@ const FundingValidityView: React.FC = () => {
                         onChange={(e) => handleWhitelistToggle(course.id, e.target.checked)}
                         className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
                         aria-label={`Whitelist ${course.title}`}
-                      />
-                    </td>
-                    <td className="px-3 py-1.5 text-center">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={!!renewingIds[course.id]}
-                        onChange={(e) => handleRenewToggle(course.id, e.target.checked)}
-                        className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-                        aria-label={`Mark ${course.title} for renewal`}
                       />
                     </td>
                     <td className="px-3 py-1.5 text-center whitespace-nowrap">

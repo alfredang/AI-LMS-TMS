@@ -22,6 +22,7 @@ const TRACKED_FIELDS: Record<string, string> = {
   assessmentHours: 'Assessment Hours',
   courseFee: 'Course Fee',
   fundingValidity: 'Funding Validity',
+  renewedStatus: 'Renewal Status',
   tscTitle: 'TSC Title',
   tscCode: 'TSC Code',
 };
@@ -36,6 +37,7 @@ const FIELD_COLUMNS: Record<string, string> = {
   assessmentHours: 'assessment_hours',
   courseFee: 'course_fee',
   fundingValidity: 'funding_validity',
+  renewedStatus: 'renewed_status',
   tscTitle: 'tsc_title',
   tscCode: 'tsc_code',
 };
