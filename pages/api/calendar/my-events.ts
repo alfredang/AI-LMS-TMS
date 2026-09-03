@@ -24,6 +24,22 @@ const TRAINER_SCOPE = `(
   OR cr.tpg_assigned_trainer_id::text = $3
   OR EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_id::text = $3)
   OR EXISTS (SELECT 1 FROM course_session css WHERE css.course_run_id = cr.id AND css.deleted = false AND css.trainer_id::text = $3)
+  OR EXISTS (
+    -- Email fallback: assignment rows written before the trainer account /
+    -- trainer_profile existed carry only the email — still their class.
+    SELECT 1 FROM app_user me
+    WHERE me.id::text = $3
+      AND NULLIF(BTRIM(me.email), '') IS NOT NULL
+      AND (
+        LOWER(cr.assigned_trainer_email) = LOWER(BTRIM(me.email))
+        OR LOWER(cr.tpg_assigned_trainer_email) = LOWER(BTRIM(me.email))
+        OR EXISTS (
+          SELECT 1 FROM course_run_trainer crt2
+          WHERE crt2.course_run_id = cr.id
+            AND LOWER(crt2.trainer_email) = LOWER(BTRIM(me.email))
+        )
+      )
+  )
 )`;
 
 const LEARNER_SCOPE = `EXISTS (

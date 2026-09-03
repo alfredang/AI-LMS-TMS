@@ -71,6 +71,7 @@ interface CourseData {
   fundingValidityStart?: string | null;
   numOfTrainers?: number;
   trainersList?: string;
+  favoriteTrainers?: string;
   trainersEmailList?: string;
   writtenAssessmentLink?: string;
   practicalPerformanceAssessmentLink?: string;
@@ -602,6 +603,17 @@ async function handler(
         courseId,
         courseData.newCourseCode === undefined ? null : courseData.newCourseCode
       ]);
+
+      // Per-course favorite trainers (starred by admin/developer). Written
+      // separately from the big positional UPDATE so the param list stays
+      // stable. Column is lazily ensured for older tenants.
+      if (courseData.favoriteTrainers !== undefined) {
+        await client.query(`ALTER TABLE course ADD COLUMN IF NOT EXISTS favorite_trainers TEXT`);
+        await client.query(
+          `UPDATE course SET favorite_trainers = $2 WHERE id = $1`,
+          [courseId, courseData.favoriteTrainers || null]
+        );
+      }
 
       // Persist the funding-validity START date. It lives on the history row of
       // the code currently in force (course_code_history.valid_from), not on the

@@ -107,6 +107,7 @@ async function handler(
             WHERE h.course_id = c.id AND h.is_current LIMIT 1) AS funding_validity_start,
         c.num_of_trainers,
         c.trainers_list,
+        c.favorite_trainers,
         c.trainers_email_list,
         c.resource_links
       FROM course c
@@ -245,6 +246,7 @@ async function handler(
       trainersList: courseData.trainers_list || '',
       trainersEmailList: courseData.trainers_email_list || '',
       approvedTrainers: splitTrainerList(courseData.trainers_list),
+      favoriteTrainers: splitTrainerList(courseData.favorite_trainers),
       assessmentMethods: assessmentMethodsData ? (typeof assessmentMethodsData === 'string' ? JSON.parse(assessmentMethodsData) : assessmentMethodsData) : null,
       resourceLinks: courseData.resource_links ? (typeof courseData.resource_links === 'string' ? JSON.parse(courseData.resource_links) : courseData.resource_links) : [],
       // Convert learning units to topics format expected by the editor

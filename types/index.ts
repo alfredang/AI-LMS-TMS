@@ -195,6 +195,7 @@ export enum DeveloperPage {
   CourseList = 'courseList',
   CourseImageGenerator = 'courseImageGenerator',
   FundingValidity = 'fundingValidity',
+  ExpiredCourseList = 'expiredCourseList',
   CourseChangeControl = 'courseChangeControl',
   SeoMetadata = 'seoMetadata',
   CoursewareTools = 'coursewareTools',
@@ -347,6 +348,8 @@ export interface Course {
   trainersList?: string;
   trainersEmailList?: string;
   approvedTrainers?: string[];
+  /** Trainers starred as favorites for THIS course (admin/developer) — kept at the front of the approved order. */
+  favoriteTrainers?: string[];
 }
 
 export interface CourseDetail {

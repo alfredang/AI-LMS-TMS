@@ -363,7 +363,7 @@ Email is configured **after first login** via the Admin UI (Training Provider > 
 
 | Variable | Value | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | `sk-ant-...` | For Nemo AI Agent, CP Generator, Courseware Generator |
+| `ANTHROPIC_API_KEY` | `sk-ant-...` | For the CP Generator and Courseware Generator |
 | `GOOGLE_GEMINI_API_KEY` | `<gemini-key>` | For the public chatbot |
 | `NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY` | `<same-gemini-key>` | Client-side access to Gemini |
 
@@ -386,8 +386,8 @@ These can be added any time after deployment:
 | `QBO_REALM_ID` | QuickBooks company ID |
 | `QBO_REFRESH_TOKEN` | QuickBooks API access |
 | `SSG_API_BASE_URL` | SkillsFuture Singapore (SG only) |
-| `OPENCLAW_GATEWAY_URL` | Nemo AI backend gateway |
-| `OPENCLAW_GATEWAY_TOKEN` | Nemo AI authentication |
+| `OPENCLAW_GATEWAY_URL` | OpenClaw agent gateway (AI chatbot backend) |
+| `OPENCLAW_GATEWAY_TOKEN` | OpenClaw gateway authentication |
 
 ---
 
@@ -499,7 +499,7 @@ Use this as a single-page reference for what needs to be configured before handi
 | 6 | OTP & Certificate email templates | **Required** | Email Templates pages | Subject + body for OTP, certificate delivery, course confirmation, etc. | [10.2](#102-email-configuration-critical) |
 | 7 | Default password & "Force first password change" | **Required** | Company Settings → Feature Toggles | Default password assigned to new accounts; enforce change-on-first-login | [10.5](#105-feature-toggles) |
 | 8 | Color scheme | **Recommended** | Company Settings → Branding | UI theme — match client's brand colours | [10.1](#101-branding--identity) |
-| 9 | Anthropic API key (for Nemo, CP Generator, Courseware Generator) | **Recommended** | Training Provider → API Keys (`training_provider_api`, `key_name = 'ANTHROPIC_API_KEY'`) | Without this, Nemo AI assistant and content generators won't work. Use a `sk-ant-oat*` token (subscription) or `sk-ant-api*` (PAYG) | [Step 6.3](#63-required-for-ai-features) |
+| 9 | Anthropic API key (for the CP Generator and Courseware Generator) | **Recommended** | Training Provider → API Keys (`training_provider_api`, `key_name = 'ANTHROPIC_API_KEY'`) | Without this, the content generators won't work. Use a `sk-ant-oat*` token (subscription) or `sk-ant-api*` (PAYG) | [Step 6.3](#63-required-for-ai-features) |
 | 10 | Google Gemini API key | **Recommended** | API Keys + env var `NEXT_PUBLIC_GOOGLE_GEMINI_API_KEY` | Powers the public-facing chatbot on marketing pages | [Step 6.3](#63-required-for-ai-features) |
 | 11 | Firecrawl API key | **Recommended** | API Keys (`key_name = 'FIRECRAWL_API_KEY'`) — also editable under TP profile → Credentials → Firecrawl | Trainer-profile enrichment from LinkedIn / personal sites | [CLAUDE.md → Web Scraping](CLAUDE.md) |
 | 12 | Google Calendar ID + sync toggle | **Recommended** | Company Settings → Google Integration | Class schedules push to a shared calendar — trainers see all upcoming classes | [10.3](#103-google--zoom-integrations-optional) |
@@ -635,7 +635,8 @@ After deployment, go through this checklist:
 
 ### System Services
 - [ ] Scheduler is running (check container logs for `"Scheduler initialized"`)
-- [ ] AI features work (Nemo chat responds, if `ANTHROPIC_API_KEY` is set)
+- [ ] AI features work (content generators respond, if `ANTHROPIC_API_KEY` is set)
+- [ ] AI chatbot launcher appears and opens the external agent chat (needs the WhatsApp/Telegram Chat Link under Company Settings → Integrations → AI Agent)
 
 ### Optional Integrations
 - [ ] Google Calendar sync works (if configured)
@@ -689,7 +690,6 @@ Everything else (Gmail, Google Calendar, QuickBooks, SSG, AI) can be configured 
 |---|---|---|---|
 | `postgres_data` | `/var/lib/postgresql/data` | Database persistence | Yes (critical) |
 | `uploads_data` | `/app/public/uploads` | User-uploaded files (assessments, slides, images, etc.) | Yes |
-| `nemo_data` | `/app/data` | Nemo AI memory and session data | Optional |
 
 ---
 

@@ -17,6 +17,7 @@ import CwGeneratorView from '../components/developer/CwGeneratorView';
 import CoursewareToolsView from '../components/developer/CoursewareToolsView';
 import CourseImageGeneratorView from '../components/admin/CourseImageGeneratorView';
 import FundingValidityView from '../components/admin/FundingValidityView';
+import ExpiredCourseListView from '../components/developer/ExpiredCourseListView';
 import { useAppVersion } from '@hooks/useAppVersion';
 
 const DeveloperLayout: React.FC = () => {
@@ -49,6 +50,9 @@ const DeveloperLayout: React.FC = () => {
     }
     if (developerPage === DeveloperPage.FundingValidity) {
       return <FundingValidityView />;
+    }
+    if (developerPage === DeveloperPage.ExpiredCourseList) {
+      return <ExpiredCourseListView />;
     }
     if (developerPage === DeveloperPage.CourseChangeControl) {
       return <CourseChangeControlView />;

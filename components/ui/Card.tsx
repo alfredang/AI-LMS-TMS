@@ -4,6 +4,8 @@ interface CardProps {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
+  /** Optional DOM id (e.g. an in-page scroll anchor). */
+  id?: string;
 }
 
 interface CardHeaderProps {
@@ -26,11 +28,11 @@ interface CardDescriptionProps {
   className?: string;
 }
 
-export const Card: React.FC<CardProps> = ({ children, className = '', onClick }) => {
+export const Card: React.FC<CardProps> = ({ children, className = '', onClick, id }) => {
   const cardClasses = `bg-surface dark:bg-gray-800 rounded-xl shadow-md overflow-hidden transition-all duration-300 ${onClick ? 'cursor-pointer hover:shadow-lg hover:-translate-y-1' : ''} ${className}`;
 
   return (
-    <div className={cardClasses} onClick={onClick}>
+    <div id={id} className={cardClasses} onClick={onClick}>
       {children}
     </div>
   );

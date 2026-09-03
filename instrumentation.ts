@@ -39,11 +39,6 @@ export async function register() {
             console.error('[Announcements] Failed to ensure course_announcement table:', err);
         }
 
-        // Warm up OpenClaw session to avoid ~15s cold start on first user message
-        const { sendToOpenClaw } = await import('./lib/openclaw-client');
-        sendToOpenClaw({ messages: [{ role: 'user', content: 'ping' }], userId: 'warmup', timeoutMs: 30000 }).catch(() => {});
-        console.log('[Nemo] Warm-up ping sent to OpenClaw');
-
         // Warm up Gmail OAuth so the first user OTP request after a deploy hits
         // an already-refreshed access token. Without this, the cold OAuth
         // refresh adds 1–3s to the first send and occasionally fails outright,

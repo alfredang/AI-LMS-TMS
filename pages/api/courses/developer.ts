@@ -40,6 +40,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           c.brochure_link,
           c.num_of_trainers,
           c.trainers_list,
+          c.favorite_trainers,
           c.trainers_email_list,
           (SELECT ARRAY_AGG(cr.course_run_id) FROM course_run cr WHERE cr.course_id = c.id) AS course_run_ids
       FROM course c
@@ -89,6 +90,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       trainersList: row.trainers_list || null,
       trainersEmailList: row.trainers_email_list || null,
       approvedTrainers: splitTrainerList(row.trainers_list),
+      favoriteTrainers: splitTrainerList(row.favorite_trainers),
       courseRunId: null,
       courseRunIds: row.course_run_ids || [],
       startDate: null,

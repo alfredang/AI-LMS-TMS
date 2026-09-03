@@ -32,7 +32,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 
 ### Why AI-LMS-TMS?
 
-- **AI-Powered Learning**: Nemo AI agent (Claude Agent SDK) with persistent memory and tool use, SEO metadata generator, external agent hand-off via WhatsApp/Telegram, plus GenAI authoring tools
+- **AI-Powered Learning**: AI chatbot powered by an external OpenClaw or Hermes agent, reached over WhatsApp/Telegram, plus a SEO metadata generator and GenAI authoring tools
 - **SSG Integration**: Full SkillsFuture Singapore API support for course runs, enrolments, assessments, grants, and claims
 - **Multi-Role System**: 7 roles with dedicated dashboards — Learner, Trainer, Admin, Developer, Finance, Payroll, Training Provider
 - **Multi-Tenant**: Same codebase deployed for multiple tenants on Coolify — Tertiary builds via **Dockerfile**, other tenants (Chariot, Intellisoft) build via **Docker Compose**
@@ -65,7 +65,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Courseware access — Learner Guide, Learner Slides, Activities/Lab and SkillsFuture link cards, unlocked from 8:30 AM SGT on the course start date
 - Progress tracking through learning units and subtopics
 - Assessment submission and grade viewing
-- AI chatbot for personalized course assistance
+- AI chatbot for personalized course assistance (external OpenClaw/Hermes agent via WhatsApp/Telegram)
 - Certificate download after completion — issued only once the class has ended (from 6:00 PM SGT on the last day, or earlier if the trainer marks the learner Competent) and the minimum attendance is met; admins/trainers can still issue manually
 - Job search integration
 - **My Calendar** — personal month calendar of the learner's scheduled classes
@@ -165,10 +165,12 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Course content creation and editing
 - **Course Image Generator** — AI course banner generation (shared with Admin, backed by Cloudflare R2)
 - **Course Funding Validity** — WSQ/CASL/IBF course validity dates with funding-type totals (WSQ, CASL and IBF each tiled separately), cumulative expiry-window dashboards (3 months / 2 months / 1 month / 1 week), renewal tracking and whitelist management (shared with Admin). Excel round-trip: full-list export, a pre-filled upload template, and bulk update by uploading the edited file (matched by course ref code; blank cells leave values unchanged)
+- **Expired Course List** — courses whose funding validity end date has already passed (any course type, including those re-typed to Non-WSQ when funding lapsed), oldest first, with course code, expiry date (and days ago) and renew status; searchable and filterable by renew status, with renewed/not-renewed totals tiled
 - Assessment authoring with multiple assessment methods (Written, Practical, Case Study, Role Play, Oral Questioning, Project, Assignment)
 - Learning unit and subtopic management
 - Course material uploads (lesson plans, slides, guides)
 - **Courseware link cards** — in course view mode, courseware documents (lesson plan, guides, slides, brochure, SkillsFuture link, etc.) render as click-to-open cards; empty links are hidden
+- **"On This Page" section menu** — course view mode shows a jump menu (Learning Outcomes, Courseware, Lesson, Assessment Links, Approved Trainers) that smooth-scrolls to the matching card; topics mount collapsed for a compact overview
 - **SEO Metadata Generator** — AI-powered SEO metadata generation for WSQ and non-WSQ courses using Claude Agent SDK
   - WSQ: Meta title (with WSQ prefix), keywords, description with 70% funding subsidy, course description, and 20 job roles
   - Non-WSQ: Region-specific meta titles (Singapore, Malaysia with HRD Corp, International), keywords, description, course description, and 20 job roles
@@ -203,11 +205,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Contact Information** — Direct access to company address, hotline (+65 6100 0613), support email (enquiry@tertiaryinfotech.com), and opening hours
 
 ### AI-Powered Features
-- **Nemo AI Agent** — Claude Agent SDK-powered operational assistant with:
-  - Persistent memory via Markdown files and Claude skills (`.claude/skills/nemo-agent/SKILL.md`)
-  - Role-based tool access (read-only for learners, full access for admin/finance/training provider)
-  - 18 tools including dashboard queries, course run search, trainer management, enrollment operations, proforma/invoice generation, QuickBooks operations, SSG course operations
-  - Agentic tool-use loop (up to 10 iterations per request)
+- **AI Chatbot (external agent)** — The operational assistant is **not** built into the platform. The app hands off to an external agent — **OpenClaw** (Kael/Jarvis/Orion) or **Hermes** — reached over WhatsApp or Telegram, which acts on the platform through the authenticated `/api/external/*` HTTPS API. Keeping the agent outside the app means it upgrades independently of a deploy and never needs direct database access. See the chat launcher below for how requests are composed.
 - **SEO Metadata Generator** — Claude-powered SEO content generation for WSQ and non-WSQ courses
 - **External Agent Chat Launcher** — Floating WhatsApp/Telegram widget that hands off to an external agent such as OpenClaw/Kael or Hermes. Two role-scoped variants, each pointing at its own group:
   - **Ops widget** (green — Admin, Finance, Training Provider, Developer, Payroll): 5 starter suggestions, with search or "Browse all" revealing the full catalogue of **40 fill-in-the-blank templates** across Trainers, Learners, Classes, Sessions, SSG/TPGateway, Finance and Reports
@@ -221,12 +219,13 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 ### Automation Features
 - **Task Scheduler** — Schedule and run automated tasks: Auto Create Certificates, Auto Send Course Confirmation, Auto Create Learners, Auto Create Assessment Records, Auto Send Class Evaluation to Trainers (compiles learner feedback for ended classes and emails trainers daily at 6:30 PM SGT), etc.
 - **Webhook System** — Configure webhooks with full logging for external integrations
-- **Trainer Invitation Workflow** — Automated cascading trainer invitations with accept/decline webhooks; if a trainer declines, system auto-sends to next available trainer
+- **Trainer Invitation Workflow** — Weekly cycle for classes without a trainer: Monday sweep invites the next trainer in the course's approved-list order, Thursday sends a reminder (same accept/decline links) to anyone still pending, and the following Monday expires no-response invitations and moves to the next trainer. On accept the class is Confirmed, the trainer is synced to SSG/TPG, added to the Google Calendar event (real invite, Course Run ID stamped in the description, Google Meet auto-generated for Virtual classes), and sent a confirmation email with the class details. Declines auto-cascade immediately; admins can pause per class or reset the cycle back to the first approved trainer
 - **Certificate Workflow** — Auto-generate certificates after class completion, upload to Google Drive, and email to learners
 - **Auto-Create Learners** — Automatically creates learner accounts for course runs starting today (via n8n)
 - **Auto-Assign Trainers** — Bot-driven trainer assignment with fallback logic
 - **Course Run Date Sync** — Automatic synchronization of dates with SSG
 - **Enrolment Backfill** — Batch sync of enrollment data from SSG
+- **Trainer WhatsApp Notifications** — Rate-gated queue consumed by the external WhatsApp Business agent: invitation/reminder nudges (max 5/day, 10:00–13:00 SGT) and upcoming-class reminders composed from the LMS record 3 days ahead (max 7/day, 13:00–17:00 SGT) — non-overlapping windows, all ≥15 min apart; plus a read-only `confirmed-classes` feed of authoritative class data
 - **Funding Renewal Reminder** — Daily 8:00 AM SGT email listing funded courses whose funding validity has expired or expires within 1 month and are not yet marked renewed on the Course Funding Validity page (recipients via `FUNDING_REMINDER_RECIPIENTS`; nothing pending → no email)
 - **Auto-Send Emails** — Configurable auto-send for proforma invoices, confirmation emails, invoices, receipts, certificates, and thank-you emails
 
