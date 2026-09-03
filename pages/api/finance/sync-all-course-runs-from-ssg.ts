@@ -19,7 +19,7 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function toIsoDate(raw: unknown): string | null {
+export function toIsoDate(raw: unknown): string | null {
   if (raw == null) return null;
   const s = String(raw).trim();
   if (!s) return null;
@@ -92,7 +92,7 @@ async function fetchAllEnrolmentsForRun(
   return all;
 }
 
-async function upsertSsgEnrolmentStaging(record: any): Promise<void> {
+export async function upsertSsgEnrolmentStaging(record: any): Promise<void> {
   const trainee = (record?.trainee ?? {}) as Record<string, unknown>;
   const course = (record?.course ?? {}) as Record<string, unknown>;
   const run = (course?.run ?? {}) as Record<string, unknown>;

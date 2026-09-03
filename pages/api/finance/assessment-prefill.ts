@@ -1,6 +1,21 @@
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
+import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
+import { upsertSsgEnrolmentStaging, toIsoDate } from './sync-all-course-runs-from-ssg';
+
+interface PrefillRow {
+  enrolment_id: string;
+  trainee_name: string | null;
+  trainee_nric: string | null;
+  course_reference: string | null;
+  course_title: string | null;
+  enrolment_status: string | null;
+  course_run_number: string | null;
+  start_date: string | null;
+  end_date: string | null;
+}
 
 /**
  * Resolves the fields the Bulk Update Assessment flow needs (including the FULL trainee
@@ -23,6 +38,46 @@ const normDateSql = (jsonPathExpr: string) => `(
     ELSE NULLIF(trim(${jsonPathExpr}), '')
   END
 )`;
+
+/**
+ * Some ssg_enrolments rows were created by the local-DB backfill path (invoice_jobs done, no SSG
+ * record ever synced) rather than a real SSG sync, and can end up with a blank trainee_nric or
+ * course_run_number that's since gone stale (e.g. the learner's NRIC was added to their profile
+ * AFTER the backfill ran). Rather than surface that gap to the admin, self-heal it here with one
+ * live SSG view-enrolment call per affected row — the same call "Refresh from SSG" makes — and
+ * persist the result so it's fixed for good, not just for this one preview.
+ */
+async function refreshFromSsg(enrolmentIds: string[], ssgApp?: string): Promise<Map<string, any>> {
+  const refreshed = new Map<string, any>();
+  if (enrolmentIds.length === 0) return refreshed;
+  try {
+    const credentials = await getSSGCredentialsService().getSSGCredentials(undefined, ssgApp);
+    if (!credentials) return refreshed;
+    const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+    const api = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
+
+    for (let i = 0; i < enrolmentIds.length; i++) {
+      const id = enrolmentIds[i];
+      try {
+        const viewResult = await api.viewEnrolment(id);
+        if (!viewResult.error) {
+          const raw: any = viewResult.data;
+          const rec = raw?.enrolment ?? raw;
+          if (rec?.referenceNumber) {
+            await upsertSsgEnrolmentStaging(rec);
+            refreshed.set(id, rec);
+          }
+        }
+      } catch (e) {
+        console.warn('[finance/assessment-prefill] live SSG refresh failed for', id, e);
+      }
+      if (i < enrolmentIds.length - 1) await new Promise((r) => setTimeout(r, 400));
+    }
+  } catch (e) {
+    console.warn('[finance/assessment-prefill] SSG credentials unavailable, skipping self-heal:', e);
+  }
+  return refreshed;
+}
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -53,8 +108,32 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
        WHERE se.enrolment_id = ANY($1::text[])`,
       [enrolmentIds]
     );
+    const rows = result.rows as PrefillRow[];
 
-    return res.status(200).json({ success: true, rows: result.rows });
+    const needsRefresh = rows
+      .filter((r) => !r.trainee_nric?.trim() || !r.course_run_number?.trim())
+      .map((r) => r.enrolment_id);
+
+    if (needsRefresh.length > 0) {
+      const ssgApp = (req.headers['x-ssg-app'] as string | undefined)?.trim() || undefined;
+      const refreshedById = await refreshFromSsg(needsRefresh, ssgApp);
+      for (const row of rows) {
+        const rec = refreshedById.get(row.enrolment_id);
+        if (!rec) continue;
+        const trainee = rec.trainee || {};
+        const course = rec.course || {};
+        const run = course.run || {};
+        row.trainee_nric = trainee.id || row.trainee_nric;
+        row.trainee_name = trainee.fullName || row.trainee_name;
+        row.course_run_number = run.id || row.course_run_number;
+        row.course_reference = course.referenceNumber || row.course_reference;
+        row.course_title = course.title || row.course_title;
+        row.start_date = toIsoDate(run.startDate) || row.start_date;
+        row.end_date = toIsoDate(run.endDate) || row.end_date;
+      }
+    }
+
+    return res.status(200).json({ success: true, rows });
   } catch (error) {
     console.error('[ERROR] [finance/assessment-prefill] Failed to fetch:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
