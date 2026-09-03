@@ -180,10 +180,18 @@ export const BulkAssessmentEditor: React.FC<BulkAssessmentEditorProps> = ({ rows
 
         const missingDate = rows.filter(r => !r.assessmentDate?.trim()).length;
         const missingSkillCodeRows = rows.filter(r => needsSkillCode(r) && !r.skillCode?.trim());
-        if (missingDate > 0 || missingSkillCodeRows.length > 0) {
+        // Blank Course Run ID / Trainee ID never come from the admin's own input — they mean the
+        // underlying data is incomplete (course run not yet published to SSG, or the learner's
+        // profile has no NRIC/FIN saved). SSG rejects these with a generic "required fields cannot
+        // be blank" (TGS-441), so catch it here with a message that actually says what's missing.
+        const missingCourseRun = rows.filter(r => !r.courseRunId?.trim());
+        const missingTraineeId = rows.filter(r => !r.traineeId?.trim());
+        if (missingDate > 0 || missingSkillCodeRows.length > 0 || missingCourseRun.length > 0 || missingTraineeId.length > 0) {
             setError([
                 missingDate > 0 ? `${missingDate} row(s) missing Assessment Date.` : '',
                 missingSkillCodeRows.length > 0 ? `${missingSkillCodeRows.length} WSQ/IBF row(s) missing Skill Code.` : '',
+                missingCourseRun.length > 0 ? `${missingCourseRun.length} row(s) missing Course Run ID (${missingCourseRun.map(r => r.traineeFullName || r.enrolmentId).join(', ')}) — this course run likely hasn't been published/synced to SSG yet.` : '',
+                missingTraineeId.length > 0 ? `${missingTraineeId.length} row(s) missing Trainee ID (${missingTraineeId.map(r => r.traineeFullName || r.enrolmentId).join(', ')}) — check that learner's profile has an NRIC/FIN saved.` : '',
             ].filter(Boolean).join(' '));
             return;
         }
