@@ -38,6 +38,24 @@ const ORDERED_COLUMNS: Array<{ name: string; type: string }> = [
   // these rows as if they had a grant — so the group can be billed at full
   // fee for the ineligible learner without blocking the rest of the group.
   { name: 'grant_ineligible', type: 'boolean DEFAULT false' },
+  // Late joiner billing, chosen by the admin when they enrol someone into a
+  // class whose employer invoice already exists (see ca-existing-invoice):
+  //
+  //   billed_manually — "Enrol only". We never invoice this learner; Finance
+  //     adds them to the existing invoice in QuickBooks by hand. The flag is
+  //     what makes that safe: a row with no invoice_id and no flag is
+  //     indistinguishable from an unbilled one, so the next Generate Invoice
+  //     click would cut exactly the duplicate the admin was avoiding.
+  //   billed_manually_invoice_ref — the DocNumber they are being added to.
+  //     Informational on the View page, and used as the grant invoice's PO#
+  //     so that cross-reference stays correct.
+  //   replace_group_invoice — "Replace". Intent, not an action: the existing
+  //     invoice can only be swapped once this learner is enroled AND their
+  //     grant has landed, which is long after the enrolment click. The
+  //     invoice sweep honours it when the group is finally billable.
+  { name: 'billed_manually', type: 'boolean DEFAULT false' },
+  { name: 'billed_manually_invoice_ref', type: 'text' },
+  { name: 'replace_group_invoice', type: 'boolean DEFAULT false' },
   { name: 'invoice_id', type: 'text' },
   { name: 'invoice_doc_number', type: 'text' },
   { name: 'invoice_drive_file_id', type: 'text' },

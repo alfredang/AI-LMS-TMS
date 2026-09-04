@@ -25,6 +25,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         FROM public.company_application
        WHERE LOWER(COALESCE(auto_enrol_status, '')) = 'failed'
           OR jsonb_array_length(COALESCE(pipeline_warnings, '[]'::jsonb)) > 0
+          -- Stranded: enroled with SSG but the pipeline never finished. The
+          -- grant poll runs in memory, so a deploy or restart inside its
+          -- 15-minute window leaves the row here with no failure and no
+          -- warning — invisible until someone happened to look. 30 minutes
+          -- clears the longest legitimate wait.
+          OR (
+               COALESCE(enrolment_id, '') <> ''
+           AND COALESCE(auto_enrol_status, '') IN ('', 'pending')
+           AND updated_at < now() - interval '30 minutes'
+          )
     `);
     return res.status(200).json({ count: result.rows[0]?.count ?? 0 });
   } catch (err: any) {

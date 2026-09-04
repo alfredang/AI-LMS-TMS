@@ -63,6 +63,39 @@ interface Group {
   anyAlreadySent: boolean;
 }
 
+/**
+ * Does the AUTOMATIC send have to wait for supporting-doc verification?
+ *
+ * The two send paths have always disagreed: the manual "Send Invoice Email"
+ * button refuses until a learner's documents are verified, while the pipeline's
+ * automatic send after invoicing goes out regardless. That was a deliberate
+ * product decision, but it was buried in a hardcoded `true` where nobody could
+ * see it, let alone change it.
+ *
+ * Now it is a setting on the same screen as the master email toggle. Default
+ * false keeps the behaviour the pipeline has always had, so nothing changes
+ * until someone decides it should.
+ *
+ * Missing column (the setting has never been opened) reads as false for the
+ * same reason.
+ */
+export async function caAutoSendRequiresDocVerification(): Promise<boolean> {
+  try {
+    const res = await pool.query(
+      `SELECT COALESCE(ca_auto_send_requires_doc_verification, false) AS required
+         FROM training_provider
+        LIMIT 1`
+    );
+    return !!res.rows[0]?.required;
+  } catch (err) {
+    console.warn(
+      '[ca-email] Could not read ca_auto_send_requires_doc_verification; keeping the existing behaviour:',
+      err instanceof Error ? err.message : err
+    );
+    return false;
+  }
+}
+
 export async function sendCompanyApplicationInvoiceEmails(
   applicationIds: string[],
   opts: { skipDocVerification?: boolean } = {}
