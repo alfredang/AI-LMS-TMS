@@ -100,6 +100,20 @@ specifically to make that class of bug structurally impossible, not just unlikel
    All invoice/customer/account lookups are `qboQuery` (read-only `SELECT`). The only writes are
    `Payment` create and `Payment` void. If a change introduces an Invoice/Customer/Account write
    here, stop and confirm with the user first — that's outside this feature's authorized scope.
+10. **Content verification, independent of resolution tier (added 2026-08-25).** Even a
+    `'docNumber'` or `'enrolment_grant_docNumber_ssg'` match is only as trustworthy as the
+    DocNumber/`ssg_grants` data feeding it — a stale `ssg_grants` row or a reused/duplicate
+    DocNumber can still resolve to the wrong invoice *object* while passing the tier check in
+    invariant 1. Every real grant invoice line in this company's QuickBooks carries
+    `"Grant Ref #: <that line's own GRN>"` in its `Description` (verified against live data
+    across dozens of sampled invoices, multiple description-punctuation variants). Before any
+    write, `invoiceHasGrantInDescription(inv.raw, grantId)` must find the row's own `grant_id`
+    literally present in the resolved invoice's line text — if not, the row fails instead of
+    writing. This mirrors `verifySfcInvoiceMatch` (`sfcInvoiceVerify.ts`), added after an
+    identical "trusted a resolved id without checking its content" incident in the SFC claims
+    feature. Do not remove this check to "fix" a row that fails it — a failure here means the
+    resolved invoice is unverified, not that the check is wrong; investigate the underlying
+    `ssg_grants`/DocNumber data instead.
 
 ## Known UI/config gotcha (not a code bug, but affects how "safe" a given deployment is)
 

@@ -24,14 +24,14 @@ function escapeQbQueryString(value: string): string {
 const QB_ACCOUNT_ID_BY_NAME_PROMISE = new Map<string, Promise<string | null>>();
 const QB_PAYMENT_METHOD_ID_BY_NAME_PROMISE = new Map<string, Promise<string | null>>();
 
-async function qbFindInvoiceByDocNumber(app: string | undefined, docNumber: string): Promise<{ id: string; customerRef?: string } | null> {
+async function qbFindInvoiceByDocNumber(app: string | undefined, docNumber: string): Promise<{ id: string; customerRef?: string; raw: any } | null> {
   const safe = escapeQbQueryString(String(docNumber || '').trim());
   if (!safe) return null;
   const data = await qboQuery(app, `SELECT * FROM Invoice WHERE DocNumber = '${safe}' MAXRESULTS 1`);
   const inv = data?.QueryResponse?.Invoice;
   const row = Array.isArray(inv) ? inv[0] : inv;
   if (!row?.Id) return null;
-  return { id: String(row.Id), customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined };
+  return { id: String(row.Id), customerRef: row?.CustomerRef?.value ? String(row.CustomerRef.value) : undefined, raw: row };
 }
 
 async function qbGetInvoiceBalance(app: string | undefined, invoiceId: string): Promise<number | null> {
@@ -67,6 +67,7 @@ async function qbResolveInvoiceForGrantRow(input: {
   | {
       id: string;
       customerRef?: string;
+      raw?: any;
       resolvedBy: 'docNumber' | 'enrolment_grant_docNumber_ssg' | 'enrolment_grant_docNumber_history' | 'date_window_scan';
     }
   | null
@@ -126,6 +127,7 @@ async function qbResolveInvoiceForGrantRowAcrossApps(input: {
       app: string;
       id: string;
       customerRef?: string;
+      raw?: any;
       resolvedBy: 'docNumber' | 'enrolment_grant_docNumber_ssg' | 'enrolment_grant_docNumber_history' | 'date_window_scan';
     }
   | null
@@ -535,6 +537,24 @@ export async function applyGrantImportBatch(input: {
           `Refusing to auto-apply: invoice for grant ${grantId} ${reason}. Auto-apply is disabled for this match type to ` +
             `prevent payments from landing on the wrong invoice. Verify the correct invoice in QuickBooks manually, or wait ` +
             `for ssg_grants to sync this enrolment's grants (or fix the data) and re-upload so it resolves with a verified match.`
+        );
+      }
+
+      // Content verification (second, independent layer on top of the tier check above):
+      // even a 'docNumber' or 'enrolment_grant_docNumber_ssg' match is only trusted as far as
+      // the DocNumber/ssg_grants data feeding it is correct. Every real grant invoice line in
+      // this company's QuickBooks carries "Grant Ref #: <that line's own GRN>" in its
+      // Description (confirmed against live data) — so the resolved invoice's own line text
+      // must cite this exact grant_id before a payment is allowed to land on it. This is the
+      // same defense-in-depth pattern already proven for SFC claims (verifySfcInvoiceMatch,
+      // sfcInvoiceVerify.ts) after an identical "trusted a resolved id without checking its
+      // content" incident there. A stale ssg_grants row, a reused/duplicate DocNumber, or any
+      // future regression in the resolver is caught here instead of silently writing.
+      if (!invoiceHasGrantInDescription(inv.raw, grantId)) {
+        throw new Error(
+          `Refusing to auto-apply: resolved invoice ${inv.id} (matched via ${inv.resolvedBy}) does not mention grant ${grantId} ` +
+            `in any line Description — content verification failed, will not risk applying to the wrong invoice. ` +
+            `Verify the correct invoice in QuickBooks manually.`
         );
       }
 
