@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { randomInt } from 'crypto';
 import { cors } from '../../../lib/cors';
 import pool from '../../../lib/db';
 import { google } from 'googleapis';
@@ -13,7 +14,7 @@ interface SendOtpResponse {
 
 // Generate a 6-digit OTP
 function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 // Module-level cached OAuth2 client — survives across requests so token refresh

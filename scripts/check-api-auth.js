@@ -21,6 +21,9 @@ const PUBLIC = new Set([
   'favicon.png.ts',
   'auth/login.ts',
   'auth/send-otp.ts',
+  // Native Android OTP endpoints implement rate limits and restrict existing mobile roles.
+  'android/send-otp.ts',
+  'android/login.ts',
   'auth/forgot-password.ts',
   'auth/verify.ts', // validates the presented token itself
   'auth/logout.ts', // revokes the presented token itself

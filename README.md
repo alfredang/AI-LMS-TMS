@@ -683,3 +683,7 @@ This project is proprietary software developed by Tertiary Infotech Pte Ltd. All
 ## Native iOS companion
 
 The learner/trainer-only Tertiary Learning iPhone and iPad app uses the scoped mobile API, email OTP, courseware, a class calendar and APNs class reminders. See [iOS backend setup](docs/mobile-ios.md).
+
+### Native Android learner and trainer client
+
+The Android companion supports email OTP, scoped courseware, class calendars, and optional 3-day/1-day Firebase reminders. See [Android API and deployment notes](docs/android-app.md) for configuration and validation.
