@@ -679,3 +679,7 @@ This project is proprietary software developed by Tertiary Infotech Pte Ltd. All
   <strong>Developed by Tertiary Infotech Pte Ltd</strong><br>
   <em>Empowering Training Excellence in Singapore</em>
 </p>
+
+## Native iOS companion
+
+The learner/trainer-only Tertiary Learning iPhone and iPad app uses the scoped mobile API, email OTP, courseware, a class calendar and APNs class reminders. See [iOS backend setup](docs/mobile-ios.md).

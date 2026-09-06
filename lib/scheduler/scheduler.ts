@@ -118,6 +118,14 @@ async function seedDefaults() {
         default_enabled?: boolean;
     }> = [
         {
+            id: 'mobile_class_reminders',
+            name: 'Mobile Class Reminders',
+            description: 'APNs reminders for enrolled learners and assigned trainers, 3 days and 1 day before each active class session.',
+            cron_expression: '*/5 * * * *',
+            api_endpoint: '/api/mobile/send-reminders',
+            default_enabled: process.env.MOBILE_APNS_ENABLED === 'true',
+        },
+        {
             id: 'auto_create_trainer_folders',
             name: 'Auto Create Assessment Records',
             description: 'Creates assessment folders in Google Drive for all course runs starting today. Trainer names are sourced from local DB (course_run_trainer / assigned_trainer_name / trainer_profile).',

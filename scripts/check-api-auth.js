@@ -15,6 +15,7 @@ const API = path.join(__dirname, '..', 'pages', 'api');
 // Routes that are public BY DESIGN. Adding to this list is a security
 // decision — justify it in the PR.
 const PUBLIC = new Set([
+  'mobile/auth.ts', // Public OTP entry point: registered learner/trainer only, DB rate limits and single-use codes.
   'health.ts', // liveness probe (no data)
   'app-version.ts',
   'favicon.png.ts',
