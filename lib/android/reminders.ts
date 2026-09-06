@@ -27,7 +27,7 @@ export async function sendAndroidReminders(options:{now?:Date,sendMessage?:(mess
   JOIN course_session cs ON NOT coalesce(cs.deleted,false)
   JOIN course_run cr ON cr.id=cs.course_run_id AND NOT coalesce(cr.is_deleted,false)
   JOIN course c ON c.id=cr.course_id
-  WHERE d.enabled AND lower(coalesce(cr.class_status::text,'')) NOT IN('cancelled','canceled')
+  WHERE d.enabled AND lower(coalesce(cr.class_status::text,''))='confirmed'
   AND replace(left(cs.start_date,10),'-','') IN(to_char(($1::timestamptz AT TIME ZONE 'Asia/Singapore')::date+1,'YYYYMMDD'),to_char(($1::timestamptz AT TIME ZONE 'Asia/Singapore')::date+3,'YYYYMMDD'))
   AND (
    (EXISTS(SELECT 1 FROM user_role_map r WHERE r.user_id=u.id AND lower(r.role::text)='learner')

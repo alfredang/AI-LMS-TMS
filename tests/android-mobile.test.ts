@@ -20,7 +20,7 @@ test('mobile authorization, material privacy, OTP replay and device lifecycle',a
  }
  await pool.query(`INSERT INTO trainer_profile(user_id,tel,gender,trainer_type,status)VALUES($1,'00000000','Prefer not to say','non-ACLP','Active')ON CONFLICT DO NOTHING`,[ids.trainer]);
  await pool.query(`INSERT INTO course(id,title,course_code,slides_url,trainer_slides_url)VALUES($1,'Native Mobile Training','TEST-ANDROID','https://example.com/slides','https://example.com/trainer') ON CONFLICT(id)DO NOTHING`,[ids.course]);
- await pool.query(`INSERT INTO course_run(id,course_id,course_run_id,start_date,end_date,assigned_trainer_id)VALUES($1,$2,'ANDROID-TEST',current_date+3,current_date+3,$3)ON CONFLICT(id)DO NOTHING`,[ids.run,ids.course,ids.trainer]);
+ await pool.query(`INSERT INTO course_run(id,course_id,course_run_id,start_date,end_date,assigned_trainer_id,class_status)VALUES($1,$2,'ANDROID-TEST',current_date+3,current_date+3,$3,'Confirmed')ON CONFLICT(id)DO UPDATE SET class_status='Confirmed'`,[ids.run,ids.course,ids.trainer]);
  await pool.query(`INSERT INTO course_session(id,course_run_id,start_date,end_date,start_time,end_time)VALUES($1,$2,to_char(current_date+3,'YYYYMMDD'),to_char(current_date+3,'YYYYMMDD'),'0900','1700')ON CONFLICT(id)DO NOTHING`,[ids.session,ids.run]);
  await pool.query(`INSERT INTO enrollment(user_id,course_id,course_run_id,enrolment_status)VALUES($1,$2,$3,'Confirmed')ON CONFLICT(user_id,course_run_id) DO UPDATE SET enrolment_status='Confirmed'`,[ids.learner,ids.course,ids.run]);
  const learner=await mobileData(ids.learner,'learner'),trainer=await mobileData(ids.trainer,'trainer'),other=await mobileData(ids.other,'learner');

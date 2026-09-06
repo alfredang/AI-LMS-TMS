@@ -18,7 +18,7 @@ Set the server-only `ANDROID_FCM_CREDENTIALS_JSON` to a Firebase service-account
 JSON with the Firebase Cloud Messaging API Admin role in the Android Firebase
 project. Never put this credential in the Android app or public repository.
 The worker starts only when this variable and the existing app scheduler are enabled.
-It checks every five minutes, beginning at 09:00 Asia/Singapore, for sessions one
+It checks every five minutes, beginning at 09:00 Asia/Singapore, for confirmed-class sessions one
 and three calendar days ahead. It checks current enrollment, assignments,
 account status, device opt-in, and the device's unexpired authenticated session.
 
