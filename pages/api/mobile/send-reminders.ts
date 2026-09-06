@@ -22,6 +22,8 @@ export default withServiceAuth(async(req:NextApiRequest,res:NextApiResponse)=>{
  for(const session of sessions.values()){
  const start=classStart(session.startDate,session.startTime);if(!start)continue;
  for(const days of dueReminderDays(start,now)){
+ const confirmed=await client.query(`SELECT 1 FROM course_session cs JOIN course_run cr ON cr.id=cs.course_run_id WHERE cs.id=$1 AND cr.class_status::text='Confirmed' AND NOT coalesce(cs.deleted,false) AND NOT coalesce(cr.is_deleted,false)`,[session.id]);
+ if(!confirmed.rowCount)continue;
  const exists=await client.query(`SELECT 1 FROM mobile_push_delivery WHERE token=$1 AND session_id=$2 AND starts_at=$3 AND days=$4 AND sent_at IS NOT NULL`,[device.token,session.id,start,days]);
  if(exists.rowCount)continue;
  try{
