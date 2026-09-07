@@ -8,7 +8,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const { courseId, casScore, esScore, fundingValidity, courseType, newCourseCode } = req.body;
+  const { courseId, casScore, esScore, fundingValidity, courseType, newCourseCode, actualRenewDate, renewalApplicationNo } = req.body;
 
   if (!courseId) {
     return res.status(400).json({ message: 'courseId is required' });
@@ -27,6 +27,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (courseType === 'WSQ' || courseType === 'CASL' || courseType === 'Non-WSQ') {
       params.push(courseType);
       setClauses.push(`course_type = $${params.length}`);
+    }
+
+    // Actual renew date / renewal application no: only written when present in
+    // the payload, so callers that don't send them (e.g. older clients) leave
+    // the stored values untouched. The dashboard Edit form always sends both,
+    // which makes a blank there a genuine clear.
+    if (actualRenewDate !== undefined) {
+      const date = String(actualRenewDate || '').slice(0, 10) || null;
+      params.push(date);
+      setClauses.push(`actual_renew_date = $${params.length}::date`);
+    }
+    if (renewalApplicationNo !== undefined) {
+      const appNo = typeof renewalApplicationNo === 'string' ? renewalApplicationNo.trim() : renewalApplicationNo;
+      params.push(appNo || null);
+      setClauses.push(`renewal_application_no = $${params.length}`);
     }
 
     // Only touch new_course_code when a NON-BLANK value is supplied. Blank means

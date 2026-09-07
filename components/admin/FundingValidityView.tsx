@@ -89,6 +89,8 @@ interface EditState {
   casScore: string;
   esScore: string;
   fundingValidity: string;
+  actualRenewDate: string;
+  renewalApplicationNo: string;
   courseType: 'WSQ' | 'CASL' | 'Non-WSQ';
   newCourseCode: string;
 }
@@ -106,7 +108,7 @@ const FundingValidityView: React.FC = () => {
   const [whitelistingIds, setWhitelistingIds] = useState<Record<string, boolean>>({});
   const [whitelistStateOverrides, setWhitelistStateOverrides] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '', courseType: 'WSQ', newCourseCode: '' });
+  const [editState, setEditState] = useState<EditState>({ casScore: '', esScore: '', fundingValidity: '', actualRenewDate: '', renewalApplicationNo: '', courseType: 'WSQ', newCourseCode: '' });
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
@@ -245,6 +247,15 @@ const FundingValidityView: React.FC = () => {
     return !!validityDate && validityDate <= oneMonthAhead && !isCourseRenewed(course);
   });
 
+  // Same rule with a 3-month horizon — every course already inside its renewal
+  // window (the Earliest Renewal Date is 3 months before expiry) that is not
+  // yet marked as renewed. Cumulative, so it includes the 1-month list above.
+  const threeMonthsAhead = startOfDay(addMonthsTo(today, 3));
+  const pendingRenewal3mCourses = wsqCourses.filter(course => {
+    const validityDate = parseValidityDate(course.fundingValidity);
+    return !!validityDate && validityDate <= threeMonthsAhead && !isCourseRenewed(course);
+  });
+
   const expiryStatusLabel = (validityDate: Date) => {
     const days = Math.round((validityDate.getTime() - today.getTime()) / 86400000);
     if (days < 0) return { text: `Expired ${-days}d ago`, cls: 'text-red-600 dark:text-red-400' };
@@ -356,6 +367,8 @@ const FundingValidityView: React.FC = () => {
       casScore: course.casScore != null ? String(course.casScore) : '',
       esScore: course.esScore != null ? String(course.esScore) : '',
       fundingValidity: toDateInputValue(course.fundingValidity),
+      actualRenewDate: toDateInputValue(course.actualRenewDate),
+      renewalApplicationNo: course.renewalApplicationNo || '',
       courseType: normalizeCourseType(course.courseType),
       newCourseCode: course.newCourseCode || '',
     });
@@ -376,6 +389,8 @@ const FundingValidityView: React.FC = () => {
         casScore: editState.casScore || null,
         esScore: editState.esScore || null,
         fundingValidity: editState.fundingValidity || null,
+        actualRenewDate: editState.actualRenewDate || null,
+        renewalApplicationNo: editState.renewalApplicationNo.trim() || null,
         newCourseCode: editState.newCourseCode.trim(),
         ...(typeChanged ? { courseType: editState.courseType } : {}),
       });
@@ -397,8 +412,8 @@ const FundingValidityView: React.FC = () => {
 
       const rows = wsqCourses.map(course => {
         const validityDate = parseValidityDate(course.fundingValidity);
-        const renewDate = validityDate ? new Date(validityDate) : null;
-        if (renewDate) renewDate.setMonth(renewDate.getMonth() - 3);
+        const earliestRenewalDate = validityDate ? new Date(validityDate) : null;
+        if (earliestRenewalDate) earliestRenewalDate.setMonth(earliestRenewalDate.getMonth() - 3);
 
         return {
           'Course Title': course.title,
@@ -407,7 +422,9 @@ const FundingValidityView: React.FC = () => {
           'Type': displayCourseType(course.courseType),
           'Validity Start Date': parseValidityDate(course.fundingValidityStart) || '',
           'Validity End Date': validityDate || '',
-          'Renew Date': renewDate || '',
+          'Earliest Renewal Date': earliestRenewalDate || '',
+          'Actual Renew Date': parseValidityDate(course.actualRenewDate) || '',
+          'Renewal Application No': course.renewalApplicationNo || '',
           'Status': !validityDate ? '' : validityDate < today ? 'Expired' : validityDate <= fourMonthsAhead ? 'Expiring Soon' : 'Valid',
           'CAS': course.casScore != null ? Number(course.casScore) : '',
           'ES': course.esScore != null ? Number(course.esScore) : '',
@@ -420,11 +437,11 @@ const FundingValidityView: React.FC = () => {
 
       // Header-row dropdowns in Excel — the Type column filters to WSQ / CASL.
       ws['!autofilter'] = { ref: ws['!ref'] };
-      ws['!cols'] = [{ wch: 60 }, { wch: 20 }, { wch: 20 }, { wch: 8 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }];
+      ws['!cols'] = [{ wch: 60 }, { wch: 20 }, { wch: 20 }, { wch: 8 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 20 }, { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }];
 
-      // Date columns (E, F) render as dd/mm/yyyy like the table.
+      // Date columns (E-H) render as dd/mm/yyyy like the table.
       for (let r = 1; r <= rows.length; r++) {
-        for (const col of ['E', 'F']) {
+        for (const col of ['E', 'F', 'G', 'H']) {
           const cell = ws[`${col}${r + 1}`];
           if (cell && cell.t === 'd') cell.z = 'dd/mm/yyyy';
         }
@@ -453,6 +470,8 @@ const FundingValidityView: React.FC = () => {
         'Course Ref Code (New)': course.newCourseCode || '',
         'Course Ref Code (Old)': course.courseCode || '',
         'Validity End Date': parseValidityDate(course.fundingValidity) || '',
+        'Actual Renew Date': parseValidityDate(course.actualRenewDate) || '',
+        'Renewal Application No': course.renewalApplicationNo || '',
         'CAS': course.casScore != null ? Number(course.casScore) : '',
         'ES': course.esScore != null ? Number(course.esScore) : '',
         'Whitelist': (whitelistStateOverrides[course.id] ?? !!course.whitelistStatus) ? 'Yes' : 'No',
@@ -461,10 +480,12 @@ const FundingValidityView: React.FC = () => {
 
       const ws = XLSX.utils.json_to_sheet(rows, { cellDates: true });
       ws['!autofilter'] = { ref: ws['!ref'] };
-      ws['!cols'] = [{ wch: 60 }, { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }];
+      ws['!cols'] = [{ wch: 60 }, { wch: 20 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }];
       for (let r = 1; r <= rows.length; r++) {
-        const cell = ws[`D${r + 1}`];
-        if (cell && cell.t === 'd') cell.z = 'dd/mm/yyyy';
+        for (const col of ['D', 'E']) {
+          const cell = ws[`${col}${r + 1}`];
+          if (cell && cell.t === 'd') cell.z = 'dd/mm/yyyy';
+        }
       }
 
       const instructions = XLSX.utils.aoa_to_sheet([
@@ -472,8 +493,8 @@ const FundingValidityView: React.FC = () => {
         [''],
         ['1.', 'Edit the "Funding Status" sheet, then upload this file back with the "Upload Excel" button.'],
         ['2.', 'Courses are matched by Course Ref Code (New), falling back to Course Ref Code (Old). Do not edit the ref code or title columns.'],
-        ['3.', 'Editable columns: Validity End Date, CAS, ES, Whitelist, Renew.'],
-        ['4.', 'Validity End Date: use a real Excel date (dd/mm/yyyy).'],
+        ['3.', 'Editable columns: Validity End Date, Actual Renew Date, Renewal Application No, CAS, ES, Whitelist, Renew.'],
+        ['4.', 'Validity End Date / Actual Renew Date: use a real Excel date (dd/mm/yyyy).'],
         ['5.', 'Whitelist / Renew: Yes or No.'],
         ['6.', 'A BLANK cell means "leave unchanged" — it never clears the stored value. To clear a value, use the Edit button on the dashboard.'],
         ['7.', 'Rows you delete from the sheet are simply not updated.'],
@@ -530,6 +551,8 @@ const FundingValidityView: React.FC = () => {
             title: String(row['Course Title'] ?? '').trim(),
           };
           if (!blank(row['Validity End Date'])) update.fundingValidity = cellToYMD(row['Validity End Date']);
+          if (!blank(row['Actual Renew Date'])) update.actualRenewDate = cellToYMD(row['Actual Renew Date']);
+          if (!blank(row['Renewal Application No'])) update.renewalApplicationNo = String(row['Renewal Application No']).trim();
           if (!blank(row['CAS'])) update.casScore = Number(row['CAS']);
           if (!blank(row['ES'])) update.esScore = Number(row['ES']);
           const whitelist = cellToYesNo(row['Whitelist']);
@@ -708,6 +731,54 @@ const FundingValidityView: React.FC = () => {
               </thead>
               <tbody>
                 {pendingRenewalCourses.map(course => {
+                  const validityDate = parseValidityDate(course.fundingValidity)!;
+                  const status = expiryStatusLabel(validityDate);
+                  return (
+                    <tr key={course.id} className="border-t border-gray-200 dark:border-gray-700">
+                      <td className="px-3 py-1.5 font-medium text-gray-900 dark:text-white max-w-[350px] truncate" title={course.title}>{course.title}</td>
+                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.newCourseCode || course.courseCode || '—'}</td>
+                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{displayCourseType(course.courseType)}</td>
+                      <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{formatValidityDate(course.fundingValidity)}</td>
+                      <td className={`px-3 py-1.5 font-semibold whitespace-nowrap ${status.cls}`}>{status.text}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card className="mb-8 dark:bg-gray-800 dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Expiring Within 3 Months — Not Yet Renewed
+            <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+              {pendingRenewal3mCourses.length}
+            </span>
+          </h4>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Courses already inside their renewal window (the earliest renewal date is 3 months before expiry) and not marked as renewed. Includes the 1-month list above.
+          </p>
+        </div>
+        {pendingRenewal3mCourses.length === 0 ? (
+          <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+            No courses pending renewal within the next 3 months. 🎉
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-gray-50 dark:bg-gray-900/40">
+                <tr className="text-left text-gray-600 dark:text-gray-300">
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Title</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Type</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Validity End Date</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingRenewal3mCourses.map(course => {
                   const validityDate = parseValidityDate(course.fundingValidity)!;
                   const status = expiryStatusLabel(validityDate);
                   return (
@@ -929,7 +1000,9 @@ const FundingValidityView: React.FC = () => {
                 <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Type</th>
                 <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Validity Start Date</th>
                 <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Validity End Date</th>
-                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Renew Date</th>
+                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Earliest Renewal Date</th>
+                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Actual Renew Date</th>
+                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Renewal Application No</th>
                 <th
                   className={`${stickyTh} font-semibold whitespace-nowrap`}
                   title="Where this course's renewal stands. Set it to Renewed — Processing once the renewal is with SSG: the course then reads as Renewal Pending instead of Expiring Soon / Expired, until the new validity end date comes through."
@@ -1040,11 +1113,36 @@ const FundingValidityView: React.FC = () => {
                     </td>
                     <td className="px-3 py-1.5 whitespace-nowrap">
                       {validityDate ? (() => {
-                        const renewDate = new Date(validityDate);
-                        renewDate.setMonth(renewDate.getMonth() - 3);
-                        const isPast = renewDate < new Date();
-                        return <span className={isPast ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-300'}>{renewDate.toLocaleDateString('en-GB')}</span>;
+                        const earliestRenewalDate = new Date(validityDate);
+                        earliestRenewalDate.setMonth(earliestRenewalDate.getMonth() - 3);
+                        const isPast = earliestRenewalDate < new Date();
+                        return <span className={isPast ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-300'}>{earliestRenewalDate.toLocaleDateString('en-GB')}</span>;
                       })() : '—'}
+                    </td>
+                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editState.actualRenewDate}
+                          onChange={e => setEditState(s => ({ ...s, actualRenewDate: e.target.value }))}
+                          className={`${inputClass} w-32`}
+                        />
+                      ) : (
+                        course.actualRenewDate ? formatValidityDate(course.actualRenewDate) : '—'
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editState.renewalApplicationNo}
+                          onChange={e => setEditState(s => ({ ...s, renewalApplicationNo: e.target.value }))}
+                          placeholder="Application no"
+                          className={`${inputClass} w-32`}
+                        />
+                      ) : (
+                        course.renewalApplicationNo || '—'
+                      )}
                     </td>
                     <td className="px-3 py-1.5">
                       <select

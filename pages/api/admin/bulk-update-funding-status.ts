@@ -8,6 +8,8 @@ interface FundingUpdateRow {
   oldCode?: string;
   title?: string;
   fundingValidity?: string; // yyyy-mm-dd
+  actualRenewDate?: string; // yyyy-mm-dd
+  renewalApplicationNo?: string;
   casScore?: number;
   esScore?: number;
   whitelist?: boolean;
@@ -56,6 +58,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // never written; a blank cell in the Excel means "leave unchanged", not
       // "clear".
       let fundingValidity: string | undefined;
+      let actualRenewDate: string | undefined;
+      let renewalApplicationNo: string | undefined;
       let casScore: number | undefined;
       let esScore: number | undefined;
 
@@ -66,6 +70,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           continue;
         }
         fundingValidity = row.fundingValidity;
+      }
+      if (row.actualRenewDate !== undefined) {
+        if (!isYMD(row.actualRenewDate)) {
+          results.push({ refCode: label, title, action: 'failed', message: `Invalid Actual Renew Date "${row.actualRenewDate}" (expected a date).` });
+          failed++;
+          continue;
+        }
+        actualRenewDate = row.actualRenewDate;
+      }
+      if (row.renewalApplicationNo !== undefined) {
+        const v = String(row.renewalApplicationNo).trim();
+        if (v) renewalApplicationNo = v;
       }
       if (row.casScore !== undefined) {
         casScore = Number(row.casScore);
@@ -83,7 +99,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           continue;
         }
       }
-      if (fundingValidity === undefined && casScore === undefined && esScore === undefined
+      if (fundingValidity === undefined && actualRenewDate === undefined && renewalApplicationNo === undefined
+        && casScore === undefined && esScore === undefined
         && typeof row.whitelist !== 'boolean' && typeof row.renew !== 'boolean') {
         results.push({ refCode: label, title, action: 'unchanged', message: 'No updatable values in this row.' });
         unchanged++;
@@ -97,7 +114,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         // Uploaded files carry both columns, so a course keeps matching even
         // after a renewal changed its current code.
         const found = await client.query(
-          `SELECT id, funding_validity, cas_score, es_score, renewed_status, whitelist_status
+          `SELECT id, funding_validity, actual_renew_date, renewal_application_no, cas_score, es_score, renewed_status, whitelist_status
            FROM public.course
            WHERE ($1 <> '' AND (new_course_code = $1 OR course_code = $1))
               OR ($2 <> '' AND course_code = $2)
@@ -136,6 +153,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           params.push(fundingValidity);
           setClauses.push(`funding_validity = $${params.length}`);
           logIncoming.fundingValidity = fundingValidity;
+        }
+        // actual_renew_date is a real DATE column — same local-midnight Date
+        // formatting caveat as funding_validity above.
+        const currentActualRenew = current.actual_renew_date instanceof Date
+          ? `${current.actual_renew_date.getFullYear()}-${String(current.actual_renew_date.getMonth() + 1).padStart(2, '0')}-${String(current.actual_renew_date.getDate()).padStart(2, '0')}`
+          : String(current.actual_renew_date ?? '').slice(0, 10);
+        if (actualRenewDate !== undefined && actualRenewDate !== currentActualRenew) {
+          params.push(actualRenewDate);
+          setClauses.push(`actual_renew_date = $${params.length}::date`);
+        }
+        if (renewalApplicationNo !== undefined && renewalApplicationNo !== String(current.renewal_application_no ?? '').trim()) {
+          params.push(renewalApplicationNo);
+          setClauses.push(`renewal_application_no = $${params.length}`);
         }
         if (casScore !== undefined && casScore !== (current.cas_score != null ? Number(current.cas_score) : null)) {
           params.push(casScore);

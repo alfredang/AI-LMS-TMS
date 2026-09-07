@@ -333,6 +333,10 @@ export interface Course {
   /** Start of the current funding validity window (course_code_history.valid_from of the code in force). */
   fundingValidityStart?: string | null;
   renewedStatus?: string;
+  /** Date the funding renewal application was actually made (course.actual_renew_date). */
+  actualRenewDate?: string | null;
+  /** SSG/TPGateway renewal application number (course.renewal_application_no). */
+  renewalApplicationNo?: string | null;
   casScore?: number | null;
   esScore?: number | null;
   isLeaderboardEnabled?: boolean;

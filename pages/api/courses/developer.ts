@@ -34,6 +34,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           (SELECT h.valid_from::text FROM course_code_history h
             WHERE h.course_id = c.id AND h.is_current LIMIT 1) AS funding_validity_start,
           c.renewed_status,
+          c.actual_renew_date::text AS actual_renew_date,
+          c.renewal_application_no,
           c.cas_score,
           c.es_score,
           c.whitelist_status,
@@ -82,6 +84,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       fundingValidity: row.funding_validity || null,
       fundingValidityStart: row.funding_validity_start || null,
       renewedStatus: row.renewed_status || null,
+      actualRenewDate: row.actual_renew_date || null,
+      renewalApplicationNo: row.renewal_application_no || null,
       casScore: row.cas_score != null ? parseFloat(row.cas_score) : null,
       esScore: row.es_score != null ? parseFloat(row.es_score) : null,
       whitelistStatus: row.whitelist_status || null,
