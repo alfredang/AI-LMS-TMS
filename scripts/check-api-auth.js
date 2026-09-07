@@ -15,11 +15,15 @@ const API = path.join(__dirname, '..', 'pages', 'api');
 // Routes that are public BY DESIGN. Adding to this list is a security
 // decision — justify it in the PR.
 const PUBLIC = new Set([
+  'mobile/auth.ts', // Public OTP entry point: registered learner/trainer only, DB rate limits and single-use codes.
   'health.ts', // liveness probe (no data)
   'app-version.ts',
   'favicon.png.ts',
   'auth/login.ts',
   'auth/send-otp.ts',
+  // Native Android OTP endpoints implement rate limits and restrict existing mobile roles.
+  'android/send-otp.ts',
+  'android/login.ts',
   'auth/forgot-password.ts',
   'auth/verify.ts', // validates the presented token itself
   'auth/logout.ts', // revokes the presented token itself

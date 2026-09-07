@@ -12,6 +12,8 @@ export async function register() {
             || (process.env.NODE_ENV === 'production' && process.env.ENABLE_APP_SCHEDULER !== 'false');
 
         if (schedulerEnabled) {
+            const { startAndroidReminderScheduler } = await import("./lib/android/reminders");
+            startAndroidReminderScheduler();
             try {
                 const { initScheduler } = await import('./lib/scheduler/scheduler');
                 await initScheduler();

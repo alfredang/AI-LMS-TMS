@@ -728,8 +728,14 @@ export async function processCompanyApplication(
     console.warn(
       `[CA] Course run ${existingRunId} on ${appId} is not in course_run — falling back to matched run ${run.courseRunId}`
     );
+    // The step name was missing here, so the message landed in the `step` slot
+    // and the warning body was `undefined` — which threw inside
+    // appendPipelineWarning and was swallowed by the .catch below. The result
+    // was a course run silently swapped with no warning recorded at all, which
+    // is the one thing this block exists to prevent.
     await appendPipelineWarning(
       appId,
+      'course_run_changed',
       `Course run changed from ${existingRunId} to ${run.courseRunId}: ${existingRunId} was not found in the LMS. Check this is the right run — two sittings of one course can share a start date.`
     ).catch(() => { /* advisory only; never break the pipeline over a warning */ });
   }
@@ -1070,7 +1076,7 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
     const { generateInvoicesForApplications } = await import('./quickbooks/createCompanyApplicationInvoice');
     const summary = await generateInvoicesForApplications(uniqueIds);
     console.log(
-      `[bulkProcessCompanyApplications] invoice sweep — generated ${summary.generated}, alreadyInvoiced ${summary.skippedAlreadyInvoiced}, notEnrolled ${summary.skippedNotEnrolled}, awaitingGrants ${summary.skippedAwaitingGrants}, failed ${summary.failed}`
+      `[bulkProcessCompanyApplications] invoice sweep — generated ${summary.generated}, replaced ${summary.replacedGroups}, billedByHand ${summary.skippedBilledManually}, alreadyInvoiced ${summary.skippedAlreadyInvoiced}, notEnrolled ${summary.skippedNotEnrolled}, awaitingGrants ${summary.skippedAwaitingGrants}, failed ${summary.failed}`
     );
     if (summary.skippedAwaitingGrants > 0) {
       console.warn(
@@ -1093,8 +1099,13 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
   // helper atomically claims invoice_sent_at, so a later manual click won't
   // double-send. Non-fatal — a send failure never breaks enrolment.
   try {
-    const { sendCompanyApplicationInvoiceEmails } = await import('./quickbooks/sendCompanyApplicationInvoiceEmails');
-    const emailSummary = await sendCompanyApplicationInvoiceEmails(uniqueIds, { skipDocVerification: true });
+    const { sendCompanyApplicationInvoiceEmails, caAutoSendRequiresDocVerification } =
+      await import('./quickbooks/sendCompanyApplicationInvoiceEmails');
+    // Whether the automatic send waits for verified supporting docs is now a
+    // setting rather than a hardcoded skip. Default keeps today's behaviour.
+    const emailSummary = await sendCompanyApplicationInvoiceEmails(uniqueIds, {
+      skipDocVerification: !(await caAutoSendRequiresDocVerification()),
+    });
     if (emailSummary.toggleDisabled) {
       console.log('[bulkProcessCompanyApplications] invoice email auto-send skipped — master switch OFF (held in test mode)');
     } else {
@@ -1109,13 +1120,23 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
     console.error('[bulkProcessCompanyApplications] invoice email auto-send crashed (non-fatal):', err);
   }
 
-  // Flip final per-row status. Rows still at 'pending' get classified by what
-  // actually landed in the DB. We ALSO re-classify rows wrongly stuck at
-  // 'failed' that have since acquired an enrolment_id — the first pass can stamp
-  // 'failed' (enrolment_id IS NULL branch) before SSG returns the id, and
-  // without this a later-successful row would flag "failed" forever with all
-  // stages green. Genuinely-failed rows (no enrolment_id) are not matched by the
-  // WHERE clause, so they correctly stay 'failed' with their original error.
+  await finaliseAutoEnrolStatus(uniqueIds);
+}
+
+/**
+ * Flip final per-row status. Rows still at 'pending' get classified by what
+ * actually landed in the DB. We ALSO re-classify rows wrongly stuck at
+ * 'failed' that have since acquired an enrolment_id — the first pass can stamp
+ * 'failed' (enrolment_id IS NULL branch) before SSG returns the id, and
+ * without this a later-successful row would flag "failed" forever with all
+ * stages green. Genuinely-failed rows (no enrolment_id) are not matched by the
+ * WHERE clause, so they correctly stay 'failed' with their original error.
+ *
+ * Shared with the stranded-row recovery sweep, which has to reach the same
+ * verdict from the same evidence — a second copy of this CASE would drift.
+ */
+async function finaliseAutoEnrolStatus(applicationIds: string[]): Promise<void> {
+  if (applicationIds.length === 0) return;
   await pool.query(
     `UPDATE public.company_application
         SET auto_enrol_status = CASE
@@ -1129,7 +1150,7 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
       WHERE id = ANY($1::uuid[])
         AND (auto_enrol_status = 'pending'
              OR (auto_enrol_status = 'failed' AND enrolment_id IS NOT NULL))`,
-    [uniqueIds]
+    [applicationIds]
   );
 }
 

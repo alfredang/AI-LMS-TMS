@@ -225,7 +225,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Auto-Assign Trainers** — Bot-driven trainer assignment with fallback logic
 - **Course Run Date Sync** — Automatic synchronization of dates with SSG
 - **Enrolment Backfill** — Batch sync of enrollment data from SSG
-- **Trainer WhatsApp Notifications** — Rate-gated queue consumed by the external WhatsApp Business agent: invitation/reminder nudges (max 5/day, 10:00–13:00 SGT) and upcoming-class reminders composed from the LMS record 3 days ahead (max 7/day, 13:00–17:00 SGT) — non-overlapping windows, all ≥15 min apart; plus a read-only `confirmed-classes` feed of authoritative class data
+- **Trainer WhatsApp Notifications** — Rate-gated queue consumed by the external WhatsApp Business agent: invitation/reminder nudges (max 5/day, 10:00–13:00 SGT) and upcoming-class reminders composed from the LMS record 3 days ahead (max 7/day, 13:00–17:00 SGT). An accepted trainer RSVP excludes every reminder with the same TGS and class date, and acceptance is checked again immediately before release. The channels use non-overlapping windows, all messages are ≥15 minutes apart, and a read-only `confirmed-classes` feed supplies authoritative class data.
 - **Funding Renewal Reminder** — Daily 8:00 AM SGT email listing funded courses whose funding validity has expired or expires within 1 month and are not yet marked renewed on the Course Funding Validity page (recipients via `FUNDING_REMINDER_RECIPIENTS`; nothing pending → no email)
 - **Auto-Send Emails** — Configurable auto-send for proforma invoices, confirmation emails, invoices, receipts, certificates, and thank-you emails
 
@@ -679,3 +679,11 @@ This project is proprietary software developed by Tertiary Infotech Pte Ltd. All
   <strong>Developed by Tertiary Infotech Pte Ltd</strong><br>
   <em>Empowering Training Excellence in Singapore</em>
 </p>
+
+## Native iOS companion
+
+The learner/trainer-only Tertiary Learning iPhone and iPad app uses the scoped mobile API, email OTP, courseware, a class calendar and APNs class reminders. See [iOS backend setup](docs/mobile-ios.md).
+
+### Native Android learner and trainer client
+
+The Android companion supports email OTP, scoped courseware, class calendars, and optional 3-day/1-day Firebase reminders. See [Android API and deployment notes](docs/android-app.md) for configuration and validation.

@@ -2,13 +2,15 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { resolveClassDurationDays } from '../../../lib/trainerInvitations';
 import { normalizeSgPhone, queueClassReminderWhatsApp } from '../../../lib/trainerWhatsapp';
+import { findAcknowledgedTrainerTgs, normalizeTgsCode, tgsDateKey } from '../../../lib/calendar/trainerAcknowledgement';
 
 /**
  * External API — Queue Class-Reminder WhatsApp Messages
  *
  * Daily (default 12:30 SGT, before the 13:00–17:00 sending window): for every
  * CONFIRMED course run starting `days_in_advance` days from today (default 3)
- * that has a trainer assigned in the LMS, composes the "upcoming class"
+ * that has a trainer assigned in the LMS and no accepted trainer attendee on
+ * any Calendar event with the same TGS/date, composes the "upcoming class"
  * reminder from the LMS's own record (title, code, run id, dates, duration,
  * mode, venue / Meet link) and queues one WhatsApp message per trainer in
  * trainer_whatsapp_notification (kind 'class_reminder').
@@ -18,7 +20,8 @@ import { normalizeSgPhone, queueClassReminderWhatsApp } from '../../../lib/train
  * the hard limits: max 7/day, 15 min apart (global), 13:00–17:00 SGT only.
  *
  * This replaces Tael's self-assembled reminders, which had wrong/blank class
- * info. Deduped per (run, trainer) so re-runs are safe.
+ * info. Acknowledgement exclusion is applied per (TGS, date); remaining
+ * reminders are deduped per (run, trainer) so re-runs are safe.
  *
  * POST /api/external/auto-queue-class-reminders
  * Headers: x-api-key: <EXTERNAL_API_KEY_FOR_CLAWDBOT>
@@ -63,6 +66,7 @@ interface QueueSummary {
   classes: number;
   queued: number;
   skippedDuplicates: number;
+  skippedAcknowledgedTgs: number;
   noPhone: number;
   errors: number;
   details: Array<{ courseRunId: string; trainer: string; result: string }>;
@@ -113,12 +117,29 @@ export async function runAutomation(): Promise<QueueSummary> {
   const targetDate = rows.rows[0]?.start_date
     || new Date(Date.now() + daysInAdvance * 86400000).toISOString().slice(0, 10);
 
-  let queued = 0, skippedDuplicates = 0, noPhone = 0, errors = 0;
+  const acknowledgedTgs = await findAcknowledgedTrainerTgs(rows.rows.map((row) => ({
+    runUuid: row.course_run_uuid,
+    courseCode: row.course_code,
+    dateIso: row.start_date,
+  })));
+
+  let queued = 0, skippedDuplicates = 0, skippedAcknowledgedTgs = 0, noPhone = 0, errors = 0;
   const details: QueueSummary['details'] = [];
 
   const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://lms-tms.tertiaryinfotech.com').replace(/\/$/, '');
 
   for (const row of rows.rows) {
+    const courseCode = normalizeTgsCode(row.course_code);
+    if (courseCode && acknowledgedTgs.has(tgsDateKey(courseCode, row.start_date))) {
+      skippedAcknowledgedTgs++;
+      details.push({
+        courseRunId: row.course_run_id,
+        trainer: (row.trainers || []).map((trainer: any) => trainer.name).filter(Boolean).join(', ') || 'N/A',
+        result: `skipped_acknowledged_tgs:${courseCode}`,
+      });
+      continue;
+    }
+
     const { label: durationDays } = resolveClassDurationDays(row);
     const hours = (Number(row.training_hours) || 0) + (Number(row.assessment_hours) || 0);
     const durationLabel = durationDays !== 'N/A' && hours > 0
@@ -171,10 +192,10 @@ export async function runAutomation(): Promise<QueueSummary> {
   const summary: QueueSummary = {
     runId, startedAt, daysInAdvance, targetDate,
     classes: rows.rows.length,
-    queued, skippedDuplicates, noPhone, errors, details,
+    queued, skippedDuplicates, skippedAcknowledgedTgs, noPhone, errors, details,
   };
   console.log(
-    `📱 [auto-queue-class-reminders] ${runId} — target=${targetDate} classes=${summary.classes} queued=${queued} dup=${skippedDuplicates} noPhone=${noPhone} errors=${errors}`
+    `📱 [auto-queue-class-reminders] ${runId} — target=${targetDate} classes=${summary.classes} queued=${queued} acknowledged_tgs=${skippedAcknowledgedTgs} dup=${skippedDuplicates} noPhone=${noPhone} errors=${errors}`
   );
   return summary;
 }

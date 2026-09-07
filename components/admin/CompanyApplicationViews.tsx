@@ -556,6 +556,10 @@ const CaEmailToggleBanner: React.FC = () => {
   const [emailToggleSaving, setEmailToggleSaving] = useState(false);
   const [invoiceEmailCc, setInvoiceEmailCc] = useState('');
   const [invoiceEmailBcc, setInvoiceEmailBcc] = useState('');
+  // The automatic send after invoicing has always gone out WITHOUT waiting for
+  // supporting-doc verification, while the manual button refuses without it.
+  // That difference used to be hardcoded where nobody could see it.
+  const [autoSendRequiresDocs, setAutoSendRequiresDocs] = useState(false);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -565,6 +569,7 @@ const CaEmailToggleBanner: React.FC = () => {
         if (ctrl.signal.aborted) return;
         if (j?.success) {
           setEmailToggleOn(!!j.value);
+          setAutoSendRequiresDocs(!!j.requiresDocVerification);
           setInvoiceEmailCc(j.cc || '');
           setInvoiceEmailBcc(j.bcc || '');
         }
@@ -587,6 +592,26 @@ const CaEmailToggleBanner: React.FC = () => {
       if (!json.success) throw new Error(json.error || 'Toggle failed');
     } catch (err) {
       setEmailToggleOn(!next);
+      alert(`Failed to update setting: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setEmailToggleSaving(false);
+    }
+  };
+
+  const handleAutoSendDocsToggle = async () => {
+    const next = !autoSendRequiresDocs;
+    setEmailToggleSaving(true);
+    setAutoSendRequiresDocs(next);
+    try {
+      const res = await fetch('/api/admin/ca-email-toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requiresDocVerification: next }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Save failed');
+    } catch (err) {
+      setAutoSendRequiresDocs(!next);
       alert(`Failed to update setting: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setEmailToggleSaving(false);
@@ -658,6 +683,33 @@ const CaEmailToggleBanner: React.FC = () => {
           <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${emailToggleOn ? 'translate-x-6' : 'translate-x-1'}`} />
         </button>
       </div>
+
+      {/* The two send paths follow different rules, and until now only one of
+          them said so. The manual button always waits for verified supporting
+          docs; the automatic send after invoicing never did. Surfacing it here
+          makes the difference a decision instead of a surprise. */}
+      {emailToggleOn && (
+        <div className="mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-800/60 flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">
+              Automatic send waits for verified supporting docs: {autoSendRequiresDocs ? 'YES' : 'NO'}
+            </p>
+            <p className="text-[11px] mt-0.5 text-emerald-700 dark:text-emerald-300 max-w-2xl">
+              {autoSendRequiresDocs
+                ? 'The invoice email sent automatically after enrolment now follows the same rule as the manual button — nothing goes out until that learner’s documents are verified.'
+                : 'The invoice email sent automatically after enrolment goes out as soon as the invoice exists, even if supporting docs have not been checked. The manual Send Invoice Email button still requires them.'}
+            </p>
+          </div>
+          <button
+            onClick={handleAutoSendDocsToggle}
+            disabled={emailToggleSaving}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${autoSendRequiresDocs ? 'bg-emerald-500 focus:ring-emerald-500' : 'bg-gray-300 dark:bg-gray-600 focus:ring-amber-500'} ${emailToggleSaving ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
+            aria-label="Toggle whether the automatic invoice email waits for supporting-doc verification"
+          >
+            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${autoSendRequiresDocs ? 'translate-x-5' : 'translate-x-1'}`} />
+          </button>
+        </div>
+      )}
       <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
         <label className="block">
           <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">CC recipients</span>
@@ -812,9 +864,13 @@ export const UploadCompanyApplicationView: React.FC = () => {
           if (status === '' || status === 'pending') stillPending++;
           if (hasError) failedRows.push(traineeName);
           if (isIneligible && !hasGrantId) ineligibleNames.push(traineeName);
+          // A learner billed by hand is not awaiting anything — Finance is
+          // adding them to an invoice that already exists in QuickBooks, so
+          // their empty Invoice ID is the expected end state, not a stall.
+          const isBilledByHand = isCheckedValue(row['Billed Manually']);
           if (!hasEnrolment) notEnrolled.push(traineeName);
           else if (!hasGrantId && !isIneligible) awaitingGrant.push(traineeName);
-          else if (!hasInvoice) awaitingInvoice++;
+          else if (!hasInvoice && !isBilledByHand) awaitingInvoice++;
 
           // Grant invoice is "complete" only when the QBO invoice has
           // actually been created — OR when the learner is explicitly
@@ -2298,11 +2354,15 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const notEnrolled = Number(data.skippedNotEnrolled) || 0;
       const awaitingGrants = Number(data.skippedAwaitingGrants) || 0;
       const failed = Number(data.failed) || 0;
+      const replaced = Number(data.replacedGroups) || 0;
+      const billedByHand = Number(data.skippedBilledManually) || 0;
       // The backend counts per group, and in per-learner mode a group IS one
       // learner — so name the unit after the mode the user actually picked.
       const unit = invoiceMode === 'per-learner' ? 'learner' : 'group';
       const parts: string[] = [];
       if (generated) parts.push(`${generated} invoice${generated === 1 ? '' : 's'} generated`);
+      if (replaced) parts.push(`${replaced} existing invoice${replaced === 1 ? '' : 's'} replaced to cover a late joiner`);
+      if (billedByHand) parts.push(`${billedByHand} learner${billedByHand === 1 ? '' : 's'} billed by hand — left for QuickBooks`);
       if (alreadyInvoiced) parts.push(`${alreadyInvoiced} ${unit}${alreadyInvoiced === 1 ? '' : 's'} already invoiced — left alone`);
       if (notEnrolled) parts.push(`${notEnrolled} ${unit}${notEnrolled === 1 ? '' : 's'} skipped (not yet enrolled with SSG)`);
       if (awaitingGrants) parts.push(`${awaitingGrants} ${unit}${awaitingGrants === 1 ? '' : 's'} awaiting grants — click "Sync Grants" after stakeholders apply in the SSG portal`);
@@ -2310,7 +2370,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
 
       // Treat the all-already-invoiced case as an explicit block: nothing
       // happened because every selected group already has an invoice.
-      if (generated === 0 && failed === 0 && alreadyInvoiced > 0 && notEnrolled === 0 && awaitingGrants === 0) {
+      if (generated === 0 && failed === 0 && replaced === 0 && billedByHand === 0 && alreadyInvoiced > 0 && notEnrolled === 0 && awaitingGrants === 0) {
         setInvoiceMessage(
           `⚠ ${alreadyInvoiced} ${unit}${alreadyInvoiced === 1 ? '' : 's'} already invoiced — cannot regenerate. Open the existing invoice via the Tax Invoice column, or delete it in QBO first if you need to regenerate.`
         );
@@ -2348,6 +2408,10 @@ export const ViewCompanyApplicationView: React.FC = () => {
     const missingDocVerified: string[] = [];
     for (const r of selectedRows) {
       const learnerLabel = String(r['Trainee FULL Name as on government ID*'] || r.id || '').trim() || '(unnamed)';
+      // Billed by hand — there is no LMS invoice to email, and there never
+      // will be. Reporting them as "missing tax invoice" would send the admin
+      // to Generate Invoice, which is the duplicate they chose to avoid.
+      if (isCheckedValue(r['Billed Manually'])) continue;
       const hasInvoice = hasValue(r['Invoice ID']) && hasValue(r['Invoice Doc Number']);
       const hasInvoicePdf = hasValue(r['Invoice Drive Link']) || hasValue(r['Invoice Drive File ID']);
       if (!hasInvoice || !hasInvoicePdf) {
@@ -2463,6 +2527,27 @@ export const ViewCompanyApplicationView: React.FC = () => {
       void reloadRows();
     } catch (err) {
       alert(`Failed to update grant eligibility: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
+  // Un-mark a learner that was enrolled as "billed by hand". Only ever used to
+  // correct a mistake — the flag is normally set at enrolment time, when the
+  // admin chose to add them to an invoice that already existed. Clearing it
+  // puts them back in the queue for a normal invoice.
+  const clearManualBilling = async (applicationId: string) => {
+    try {
+      const res = await fetch('/api/admin/ca-toggle-manual-billing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId, billedManually: false }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `Request failed (${res.status})`);
+      }
+      void reloadRows();
+    } catch (err) {
+      alert(`Failed to update billing: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -2630,6 +2715,36 @@ export const ViewCompanyApplicationView: React.FC = () => {
     [rows],
   );
 
+  // Companies holding more than one invoice for the same class. Derived from
+  // the rows already on screen rather than a new endpoint, and keyed on
+  // (employer, course run) — the same pair the invoice itself is grouped by.
+  const splitInvoiceGroups = useMemo(() => {
+    const byGroup = new Map<string, { employer: string; courseRunId: string; docNumbers: Set<string> }>();
+    for (const r of rows) {
+      const invoiceId = String(r['Invoice ID'] || '').trim();
+      if (!invoiceId) continue;
+      const uen = String(r['Employer UEN*'] || '').trim();
+      const runId = String(r['Course Run ID'] || '').trim();
+      if (!uen || !runId) continue;
+      const key = `${uen}::${runId}`;
+      const entry = byGroup.get(key) ?? {
+        employer: String(r['Employer Organization Name*'] || '').trim() || uen,
+        courseRunId: runId,
+        docNumbers: new Set<string>(),
+      };
+      entry.docNumbers.add(String(r['Invoice Doc Number'] || '').trim() || invoiceId);
+      byGroup.set(key, entry);
+    }
+    return Array.from(byGroup.entries())
+      .filter(([, v]) => v.docNumbers.size > 1)
+      .map(([key, v]) => ({
+        key,
+        employer: v.employer,
+        courseRunId: v.courseRunId,
+        docNumbers: Array.from(v.docNumbers).sort(),
+      }));
+  }, [rows]);
+
   const filteredRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const queryMatched = query
@@ -2780,6 +2895,43 @@ export const ViewCompanyApplicationView: React.FC = () => {
       </div>
 
       <CaEmailToggleBanner />
+
+      {/* A company holding more than one invoice for the same class. It happens
+          legitimately — two upload batches, per-learner mode, a late joiner —
+          and everything downstream copes, but until now nothing ever said so.
+          Finding out meant noticing two rows in the Invoice # column. */}
+      {splitInvoiceGroups.length > 0 && (
+        <div className="mb-6 p-4 rounded-lg border-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 flex-shrink-0 rounded-full bg-amber-100 dark:bg-amber-800/40 flex items-center justify-center">
+              <Icon name={IconName.Warning} className="w-5 h-5 text-amber-600 dark:text-amber-300" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                {splitInvoiceGroups.length} compan{splitInvoiceGroups.length === 1 ? 'y has' : 'ies have'} more than one invoice for the same class
+              </p>
+              <p className="text-xs mt-0.5 text-amber-700 dark:text-amber-300">
+                The amounts are correct — each learner is billed once. But the employer receives several
+                invoices for one class, and each one is emailed separately.
+              </p>
+              <ul className="mt-2 space-y-1">
+                {splitInvoiceGroups.slice(0, 6).map(g => (
+                  <li key={g.key} className="text-xs text-amber-800 dark:text-amber-200">
+                    <span className="font-semibold">{g.employer}</span>
+                    <span className="opacity-75"> · run {g.courseRunId} · </span>
+                    <span className="font-mono">{g.docNumbers.join(', ')}</span>
+                  </li>
+                ))}
+                {splitInvoiceGroups.length > 6 && (
+                  <li className="text-xs text-amber-700 dark:text-amber-300">
+                    …and {splitInvoiceGroups.length - 6} more.
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* QuickBooks company lookup — check BEFORE enrolling whether an employer
           is already a QBO customer. A company that isn't in QuickBooks yet
@@ -3115,13 +3267,28 @@ export const ViewCompanyApplicationView: React.FC = () => {
           const withInvoice = selectedRows.filter(r => hasValue(r['Invoice ID'])).length;
           const withGrantInvoice = selectedRows.filter(r => hasValue(r['Grant Invoice ID'])).length;
           const allInvoiced = totalSelected > 0 && withInvoice === totalSelected;
-          const groupCount = new Set(
-            selectedRows.map(r => {
-              const uen = String(r['Employer UEN*'] || '').trim();
-              const runId = String(r['Course Run ID'] || '').trim();
-              return `${uen}::${runId}`;
-            })
-          ).size;
+          const groupKeyOf = (r: any) => {
+            const uen = String(r['Employer UEN*'] || '').trim();
+            const runId = String(r['Course Run ID'] || '').trim();
+            return `${uen}::${runId}`;
+          };
+          const groupCount = new Set(selectedRows.map(groupKeyOf)).size;
+          // Invoices these employers already hold for this course run, sitting
+          // on rows you did NOT tick. This is the late joiner blind spot: tick
+          // only the new learner and every count above reads zero, so the
+          // popup used to say nothing at all while about to cut a second
+          // invoice for a class that already had one.
+          const selectedGroupKeys = new Set(selectedRows.map(groupKeyOf));
+          const priorInvoiceDocs = Array.from(new Set(
+            rows
+              .filter(r =>
+                selectedGroupKeys.has(groupKeyOf(r)) &&
+                !selectedIds.has(String(r.id || '')) &&
+                hasValue(r['Invoice ID'])
+              )
+              .map(r => String(r['Invoice Doc Number'] || r['Invoice ID'] || '').trim())
+              .filter(Boolean)
+          ));
           // Rows that will actually be billed — already-invoiced ones are left
           // alone, so they don't count toward the invoice tally either way.
           const toBill = totalSelected - withInvoice;
@@ -3204,6 +3371,18 @@ export const ViewCompanyApplicationView: React.FC = () => {
                   </span>
                 </div>
               </div>
+              {priorInvoiceDocs.length > 0 && (
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200 dark:ring-amber-800/60 p-2.5 text-xs text-amber-700 dark:text-amber-300 inline-flex items-start gap-1.5">
+                  <Icon name={IconName.Warning} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <span>
+                    This employer already has {priorInvoiceDocs.length === 1 ? 'an invoice' : `${priorInvoiceDocs.length} invoices`} for this course
+                    run — <span className="font-mono font-semibold">{priorInvoiceDocs.join(', ')}</span>.
+                    {' '}Generating now creates <span className="font-semibold">another separate invoice</span>. To put this learner on the
+                    existing one instead, add them in QuickBooks and mark them
+                    {' '}<span className="font-semibold">Billed by hand</span> on the View page.
+                  </span>
+                </div>
+              )}
               {allInvoiced ? (
                 <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-200 dark:ring-amber-800/60 p-2.5 text-xs text-amber-700 dark:text-amber-300 inline-flex items-start gap-1.5">
                   <Icon name={IconName.Warning} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
@@ -3670,6 +3849,22 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       }
 
                       if (!hasAny) {
+                        // Billed by hand: there is no LMS invoice and there
+                        // never will be. A bare dash reads as "missing", which
+                        // is what sends someone to Generate Invoice and creates
+                        // the duplicate the admin chose to avoid.
+                        if (!isGrant && isCheckedValue(row['Billed Manually'])) {
+                          return (
+                            <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap align-middle">
+                              <span
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                                title="Added to an existing invoice in QuickBooks by hand — the LMS will never invoice this learner."
+                              >
+                                In QuickBooks
+                              </span>
+                            </td>
+                          );
+                        }
                         return <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap text-gray-400 align-middle">-</td>;
                       }
 
@@ -3711,6 +3906,27 @@ export const ViewCompanyApplicationView: React.FC = () => {
                       const taxInvoicePresent = !!(driveFileId || driveLink) && !taxInvoiceBroken;
                       const rowSpan = groupMeta.size > 1 ? groupMeta.size : undefined;
                       if (!display || !taxInvoicePresent) {
+                        if (isCheckedValue(row['Billed Manually'])) {
+                          const manualRef = (row['Billed Manually Invoice Ref'] || '').trim();
+                          return (
+                            <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap align-middle">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm('Un-mark this learner as billed by hand? They will be invoiced normally by the LMS, which may create a second invoice for this class.')) {
+                                    void clearManualBilling(String(row.id || ''));
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                                title={manualRef
+                                  ? `Billed by hand on invoice ${manualRef}. Click to un-mark.`
+                                  : 'Billed by hand in QuickBooks. Click to un-mark.'}
+                              >
+                                By hand{manualRef ? <span className="font-mono opacity-80">· {manualRef}</span> : null}
+                              </button>
+                            </td>
+                          );
+                        }
                         return <td key={column} rowSpan={rowSpan} className="px-2 py-1.5 whitespace-nowrap text-gray-400 align-middle">-</td>;
                       }
                       return (

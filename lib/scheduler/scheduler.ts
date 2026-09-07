@@ -118,6 +118,14 @@ async function seedDefaults() {
         default_enabled?: boolean;
     }> = [
         {
+            id: 'mobile_class_reminders',
+            name: 'Mobile Class Reminders',
+            description: 'APNs reminders for enrolled learners and assigned trainers, 3 days and 1 day before each active class session.',
+            cron_expression: '*/5 * * * *',
+            api_endpoint: '/api/mobile/send-reminders',
+            default_enabled: process.env.MOBILE_APNS_ENABLED === 'true',
+        },
+        {
             id: 'auto_create_trainer_folders',
             name: 'Auto Create Assessment Records',
             description: 'Creates assessment folders in Google Drive for all course runs starting today. Trainer names are sourced from local DB (course_run_trainer / assigned_trainer_name / trainer_profile).',
@@ -271,7 +279,7 @@ async function seedDefaults() {
         {
             id: 'auto_queue_class_reminder_whatsapp',
             name: 'Queue Class-Reminder WhatsApp (3 days ahead)',
-            description: 'Daily at 12:30 PM SGT: for every CONFIRMED class starting days_in_advance days from today (default 3) with a trainer assigned in the LMS, composes the upcoming-class reminder from the LMS record (title, code, run ID, dates, duration, mode, venue/Meet link) and queues one WhatsApp message per trainer. Delivery is pulled by the OpenClaw WhatsApp agent via the rate-gated queue API (max 7/day, 15 min apart, 1:00–5:00 PM SGT only).',
+            description: 'Daily at 12:30 PM SGT: for every CONFIRMED class starting days_in_advance days from today (default 3) with a trainer assigned in the LMS, excludes the whole TGS/date when a trainer has accepted a matching Google Calendar invite, then composes the upcoming-class reminder from the LMS record (title, code, run ID, dates, duration, mode, venue/Meet link) and queues one WhatsApp message per remaining trainer. Delivery rechecks acceptance and is pulled by the OpenClaw WhatsApp agent via the rate-gated queue API (max 7/day, 15 min apart, 1:00–5:00 PM SGT only).',
             cron_expression: '30 12 * * *', // 12:30 PM SGT daily
             api_endpoint: '/api/external/auto-queue-class-reminders',
             days_in_advance: 3,

@@ -65,6 +65,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (!Array.isArray(rows)) return res.status(400).json({ message: 'rows must be an array' });
   if (rows.length === 0) return res.status(200).json({ inserted: 0 });
 
+  // How these learners should be billed, chosen in the Enrol Learners popup
+  // when the employer already has an invoice for this course run:
+  //   auto       — normal pipeline (this is also every Excel upload)
+  //   enrol-only — never invoice them here; Finance adds them to the existing
+  //                invoice in QuickBooks by hand
+  //   replace    — delete the existing invoice and reissue one covering
+  //                everyone, once the group is billable
+  // Rejected rather than defaulted when unrecognised: billing is not something
+  // to guess at.
+  const billingMode = String(req.body?.billing?.mode || 'auto').trim();
+  if (!['auto', 'enrol-only', 'replace'].includes(billingMode)) {
+    return res.status(400).json({ message: "billing.mode must be 'auto', 'enrol-only' or 'replace'" });
+  }
+  const billingInvoiceRef = String(req.body?.billing?.invoiceRef || '').trim();
+
   try {
     await ensureCompanyApplicationsTable();
 
@@ -231,6 +246,25 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           }
         }
       }
+    }
+
+    // Stamp the billing choice before the pipeline starts. The invoice sweep at
+    // the end of bulkProcessCompanyApplications reads these columns, so setting
+    // them after the background job is kicked off would be a race the invoice
+    // usually wins.
+    if (queuedIds.length > 0 && billingMode !== 'auto') {
+      await pool.query(
+        `UPDATE public.company_application
+            SET billed_manually             = $2,
+                billed_manually_invoice_ref = CASE WHEN $2 THEN NULLIF($4, '') ELSE NULL END,
+                replace_group_invoice       = $3,
+                updated_at                  = now()
+          WHERE id = ANY($1::uuid[])`,
+        [queuedIds, billingMode === 'enrol-only', billingMode === 'replace', billingInvoiceRef]
+      );
+      console.log(
+        `[upload-company-applications] billing mode '${billingMode}' applied to ${queuedIds.length} row(s)`
+      );
     }
 
     if (queuedIds.length > 0) {

@@ -37,7 +37,13 @@ async function ensureColumns() {
     ALTER TABLE training_provider
       ADD COLUMN IF NOT EXISTS ca_auto_send_invoice_email boolean DEFAULT false,
       ADD COLUMN IF NOT EXISTS ca_invoice_email_cc text,
-      ADD COLUMN IF NOT EXISTS ca_invoice_email_bcc text
+      ADD COLUMN IF NOT EXISTS ca_invoice_email_bcc text,
+      -- Whether the AUTOMATIC send after invoicing waits for supporting-doc
+      -- verification. The manual "Send Invoice Email" button has always
+      -- required it; the pipeline never did. That gap was hardcoded and
+      -- invisible — this makes it a visible choice. Default false keeps the
+      -- behaviour the pipeline has always had.
+      ADD COLUMN IF NOT EXISTS ca_auto_send_requires_doc_verification boolean DEFAULT false
   `);
 }
 
@@ -63,6 +69,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const result = await pool.query(
         `SELECT
             COALESCE(ca_auto_send_invoice_email, false) AS value,
+            COALESCE(ca_auto_send_requires_doc_verification, false) AS requires_doc_verification,
             ca_invoice_email_cc AS cc,
             ca_invoice_email_bcc AS bcc
          FROM training_provider
@@ -72,6 +79,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(200).json({
         success: true,
         value: !!result.rows[0]?.value,
+        requiresDocVerification: !!result.rows[0]?.requires_doc_verification,
         cc: result.rows[0]?.cc ?? '',
         bcc: result.rows[0]?.bcc ?? '',
         ccSource: 'company_application',
@@ -80,9 +88,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     if (req.method === 'POST') {
-      const { value, cc, bcc, importFromQuickBooks } = req.body || {};
+      const { value, cc, bcc, importFromQuickBooks, requiresDocVerification } = req.body || {};
       if (value !== undefined && typeof value !== 'boolean') {
         return res.status(400).json({ success: false, error: 'value must be a boolean when provided' });
+      }
+      if (requiresDocVerification !== undefined && typeof requiresDocVerification !== 'boolean') {
+        return res.status(400).json({ success: false, error: 'requiresDocVerification must be a boolean when provided' });
       }
 
       if (importFromQuickBooks === true) {
@@ -110,20 +121,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const normalizedCc = shouldUpdateCc ? normalizeRecipientList(cc) : null;
       const normalizedBcc = shouldUpdateBcc ? normalizeRecipientList(bcc) : null;
 
-      if (value !== undefined || shouldUpdateCc || shouldUpdateBcc) {
+      if (value !== undefined || shouldUpdateCc || shouldUpdateBcc || requiresDocVerification !== undefined) {
         await pool.query(
           `UPDATE training_provider
            SET ca_auto_send_invoice_email = COALESCE($1::boolean, ca_auto_send_invoice_email),
                ca_invoice_email_cc = CASE WHEN $2::boolean THEN $3::text ELSE ca_invoice_email_cc END,
                ca_invoice_email_bcc = CASE WHEN $4::boolean THEN $5::text ELSE ca_invoice_email_bcc END,
+               ca_auto_send_requires_doc_verification = COALESCE($6::boolean, ca_auto_send_requires_doc_verification),
                updated_at = NOW()`,
-          [value, shouldUpdateCc, normalizedCc, shouldUpdateBcc, normalizedBcc]
+          [value, shouldUpdateCc, normalizedCc, shouldUpdateBcc, normalizedBcc, requiresDocVerification]
         );
       }
 
       const result = await pool.query(
         `SELECT
             COALESCE(ca_auto_send_invoice_email, false) AS value,
+            COALESCE(ca_auto_send_requires_doc_verification, false) AS requires_doc_verification,
             COALESCE(ca_invoice_email_cc, '') AS cc,
             COALESCE(ca_invoice_email_bcc, '') AS bcc
          FROM training_provider
@@ -134,6 +147,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(200).json({
         success: true,
         value: !!result.rows[0]?.value,
+        requiresDocVerification: !!result.rows[0]?.requires_doc_verification,
         cc: result.rows[0]?.cc || '',
         bcc: result.rows[0]?.bcc || '',
       });

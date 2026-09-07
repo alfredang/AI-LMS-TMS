@@ -33,6 +33,8 @@ import {
   createCompanyApplicationGrantInvoice,
 } from './createCompanyApplicationGrantInvoice';
 import { driveFileExists, uploadInvoicePdfToDrive } from '../services/invoiceDriveUpload';
+import { findEnrolmentsAwaitingGrants } from '../services/caExistingInvoice';
+import { deleteQboInvoice, readQboInvoiceLifecycle } from './voidCompanyApplicationInvoice';
 import {
   buildInvoiceLineText,
   COURSE_LINE_HEADING_PREFIX,
@@ -980,9 +982,15 @@ export async function createCompanyApplicationInvoice(
   // but failed to persist locally, reuse it instead of creating a duplicate.
   //   1. Same DocNumber today
   //   2. LIKE search by the stable -{suffix} so a retry on a later day matches
-  const existingToday = await qboFindInvoiceByDocNumber(undefined, docNumber);
+  // `ignoreVoided` matters as soon as an invoice can be reissued: a voided
+  // invoice keeps its DocNumber, so without this the search would adopt the
+  // corpse and hand a zero-value invoice back to the whole group. The late
+  // joiner replacement path deletes rather than voids for the same reason, but
+  // an invoice voided by hand in QuickBooks would hit this too. Matches what
+  // createDirectApplicationInvoice already does.
+  const existingToday = await qboFindInvoiceByDocNumber(undefined, docNumber, { ignoreVoided: true });
   const existingBySuffix = !existingToday?.id && suffix
-    ? await qboFindInvoiceByDocNumberLike(undefined, `TC%-${suffix}`)
+    ? await qboFindInvoiceByDocNumberLike(undefined, `TC%-${suffix}`, { ignoreVoided: true })
     : null;
   const orphan = existingToday ?? existingBySuffix;
   if (orphan?.id) {
@@ -1066,6 +1074,10 @@ export interface GenerateInvoicesResult {
   skippedNotEnrolled: number;
   /** Groups where ≥1 learner is enrolled but has no positive ssg_grants row yet. */
   skippedAwaitingGrants: number;
+  /** Learners the admin chose to bill by hand ("Enrol only") — never invoiced here. */
+  skippedBilledManually: number;
+  /** Groups where an existing invoice was deleted and reissued to cover a late joiner. */
+  replacedGroups: number;
   failed: number;
   errors: Array<{
     groupKey: string;
@@ -1104,28 +1116,15 @@ function isCustomerLookupError(message: string): boolean {
 export type InvoiceGenerationMode = 'consolidated' | 'per-learner';
 
 /**
- * Group the given application IDs and generate one QBO invoice per group —
- * per (employer_uen, course_run_id) by default, or per learner when
- * `mode: 'per-learner'`. Idempotent — rows that already have an `invoice_id`
- * are never re-billed, only self-healed.
+ * Every column the invoice builder needs for a Company Application row, with the
+ * course run and course joined on.
+ *
+ * Extracted because the replacement path has to load rows the caller never
+ * mentioned — the late joiner's already-invoiced classmates — and they must
+ * arrive in exactly the same shape, course fee and titles included, or the
+ * reissued invoice is built from half a row.
  */
-export async function generateInvoicesForApplications(
-  applicationIds: string[],
-  mode: InvoiceGenerationMode = 'consolidated'
-): Promise<GenerateInvoicesResult> {
-  const result: GenerateInvoicesResult = {
-    generated: 0,
-    skipped: 0,
-    skippedAlreadyInvoiced: 0,
-    skippedNotEnrolled: 0,
-    skippedAwaitingGrants: 0,
-    failed: 0,
-    errors: [],
-  };
-  if (!applicationIds.length) return result;
-
-  const rowsRes = await pool.query(
-    `SELECT
+const CA_INVOICE_ROW_SELECT = `SELECT
        ca.id,
        ca.trainee_full_name,
        ca.trainee_nric,
@@ -1137,6 +1136,10 @@ export async function generateInvoicesForApplications(
        ca.grant_invoice_doc_number,
        ca.grant_invoice_drive_file_id,
        ca.grant_ineligible,
+       ca.billed_manually,
+       ca.billed_manually_invoice_ref,
+       ca.replace_group_invoice,
+       ca.invoice_sent_at,
        ca.employer_org_name,
        ca.employer_uen,
        ca.employer_contact_email,
@@ -1153,7 +1156,33 @@ export async function generateInvoicesForApplications(
      LEFT JOIN public.course_run cr
        ON cr.course_run_id::text = ca.course_run_id::text
        OR cr.id::text = ca.course_run_id::text
-     LEFT JOIN public.course c ON c.id = cr.course_id
+     LEFT JOIN public.course c ON c.id = cr.course_id`;
+
+/**
+ * Group the given application IDs and generate one QBO invoice per group —
+ * per (employer_uen, course_run_id) by default, or per learner when
+ * `mode: 'per-learner'`. Idempotent — rows that already have an `invoice_id`
+ * are never re-billed, only self-healed.
+ */
+export async function generateInvoicesForApplications(
+  applicationIds: string[],
+  mode: InvoiceGenerationMode = 'consolidated'
+): Promise<GenerateInvoicesResult> {
+  const result: GenerateInvoicesResult = {
+    generated: 0,
+    skipped: 0,
+    skippedAlreadyInvoiced: 0,
+    skippedNotEnrolled: 0,
+    skippedAwaitingGrants: 0,
+    skippedBilledManually: 0,
+    replacedGroups: 0,
+    failed: 0,
+    errors: [],
+  };
+  if (!applicationIds.length) return result;
+
+  const rowsRes = await pool.query(
+    `${CA_INVOICE_ROW_SELECT}
      WHERE ca.id = ANY($1::uuid[])
      ORDER BY ca.created_at, ca.id`,
     [applicationIds]
@@ -1224,8 +1253,115 @@ export async function generateInvoicesForApplications(
       // never be billed; and when the uninvoiced learner happened to sort
       // first, the new invoice_id was written over the sibling's — re-billing
       // someone who already had an invoice.
-      const invoicedRows = rows.filter(r => String(r.invoice_id || '').trim());
-      const pendingRows = rows.filter(r => !String(r.invoice_id || '').trim());
+      let invoicedRows = rows.filter(r => String(r.invoice_id || '').trim());
+      const unbilledRows = rows.filter(r => !String(r.invoice_id || '').trim());
+
+      // "Enrol only" learners are being added to an existing invoice by Finance
+      // in QuickBooks. They are not waiting to be billed — they are already
+      // accounted for — so they must never fall into pendingRows and cut a
+      // second invoice. This flag is the only thing that distinguishes them
+      // from a genuinely unbilled learner.
+      const manualRows = unbilledRows.filter(r => r.billed_manually === true);
+      let pendingRows = unbilledRows.filter(r => r.billed_manually !== true);
+      if (manualRows.length > 0) {
+        result.skippedBilledManually += manualRows.length;
+        console.log(
+          `[ca-invoice] Group ${key}: ${manualRows.length} learner(s) billed by hand — left for QuickBooks`
+        );
+        // They still earn a grant invoice billed to WSG. That claim is ours to
+        // make whether or not the employer's tax invoice was cut here, so
+        // skipping it would quietly lose real money. It cites the invoice
+        // Finance is adding them to, keeping the PO# cross-reference right.
+        for (const r of manualRows) {
+          await processGrantInvoicesForGroup([r], String(r.billed_manually_invoice_ref || '').trim());
+        }
+      }
+
+      // The caller normally passes ONLY the learner just enrolled, so the
+      // classmates already sitting on the employer's invoice are not in `rows`
+      // at all. Without loading them the replacement finds nothing to replace
+      // and falls through to cutting a second invoice — precisely the outcome
+      // the admin chose against. Widening the read is safe here: the advisory
+      // lock is keyed on the whole (employer, course-run), not on the ids that
+      // happened to be selected.
+      if (mode === 'consolidated' && pendingRows.some(r => r.replace_group_invoice === true)) {
+        const employerUen = String(pendingRows[0]?.employer_uen || '').trim();
+        const runId = String(pendingRows[0]?.course_run_id || '').trim();
+        if (employerUen && runId) {
+          const siblings = await pool.query(
+            `${CA_INVOICE_ROW_SELECT}
+             WHERE LOWER(TRIM(ca.employer_uen)) = LOWER($1)
+               AND TRIM(ca.course_run_id)       = $2
+               AND COALESCE(ca.invoice_id, '') <> ''
+               AND NOT (ca.id = ANY($3::uuid[]))
+             ORDER BY ca.created_at, ca.id`,
+            [employerUen, runId, rows.map(r => r.id)]
+          );
+          if (siblings.rows.length > 0) {
+            invoicedRows = [...invoicedRows, ...siblings.rows];
+            console.log(
+              `[ca-invoice] Group ${key}: pulled in ${siblings.rows.length} already-invoiced classmate(s) for the replacement`
+            );
+          }
+        }
+      }
+
+      // Late joiner replacement. The admin asked for ONE invoice covering
+      // everyone instead of a second one, and this is the first moment that can
+      // actually happen — at the enrolment click the newcomer had no enrolment
+      // reference and no grant, so there was nothing to reissue with.
+      if (invoicedRows.length > 0 && pendingRows.some(r => r.replace_group_invoice === true)) {
+        const outcome = await attemptGroupInvoiceReplacement({
+          groupKey: key,
+          invoicedRows,
+          pendingRows,
+        });
+
+        if (outcome.status === 'hold') {
+          // Deliberately do nothing at all. Deleting now — before the group can
+          // actually be re-billed — would leave the employer with no invoice
+          // until SSG grants the newcomer, which can take days. Retried on the
+          // next sweep, with replace_group_invoice still set.
+          console.log(`[ca-invoice] Group ${key}: holding replacement — ${outcome.reason}`);
+          result.skipped++;
+          result.skippedAwaitingGrants++;
+          continue;
+        }
+
+        if (outcome.status === 'replaced') {
+          const freed = new Set(outcome.freedApplicationIds);
+          pendingRows = [...invoicedRows.filter(r => freed.has(String(r.id))), ...pendingRows];
+          invoicedRows = invoicedRows.filter(r => !freed.has(String(r.id)));
+          result.replacedGroups++;
+          console.log(
+            `[ca-invoice] Group ${key}: replaced existing invoice(s), reissuing one for ${pendingRows.length} learner(s)`
+          );
+        } else {
+          // 'blocked' — the invoice is out of reach (the employer has it, or a
+          // payment is applied). Fall through and bill the newcomer separately,
+          // which is what would have happened anyway, but leave a trail saying
+          // why the replacement they asked for did not occur.
+          console.log(`[ca-invoice] Group ${key}: replacement not possible — ${outcome.reason}`);
+          for (const r of pendingRows.filter(x => x.replace_group_invoice === true)) {
+            await appendPipelineWarning(String(r.id), 'invoice_replacement_blocked', outcome.reason);
+          }
+        }
+
+        // Acted on either way — clear the intent so a later sweep does not try
+        // again. Only 'hold' keeps it, because 'hold' means "not yet".
+        await pool.query(
+          `UPDATE public.company_application
+              SET replace_group_invoice = false, updated_at = now()
+            WHERE id = ANY($1::uuid[])`,
+          [rows.filter(r => r.replace_group_invoice === true).map(r => r.id)]
+        );
+
+        // Classmates pulled in only to be replaced, that in the end were not,
+        // go back out of scope. The caller did not select them, so they should
+        // not pick up this run's self-healing or land in its counts.
+        const selectedIds = new Set(rows.map(r => String(r.id)));
+        invoicedRows = invoicedRows.filter(r => selectedIds.has(String(r.id)));
+      }
 
       // Idempotency — already invoiced. Self-heal the Drive PDF link only,
       // and run per-learner grant invoices (fills in any that weren't
@@ -1380,9 +1516,13 @@ export async function generateInvoicesForApplications(
       // next run to re-bill the customer.
       await pool.query(
         `UPDATE public.company_application
-            SET invoice_id         = $1,
-                invoice_doc_number = $2,
-                updated_at         = now()
+            SET invoice_id            = $1,
+                invoice_doc_number    = $2,
+                -- Whatever the late joiner asked for has now happened: they are
+                -- on an invoice. Leaving the intent set would let a much later
+                -- sweep delete this invoice to "replace" it all over again.
+                replace_group_invoice = false,
+                updated_at            = now()
           WHERE id = ANY($3::uuid[])`,
         [inv.invoiceId, inv.docNumber, rowIds]
       );
@@ -1455,6 +1595,180 @@ export async function generateInvoicesForApplications(
  * Non-fatal: any per-learner failure is logged but doesn't stop the rest of
  * the group. The next Generate Invoice click can retry.
  */
+type ReplacementOutcome =
+  /** Existing invoice(s) deleted; these application ids are now unbilled and should be re-billed together. */
+  | { status: 'replaced'; freedApplicationIds: string[] }
+  /** Not yet — nothing was touched. Retry on a later sweep. */
+  | { status: 'hold'; reason: string }
+  /** Never — the invoice is out of reach. Bill the newcomer separately. */
+  | { status: 'blocked'; reason: string };
+
+/**
+ * Swap a group's existing invoice(s) for a single one covering the late joiner
+ * too.
+ *
+ * Runs inside the group's advisory lock, so no other worker can be billing this
+ * (employer, course run) at the same time.
+ *
+ * The ordering here is the whole safety story, in three refusals before any
+ * destructive call:
+ *
+ *   1. Everyone must be enroled with SSG — without ENR- references there is
+ *      nothing to build a replacement from.
+ *   2. Everyone must be grant-settled. An invoice is only ever created once the
+ *      whole group has grants, so deleting while the newcomer is still waiting
+ *      would leave the employer holding NO invoice until SSG comes back. That
+ *      is strictly worse than the two invoices we set out to avoid.
+ *   3. Every existing invoice must still be unsent and unpaid, checked against
+ *      QuickBooks as well as our own invoice_sent_at, because Finance can email
+ *      or take payment outside the LMS.
+ *
+ * Only then does it delete. Invoices are handled one at a time and their rows
+ * cleared immediately after each success, so a failure part-way through leaves
+ * a coherent state — the freed learners get the new invoice, anything that
+ * could not be deleted keeps the invoice it already had.
+ */
+async function attemptGroupInvoiceReplacement(opts: {
+  groupKey: string;
+  invoicedRows: any[];
+  pendingRows: any[];
+}): Promise<ReplacementOutcome> {
+  const { groupKey, invoicedRows, pendingRows } = opts;
+
+  const notEnrolled = pendingRows.filter(r => !/^ENR-/i.test(String(r.enrolment_id || '')));
+  if (notEnrolled.length > 0) {
+    return { status: 'hold', reason: `${notEnrolled.length} learner(s) not yet enroled with SSG` };
+  }
+
+  const awaiting = await findEnrolmentsAwaitingGrants([...invoicedRows, ...pendingRows]);
+  if (awaiting.length > 0) {
+    return {
+      status: 'hold',
+      reason: `${awaiting.length} learner(s) still awaiting an SSG grant — replacing now would leave the employer with no invoice`,
+    };
+  }
+
+  const invoiceIds = Array.from(
+    new Set(invoicedRows.map(r => String(r.invoice_id || '').trim()).filter(Boolean))
+  );
+
+  // Refuse before deleting anything, so a group with two invoices where only
+  // one is still reachable is left entirely alone rather than half-replaced.
+  for (const invoiceId of invoiceIds) {
+    const owner = invoicedRows.find(r => String(r.invoice_id || '').trim() === invoiceId);
+    const docNumber = String(owner?.invoice_doc_number || invoiceId);
+
+    if (owner?.invoice_sent_at) {
+      return { status: 'blocked', reason: `invoice ${docNumber} has already been emailed to the employer` };
+    }
+
+    let state;
+    try {
+      state = await readQboInvoiceLifecycle(invoiceId);
+    } catch (err) {
+      return {
+        status: 'blocked',
+        reason: `invoice ${docNumber} could not be read from QuickBooks (${err instanceof Error ? err.message : 'unknown error'})`,
+      };
+    }
+    if (state.found && state.emailSent) {
+      return { status: 'blocked', reason: `invoice ${docNumber} was emailed from QuickBooks` };
+    }
+    if (state.found && state.hasPayment) {
+      return { status: 'blocked', reason: `invoice ${docNumber} already has a payment applied` };
+    }
+  }
+
+  const freedApplicationIds: string[] = [];
+
+  for (const invoiceId of invoiceIds) {
+    const rowsOnInvoice = invoicedRows.filter(r => String(r.invoice_id || '').trim() === invoiceId);
+    const docNumber = String(rowsOnInvoice[0]?.invoice_doc_number || invoiceId);
+
+    const deleted = await deleteQboInvoice(invoiceId);
+    if (!deleted.ok) {
+      console.warn(`[ca-invoice] Group ${groupKey}: could not delete invoice ${docNumber}: ${deleted.message}`);
+      continue;
+    }
+
+    // The per-learner grant invoices cite this invoice's DocNumber as their
+    // PO#, so they are stale the moment it goes. Delete them too and let the
+    // normal flow reissue them against the new number. A failure here is NOT
+    // fatal, but the id is then left in place on purpose — clearing it would
+    // make the next pass create a second grant claim to WSG for the same
+    // learner.
+    const clearedGrantInvoiceIds: string[] = [];
+    for (const r of rowsOnInvoice) {
+      const grantInvoiceId = String(r.grant_invoice_id || '').trim();
+      if (!grantInvoiceId) continue;
+      const grantDeleted = await deleteQboInvoice(grantInvoiceId);
+      if (grantDeleted.ok) {
+        clearedGrantInvoiceIds.push(String(r.id));
+      } else {
+        console.warn(
+          `[ca-invoice] Group ${groupKey}: could not delete grant invoice ${r.grant_invoice_doc_number || grantInvoiceId}: ${grantDeleted.message}`
+        );
+        await appendPipelineWarning(
+          String(r.id),
+          'grant_invoice_replacement',
+          `Main invoice ${docNumber} was replaced but this learner's grant invoice could not be deleted, so it still cites the old invoice number. Fix it in QuickBooks.`
+        );
+      }
+    }
+
+    const rowIds = rowsOnInvoice.map(r => r.id);
+    await pool.query(
+      `UPDATE public.company_application
+          SET invoice_id                  = NULL,
+              invoice_doc_number          = NULL,
+              invoice_drive_file_id       = NULL,
+              invoice_drive_web_view_link = NULL,
+              invoice_sent_at             = NULL,
+              invoice_sent_to             = NULL,
+              updated_at                  = now()
+        WHERE id = ANY($1::uuid[])`,
+      [rowIds]
+    );
+    if (clearedGrantInvoiceIds.length > 0) {
+      await pool.query(
+        `UPDATE public.company_application
+            SET grant_invoice_id                  = NULL,
+                grant_invoice_doc_number          = NULL,
+                grant_invoice_drive_file_id       = NULL,
+                grant_invoice_drive_web_view_link = NULL,
+                updated_at                        = now()
+          WHERE id = ANY($1::uuid[])`,
+        [clearedGrantInvoiceIds]
+      );
+    }
+
+    // Keep the in-memory rows honest — they are handed straight back to the
+    // billing flow, and a stale grant_invoice_id there would send
+    // processGrantInvoicesForGroup chasing a PDF for an invoice we just
+    // deleted.
+    const clearedGrantRows = new Set(clearedGrantInvoiceIds);
+    for (const r of rowsOnInvoice) {
+      r.invoice_id = null;
+      r.invoice_doc_number = null;
+      r.invoice_drive_file_id = null;
+      r.invoice_sent_at = null;
+      if (clearedGrantRows.has(String(r.id))) {
+        r.grant_invoice_id = null;
+        r.grant_invoice_doc_number = null;
+        r.grant_invoice_drive_file_id = null;
+      }
+    }
+
+    console.log(`[ca-invoice] Group ${groupKey}: deleted invoice ${docNumber} (${rowIds.length} learner(s) freed)`);
+    freedApplicationIds.push(...rowIds.map((id: any) => String(id)));
+  }
+
+  if (freedApplicationIds.length === 0) {
+    return { status: 'blocked', reason: 'no existing invoice could be deleted in QuickBooks' };
+  }
+  return { status: 'replaced', freedApplicationIds };
+}
+
 async function processGrantInvoicesForGroup(
   rows: any[],
   mainInvoiceDocNumber: string

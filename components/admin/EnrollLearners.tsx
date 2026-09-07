@@ -56,6 +56,40 @@ interface EmployerOption {
 // Sentinel dropdown value for entering a brand-new employer by hand.
 const NEW_EMPLOYER_KEY = '__new__';
 
+/** How a late joiner should be billed when their employer already has an invoice for this run. */
+type CaBillingMode = 'auto' | 'enrol-only' | 'replace';
+
+interface ExistingInvoiceSummary {
+  invoiceId: string;
+  docNumber: string;
+  learnerNames: string[];
+  learnerCount: number;
+  sentAt: string | null;
+}
+
+/** Reply from /api/admin/ca-existing-invoice. */
+interface ExistingInvoiceLookup {
+  invoices: ExistingInvoiceSummary[];
+  /** True only when every existing invoice is still unsent and unpaid. */
+  canReplace: boolean;
+  blockedReason: 'sent' | 'paid' | 'qbo-unreachable' | null;
+  employerOrgName: string;
+}
+
+/** Plain-English reason a replacement is off the table, for the popup. */
+function describeReplaceBlock(reason: ExistingInvoiceLookup['blockedReason']): string {
+  switch (reason) {
+    case 'sent':
+      return 'The company already has this invoice, so we will not change it.';
+    case 'paid':
+      return 'A payment is already recorded against this invoice, so it cannot be deleted.';
+    case 'qbo-unreachable':
+      return 'We could not check this invoice in QuickBooks, so it is left untouched.';
+    default:
+      return 'This invoice cannot be replaced.';
+  }
+}
+
 // Trainee Identity Type options accepted by the Company Application pipeline.
 const IDENTITY_TYPE_OPTIONS = ['Singapore Citizen', 'Singapore Permanent Resident'];
 
@@ -218,6 +252,18 @@ const EnrollLearners: React.FC = () => {
   // more than one, they must be staged into the batch so the CA pipeline groups
   // them into a single consolidated tax invoice. This modal is the last checkpoint.
   const [showSingleCaConfirm, setShowSingleCaConfirm] = useState(false);
+  // Late joiner guard. Before enrolling anyone under an employer we ask whether
+  // that employer already has an invoice for this course run — because if they
+  // do, the pipeline will quietly cut a SECOND one and nobody would be told.
+  // The answer decides which choices the admin is offered.
+  const [existingInvoice, setExistingInvoice] = useState<ExistingInvoiceLookup | null>(null);
+  const [showExistingInvoiceConfirm, setShowExistingInvoiceConfirm] = useState(false);
+  const [pendingCaAction, setPendingCaAction] = useState<'single' | 'batch' | null>(null);
+  // Which existing invoice Finance is adding the learner to, when there is more
+  // than one for this group. Only meaningful for "Enrol only" — it becomes the
+  // grant invoice's PO#, so a wrong pick leaves a real cross-reference wrong.
+  const [manualInvoiceRef, setManualInvoiceRef] = useState('');
+  const [isCheckingExistingInvoice, setIsCheckingExistingInvoice] = useState(false);
   const ENROLMENT_DRAFT_KEY = 'enrolment_submission_draft';
 
   const inputClasses = "block w-full px-3 py-2 text-gray-900 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400";
@@ -949,7 +995,53 @@ const EnrollLearners: React.FC = () => {
     }));
   };
 
-  const handleCompanyApplicationSubmit = async () => {
+  /**
+   * Does this employer already have an invoice for this course run?
+   *
+   * A failed lookup returns null and enrolment carries on — a warning check
+   * must never block an enrolment — but the admin is told the check did not
+   * run, because silently skipping it recreates the exact surprise this whole
+   * feature exists to prevent.
+   */
+  const checkExistingGroupInvoice = async (): Promise<ExistingInvoiceLookup | null> => {
+    const uen = (formData.employerUen || '').trim();
+    const runId = (formData.courseRunId || '').trim();
+    if (!uen || !runId) return null;
+
+    setIsCheckingExistingInvoice(true);
+    try {
+      const res = await fetch(
+        `/api/admin/ca-existing-invoice?employerUen=${encodeURIComponent(uen)}&courseRunId=${encodeURIComponent(runId)}`
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        setWarnings([
+          'Could not check whether this company already has an invoice for this class. If they do, this enrolment will create a second one.',
+        ]);
+        return null;
+      }
+      return data as ExistingInvoiceLookup;
+    } catch (err) {
+      console.error('Existing invoice check failed:', err);
+      setWarnings([
+        'Could not check whether this company already has an invoice for this class. If they do, this enrolment will create a second one.',
+      ]);
+      return null;
+    } finally {
+      setIsCheckingExistingInvoice(false);
+    }
+  };
+
+  /** The billing directive sent to the upload endpoint for the admin's choice. */
+  const buildBillingPayload = (mode: CaBillingMode) => ({
+    mode,
+    invoiceRef:
+      mode === 'enrol-only'
+        ? manualInvoiceRef || existingInvoice?.invoices[0]?.docNumber || ''
+        : '',
+  });
+
+  const handleCompanyApplicationSubmit = async (billingMode: CaBillingMode = 'auto') => {
     const { courseTitle, startDate } = resolveCaContext();
     const newErrors = validateCaFields(courseTitle, startDate);
 
@@ -969,7 +1061,7 @@ const EnrollLearners: React.FC = () => {
       const response = await fetch('/api/admin/upload-company-applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: [row] }),
+        body: JSON.stringify({ rows: [row], billing: buildBillingPayload(billingMode) }),
       });
       const data = await response.json().catch(() => ({}));
 
@@ -1032,7 +1124,7 @@ const EnrollLearners: React.FC = () => {
 
   // Enrol every staged learner in ONE call so the CA pipeline groups them by
   // (employer_uen, course_run_id) into a single consolidated invoice.
-  const handleEnrolBatch = async () => {
+  const submitCaBatch = async (billingMode: CaBillingMode = 'auto') => {
     if (caBatch.length === 0) return;
     setIsEnrolBatch(true);
     setErrors([]);
@@ -1041,7 +1133,7 @@ const EnrollLearners: React.FC = () => {
       const response = await fetch('/api/admin/upload-company-applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: caBatch.map(b => b.row) }),
+        body: JSON.stringify({ rows: caBatch.map(b => b.row), billing: buildBillingPayload(billingMode) }),
       });
       const data = await response.json().catch(() => ({}));
 
@@ -1076,6 +1168,33 @@ const EnrollLearners: React.FC = () => {
     }
   };
 
+  // A batch of late joiners hits exactly the same problem as a single one, so
+  // it gets the same check before anything is submitted.
+  const handleEnrolBatch = async () => {
+    if (caBatch.length === 0) return;
+    const lookup = await checkExistingGroupInvoice();
+    if (lookup && lookup.invoices.length > 0) {
+      setExistingInvoice(lookup);
+      setManualInvoiceRef(lookup.invoices[0]?.docNumber || '');
+      setPendingCaAction('batch');
+      setShowExistingInvoiceConfirm(true);
+      return;
+    }
+    await submitCaBatch('auto');
+  };
+
+  /** Run the admin's choice from the existing-invoice popup. */
+  const runPendingCaAction = async (billingMode: CaBillingMode) => {
+    const action = pendingCaAction;
+    setShowExistingInvoiceConfirm(false);
+    setPendingCaAction(null);
+    if (action === 'batch') {
+      await submitCaBatch(billingMode);
+    } else {
+      await handleCompanyApplicationSubmit(billingMode);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -1092,6 +1211,19 @@ const EnrollLearners: React.FC = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
+      // Does this employer already have an invoice for this class? If so that
+      // question comes first — it decides whether a second invoice is even the
+      // right outcome, which the "are you enrolling only 1?" popup below
+      // assumes.
+      const lookup = await checkExistingGroupInvoice();
+      if (lookup && lookup.invoices.length > 0) {
+        setExistingInvoice(lookup);
+        setManualInvoiceRef(lookup.invoices[0]?.docNumber || '');
+        setPendingCaAction('single');
+        setShowExistingInvoiceConfirm(true);
+        return;
+      }
+
       setShowSingleCaConfirm(true);
       return;
     }
@@ -2355,12 +2487,14 @@ const EnrollLearners: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleEnrolBatch}
-                  disabled={isEnrolBatch || caBatch.length === 0}
+                  disabled={isEnrolBatch || isCheckingExistingInvoice || caBatch.length === 0}
                   className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {isEnrolBatch
-                    ? 'Enrolling batch…'
-                    : `Enrol all ${caBatch.length > 0 ? `${caBatch.length} ` : ''}& generate 1 invoice`}
+                  {isCheckingExistingInvoice
+                    ? 'Checking existing invoices…'
+                    : isEnrolBatch
+                      ? 'Enrolling batch…'
+                      : `Enrol all ${caBatch.length > 0 ? `${caBatch.length} ` : ''}& generate 1 invoice`}
                 </button>
               </div>
             </div>
@@ -2397,12 +2531,14 @@ const EnrollLearners: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCheckingExistingInvoice}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed dark:bg-blue-500 dark:hover:bg-blue-600"
             >
-              {isSubmitting
-                ? (isCompanyApplication ? 'Submitting Company Application...' : 'Creating Enrolment...')
-                : (isCompanyApplication ? 'Enrol as Company Application' : 'Create Enrolment')}
+              {isCheckingExistingInvoice
+                ? 'Checking existing invoices...'
+                : isSubmitting
+                  ? (isCompanyApplication ? 'Submitting Company Application...' : 'Creating Enrolment...')
+                  : (isCompanyApplication ? 'Enrol as Company Application' : 'Create Enrolment')}
             </button>
           </div>
         </form>
@@ -2456,6 +2592,141 @@ const EnrollLearners: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Late joiner. This employer already has an invoice for this course run,
+          so enrolling now would quietly cut a second one. Which choices are
+          offered depends on whether that invoice is still ours to take back. */}
+      {showExistingInvoiceConfirm && existingInvoice && (() => {
+        const existingLearnerCount = existingInvoice.invoices.reduce((sum, inv) => sum + inv.learnerCount, 0);
+        const addingCount = pendingCaAction === 'batch' ? caBatch.length : 1;
+        const totalCount = existingLearnerCount + addingCount;
+        const employerLabel =
+          existingInvoice.employerOrgName || formData.employerOrgName?.trim() || 'This company';
+        const isBusy = isSubmitting || isEnrolBatch;
+        const formatSent = (iso: string | null) =>
+          iso
+            ? `Emailed ${new Date(iso).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' })}`
+            : 'Not sent yet';
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-lg rounded-lg bg-white shadow-xl dark:bg-gray-800">
+              <div className="p-6 space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {employerLabel} already has an invoice for this class
+                </h3>
+
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 space-y-2 dark:border-amber-800/60 dark:bg-amber-900/20">
+                  {existingInvoice.invoices.map(inv => (
+                    <div key={inv.invoiceId} className="text-xs text-amber-800 dark:text-amber-200">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-mono font-semibold">{inv.docNumber || inv.invoiceId}</span>
+                        <span>·</span>
+                        <span>{inv.learnerCount} learner{inv.learnerCount === 1 ? '' : 's'}</span>
+                        <span>·</span>
+                        <span className="font-medium">{formatSent(inv.sentAt)}</span>
+                      </div>
+                      {inv.learnerNames.length > 0 && (
+                        <div className="mt-0.5 opacity-90">{inv.learnerNames.join(', ')}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* More than one invoice already exists for this class, so
+                    "add them to the existing one" is ambiguous. The choice
+                    becomes the grant invoice's PO#, so it has to be asked
+                    rather than guessed. */}
+                {!existingInvoice.canReplace && existingInvoice.invoices.length > 1 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                      Which invoice will you add {addingCount === 1 ? 'this learner' : 'them'} to?
+                    </p>
+                    {existingInvoice.invoices.map(inv => {
+                      const ref = inv.docNumber || inv.invoiceId;
+                      return (
+                        <label
+                          key={inv.invoiceId}
+                          className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer"
+                        >
+                          <input
+                            type="radio"
+                            name="manual-invoice-ref"
+                            value={ref}
+                            checked={manualInvoiceRef === ref}
+                            onChange={() => setManualInvoiceRef(ref)}
+                            className="h-3.5 w-3.5"
+                          />
+                          <span className="font-mono">{ref}</span>
+                          <span className="opacity-70">
+                            ({inv.learnerCount} learner{inv.learnerCount === 1 ? '' : 's'})
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {existingInvoice.canReplace ? (
+                  <div className="rounded-md bg-gray-50 p-3 text-sm text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+                    The company has not seen this invoice yet, so we can replace it with a single
+                    invoice covering all {totalCount} learners. The swap happens once SSG grants the
+                    new {addingCount === 1 ? 'learner' : 'learners'} — until then the current invoice
+                    stays exactly as it is.
+                  </div>
+                ) : (
+                  <div className="rounded-md bg-gray-50 p-3 text-sm text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+                    {describeReplaceBlock(existingInvoice.blockedReason)} Add{' '}
+                    {addingCount === 1 ? 'this learner' : 'these learners'} to it yourself in
+                    QuickBooks, or bill {addingCount === 1 ? 'them' : 'them'} on a second invoice.
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => {
+                    setShowExistingInvoiceConfirm(false);
+                    setPendingCaAction(null);
+                  }}
+                  className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => void runPendingCaAction('auto')}
+                  className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Create a separate invoice
+                </button>
+                {existingInvoice.canReplace ? (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => void runPendingCaAction('replace')}
+                    className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    Replace with 1 invoice for all {totalCount}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => void runPendingCaAction('enrol-only')}
+                    className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    Enrol only — I&apos;ll edit the invoice
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
