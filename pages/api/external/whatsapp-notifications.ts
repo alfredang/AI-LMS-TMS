@@ -7,6 +7,7 @@ import {
   WHATSAPP_MIN_GAP_MINUTES,
   WHATSAPP_PENDING_TTL_HOURS,
 } from '../../../lib/trainerWhatsapp';
+import { findAcknowledgedTrainerTgs } from '../../../lib/calendar/trainerAcknowledgement';
 
 /**
  * External API — Trainer WhatsApp Notification Queue (rate-gated dispatcher)
@@ -140,6 +141,41 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             )`
       );
     } else if (channelName === 'class_reminder') {
+      // Re-check live Calendar acceptance immediately before release. This
+      // cancels old queue rows too: one accepted trainer suppresses every
+      // pending reminder for the same TGS and class date.
+      const pendingTgsRows = (await pool.query<{
+        run_uuid: string;
+        course_code: string | null;
+        start_date: string;
+      }>(
+        `SELECT DISTINCT cr.id AS run_uuid, c.course_code, cr.start_date::date::text AS start_date
+           FROM trainer_whatsapp_notification n
+           JOIN course_run cr ON cr.id = n.course_run_id
+           JOIN course c ON c.id = cr.course_id
+          WHERE n.status = 'pending' AND n.kind = 'class_reminder'`,
+      )).rows;
+      const acknowledgedTgs = await findAcknowledgedTrainerTgs(pendingTgsRows.map((row) => ({
+        runUuid: row.run_uuid,
+        courseCode: row.course_code,
+        dateIso: row.start_date,
+      })));
+      for (const acknowledgement of acknowledgedTgs.values()) {
+        await pool.query(
+          `UPDATE trainer_whatsapp_notification n
+              SET status = 'cancelled',
+                  error = 'Trainer accepted Calendar invite for this TGS/date - reminder no longer needed'
+             FROM course_run cr
+             JOIN course c ON c.id = cr.course_id
+            WHERE n.course_run_id = cr.id
+              AND n.status = 'pending'
+              AND n.kind = 'class_reminder'
+              AND upper(btrim(c.course_code)) = $1
+              AND cr.start_date::date = $2::date`,
+          [acknowledgement.courseCode, acknowledgement.dateIso],
+        );
+      }
+
       // Symmetric guard: a class reminder only goes to a trainer of a class
       // that is STILL Confirmed with that trainer still assigned.
       await pool.query(

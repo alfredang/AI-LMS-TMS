@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import { resolveTrainerForRunDate, TrainerResolutionResult } from '../../../lib/calendar/resolveTrainerFromCalendar';
 import { getCalendarReadClient } from '../../../lib/calendar/calendarClient';
 import { resolveEventsToRuns, CandidateRun } from '../../../lib/calendar/resolveEventToRun';
+import { findAcknowledgedTrainerTgs, tgsDateKey } from '../../../lib/calendar/trainerAcknowledgement';
 
 /**
  * External API — Trainer Reminders
@@ -355,9 +356,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let rows = await resolveAllRows(rowsForResolution, { start: String(start_date), end: String(end_date) });
 
-    // Filter only reminder-eligible (have phone)
+    // An accepted trainer on any Calendar event acknowledges the whole TGS for
+    // this date, including other runs that share the TGS.
     if (send_reminder === 'true') {
-      rows = rows.filter((r) => r.send_reminder);
+      const acknowledgedTgs = await findAcknowledgedTrainerTgs(rowsForResolution.map((row) => ({
+        runUuid: row.run_uuid,
+        courseCode: row.course_code,
+        dateIso: row.session_dates?.[0] || row.start_date,
+      })));
+      rows = rows.filter((r, index) => {
+        const source = rowsForResolution[index];
+        const dateIso = source?.session_dates?.[0] || source?.start_date;
+        return r.send_reminder && !acknowledgedTgs.has(tgsDateKey(r.course_code, dateIso));
+      });
     }
 
     console.log(`external/trainer-reminders: 200 OK, ${rows.length} row(s) for ${start_date}..${end_date} (caller ${callerIp})`);
