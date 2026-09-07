@@ -155,6 +155,12 @@ const GrantImportView: React.FC = () => {
     return 'Invalid file type. Please upload an Excel file (.xlsx).';
   }, [file]);
 
+  // A row keeps match_status 'ready' even after it's been successfully applied — that
+  // field reflects the upload-time match, not the current apply state. Once apply_status
+  // is 'applied', the row belongs only in the Applied tab, not Ready, or it'd show up
+  // (and be re-selectable) in both at once.
+  const isStillReady = (r: any) => String(r.match_status) === 'ready' && String(r.apply_status || '').toLowerCase() !== 'applied';
+
   const counts = useMemo(() => {
     const rows = preview?.rows || [];
     const total = rows.length;
@@ -162,7 +168,7 @@ const GrantImportView: React.FC = () => {
     const problem = by('unmatched') + by('ambiguous') + by('invalid');
     return {
       total,
-      ready: by('ready'),
+      ready: rows.filter(isStillReady).length,
       already: by('already_applied'),
       unmatched: by('unmatched'),
       ambiguous: by('ambiguous'),
@@ -178,6 +184,8 @@ const GrantImportView: React.FC = () => {
     if (rowFilter !== 'all') {
       if (applyStatuses.includes(rowFilter))
         result = result.filter((r) => String(r.apply_status || '').toLowerCase() === rowFilter);
+      else if (rowFilter === 'ready')
+        result = result.filter(isStillReady);
       else
         result = result.filter((r) => String(r.match_status) === rowFilter);
     }
@@ -196,7 +204,7 @@ const GrantImportView: React.FC = () => {
 
   /** Count of selected+ready rows in the currently-visible (date-filtered) view. */
   const selectedCount = useMemo(
-    () => filteredRows.filter((r) => r.selected_for_apply && String(r.match_status) === 'ready').length,
+    () => filteredRows.filter((r) => r.selected_for_apply && isStillReady(r)).length,
     [filteredRows]
   );
 
@@ -1250,7 +1258,7 @@ const GrantImportView: React.FC = () => {
                   <tr className="border-b border-default bg-surface-elevated">
                     <th className="px-3 py-2 text-xs text-left">
                       {(() => {
-                        const selectable = filteredRows.filter((r) => String(r.match_status) === 'ready');
+                        const selectable = filteredRows.filter(isStillReady);
                         const allSelected = selectable.length > 0 && selectable.every((r) => !!r.selected_for_apply);
                         const someSelected = selectable.some((r) => !!r.selected_for_apply);
                         const nextChecked = !allSelected;
@@ -1297,7 +1305,7 @@ const GrantImportView: React.FC = () => {
                   )}
                   {filteredRows.map((r) => {
                     const disabled = ['unmatched', 'ambiguous', 'invalid'].includes(String(r.match_status));
-                    const selectable = String(r.match_status) === 'ready';
+                    const selectable = isStillReady(r);
                     const disabledAny = disabled || !selectable;
                     const fmsStatus = r.fms_updated_live ? 'updated' : 'not updated';
                     const qbStatus = r.qb_applied_live ? 'applied' : 'not applied';

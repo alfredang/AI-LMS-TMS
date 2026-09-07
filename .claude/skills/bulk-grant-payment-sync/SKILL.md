@@ -56,18 +56,26 @@ specifically to make that class of bug structurally impossible, not just unlikel
        where the sibling relationship is confirmed by `ssg_grants` (synced directly from
        SSG/TPGateway — the same data the Consolidated Finance view reads from).
    (c) `resolvedBy: 'enrolment_grant_docNumber_history'` — sibling GRN known only from this app's
-       own `grant_import_rows` upload history. Self-referential, never externally re-verified: if a
-       wrong pairing were ever uploaded once, this tier would keep trusting it indefinitely. Tried
-       only when `ssg_grants` has nothing (it lags/is missing for newer enrolments).
+       own `grant_import_rows` upload history. Self-referential, never externally re-verified on
+       its own: if a wrong pairing were ever uploaded once, this tier would keep trusting it
+       indefinitely — **which is why, unlike (a)/(b), it may only drive a write if invariant #10's
+       content check (below) independently confirms the resolved invoice's own line text actually
+       cites this grant.** Tried only when `ssg_grants` has nothing (it lags/is missing for newer
+       enrolments). (Loosened 2026-09-07, at the user's explicit request with a verified real
+       example — see invariant #10.)
    (d) `resolvedBy: 'date_window_scan'` — fuzzy scan of nearby invoices' Line.Description text.
-   **Only (a) and (b) may drive a write.** `applyGrantImportBatch` explicitly rejects
-   `resolvedBy === 'date_window_scan'` **and** `resolvedBy === 'enrolment_grant_docNumber_history'`
-   before doing anything else — those rows fail with an actionable message instead of writing.
+   **(a) and (b) may always drive a write; (c) may only if content verification (#10) passes; (d)
+   may never.** `applyGrantImportBatch` explicitly rejects `resolvedBy === 'date_window_scan'`
+   unconditionally — that tier isn't even grant-ID-based, so content verification wouldn't be a
+   meaningful safeguard for it. `enrolment_grant_docNumber_history` used to be rejected the same
+   unconditional way; it now falls through to the content-verification check instead, and is
+   rejected only if that check fails.
    The `TC...` vs `GRN-...` DocNumber prefixes never overlap, so exact-DocNumber matching (a/b)
    can structurally never land on the wrong invoice *type* (Customer vs Grant) — the remaining
    risk tiers (c) and (d) guard against is picking the wrong *sibling GRN* or wrong *invoice
-   instance*, not the wrong invoice type. If you ever see logic that lets `date_window_scan` or
-   `enrolment_grant_docNumber_history` reach `qbCreatePayment`, that is a regression — revert it.
+   instance*, not the wrong invoice type. If you ever see logic that lets `date_window_scan`
+   reach `qbCreatePayment` unconditionally, or lets `enrolment_grant_docNumber_history` reach it
+   *without* passing the content check, that is a regression — revert it.
 2. **Payment amount can never exceed the resolved invoice's live remaining balance.** Checked via
    a fresh `qbGetInvoiceBalance` call immediately before building the payment body. This is what
    stops `AutoApplyPayments` from having any excess to redistribute even if a wrong-but-underfull
@@ -114,6 +122,16 @@ specifically to make that class of bug structurally impossible, not just unlikel
     feature. Do not remove this check to "fix" a row that fails it — a failure here means the
     resolved invoice is unverified, not that the check is wrong; investigate the underlying
     `ssg_grants`/DocNumber data instead.
+
+    **Extended 2026-09-07** to also be the deciding gate for `resolvedBy ===
+    'enrolment_grant_docNumber_history'` (invariant 1, tier c), at the user's explicit request
+    after a verified real case: grant `GRN-2607-218802` could only be resolved via this tier, but
+    its target invoice (`GRN-2607-218800`) genuinely carries `"Grant Ref #: GRN-2607-218802"` on
+    its own MCES line — a real, correct match that unconditional rejection was blocking. That tier
+    was previously blocked outright before ever reaching this check; it now falls through to it
+    instead, succeeding only if the invoice's own text confirms the grant. `date_window_scan`
+    remains unconditionally blocked and never reaches this check — it isn't grant-ID-based at all,
+    so content verification wouldn't be a meaningful safeguard for it.
 
 ## Known UI/config gotcha (not a code bug, but affects how "safe" a given deployment is)
 
