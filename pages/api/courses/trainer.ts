@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -81,8 +82,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       courseRunCode: row.course_run_code,
       digitalAttendanceId: row.digital_attendance_id || '',
       assignedTrainerName: row.assigned_trainer_name || '',
-      startDate: row.start_date,
-      endDate: row.end_date,
+      startDate: row.start_date ? getLocalYMD(row.start_date) : null,
+      endDate: row.end_date ? getLocalYMD(row.end_date) : null,
       classType: row.class_type || 'Physical',
       virtualMeetingLink: row.virtual_meeting_link || null,
       virtualMeetingHostLink: row.virtual_meeting_host_link || null,
