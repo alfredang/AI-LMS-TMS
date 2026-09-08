@@ -32,6 +32,7 @@ import {
   qboResolveOosTaxCodeRef,
   qboSparseUpdateInvoice,
 } from '../services/qboInvoiceService';
+import { withGrantInvoiceDocNumberLock } from './grantInvoiceCreationLock';
 import { refreshGrantsForEnrolments } from '../services/billingSync';
 import {
   buildFallbackSplitGrantLines,
@@ -205,96 +206,105 @@ export async function createDirectApplicationGrantInvoice(
   // reuse it rather than duplicating. Backfill PONumber if the existing
   // invoice was created before PO linking was added and mainInvoiceDocNumber
   // is now available.
-  // A void is not a reusable invoice. Skipping it lets the grant invoice be
-  // reissued after the admin cancels it from the DA screen.
-  const existing = await qboFindInvoiceByDocNumber(undefined, docNumber, { ignoreVoided: true });
-  if (existing?.id) {
-    const desiredPo = input.mainInvoiceDocNumber ? input.mainInvoiceDocNumber.trim() : '';
-    if (desiredPo && existing.syncToken) {
-      try {
-        await qboSparseUpdateInvoice(
-          undefined,
-          existing.id,
-          existing.syncToken,
-          await buildPurchaseOrderInvoiceFields(desiredPo, existing.raw)
-        );
-      } catch (err) {
-        console.warn(`[QBO grant invoice] Failed to backfill PONumber on invoice ${existing.id}:`, err);
+  //
+  // This whole check-then-create sequence is serialised per DocNumber (see
+  // withGrantInvoiceDocNumberLock) because QuickBooks does not reliably
+  // reject a duplicate DocNumber for this company, and this DocNumber can be
+  // raced by more than one caller: the DA pipeline has 5 independent
+  // triggers, and createCompanyApplicationGrantInvoice can compute the same
+  // grant_id-derived DocNumber from the CA side.
+  return withGrantInvoiceDocNumberLock(docNumber, async () => {
+    // A void is not a reusable invoice. Skipping it lets the grant invoice be
+    // reissued after the admin cancels it from the DA screen.
+    const existing = await qboFindInvoiceByDocNumber(undefined, docNumber, { ignoreVoided: true });
+    if (existing?.id) {
+      const desiredPo = input.mainInvoiceDocNumber ? input.mainInvoiceDocNumber.trim() : '';
+      if (desiredPo && existing.syncToken) {
+        try {
+          await qboSparseUpdateInvoice(
+            undefined,
+            existing.id,
+            existing.syncToken,
+            await buildPurchaseOrderInvoiceFields(desiredPo, existing.raw)
+          );
+        } catch (err) {
+          console.warn(`[QBO grant invoice] Failed to backfill PONumber on invoice ${existing.id}:`, err);
+        }
       }
+      return {
+        invoiceId: existing.id,
+        docNumber,
+        lineCount: positiveLines.length,
+        totalAmount: positiveLines.reduce((s, l) => s + l.amount, 0),
+        reusedExisting: true,
+      };
     }
+
+    const customerRef = await resolveSupplementalCustomerRef();
+    const taxOos = await qboResolveOosTaxCodeRef(undefined);
+
+    const lineBodies: any[] = [];
+    for (const g of positiveLines) {
+      const item = await resolveGrantItem(g.itemName);
+      if (!item) {
+        throw new Error(
+          `Grant invoice requires QBO Product/Service "${g.itemName}" to exist. Create it in QuickBooks or adjust the mapping in daInvoiceGrantLines.ts.`
+        );
+      }
+      // Same wording as the main invoice, from the same product Description box.
+      const built = buildInvoiceLineText({
+        productDescription: item.description,
+        fields: [{ key: 'grantRef', label: 'Grant Ref #', value: `1. ${g.grantId}`, block: true }],
+        fallbackHeading: g.description.split('\n')[0],
+      });
+      lineBodies.push({
+        DetailType: 'SalesItemLineDetail',
+        Amount: g.amount,
+        Description: built.text,
+        SalesItemLineDetail: {
+          ItemRef: { value: item.id, name: item.name },
+          Qty: 1,
+          UnitPrice: g.amount,
+          TaxCodeRef: { value: taxOos },
+        },
+      });
+    }
+
+    const txnDate = new Date().toISOString().slice(0, 10);
+
+    const invoiceBody: Record<string, any> = {
+      CustomerRef: { value: customerRef },
+      BillAddr: { Line1: SUPPLEMENTAL_INVOICE_CUSTOMER_NAME },
+      TxnDate: txnDate,
+      DueDate: txnDate,
+      GlobalTaxCalculation: 'TaxExcluded',
+      DocNumber: docNumber,
+      Line: lineBodies,
+    };
+
+    if (input.mainInvoiceDocNumber && input.mainInvoiceDocNumber.trim()) {
+      // PO# cross-reference back to the main tax invoice.
+      Object.assign(invoiceBody, await buildPurchaseOrderInvoiceFields(input.mainInvoiceDocNumber));
+    }
+
+    // The grant reference is the number and carries no date, so a hand-voided
+    // original still occupies it; a rejected duplicate reissues as -R2.
+    const created = await qboCreateInvoiceRetryingDuplicateDocNumber(
+      body => qboCreateInvoice(undefined, body),
+      invoiceBody
+    );
+    if (!created.id) {
+      throw new Error('QB grant invoice create returned no Id');
+    }
+
     return {
-      invoiceId: existing.id,
-      docNumber,
+      invoiceId: created.id,
+      docNumber: created.docNumber || docNumber,
       lineCount: positiveLines.length,
       totalAmount: positiveLines.reduce((s, l) => s + l.amount, 0),
-      reusedExisting: true,
+      reusedExisting: false,
     };
-  }
-
-  const customerRef = await resolveSupplementalCustomerRef();
-  const taxOos = await qboResolveOosTaxCodeRef(undefined);
-
-  const lineBodies: any[] = [];
-  for (const g of positiveLines) {
-    const item = await resolveGrantItem(g.itemName);
-    if (!item) {
-      throw new Error(
-        `Grant invoice requires QBO Product/Service "${g.itemName}" to exist. Create it in QuickBooks or adjust the mapping in daInvoiceGrantLines.ts.`
-      );
-    }
-    // Same wording as the main invoice, from the same product Description box.
-    const built = buildInvoiceLineText({
-      productDescription: item.description,
-      fields: [{ key: 'grantRef', label: 'Grant Ref #', value: `1. ${g.grantId}`, block: true }],
-      fallbackHeading: g.description.split('\n')[0],
-    });
-    lineBodies.push({
-      DetailType: 'SalesItemLineDetail',
-      Amount: g.amount,
-      Description: built.text,
-      SalesItemLineDetail: {
-        ItemRef: { value: item.id, name: item.name },
-        Qty: 1,
-        UnitPrice: g.amount,
-        TaxCodeRef: { value: taxOos },
-      },
-    });
-  }
-
-  const txnDate = new Date().toISOString().slice(0, 10);
-
-  const invoiceBody: Record<string, any> = {
-    CustomerRef: { value: customerRef },
-    BillAddr: { Line1: SUPPLEMENTAL_INVOICE_CUSTOMER_NAME },
-    TxnDate: txnDate,
-    DueDate: txnDate,
-    GlobalTaxCalculation: 'TaxExcluded',
-    DocNumber: docNumber,
-    Line: lineBodies,
-  };
-
-  if (input.mainInvoiceDocNumber && input.mainInvoiceDocNumber.trim()) {
-    // PO# cross-reference back to the main tax invoice.
-    Object.assign(invoiceBody, await buildPurchaseOrderInvoiceFields(input.mainInvoiceDocNumber));
-  }
-
-  // The grant reference is the number and carries no date, so a hand-voided
-  // original still occupies it; a rejected duplicate reissues as -R2.
-  const created = await qboCreateInvoiceRetryingDuplicateDocNumber(
-    body => qboCreateInvoice(undefined, body),
-    invoiceBody
-  );
-  if (!created.id) {
-    throw new Error('QB grant invoice create returned no Id');
-  }
-
-  return {
-    invoiceId: created.id,
-    docNumber: created.docNumber || docNumber,
-    lineCount: positiveLines.length,
-    totalAmount: positiveLines.reduce((s, l) => s + l.amount, 0),
-    reusedExisting: false,
-  };
+  });
 }
 
 export function buildDaGrantInvoicePdfFileName(docNumber: string): string {

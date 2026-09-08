@@ -29,6 +29,7 @@ import {
 import { buildInvoiceLineText } from './invoiceLineText';
 import {
   qboCreateInvoice,
+  qboCreateInvoiceRetryingDuplicateDocNumber,
   qboFindCustomerByName,
   qboFindInvoiceByDocNumber,
   qboFindItemByName,
@@ -37,6 +38,7 @@ import {
   qboSparseUpdateInvoice,
 } from '../services/qboInvoiceService';
 import { buildPurchaseOrderInvoiceFields } from './directApplicationInvoiceFields';
+import { withGrantInvoiceDocNumberLock } from './grantInvoiceCreationLock';
 
 const SUPPLEMENTAL_INVOICE_CUSTOMER_NAME = (
   process.env.QBO_CA_SUPPLEMENTAL_CUSTOMER_NAME ||
@@ -145,101 +147,113 @@ export async function createCompanyApplicationGrantInvoice(
   // Idempotency: reuse an existing invoice with this DocNumber. Backfill the
   // PONumber if the existing invoice was created before the main invoice's
   // DocNumber became known.
-  const existing = await qboFindInvoiceByDocNumber(undefined, docNumber);
-  if (existing?.id) {
-    const desiredPo = input.mainInvoiceDocNumber ? input.mainInvoiceDocNumber.trim() : '';
-    if (desiredPo && existing.syncToken) {
-      try {
-        await qboSparseUpdateInvoice(
-          undefined,
-          existing.id,
-          existing.syncToken,
-          await buildPurchaseOrderInvoiceFields(desiredPo, existing.raw)
-        );
-      } catch (err) {
-        console.warn(`[QBO CA grant invoice] Failed to backfill PONumber on invoice ${existing.id}:`, err);
+  //
+  // This whole check-then-create sequence is serialised per DocNumber (see
+  // withGrantInvoiceDocNumberLock) because QuickBooks does not reliably
+  // reject a duplicate DocNumber for this company, and createDirectApplicationGrantInvoice
+  // can compute the same grant_id-derived DocNumber from the DA side.
+  return withGrantInvoiceDocNumberLock(docNumber, async () => {
+    const existing = await qboFindInvoiceByDocNumber(undefined, docNumber);
+    if (existing?.id) {
+      const desiredPo = input.mainInvoiceDocNumber ? input.mainInvoiceDocNumber.trim() : '';
+      if (desiredPo && existing.syncToken) {
+        try {
+          await qboSparseUpdateInvoice(
+            undefined,
+            existing.id,
+            existing.syncToken,
+            await buildPurchaseOrderInvoiceFields(desiredPo, existing.raw)
+          );
+        } catch (err) {
+          console.warn(`[QBO CA grant invoice] Failed to backfill PONumber on invoice ${existing.id}:`, err);
+        }
       }
+      return {
+        invoiceId: existing.id,
+        docNumber,
+        lineCount: positiveLines.length,
+        totalAmount: positiveLines.reduce((s, l) => s + l.amount, 0),
+        reusedExisting: true,
+      };
     }
-    return {
-      invoiceId: existing.id,
-      docNumber,
-      lineCount: positiveLines.length,
-      totalAmount: positiveLines.reduce((s, l) => s + l.amount, 0),
-      reusedExisting: true,
-    };
-  }
 
-  const customerRef = await resolveSupplementalCustomerRef();
-  const taxOos = await qboResolveOosTaxCodeRef(undefined);
-  const term = await qboFindTermByName(undefined, CA_GRANT_TERM_NAME);
-  if (!term?.id) {
-    throw new Error(
-      `QuickBooks Term "${CA_GRANT_TERM_NAME}" not found. Create it in QBO (Lists → All Lists → Terms).`
-    );
-  }
-
-  const lineBodies: any[] = [];
-  for (const g of positiveLines) {
-    const item = await resolveGrantItem(g.itemName);
-    const itemRef = item?.id ? { value: item.id, name: item.name } : null;
-    if (!itemRef) {
+    const customerRef = await resolveSupplementalCustomerRef();
+    const taxOos = await qboResolveOosTaxCodeRef(undefined);
+    const term = await qboFindTermByName(undefined, CA_GRANT_TERM_NAME);
+    if (!term?.id) {
       throw new Error(
-        `CA grant invoice requires QBO Product/Service "${g.itemName}" to exist. Create it in QuickBooks.`
+        `QuickBooks Term "${CA_GRANT_TERM_NAME}" not found. Create it in QBO (Lists → All Lists → Terms).`
       );
     }
-    lineBodies.push({
-      DetailType: 'SalesItemLineDetail',
-      Amount: g.amount,
-      // Same wording as the main invoice: from the funding product's own
-      // Description box, with the grant refs appended.
-      Description: buildInvoiceLineText({
-        productDescription: item?.description,
-        fields: [{ key: 'grantRef', label: 'Grant Ref #', value: `1. ${g.grantId}`, block: true }],
-        fallbackHeading: g.description.split('\n')[0],
-      }).text,
-      SalesItemLineDetail: {
-        ItemRef: itemRef,
-        Qty: 1,
-        UnitPrice: g.amount,
-        TaxCodeRef: { value: taxOos },
-      },
-    });
-  }
 
-  const txnDate = new Date().toISOString().slice(0, 10);
-  const dueDate = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + CA_GRANT_DUE_DAYS);
-    return d.toISOString().slice(0, 10);
-  })();
+    const lineBodies: any[] = [];
+    for (const g of positiveLines) {
+      const item = await resolveGrantItem(g.itemName);
+      const itemRef = item?.id ? { value: item.id, name: item.name } : null;
+      if (!itemRef) {
+        throw new Error(
+          `CA grant invoice requires QBO Product/Service "${g.itemName}" to exist. Create it in QuickBooks.`
+        );
+      }
+      lineBodies.push({
+        DetailType: 'SalesItemLineDetail',
+        Amount: g.amount,
+        // Same wording as the main invoice: from the funding product's own
+        // Description box, with the grant refs appended.
+        Description: buildInvoiceLineText({
+          productDescription: item?.description,
+          fields: [{ key: 'grantRef', label: 'Grant Ref #', value: `1. ${g.grantId}`, block: true }],
+          fallbackHeading: g.description.split('\n')[0],
+        }).text,
+        SalesItemLineDetail: {
+          ItemRef: itemRef,
+          Qty: 1,
+          UnitPrice: g.amount,
+          TaxCodeRef: { value: taxOos },
+        },
+      });
+    }
 
-  const invoiceBody: Record<string, any> = {
-    CustomerRef: { value: customerRef },
-    BillAddr: { Line1: SUPPLEMENTAL_INVOICE_CUSTOMER_NAME },
-    TxnDate: txnDate,
-    DueDate: dueDate,
-    SalesTermRef: { value: term.id },
-    GlobalTaxCalculation: 'TaxExcluded',
-    DocNumber: docNumber,
-    Line: lineBodies,
-  };
+    const txnDate = new Date().toISOString().slice(0, 10);
+    const dueDate = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() + CA_GRANT_DUE_DAYS);
+      return d.toISOString().slice(0, 10);
+    })();
 
-  if (input.mainInvoiceDocNumber && input.mainInvoiceDocNumber.trim()) {
-    Object.assign(invoiceBody, await buildPurchaseOrderInvoiceFields(input.mainInvoiceDocNumber));
-  }
+    const invoiceBody: Record<string, any> = {
+      CustomerRef: { value: customerRef },
+      BillAddr: { Line1: SUPPLEMENTAL_INVOICE_CUSTOMER_NAME },
+      TxnDate: txnDate,
+      DueDate: dueDate,
+      SalesTermRef: { value: term.id },
+      GlobalTaxCalculation: 'TaxExcluded',
+      DocNumber: docNumber,
+      Line: lineBodies,
+    };
 
-  const created = await qboCreateInvoice(undefined, invoiceBody);
-  if (!created.id) {
-    throw new Error('QB CA grant invoice create returned no Id');
-  }
+    if (input.mainInvoiceDocNumber && input.mainInvoiceDocNumber.trim()) {
+      Object.assign(invoiceBody, await buildPurchaseOrderInvoiceFields(input.mainInvoiceDocNumber));
+    }
 
-  return {
-    invoiceId: created.id,
-    docNumber: created.docNumber || docNumber,
-    lineCount: positiveLines.length,
-    totalAmount: positiveLines.reduce((s, l) => s + l.amount, 0),
-    reusedExisting: false,
-  };
+    // The grant reference is the number and carries no date, so a hand-voided
+    // original still occupies it; a rejected duplicate reissues as -R2.
+    const created = await qboCreateInvoiceRetryingDuplicateDocNumber(
+      body => qboCreateInvoice(undefined, body),
+      invoiceBody
+    );
+    if (!created.id) {
+      throw new Error('QB CA grant invoice create returned no Id');
+    }
+
+    return {
+      invoiceId: created.id,
+      docNumber: created.docNumber || docNumber,
+      lineCount: positiveLines.length,
+      totalAmount: positiveLines.reduce((s, l) => s + l.amount, 0),
+      reusedExisting: false,
+    };
+  });
 }
 
 export function buildCaGrantInvoicePdfFileName(docNumber: string): string {

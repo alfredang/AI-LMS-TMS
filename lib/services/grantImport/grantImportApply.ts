@@ -376,10 +376,13 @@ async function qbReadPayment(
   paymentRefNum?: string;
   depositToAccountId?: string;
   paymentMethodId?: string;
+  totalAmt: number;
+  lineAmountSum: number;
 } | null> {
   const result = await qboReadPaymentSvc(app, paymentId);
   if (!result?.id) return null;
   const p = result.raw;
+  const lineAmountSum = toLineArray(p.Line).reduce((s: number, l: any) => s + Number(l?.Amount || 0), 0);
   return {
     id: String(p.Id),
     syncToken: p?.SyncToken ? String(p.SyncToken) : undefined,
@@ -387,6 +390,8 @@ async function qbReadPayment(
     paymentRefNum: p?.PaymentRefNum ? String(p.PaymentRefNum) : undefined,
     depositToAccountId: p?.DepositToAccountRef?.value ? String(p.DepositToAccountRef.value) : undefined,
     paymentMethodId: p?.PaymentMethodRef?.value ? String(p.PaymentMethodRef.value) : undefined,
+    totalAmt: Number(p?.TotalAmt || 0),
+    lineAmountSum,
   };
 }
 
@@ -864,6 +869,39 @@ export async function applyGrantImportBatch(input: {
           `QuickBooks saved unexpected fields for created payment ${created.id}. ` +
             `Expected date=${wantDate}, ref=${wantRef}, depositTo=${wantDep}, method=${wantPm}. ` +
             `Got date=${saved?.txnDate || ''}, ref=${saved?.paymentRefNum || ''}, depositTo=${saved?.depositToAccountId || ''}, method=${saved?.paymentMethodId || ''}.`
+        );
+      }
+
+      // Verify QuickBooks didn't silently save a payment whose TotalAmt doesn't equal what's
+      // actually applied across its own Line(s) — real disbursement money left unlinked inside
+      // the payment record itself (found in the wild: a $375 payment that only linked $365.86,
+      // with $9.14 trapped). Field-level checks above can pass while this is still wrong, since
+      // TotalAmt/Line are independent from date/ref/deposit/method.
+      if (Math.abs(saved!.totalAmt - saved!.lineAmountSum) > 0.01) {
+        try {
+          if (saved?.syncToken) await qbVoidPayment(inv.app, saved.id, String(saved.syncToken));
+        } catch {
+          // ignore
+        }
+        throw new Error(
+          `QuickBooks saved payment ${created.id} with TotalAmt (${saved!.totalAmt}) not matching its own Line amount sum ` +
+            `(${saved!.lineAmountSum}) — money would be left unlinked inside the payment. Voided; not marking this row as applied.`
+        );
+      }
+
+      // Verify the amount actually recorded in QuickBooks is exactly the amount in the source
+      // TPGateway Excel row (row.amount_parsed) — not just internally consistent with itself.
+      // This is what actually caught (or would have caught) the difference between "received"
+      // and "the correct full payment on record".
+      if (Math.abs(saved!.totalAmt - amount) > 0.01) {
+        try {
+          if (saved?.syncToken) await qbVoidPayment(inv.app, saved.id, String(saved.syncToken));
+        } catch {
+          // ignore
+        }
+        throw new Error(
+          `QuickBooks saved payment ${created.id} with TotalAmt (${saved!.totalAmt}) not matching the source record's amount ` +
+            `(${amount}) for grant ${grantId}. Voided; not marking this row as applied.`
         );
       }
 
