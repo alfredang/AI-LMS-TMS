@@ -463,10 +463,14 @@ async function waitForTableRows(page: Page, timeoutMs: number): Promise<boolean>
  * document-wide "Paid" text search, which could grab an unrelated occurrence
  * of the word elsewhere on the page).
  *
- * The Payment From date field mapping is confirmed against the live filter
- * row (not a guess): of the two date inputs on the page, the one next to Bank
- * Reference Id (last in DOM order) is "Payment From"; the other (top-left,
- * next to Funding Component) is "Payment To" and is deliberately left alone.
+ * The Payment From date field is confirmed against a live run's DOM dump
+ * (scratch/grant-fetch-date-filter-diagnostics.json, 2026-09-08), not the
+ * class/placeholder-pattern guess this used to use (which matched nothing —
+ * both date inputs' real class is just "input padding-left-l OSFillParent",
+ * with no "date"/"datepicker" substring, and their placeholder text is
+ * literally "Payment From" / "Payment To", not "DD-MM-YYYY"). Selected
+ * directly by `input[placeholder="Payment From"]`; its sibling
+ * `input[placeholder="Payment To"]` is deliberately left alone.
  */
 async function applyFilters(page: Page, startDate: string): Promise<boolean> {
   let ok = true;
@@ -490,7 +494,7 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
       .waitFor({ state: 'attached', timeout: 15000 })
       .catch(() => log('Status select did not attach within 15s.')),
     page
-      .locator('input[type="text"][class*="date" i], input[placeholder*="DD-MM-YYYY" i], input[class*="datepicker" i]')
+      .locator('input[placeholder="Payment From"]')
       .first()
       .waitFor({ state: 'attached', timeout: 15000 })
       .catch(() => log('date filter input did not attach within 15s.')),
@@ -544,11 +548,15 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
   // keystrokes) is made before giving up.
   let confirmedValue = '';
   try {
-    const dateInputs = page.locator('input[type="text"][class*="date" i], input[placeholder*="DD-MM-YYYY" i], input[class*="datepicker" i]');
-    const dateCount = await dateInputs.count().catch(() => 0);
+    // Confirmed directly from a live run's diagnostics (scratch/grant-fetch-date-filter-diagnostics.json,
+    // 2026-09-08): the real field is a plain OutSystems text input with
+    // placeholder="Payment From" (its sibling is placeholder="Payment To") — class is just
+    // "input padding-left-l OSFillParent", which never matched the old class*="date"/
+    // placeholder*="DD-MM-YYYY"/class*="datepicker" guesses. Target it by its actual,
+    // unambiguous placeholder text instead of a position/class heuristic.
+    const startDateField = page.locator('input[placeholder="Payment From"]').first();
+    const dateCount = await startDateField.count().catch(() => 0);
     if (dateCount >= 1) {
-      const startDateField = dateInputs.last(); // field next to Bank Reference Id = Payment From
-
       await startDateField.click({ timeout: 5000 });
       await startDateField.fill('');
       await startDateField.type(startDate, { delay: 20 });
@@ -739,11 +747,15 @@ async function dumpDateFilterDiagnostics(page: Page, intended: string, confirmed
 /**
  * Click the Download/Export button and save the resulting file to a temp path.
  *
- * BEST EFFORT / UNVERIFIED exact label — confirmed a Download/Export button
- * exists on this page, but not its precise text, so this tries several common
- * variants. Playwright's download event fires regardless of whether the click
- * triggers a same-tab file response or a new-tab one, so no special handling
- * is needed there.
+ * "Excel View" is the confirmed real label (operator screenshot, 2026-09-08 —
+ * top-right purple button, visible and unobstructed). A live run confirmed
+ * `getByRole('button'/'link', ...)` does NOT find it even though it's plainly
+ * on the page — same pattern as the Status/date fields elsewhere in this file:
+ * OutSystems renders it as a styled, non-semantic element (no real
+ * `<button>`/`<a>` tag or ARIA role), so it never enters the accessibility
+ * tree as a "button" for getByRole to match. Try role-based first (cheap,
+ * works on a normal site), then fall back to a plain text search — which
+ * matches on rendered text regardless of the underlying tag.
  */
 async function downloadDisbursementExport(page: Page, jobId: string): Promise<{ filepath: string; filename: string } | null> {
   // "Excel View" confirmed as the real button label (operator screenshot) — tried first.
@@ -758,6 +770,11 @@ async function downloadDisbursementExport(page: Page, jobId: string): Promise<{ 
       }
     }
     if (button) break;
+    const textCandidate = page.getByText(pattern).first();
+    if (await textCandidate.count().catch(() => 0)) {
+      button = textCandidate;
+      break;
+    }
   }
   if (!button) {
     log('could not find a Download/Export button on the Financial Transactions page.');
