@@ -14,9 +14,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
-    // Query to get course code from course run ID
+    // Query to get course code from course run ID. Use the code currently in
+    // force (COALESCE new_course_code -> course_code), matching /api/courses/list,
+    // so the value auto-filled here always matches an option in the "Available
+    // Courses" dropdown -- a renewed course's retired code matches nothing there
+    // and silently empties the "Available Course Runs" dropdown.
     const query = `
-      SELECT c.course_code as "courseCode"
+      SELECT COALESCE(NULLIF(c.new_course_code, ''), c.course_code) as "courseCode"
       FROM course_run cr
       JOIN course c ON cr.course_id = c.id
       WHERE cr.course_run_id = $1
