@@ -69,14 +69,8 @@ function isCustomerInvoiceDocNumber(docNumber: string | null | undefined): boole
   return CUSTOMER_INVOICE_DOC_NUMBER_RE.test(String(docNumber || '').trim());
 }
 
-/** Writes a resolved (verified) invoice link to both invoice_jobs and the sfc_import_rows row. */
-async function linkResolvedInvoice(
-  batchId: number,
-  row: { id: number; matched_enrolment_id: string },
-  qboInvoiceId: string,
-  qboDocNumber: string | null
-): Promise<void> {
-  const enrolmentId = String(row.matched_enrolment_id || '').trim();
+/** Upserts invoice_jobs for a resolved (verified) invoice — shared by both link helpers below. */
+async function upsertInvoiceJobsCache(enrolmentId: string, qboInvoiceId: string, qboDocNumber: string | null): Promise<void> {
   const enrData = await pool.query(
     `SELECT e.user_id::text AS user_id, u.email::text AS learner_email, COALESCE(e.course_reference::text,'') AS course_code
      FROM enrollment e LEFT JOIN app_user u ON u.id = e.user_id
@@ -90,6 +84,17 @@ async function linkResolvedInvoice(
      ON CONFLICT (enrolment_id) DO UPDATE SET qbo_invoice_id=EXCLUDED.qbo_invoice_id, qbo_doc_number=EXCLUDED.qbo_doc_number, status='done', updated_at=now()`,
     [enrolmentId, enrRow?.user_id || null, enrRow?.learner_email || '', enrRow?.course_code || '', qboInvoiceId, qboDocNumber]
   );
+}
+
+/** Writes a resolved (verified) invoice link to both invoice_jobs and the sfc_import_rows row. */
+async function linkResolvedInvoice(
+  batchId: number,
+  row: { id: number; matched_enrolment_id: string },
+  qboInvoiceId: string,
+  qboDocNumber: string | null
+): Promise<void> {
+  const enrolmentId = String(row.matched_enrolment_id || '').trim();
+  await upsertInvoiceJobsCache(enrolmentId, qboInvoiceId, qboDocNumber);
   // Every caller here only ever resolves a "TC..." customer invoice (Step 4/5's last-6 scan and
   // Stage 2's blind scan are both scoped to TC-prefixed DocNumbers), so it's also the verified
   // "Customer Invoice No" reference — stamped into main_qbo_* so it survives independently of
@@ -107,6 +112,77 @@ async function linkResolvedInvoice(
      WHERE id = $1::int AND batch_id = $4::int`,
     [row.id, qboInvoiceId, qboDocNumber, batchId]
   );
+}
+
+/** The "Purchase Order #" custom field QuickBooks invoices carry — createDirectApplicationSfcInvoice
+ *  stamps every SFC-CA invoice's PO# with its main Customer (TC) invoice's own DocNumber at creation
+ *  time (confirmed live), so a just-read SFC-CA invoice already names its own TC invoice directly —
+ *  no search needed, and it's exact where a last-6-digit scan is only ever a coincidence-prone guess. */
+function purchaseOrderDocNumber(invoiceRaw: any): string | null {
+  const fields = Array.isArray(invoiceRaw?.CustomField) ? invoiceRaw.CustomField : invoiceRaw?.CustomField ? [invoiceRaw.CustomField] : [];
+  const po = fields.find((f: any) => String(f?.Name || '').trim().toLowerCase() === 'purchase order #');
+  const value = po?.StringValue ? String(po.StringValue).trim() : '';
+  return value || null;
+}
+
+/**
+ * DA rows only: best-effort, reference-only lookup of the enrolment's Customer (TC) invoice —
+ * for the "Customer Invoice No" column, never the SFC payment target (that stays whatever the
+ * DA loop resolved for matched_qbo_invoice_id/matched_qbo_doc_number). Never touches match_status
+ * or matched_qbo_*; failing to find one here just leaves the column blank, exactly as before —
+ * it must never be able to make an already-resolved DA row worse.
+ */
+async function linkReferenceTcInvoiceForDaRow(
+  row: { id: number; matched_enrolment_id: string; individual_nric: string | null; course_reference_number: string | null },
+  sfcInvoiceRaw: any,
+  apps: string[],
+  doneMap: Map<string, { qboInvoiceId: string; qboDocNumber: string | null }>,
+  qbInvoiceByLast6: Map<string, { id: string; docNumber: string; app: string }>
+): Promise<boolean> {
+  const enrolmentId = String(row.matched_enrolment_id || '').trim();
+  if (!enrolmentId) return false;
+
+  const candidates: Array<{ app: string; id?: string; docNumber: string }> = [];
+  const poDocNumber = purchaseOrderDocNumber(sfcInvoiceRaw);
+  if (poDocNumber) {
+    for (const app of apps) candidates.push({ app, docNumber: poDocNumber });
+  }
+  const done = doneMap.get(enrolmentId.toLowerCase().trim());
+  if (done?.qboInvoiceId) {
+    for (const app of apps) candidates.push({ app, id: done.qboInvoiceId, docNumber: done.qboDocNumber || '' });
+  }
+  const l6 = enrolmentLast6(enrolmentId);
+  const l6Match = l6 ? qbInvoiceByLast6.get(l6) : undefined;
+  if (l6Match) candidates.push({ app: l6Match.app, id: l6Match.id, docNumber: l6Match.docNumber });
+
+  for (const cand of candidates) {
+    let invoiceId = cand.id ?? null;
+    if (!invoiceId && cand.docNumber) {
+      const found = await qbFindInvoiceByDocNumber([cand.app], cand.docNumber);
+      invoiceId = found?.id ?? null;
+    }
+    if (!invoiceId) continue;
+
+    const full = await qbReadInvoiceFull(cand.app, invoiceId);
+    if (!full) continue;
+    const verify = await verifySfcInvoiceMatch({
+      invoiceRaw: full.raw,
+      docNumber: full.docNumber || cand.docNumber,
+      matchedEnrolmentId: enrolmentId,
+      excelNric: row.individual_nric,
+      excelCourseRef: row.course_reference_number,
+    });
+    if (!verify.ok) continue;
+
+    const finalDoc = full.docNumber || cand.docNumber;
+    await upsertInvoiceJobsCache(enrolmentId, invoiceId, finalDoc);
+    await pool.query(
+      `UPDATE public.sfc_import_rows SET main_qbo_invoice_id = $2::varchar, main_qbo_doc_number = $3::varchar WHERE id = $1::int`,
+      [row.id, invoiceId, finalDoc]
+    );
+    return true;
+  }
+  return false;
 }
 
 async function qbFetchAllInvoices(app: string): Promise<Array<{ id: string; docNumber: string | null }>> {
@@ -207,6 +283,71 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const nonDaRows = allUnmatchedRows.filter((row) => !realApplicationId(row.da_application_id));
     const stage2Candidates: typeof allUnmatchedRows = [];
 
+    // Step 1: Fix invoice_jobs rows that already have qbo_invoice_id but wrong status
+    await pool.query(
+      `UPDATE public.invoice_jobs SET status = 'done', updated_at = now()
+       WHERE status != 'done' AND qbo_invoice_id IS NOT NULL`
+    );
+
+    // Step 2: Build last6 → enrolment map for the bulk TC-invoice QB scan below. Built from
+    // EVERY unmatched row, DA included — a DA row's payment target is always the SFC-CA invoice
+    // (resolved separately below), but its Customer (TC) invoice is still worth finding and
+    // showing for reference, and doing it here means one shared bulk fetch instead of a second
+    // one just for DA rows.
+    const last6Map = new Map<string, string>();
+    const enrolmentIdSet = new Set<string>();
+    for (const row of allUnmatchedRows) {
+      const eid = String(row.matched_enrolment_id || '').trim();
+      if (!eid) continue;
+      const l6 = enrolmentLast6(eid);
+      if (!l6) continue;
+      if (last6Map.has(l6)) {
+        last6Map.delete(l6); // collision — skip ambiguous entries
+      } else {
+        last6Map.set(l6, eid);
+        enrolmentIdSet.add(eid);
+      }
+    }
+
+    // Step 3: Check invoice_jobs for already-done entries (handles status fix from Step 1)
+    const alreadyDoneEarly = await pool.query(
+      `SELECT enrolment_id::text AS enrolment_id,
+              qbo_invoice_id::text AS qbo_invoice_id,
+              qbo_doc_number::text AS qbo_doc_number
+       FROM public.invoice_jobs
+       WHERE status = 'done'
+         AND qbo_invoice_id IS NOT NULL
+         AND LOWER(TRIM(enrolment_id)) = ANY(
+           SELECT LOWER(TRIM(unnest($1::text[])))
+         )`,
+      [Array.from(enrolmentIdSet)]
+    );
+    const doneMap = new Map<string, { qboInvoiceId: string; qboDocNumber: string | null }>();
+    for (const rr of alreadyDoneEarly.rows) {
+      doneMap.set(String(rr.enrolment_id).toLowerCase().trim(), {
+        qboInvoiceId: String(rr.qbo_invoice_id),
+        qboDocNumber: rr.qbo_doc_number ? String(rr.qbo_doc_number) : null,
+      });
+    }
+
+    // Step 4: Bulk-fetch all QB invoices (paginated) and match by last-6 DocNumber suffix.
+    // Only TC-format customer invoices are eligible — GRN-/SFC- supplemental invoices share
+    // the enrolment suffix and would otherwise be misattributed. This suffix match is only a
+    // CANDIDATE — every use of it below re-fetches the full invoice and requires it to verify
+    // against the claim's own NRIC/course reference before it's ever accepted or linked.
+    const qbInvoiceByLast6 = new Map<string, { id: string; docNumber: string; app: string }>();
+    for (const app of apps) {
+      const allInvoicesEarly = await qbFetchAllInvoices(app);
+      for (const inv of allInvoicesEarly) {
+        if (!inv.docNumber) continue;
+        if (!isCustomerInvoiceDocNumber(inv.docNumber)) continue;
+        const suffix = inv.docNumber.slice(-6);
+        if (last6Map.has(suffix) && !qbInvoiceByLast6.has(suffix)) {
+          qbInvoiceByLast6.set(suffix, { id: inv.id, docNumber: inv.docNumber, app });
+        }
+      }
+    }
+
     // ---------- DA rows: resolve the exact SFC-CA invoice by its known DocNumber ----------
     for (const row of daRows) {
       try {
@@ -257,6 +398,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           [row.id, found.id, full.docNumber || desiredDoc, batchId]
         );
         resolved++;
+
+        // Best-effort, reference-only: also try to find this same enrolment's Customer (TC)
+        // invoice for the "Customer Invoice No" column. Never affects match_status, the SFC
+        // payment target above, or the resolved/notFound/rejected counters — a DA row is fully
+        // resolved and ready regardless of whether this side lookup finds anything.
+        try {
+          await linkReferenceTcInvoiceForDaRow(row, full.raw, apps, doneMap, qbInvoiceByLast6);
+        } catch {
+          // best-effort
+        }
       } catch (e) {
         errors++;
         console.error('[sfc-import/sync-invoice-ids] DA row error:', e instanceof Error ? e.message : e);
@@ -264,69 +415,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     // ---------- Non-DA rows: resolve the Customer (TC) invoice, exactly as before ----------
+    // (last6Map / doneMap / qbInvoiceByLast6 were already built above, from ALL unmatched rows.)
     if (nonDaRows.length > 0) {
-      // Step 1: Fix invoice_jobs rows that already have qbo_invoice_id but wrong status
-      await pool.query(
-        `UPDATE public.invoice_jobs SET status = 'done', updated_at = now()
-         WHERE status != 'done' AND qbo_invoice_id IS NOT NULL`
-      );
-
-      // Step 2: Build last6 → enrolment map for bulk QB scan
-      const last6Map = new Map<string, string>();
-      const enrolmentIdSet = new Set<string>();
-      for (const row of nonDaRows) {
-        const eid = String(row.matched_enrolment_id || '').trim();
-        if (!eid) continue;
-        const l6 = enrolmentLast6(eid);
-        if (!l6) continue;
-        if (last6Map.has(l6)) {
-          last6Map.delete(l6); // collision — skip ambiguous entries
-        } else {
-          last6Map.set(l6, eid);
-          enrolmentIdSet.add(eid);
-        }
-      }
-
-      // Step 3: Check invoice_jobs for already-done entries (handles status fix from Step 1)
-      const alreadyDone = await pool.query(
-        `SELECT enrolment_id::text AS enrolment_id,
-                qbo_invoice_id::text AS qbo_invoice_id,
-                qbo_doc_number::text AS qbo_doc_number
-         FROM public.invoice_jobs
-         WHERE status = 'done'
-           AND qbo_invoice_id IS NOT NULL
-           AND LOWER(TRIM(enrolment_id)) = ANY(
-             SELECT LOWER(TRIM(unnest($1::text[])))
-           )`,
-        [Array.from(enrolmentIdSet)]
-      );
-      const doneMap = new Map<string, { qboInvoiceId: string; qboDocNumber: string | null }>();
-      for (const rr of alreadyDone.rows) {
-        doneMap.set(String(rr.enrolment_id).toLowerCase().trim(), {
-          qboInvoiceId: String(rr.qbo_invoice_id),
-          qboDocNumber: rr.qbo_doc_number ? String(rr.qbo_doc_number) : null,
-        });
-      }
-
-      // Step 4: Bulk-fetch all QB invoices (paginated) and match by last-6 DocNumber suffix.
-      // Only TC-format customer invoices are eligible — GRN-/SFC- supplemental invoices share
-      // the enrolment suffix and would otherwise be misattributed. This suffix match is only a
-      // CANDIDATE — Step 5 below re-fetches each candidate's full content and requires it to
-      // verify against the claim's own NRIC/course reference before it's ever accepted.
-      const qbInvoiceByLast6 = new Map<string, { id: string; docNumber: string; app: string }>();
-      for (const app of apps) {
-        const allInvoices = await qbFetchAllInvoices(app);
-        for (const inv of allInvoices) {
-          if (!inv.docNumber) continue;
-          if (!isCustomerInvoiceDocNumber(inv.docNumber)) continue;
-          const suffix = inv.docNumber.slice(-6);
-          if (last6Map.has(suffix) && !qbInvoiceByLast6.has(suffix)) {
-            qbInvoiceByLast6.set(suffix, { id: inv.id, docNumber: inv.docNumber, app });
-          }
-        }
-      }
-
-      // Step 5: Update each non-DA row. Rows whose invoice can't be found by the last-6-digit
+      // Update each non-DA row. Rows whose invoice can't be found by the last-6-digit
       // scan (Step 4 only considers standard-format DocNumbers) fall through to Stage 2 below,
       // rather than being counted as notFound immediately.
       for (const row of nonDaRows) {

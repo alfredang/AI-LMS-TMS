@@ -132,6 +132,17 @@ async function qbFindInvoiceByEnrolmentId(apps: string[], enrolmentId: string): 
   return null;
 }
 
+/** The "Purchase Order #" custom field QuickBooks invoices carry — createDirectApplicationSfcInvoice
+ *  stamps every SFC-CA invoice's PO# with its main Customer (TC) invoice's own DocNumber at creation
+ *  time (confirmed live), so a just-read SFC-CA invoice already names its own TC invoice directly —
+ *  no extra search needed for the common case. */
+function purchaseOrderDocNumber(invoiceRaw: any): string | null {
+  const fields = Array.isArray(invoiceRaw?.CustomField) ? invoiceRaw.CustomField : invoiceRaw?.CustomField ? [invoiceRaw.CustomField] : [];
+  const po = fields.find((f: any) => String(f?.Name || '').trim().toLowerCase() === 'purchase order #');
+  const value = po?.StringValue ? String(po.StringValue).trim() : '';
+  return value || null;
+}
+
 async function qbFindInvoiceByDocNumber(apps: string[], docNumber: string): Promise<{
   app: string;
   id: string;
@@ -799,6 +810,10 @@ export async function sfcStage1ParseMatchAndPersist(input: {
     let qboInvoiceBalance: number | null = null;
     let resolvedMatchStatus = 'ready';
     const reviewReasons: string[] = [];
+    // DA-only, reference-only: the Customer (TC) invoice for the "Customer Invoice No" column.
+    // Never the SFC payment target (that stays matched_qbo_invoice_id/qboInvoiceId below).
+    let daMainQboInvoiceId: string | null = null;
+    let daMainQboDocNumber: string | null = null;
 
     // DA rows can be "ready" even before the supplemental SFC invoice exists.
     // In that case, Stage 2 will create the invoice (DocNumber SFC-CA-...) and then apply payment.
@@ -847,6 +862,33 @@ export async function sfcStage1ParseMatchAndPersist(input: {
         } else if (invData.balance === 0 || historicallyMarkedApplied) {
           resolvedMatchStatus = 'already_applied';
         }
+
+        // Best-effort, reference-only: a verified SFC-CA invoice already names its own Customer
+        // (TC) invoice via its PO# field — one extra exact-match QB call, only when isDa and a
+        // PO# is actually present. Never touches match_status or the SFC payment target above.
+        if (verify.ok && isDa) {
+          const poDoc = purchaseOrderDocNumber(invData.raw);
+          if (poDoc) {
+            try {
+              const tcFound = await qbFindInvoiceByDocNumber(apps, poDoc);
+              if (tcFound?.id) {
+                const tcVerify = await verifySfcInvoiceMatch({
+                  invoiceRaw: (await qbGetInvoiceById(tcFound.app, tcFound.id))?.raw,
+                  docNumber: tcFound.docNumber || poDoc,
+                  matchedEnrolmentId: enrolmentId,
+                  excelNric: individualNric,
+                  excelCourseRef: courseRefNumber,
+                });
+                if (tcVerify.ok) {
+                  daMainQboInvoiceId = tcFound.id;
+                  daMainQboDocNumber = tcFound.docNumber || poDoc;
+                }
+              }
+            } catch {
+              // best-effort
+            }
+          }
+        }
       }
     } else if (historicallyMarkedApplied) {
       // We know a payment was created previously, but no invoice id could be resolved to
@@ -872,8 +914,9 @@ export async function sfcStage1ParseMatchAndPersist(input: {
     // rather than the raw, NEVER-content-verified cache lookup (mainInvoiceId/mainDocNumber) —
     // that raw cache is exactly what previously caused a wrong invoice number to be shown/used
     // (confirmed live: a coincidental last-6-digit DocNumber collision). For a DA row this is
-    // left null here; only Sync QB Invoice IDs' verified search (sync-invoice-ids.ts) is trusted
-    // to populate it.
+    // whatever the verified PO#-based lookup above found (often nothing on first upload before
+    // the TC invoice is even known yet) — Sync QB Invoice IDs' search is the other, more
+    // exhaustive place this gets filled in when the PO# lookup here comes up empty.
     await insertSfcImportRow({
       ...baseFields,
       match_status: resolvedMatchStatus,
@@ -882,8 +925,8 @@ export async function sfcStage1ParseMatchAndPersist(input: {
       sponsorship_type: sponsorshipType,
       da_application_id: daApplicationId,
       da_sfc_invoice_id: daSfcInvoiceId,
-      main_qbo_invoice_id: isDa ? null : qboInvoiceId,
-      main_qbo_doc_number: isDa ? null : qboDocNumber,
+      main_qbo_invoice_id: isDa ? daMainQboInvoiceId : qboInvoiceId,
+      main_qbo_doc_number: isDa ? daMainQboDocNumber : qboDocNumber,
       matched_qbo_invoice_id: qboInvoiceId,
       matched_qbo_doc_number: qboDocNumber,
       matched_qbo_invoice_balance: qboInvoiceBalance,
