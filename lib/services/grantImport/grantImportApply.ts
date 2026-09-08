@@ -185,7 +185,7 @@ async function qbFindInvoiceByScanningRecentInvoices(
   app: string | undefined,
   grantId: string,
   paymentDate: string
-): Promise<{ id: string; customerRef?: string } | null> {
+): Promise<{ id: string; customerRef?: string; raw?: any } | null> {
   const d = parseIsoDate(paymentDate);
   if (!d) return null;
   const end = new Date(d.getTime() + 24 * 60 * 60 * 1000);
@@ -205,7 +205,7 @@ async function qbFindInvoiceByScanningRecentInvoices(
     if (arr.length === 0) return null;
     const hit = arr.find((inv: any) => invoiceHasGrantInDescription(inv, grantId));
     if (hit?.Id) {
-      return { id: String(hit.Id), customerRef: hit?.CustomerRef?.value ? String(hit.CustomerRef.value) : undefined };
+      return { id: String(hit.Id), customerRef: hit?.CustomerRef?.value ? String(hit.CustomerRef.value) : undefined, raw: hit };
     }
     if (arr.length < pageSize) return null;
   }
