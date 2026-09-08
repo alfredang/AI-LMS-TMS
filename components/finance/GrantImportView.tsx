@@ -361,7 +361,24 @@ const GrantImportView: React.FC = () => {
         body: JSON.stringify({ startDate: startDateDdMmYyyy }),
       });
       const json = await res.json();
-      if (!res.ok || !json?.success) throw new Error(json?.error || 'Failed to start fetch');
+      if (!res.ok || !json?.success) {
+        // A 409 here means a PREVIOUS run is stuck (e.g. its office-machine relay was
+        // interrupted mid-handshake by a deploy) rather than something actually running —
+        // it still carries that job's id so it can be cancelled. Without capturing it here,
+        // the Cancel button (gated on fetchJobId) never appears and there is no way to
+        // clear it from the UI at all.
+        const stuckJobId = String(json?.jobId || '').trim();
+        if (stuckJobId) {
+          setFetchJobId(stuckJobId);
+          setFetchError(
+            `${json?.error || 'A previous fetch is stuck.'} Click Cancel below to clear it, then try again.`
+          );
+        } else {
+          setFetchError(json?.error || 'Failed to start fetch');
+        }
+        setFetching(false);
+        return;
+      }
       const jobId = String(json?.jobId || '').trim();
       if (!jobId) throw new Error('Fetch job did not start');
       setFetchJobId(jobId);
@@ -456,7 +473,7 @@ const GrantImportView: React.FC = () => {
           return;
         }
         if (job.phase === 'error' || job.phase === 'cancelled') {
-          if (job.phase === 'error') setFetchError(job.error || 'Fetch failed');
+          setFetchError(job.phase === 'error' ? job.error || 'Fetch failed' : null);
           setFetching(false);
           setFetchJobId(null);
           setFetchScreen(null);
@@ -802,7 +819,7 @@ const GrantImportView: React.FC = () => {
           >
             {fetching ? 'Fetching…' : 'Fetch & Upload'}
           </Button>
-          {fetching && (
+          {(fetching || fetchJobId) && (
             <Button type="button" variant="outline" onClick={() => void cancelFetch()}>
               Cancel
             </Button>
