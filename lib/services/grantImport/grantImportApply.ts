@@ -518,50 +518,14 @@ export async function applyGrantImportBatch(input: {
       const customerRef = inv.customerRef;
       if (!customerRef) throw new Error(`QuickBooks invoice ${grantId} has no CustomerRef`);
 
-      // Spillover / wrong-invoice prevention (hard rule, not a suggestion): only ever write a
-      // payment when the invoice was located by an exact, structured-field match, OR — for the
-      // one self-referential tier below — when the content check a few lines down independently
-      // confirms it. Three resolution tiers may reach a write:
-      //   - 'docNumber': this GRN's own DocNumber.
-      //   - 'enrolment_grant_docNumber_ssg': a sibling GRN's DocNumber, where the sibling
-      //     relationship is confirmed by ssg_grants (synced from SSG/TPGateway — the same data
-      //     Consolidated Finance reads from).
-      //   - 'enrolment_grant_docNumber_history': a sibling GRN only known from this app's own
-      //     past uploads (self-referential — never externally re-verified on its own, which is
-      //     why it does NOT skip the content-verification check below like the two tiers above
-      //     effectively always pass it; here it's the only thing standing between this tier and
-      //     a write). If the resolved invoice's own line text doesn't actually cite this grant,
-      //     it's rejected same as before.
-      // One tier is NEVER allowed to write, no exception:
-      //   - 'date_window_scan': a fuzzy scan of nearby invoices' Line.Description text — a
-      //     heuristic, not an identity check, and the exact kind of loose match that previously
-      //     caused a payment to land on the wrong invoice and let QuickBooks' AutoApplyPayments
-      //     setting spill the difference onto that customer's other open invoices. Unlike the
-      //     history tier, this one isn't even grant-ID-based, so content verification wouldn't
-      //     be a meaningful safeguard for it.
-      if (inv.resolvedBy === 'date_window_scan') {
-        throw new Error(
-          `Refusing to auto-apply: invoice for grant ${grantId} could only be located via a fuzzy date-window text scan ` +
-            `(no exact DocNumber match on this GRN or any ssg_grants-verified sibling GRN for this enrolment). Auto-apply is ` +
-            `disabled for this match type to prevent payments from landing on the wrong invoice. Verify the correct invoice ` +
-            `in QuickBooks manually, or wait for ssg_grants to sync this enrolment's grants (or fix the data) and re-upload ` +
-            `so it resolves with a verified match.`
-        );
-      }
-
-      // Content verification. For 'docNumber' / 'enrolment_grant_docNumber_ssg', this is a
-      // second, independent layer on top of the tier check above — even those are only trusted
-      // as far as the DocNumber/ssg_grants data feeding them is correct. For
-      // 'enrolment_grant_docNumber_history' (self-referential, never externally confirmed on its
-      // own), this check is the ONLY thing that can still let it through — it's the sole reason
-      // that tier is allowed to reach a write at all. Every real grant invoice line in this
-      // company's QuickBooks carries "Grant Ref #: <that line's own GRN>" in its Description
+      // Content verification, unconditional on resolution tier. Every real grant invoice line in
+      // this company's QuickBooks carries "Grant Ref #: <that line's own GRN>" in its Description
       // (confirmed against live data), so the resolved invoice's own line text must cite this
-      // exact grant_id before a payment is allowed to land on it. Same defense-in-depth pattern
-      // already proven for SFC claims (verifySfcInvoiceMatch, sfcInvoiceVerify.ts) after an
-      // identical "trusted a resolved id without checking its content" incident there. A stale
-      // ssg_grants row, a reused/duplicate DocNumber, a wrong sibling-GRN history pairing, or any
-      // future regression in the resolver is caught here instead of silently writing.
+      // exact grant_id before this row is allowed to touch it at all — whether that's recognizing
+      // an already-correct payment below, or (for the trusted tiers only, see the tier gate further
+      // down) creating a new one. Same defense-in-depth pattern already proven for SFC claims
+      // (verifySfcInvoiceMatch, sfcInvoiceVerify.ts) after an identical "trusted a resolved id
+      // without checking its content" incident there.
       if (!invoiceHasGrantInDescription(inv.raw, grantId)) {
         throw new Error(
           `Refusing to auto-apply: resolved invoice ${inv.id} (matched via ${inv.resolvedBy}) does not mention grant ${grantId} ` +
@@ -743,6 +707,38 @@ export async function applyGrantImportBatch(input: {
         } catch {
           // best-effort
         }
+      }
+
+      // Spillover / wrong-invoice prevention (hard rule, not a suggestion): only ever CREATE a
+      // new payment when the invoice was located by an exact, structured-field match, OR — for
+      // the one self-referential tier below — when the content check above independently
+      // confirmed it. This gate sits here, after every idempotency check above has already had
+      // its chance to recognize an existing correct payment and `continue` out — a row that's
+      // already correctly paid in QuickBooks must be reported as applied regardless of which
+      // tier located the invoice, since recognizing existing money is a read, not a write, and
+      // carries none of the spillover risk this gate exists to prevent. Only a genuinely NEW
+      // write is gated by trust tier. Three resolution tiers may reach a write:
+      //   - 'docNumber': this GRN's own DocNumber.
+      //   - 'enrolment_grant_docNumber_ssg': a sibling GRN's DocNumber, where the sibling
+      //     relationship is confirmed by ssg_grants (synced from SSG/TPGateway — the same data
+      //     Consolidated Finance reads from).
+      //   - 'enrolment_grant_docNumber_history': a sibling GRN only known from this app's own
+      //     past uploads (self-referential — never externally re-verified on its own; the content
+      //     check above is the only thing standing between this tier and a write).
+      // One tier is NEVER allowed to write, no exception:
+      //   - 'date_window_scan': a fuzzy scan of nearby invoices' Line.Description text — a
+      //     heuristic, not an identity check, and the exact kind of loose match that previously
+      //     caused a payment to land on the wrong invoice and let QuickBooks' AutoApplyPayments
+      //     setting spill the difference onto that customer's other open invoices.
+      if (inv.resolvedBy === 'date_window_scan') {
+        throw new Error(
+          `Refusing to auto-apply: invoice for grant ${grantId} could only be located via a fuzzy date-window text scan ` +
+            `(no exact DocNumber match on this GRN or any ssg_grants-verified sibling GRN for this enrolment), and no ` +
+            `existing QuickBooks payment for this exact invoice/amount/date was found to recognize as already applied. ` +
+            `Auto-apply is disabled for this match type to prevent a NEW payment from landing on the wrong invoice. Verify ` +
+            `the correct invoice in QuickBooks manually, or wait for ssg_grants to sync this enrolment's grants (or fix the ` +
+            `data) and re-upload so it resolves with a verified match.`
+        );
       }
 
       // Safety guard: never create a payment for more than the resolved invoice actually owes.
