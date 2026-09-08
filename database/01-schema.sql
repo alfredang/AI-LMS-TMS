@@ -1378,6 +1378,8 @@ CREATE TABLE public.course (
     cas_score numeric(6,2),
     es_score numeric(6,2),
     whitelist_status text,
+    actual_renew_date date,
+    renewal_application_no text,
     CONSTRAINT course_assessment_hours_check CHECK ((assessment_hours >= (0)::numeric)),
     CONSTRAINT course_course_fee_check CHECK ((course_fee >= (0)::numeric)),
     CONSTRAINT course_dates CHECK ((end_date >= start_date)),
