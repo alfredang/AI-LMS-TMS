@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { getLocalYMD } from '../../../lib/dateHelpers';
 
 interface CourseRow {
   course_id: string;
@@ -130,8 +131,8 @@ async function handler(
       paymentStatus: row.payment_status,
       assessmentStatus: row.assessment_status,
       enrollmentDate: row.enrolment_date,
-      startDate: row.start_date,
-      endDate: row.end_date,
+      startDate: row.start_date ? getLocalYMD(row.start_date) : null,
+      endDate: row.end_date ? getLocalYMD(row.end_date) : null,
       classStatus: row.class_status,
       classType: row.class_type || 'Physical',
       virtualMeetingLink: row.virtual_meeting_link || null,
