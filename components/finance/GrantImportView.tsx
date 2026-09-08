@@ -161,6 +161,14 @@ const GrantImportView: React.FC = () => {
   // (and be re-selectable) in both at once.
   const isStillReady = (r: any) => String(r.match_status) === 'ready' && String(r.apply_status || '').toLowerCase() !== 'applied';
 
+  // Rows that already had a correct QuickBooks payment before this apply run (match_status
+  // 'already_applied' from stage1) also get apply_status 'applied' once Apply recognizes and
+  // confirms them — but that's the outcome of a read-only idempotency check, not a new write.
+  // The "Applied" tab is meant to show what THIS apply run actually did, so it must exclude
+  // these — they belong exclusively in the "Already Applied" tab, not double-counted in both.
+  const isFreshlyApplied = (r: any) =>
+    String(r.apply_status || '').toLowerCase() === 'applied' && String(r.match_status) !== 'already_applied';
+
   const counts = useMemo(() => {
     const rows = preview?.rows || [];
     const total = rows.length;
@@ -182,7 +190,8 @@ const GrantImportView: React.FC = () => {
     const applyStatuses = ['applied', 'skipped', 'failed', 'pending'];
     let result = preview.rows;
     if (rowFilter !== 'all') {
-      if (applyStatuses.includes(rowFilter))
+      if (rowFilter === 'applied') result = result.filter(isFreshlyApplied);
+      else if (applyStatuses.includes(rowFilter))
         result = result.filter((r) => String(r.apply_status || '').toLowerCase() === rowFilter);
       else if (rowFilter === 'ready')
         result = result.filter(isStillReady);
@@ -1167,7 +1176,7 @@ const GrantImportView: React.FC = () => {
                   { key: 'ambiguous',      label: 'Ambiguous',      count: counts.ambiguous,                                                                        activeClass: 'bg-red-500 text-white' },
                   { key: 'invalid',        label: 'Invalid',        count: counts.invalid,                                                                          activeClass: 'bg-gray-500 text-white' },
                   ...(applyResult ? [
-                    { key: 'applied', label: 'Applied', count: preview.rows.filter((r) => String(r.apply_status || '') === 'applied').length, activeClass: 'bg-emerald-600 text-white' },
+                    { key: 'applied', label: 'Applied', count: preview.rows.filter(isFreshlyApplied).length, activeClass: 'bg-emerald-600 text-white' },
                     { key: 'skipped', label: 'Skipped', count: preview.rows.filter((r) => String(r.apply_status || '') === 'skipped').length, activeClass: 'bg-amber-500 text-white' },
                     { key: 'failed',  label: 'Failed',  count: preview.rows.filter((r) => String(r.apply_status || '') === 'failed').length,  activeClass: 'bg-red-500 text-white' },
                   ] : []),
