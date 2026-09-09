@@ -247,7 +247,7 @@ async function runJob(id: string, opts: StartGrantFetchOptions): Promise<void> {
       await shoot(page, id, 'grant-fetch-download-failed');
       patchGrantFetchJob(id, {
         phase: 'error',
-        error: 'Could not find/trigger the Download/Export button on the Financial Transactions page. A debug screenshot was saved to scratch/.',
+        error: 'Could not download the Financial Transactions export — either the Excel View button could not be found/clicked, or it was clicked but the export did not finish generating within 3 minutes (a wide date range with thousands of rows takes longer to export). A debug screenshot was saved to scratch/.',
         message: 'Download failed.',
       });
       return;
@@ -782,8 +782,14 @@ async function downloadDisbursementExport(page: Page, jobId: string): Promise<{ 
   }
 
   try {
+    // 30s was tuned against the small, default-30-days result set. Now that the Payment
+    // From fix correctly widens the query (confirmed live: 2,775 rows vs a few dozen
+    // before), generating that much larger Excel server-side plausibly takes longer than
+    // 30s — the button is found and clicked fine, but the download event never fires
+    // before waitForEvent gives up, which this function previously reported as
+    // indistinguishable from "button not found" at all. 3 minutes gives real headroom.
     const [download] = await Promise.all([
-      page.waitForEvent('download', { timeout: 30000 }),
+      page.waitForEvent('download', { timeout: 180000 }),
       button.click({ timeout: 10000 }),
     ]);
     const suggested = download.suggestedFilename() || `tpgateway-disbursement-${Date.now()}.xlsx`;
@@ -791,7 +797,7 @@ async function downloadDisbursementExport(page: Page, jobId: string): Promise<{ 
     await download.saveAs(filepath);
     return { filepath, filename: suggested };
   } catch (e) {
-    log('clicked Download/Export but no download completed:', e instanceof Error ? e.message : e);
+    log('clicked Download/Export but no download completed within 3 minutes (large exports take longer to generate):', e instanceof Error ? e.message : e);
     return null;
   }
 }
