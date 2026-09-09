@@ -2185,6 +2185,23 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const res = await fetch(`/api/admin/ca-verify-drive?${params.toString()}`);
       const json = await res.json();
       if (json.valid) {
+        // The server re-pulls the PDF when QuickBooks has been edited since we
+        // saved ours, so say so — otherwise the document silently differs from
+        // the one the admin remembers generating.
+        //
+        // The toast alone is not enough here: opening the PDF switches the
+        // browser to a new tab immediately, and the toast has expired by the
+        // time anyone looks back. So the same message also goes to the
+        // persistent line above the table, which is still there on return.
+        if (json.refreshed) {
+          const docNumber = String(
+            row[kind === 'grant' ? 'Grant Invoice Doc Number' : 'Invoice Doc Number'] || ''
+          ).trim();
+          const note = `${docNumber ? `Invoice ${docNumber}` : 'This invoice'} was edited in QuickBooks — the PDF here has been updated to match.`;
+          showToast('Invoice was edited in QuickBooks — PDF updated');
+          setInvoiceMessage(note);
+          void reloadRows();
+        }
         window.open(url || `https://drive.google.com/file/d/${fileId}/view`, '_blank', 'noopener');
       } else {
         setBrokenDocumentKeys(prev => new Set(prev).add(key));
