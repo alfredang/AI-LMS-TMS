@@ -584,6 +584,88 @@ async function resolveEmployerCustomerRef(opts: {
   );
 }
 
+/**
+ * Build the invoice's BILL TO block for a Company Application.
+ *
+ * QBO customers for employers are often auto-created (or were created by hand)
+ * with the contact person's name as the first billing-address line, so the
+ * printed invoice read "Kenneth Ong / MacDermid Performance Solutions". For a
+ * company invoice the employer's organisation must be the name being billed, so
+ * we compose BillAddr ourselves:
+ *
+ *   Line1 = employer organisation name (always)
+ *   Line2+ = the customer's existing address lines, minus any line that is just
+ *            the contact person's name or a repeat of the company name
+ *
+ * The street/city/postal fields are carried over untouched — this only changes
+ * WHO is billed, not WHERE. If the customer can't be read we still force the
+ * company name onto Line1 and blank the rest rather than let a person's name
+ * print. Line2–5 are always sent (blank when unused) so QBO doesn't merge in
+ * stale lines from the customer record.
+ */
+const BILL_ADDR_LINE_KEYS = ['Line1', 'Line2', 'Line3', 'Line4', 'Line5'] as const;
+const BILL_ADDR_PLACE_KEYS = ['City', 'CountrySubDivisionCode', 'PostalCode', 'Country'] as const;
+
+function normaliseAddrLine(value: string): string {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+async function buildEmployerBillAddr(opts: {
+  customerRef: string;
+  employerOrgName: string;
+  employerContactName?: string;
+}): Promise<Record<string, string>> {
+  const company = String(opts.employerOrgName || '').trim();
+  const addr: Record<string, string> = { Line1: '', Line2: '', Line3: '', Line4: '', Line5: '' };
+  if (!company) return addr;
+
+  let customer: any = null;
+  try {
+    const safeId = escapeQboLiteral(String(opts.customerRef || ''));
+    const data = await qboQuery(undefined, `SELECT * FROM Customer WHERE Id = '${safeId}' MAXRESULTS 1`);
+    const raw = data?.QueryResponse?.Customer;
+    customer = (Array.isArray(raw) ? raw[0] : raw) || null;
+  } catch (err) {
+    console.warn(
+      `[ca-invoice] Could not read QBO customer ${opts.customerRef} for BillAddr — billing to company name only:`,
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  const src = customer?.BillAddr || {};
+
+  // Names that must not appear in BILL TO: the application's contact person and
+  // the person name QBO holds on the customer record.
+  const personKeys = new Set<string>();
+  const addPerson = (v: string) => {
+    const k = normaliseAddrLine(v);
+    if (k) personKeys.add(k);
+  };
+  addPerson(String(opts.employerContactName || ''));
+  addPerson([customer?.GivenName, customer?.MiddleName, customer?.FamilyName].filter(Boolean).join(' '));
+
+  const companyKey = normaliseAddrLine(company);
+  const kept: string[] = [];
+  for (const key of BILL_ADDR_LINE_KEYS) {
+    const value = String(src?.[key] || '').trim();
+    if (!value) continue;
+    const norm = normaliseAddrLine(value);
+    if (norm === companyKey) continue;
+    if (personKeys.has(norm)) continue;
+    kept.push(value);
+  }
+
+  [company, ...kept].slice(0, BILL_ADDR_LINE_KEYS.length).forEach((value, i) => {
+    addr[BILL_ADDR_LINE_KEYS[i]] = value;
+  });
+  for (const key of BILL_ADDR_PLACE_KEYS) {
+    const value = String(src?.[key] || '').trim();
+    if (value) addr[key] = value;
+  }
+
+  return addr;
+}
+
 export interface CaInvoiceLearner {
   applicationId: string;
   fullName: string;
@@ -1010,14 +1092,21 @@ export async function createCompanyApplicationInvoice(
     };
   }
 
-  // ShipAddr intentionally blanked — CA invoices have no shipping concept,
-  // and QBO otherwise inherits the customer's default ShipAddr and renders a
-  // "Shipping to" box on the PDF. BillAddr is left alone so the employer's
-  // QBO billing address still prints normally.
+  // BillAddr is billed to the EMPLOYER ORGANISATION, not the contact person —
+  // see buildEmployerBillAddr(). ShipAddr is intentionally blanked: CA invoices
+  // have no shipping concept, and QBO otherwise inherits the customer's default
+  // ShipAddr and renders a "Shipping to" box on the PDF.
+  const billAddr = await buildEmployerBillAddr({
+    customerRef,
+    employerOrgName: input.employerOrgName,
+    employerContactName: input.employerContactName,
+  });
+
   const invoiceBody = {
     CustomerRef: { value: customerRef },
     DocNumber: docNumber,
     BillEmail: { Address: input.employerContactEmail },
+    BillAddr: billAddr,
     ShipAddr: {
       Line1: '',
       Line2: '',
