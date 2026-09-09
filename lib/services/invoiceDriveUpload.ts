@@ -90,6 +90,60 @@ export async function trashDriveFile(fileId: string | null | undefined): Promise
   }
 }
 
+/**
+ * When this Drive file was last written, as an ISO timestamp.
+ *
+ * For an invoice PDF that is the moment WE uploaded it, which makes it the
+ * yardstick for "is our copy still current?" — compare it against the
+ * invoice's own last-updated time in QuickBooks and the answer falls out
+ * without needing a column to track it.
+ *
+ * Returns null when the file is gone or Drive cannot be reached; callers
+ * treat that as "cannot tell" and leave the file alone.
+ */
+export async function getDriveFileModifiedTime(fileId: string | null | undefined): Promise<string | null> {
+  const id = String(fileId || '').trim();
+  if (!id) return null;
+  try {
+    const drive = await getDriveClient();
+    const res = await drive.files.get({ fileId: id, fields: 'id, trashed, modifiedTime' });
+    if (!res.data?.id || res.data.trashed === true) return null;
+    return res.data.modifiedTime ? String(res.data.modifiedTime) : null;
+  } catch (err) {
+    console.warn('[invoiceDriveUpload] Could not read modifiedTime:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
+ * Overwrite an existing Drive file's contents, keeping its id and link.
+ *
+ * Deliberately NOT uploadInvoicePdfToDrive: that one dedups by filename and
+ * hands back the file it finds WITHOUT touching its contents, which is right
+ * for "make sure a PDF exists" and useless for "this PDF is out of date".
+ * Updating in place also means any link already shared keeps working and simply
+ * shows the new version.
+ */
+export async function replaceDriveFileContent(params: {
+  fileId: string;
+  pdf: Buffer;
+}): Promise<{ fileId: string; webViewLink: string }> {
+  const drive = await getDriveClient();
+  const res = await drive.files.update({
+    fileId: params.fileId,
+    media: {
+      mimeType: 'application/pdf',
+      body: Readable.from(params.pdf),
+    },
+    fields: 'id, webViewLink',
+  });
+  const id = res.data.id || params.fileId;
+  return {
+    fileId: id,
+    webViewLink: res.data.webViewLink || `https://drive.google.com/file/d/${id}/view`,
+  };
+}
+
 export async function uploadInvoicePdfToDrive(params: {
   pdf: Buffer;
   fileName: string;
