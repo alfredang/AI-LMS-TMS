@@ -89,6 +89,27 @@ const note = (id: string, text: string) => {
   pushGrantFetchLog(id, text);
 };
 
+/**
+ * Run a potentially slow, non-interactive step while periodically touching the
+ * job so grantFetchJobStore's own staleness watchdog (90s with no update, for
+ * any phase other than queued/awaiting_login/needsOperator — see STALE_AFTER_MS
+ * there) doesn't mark it "lost contact" and make the frontend stop polling
+ * while the step is still genuinely, legitimately running. Confirmed live
+ * (2026-09-09): a narrow date range (1 August) worked, a wider one (1 July,
+ * more rows to filter/export) did not — exactly the shape of a >90s stall
+ * killed by that watchdog before this file's own, much longer, internal
+ * timeouts ever got a chance to fire. A real crash still gets caught: nothing
+ * is touching the job if the process is actually dead.
+ */
+async function withHeartbeat<T>(jobId: string, fn: () => Promise<T>): Promise<T> {
+  const heartbeat = setInterval(() => patchGrantFetchJob(jobId, {}), 20000);
+  try {
+    return await fn();
+  } finally {
+    clearInterval(heartbeat);
+  }
+}
+
 // --- public API --------------------------------------------------------------
 
 export interface StartGrantFetchOptions {
@@ -227,11 +248,19 @@ async function runJob(id: string, opts: StartGrantFetchOptions): Promise<void> {
     // still there client-side if finer narrowing is needed after the fact.
     patchGrantFetchJob(id, { phase: 'filtering', message: 'Filtering to Paid…' });
     note(id, `Setting Status = Paid, Payment From = ${opts.startDate}…`);
-    const filtered = await applyFilters(page, opts.startDate);
+    const filtered = await withHeartbeat(id, () => applyFilters(page, opts.startDate));
     if (isGrantFetchCancelled(id)) return finishCancelled(id, 'Cancelled while filtering. Nothing was fetched.');
-    if (!filtered) {
+    if (!filtered.ok) {
       await shoot(page, id, 'grant-fetch-filter-failed');
-      note(id, 'Could not fully drive the Status filter — continuing to scrape whatever is currently shown (may be unfiltered).');
+      // Name the actual failing step(s) — Status, Payment From, and Apply/Search are
+      // independent and any of them can fail on their own; a blanket "Status filter"
+      // message was misleading when e.g. only the Apply click failed to find its button.
+      const failedParts = [
+        !filtered.statusOk && 'Status = Paid',
+        !filtered.dateOk && 'Payment From date',
+        !filtered.applyOk && 'Apply/Search button',
+      ].filter(Boolean);
+      note(id, `Could not fully drive: ${failedParts.join(', ')} — continuing to scrape whatever is currently shown (may be unfiltered).`);
     }
 
     // 4. Download --------------------------------------------------------------
@@ -247,7 +276,7 @@ async function runJob(id: string, opts: StartGrantFetchOptions): Promise<void> {
       await shoot(page, id, 'grant-fetch-download-failed');
       patchGrantFetchJob(id, {
         phase: 'error',
-        error: 'Could not download the Financial Transactions export — either the Excel View button could not be found/clicked, or it was clicked but the export did not finish generating within 3 minutes (a wide date range with thousands of rows takes longer to export). A debug screenshot was saved to scratch/.',
+        error: 'Could not download the Financial Transactions export — either the Excel View button could not be found/clicked, or it was clicked but the export did not finish generating within 5 minutes (a wide date range with thousands of rows takes longer to export). A debug screenshot was saved to scratch/.',
         message: 'Download failed.',
       });
       return;
@@ -472,8 +501,17 @@ async function waitForTableRows(page: Page, timeoutMs: number): Promise<boolean>
  * directly by `input[placeholder="Payment From"]`; its sibling
  * `input[placeholder="Payment To"]` is deliberately left alone.
  */
-async function applyFilters(page: Page, startDate: string): Promise<boolean> {
-  let ok = true;
+interface ApplyFiltersResult {
+  ok: boolean;
+  statusOk: boolean;
+  dateOk: boolean;
+  applyOk: boolean;
+}
+
+async function applyFilters(page: Page, startDate: string): Promise<ApplyFiltersResult> {
+  let statusOk = true;
+  let dateOk = true;
+  let applyOk = true;
 
   // The filter row (Status select, date inputs, everything else) is rendered by an
   // async OutSystems AJAX call after the page itself has loaded — proceeding
@@ -507,6 +545,16 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
       .first();
     if (await statusSelect.count().catch(() => 0)) {
       await statusSelect.selectOption({ label: 'Paid' }).catch(() => statusSelect.selectOption('Paid').catch(() => {}));
+      // Verify it actually landed — the previous version swallowed a failed
+      // selectOption silently (both attempts .catch()'d to a no-op) and never
+      // flagged statusOk, so a genuine Status failure was invisible.
+      const selectedLabel = await statusSelect
+        .evaluate((el: HTMLSelectElement) => el.options[el.selectedIndex]?.text || '')
+        .catch(() => '');
+      if (!/^\s*paid\s*$/i.test(selectedLabel)) {
+        log(`Status select did not land on "Paid" — shows "${selectedLabel}".`);
+        statusOk = false;
+      }
     } else {
       // Not a native <select> — try a custom dropdown. The filter row shows each
       // field's name as placeholder text INSIDE the control itself (same as
@@ -522,20 +570,20 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
         const optionInList = openList.getByText(/^\s*paid\s*$/i).first();
         if (await optionInList.count().catch(() => 0)) {
           await optionInList.click({ timeout: 5000 }).catch(() => {
-            ok = false;
+            statusOk = false;
           });
         } else {
           // Last resort: whichever "Paid" text is topmost/most-recently rendered.
           await page.getByText(/^\s*paid\s*$/i).last().click({ timeout: 5000 }).catch(() => {
-            ok = false;
+            statusOk = false;
           });
         }
       } else {
-        ok = false;
+        statusOk = false;
       }
     }
   } catch {
-    ok = false;
+    statusOk = false;
   }
 
   // Payment From (start date only — see function doc comment for the field mapping).
@@ -575,14 +623,14 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
 
       if (confirmedValue !== startDate) {
         log(`Payment From did not stick — field shows "${confirmedValue}" after setting "${startDate}". Continuing without the date filter.`);
-        ok = false;
+        dateOk = false;
       }
     } else {
       log('expected at least 1 date filter input, found 0 — Payment From was not set.');
-      ok = false;
+      dateOk = false;
     }
   } catch {
-    ok = false;
+    dateOk = false;
   }
 
   // Unconditional, every run — not gated behind dateCount >= 1. Two attempts at
@@ -597,21 +645,97 @@ async function applyFilters(page: Page, startDate: string): Promise<boolean> {
   // Apply / Search. A short pause first in case the date widget syncs its real
   // bound state asynchronously after blur — clicking Apply immediately could
   // otherwise race ahead of that and submit with the pre-typed default.
+  //
+  // REQUIRED, not best-effort: confirmed live (2026-09-09) that a 1-June run
+  // where this step could not find a button still showed the *field* correctly
+  // reading "01-06-2026" (dateOk true) but the *results table* stayed on the
+  // default last-30-days window — i.e. the typed value never actually reached
+  // the server-side query without a real Apply/Search click. An earlier belief
+  // that this page auto-submits on blur was wrong; that same run's "success"
+  // was something else, not evidence the button is optional. Give it the same
+  // generous wait as the Status/date fields (they needed up to 15s to attach)
+  // rather than the 3s this used to allow.
   await page.waitForTimeout(400);
   try {
-    const applyBtn = page.getByRole('button', { name: /^\s*(apply|search|filter)\s*$/i }).first();
-    if (await applyBtn.count().catch(() => 0)) {
+    const applyPatterns = [/^\s*(apply|search|filter)\s*$/i];
+    let applyBtn = null;
+    for (const pattern of applyPatterns) {
+      const roleCandidate = page.getByRole('button', { name: pattern }).first();
+      await roleCandidate.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+      if (await roleCandidate.count().catch(() => 0)) {
+        applyBtn = roleCandidate;
+        break;
+      }
+      const textCandidate = page.getByText(pattern).first();
+      await textCandidate.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+      if (await textCandidate.count().catch(() => 0)) {
+        applyBtn = textCandidate;
+        break;
+      }
+    }
+    if (applyBtn) {
       await applyBtn.click({ timeout: 8000 });
       await page.waitForLoadState('networkidle').catch(() => {});
     } else {
-      ok = false;
+      log('could not find an Apply/Search/Filter button — the typed filters were likely not submitted.');
+      await dumpApplyButtonDiagnostics(page);
+      applyOk = false;
     }
   } catch {
-    ok = false;
+    applyOk = false;
   }
 
-  if (!ok) await dumpStatusFilterDiagnostics(page);
-  return ok;
+  const ok = statusOk && dateOk && applyOk;
+  if (!ok) {
+    log(`applyFilters incomplete — statusOk=${statusOk} dateOk=${dateOk} applyOk=${applyOk}`);
+    await dumpStatusFilterDiagnostics(page);
+  }
+  return { ok, statusOk, dateOk, applyOk };
+}
+
+/**
+ * Write out real DOM ground truth for why the Apply/Search/Filter button can't be found —
+ * same reasoning as dumpDownloadButtonDiagnostics: every element whose text loosely
+ * matches apply/search/filter/go, plus any iframes, so the next fix is based on the
+ * actual markup instead of another label/role guess.
+ */
+async function dumpApplyButtonDiagnostics(page: Page): Promise<void> {
+  try {
+    const info = await page.evaluate(() => {
+      const clean = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim();
+      const describe = (el: Element) => ({
+        tag: el.tagName.toLowerCase(),
+        class: (el as HTMLElement).className || null,
+        role: el.getAttribute('role'),
+        type: el.getAttribute('type'),
+        fullText: clean(el.textContent).slice(0, 80),
+        outerHTMLSnippet: el.outerHTML.slice(0, 500),
+      });
+      const iframes = Array.from(document.querySelectorAll('iframe')).map((f) => ({
+        src: f.getAttribute('src'),
+        id: f.id || null,
+      }));
+      const candidates = Array.from(document.querySelectorAll('body *'))
+        .filter((el) => /^\s*(apply|search|filter|go|submit)\s*$/i.test(clean(el.textContent)))
+        .slice(0, 15)
+        .map((el) => ({ self: describe(el), parent: el.parentElement ? describe(el.parentElement) : null }));
+      // Also every actual <button> and <input type=button|submit> on the page, regardless
+      // of label — in case the real trigger has no visible text at all (icon-only).
+      const allButtons = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], [role="button"]'))
+        .slice(0, 25)
+        .map(describe);
+      return { iframeCount: iframes.length, iframes, candidateCount: candidates.length, candidates, allButtons };
+    });
+    fs.mkdirSync(SHOT_DIR, { recursive: true });
+    fs.writeFileSync(
+      path.join(SHOT_DIR, 'grant-fetch-apply-button-diagnostics.json'),
+      JSON.stringify(info, null, 2),
+      'utf8'
+    );
+    log('Apply button diagnostics saved to scratch/grant-fetch-apply-button-diagnostics.json');
+  } catch (e) {
+    log('could not write apply button diagnostics:', e instanceof Error ? e.message : e);
+  }
 }
 
 /**
@@ -745,6 +869,58 @@ async function dumpDateFilterDiagnostics(page: Page, intended: string, confirmed
 }
 
 /**
+ * Write out real DOM ground truth for why the Excel View button can't be found, when a
+ * screenshot taken moments later clearly shows it. Same reasoning as
+ * dumpStatusFilterDiagnostics/dumpDateFilterDiagnostics: a screenshot proves something is
+ * VISUALLY there, not that Playwright's accessibility-tree/text-node queries can see the
+ * same node — the two most likely reasons for that gap are (a) an iframe, which
+ * page.getByText/getByRole never look inside without an explicit frameLocator, or (b) the
+ * label text being split across sibling nodes/icons so no single element's own text node
+ * reads as a clean "Excel View" match.
+ */
+async function dumpDownloadButtonDiagnostics(page: Page): Promise<void> {
+  try {
+    const info = await page.evaluate(() => {
+      const clean = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim();
+      const describe = (el: Element) => ({
+        tag: el.tagName.toLowerCase(),
+        class: (el as HTMLElement).className || null,
+        role: el.getAttribute('role'),
+        ownTextOnly: clean(
+          Array.from(el.childNodes)
+            .filter((n) => n.nodeType === Node.TEXT_NODE)
+            .map((n) => n.textContent)
+            .join('')
+        ),
+        fullText: clean(el.textContent).slice(0, 80),
+        outerHTMLSnippet: el.outerHTML.slice(0, 500),
+      });
+      const iframes = Array.from(document.querySelectorAll('iframe')).map((f) => ({
+        src: f.getAttribute('src'),
+        id: f.id || null,
+      }));
+      // Broad net: anything whose text loosely contains excel/view/download/export,
+      // regardless of tag, plus its immediate parent (in case the label is a child span
+      // inside the real clickable element).
+      const candidates = Array.from(document.querySelectorAll('body *'))
+        .filter((el) => /excel|view|download|export/i.test(clean(el.textContent)) && clean(el.textContent).length < 40)
+        .slice(0, 15)
+        .map((el) => ({ self: describe(el), parent: el.parentElement ? describe(el.parentElement) : null }));
+      return { iframeCount: iframes.length, iframes, candidateCount: candidates.length, candidates };
+    });
+    fs.mkdirSync(SHOT_DIR, { recursive: true });
+    fs.writeFileSync(
+      path.join(SHOT_DIR, 'grant-fetch-download-button-diagnostics.json'),
+      JSON.stringify(info, null, 2),
+      'utf8'
+    );
+    log('Download button diagnostics saved to scratch/grant-fetch-download-button-diagnostics.json');
+  } catch (e) {
+    log('could not write download button diagnostics:', e instanceof Error ? e.message : e);
+  }
+}
+
+/**
  * Click the Download/Export button and save the resulting file to a temp path.
  *
  * "Excel View" is the confirmed real label (operator screenshot, 2026-09-08 —
@@ -760,6 +936,19 @@ async function dumpDateFilterDiagnostics(page: Page, intended: string, confirmed
 async function downloadDisbursementExport(page: Page, jobId: string): Promise<{ filepath: string; filename: string } | null> {
   // "Excel View" confirmed as the real button label (operator screenshot) — tried first.
   const patterns = [/^\s*excel\s*view\s*$/i, /^\s*download\s*$/i, /^\s*export\s*$/i, /export\s*to\s*excel/i, /download|export/i];
+
+  // Wait for the highest-confidence pattern's text to actually be visible before searching
+  // at all — the page may still be settling from the Apply/Search postback (networkidle
+  // measures network requests, not client-side re-render completion, and a wide date range
+  // means the server is still computing/rendering a much larger result set), and a bare
+  // count() check with no wait can race ahead of that the same way the Status/date fields
+  // did before they got an explicit waitFor. Confirmed live (2026-09-09): a start date far
+  // enough back that the export takes noticeably longer to generate needs real headroom
+  // here, not just at the download-event wait below.
+  await page.getByText(patterns[0]).first().waitFor({ state: 'visible', timeout: 60000 }).catch(() =>
+    log('"Excel View" text did not become visible within 60s — searching anyway.')
+  );
+
   let button = null;
   for (const pattern of patterns) {
     for (const role of ['button', 'link'] as const) {
@@ -778,26 +967,28 @@ async function downloadDisbursementExport(page: Page, jobId: string): Promise<{ 
   }
   if (!button) {
     log('could not find a Download/Export button on the Financial Transactions page.');
+    // Confirmed live (2026-09-09): "Excel View" is visibly rendered, unobstructed, in a
+    // debug screenshot taken within 38s of this exact failure — meaning it isn't a timing
+    // race, it's a genuine mismatch between what getByRole/getByText can see and what a
+    // screenshot shows. Real DOM ground truth (same approach that solved the Status/date
+    // fields) instead of guessing a fourth selector.
+    await dumpDownloadButtonDiagnostics(page);
     return null;
   }
 
   try {
-    // 30s was tuned against the small, default-30-days result set. Now that the Payment
-    // From fix correctly widens the query (confirmed live: 2,775 rows vs a few dozen
-    // before), generating that much larger Excel server-side plausibly takes longer than
-    // 30s — the button is found and clicked fine, but the download event never fires
-    // before waitForEvent gives up, which this function previously reported as
-    // indistinguishable from "button not found" at all. 3 minutes gives real headroom.
-    const [download] = await Promise.all([
-      page.waitForEvent('download', { timeout: 180000 }),
-      button.click({ timeout: 10000 }),
-    ]);
-    const suggested = download.suggestedFilename() || `tpgateway-disbursement-${Date.now()}.xlsx`;
-    const filepath = path.join(os.tmpdir(), `gfetch-${jobId}-${suggested}`);
-    await download.saveAs(filepath);
-    return { filepath, filename: suggested };
+    return await withHeartbeat(jobId, async () => {
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 300000 }),
+        button.click({ timeout: 10000 }),
+      ]);
+      const suggested = download.suggestedFilename() || `tpgateway-disbursement-${Date.now()}.xlsx`;
+      const filepath = path.join(os.tmpdir(), `gfetch-${jobId}-${suggested}`);
+      await download.saveAs(filepath);
+      return { filepath, filename: suggested };
+    });
   } catch (e) {
-    log('clicked Download/Export but no download completed within 3 minutes (large exports take longer to generate):', e instanceof Error ? e.message : e);
+    log('clicked Download/Export but no download completed within 5 minutes (large exports take longer to generate):', e instanceof Error ? e.message : e);
     return null;
   }
 }
