@@ -605,6 +605,59 @@ const parseCompanyApplicationRows = async (file: File): Promise<CompanyApplicati
 // sponsoring company, not the trainee). Rendered on both the Upload and View
 // pages so admins always know which mode they're in before triggering a
 // generation.
+/**
+ * A notice or tool that lives between the counters and the table, collapsed to
+ * a single line until someone wants it.
+ *
+ * This strip used to be three full-height cards, which pushed the table — the
+ * thing people actually come to this page for — below the fold. The content is
+ * still worth having; it just is not worth reading on every visit.
+ */
+const PageNotice: React.FC<{
+  tone: 'neutral' | 'warn';
+  icon: IconName;
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}> = ({ tone, icon, title, hint, children }) => {
+  const [open, setOpen] = useState(false);
+  const warn = tone === 'warn';
+  return (
+    <div
+      className={`rounded-lg border ${warn
+        ? 'border-amber-300 bg-amber-50 dark:border-amber-700/60 dark:bg-amber-900/20'
+        : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'}`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left"
+      >
+        <Icon
+          name={icon}
+          className={`w-4 h-4 flex-shrink-0 ${warn ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}
+        />
+        <span className="min-w-0 flex-1">
+          <span className={`block text-sm font-semibold truncate ${warn ? 'text-amber-800 dark:text-amber-200' : 'text-gray-900 dark:text-white'}`}>
+            {title}
+          </span>
+          {hint && !open && (
+            <span className={`block text-xs truncate ${warn ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>
+              {hint}
+            </span>
+          )}
+        </span>
+        <Icon
+          name={IconName.ChevronDown}
+          className={`w-4 h-4 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''} ${warn ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}`}
+        />
+      </button>
+      {open && <div className="px-3.5 pb-3.5 pt-0">{children}</div>}
+    </div>
+  );
+};
+
 const CaEmailToggleBanner: React.FC = () => {
   const [emailToggleOn, setEmailToggleOn] = useState(false);
   const [emailToggleSaving, setEmailToggleSaving] = useState(false);
@@ -3046,124 +3099,125 @@ export const ViewCompanyApplicationView: React.FC = () => {
           legitimately — two upload batches, per-learner mode, a late joiner —
           and everything downstream copes, but until now nothing ever said so.
           Finding out meant noticing two rows in the Invoice # column. */}
-      {splitInvoiceGroups.length > 0 && (
-        <div className="mb-6 p-4 rounded-lg border-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 flex-shrink-0 rounded-full bg-amber-100 dark:bg-amber-800/40 flex items-center justify-center">
-              <Icon name={IconName.Warning} className="w-5 h-5 text-amber-600 dark:text-amber-300" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                {splitInvoiceGroups.length} compan{splitInvoiceGroups.length === 1 ? 'y has' : 'ies have'} more than one invoice for the same class
-              </p>
-              <p className="text-xs mt-0.5 text-amber-700 dark:text-amber-300">
-                The amounts are correct — each learner is billed once. But the employer receives several
-                invoices for one class, and each one is emailed separately.
-              </p>
-              <ul className="mt-2 space-y-1">
-                {splitInvoiceGroups.slice(0, 6).map(g => (
-                  <li key={g.key} className="text-xs text-amber-800 dark:text-amber-200 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span>
-                      <span className="font-semibold">{g.employer}</span>
-                      <span className="opacity-75"> · run {g.courseRunId} · </span>
-                      <span className="font-mono">{g.docNumbers.join(', ')}</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void openMergePreview(g)}
-                      disabled={mergingGroupKey !== null}
-                      className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border border-amber-400 text-amber-800 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-600 dark:text-amber-200 dark:hover:bg-amber-900/40"
-                      title="See what merging these into one invoice would do. Nothing is changed until you confirm."
-                    >
-                      {mergingGroupKey === g.key ? 'Checking…' : 'Merge into one'}
-                    </button>
-                  </li>
-                ))}
-                {splitInvoiceGroups.length > 6 && (
-                  <li className="text-xs text-amber-700 dark:text-amber-300">
-                    …and {splitInvoiceGroups.length - 6} more.
-                  </li>
-                )}
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* QuickBooks company lookup — check BEFORE enrolling whether an employer
-          is already a QBO customer. A company that isn't in QuickBooks yet
-          (source 'history') will make the consolidated invoice fail until it's
-          created there, so this lets admins catch it up front. */}
-      <Card className="p-6 mb-6">
-        <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-            <Icon name={IconName.Building} className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">Check if a company is in QuickBooks</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              A company must already be a QuickBooks customer for its consolidated invoice to generate. Search before enrolling under it.
-            </p>
-          </div>
-        </div>
-        <div className="relative mt-3">
-          <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            id="search-qb-company"
-            type="text"
-            value={qbCompanyQuery}
-            onChange={(e) => setQbCompanyQuery(e.target.value)}
-            placeholder="Search company name or UEN…"
-            className={`${inputClasses} pl-9`}
-          />
-        </div>
-
-        {qbEmployersLoading && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Loading companies from QuickBooks…</p>
-        )}
-        {qbEmployersError && (
-          <p className="text-xs text-red-500 mt-2">Couldn’t load companies: {qbEmployersError}</p>
-        )}
-
-        {qbCompanyQuery.trim() && !qbEmployersLoading && (
-          qbCompanyMatches.length > 0 ? (
-            <ul className="mt-3 max-h-64 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
-              {qbCompanyMatches.map((e) => {
-                const inQb = e.source === 'qb' || e.source === 'both';
-                return (
-                  <li key={e.id} className="px-3 py-2 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{e.employerOrgName}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {e.employerUen ? `UEN ${e.employerUen}` : 'No UEN on record'}
-                        {e.employerContactEmail ? ` · ${e.employerContactEmail}` : ''}
-                      </p>
-                    </div>
-                    {inQb ? (
-                      <span className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                        <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5" />
-                        In QuickBooks
-                      </span>
-                    ) : (
-                      <span
-                        className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                        title="Only in application history — not a QuickBooks customer yet. Add it in QuickBooks before enrolling or the invoice will fail."
-                      >
-                        <Icon name={IconName.Warning} className="w-3.5 h-3.5" />
-                        Not in QuickBooks
-                      </span>
+      {/* Everything between the counters and the table is a notice or a tool,
+          not something to read every visit. Collapsed to a line each so the
+          table starts where the eye already is. The email banner above stays
+          open on purpose — it says whether real emails are going out. */}
+      <div className="space-y-2 mb-6">
+        {splitInvoiceGroups.length > 0 && (
+          <PageNotice
+            tone="warn"
+            icon={IconName.Warning}
+            title={`${splitInvoiceGroups.length} compan${splitInvoiceGroups.length === 1 ? 'y has' : 'ies have'} more than one invoice for the same class`}
+            hint="Amounts are correct — but each invoice is emailed separately"
+          >
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 flex-shrink-0 rounded-full bg-amber-100 dark:bg-amber-800/40 flex items-center justify-center">
+                  <Icon name={IconName.Warning} className="w-5 h-5 text-amber-600 dark:text-amber-300" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                    {splitInvoiceGroups.length} compan{splitInvoiceGroups.length === 1 ? 'y has' : 'ies have'} more than one invoice for the same class
+                  </p>
+                  <p className="text-xs mt-0.5 text-amber-700 dark:text-amber-300">
+                    The amounts are correct — each learner is billed once. But the employer receives several
+                    invoices for one class, and each one is emailed separately.
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {splitInvoiceGroups.slice(0, 6).map(g => (
+                      <li key={g.key} className="text-xs text-amber-800 dark:text-amber-200 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span>
+                          <span className="font-semibold">{g.employer}</span>
+                          <span className="opacity-75"> · run {g.courseRunId} · </span>
+                          <span className="font-mono">{g.docNumbers.join(', ')}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void openMergePreview(g)}
+                          disabled={mergingGroupKey !== null}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border border-amber-400 text-amber-800 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-600 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                          title="See what merging these into one invoice would do. Nothing is changed until you confirm."
+                        >
+                          {mergingGroupKey === g.key ? 'Checking…' : 'Merge into one'}
+                        </button>
+                      </li>
+                    ))}
+                    {splitInvoiceGroups.length > 6 && (
+                      <li className="text-xs text-amber-700 dark:text-amber-300">
+                        …and {splitInvoiceGroups.length - 6} more.
+                      </li>
                     )}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-              No company matches “{qbCompanyQuery.trim()}”. If this is a new company, add it in QuickBooks first — otherwise its consolidated invoice will fail when you enrol under it.
-            </div>
-          )
+                  </ul>
+                </div>
+              </div>
+          </PageNotice>
         )}
-      </Card>
+
+        <PageNotice
+          tone="neutral"
+          icon={IconName.Building}
+          title="Check if a company is in QuickBooks"
+          hint="A company must be a QuickBooks customer before its invoice can generate"
+        >
+          <div className="relative mt-3">
+            <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="search-qb-company"
+              type="text"
+              value={qbCompanyQuery}
+              onChange={(e) => setQbCompanyQuery(e.target.value)}
+              placeholder="Search company name or UEN…"
+              className={`${inputClasses} pl-9`}
+            />
+          </div>
+
+          {qbEmployersLoading && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Loading companies from QuickBooks…</p>
+          )}
+          {qbEmployersError && (
+            <p className="text-xs text-red-500 mt-2">Couldn’t load companies: {qbEmployersError}</p>
+          )}
+
+          {qbCompanyQuery.trim() && !qbEmployersLoading && (
+            qbCompanyMatches.length > 0 ? (
+              <ul className="mt-3 max-h-64 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                {qbCompanyMatches.map((e) => {
+                  const inQb = e.source === 'qb' || e.source === 'both';
+                  return (
+                    <li key={e.id} className="px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{e.employerOrgName}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {e.employerUen ? `UEN ${e.employerUen}` : 'No UEN on record'}
+                          {e.employerContactEmail ? ` · ${e.employerContactEmail}` : ''}
+                        </p>
+                      </div>
+                      {inQb ? (
+                        <span className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                          <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5" />
+                          In QuickBooks
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                          title="Only in application history — not a QuickBooks customer yet. Add it in QuickBooks before enrolling or the invoice will fail."
+                        >
+                          <Icon name={IconName.Warning} className="w-3.5 h-3.5" />
+                          Not in QuickBooks
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                No company matches “{qbCompanyQuery.trim()}”. If this is a new company, add it in QuickBooks first — otherwise its consolidated invoice will fail when you enrol under it.
+              </div>
+            )
+          )}
+        </PageNotice>
+      </div>
 
       {/* The "Register all" banner used to sit here. It promoted every synced
           employer enrolment in one click, taking the employer name from
