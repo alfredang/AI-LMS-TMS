@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
@@ -1820,6 +1820,7 @@ export const ViewDirectApplicationView: React.FC = () => {
     // [ARCHIVED] const [isAutoEnrolling, setIsAutoEnrolling] = useState(false);
     const [isAddingToCal, setIsAddingToCal] = useState(false);
     const [isGeneratingInv, setIsGeneratingInv] = useState(false);
+    const [isRemovingInv, setIsRemovingInv] = useState(false);
     const [isSendingInvoiceEmail, setIsSendingInvoiceEmail] = useState(false);
     const [showPii, setShowPii] = useState(false);
     // Single "Sync / Reconcile" control replaces the old Recover Enrolment IDs /
@@ -1831,6 +1832,22 @@ export const ViewDirectApplicationView: React.FC = () => {
     const [repairBusy, setRepairBusy] = useState(false);
     const [repairCount, setRepairCount] = useState<number | null>(null);
     const [repairMsg, setRepairMsg] = useState<string | null>(null);
+
+    /**
+     * Rows the status repair would actually act on: marked failed, yet holding a
+     * real SSG enrolment reference. Mirrors what repair-da-enrol-status looks
+     * for, and is what decides whether that button is worth showing at all.
+     *
+     * A local estimate, not the authority — the endpoint still checks for
+     * itself before changing anything.
+     */
+    const statusRepairCandidates = useMemo(
+        () => applications.filter((app: any) =>
+            String(app?.auto_enrol_status || '').trim().toLowerCase() === 'failed' &&
+            /^ENR-/i.test(String(app?.enrolment_id || '').trim())
+        ).length,
+        [applications]
+    );
     const [emailToggleOn, setEmailToggleOn] = useState(false);
     const [emailToggleSaving, setEmailToggleSaving] = useState(false);
     const [invoiceEmailCc, setInvoiceEmailCc] = useState('');
@@ -2167,6 +2184,79 @@ export const ViewDirectApplicationView: React.FC = () => {
             showToast(`Invoice generation failed: ${message}`, true);
         } finally {
             setIsGeneratingInv(false);
+        }
+    };
+
+    /**
+     * Detach a wrong invoice so a correct one can be raised.
+     *
+     * Nothing else moves: the learner stays enrolled, the grant stays, the
+     * calendar entry stays, the status is untouched. Cancelling the application
+     * would do all of those and is not what a bad invoice calls for.
+     *
+     * The server decides whether the QuickBooks document is deleted or merely
+     * unlinked. An invoice that turns out to belong to a different learner, or
+     * one that has been paid, is always kept — this screen just reports which.
+     */
+    const handleRemoveInvoice = async () => {
+        const selectedRows = applications.filter(app => selectedIds.has(app.application_id));
+        // Only rows holding a real QuickBooks id. A "MANUAL" marker means the
+        // learner was billed outside the system, and clearing that would erase a
+        // deliberate record rather than fix a mistake.
+        const withInvoice = selectedRows.filter(app => hasRealInvoice(app.invoice_id));
+        if (withInvoice.length === 0) {
+            showToast('None of the selected applications has a QuickBooks invoice attached.', true);
+            return;
+        }
+        // Mirrors the server's cap. Each row talks to QuickBooks in sequence, so
+        // a large selection would sit there until the request timed out.
+        if (withInvoice.length > 25) {
+            showToast(`Select 25 or fewer — ${withInvoice.length} rows would take too long.`, true);
+            return;
+        }
+        if (!window.confirm(
+            `Remove the invoice from ${withInvoice.length} application(s)?\n\n` +
+            `The learner stays enrolled, keeps their grant and stays on the calendar. ` +
+            `Only the invoice link is cleared so a correct one can be generated.\n\n` +
+            `An invoice that belongs to someone else, or that has already been paid, ` +
+            `is kept in QuickBooks and only unlinked here.`
+        )) return;
+
+        setIsRemovingInv(true);
+        try {
+            const res = await fetch('/api/admin/da-remove-invoice', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicationIds: withInvoice.map(a => a.id) }),
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) {
+                showToast(`Could not remove invoices: ${json.error || res.statusText}`, true);
+                return;
+            }
+
+            const s = json.summary || {};
+            // Kept documents are the interesting outcome, not an error — say so
+            // plainly rather than burying it in a count of successes.
+            const parts: string[] = [];
+            if (s.deleted) parts.push(`${s.deleted} deleted from QuickBooks`);
+            if (s.keptForeign) parts.push(`${s.keptForeign} belonged to another learner and were kept`);
+            if (s.keptPaid) parts.push(`${s.keptPaid} already paid and were kept`);
+            if (s.alreadyGone) parts.push(`${s.alreadyGone} already gone`);
+            if (s.busy) parts.push(`${s.busy} busy generating, try again`);
+            if (s.failed) parts.push(`${s.failed} failed`);
+            showToast(parts.length ? parts.join(' | ') : 'Nothing to remove', !!s.failed);
+
+            const notable = (json.results || []).filter(
+                (r: any) => r.invoiceKept || !r.success
+            );
+            if (notable.length > 0) {
+                console.warn('DA invoice removal — kept or failed:', notable);
+            }
+            fetchApplications();
+        } catch (err) {
+            showToast(`Could not remove invoices: ${err instanceof Error ? err.message : String(err)}`, true);
+        } finally {
+            setIsRemovingInv(false);
         }
     };
 
@@ -2651,15 +2741,54 @@ export const ViewDirectApplicationView: React.FC = () => {
 
             {!isLoading && (
                 <Card className="p-0">
-                    <div className="p-6 border-b flex justify-between items-start">
-                        <div>
-                            <h3 className="text-xl font-bold">DA Applications</h3>
-                            <p className="text-gray-500 dark:text-gray-400 mt-1">
-                                Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredApplications.length)} of {filteredApplications.length} applications
-                                {(searchQuery || toBeEnrolledFilter) && ` (filtered from ${applications.length} total)`}
-                            </p>
+                    {/* Every action stays on screen. What changed is that the five
+                        row actions no longer fight the title and the whole-table
+                        actions for the same strip: they get their own line, so
+                        nothing wraps and the two kinds of action read apart. */}
+                    <div className="p-6 border-b">
+                        <div className="flex justify-between items-start gap-4 flex-wrap">
+                            <div>
+                                <h3 className="text-xl font-bold">DA Applications</h3>
+                                <p className="text-gray-500 dark:text-gray-400 mt-1">
+                                    Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredApplications.length)} of {filteredApplications.length} applications
+                                    {(searchQuery || toBeEnrolledFilter) && ` (filtered from ${applications.length} total)`}
+                                </p>
+                            </div>
+                            {/* Whole-table maintenance, kept away from the row actions
+                                because it ignores the ticks entirely — something the
+                                old single strip never made clear. */}
+                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                                <button
+                                    onClick={handleSyncAll}
+                                    disabled={isSyncingAll}
+                                    className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-purple-600 hover:bg-purple-700 shadow-sm shadow-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    title="Reconcile ALL applications against SSG & Google Calendar, whatever is ticked: recover enrolment IDs, sync enrolments, pull grants, and update calendar flags"
+                                >
+                                    {isSyncingAll ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />{syncAllStep ? `${syncAllStep}...` : 'Syncing...'}</> : <><Icon name={IconName.Sync} className="w-3.5 h-3.5 mr-1.5" />Sync all</>}
+                                </button>
+                                {/* A repair tool, so it appears when there is something
+                                    to repair. Stays visible once clicked so the result
+                                    can be read. */}
+                                {(statusRepairCandidates > 0 || repairCount !== null || repairBusy) && (
+                                    <button
+                                        onClick={() => runStatusRepair(repairCount === null)}
+                                        disabled={repairBusy}
+                                        className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg border border-amber-400 text-amber-700 dark:text-amber-300 dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                        title="Find applications marked failed that actually hold an SSG enrolment ID, and correct their status. Checks first — nothing is changed until you click again."
+                                    >
+                                        {repairBusy
+                                            ? 'Checking...'
+                                            : repairCount === null
+                                                ? `Check ${statusRepairCandidates} enrol status(es)`
+                                                : repairCount > 0 ? `Fix ${repairCount} status(es)` : 'Nothing to fix'}
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap">
+
+                        {/* The five row actions. Always here, disabled until rows are
+                            ticked, with the count where the eye already is. */}
+                        <div className="flex items-center gap-2 flex-wrap mt-4">
                             <button onClick={handleEnrolment} disabled={isEnrolling || selectedIds.size === 0} className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 shadow-sm shadow-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                                 {isEnrolling ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />Enrolling...</> : <><Icon name={IconName.Users} className="w-3.5 h-3.5 mr-1.5" />Enrol to SSG</>}
                             </button>
@@ -2675,6 +2804,14 @@ export const ViewDirectApplicationView: React.FC = () => {
                                 {isGeneratingInv ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />Generating...</> : <><Icon name={IconName.FileText} className="w-3.5 h-3.5 mr-1.5" />Generate Invoice</>}
                             </button>
                             <button
+                                onClick={handleRemoveInvoice}
+                                disabled={isRemovingInv || selectedIds.size === 0}
+                                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg border border-rose-400 text-rose-700 dark:text-rose-300 dark:border-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                title="Detach the tax invoice from the selected rows so a correct one can be generated. Does not cancel the enrolment, touch the grant, or remove the learner from the calendar. An invoice belonging to another learner, or one already paid, is kept in QuickBooks and only unlinked here."
+                            >
+                                {isRemovingInv ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-rose-500 mr-2" />Removing...</> : <><Icon name={IconName.Delete} className="w-3.5 h-3.5 mr-1.5" />Remove Invoice</>}
+                            </button>
+                            <button
                                 onClick={handleSendInvoiceEmail}
                                 disabled={isSendingInvoiceEmail || selectedIds.size === 0}
                                 className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -2682,27 +2819,9 @@ export const ViewDirectApplicationView: React.FC = () => {
                             >
                                 {isSendingInvoiceEmail ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />Sending...</> : <><Icon name={IconName.Mail} className="w-3.5 h-3.5 mr-1.5" />Send Invoice Email</>}
                             </button>
-                            <span className="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" />
-                            <button
-                                onClick={handleSyncAll}
-                                disabled={isSyncingAll}
-                                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-purple-600 hover:bg-purple-700 shadow-sm shadow-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                title="Reconcile all applications against SSG & Google Calendar: recover enrolment IDs, sync enrolments, pull grants, and update calendar flags"
-                            >
-                                {isSyncingAll ? <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2" />{syncAllStep ? `${syncAllStep}...` : 'Syncing...'}</> : <><Icon name={IconName.Sync} className="w-3.5 h-3.5 mr-1.5" />Sync</>}
-                            </button>
-                            <button
-                                onClick={() => runStatusRepair(repairCount === null)}
-                                disabled={repairBusy}
-                                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg border border-amber-400 text-amber-700 dark:text-amber-300 dark:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                title="Find applications marked failed that actually hold an SSG enrolment ID, and correct their status. Checks first — nothing is changed until you click again."
-                            >
-                                {repairBusy
-                                    ? 'Checking...'
-                                    : repairCount === null
-                                        ? 'Check enrol statuses'
-                                        : repairCount > 0 ? `Fix ${repairCount} status(es)` : 'Nothing to fix'}
-                            </button>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 ml-1 tabular-nums">
+                                {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Tick rows to use these'}
+                            </span>
                         </div>
                     </div>
                     {repairMsg && (
