@@ -190,3 +190,132 @@ export async function findEnrolmentsAwaitingGrants(
 
   return enrolmentIds.filter(id => !settled.has(id));
 }
+
+/** One existing invoice, as the merge preview needs to describe it. */
+export interface MergePreviewInvoice {
+  invoiceId: string;
+  docNumber: string;
+  learnerCount: number;
+  learnerNames: string[];
+  /** True when the employer has it — from our own record OR from QuickBooks. */
+  emailed: boolean;
+  emailedAt: string | null;
+  paid: boolean;
+  total: number;
+  /** False when this particular invoice is what stops the merge. */
+  mergeable: boolean;
+  blockedReason: string | null;
+}
+
+export interface MergePreview {
+  employerOrgName: string;
+  invoices: MergePreviewInvoice[];
+  learnersOnNewInvoice: number;
+  canMerge: boolean;
+  /** Why not, in words an admin can act on. Null when the merge can proceed. */
+  blockedReason: string | null;
+}
+
+/**
+ * What merging this group WOULD do, without doing any of it.
+ *
+ * Deleting invoices is not something to confirm from a one-line browser prompt,
+ * so this answers the questions an admin actually needs first: which documents
+ * disappear, who ends up on the replacement, and whether it is allowed at all.
+ *
+ * Runs the same three tests the merge itself runs, and reports them per invoice
+ * so a blocked group says WHICH invoice blocked it rather than just "no".
+ * Read-only — nothing here writes to the database or to QuickBooks.
+ */
+export async function previewGroupInvoiceMerge(
+  employerUen: string,
+  courseRunId: string
+): Promise<MergePreview> {
+  const uen = String(employerUen || '').trim();
+  const runId = String(courseRunId || '').trim();
+
+  const rowsRes = await pool.query(
+    `SELECT id, invoice_id, enrolment_id, grant_ineligible, billed_manually, employer_org_name
+       FROM public.company_application
+      WHERE LOWER(TRIM(employer_uen)) = LOWER($1)
+        AND TRIM(course_run_id)       = $2`,
+    [uen, runId]
+  );
+  const rows = rowsRes.rows;
+  const invoicedRows = rows.filter(
+    (r: any) => String(r.invoice_id || '').trim() && r.billed_manually !== true
+  );
+
+  const employerOrgName = String(
+    rows.find((r: any) => String(r.employer_org_name || '').trim())?.employer_org_name || ''
+  ).trim();
+
+  const base = await findExistingGroupInvoices(uen, runId);
+
+  const invoices: MergePreviewInvoice[] = [];
+  let blockedReason: string | null = null;
+
+  for (const inv of base) {
+    let emailed = !!inv.sentAt;
+    let paid = false;
+    let total = 0;
+    let reason: string | null = emailed ? 'Already emailed to the employer' : null;
+
+    try {
+      const state = await readQboInvoiceLifecycle(inv.invoiceId);
+      if (state.found) {
+        total = state.totalAmt;
+        if (state.emailSent) {
+          emailed = true;
+          reason = reason || 'Emailed from QuickBooks';
+        }
+        if (state.hasPayment) {
+          paid = true;
+          reason = reason || 'A payment is recorded against it';
+        }
+      }
+    } catch {
+      reason = reason || 'Could not be read from QuickBooks';
+    }
+
+    const mergeable = !reason;
+    if (!mergeable && !blockedReason) {
+      blockedReason = `${inv.docNumber || inv.invoiceId}: ${reason}`;
+    }
+    invoices.push({
+      invoiceId: inv.invoiceId,
+      docNumber: inv.docNumber,
+      learnerCount: inv.learnerCount,
+      learnerNames: inv.learnerNames,
+      emailed,
+      emailedAt: inv.sentAt,
+      paid,
+      total,
+      mergeable,
+      blockedReason: reason,
+    });
+  }
+
+  if (invoices.length < 2 && !blockedReason) {
+    blockedReason = 'Only one invoice for this course run — nothing to merge.';
+  }
+
+  if (!blockedReason) {
+    const awaiting = await findEnrolmentsAwaitingGrants(invoicedRows);
+    if (awaiting.length > 0) {
+      blockedReason = `${awaiting.length} learner(s) are still awaiting an SSG grant, so a replacement invoice cannot be issued yet.`;
+    }
+    const notEnrolled = invoicedRows.filter((r: any) => !/^ENR-/i.test(String(r.enrolment_id || '')));
+    if (!blockedReason && notEnrolled.length > 0) {
+      blockedReason = `${notEnrolled.length} learner(s) are not yet enroled with SSG.`;
+    }
+  }
+
+  return {
+    employerOrgName,
+    invoices,
+    learnersOnNewInvoice: invoicedRows.length,
+    canMerge: !blockedReason,
+    blockedReason,
+  };
+}
