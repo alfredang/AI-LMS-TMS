@@ -907,6 +907,12 @@ export async function qboFindOrCreateCompanyCustomer(
     email?: string;
     phone?: string;
     contactName?: string;
+    /**
+     * Billing address for a customer we are about to CREATE. Ignored when the
+     * customer already exists — an address Finance has corrected by hand must
+     * never be overwritten by a looked-up one.
+     */
+    billAddr?: Record<string, string> | null;
   }
 ): Promise<string> {
   const displayName = (opts.displayName || '').trim();
@@ -930,6 +936,12 @@ export async function qboFindOrCreateCompanyCustomer(
   if (email) body.PrimaryEmailAddr = { Address: email };
   const phone = (opts.phone || '').trim();
   if (phone) body.PrimaryPhone = { FreeFormNumber: phone };
+  // A company created from a Company Application has no address unless we give
+  // it one, and its invoices then print a name over empty space. Line1 is left
+  // alone: buildEmployerBillAddr decides whose name is billed at invoice time.
+  if (opts.billAddr && Object.keys(opts.billAddr).length > 0) {
+    body.BillAddr = { ...opts.billAddr };
+  }
   const contactName = (opts.contactName || '').trim();
   if (contactName) {
     // QBO stores the contact person separately from the company. Split on the
@@ -943,6 +955,50 @@ export async function qboFindOrCreateCompanyCustomer(
   const cust = created?.Customer ?? created;
   if (!cust?.Id) throw new Error('QBO customer create returned no Id');
   return String(cust.Id);
+}
+
+/**
+ * Sparse-update a QuickBooks customer. Only the fields in `fields` change;
+ * everything else on the record is preserved. Caller must supply the current
+ * SyncToken, which `qboReadCustomer` returns alongside the record.
+ *
+ * Note the asymmetry with invoices: an invoice sparse update treats `Line` as
+ * the complete set and drops anything omitted. A customer has no such
+ * collection, so a partial `BillAddr` here is genuinely partial.
+ */
+export async function qboSparseUpdateCustomer(
+  appOverride: string | undefined,
+  customerId: string,
+  syncToken: string,
+  fields: Record<string, any>
+): Promise<{ id: string; syncToken?: string; raw: any }> {
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/customer?minorversion=${MINOR_VERSION}`;
+  const body = { Id: customerId, SyncToken: syncToken, sparse: true, ...fields };
+  const data = await qboFetchJson({ token, url, method: 'POST', body });
+  const c = data?.Customer ?? data;
+  return {
+    id: String(c?.Id ?? ''),
+    syncToken: c?.SyncToken ? String(c.SyncToken) : undefined,
+    raw: c,
+  };
+}
+
+/** Read one customer by id, with its SyncToken — needed before any update. */
+export async function qboReadCustomer(
+  appOverride: string | undefined,
+  customerId: string
+): Promise<{ id: string; syncToken?: string; raw: any } | null> {
+  const safe = String(customerId || '').replace(/'/g, "''").trim();
+  if (!safe) return null;
+  const data = await qboQuery(appOverride, `SELECT * FROM Customer WHERE Id = '${safe}' MAXRESULTS 1`);
+  const raw = data?.QueryResponse?.Customer;
+  const c = Array.isArray(raw) ? raw[0] : raw;
+  if (!c?.Id) return null;
+  return { id: String(c.Id), syncToken: c.SyncToken ? String(c.SyncToken) : undefined, raw: c };
 }
 
 export async function qboFindOrCreateCustomerByEmail(appOverride: string | undefined, email: string, displayName: string): Promise<string> {
