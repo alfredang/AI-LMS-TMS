@@ -195,10 +195,24 @@ const InAppCalendar: React.FC = () => {
 
   // A WSQ/IBF run-day the calendar sweep checked and found NO Google event for.
   // Google Calendar is the source of truth for WSQ classes, so these are drift.
+  // FullCalendar's month grid always draws 6 full weeks (fixedWeekCount), so a
+  // "July" view actually renders a handful of trailing June days and a week+ of
+  // August padding. Without this, those padding-month rows silently dominated
+  // the "not on GCal" badge — e.g. viewing July showed hundreds flagged, nearly
+  // all of them really June/August, with barely any of it actually July. Scope
+  // both the badge and the per-event red-dashed flag to the month actually being
+  // viewed; the same padding dates still get flagged correctly once you navigate
+  // to June or August, where they're the "current" month.
+  const isInViewedMonth = useCallback((dateIso: string): boolean => {
+    const d = new Date(dateIso + 'T00:00:00');
+    return d.getFullYear() === viewYM.y && d.getMonth() === viewYM.m;
+  }, [viewYM]);
+
   const isGcalUnmatched = useCallback((r: ClassDayEvent): boolean => (
     !!gcalMatches && !r.noSessions && !isNonWsq(r.courseCode) && r.classStatus !== 'Cancelled' &&
+    isInViewedMonth(r.sessionDate) &&
     gcalMatches[`${r.courseRunUuid}|${r.sessionDate}`] === false
-  ), [gcalMatches]);
+  ), [gcalMatches, isInViewedMonth]);
 
   const unmatchedCount = useMemo(
     () => rawEvents.filter(isGcalUnmatched).length,
@@ -355,10 +369,16 @@ const InAppCalendar: React.FC = () => {
   const [bulkTo, setBulkTo] = useState('');
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
+  // Defaults to the ACTUAL month being viewed (matching what the badge now
+  // counts), not FullCalendar's padded grid range — so the dialog's preview
+  // count lines up with the badge that opened it, instead of silently pulling
+  // in a different, wider window again.
   const openBulkPanel = useCallback(() => {
-    if (range) { setBulkFrom(range.start); setBulkTo(range.end); }
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    setBulkFrom(fmt(new Date(viewYM.y, viewYM.m, 1)));
+    setBulkTo(fmt(new Date(viewYM.y, viewYM.m + 1, 0)));
     setBulkPanelOpen(true);
-  }, [range]);
+  }, [viewYM]);
 
   // Resolve the unmatched course_run_uuids for an arbitrary [start,end] — same
   // predicate as isGcalUnmatched, but against a freshly fetched range instead
@@ -823,7 +843,7 @@ const InAppCalendar: React.FC = () => {
           height="auto"
           timeZone="local"
           nowIndicator
-          fixedWeekCount
+          fixedWeekCount={false}
           showNonCurrentDates
           dayMaxEvents={4}
           eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
