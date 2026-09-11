@@ -23,18 +23,32 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const result = await pool.query(`
       SELECT COUNT(*)::int AS count
         FROM public.company_application
-       WHERE LOWER(COALESCE(auto_enrol_status, '')) = 'failed'
-          OR jsonb_array_length(COALESCE(pipeline_warnings, '[]'::jsonb)) > 0
-          -- Stranded: enroled with SSG but the pipeline never finished. The
-          -- grant poll runs in memory, so a deploy or restart inside its
-          -- 15-minute window leaves the row here with no failure and no
-          -- warning — invisible until someone happened to look. 30 minutes
-          -- clears the longest legitimate wait.
-          OR (
-               COALESCE(enrolment_id, '') <> ''
-           AND COALESCE(auto_enrol_status, '') IN ('', 'pending')
-           AND updated_at < now() - interval '30 minutes'
-          )
+       WHERE
+         -- MUST match the isStuck rule in fetch-company-applications.ts. This
+         -- number is a promise that the page can show you that many rows; when
+         -- the two drift the badge points at rows the page then filters away,
+         -- which is exactly what a badge must never do.
+         (
+           LOWER(COALESCE(auto_enrol_status, '')) = 'failed'
+           -- Warnings only count while they are still actionable: an invoice
+           -- means the run finished despite them, and a dismissal means an
+           -- admin has already looked.
+           OR (
+                jsonb_array_length(COALESCE(pipeline_warnings, '[]'::jsonb)) > 0
+            AND COALESCE(invoice_id, '') = ''
+            AND attention_ignored_at IS NULL
+              )
+           -- Stranded: enroled with SSG but the pipeline never finished. The
+           -- grant poll runs in memory, so a deploy or restart inside its
+           -- 15-minute window leaves the row here with no failure and no
+           -- warning. 30 minutes clears the longest legitimate wait.
+           OR (
+                COALESCE(enrolment_id, '') <> ''
+            AND COALESCE(auto_enrol_status, '') IN ('', 'pending')
+            AND updated_at < now() - interval '30 minutes'
+            AND attention_ignored_at IS NULL
+              )
+         )
     `);
     return res.status(200).json({ count: result.rows[0]?.count ?? 0 });
   } catch (err: any) {
