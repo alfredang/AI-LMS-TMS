@@ -20,6 +20,7 @@ import {
 } from './invoiceLineText';
 import { formatDateOnlyEnSg } from '../utils/dateOnly';
 import { assessGrantEligibility } from '../grantEligibility';
+import { daInvoiceBelongsTo } from './invoiceOwnership';
 import type { QboItem } from '../services/qboInvoiceService';
 import {
   qboFindCustomerByName,
@@ -497,11 +498,45 @@ async function buildAndPostDirectApplicationInvoice(
   // adopt an invoice a previous attempt created but failed to record; a voided
   // one is not that - it is a document an admin deliberately cancelled, and
   // adopting it would silently point the row back at a zeroed invoice.
-  const existingByToday = await qboFindInvoiceByDocNumber(undefined, docNumber, { ignoreVoided: true });
-  const existingByLast6 =
+  // Both searches key on the last 6 characters of the enrolment reference, and
+  // SSG reuses those across periods (ENR-2512-019463 and ENR-2609-019463 both
+  // exist here). So a match is a CANDIDATE, never an answer: adopting one
+  // unchecked attached December's invoice to a September learner and left that
+  // learner with no invoice at all. Only adopt what the invoice itself
+  // identifies as ours; anything else is somebody's real invoice.
+  const belongsHere = (candidate: { id: string; raw?: unknown } | null): boolean =>
+    !!candidate?.id &&
+    daInvoiceBelongsTo(candidate.raw, {
+      applicationId: realApplicationId(app.application_id),
+      enrolmentId,
+      traineeName: app.trainee_name,
+      courseRunId: app.course_run_id,
+    });
+
+  const rejectCandidate = (candidate: { id: string; raw?: unknown } | null, how: string): null => {
+    if (candidate?.id) {
+      const doc = (candidate.raw as { DocNumber?: unknown } | null)?.DocNumber;
+      console.warn(
+        `[QBO main invoice] Not adopting invoice ${candidate.id} (DocNumber ${String(doc ?? '?')}) found by ${how} ` +
+          `for enrolment ${enrolmentId}: nothing on it identifies this application. Raising a new invoice instead.`
+      );
+    }
+    return null;
+  };
+
+  const candidateToday = await qboFindInvoiceByDocNumber(undefined, docNumber, { ignoreVoided: true });
+  const existingByToday = belongsHere(candidateToday)
+    ? candidateToday
+    : rejectCandidate(candidateToday, "today's document number");
+
+  const candidateByLast6 =
     !existingByToday?.id && last6
       ? await qboFindInvoiceByDocNumberLike(undefined, `TC%-${last6}`, { ignoreVoided: true })
       : null;
+  const existingByLast6 = belongsHere(candidateByLast6)
+    ? candidateByLast6
+    : rejectCandidate(candidateByLast6, 'the enrolment suffix');
+
   const orphan = existingByToday ?? existingByLast6;
   let reusableOrphan = orphan;
   let reusableOrphanInvoice: Awaited<ReturnType<typeof qboReadInvoice>> | null = null;

@@ -51,11 +51,14 @@ export interface QboInvoiceLifecycle {
   hasPayment: boolean;
   totalAmt: number;
   balance: number;
+  /** When QuickBooks last wrote to this invoice — ISO, or '' if not reported. */
+  lastUpdatedTime: string;
 }
 
 export async function readQboInvoiceLifecycle(invoiceId: string): Promise<QboInvoiceLifecycle> {
   const missing: QboInvoiceLifecycle = {
     found: false, docNumber: '', emailSent: false, hasPayment: false, totalAmt: 0, balance: 0,
+    lastUpdatedTime: '',
   };
   const id = String(invoiceId || '').trim();
   if (!id) return missing;
@@ -82,6 +85,7 @@ export async function readQboInvoiceLifecycle(invoiceId: string): Promise<QboInv
     hasPayment: linkedTxns.some((t: any) => String(t?.TxnType || '') === 'Payment'),
     totalAmt: Number(invoice.TotalAmt) || 0,
     balance: Number(invoice.Balance) || 0,
+    lastUpdatedTime: String(invoice.MetaData?.LastUpdatedTime || ''),
   };
 }
 

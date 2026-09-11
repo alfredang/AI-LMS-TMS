@@ -35,6 +35,7 @@ import {
 import { driveFileExists, uploadInvoicePdfToDrive } from '../services/invoiceDriveUpload';
 import { findEnrolmentsAwaitingGrants } from '../services/caExistingInvoice';
 import { deleteQboInvoice, readQboInvoiceLifecycle } from './voidCompanyApplicationInvoice';
+import { caInvoiceBelongsTo } from './invoiceOwnership';
 import {
   buildInvoiceLineText,
   COURSE_LINE_HEADING_PREFIX,
@@ -584,6 +585,88 @@ async function resolveEmployerCustomerRef(opts: {
   );
 }
 
+/**
+ * Build the invoice's BILL TO block for a Company Application.
+ *
+ * QBO customers for employers are often auto-created (or were created by hand)
+ * with the contact person's name as the first billing-address line, so the
+ * printed invoice read "Kenneth Ong / MacDermid Performance Solutions". For a
+ * company invoice the employer's organisation must be the name being billed, so
+ * we compose BillAddr ourselves:
+ *
+ *   Line1 = employer organisation name (always)
+ *   Line2+ = the customer's existing address lines, minus any line that is just
+ *            the contact person's name or a repeat of the company name
+ *
+ * The street/city/postal fields are carried over untouched — this only changes
+ * WHO is billed, not WHERE. If the customer can't be read we still force the
+ * company name onto Line1 and blank the rest rather than let a person's name
+ * print. Line2–5 are always sent (blank when unused) so QBO doesn't merge in
+ * stale lines from the customer record.
+ */
+const BILL_ADDR_LINE_KEYS = ['Line1', 'Line2', 'Line3', 'Line4', 'Line5'] as const;
+const BILL_ADDR_PLACE_KEYS = ['City', 'CountrySubDivisionCode', 'PostalCode', 'Country'] as const;
+
+function normaliseAddrLine(value: string): string {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+async function buildEmployerBillAddr(opts: {
+  customerRef: string;
+  employerOrgName: string;
+  employerContactName?: string;
+}): Promise<Record<string, string>> {
+  const company = String(opts.employerOrgName || '').trim();
+  const addr: Record<string, string> = { Line1: '', Line2: '', Line3: '', Line4: '', Line5: '' };
+  if (!company) return addr;
+
+  let customer: any = null;
+  try {
+    const safeId = escapeQboLiteral(String(opts.customerRef || ''));
+    const data = await qboQuery(undefined, `SELECT * FROM Customer WHERE Id = '${safeId}' MAXRESULTS 1`);
+    const raw = data?.QueryResponse?.Customer;
+    customer = (Array.isArray(raw) ? raw[0] : raw) || null;
+  } catch (err) {
+    console.warn(
+      `[ca-invoice] Could not read QBO customer ${opts.customerRef} for BillAddr — billing to company name only:`,
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  const src = customer?.BillAddr || {};
+
+  // Names that must not appear in BILL TO: the application's contact person and
+  // the person name QBO holds on the customer record.
+  const personKeys = new Set<string>();
+  const addPerson = (v: string) => {
+    const k = normaliseAddrLine(v);
+    if (k) personKeys.add(k);
+  };
+  addPerson(String(opts.employerContactName || ''));
+  addPerson([customer?.GivenName, customer?.MiddleName, customer?.FamilyName].filter(Boolean).join(' '));
+
+  const companyKey = normaliseAddrLine(company);
+  const kept: string[] = [];
+  for (const key of BILL_ADDR_LINE_KEYS) {
+    const value = String(src?.[key] || '').trim();
+    if (!value) continue;
+    const norm = normaliseAddrLine(value);
+    if (norm === companyKey) continue;
+    if (personKeys.has(norm)) continue;
+    kept.push(value);
+  }
+
+  [company, ...kept].slice(0, BILL_ADDR_LINE_KEYS.length).forEach((value, i) => {
+    addr[BILL_ADDR_LINE_KEYS[i]] = value;
+  });
+  for (const key of BILL_ADDR_PLACE_KEYS) {
+    const value = String(src?.[key] || '').trim();
+    if (value) addr[key] = value;
+  }
+
+  return addr;
+}
+
 export interface CaInvoiceLearner {
   applicationId: string;
   fullName: string;
@@ -988,10 +1071,42 @@ export async function createCompanyApplicationInvoice(
   // joiner replacement path deletes rather than voids for the same reason, but
   // an invoice voided by hand in QuickBooks would hit this too. Matches what
   // createDirectApplicationInvoice already does.
-  const existingToday = await qboFindInvoiceByDocNumber(undefined, docNumber, { ignoreVoided: true });
-  const existingBySuffix = !existingToday?.id && suffix
+  // The suffix is the last 6 characters of an enrolment reference, and SSG
+  // reuses those across periods, so a match is a CANDIDATE rather than an
+  // answer. Adopting one unchecked hands this group an invoice raised for a
+  // different group months earlier, and leaves this one unbilled. Only adopt
+  // what the invoice identifies as ours: same course run, and at least one of
+  // these learners named on it.
+  const groupOwns = (candidate: { id: string; raw?: unknown } | null): boolean =>
+    !!candidate?.id &&
+    caInvoiceBelongsTo(candidate.raw, {
+      courseRunId: input.courseRunId,
+      learnerNames: input.learners.map(l => l.fullName),
+    });
+
+  const refuse = (candidate: { id: string; raw?: unknown } | null, how: string): null => {
+    if (candidate?.id) {
+      const doc = (candidate.raw as { DocNumber?: unknown } | null)?.DocNumber;
+      console.warn(
+        `[QBO CA invoice] Not adopting invoice ${candidate.id} (DocNumber ${String(doc ?? '?')}) found by ${how} ` +
+          `for group ${input.employerUen}|${input.courseRunId}: nothing on it identifies this group. Raising a new invoice instead.`
+      );
+    }
+    return null;
+  };
+
+  const candidateToday = await qboFindInvoiceByDocNumber(undefined, docNumber, { ignoreVoided: true });
+  const existingToday = groupOwns(candidateToday)
+    ? candidateToday
+    : refuse(candidateToday, "today's document number");
+
+  const candidateBySuffix = !existingToday?.id && suffix
     ? await qboFindInvoiceByDocNumberLike(undefined, `TC%-${suffix}`, { ignoreVoided: true })
     : null;
+  const existingBySuffix = groupOwns(candidateBySuffix)
+    ? candidateBySuffix
+    : refuse(candidateBySuffix, 'the enrolment suffix');
+
   const orphan = existingToday ?? existingBySuffix;
   if (orphan?.id) {
     const orphanDocNumber = String(orphan.raw?.DocNumber || docNumber);
@@ -1010,14 +1125,21 @@ export async function createCompanyApplicationInvoice(
     };
   }
 
-  // ShipAddr intentionally blanked — CA invoices have no shipping concept,
-  // and QBO otherwise inherits the customer's default ShipAddr and renders a
-  // "Shipping to" box on the PDF. BillAddr is left alone so the employer's
-  // QBO billing address still prints normally.
+  // BillAddr is billed to the EMPLOYER ORGANISATION, not the contact person —
+  // see buildEmployerBillAddr(). ShipAddr is intentionally blanked: CA invoices
+  // have no shipping concept, and QBO otherwise inherits the customer's default
+  // ShipAddr and renders a "Shipping to" box on the PDF.
+  const billAddr = await buildEmployerBillAddr({
+    customerRef,
+    employerOrgName: input.employerOrgName,
+    employerContactName: input.employerContactName,
+  });
+
   const invoiceBody = {
     CustomerRef: { value: customerRef },
     DocNumber: docNumber,
     BillEmail: { Address: input.employerContactEmail },
+    BillAddr: billAddr,
     ShipAddr: {
       Line1: '',
       Line2: '',
@@ -1767,6 +1889,346 @@ async function attemptGroupInvoiceReplacement(opts: {
     return { status: 'blocked', reason: 'no existing invoice could be deleted in QuickBooks' };
   }
   return { status: 'replaced', freedApplicationIds };
+}
+
+/** GST rate applied to the course-fee line. Grant lines are Out of Scope. */
+const CA_GST_RATE = 0.09;
+
+export interface MergedInvoicePreview {
+  available: boolean;
+  reason?: string;
+  courseTitle: string;
+  courseReferenceNumber: string;
+  learnerNames: string[];
+  courseFee: number;
+  quantity: number;
+  courseTotal: number;
+  schemes: Array<{ label: string; qty: number; amount: number }>;
+  grantTotal: number;
+  subtotal: number;
+  gst: number;
+  total: number;
+  /** Who the invoice is addressed to. */
+  billTo: string;
+  /** The lines as QuickBooks would print them, in order, with the real wording. */
+  lines: Array<{
+    product: string;
+    description: string;
+    qty: number;
+    rate: number;
+    amount: number;
+    /** SR (9%) on the course line, Out of Scope on the grant lines. */
+    taxCode: string;
+  }>;
+}
+
+/**
+ * What the single replacement invoice would say, without creating it.
+ *
+ * Priced exactly the way createCompanyApplicationInvoice prices the real thing:
+ * one course-fee line at quantity = headcount carrying GST, then one negative
+ * line per grant scheme which is Out of Scope. So GST is 9% of the COURSE line,
+ * not of the net — computing it off the subtotal would understate the total by
+ * 9% of the grants and make the preview disagree with the invoice it is
+ * previewing.
+ *
+ * Read-only. Nothing is written and nothing is sent to QuickBooks beyond the
+ * product lookup needed to tell WSQ from CASL, which decides which funding
+ * products the grant lines bill against.
+ */
+export async function previewMergedInvoice(
+  employerUen: string,
+  courseRunId: string
+): Promise<MergedInvoicePreview> {
+  const empty: MergedInvoicePreview = {
+    available: false,
+    courseTitle: '',
+    courseReferenceNumber: '',
+    learnerNames: [],
+    courseFee: 0,
+    quantity: 0,
+    courseTotal: 0,
+    schemes: [],
+    grantTotal: 0,
+    subtotal: 0,
+    gst: 0,
+    total: 0,
+    billTo: '',
+    lines: [],
+  };
+
+  const rowsRes = await pool.query(
+    `${CA_INVOICE_ROW_SELECT}
+     WHERE LOWER(TRIM(ca.employer_uen)) = LOWER($1)
+       AND TRIM(ca.course_run_id)       = $2
+     ORDER BY ca.created_at, ca.id`,
+    [String(employerUen || '').trim(), String(courseRunId || '').trim()]
+  );
+
+  const rows = rowsRes.rows.filter(
+    (r: any) => String(r.invoice_id || '').trim() && r.billed_manually !== true
+  );
+  if (rows.length === 0) {
+    return { ...empty, reason: 'No invoiced learners found for this group.' };
+  }
+
+  const first = rows[0];
+  const courseFee = Number(first.db_course_fee);
+  if (!Number.isFinite(courseFee) || courseFee <= 0) {
+    return { ...empty, reason: 'Course fee is not configured, so the total cannot be shown.' };
+  }
+
+  const courseReferenceNumber = String(first.course_reference_number || '').trim();
+  const learnerNames = rows.map((r: any) => String(r.trainee_full_name || '').trim() || 'Unnamed');
+  const enrolmentIds = rows.map((r: any) => String(r.enrolment_id || '').trim()).filter(Boolean);
+
+  // Same product lookup the real invoice does — it decides whether the grant
+  // lines bill against the WSQ or the CASL funding products, and its
+  // Description is what the printed course line actually says.
+  let family: FundingFamily = 'WSQ';
+  let courseItem: Awaited<ReturnType<typeof qboFindItemBySku>> = null;
+  try {
+    courseItem = await qboFindItemBySku(undefined, courseReferenceNumber);
+    family = detectFundingFamily(courseItem?.description, courseItem?.name, String(first.db_course_title || ''));
+  } catch {
+    // Fall back to WSQ; the scheme labels stay right even if the product does not.
+  }
+
+  let schemes: SchemeAggregate[] = [];
+  try {
+    schemes = await aggregateGrantsByScheme(enrolmentIds, family);
+  } catch (err) {
+    console.warn('[ca-merge-preview] Could not aggregate grants:', err instanceof Error ? err.message : err);
+  }
+
+  const quantity = rows.length;
+  const courseTotal = Number((quantity * courseFee).toFixed(2));
+  const grantTotal = Number(schemes.reduce((sum, x) => sum + x.totalAmount, 0).toFixed(2));
+  const subtotal = Number((courseTotal - grantTotal).toFixed(2));
+  const gst = Number((courseTotal * CA_GST_RATE).toFixed(2));
+  const total = Number((subtotal + gst).toFixed(2));
+
+  // Compose the lines through the SAME builders the real invoice uses, so the
+  // preview shows the wording that will actually print rather than a paraphrase
+  // of it. The course line's text comes from the QuickBooks product Description
+  // where one is set, which is the whole point of that arrangement.
+  const previewInput: CreateCaInvoiceInput = {
+    employerOrgName: String(first.employer_org_name || '').trim(),
+    employerUen: String(first.employer_uen || '').trim(),
+    employerContactEmail: String(first.employer_contact_email || '').trim(),
+    employerContactName: String(first.employer_contact_name || '').trim(),
+    employerContactPhone: String(first.employer_contact_phone || '').trim(),
+    courseTitle: String(first.db_course_title || '').trim(),
+    courseReferenceNumber,
+    courseRunId: String(first.course_run_id || '').trim(),
+    courseStartDate: first.run_start_date || first.course_start_date || null,
+    courseEndDate: first.run_end_date || null,
+    courseFee,
+    learners: rows.map((r: any) => ({
+      applicationId: String(r.id),
+      fullName: String(r.trainee_full_name || '').trim(),
+      nric: String(r.trainee_nric || '').trim(),
+      enrolmentId: String(r.enrolment_id || '').trim(),
+    })),
+  };
+
+  const lines: MergedInvoicePreview['lines'] = [
+    {
+      product: courseItem?.name || courseReferenceNumber,
+      description: buildCourseLineDescription(previewInput, courseItem, family),
+      qty: quantity,
+      rate: courseFee,
+      amount: courseTotal,
+      taxCode: 'SR (9%)',
+    },
+  ];
+
+  for (const scheme of schemes) {
+    let grantItem: Awaited<ReturnType<typeof qboFindItemByName>> = null;
+    try {
+      grantItem = await qboFindItemByName(undefined, scheme.itemName);
+    } catch {
+      // Falls back to the course product on the real invoice too.
+    }
+    lines.push({
+      product: grantItem?.name || scheme.itemName,
+      description: buildGrantLineDescription(scheme, grantItem, family),
+      qty: scheme.qty,
+      rate: -Number((scheme.totalAmount / (scheme.qty || 1)).toFixed(2)),
+      amount: -Number(scheme.totalAmount.toFixed(2)),
+      taxCode: 'Out of Scope',
+    });
+  }
+
+  return {
+    available: true,
+    courseTitle: String(first.db_course_title || '').trim(),
+    courseReferenceNumber,
+    learnerNames,
+    courseFee,
+    quantity,
+    courseTotal,
+    schemes: schemes.map(x => ({
+      label: x.schemeLabel,
+      qty: x.qty,
+      amount: Number(x.totalAmount.toFixed(2)),
+    })),
+    grantTotal,
+    subtotal,
+    gst,
+    total,
+    billTo: String(first.employer_org_name || '').trim(),
+    lines,
+  };
+}
+
+export interface MergeGroupInvoicesResult {
+  merged: boolean;
+  /** Why not, in words an admin can act on. Present whenever merged is false. */
+  reason?: string;
+  invoicesDeleted: number;
+  learnersCovered: number;
+  newDocNumber?: string;
+}
+
+/**
+ * Collapse the several invoices one employer holds for one course run into a
+ * single invoice covering everyone.
+ *
+ * Groups end up split for ordinary reasons — two upload batches, per-learner
+ * mode, a late joiner — and the result is correct but untidy: the company gets
+ * several documents for one class, each emailed separately.
+ *
+ * This is the late joiner Replace path with no late joiner: the same three
+ * refusals (everyone enroled, everyone grant-settled, every invoice still
+ * unsent and unpaid) run before anything is deleted, and the same function does
+ * the deleting, so there is one implementation to trust rather than two.
+ *
+ * Deliberately NOT offered for an invoice the employer already has. Merging
+ * then would mean deleting a document someone is holding and issuing a new
+ * number in its place — a credit note is the instrument for that, and it
+ * belongs in QuickBooks with a human deciding.
+ */
+export async function mergeGroupInvoices(
+  employerUen: string,
+  courseRunId: string
+): Promise<MergeGroupInvoicesResult> {
+  const uen = String(employerUen || '').trim();
+  const runId = String(courseRunId || '').trim();
+  if (!uen || !runId) {
+    return { merged: false, reason: 'Employer UEN and course run are both required.', invoicesDeleted: 0, learnersCovered: 0 };
+  }
+
+  const rowsRes = await pool.query(
+    `${CA_INVOICE_ROW_SELECT}
+     WHERE LOWER(TRIM(ca.employer_uen)) = LOWER($1)
+       AND TRIM(ca.course_run_id)       = $2
+     ORDER BY ca.created_at, ca.id`,
+    [uen, runId]
+  );
+
+  const rows = rowsRes.rows;
+  // Learners billed by hand are on an invoice Finance manages; they are not
+  // ours to move.
+  const invoicedRows = rows.filter(
+    r => String(r.invoice_id || '').trim() && r.billed_manually !== true
+  );
+  const distinctInvoiceIds = Array.from(
+    new Set(invoicedRows.map(r => String(r.invoice_id).trim()))
+  );
+
+  if (distinctInvoiceIds.length < 2) {
+    return {
+      merged: false,
+      reason: 'This employer has only one invoice for this course run — nothing to merge.',
+      invoicesDeleted: 0,
+      learnersCovered: 0,
+    };
+  }
+
+  // Same lock, same key as the invoice sweep, so a merge and a Generate Invoice
+  // click can never both be acting on this group.
+  const lockKey = `ca-inv:${String(invoicedRows[0].employer_uen || '').trim()}|${String(invoicedRows[0].course_run_id || '').trim()}`;
+  const lockClient = await pool.connect();
+  let lockAcquired = false;
+  let freedApplicationIds: string[] = [];
+
+  try {
+    const lockRes = await lockClient.query(
+      `SELECT pg_try_advisory_lock(hashtext($1)) AS locked`,
+      [lockKey]
+    );
+    lockAcquired = !!lockRes.rows[0]?.locked;
+    if (!lockAcquired) {
+      return {
+        merged: false,
+        reason: 'This group is being invoiced right now. Try again in a moment.',
+        invoicesDeleted: 0,
+        learnersCovered: 0,
+      };
+    }
+
+    const outcome = await attemptGroupInvoiceReplacement({
+      groupKey: `${uen}|${runId}`,
+      invoicedRows,
+      pendingRows: [],
+    });
+
+    if (outcome.status !== 'replaced') {
+      return {
+        merged: false,
+        reason:
+          outcome.status === 'blocked'
+            ? `Cannot merge — ${outcome.reason}.`
+            : `Not yet — ${outcome.reason}.`,
+        invoicesDeleted: 0,
+        learnersCovered: 0,
+      };
+    }
+    freedApplicationIds = outcome.freedApplicationIds;
+  } finally {
+    if (lockAcquired) {
+      await lockClient
+        .query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey])
+        .catch(() => { /* releasing the connection drops it anyway */ });
+    }
+    lockClient.release();
+  }
+
+  // Reissue OUTSIDE the lock — generateInvoicesForApplications takes the very
+  // same lock for this group and would find it held by us.
+  const summary = await generateInvoicesForApplications(freedApplicationIds);
+
+  const afterRes = await pool.query(
+    `SELECT DISTINCT invoice_doc_number
+       FROM public.company_application
+      WHERE id = ANY($1::uuid[])
+        AND COALESCE(invoice_doc_number, '') <> ''`,
+    [freedApplicationIds]
+  );
+  const newDocNumber = afterRes.rows[0]?.invoice_doc_number
+    ? String(afterRes.rows[0].invoice_doc_number)
+    : undefined;
+
+  if (summary.generated === 0 && !newDocNumber) {
+    // The old invoices are gone but the replacement did not land — say so
+    // plainly rather than reporting success. Generate Invoice on these rows
+    // will finish the job.
+    return {
+      merged: false,
+      reason:
+        'The old invoices were removed but the replacement could not be created. Select these learners and click Generate Invoice.',
+      invoicesDeleted: distinctInvoiceIds.length,
+      learnersCovered: freedApplicationIds.length,
+    };
+  }
+
+  return {
+    merged: true,
+    invoicesDeleted: distinctInvoiceIds.length,
+    learnersCovered: freedApplicationIds.length,
+    newDocNumber,
+  };
 }
 
 async function processGrantInvoicesForGroup(

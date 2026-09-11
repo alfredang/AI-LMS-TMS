@@ -220,6 +220,60 @@ const COLUMN_GROUPS: Array<{ label: string; columns: string[]; className: string
 
 export type CompanyApplicationRow = Record<string, string>;
 
+/** A company holding more than one invoice for the same course run. */
+interface SplitInvoiceGroup {
+  key: string;
+  employer: string;
+  employerUen: string;
+  courseRunId: string;
+  docNumbers: string[];
+}
+
+/** Reply from GET /api/admin/ca-merge-invoices — what a merge would do. */
+interface MergePreviewData {
+  employerOrgName: string;
+  invoices: Array<{
+    invoiceId: string;
+    docNumber: string;
+    learnerCount: number;
+    learnerNames: string[];
+    emailed: boolean;
+    emailedAt: string | null;
+    paid: boolean;
+    total: number;
+    mergeable: boolean;
+    blockedReason: string | null;
+  }>;
+  learnersOnNewInvoice: number;
+  canMerge: boolean;
+  blockedReason: string | null;
+  /** The single invoice that would replace them, priced the way the real one is. */
+  projected?: {
+    available: boolean;
+    reason?: string;
+    courseTitle: string;
+    courseReferenceNumber: string;
+    learnerNames: string[];
+    courseFee: number;
+    quantity: number;
+    courseTotal: number;
+    schemes: Array<{ label: string; qty: number; amount: number }>;
+    grantTotal: number;
+    subtotal: number;
+    gst: number;
+    total: number;
+    billTo: string;
+    lines: Array<{
+      product: string;
+      description: string;
+      qty: number;
+      rate: number;
+      amount: number;
+      taxCode: string;
+    }>;
+  };
+}
+
 const inputClasses = 'block w-full px-3 py-2 text-on-surface bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-500';
 
 const normalize = (value: unknown) =>
@@ -551,6 +605,59 @@ const parseCompanyApplicationRows = async (file: File): Promise<CompanyApplicati
 // sponsoring company, not the trainee). Rendered on both the Upload and View
 // pages so admins always know which mode they're in before triggering a
 // generation.
+/**
+ * A notice or tool that lives between the counters and the table, collapsed to
+ * a single line until someone wants it.
+ *
+ * This strip used to be three full-height cards, which pushed the table — the
+ * thing people actually come to this page for — below the fold. The content is
+ * still worth having; it just is not worth reading on every visit.
+ */
+const PageNotice: React.FC<{
+  tone: 'neutral' | 'warn';
+  icon: IconName;
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}> = ({ tone, icon, title, hint, children }) => {
+  const [open, setOpen] = useState(false);
+  const warn = tone === 'warn';
+  return (
+    <div
+      className={`rounded-lg border ${warn
+        ? 'border-amber-300 bg-amber-50 dark:border-amber-700/60 dark:bg-amber-900/20'
+        : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'}`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left"
+      >
+        <Icon
+          name={icon}
+          className={`w-4 h-4 flex-shrink-0 ${warn ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}
+        />
+        <span className="min-w-0 flex-1">
+          <span className={`block text-sm font-semibold truncate ${warn ? 'text-amber-800 dark:text-amber-200' : 'text-gray-900 dark:text-white'}`}>
+            {title}
+          </span>
+          {hint && !open && (
+            <span className={`block text-xs truncate ${warn ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>
+              {hint}
+            </span>
+          )}
+        </span>
+        <Icon
+          name={IconName.ChevronDown}
+          className={`w-4 h-4 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''} ${warn ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}`}
+        />
+      </button>
+      {open && <div className="px-3.5 pb-3.5 pt-0">{children}</div>}
+    </div>
+  );
+};
+
 const CaEmailToggleBanner: React.FC = () => {
   const [emailToggleOn, setEmailToggleOn] = useState(false);
   const [emailToggleSaving, setEmailToggleSaving] = useState(false);
@@ -2185,7 +2292,28 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const res = await fetch(`/api/admin/ca-verify-drive?${params.toString()}`);
       const json = await res.json();
       if (json.valid) {
-        window.open(url || `https://drive.google.com/file/d/${fileId}/view`, '_blank', 'noopener');
+        // The server re-pulls the PDF when QuickBooks has been edited since we
+        // saved ours, so say so — otherwise the document silently differs from
+        // the one the admin remembers generating.
+        //
+        // The toast alone is not enough here: opening the PDF switches the
+        // browser to a new tab immediately, and the toast has expired by the
+        // time anyone looks back. So the same message also goes to the
+        // persistent line above the table, which is still there on return.
+        const target = url || `https://drive.google.com/file/d/${fileId}/view`;
+        if (json.refreshed) {
+          const docNumber = String(
+            row[kind === 'grant' ? 'Grant Invoice Doc Number' : 'Invoice Doc Number'] || ''
+          ).trim();
+          setInvoiceMessage(
+            `${docNumber ? `Invoice ${docNumber}` : 'This invoice'} was edited in QuickBooks — the PDF here has been updated to match.`
+          );
+          // Deliberately NOT opening yet: see the note on refreshedDoc.
+          setRefreshedDoc({ url: target, docNumber });
+          void reloadRows();
+          return;
+        }
+        window.open(target, '_blank', 'noopener');
       } else {
         setBrokenDocumentKeys(prev => new Set(prev).add(key));
         showToast('Document may have been deleted', true);
@@ -2530,6 +2658,75 @@ export const ViewCompanyApplicationView: React.FC = () => {
     }
   };
 
+  // Collapse an employer's several invoices for one class into a single one.
+  //
+  // Two steps on purpose. Clicking the button only LOOKS (a GET), and what it
+  // finds is shown in full — every invoice that would be deleted, who is on it,
+  // whether the employer already has it. Only the button inside that dialog
+  // acts. Deleting real invoices should never hang off a one-line browser
+  // prompt that says nothing about what is being destroyed.
+  // Shown when opening a document turned out to need a fresh copy first.
+  // Google Drive's viewer serves a cached render for a moment after the file
+  // content changes, so opening it immediately shows the OLD invoice and only
+  // a second click shows the new one. Holding the open behind a dialog both
+  // makes the refresh visible and gives Drive the moment it needs.
+  const [refreshedDoc, setRefreshedDoc] = useState<{ url: string; docNumber: string } | null>(null);
+  const [mergingGroupKey, setMergingGroupKey] = useState<string | null>(null);
+  const [mergePreview, setMergePreview] = useState<{
+    group: SplitInvoiceGroup;
+    data: MergePreviewData;
+  } | null>(null);
+  const [isMerging, setIsMerging] = useState(false);
+
+  const openMergePreview = async (group: SplitInvoiceGroup) => {
+    setMergingGroupKey(group.key);
+    try {
+      const params = new URLSearchParams({
+        employerUen: group.employerUen,
+        courseRunId: group.courseRunId,
+      });
+      const res = await fetch(`/api/admin/ca-merge-invoices?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || `Request failed (${res.status})`);
+      setMergePreview({ group, data: data as MergePreviewData });
+    } catch (err) {
+      alert(`Could not check these invoices: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setMergingGroupKey(null);
+    }
+  };
+
+  const confirmMerge = async () => {
+    if (!mergePreview) return;
+    const { group } = mergePreview;
+    setIsMerging(true);
+    try {
+      const res = await fetch('/api/admin/ca-merge-invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employerUen: group.employerUen, courseRunId: group.courseRunId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || `Request failed (${res.status})`);
+
+      if (data.merged) {
+        showToast('Invoices merged');
+        setInvoiceMessage(
+          `${group.employer}: ${data.invoicesDeleted} invoices merged into ${data.newDocNumber || 'one invoice'} covering ${data.learnersCovered} learner${data.learnersCovered === 1 ? '' : 's'}.`
+        );
+      } else {
+        showToast(data.reason || 'Could not merge', true);
+        setInvoiceMessage(`${group.employer}: ${data.reason || 'Could not merge.'}`);
+      }
+      setMergePreview(null);
+      void reloadRows();
+    } catch (err) {
+      alert(`Failed to merge invoices: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
   // Un-mark a learner that was enrolled as "billed by hand". Only ever used to
   // correct a mistake — the flag is normally set at enrolment time, when the
   // admin chose to add them to an invoice that already existed. Clearing it
@@ -2719,7 +2916,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
   // the rows already on screen rather than a new endpoint, and keyed on
   // (employer, course run) — the same pair the invoice itself is grouped by.
   const splitInvoiceGroups = useMemo(() => {
-    const byGroup = new Map<string, { employer: string; courseRunId: string; docNumbers: Set<string> }>();
+    const byGroup = new Map<string, { employer: string; employerUen: string; courseRunId: string; docNumbers: Set<string> }>();
     for (const r of rows) {
       const invoiceId = String(r['Invoice ID'] || '').trim();
       if (!invoiceId) continue;
@@ -2729,6 +2926,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
       const key = `${uen}::${runId}`;
       const entry = byGroup.get(key) ?? {
         employer: String(r['Employer Organization Name*'] || '').trim() || uen,
+        employerUen: uen,
         courseRunId: runId,
         docNumbers: new Set<string>(),
       };
@@ -2740,6 +2938,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
       .map(([key, v]) => ({
         key,
         employer: v.employer,
+        employerUen: v.employerUen,
         courseRunId: v.courseRunId,
         docNumbers: Array.from(v.docNumbers).sort(),
       }));
@@ -2900,113 +3099,125 @@ export const ViewCompanyApplicationView: React.FC = () => {
           legitimately — two upload batches, per-learner mode, a late joiner —
           and everything downstream copes, but until now nothing ever said so.
           Finding out meant noticing two rows in the Invoice # column. */}
-      {splitInvoiceGroups.length > 0 && (
-        <div className="mb-6 p-4 rounded-lg border-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 flex-shrink-0 rounded-full bg-amber-100 dark:bg-amber-800/40 flex items-center justify-center">
-              <Icon name={IconName.Warning} className="w-5 h-5 text-amber-600 dark:text-amber-300" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                {splitInvoiceGroups.length} compan{splitInvoiceGroups.length === 1 ? 'y has' : 'ies have'} more than one invoice for the same class
-              </p>
-              <p className="text-xs mt-0.5 text-amber-700 dark:text-amber-300">
-                The amounts are correct — each learner is billed once. But the employer receives several
-                invoices for one class, and each one is emailed separately.
-              </p>
-              <ul className="mt-2 space-y-1">
-                {splitInvoiceGroups.slice(0, 6).map(g => (
-                  <li key={g.key} className="text-xs text-amber-800 dark:text-amber-200">
-                    <span className="font-semibold">{g.employer}</span>
-                    <span className="opacity-75"> · run {g.courseRunId} · </span>
-                    <span className="font-mono">{g.docNumbers.join(', ')}</span>
-                  </li>
-                ))}
-                {splitInvoiceGroups.length > 6 && (
-                  <li className="text-xs text-amber-700 dark:text-amber-300">
-                    …and {splitInvoiceGroups.length - 6} more.
-                  </li>
-                )}
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* QuickBooks company lookup — check BEFORE enrolling whether an employer
-          is already a QBO customer. A company that isn't in QuickBooks yet
-          (source 'history') will make the consolidated invoice fail until it's
-          created there, so this lets admins catch it up front. */}
-      <Card className="p-6 mb-6">
-        <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-            <Icon name={IconName.Building} className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">Check if a company is in QuickBooks</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              A company must already be a QuickBooks customer for its consolidated invoice to generate. Search before enrolling under it.
-            </p>
-          </div>
-        </div>
-        <div className="relative mt-3">
-          <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            id="search-qb-company"
-            type="text"
-            value={qbCompanyQuery}
-            onChange={(e) => setQbCompanyQuery(e.target.value)}
-            placeholder="Search company name or UEN…"
-            className={`${inputClasses} pl-9`}
-          />
-        </div>
-
-        {qbEmployersLoading && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Loading companies from QuickBooks…</p>
-        )}
-        {qbEmployersError && (
-          <p className="text-xs text-red-500 mt-2">Couldn’t load companies: {qbEmployersError}</p>
-        )}
-
-        {qbCompanyQuery.trim() && !qbEmployersLoading && (
-          qbCompanyMatches.length > 0 ? (
-            <ul className="mt-3 max-h-64 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
-              {qbCompanyMatches.map((e) => {
-                const inQb = e.source === 'qb' || e.source === 'both';
-                return (
-                  <li key={e.id} className="px-3 py-2 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{e.employerOrgName}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {e.employerUen ? `UEN ${e.employerUen}` : 'No UEN on record'}
-                        {e.employerContactEmail ? ` · ${e.employerContactEmail}` : ''}
-                      </p>
-                    </div>
-                    {inQb ? (
-                      <span className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                        <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5" />
-                        In QuickBooks
-                      </span>
-                    ) : (
-                      <span
-                        className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                        title="Only in application history — not a QuickBooks customer yet. Add it in QuickBooks before enrolling or the invoice will fail."
-                      >
-                        <Icon name={IconName.Warning} className="w-3.5 h-3.5" />
-                        Not in QuickBooks
-                      </span>
+      {/* Everything between the counters and the table is a notice or a tool,
+          not something to read every visit. Collapsed to a line each so the
+          table starts where the eye already is. The email banner above stays
+          open on purpose — it says whether real emails are going out. */}
+      <div className="space-y-2 mb-6">
+        {splitInvoiceGroups.length > 0 && (
+          <PageNotice
+            tone="warn"
+            icon={IconName.Warning}
+            title={`${splitInvoiceGroups.length} compan${splitInvoiceGroups.length === 1 ? 'y has' : 'ies have'} more than one invoice for the same class`}
+            hint="Amounts are correct — but each invoice is emailed separately"
+          >
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 flex-shrink-0 rounded-full bg-amber-100 dark:bg-amber-800/40 flex items-center justify-center">
+                  <Icon name={IconName.Warning} className="w-5 h-5 text-amber-600 dark:text-amber-300" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                    {splitInvoiceGroups.length} compan{splitInvoiceGroups.length === 1 ? 'y has' : 'ies have'} more than one invoice for the same class
+                  </p>
+                  <p className="text-xs mt-0.5 text-amber-700 dark:text-amber-300">
+                    The amounts are correct — each learner is billed once. But the employer receives several
+                    invoices for one class, and each one is emailed separately.
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {splitInvoiceGroups.slice(0, 6).map(g => (
+                      <li key={g.key} className="text-xs text-amber-800 dark:text-amber-200 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span>
+                          <span className="font-semibold">{g.employer}</span>
+                          <span className="opacity-75"> · run {g.courseRunId} · </span>
+                          <span className="font-mono">{g.docNumbers.join(', ')}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void openMergePreview(g)}
+                          disabled={mergingGroupKey !== null}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border border-amber-400 text-amber-800 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-600 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                          title="See what merging these into one invoice would do. Nothing is changed until you confirm."
+                        >
+                          {mergingGroupKey === g.key ? 'Checking…' : 'Merge into one'}
+                        </button>
+                      </li>
+                    ))}
+                    {splitInvoiceGroups.length > 6 && (
+                      <li className="text-xs text-amber-700 dark:text-amber-300">
+                        …and {splitInvoiceGroups.length - 6} more.
+                      </li>
                     )}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-              No company matches “{qbCompanyQuery.trim()}”. If this is a new company, add it in QuickBooks first — otherwise its consolidated invoice will fail when you enrol under it.
-            </div>
-          )
+                  </ul>
+                </div>
+              </div>
+          </PageNotice>
         )}
-      </Card>
+
+        <PageNotice
+          tone="neutral"
+          icon={IconName.Building}
+          title="Check if a company is in QuickBooks"
+          hint="A company must be a QuickBooks customer before its invoice can generate"
+        >
+          <div className="relative mt-3">
+            <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="search-qb-company"
+              type="text"
+              value={qbCompanyQuery}
+              onChange={(e) => setQbCompanyQuery(e.target.value)}
+              placeholder="Search company name or UEN…"
+              className={`${inputClasses} pl-9`}
+            />
+          </div>
+
+          {qbEmployersLoading && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Loading companies from QuickBooks…</p>
+          )}
+          {qbEmployersError && (
+            <p className="text-xs text-red-500 mt-2">Couldn’t load companies: {qbEmployersError}</p>
+          )}
+
+          {qbCompanyQuery.trim() && !qbEmployersLoading && (
+            qbCompanyMatches.length > 0 ? (
+              <ul className="mt-3 max-h-64 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                {qbCompanyMatches.map((e) => {
+                  const inQb = e.source === 'qb' || e.source === 'both';
+                  return (
+                    <li key={e.id} className="px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{e.employerOrgName}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {e.employerUen ? `UEN ${e.employerUen}` : 'No UEN on record'}
+                          {e.employerContactEmail ? ` · ${e.employerContactEmail}` : ''}
+                        </p>
+                      </div>
+                      {inQb ? (
+                        <span className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                          <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5" />
+                          In QuickBooks
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                          title="Only in application history — not a QuickBooks customer yet. Add it in QuickBooks before enrolling or the invoice will fail."
+                        >
+                          <Icon name={IconName.Warning} className="w-3.5 h-3.5" />
+                          Not in QuickBooks
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                No company matches “{qbCompanyQuery.trim()}”. If this is a new company, add it in QuickBooks first — otherwise its consolidated invoice will fail when you enrol under it.
+              </div>
+            )
+          )}
+        </PageNotice>
+      </div>
 
       {/* The "Register all" banner used to sit here. It promoted every synced
           employer enrolment in one click, taking the employer name from
@@ -3407,6 +3618,247 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 Tip: {perLearner ? 'learners' : 'groups'} whose grants are still awaiting application get flagged and skipped — sync grants first if so.
               </p>
             </ConfirmPopup>
+          );
+        })()}
+        {refreshedDoc && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-gray-800">
+              <div className="p-6 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 flex-shrink-0 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                    <Icon name={IconName.CheckCircle} className="w-5 h-5 text-emerald-600 dark:text-emerald-300" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                      This invoice was edited in QuickBooks
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                      {refreshedDoc.docNumber ? (
+                        <>The copy stored here for <span className="font-mono font-semibold">{refreshedDoc.docNumber}</span> has been updated to match.</>
+                      ) : (
+                        <>The copy stored here has been updated to match.</>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Google Drive can take a few seconds to show a newly changed file. If it still looks
+                  like the old version, refresh that tab.
+                </p>
+              </div>
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setRefreshedDoc(null)}
+                  className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.open(refreshedDoc.url, '_blank', 'noopener');
+                    setRefreshedDoc(null);
+                  }}
+                  className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-emerald-600 hover:bg-emerald-700"
+                >
+                  Open updated PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {mergePreview && (() => {
+          const { group, data } = mergePreview;
+          const totalToDelete = data.invoices.length;
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-800 max-h-[85vh] flex flex-col">
+                <div className="p-6 space-y-4 overflow-y-auto">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Merge {totalToDelete} invoices into one?
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                      {data.employerOrgName || group.employer} &middot; course run {group.courseRunId}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+                      These invoices would be deleted in QuickBooks
+                    </p>
+                    <div className="space-y-2">
+                      {data.invoices.map(inv => (
+                        <div
+                          key={inv.invoiceId}
+                          className={`rounded-md border p-3 ${inv.mergeable
+                            ? 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/40'
+                            : 'border-amber-300 bg-amber-50 dark:border-amber-700/60 dark:bg-amber-900/20'}`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-mono text-sm font-semibold text-gray-900 dark:text-white">
+                              {inv.docNumber || inv.invoiceId}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {inv.learnerCount} learner{inv.learnerCount === 1 ? '' : 's'}
+                              {inv.total > 0 && ` · $${inv.total.toFixed(2)}`}
+                            </span>
+                          </div>
+                          {inv.learnerNames.length > 0 && (
+                            <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                              {inv.learnerNames.join(', ')}
+                            </p>
+                          )}
+                          {!inv.mergeable && (
+                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 mt-1.5 inline-flex items-start gap-1.5">
+                              <Icon name={IconName.Warning} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                              <span>{inv.blockedReason}</span>
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* The replacement drawn as the document it would become.
+                      Lines, wording and tax codes come from the same builders
+                      the real invoice uses, so what is shown here is what
+                      QuickBooks will print — not a paraphrase of it. */}
+                  {data.projected?.available && (() => {
+                    const proj = data.projected;
+                    const currentTotal = data.invoices.reduce((sum, i) => sum + (i.total || 0), 0);
+                    const money = (n: number) =>
+                      Math.abs(n).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    const matches = Math.abs(currentTotal - proj.total) < 0.01;
+                    return (
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+                          The invoice that would replace them
+                        </p>
+
+                        {/* Deliberately light in both themes — this is a preview
+                            of a printed document, not part of the app chrome. */}
+                        <div className="rounded-md border border-gray-300 bg-white text-gray-900 overflow-hidden shadow-sm dark:border-gray-600">
+                          <div className="flex items-start justify-between gap-4 px-4 pt-4 pb-3 border-b border-gray-200">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Tax Invoice</p>
+                              <p className="text-sm font-bold mt-1">{proj.billTo || group.employer}</p>
+                              <p className="text-[11px] text-gray-500 mt-0.5">
+                                Course run {group.courseRunId} · {proj.quantity} participant{proj.quantity === 1 ? '' : 's'}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[10px] uppercase tracking-wider text-gray-400">Invoice no.</p>
+                              <p className="text-[11px] font-mono text-gray-400 italic">assigned on issue</p>
+                            </div>
+                          </div>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-[11px]">
+                              <thead>
+                                <tr className="bg-gray-50 text-gray-500">
+                                  <th className="text-left font-semibold uppercase tracking-wider px-4 py-1.5">Description</th>
+                                  <th className="text-right font-semibold uppercase tracking-wider px-2 py-1.5 whitespace-nowrap">Qty</th>
+                                  <th className="text-right font-semibold uppercase tracking-wider px-2 py-1.5 whitespace-nowrap">Rate</th>
+                                  <th className="text-right font-semibold uppercase tracking-wider px-2 py-1.5 whitespace-nowrap">Tax</th>
+                                  <th className="text-right font-semibold uppercase tracking-wider px-4 py-1.5 whitespace-nowrap">Amount</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {proj.lines.map((ln, i) => (
+                                  <tr key={i} className="border-t border-gray-200 align-top">
+                                    <td className="px-4 py-2">
+                                      <p className="font-semibold">{ln.product}</p>
+                                      <p className="text-gray-600 whitespace-pre-line leading-snug mt-0.5">{ln.description}</p>
+                                    </td>
+                                    <td className="px-2 py-2 text-right font-mono tabular-nums">{ln.qty}</td>
+                                    <td className="px-2 py-2 text-right font-mono tabular-nums whitespace-nowrap">
+                                      {ln.rate < 0 ? '-' : ''}${money(ln.rate)}
+                                    </td>
+                                    <td className="px-2 py-2 text-right text-gray-500 whitespace-nowrap">{ln.taxCode}</td>
+                                    <td className="px-4 py-2 text-right font-mono tabular-nums whitespace-nowrap">
+                                      {ln.amount < 0 ? '-' : ''}${money(ln.amount)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="border-t border-gray-200 px-4 py-3 flex justify-end">
+                            <div className="w-56 space-y-1 text-[11px]">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Subtotal</span>
+                                <span className="font-mono tabular-nums">${money(proj.subtotal)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">GST 9%</span>
+                                <span className="font-mono tabular-nums">${money(proj.gst)}</span>
+                              </div>
+                              <div className="flex justify-between pt-1 border-t border-gray-300 text-sm font-bold">
+                                <span>Balance due</span>
+                                <span className="font-mono tabular-nums">${money(proj.total)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className={`mt-2 rounded-md px-3 py-2 text-[11px] border ${matches
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700/60 dark:bg-emerald-900/20 dark:text-emerald-200'
+                          : 'border-amber-300 bg-amber-50 text-amber-800 font-semibold dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-200'}`}>
+                          {matches
+                            ? `Same as the ${data.invoices.length} invoices today ($${money(currentTotal)}) — the company owes exactly what it owes now.`
+                            : `The ${data.invoices.length} invoices today total $${money(currentTotal)} — that is $${money(currentTotal - proj.total)} ${currentTotal > proj.total ? 'more' : 'less'} than this. Check why before merging.`}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {data.canMerge ? (
+                    <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-700/60 dark:bg-emerald-900/20">
+                      <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+                        Ready to merge
+                      </p>
+                      <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+                        None of these has been emailed or paid, so nothing has left the office.
+                        The old numbers are deleted and a new one is issued.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700/60 dark:bg-amber-900/20">
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                        These cannot be merged
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                        {data.blockedReason} Use a credit note in QuickBooks if they must be combined.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    type="button"
+                    disabled={isMerging}
+                    onClick={() => setMergePreview(null)}
+                    className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    {data.canMerge ? 'Cancel' : 'Close'}
+                  </button>
+                  {data.canMerge && (
+                    <button
+                      type="button"
+                      disabled={isMerging}
+                      onClick={() => void confirmMerge()}
+                      className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {isMerging ? 'Merging…' : `Delete ${totalToDelete} and issue one`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           );
         })()}
         {deleteConfirmOpen && (
