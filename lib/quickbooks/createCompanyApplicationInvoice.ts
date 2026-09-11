@@ -33,6 +33,7 @@ import {
   createCompanyApplicationGrantInvoice,
 } from './createCompanyApplicationGrantInvoice';
 import { driveFileExists, uploadInvoicePdfToDrive } from '../services/invoiceDriveUpload';
+import { lookupAcraEntity, acraAddressFields } from '../services/acraEntityLookup';
 import { findEnrolmentsAwaitingGrants } from '../services/caExistingInvoice';
 import { deleteQboInvoice, readQboInvoiceLifecycle } from './voidCompanyApplicationInvoice';
 import { caInvoiceBelongsTo } from './invoiceOwnership';
@@ -549,12 +550,32 @@ async function resolveEmployerCustomerRef(opts: {
   // the accepted trade-off for auto-generating the invoice.
   if (name) {
     try {
+      // A brand-new customer is created with whatever we know, and until now
+      // that did not include an address — so its invoices printed a company
+      // name over empty space. ACRA's open register turns the UEN we already
+      // hold into a street and postal code. Best effort throughout: a failed
+      // or unknown lookup simply creates the customer as before.
+      let billAddr: Record<string, string> | null = null;
+      if (uen) {
+        const entity = await lookupAcraEntity(uen);
+        billAddr = acraAddressFields(entity);
+        if (entity && entity.status && !/^registered$/i.test(entity.status)) {
+          console.warn(
+            `[ca-invoice] ACRA reports "${entity.entityName}" (UEN ${uen}) as "${entity.status}" — invoicing an employer that is no longer registered.`
+          );
+        }
+        if (billAddr) {
+          console.log(`[ca-invoice] Address for UEN ${uen} from ACRA: ${billAddr.Line2 || ''} ${billAddr.PostalCode || ''}`.trim());
+        }
+      }
+
       const newCustomerId = await qboFindOrCreateCompanyCustomer(undefined, {
         displayName: name,
         companyName: name,
         email: opts.employerContactEmail,
         phone: opts.employerContactPhone,
         contactName: opts.employerContactName,
+        billAddr,
       });
       console.log(`[ca-invoice] Auto-created QBO customer for new employer "${name}" (UEN ${uen || '—'}) → id ${newCustomerId}`);
       if (uen) {

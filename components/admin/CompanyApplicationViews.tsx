@@ -229,6 +229,22 @@ interface SplitInvoiceGroup {
   docNumbers: string[];
 }
 
+/** Reply from GET /api/admin/ca-backfill-employer-address. */
+interface AddressBackfillPreview {
+  wouldUpdate: number;
+  candidates: Array<{
+    employerUen: string;
+    employerName: string;
+    customerName: string;
+    learners: number;
+    skip?: string;
+    address?: { Line2?: string; City?: string; PostalCode?: string; Country?: string };
+    acraStatus?: string;
+  }>;
+  skippedCounts: Record<string, number>;
+  skipReasons: Record<string, string>;
+}
+
 /** Reply from GET /api/admin/ca-merge-invoices — what a merge would do. */
 interface MergePreviewData {
   employerOrgName: string;
@@ -2727,6 +2743,112 @@ export const ViewCompanyApplicationView: React.FC = () => {
     }
   };
 
+  // Fill in the billing address on companies already in QuickBooks that have
+  // none, from the UEN we hold and ACRA's open register.
+  //
+  // New companies get an address when their customer is created; this is the
+  // catch-up for everyone created before that. It never overwrites — a company
+  // with any address already set is skipped, because a hand-corrected address
+  // beats a registered one (ACRA publishes street and postal code, never a
+  // block or unit number).
+  const [addressPreview, setAddressPreview] = useState<AddressBackfillPreview | null>(null);
+  const [isCheckingAddresses, setIsCheckingAddresses] = useState(false);
+  const [isFillingAddresses, setIsFillingAddresses] = useState(false);
+
+  const previewAddressBackfill = async () => {
+    setIsCheckingAddresses(true);
+    try {
+      const res = await fetch('/api/admin/ca-backfill-employer-address');
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || `Request failed (${res.status})`);
+      setAddressPreview(data as AddressBackfillPreview);
+    } catch (err) {
+      alert(`Could not check addresses: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsCheckingAddresses(false);
+    }
+  };
+
+  const applyAddressBackfill = async () => {
+    setIsFillingAddresses(true);
+    try {
+      const res = await fetch('/api/admin/ca-backfill-employer-address', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || `Request failed (${res.status})`);
+      showToast(data.message || 'Addresses filled in');
+      setInvoiceMessage(data.message || null);
+      setAddressPreview(null);
+    } catch (err) {
+      alert(`Could not fill in addresses: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsFillingAddresses(false);
+    }
+  };
+
+  // Detach a wrong invoice without cancelling anything.
+  //
+  // Distinct from Delete Selected, which removes the learner and cancels their
+  // SSG enrolment. Here the learner stays exactly as they are and only the
+  // invoice link goes, so a correct one can be raised. The server decides
+  // whether the QuickBooks document is deleted or merely unlinked — an invoice
+  // that turns out to belong to another group, or that has been paid, is never
+  // deleted to tidy up a wrong link.
+  const [isRemovingInvoice, setIsRemovingInvoice] = useState(false);
+
+  const removeInvoiceFromSelected = async () => {
+    if (selectedIds.size === 0) {
+      setInvoiceMessage('Select at least one learner first.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Remove the tax invoice from ${selectedIds.size} selected learner${selectedIds.size === 1 ? '' : 's'}?\n\n` +
+      `The enrolment, grant and calendar entry are NOT touched — only the invoice link is cleared so a correct one can be generated.\n\n` +
+      `The QuickBooks document is deleted only when it is ours, unpaid, and every learner on it was selected. ` +
+      `Otherwise it is left in place and only unlinked here.`
+    );
+    if (!confirmed) return;
+
+    setIsRemovingInvoice(true);
+    setInvoiceMessage(null);
+    try {
+      const res = await fetch('/api/admin/ca-remove-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationIds: Array.from(selectedIds) }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || `Request failed (${res.status})`);
+
+      if (data.message) {
+        setInvoiceMessage(data.message);
+      } else {
+        const s = data.summary || {};
+        const parts: string[] = [];
+        if (s.deleted) parts.push(`${s.deleted} invoice${s.deleted === 1 ? '' : 's'} deleted in QuickBooks`);
+        if (s.unlinked) parts.push(`${s.unlinked} unlinked but kept in QuickBooks`);
+        if (s.failed) parts.push(`${s.failed} failed`);
+        setInvoiceMessage(parts.length ? parts.join(' · ') : 'Nothing to remove.');
+        // Each invoice explains itself — a kept document always says why, and
+        // that reason is the point of the whole action.
+        const notable = (data.results || []).filter((r: any) => r.invoiceKept || !r.success);
+        if (notable.length > 0) {
+          showToast(notable[0].message, !notable[0].success);
+        } else {
+          showToast('Invoice removed');
+        }
+      }
+      void reloadRows();
+    } catch (err) {
+      alert(`Failed to remove invoice: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsRemovingInvoice(false);
+    }
+  };
+
   // Un-mark a learner that was enrolled as "billed by hand". Only ever used to
   // correct a mistake — the flag is normally set at enrolment time, when the
   // admin chose to add them to an invoice that already existed. Clearing it
@@ -3159,6 +3281,22 @@ export const ViewCompanyApplicationView: React.FC = () => {
           title="Check if a company is in QuickBooks"
           hint="A company must be a QuickBooks customer before its invoice can generate"
         >
+          <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Missing company addresses</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Fill in the billing address on companies that have none, from their UEN. Never changes an address already set.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void previewAddressBackfill()}
+              disabled={isCheckingAddresses}
+              className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 ring-1 ring-emerald-300 disabled:opacity-50 dark:text-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:ring-emerald-700/60"
+            >
+              {isCheckingAddresses ? 'Checking…' : 'Check addresses'}
+            </button>
+          </div>
           <div className="relative mt-3">
             <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
@@ -3346,6 +3484,24 @@ export const ViewCompanyApplicationView: React.FC = () => {
                   <>
                     <Icon name={IconName.Mail} className="w-3.5 h-3.5 mr-1.5" />
                     Send Invoice
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => void removeInvoiceFromSelected()}
+                disabled={isRemovingInvoice || selectedIds.size === 0}
+                title="Detach a wrong tax invoice from the selected learners so a correct one can be generated. The enrolment, grant and calendar entry are NOT touched. The QuickBooks document is deleted only when it is ours, unpaid, and every learner on it was selected."
+                className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-amber-700 bg-amber-100 hover:bg-amber-200 ring-1 ring-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:text-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 dark:ring-amber-700/60"
+              >
+                {isRemovingInvoice ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2" />
+                    Removing...
+                  </>
+                ) : (
+                  <>
+                    <Icon name={IconName.Warning} className="w-3.5 h-3.5 mr-1.5" />
+                    Remove Invoice
                   </>
                 )}
               </button>
@@ -3618,6 +3774,90 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 Tip: {perLearner ? 'learners' : 'groups'} whose grants are still awaiting application get flagged and skipped — sync grants first if so.
               </p>
             </ConfirmPopup>
+          );
+        })()}
+        {addressPreview && (() => {
+          const fillable = addressPreview.candidates.filter(c => !c.skip && c.address);
+          const skipped = Object.entries(addressPreview.skippedCounts || {}).filter(([, n]) => Number(n) > 0);
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-800 max-h-[85vh] flex flex-col">
+                <div className="p-6 space-y-4 overflow-y-auto">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {fillable.length > 0
+                      ? `Add an address to ${fillable.length} compan${fillable.length === 1 ? 'y' : 'ies'}?`
+                      : 'No addresses to fill in'}
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Addresses come from the ACRA register, looked up by UEN. Street and postal code only &mdash;
+                    ACRA does not publish block or unit numbers. Companies that already have an address are never changed.
+                  </p>
+
+                  {fillable.length > 0 && (
+                    <div className="rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+                      {fillable.slice(0, 25).map(c => (
+                        <div key={c.employerUen} className="p-3 text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-semibold text-gray-900 dark:text-white">
+                              {c.customerName || c.employerName}
+                            </span>
+                            <span className="font-mono text-gray-400">{c.employerUen}</span>
+                          </div>
+                          <p className="text-gray-600 dark:text-gray-300 mt-0.5">
+                            {[c.address?.Line2, [c.address?.City, c.address?.PostalCode].filter(Boolean).join(' ')].filter(Boolean).join(' · ')}
+                          </p>
+                          {c.acraStatus && !/^registered$/i.test(c.acraStatus) && (
+                            <p className="text-amber-700 dark:text-amber-300 font-semibold mt-0.5">
+                              ACRA status: {c.acraStatus}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                      {fillable.length > 25 && (
+                        <p className="p-3 text-xs text-gray-500 dark:text-gray-400">
+                          …and {fillable.length - 25} more in this batch.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {skipped.length > 0 && (
+                    <div className="rounded-md bg-gray-50 dark:bg-gray-900/40 p-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">
+                        Skipped
+                      </p>
+                      {skipped.map(([k, n]) => (
+                        <p key={k} className="text-xs text-gray-600 dark:text-gray-300">
+                          <span className="font-mono font-semibold">{n}</span>{' '}
+                          {addressPreview.skipReasons?.[k] || k}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    type="button"
+                    disabled={isFillingAddresses}
+                    onClick={() => setAddressPreview(null)}
+                    className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    {fillable.length > 0 ? 'Cancel' : 'Close'}
+                  </button>
+                  {fillable.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={isFillingAddresses}
+                      onClick={() => void applyAddressBackfill()}
+                      className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      {isFillingAddresses ? 'Filling in…' : `Add to ${fillable.length}`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           );
         })()}
         {refreshedDoc && (

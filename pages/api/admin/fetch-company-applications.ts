@@ -198,7 +198,25 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const isFailed = String(r.auto_enrol_status || '').trim().toLowerCase() === 'failed';
       const isInvoiced = String(r.invoice_id || '').trim().length > 0;
       const isDismissed = r.attention_ignored_at != null;
-      const isStuck = isFailed || (warnings.length > 0 && !isInvoiced && !isDismissed);
+
+      // Stranded: enroled with SSG but the pipeline never finished. The grant
+      // poll runs in memory, so a deploy or restart inside its 15-minute window
+      // leaves the row at 'pending' with no failure and no warning — invisible
+      // to both tests above. Thirty minutes clears the longest legitimate wait.
+      //
+      // This must stay in step with ca-stuck-count, which drives the sidebar
+      // badge: when the two disagree the badge shows a number the page cannot
+      // then produce a row for.
+      const status = String(r.auto_enrol_status || '').trim().toLowerCase();
+      const updatedAt = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+      const isStranded =
+        String(r.enrolment_id || '').trim().length > 0 &&
+        (status === '' || status === 'pending') &&
+        updatedAt > 0 &&
+        Date.now() - updatedAt > 30 * 60 * 1000 &&
+        !isDismissed;
+
+      const isStuck = isFailed || isStranded || (warnings.length > 0 && !isInvoiced && !isDismissed);
 
       // Read by the Type and Renewal columns.
       out._course_type = String(r.course_type || '');
