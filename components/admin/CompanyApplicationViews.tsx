@@ -229,22 +229,6 @@ interface SplitInvoiceGroup {
   docNumbers: string[];
 }
 
-/** Reply from GET /api/admin/ca-backfill-employer-address. */
-interface AddressBackfillPreview {
-  wouldUpdate: number;
-  candidates: Array<{
-    employerUen: string;
-    employerName: string;
-    customerName: string;
-    learners: number;
-    skip?: string;
-    address?: { Line2?: string; City?: string; PostalCode?: string; Country?: string };
-    acraStatus?: string;
-  }>;
-  skippedCounts: Record<string, number>;
-  skipReasons: Record<string, string>;
-}
-
 /** Reply from GET /api/admin/ca-merge-invoices — what a merge would do. */
 interface MergePreviewData {
   employerOrgName: string;
@@ -2743,52 +2727,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
     }
   };
 
-  // Fill in the billing address on companies already in QuickBooks that have
-  // none, from the UEN we hold and ACRA's open register.
-  //
-  // New companies get an address when their customer is created; this is the
-  // catch-up for everyone created before that. It never overwrites — a company
-  // with any address already set is skipped, because a hand-corrected address
-  // beats a registered one (ACRA publishes street and postal code, never a
-  // block or unit number).
-  const [addressPreview, setAddressPreview] = useState<AddressBackfillPreview | null>(null);
-  const [isCheckingAddresses, setIsCheckingAddresses] = useState(false);
-  const [isFillingAddresses, setIsFillingAddresses] = useState(false);
-
-  const previewAddressBackfill = async () => {
-    setIsCheckingAddresses(true);
-    try {
-      const res = await fetch('/api/admin/ca-backfill-employer-address');
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || `Request failed (${res.status})`);
-      setAddressPreview(data as AddressBackfillPreview);
-    } catch (err) {
-      alert(`Could not check addresses: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setIsCheckingAddresses(false);
-    }
-  };
-
-  const applyAddressBackfill = async () => {
-    setIsFillingAddresses(true);
-    try {
-      const res = await fetch('/api/admin/ca-backfill-employer-address', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || `Request failed (${res.status})`);
-      showToast(data.message || 'Addresses filled in');
-      setInvoiceMessage(data.message || null);
-      setAddressPreview(null);
-    } catch (err) {
-      alert(`Could not fill in addresses: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setIsFillingAddresses(false);
-    }
-  };
-
   // Detach a wrong invoice without cancelling anything.
   //
   // Distinct from Delete Selected, which removes the learner and cancels their
@@ -3024,6 +2962,54 @@ export const ViewCompanyApplicationView: React.FC = () => {
       )
       .slice(0, 30);
   }, [qbCompanyQuery, qbEmployers]);
+
+  // Registered address for each company in the search results.
+  //
+  // Looked up on demand and remembered per UEN for the session, so retyping a
+  // search costs nothing. Only a handful are looked up at a time — typing "pte"
+  // matches dozens of companies and firing a request for each would be worse
+  // than showing nothing.
+  //
+  // The set of UENs already requested lives in a ref, NOT in the effect's
+  // dependencies. Deriving it from the address state instead meant writing the
+  // "Looking up…" placeholder re-ran this effect, whose cleanup then cancelled
+  // the very fetches it had just started: the row sat on "Looking up address…"
+  // for ever while the answer was discarded on arrival.
+  const [companyAddresses, setCompanyAddresses] = useState<Record<string, string>>({});
+  const requestedAddressUens = React.useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const uens = qbCompanyMatches
+      .map(e => String(e.employerUen || '').trim())
+      .filter(Boolean)
+      .filter(u => !requestedAddressUens.current.has(u))
+      .slice(0, 8);
+    if (uens.length === 0) return;
+
+    uens.forEach(u => requestedAddressUens.current.add(u));
+    setCompanyAddresses(prev => {
+      const next = { ...prev };
+      uens.forEach(u => { next[u] = '…'; });
+      return next;
+    });
+
+    // All at once, not one after another — these are independent lookups, and
+    // each settles on its own so addresses appear as they arrive.
+    uens.forEach(async (uen) => {
+      try {
+        const res = await fetch(`/api/admin/acra-address?uen=${encodeURIComponent(uen)}`);
+        const data = await res.json();
+        setCompanyAddresses(prev => ({
+          ...prev,
+          [uen]: data?.found ? String(data.addressLine || '') : String(data?.message || 'No address found'),
+        }));
+      } catch {
+        // Allow a retry on the next search rather than leaving it mid-flight.
+        requestedAddressUens.current.delete(uen);
+        setCompanyAddresses(prev => ({ ...prev, [uen]: 'Could not reach ACRA' }));
+      }
+    });
+  }, [qbCompanyMatches]);
 
   // Auto-refresh polling removed — was reloading rows every 5s while any row
   // was in-progress, which the admin found disruptive. Refresh is now manual
@@ -3281,22 +3267,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
           title="Check if a company is in QuickBooks"
           hint="A company must be a QuickBooks customer before its invoice can generate"
         >
-          <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">Missing company addresses</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Fill in the billing address on companies that have none, from their UEN. Never changes an address already set.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void previewAddressBackfill()}
-              disabled={isCheckingAddresses}
-              className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 ring-1 ring-emerald-300 disabled:opacity-50 dark:text-emerald-200 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:ring-emerald-700/60"
-            >
-              {isCheckingAddresses ? 'Checking…' : 'Check addresses'}
-            </button>
-          </div>
           <div className="relative mt-3">
             <Icon name={IconName.Search} className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
@@ -3329,6 +3299,33 @@ export const ViewCompanyApplicationView: React.FC = () => {
                           {e.employerUen ? `UEN ${e.employerUen}` : 'No UEN on record'}
                           {e.employerContactEmail ? ` · ${e.employerContactEmail}` : ''}
                         </p>
+                        {/* Registered address from ACRA. Only a UEN can be
+                            looked up — searching the register by name returns
+                            anything sharing a word, so a company with no UEN
+                            says so rather than guessing. */}
+                        {e.employerUen ? (() => {
+                          const addr = companyAddresses[String(e.employerUen).trim()];
+                          // Only the first few results are looked up, so a row
+                          // beyond that has no entry at all. Say so: a blank
+                          // line where other rows show an address reads as "this
+                          // company has none", which is not what it means.
+                          if (addr === undefined) {
+                            return (
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">
+                                Type more of the name to look up this address
+                              </p>
+                            );
+                          }
+                          return (
+                            <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5 truncate">
+                              {addr === '…' ? 'Looking up address…' : addr}
+                            </p>
+                          );
+                        })() : (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">
+                            No UEN, so the address cannot be looked up
+                          </p>
+                        )}
                       </div>
                       {inQb ? (
                         <span className="inline-flex items-center gap-1 flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -3774,90 +3771,6 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 Tip: {perLearner ? 'learners' : 'groups'} whose grants are still awaiting application get flagged and skipped — sync grants first if so.
               </p>
             </ConfirmPopup>
-          );
-        })()}
-        {addressPreview && (() => {
-          const fillable = addressPreview.candidates.filter(c => !c.skip && c.address);
-          const skipped = Object.entries(addressPreview.skippedCounts || {}).filter(([, n]) => Number(n) > 0);
-          return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl dark:bg-gray-800 max-h-[85vh] flex flex-col">
-                <div className="p-6 space-y-4 overflow-y-auto">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {fillable.length > 0
-                      ? `Add an address to ${fillable.length} compan${fillable.length === 1 ? 'y' : 'ies'}?`
-                      : 'No addresses to fill in'}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    Addresses come from the ACRA register, looked up by UEN. Street and postal code only &mdash;
-                    ACRA does not publish block or unit numbers. Companies that already have an address are never changed.
-                  </p>
-
-                  {fillable.length > 0 && (
-                    <div className="rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
-                      {fillable.slice(0, 25).map(c => (
-                        <div key={c.employerUen} className="p-3 text-xs">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {c.customerName || c.employerName}
-                            </span>
-                            <span className="font-mono text-gray-400">{c.employerUen}</span>
-                          </div>
-                          <p className="text-gray-600 dark:text-gray-300 mt-0.5">
-                            {[c.address?.Line2, [c.address?.City, c.address?.PostalCode].filter(Boolean).join(' ')].filter(Boolean).join(' · ')}
-                          </p>
-                          {c.acraStatus && !/^registered$/i.test(c.acraStatus) && (
-                            <p className="text-amber-700 dark:text-amber-300 font-semibold mt-0.5">
-                              ACRA status: {c.acraStatus}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                      {fillable.length > 25 && (
-                        <p className="p-3 text-xs text-gray-500 dark:text-gray-400">
-                          …and {fillable.length - 25} more in this batch.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {skipped.length > 0 && (
-                    <div className="rounded-md bg-gray-50 dark:bg-gray-900/40 p-3">
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">
-                        Skipped
-                      </p>
-                      {skipped.map(([k, n]) => (
-                        <p key={k} className="text-xs text-gray-600 dark:text-gray-300">
-                          <span className="font-mono font-semibold">{n}</span>{' '}
-                          {addressPreview.skipReasons?.[k] || k}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    type="button"
-                    disabled={isFillingAddresses}
-                    onClick={() => setAddressPreview(null)}
-                    className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                  >
-                    {fillable.length > 0 ? 'Cancel' : 'Close'}
-                  </button>
-                  {fillable.length > 0 && (
-                    <button
-                      type="button"
-                      disabled={isFillingAddresses}
-                      onClick={() => void applyAddressBackfill()}
-                      className="px-4 py-2 text-sm font-semibold rounded-md text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                      {isFillingAddresses ? 'Filling in…' : `Add to ${fillable.length}`}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
           );
         })()}
         {refreshedDoc && (
