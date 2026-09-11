@@ -719,30 +719,48 @@ const InAppCalendar: React.FC = () => {
           </button>
         )}
         {gcalMatches !== null && (
-          <div className="relative">
-            <button type="button" onClick={() => (bulkPanelOpen ? setBulkPanelOpen(false) : openBulkPanel())} disabled={bulkSyncing}
-              title="Pick a date range and create the missing Google Calendar events (+ sync attendees) for every flagged class in it. No emails are sent."
-              className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 flex items-center gap-1">
-              {bulkSyncing && <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />}
-              {bulkProgress ? `Syncing ${bulkProgress.done}/${bulkProgress.total}…` : 'Sync all to Google Calendar'}
-            </button>
-            {bulkPanelOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => !bulkSyncing && setBulkPanelOpen(false)} />
-                <div className="absolute z-30 left-0 top-9 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 w-72">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Sync every WSQ/IBF/CASL class in this date range that's missing its Google Calendar event.</p>
-                  <div className="flex items-center gap-2 mb-2">
-                    <input type="date" value={bulkFrom} onChange={(e) => setBulkFrom(e.target.value)} disabled={bulkSyncing} className={`${inputCls} flex-1`} />
-                    <span className="text-xs text-gray-400">to</span>
-                    <input type="date" value={bulkTo} onChange={(e) => setBulkTo(e.target.value)} disabled={bulkSyncing} className={`${inputCls} flex-1`} />
-                  </div>
+          <button type="button" onClick={openBulkPanel} disabled={bulkSyncing}
+            title="Pick a date range and create the missing Google Calendar events (+ sync attendees) for every flagged class in it. No emails are sent."
+            className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 flex items-center gap-1">
+            {bulkSyncing && <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />}
+            {bulkProgress ? `Syncing ${bulkProgress.done}/${bulkProgress.total}…` : 'Sync all to Google Calendar'}
+          </button>
+        )}
+
+        {/* Bulk sync dialog — centred modal (not anchored to the toolbar button) so it's
+            never clipped by the horizontally-scrolling filter row it's triggered from. */}
+        {bulkPanelOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => !bulkSyncing && setBulkPanelOpen(false)}>
+            <div onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-sm border dark:border-gray-700">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-start justify-between gap-3">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Sync all to Google Calendar</h3>
+                <button type="button" onClick={() => !bulkSyncing && setBulkPanelOpen(false)} disabled={bulkSyncing}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none disabled:opacity-30">×</button>
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Creates the missing Google Calendar event (and syncs attendees) for every WSQ/IBF/CASL class in this date range that isn't matched yet. No emails are sent.</p>
+                <div className="flex items-center gap-2">
+                  <input type="date" value={bulkFrom} onChange={(e) => setBulkFrom(e.target.value)} disabled={bulkSyncing}
+                    className={`${inputCls} flex-1 min-w-0`} />
+                  <span className="text-xs text-gray-400 shrink-0">to</span>
+                  <input type="date" value={bulkTo} onChange={(e) => setBulkTo(e.target.value)} disabled={bulkSyncing}
+                    className={`${inputCls} flex-1 min-w-0`} />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button type="button" onClick={() => setBulkPanelOpen(false)} disabled={bulkSyncing}
+                    className="px-3 py-1.5 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50">
+                    Cancel
+                  </button>
                   <button type="button" onClick={prepareBulkSync} disabled={bulkSyncing}
-                    className="w-full px-2 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                    className="flex-1 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5">
+                    {bulkSyncing && <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" />}
                     {bulkSyncing ? (bulkProgress ? `Syncing ${bulkProgress.done}/${bulkProgress.total}…` : 'Checking range…') : 'Check & sync'}
                   </button>
                 </div>
-              </>
-            )}
+              </div>
+            </div>
           </div>
         )}
         <div className="flex items-center gap-1">
