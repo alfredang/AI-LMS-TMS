@@ -49,6 +49,22 @@ const ATTEMPTS = 2;
  */
 const cache = new Map<string, AcraEntity | null>();
 
+/**
+ * Ceiling on the cache. Entries are tiny, but the process is long-lived and
+ * nothing here ever evicts, so without a limit it grows for the lifetime of the
+ * server. Oldest-first eviction is right for this: a UEN looked up minutes ago
+ * is far more likely to be looked up again than one from last week.
+ */
+const CACHE_MAX = 5_000;
+
+function remember(key: string, value: AcraEntity | null): void {
+  if (cache.size >= CACHE_MAX) {
+    const oldest = cache.keys().next();
+    if (!oldest.done) cache.delete(oldest.value);
+  }
+  cache.set(key, value);
+}
+
 export interface AcraEntity {
   uen: string;
   /** Official registered name, e.g. "10X GENOMICS PTE. LTD." */
@@ -62,10 +78,26 @@ export interface AcraEntity {
 }
 
 /**
- * Look up a UEN. Returns null when the UEN is unknown, blank, or the lookup
- * fails for any reason — callers must treat null as "carry on without".
+ * Why a lookup produced no entity.
+ *
+ * The distinction matters to anything that reports back to a person: "ACRA does
+ * not have this company" is a fact about the register, while "we could not
+ * reach ACRA" is a fact about this moment. Collapsing them into null told
+ * admins nine companies were missing from the register when most had simply
+ * timed out.
  */
-export async function lookupAcraEntity(
+export type AcraLookupStatus = 'found' | 'not_in_register' | 'lookup_failed' | 'no_uen';
+
+export interface AcraLookupResult {
+  status: AcraLookupStatus;
+  entity: AcraEntity | null;
+}
+
+/**
+ * Look up a UEN, saying WHY when there is no answer. `lookupAcraEntity` wraps
+ * this for callers that only care whether they got an address.
+ */
+export async function lookupAcraEntityDetailed(
   uen: string | null | undefined,
   /**
    * Bulk callers pass a shorter budget and no retry. One invoice can afford to
@@ -74,10 +106,13 @@ export async function lookupAcraEntity(
    * the connection pool everything else is waiting on.
    */
   opts: { timeoutMs?: number; attempts?: number } = {}
-): Promise<AcraEntity | null> {
+): Promise<AcraLookupResult> {
   const key = String(uen || '').trim().toUpperCase();
-  if (!key) return null;
-  if (cache.has(key)) return cache.get(key) ?? null;
+  if (!key) return { status: 'no_uen', entity: null };
+  if (cache.has(key)) {
+    const hit = cache.get(key) ?? null;
+    return { status: hit ? 'found' : 'not_in_register', entity: hit };
+  }
 
   const timeoutMs = Math.max(1_000, opts.timeoutMs ?? LOOKUP_TIMEOUT_MS);
   const attempts = Math.max(1, opts.attempts ?? ATTEMPTS);
@@ -94,19 +129,16 @@ export async function lookupAcraEntity(
         console.warn(`[acra] Lookup for ${key} returned HTTP ${res.status} (attempt ${attempt}/${attempts})`);
         continue;
       }
-
       const json: any = await res.json();
       const records: any[] = Array.isArray(json?.result?.records) ? json.result.records : [];
-
       // The endpoint is a free-text search, so it can return near matches for
       // other entities. Only an exact UEN is this company.
       const match = records.find(r => String(r?.uen || '').trim().toUpperCase() === key);
       if (!match) {
         // A real answer: the register does not hold this UEN. Worth caching.
-        cache.set(key, null);
-        return null;
+        remember(key, null);
+        return { status: 'not_in_register', entity: null };
       }
-
       const entity: AcraEntity = {
         uen: key,
         entityName: String(match.entity_name || '').trim(),
@@ -115,8 +147,8 @@ export async function lookupAcraEntity(
         status: String(match.uen_status_desc || '').trim(),
         entityType: String(match.entity_type_desc || '').trim(),
       };
-      cache.set(key, entity);
-      return entity;
+      remember(key, entity);
+      return { status: 'found', entity };
     } catch (err) {
       const aborted = controller.signal.aborted;
       console.warn(
@@ -131,7 +163,19 @@ export async function lookupAcraEntity(
   // Every attempt failed. Deliberately NOT cached — this says nothing about
   // whether the register holds this UEN, and the next invoice deserves a fresh
   // try rather than inheriting one bad moment.
-  return null;
+  return { status: 'lookup_failed', entity: null };
+}
+
+/**
+ * Look up a UEN. Returns null when the UEN is unknown, blank, or the lookup
+ * fails for any reason — callers must treat null as "carry on without".
+ */
+export async function lookupAcraEntity(
+  uen: string | null | undefined,
+  opts: { timeoutMs?: number; attempts?: number } = {}
+): Promise<AcraEntity | null> {
+  const { entity } = await lookupAcraEntityDetailed(uen, opts);
+  return entity;
 }
 
 /**

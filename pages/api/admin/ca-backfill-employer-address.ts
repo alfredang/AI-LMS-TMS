@@ -3,7 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureCompanyApplicationsTable } from '../../../lib/companyApplicationsTable';
 import { qboReadCustomer, qboSparseUpdateCustomer } from '../../../lib/services/qboInvoiceService';
-import { lookupAcraEntity, acraAddressFields } from '../../../lib/services/acraEntityLookup';
+import { lookupAcraEntityDetailed, acraAddressFields } from '../../../lib/services/acraEntityLookup';
 
 /**
  * GET  /api/admin/ca-backfill-employer-address   -> preview, changes nothing
@@ -66,6 +66,7 @@ type Skip =
   | 'already_has_address'
   | 'not_in_quickbooks'
   | 'no_acra_match'
+  | 'acra_unreachable'
   | 'no_address_in_acra'
   | 'no_uen';
 
@@ -88,7 +89,12 @@ interface Candidate {
 const SKIP_REASON: Record<Skip, string> = {
   already_has_address: 'Already has an address in QuickBooks — left alone',
   not_in_quickbooks: 'Customer could not be read from QuickBooks',
-  no_acra_match: 'UEN not found in the ACRA register',
+  no_acra_match: 'UEN is genuinely not in the ACRA register',
+  // Deliberately separate from the line above. "Not in the register" is a fact
+  // about the company; "could not reach ACRA" is a fact about this minute, and
+  // reporting the second as the first told admins companies were missing when
+  // the lookup had simply timed out.
+  acra_unreachable: 'Could not reach ACRA this time — try again',
   no_address_in_acra: 'ACRA holds no street or postal code for this UEN',
   no_uen: 'No employer UEN recorded',
 };
@@ -136,10 +142,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     let stoppedEarly = false;
     const deadline = Date.now() + TIME_BUDGET_MS;
 
-    for (const row of rows) {
+    // Examined in small parallel batches. Each employer costs two QuickBooks
+    // calls plus a lookup, and doing them strictly one after another is what
+    // made a 25-employer sweep feel like it had hung. Five at a time keeps the
+    // wall time down without hammering one QuickBooks realm.
+    const BATCH = 5;
+    const queue = rows.slice(0, MAX_EXAMINED_PER_CALL);
+
+    for (let i = 0; i < queue.length; i += BATCH) {
       if (actionableSoFar >= limit) { stoppedEarly = true; break; }
-      if (examined >= MAX_EXAMINED_PER_CALL) { stoppedEarly = true; break; }
       if (Date.now() > deadline) { stoppedEarly = true; break; }
+      if (i + BATCH < queue.length) stoppedEarly = true;
+      await Promise.all(queue.slice(i, i + BATCH).map(examineOne));
+    }
+    if (queue.length < rows.length) stoppedEarly = true;
+
+    async function examineOne(row: any) {
       examined++;
 
       const employerUen = String(row.employer_uen || '').trim();
@@ -154,7 +172,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
       if (!employerUen) {
         candidates.push({ ...base, skip: 'no_uen' });
-        continue;
+        return;
       }
 
       // The customer id lives on the invoice this employer was billed through.
@@ -172,27 +190,30 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
       } catch (err) {
         candidates.push({ ...base, skip: 'not_in_quickbooks', error: err instanceof Error ? err.message : String(err) });
-        continue;
+        return;
       }
 
       if (!customerRaw) {
         candidates.push({ ...base, skip: 'not_in_quickbooks' });
-        continue;
+        return;
       }
       if (hasUsableAddress(customerRaw)) {
         candidates.push({ ...base, skip: 'already_has_address' });
-        continue;
+        return;
       }
 
-      const entity = await lookupAcraEntity(employerUen, BULK_ACRA_OPTS);
+      const { status, entity } = await lookupAcraEntityDetailed(employerUen, BULK_ACRA_OPTS);
       if (!entity) {
-        candidates.push({ ...base, skip: 'no_acra_match' });
-        continue;
+        candidates.push({
+          ...base,
+          skip: status === 'not_in_register' ? 'no_acra_match' : 'acra_unreachable',
+        });
+        return;
       }
       const address = acraAddressFields(entity);
       if (!address) {
         candidates.push({ ...base, skip: 'no_address_in_acra', acraStatus: entity.status });
-        continue;
+        return;
       }
 
       candidates.push({ ...base, address, acraStatus: entity.status });
