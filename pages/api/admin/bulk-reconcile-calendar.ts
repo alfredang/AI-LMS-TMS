@@ -21,8 +21,17 @@ import { reconcileRunCalendar } from '../../../lib/calendar/reconcileRunCalendar
  * (see lib/calendar/calendarGuard.ts) or the tenant's sync toggle is off.
  *
  * Body: { courseRunUuids: string[] }   (course_run UUIDs, not the SSG run id)
+ *
+ * Capped small on purpose: this is meant to be called with small chunks from a
+ * client-side loop (see the date-range "Sync all to Google Calendar" control on
+ * the Calendar tab), not one giant request for an entire backlog — a single
+ * request processing hundreds of classes sequentially against the Google
+ * Calendar API is exactly the shape a reverse proxy / serverless timeout kills
+ * mid-flight, which surfaces to the browser as a bare "Failed to fetch" with no
+ * useful error. Small chunks keep each call fast and let the caller show
+ * progress across many calls instead of guessing why one huge one died.
  */
-const MAX_RUNS_PER_CALL = 100;
+const MAX_RUNS_PER_CALL = 20;
 
 interface RunOutcome {
   courseRunUuid: string;

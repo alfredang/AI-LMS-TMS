@@ -341,48 +341,104 @@ const InAppCalendar: React.FC = () => {
     finally { setCreatingEvents(false); }
   }, [refetchModalSessions, range, fetchRange]);
 
-  // Create missing Google Calendar events for every currently-unmatched WSQ/IBF/CASL
-  // run-day in the visible range, in one click — the bulk counterpart to
-  // createMissingEvents above. Confirms first since it's a real write; runs
-  // sequentially server-side so one failing run doesn't stop the rest.
-  const runBulkSync = useCallback(async () => {
-    const uuids = [...new Set(rawEvents.filter(isGcalUnmatched).map((r) => r.courseRunUuid))];
-    if (uuids.length === 0) return;
+  // ── Bulk "Sync all to Google Calendar" — date-range, chunked, with progress ──
+  // A single request processing hundreds of classes sequentially against the
+  // Google Calendar API is exactly the shape a reverse proxy / serverless
+  // timeout kills mid-flight ("Failed to fetch", no useful error). Instead:
+  // fetch the unmatched list for the CHOSEN range once, then feed it to the
+  // bulk-reconcile endpoint in small chunks from the client, updating a
+  // progress readout between calls. Same server-side action either way
+  // (reconcileRunCalendar, sendUpdates:'none' — no emails).
+  const BULK_CHUNK_SIZE = 20;
+  const [bulkPanelOpen, setBulkPanelOpen] = useState(false);
+  const [bulkFrom, setBulkFrom] = useState('');
+  const [bulkTo, setBulkTo] = useState('');
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const openBulkPanel = useCallback(() => {
+    if (range) { setBulkFrom(range.start); setBulkTo(range.end); }
+    setBulkPanelOpen(true);
+  }, [range]);
+
+  // Resolve the unmatched course_run_uuids for an arbitrary [start,end] — same
+  // predicate as isGcalUnmatched, but against a freshly fetched range instead
+  // of whatever FullCalendar happens to have rendered.
+  const resolveUnmatchedForRange = useCallback(async (start: string, end: string): Promise<string[]> => {
+    const [evRes, matchRes] = await Promise.all([
+      fetch(getApiUrl(`/api/admin/classes-by-date?monthStart=${start}&monthEnd=${end}`)).then((r) => r.json()),
+      fetch(getApiUrl(`/api/admin/calendar-match?start=${start}&end=${end}`)).then((r) => r.json()),
+    ]);
+    const events: ClassDayEvent[] = evRes?.success ? (evRes.data?.events || []) : [];
+    const matches: Record<string, boolean> | null = matchRes?.success && matchRes?.calendarChecked ? (matchRes.matches || {}) : null;
+    if (!matches) return [];
+    const unmatched = events.filter((r) =>
+      !r.noSessions && !isNonWsq(r.courseCode) && r.classStatus !== 'Cancelled' &&
+      matches[`${r.courseRunUuid}|${r.sessionDate}`] === false
+    );
+    return [...new Set(unmatched.map((r) => r.courseRunUuid))];
+  }, []);
+
+  const processBulkList = useCallback(async (uuids: string[]) => {
     setBulkSyncing(true);
+    setBulkProgress({ done: 0, total: uuids.length });
+    let succeeded = 0, skipped = 0, failed = 0, eventsCreated = 0, attendeesAdded = 0;
     try {
-      const r = await fetch(getApiUrl('/api/admin/bulk-reconcile-calendar'), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseRunUuids: uuids }),
-      });
-      const j = await r.json();
-      if (j?.success) {
-        showSuccessPopup(
-          `Synced ${j.succeeded}/${j.totalRuns} class(es) — ${j.totalEventsCreated} event(s) created, ` +
-          `${j.totalAttendeesAdded} attendee(s) added.` +
-          (j.skipped ? ` ${j.skipped} skipped (calendar sync disabled here).` : '') +
-          (j.failed ? ` ⚠ ${j.failed} failed — check server logs.` : '')
-        );
-      } else {
-        showErrorPopup(`Bulk sync failed: ${j?.error || 'unknown error'}`);
+      for (let i = 0; i < uuids.length; i += BULK_CHUNK_SIZE) {
+        const chunk = uuids.slice(i, i + BULK_CHUNK_SIZE);
+        try {
+          const r = await fetch(getApiUrl('/api/admin/bulk-reconcile-calendar'), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseRunUuids: chunk }),
+          });
+          const j = await r.json();
+          if (j?.success) {
+            succeeded += j.succeeded || 0; skipped += j.skipped || 0; failed += j.failed || 0;
+            eventsCreated += j.totalEventsCreated || 0; attendeesAdded += j.totalAttendeesAdded || 0;
+          } else {
+            failed += chunk.length;
+          }
+        } catch {
+          failed += chunk.length;
+        }
+        setBulkProgress({ done: Math.min(i + BULK_CHUNK_SIZE, uuids.length), total: uuids.length });
       }
+      showSuccessPopup(
+        `Synced ${succeeded}/${uuids.length} class(es) — ${eventsCreated} event(s) created, ${attendeesAdded} attendee(s) added.` +
+        (skipped ? ` ${skipped} skipped (calendar sync disabled here).` : '') +
+        (failed ? ` ⚠ ${failed} failed — safe to run again, only the failed ones will retry (already-synced classes are no-ops).` : '')
+      );
       if (range) void fetchRange(range.start, range.end);
-    } catch (e) {
-      showErrorPopup('Bulk sync failed: ' + (e instanceof Error ? e.message : 'unknown error'));
+      setBulkPanelOpen(false);
     } finally {
       setBulkSyncing(false);
+      setBulkProgress(null);
     }
-  }, [rawEvents, isGcalUnmatched, range, fetchRange]);
+  }, [range, fetchRange]);
 
-  const confirmBulkSync = useCallback(() => {
-    const uuids = [...new Set(rawEvents.filter(isGcalUnmatched).map((r) => r.courseRunUuid))];
-    if (uuids.length === 0) return;
-    showConfirmPopup(
-      `This will create missing Google Calendar events for ${uuids.length} class(es) currently flagged in this view, and sync their attendees. No emails are sent (sendUpdates: none). Continue?`,
-      () => void runBulkSync(),
-      'Sync all to Google Calendar',
-      'Sync now',
-      'Cancel'
-    );
-  }, [rawEvents, isGcalUnmatched, runBulkSync]);
+  const prepareBulkSync = useCallback(async () => {
+    if (!bulkFrom || !bulkTo || bulkFrom > bulkTo) {
+      showErrorPopup('Pick a valid "from" date on or before the "to" date.');
+      return;
+    }
+    setBulkSyncing(true);
+    try {
+      const uuids = await resolveUnmatchedForRange(bulkFrom, bulkTo);
+      setBulkSyncing(false);
+      if (uuids.length === 0) {
+        showSuccessPopup(`Nothing to sync — every class between ${bulkFrom} and ${bulkTo} already matches Google Calendar.`);
+        return;
+      }
+      showConfirmPopup(
+        `This will create missing Google Calendar events for ${uuids.length} class(es) between ${bulkFrom} and ${bulkTo}, and sync their attendees. Runs in small batches with a progress readout; no emails are sent (sendUpdates: none). Continue?`,
+        () => void processBulkList(uuids),
+        'Sync all to Google Calendar',
+        'Sync now',
+        'Cancel'
+      );
+    } catch (e) {
+      setBulkSyncing(false);
+      showErrorPopup('Could not check the range: ' + (e instanceof Error ? e.message : 'unknown error'));
+    }
+  }, [bulkFrom, bulkTo, resolveUnmatchedForRange, processBulkList]);
 
   // Re-pull the open modal's learners + trainers (e.g. after the attendee reconcile changes the LMS roster).
   const refreshModalDetails = useCallback(async () => {
@@ -662,13 +718,32 @@ const InAppCalendar: React.FC = () => {
             {unmatchedCount > 0 ? `⚠ ${unmatchedCount} not on GCal` : '✓ All on GCal'}
           </button>
         )}
-        {unmatchedCount > 0 && (
-          <button type="button" onClick={confirmBulkSync} disabled={bulkSyncing}
-            title="Create the missing Google Calendar events (and sync attendees) for every flagged class in this view, in one go. No emails are sent."
-            className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 flex items-center gap-1">
-            {bulkSyncing && <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />}
-            Sync all to Google Calendar
-          </button>
+        {gcalMatches !== null && (
+          <div className="relative">
+            <button type="button" onClick={() => (bulkPanelOpen ? setBulkPanelOpen(false) : openBulkPanel())} disabled={bulkSyncing}
+              title="Pick a date range and create the missing Google Calendar events (+ sync attendees) for every flagged class in it. No emails are sent."
+              className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 flex items-center gap-1">
+              {bulkSyncing && <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />}
+              {bulkProgress ? `Syncing ${bulkProgress.done}/${bulkProgress.total}…` : 'Sync all to Google Calendar'}
+            </button>
+            {bulkPanelOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => !bulkSyncing && setBulkPanelOpen(false)} />
+                <div className="absolute z-30 left-0 top-9 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 w-72">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Sync every WSQ/IBF/CASL class in this date range that's missing its Google Calendar event.</p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <input type="date" value={bulkFrom} onChange={(e) => setBulkFrom(e.target.value)} disabled={bulkSyncing} className={`${inputCls} flex-1`} />
+                    <span className="text-xs text-gray-400">to</span>
+                    <input type="date" value={bulkTo} onChange={(e) => setBulkTo(e.target.value)} disabled={bulkSyncing} className={`${inputCls} flex-1`} />
+                  </div>
+                  <button type="button" onClick={prepareBulkSync} disabled={bulkSyncing}
+                    className="w-full px-2 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                    {bulkSyncing ? (bulkProgress ? `Syncing ${bulkProgress.done}/${bulkProgress.total}…` : 'Checking range…') : 'Check & sync'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         )}
         <div className="flex items-center gap-1">
           <button type="button" onClick={showAll} title="Clear all filters — show every class on every day" className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">Show all</button>
