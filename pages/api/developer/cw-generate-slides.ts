@@ -1,3 +1,4 @@
+import { getGenerationCredential } from '@lib/ai/settings';
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
@@ -19,19 +20,7 @@ function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9_\-. ]/g, '').substring(0, 80).trim() || 'Course';
 }
 
-async function getApiKey(): Promise<string | null> {
-  try {
-    const result = await pool.query(
-      `SELECT key_value FROM training_provider_api
-       WHERE training_provider_id = (SELECT id FROM training_provider ORDER BY created_at DESC LIMIT 1)
-       AND key_name = 'ANTHROPIC_API_KEY'`,
-    );
-    if (result.rows.length > 0 && result.rows[0].key_value) return result.rows[0].key_value;
-  } catch (e) {
-    console.error('Failed to fetch API key from DB:', e);
-  }
-  return process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_CODE_OAUTH_TOKEN || null;
-}
+const getApiKey = getGenerationCredential;
 
 async function getCompanyInfo(): Promise<CwCompanyInfo | undefined> {
   try {
@@ -113,7 +102,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   const apiKey = await getApiKey();
   if (!apiKey) {
     return res.status(500).json({
-      error: 'Anthropic API key not configured. Set ANTHROPIC_API_KEY or add a row to training_provider_api.',
+      error: 'AI credentials are not configured. Open AI Provider in Company Settings to connect Claude or OpenAI OAuth.',
     });
   }
 

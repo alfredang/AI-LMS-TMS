@@ -9,7 +9,7 @@
  * Evidence Gathering Plan section.
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { query } from '@lib/ai/query';
 import { buildClaudeEnv } from './anthropic-auth';
 
 const SYSTEM_PROMPT = `Based on the following course details, you are to provide structured justifications for the selected Assessment Methods, aligning them with Learning Outcomes (LOs) and Topics.

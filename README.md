@@ -26,6 +26,18 @@
 
 ---
 
+## AI OAuth provider selection
+
+[AI Provider settings](https://lms-tms.tertiaryinfotech.com/ai-provider) lets an
+Admin or Training Provider connect OpenAI and Claude OAuth, test the connections,
+and select the provider used by chat, courseware, assessments, audits, SEO and
+supporting-document processing. OpenAI uses the Codex SDK with `gpt-5.6-sol`;
+Claude uses the Claude SDK with `claude-opus-5`. Optional Claude fallback retries
+failed OpenAI requests. Credentials are encrypted on the server.
+See [setup and verification](docs/ai-provider.md).
+
+![AI provider settings](screenshot.png)
+
 ## Overview
 
 AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages the complete training lifecycle - from course creation and scheduling to learner enrollment, progress tracking, assessments, and certification. Built with modern technologies and deep integration with Singapore's SkillsFuture ecosystem, it provides a seamless experience for training providers, trainers, and learners.

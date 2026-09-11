@@ -1,7 +1,7 @@
+import { getGenerationCredential } from '@lib/ai/settings';
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import pool from '../../../lib/db';
+import { query } from '@lib/ai/query';
 import { buildClaudeEnv } from '../../../lib/anthropic-auth';
 import { parseCpFile } from '../../../lib/cp-parser';
 import { fillTemplate, type CwDocType } from '../../../lib/cw-fill-template';
@@ -14,19 +14,7 @@ import {
   mergeNarrativeIntoContext,
 } from '../../../lib/cw-evidence-agent';
 
-async function getApiKey(): Promise<string | null> {
-  try {
-    const result = await pool.query(
-      `SELECT key_value FROM training_provider_api
-       WHERE training_provider_id = (SELECT id FROM training_provider ORDER BY created_at DESC LIMIT 1)
-       AND key_name = 'ANTHROPIC_API_KEY'`,
-    );
-    if (result.rows.length > 0 && result.rows[0].key_value) return result.rows[0].key_value;
-  } catch (e) {
-    console.error('Failed to fetch API key from DB:', e);
-  }
-  return process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_CODE_OAUTH_TOKEN || null;
-}
+const getApiKey = getGenerationCredential;
 
 /**
  * Enrich the courseData with Claude-generated content the templates need but

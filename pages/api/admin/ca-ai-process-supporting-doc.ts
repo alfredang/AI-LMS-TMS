@@ -1,8 +1,12 @@
+import { runClaude } from '@lib/ai/claude';
+import { OPENAI_CREDENTIAL } from '@lib/ai/credentials';
+import { generateOpenAi } from '@lib/ai/settings';
+import { documentImages } from '@lib/ai/document';
+import { getGenerationCredential } from '@lib/ai/settings';
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
-import Anthropic from '@anthropic-ai/sdk';
 import pool from '../../../lib/db';
 
 export const config = {
@@ -35,21 +39,8 @@ export const config = {
  * Returns 400 if no API key configured — caller falls back to manual flow.
  */
 
-const VISION_MODEL = 'claude-haiku-4-5-20251001';
 
-async function getAnthropicKey(): Promise<string | null> {
-  try {
-    const result = await pool.query(
-      `SELECT key_value FROM training_provider_api
-        WHERE training_provider_id = (SELECT id FROM training_provider ORDER BY created_at DESC LIMIT 1)
-          AND key_name = 'ANTHROPIC_API_KEY'`
-    );
-    if (result.rows[0]?.key_value) return String(result.rows[0].key_value);
-  } catch (e) {
-    console.error('[ca-ai-process] Failed to fetch ANTHROPIC_API_KEY from DB:', e);
-  }
-  return process.env.ANTHROPIC_API_KEY || null;
-}
+const getAnthropicKey = getGenerationCredential;
 
 interface Candidate {
   id: string;
@@ -185,31 +176,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     const fileBuffer = await fs.promises.readFile(uploaded.filepath);
-    const base64 = fileBuffer.toString('base64');
     const mimeType = uploaded.mimetype || 'image/png';
     try { fs.unlinkSync(uploaded.filepath); } catch { /* noop */ }
 
-    const client = apiKey.trim().startsWith('sk-ant-oat')
-      ? new Anthropic({ authToken: apiKey.trim() })
-      : new Anthropic({ apiKey: apiKey.trim() });
-
-    const docBlock = mimeType === 'application/pdf'
-      ? { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } }
-      : { type: 'image' as const, source: { type: 'base64' as const, media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data: base64 } };
-
-    const response = await client.messages.create({
-      model: VISION_MODEL,
-      max_tokens: 600,
-      messages: [{
-        role: 'user',
-        content: [
-          docBlock,
-          { type: 'text', text: buildPrompt(candidates) },
-        ],
-      }],
-    });
-
-    const textBlock = response.content.find((b: any) => b.type === 'text') as any;
+    const input = { prompt: buildPrompt(candidates), images: await documentImages(fileBuffer, mimeType) };
+    const textBlock = { text: apiKey === OPENAI_CREDENTIAL
+      ? await generateOpenAi(input)
+      : await runClaude(apiKey, input) };
     if (!textBlock?.text) {
       return res.status(502).json({ success: false, error: 'AI returned empty response' });
     }

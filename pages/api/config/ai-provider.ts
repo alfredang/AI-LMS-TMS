@@ -1,3 +1,4 @@
+import { aiSettings } from '@lib/ai/settings';
 import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
@@ -10,6 +11,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         return res.status(405).json({ success: false, error: 'Method not allowed' });
     }
 
+    const settings = await aiSettings();
+    if (settings.provider === 'openai') return res.json({ success: true,
+        defaultProvider: { provider: 'OPENAI_OAUTH', model: settings.openai_model }, fallbackProvider: null,
+        allProviders: [{ provider: 'OPENAI_OAUTH', model: settings.openai_model, hasKey: !!settings.oauth_encrypted }] });
     const client = await pool.connect();
 
     try {

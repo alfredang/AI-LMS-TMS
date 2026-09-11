@@ -25,6 +25,7 @@
     "@fullcalendar/react": "^6.1.20",
     "@fullcalendar/timegrid": "^6.1.20",
     "@google/generative-ai": "^0.24.1",
+    "@openai/codex-sdk": "0.149.0",
     "@types/nunjucks": "^3.2.6",
     "@types/ws": "^8.18.1",
     "bcryptjs": "^2.4.3",

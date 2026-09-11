@@ -1,7 +1,7 @@
+import { getGenerationCredential } from '@lib/ai/settings';
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import pool from '../../../lib/db';
+import { query } from '@lib/ai/query';
 import { buildClaudeEnv } from '../../../lib/anthropic-auth';
 import { parseCpFile } from '../../../lib/cp-parser';
 
@@ -284,21 +284,7 @@ Respond with ONLY the audit report, nothing else.`;
 
 // ─── Helpers ───
 
-async function getApiKey(): Promise<string | null> {
-  try {
-    const result = await pool.query(
-      `SELECT key_value FROM training_provider_api
-       WHERE training_provider_id = (SELECT id FROM training_provider ORDER BY created_at DESC LIMIT 1)
-       AND key_name = 'ANTHROPIC_API_KEY'`
-    );
-    if (result.rows.length > 0 && result.rows[0].key_value) {
-      return result.rows[0].key_value;
-    }
-  } catch (e) {
-    console.error('Failed to fetch API key from DB:', e);
-  }
-  return process.env.ANTHROPIC_API_KEY || null;
-}
+const getApiKey = getGenerationCredential;
 
 async function generateWithClaude(
   prompt: string,
@@ -329,7 +315,7 @@ async function generateWithClaude(
   }
 
   if (!resultText) {
-    throw new Error('No response from Claude. Please try again.');
+    throw new Error('No response from the selected AI provider. Please try again.');
   }
 
   return resultText;

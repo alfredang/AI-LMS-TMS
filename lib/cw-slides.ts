@@ -14,7 +14,7 @@
  * pages/api/developer/cw-generate.ts and seo-generate.ts.
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { query } from '@lib/ai/query';
 import PptxGenJS from 'pptxgenjs';
 import fs from 'fs';
 import path from 'path';

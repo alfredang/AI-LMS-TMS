@@ -16,7 +16,7 @@
  * facts users complained about in deck 21.
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { query } from '@lib/ai/query';
 import { buildClaudeEnv } from '../anthropic-auth';
 import { CONTENT_SYSTEM_PROMPT } from './prompts';
 import type {

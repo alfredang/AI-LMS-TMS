@@ -1,3 +1,8 @@
+import { runClaude } from '@lib/ai/claude';
+import { CLAUDE_MODEL } from '@lib/ai/models';
+import { aiSettings, generateOpenAiResult, getGenerationCredential } from '@lib/ai/settings';
+import { query } from '@lib/ai/query';
+import { buildClaudeEnv } from '@lib/anthropic-auth';
 import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
@@ -48,6 +53,18 @@ async function getProviderConfigs(): Promise<{ default: ProviderConfig | null; f
 }
 
 async function callAnthropic(apiKey: string, model: string, messages: any[], systemPrompt?: string): Promise<string> {
+    if (apiKey.startsWith('sk-ant-oat')) {
+        let text = '';
+        for await (const event of query({
+            prompt: messages.map(m => `${m.role}: ${m.content || m.text}`).join('\n'),
+            options: { env: buildClaudeEnv(apiKey), allowedTools: [], maxTurns: 1,
+                model: model.replace(/-20250527$/, ''), systemPrompt },
+        })) {
+            if (event.type === 'assistant') for (const block of event.message.content) if (block.type === 'text') text += block.text;
+        }
+        if (!text) throw new Error('Claude returned an empty response.');
+        return text;
+    }
     const body: any = {
         model,
         max_tokens: 4096,
@@ -210,11 +227,31 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     try {
         const { messages, systemPrompt } = req.body;
 
-        if (!messages || !Array.isArray(messages)) {
+        if (!Array.isArray(messages) || !messages.length || messages.length > 100 || messages.some(m => !m || !['user', 'assistant', 'model'].includes(m.role) || typeof (m.content || m.text) !== 'string') || (systemPrompt !== undefined && typeof systemPrompt !== 'string')) {
             return res.status(400).json({ error: 'Messages array is required' });
         }
 
+        const settings = await aiSettings();
+        if (settings.provider === 'openai') {
+            try {
+                const result = await generateOpenAiResult({ system: systemPrompt,
+                    prompt: messages.map(m => `${m.role}: ${m.content || m.text}`).join('\n') });
+                return res.json(result);
+            } catch (error: any) {
+                return res.status(502).json({ error: error.message, providerLocked: true });
+            }
+        }
         const providers = await getProviderConfigs();
+        const claudeToken = await getGenerationCredential();
+        if (claudeToken) {
+            try {
+                const text = await runClaude(claudeToken, { system: systemPrompt,
+                    prompt: messages.map(m => `${m.role}: ${m.content || m.text}`).join('\n') });
+                return res.json({ text, provider: 'CLAUDE_OAUTH', model: CLAUDE_MODEL, usedFallback: false });
+            } catch (error: any) {
+                return res.status(502).json({ error: error.message, providerLocked: true });
+            }
+        }
 
         if (!providers.default) {
             return res.status(500).json({ error: 'No AI provider configured. Please set up an API key and select a model in your Training Provider profile.' });
