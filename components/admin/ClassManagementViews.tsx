@@ -196,7 +196,9 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     // Full snapshot of the session as it was when editing began, so the confirm
     // dialog can show the Old → New change.
     const [editingOriginalSession, setEditingOriginalSession] = useState<{ startDate: string; startTime: string; endTime: string; modeOfTraining: string } | null>(null);
-    const [syncCalendarOnSave, setSyncCalendarOnSave] = useState(false);
+    // Defaults ON (overridable) so confirming a learner / editing a session keeps
+    // Google Calendar caught up automatically instead of relying on an admin to tick it.
+    const [syncCalendarOnSave, setSyncCalendarOnSave] = useState(true);
     // Phase 2: blocking, up-front resolution prompt shown BEFORE a reschedule runs
     // when the session's calendar event was manually moved onto a non-session date.
     // reschedulePrompt is now owned by the shared useSessionReschedule hook (below).
@@ -236,8 +238,9 @@ export const ClassManagerView: React.FC<ClassManagerViewProps> = ({ courseToEdit
     const [reschedTargetRunId, setReschedTargetRunId] = useState('');
     // Target-run picker shows future runs by default; opt in to include past runs.
     const [reschedIncludeHistorical, setReschedIncludeHistorical] = useState(false);
-    // Opt-in: also migrate the Google Calendar (move attendees source→target). Default OFF.
-    const [reschedSyncCalendar, setReschedSyncCalendar] = useState(false);
+    // Also migrate the Google Calendar (move attendees source→target). Defaults ON
+    // (overridable) so this move keeps Google Calendar aligned automatically.
+    const [reschedSyncCalendar, setReschedSyncCalendar] = useState(true);
     // Live linked-calendar-events preview for both runs (when calendar sync is on).
     type ReschedSess = { startDate: string | null; startTime: string | null; endTime: string | null; calendarMatched?: boolean; calendarLink?: string | null };
     const [reschedSrcSessions, setReschedSrcSessions] = useState<{ sessions: ReschedSess[]; calendarChecked: boolean } | null>(null);

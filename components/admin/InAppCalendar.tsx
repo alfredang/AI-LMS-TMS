@@ -106,6 +106,7 @@ const InAppCalendar: React.FC = () => {
   // null = not checked (calendar off/unreachable) → no highlights (fail soft).
   const [gcalMatches, setGcalMatches] = useState<Record<string, boolean> | null>(null);
   const [onlyUnmatched, setOnlyUnmatched] = useState(false);
+  const [bulkSyncing, setBulkSyncing] = useState(false);
   const gcalReqSeq = useRef(0);
 
   // Click-the-title month/year quick-jump.
@@ -135,8 +136,10 @@ const InAppCalendar: React.FC = () => {
 
   const [dragging, setDragging] = useState(false);
   // Page-level "parent" defaults — each reschedule/cancel step inherits these but
-  // can override them in its confirmation.
-  const [syncCalendar, setSyncCalendar] = useState(false);
+  // can override them in its confirmation. Sync defaults ON so the TMS Calendar
+  // stays the control point without admins remembering to tick it; Notify stays
+  // OFF by default since it sends real emails and should be a deliberate choice.
+  const [syncCalendar, setSyncCalendar] = useState(true);
   const [notifyAttendees, setNotifyAttendees] = useState(false);
   const [moveTarget, setMoveTarget] = useState<{ id: string; courseRunId: string; courseTitle: string; courseCode: string } | null>(null);
   // A translucent "where it's trying to go" preview shown while a reschedule is pending
@@ -337,6 +340,49 @@ const InAppCalendar: React.FC = () => {
     } catch (e) { showErrorPopup('Calendar sync failed: ' + (e instanceof Error ? e.message : 'unknown error')); }
     finally { setCreatingEvents(false); }
   }, [refetchModalSessions, range, fetchRange]);
+
+  // Create missing Google Calendar events for every currently-unmatched WSQ/IBF/CASL
+  // run-day in the visible range, in one click — the bulk counterpart to
+  // createMissingEvents above. Confirms first since it's a real write; runs
+  // sequentially server-side so one failing run doesn't stop the rest.
+  const runBulkSync = useCallback(async () => {
+    const uuids = [...new Set(rawEvents.filter(isGcalUnmatched).map((r) => r.courseRunUuid))];
+    if (uuids.length === 0) return;
+    setBulkSyncing(true);
+    try {
+      const r = await fetch(getApiUrl('/api/admin/bulk-reconcile-calendar'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseRunUuids: uuids }),
+      });
+      const j = await r.json();
+      if (j?.success) {
+        showSuccessPopup(
+          `Synced ${j.succeeded}/${j.totalRuns} class(es) — ${j.totalEventsCreated} event(s) created, ` +
+          `${j.totalAttendeesAdded} attendee(s) added.` +
+          (j.skipped ? ` ${j.skipped} skipped (calendar sync disabled here).` : '') +
+          (j.failed ? ` ⚠ ${j.failed} failed — check server logs.` : '')
+        );
+      } else {
+        showErrorPopup(`Bulk sync failed: ${j?.error || 'unknown error'}`);
+      }
+      if (range) void fetchRange(range.start, range.end);
+    } catch (e) {
+      showErrorPopup('Bulk sync failed: ' + (e instanceof Error ? e.message : 'unknown error'));
+    } finally {
+      setBulkSyncing(false);
+    }
+  }, [rawEvents, isGcalUnmatched, range, fetchRange]);
+
+  const confirmBulkSync = useCallback(() => {
+    const uuids = [...new Set(rawEvents.filter(isGcalUnmatched).map((r) => r.courseRunUuid))];
+    if (uuids.length === 0) return;
+    showConfirmPopup(
+      `This will create missing Google Calendar events for ${uuids.length} class(es) currently flagged in this view, and sync their attendees. No emails are sent (sendUpdates: none). Continue?`,
+      () => void runBulkSync(),
+      'Sync all to Google Calendar',
+      'Sync now',
+      'Cancel'
+    );
+  }, [rawEvents, isGcalUnmatched, runBulkSync]);
 
   // Re-pull the open modal's learners + trainers (e.g. after the attendee reconcile changes the LMS roster).
   const refreshModalDetails = useCallback(async () => {
@@ -614,6 +660,14 @@ const InAppCalendar: React.FC = () => {
                 ? 'border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
                 : 'border-green-300 dark:border-green-700 text-green-700 dark:text-green-400'}`}>
             {unmatchedCount > 0 ? `⚠ ${unmatchedCount} not on GCal` : '✓ All on GCal'}
+          </button>
+        )}
+        {unmatchedCount > 0 && (
+          <button type="button" onClick={confirmBulkSync} disabled={bulkSyncing}
+            title="Create the missing Google Calendar events (and sync attendees) for every flagged class in this view, in one go. No emails are sent."
+            className="px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 flex items-center gap-1">
+            {bulkSyncing && <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500" />}
+            Sync all to Google Calendar
           </button>
         )}
         <div className="flex items-center gap-1">

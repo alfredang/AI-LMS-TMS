@@ -11,19 +11,20 @@ Each **course** has an ordered **Approved Trainers** list. When a course **run**
 1. Trainer **#1** gets an email invitation (Accept / Decline buttons).
 2. If they **Accept** → they're assigned, calendar invite goes out, and the cascade **stops**.
 3. If they **Decline** → the system automatically invites trainer **#2**, then **#3**, and so on.
-4. If it reaches the end of the list with no acceptance → the run is **exhausted** (needs manual attention).
+4. If they **don't respond at all**, the invite expires after 6 days and the system moves on to the next trainer automatically (see below) — the same as a decline, just slower.
+5. If it reaches the end of the list with no acceptance → the run is **exhausted** (needs manual attention).
 
 Invitations are sent automatically by a twice-weekly job (Mon & Thu, 10:00 AM SGT) and can also be sent/resent manually.
 
 **Two representations to know:**
 - The **approved list** lives on the **course** (shared by all its runs).
-- Each invitation's state (pending / accepted / declined) is tracked **per run, per trainer**.
+- Each invitation's state (pending / accepted / declined / expired) is tracked **per run, per trainer**.
 
-**Invitations never expire (important — this shapes the alerts).** An invite stays **pending indefinitely** until the trainer clicks **Accept** or **Decline**; there is no timeout and no auto-expiry.
-- The cascade advances to the next trainer **only on Decline**. If a trainer simply **ignores** the email, nothing moves automatically.
-- The twice-weekly sweep still invites the *next* un-invited trainer on each run (skipping those already pending), so a run can have several trainers pending at once — none of which expire.
-- A run only becomes **"List exhausted"** if trainers actively **decline** the whole list. The common *"nobody responded"* case never becomes exhausted — which is exactly why the time-based **"Not in LMS + approaching start (≤7 days)"** alert is the real safety net.
-- (Admin actions can still close a pending invite: **resending** supersedes the old one; **unconfirming/resetting** a class marks its pending invites superseded.)
+**Invitations expire after 6 days of silence, and the cascade moves on automatically.** An invite sent Monday and reminded Thursday that's still unanswered by the *following* Monday's sweep is marked **expired** — its accept/decline links stop working — and that same sweep invites the next eligible trainer on the list in one pass.
+- The cascade advances to the next trainer on **Decline** (immediately, the same day) **or** on **expiry** (the following Monday, if the trainer never responded at all).
+- The twice-weekly sweep still invites the *next* un-invited trainer on each run (skipping those already pending), so a run can have several trainers pending at once until their own 6‑day windows resolve.
+- A run only becomes **"List exhausted"** once every approved trainer has actively **declined** — expiry and decline are tracked as different statuses, so a list that empties out purely through silence keeps cycling through the weekly expire‑and‑escalate loop above rather than tripping the exhausted‑list alert. The time-based **"Not in LMS + approaching start (≤7 days)"** alert is still the real safety net for a run that's cycling through non‑responders as the start date closes in.
+- (Admin actions can still close a pending invite early: **resending** supersedes the old one; **unconfirming/resetting** a class marks its pending invites superseded.)
 
 ---
 
@@ -91,7 +92,7 @@ A red banner appears above the Upcoming Classes table whenever any run needs att
 
 Flagged rows also carry a small tag (**⚠ Not in LMS** / **⚠ Not in TPG**) next to their status badge. The window is adjustable in the advanced filter ("Approaching start within N days"). The **⚠ Needs attention** filter-bar button toggles all types at once.
 
-> **Why "Not in LMS" matters most:** because invites never expire (Section 1), the common *"trainer ignored the email"* case never shows as "List exhausted" — it just sits Pending. The time-based **Not in LMS** alert is what catches those before the class starts.
+> **Why "Not in LMS" matters most:** because expiry keeps cycling quietly through the list one trainer at a time (Section 1) rather than tripping "List exhausted" outright, a run can sit unstaffed for weeks — expired invite after expired invite — without ever showing that badge. The time-based **Not in LMS** alert is what catches those before the class starts.
 
 **Each run shows under exactly one chip / tag.** The three issue types are mutually exclusive — a run is counted once and tagged once. A run with **no LMS *and* no TPG trainer** shows only as **Not in LMS** (the blocking gap); "Not in TPG" only applies once a trainer *is* assigned in the LMS (you can't be missing the TPG push until there's an LMS trainer to push).
 
@@ -166,6 +167,7 @@ All trainer email/CC/notification settings live under **Training Provider View �
 | **Pending** | Invitation sent, awaiting the trainer's response |
 | **Accepted** | Trainer confirmed; assigned + calendar invite sent |
 | **Declined** | Trainer declined; cascade moved to the next trainer |
+| **Expired** | No response within 6 days; links stopped working and the cascade moved to the next trainer |
 | **Resent** | A previous pending invite was superseded by a newer one |
 | **Not Sent** | In the approved list but never invited for this run |
 | **Manually Added** | Assigned directly (no email invitation flow) |

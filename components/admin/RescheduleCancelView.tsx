@@ -11,7 +11,8 @@
  *  - Move a whole class's learners + trainer to another run (MoveClassModal).
  *  - Cancel an entire class, or reactivate a cancelled one.
  *
- * Calendar sync is opt-in, default OFF.
+ * Calendar sync defaults ON (admins can untick it per action); attendee
+ * notification stays opt-in, default OFF.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '../ui/Card';
@@ -130,7 +131,9 @@ const RescheduleCancelView: React.FC = () => {
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sessionsByRun, setSessionsByRun] = useState<Record<string, SessionsState>>({});
-  const [syncCalendar, setSyncCalendar] = useState(false);
+  // Sync defaults ON so this page stays the control point without admins
+  // remembering to tick it; Notify stays OFF since it sends real emails.
+  const [syncCalendar, setSyncCalendar] = useState(true);
   const [notifyAttendees, setNotifyAttendees] = useState(false);
   const [busy, setBusy] = useState(false);
   const [edit, setEdit] = useState<EditDraft | null>(null);
