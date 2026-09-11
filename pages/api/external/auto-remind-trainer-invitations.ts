@@ -116,7 +116,12 @@ async function sendReminderForInvitation(
   const declineUrl = `${siteUrl}/api/public/trainer-invitation/respond?token=${inv.token}&action=decline`;
 
   const replacements = buildInvitationReplacements({
-    classRow: inv,
+    // inv.course_run_id is trainer_invitation's internal UUID FK, not the
+    // human-readable SSG run id — buildInvitationReplacements expects the
+    // latter for {COURSE_RUN_ID}. Override with the correct external id
+    // (aliased above as external_course_run_id) without touching the rest
+    // of `inv`, which callers below still use course_run_id (the UUID) for.
+    classRow: { ...inv, course_run_id: inv.external_course_run_id },
     trainerName: inv.trainer_name,
     companyShortName: tp.company_shortname || tp.company_name || 'Training Provider',
     companyPhone: tp.contact_tel || tp.company_tel || '',
