@@ -2,6 +2,7 @@ import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { recordCourseChanges } from '../../../lib/courseChangeLog';
+import { recordRenamedTitle } from '../../../lib/courseCode';
 
 /**
  * Rename courses by course_code -- title ONLY.
@@ -126,10 +127,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           console.error('Course change log skipped:', (logError as Error).message);
         }
 
-        await client.query(
-          `UPDATE public.course SET title = $1, updated_at = NOW() WHERE id = $2`,
-          [title, id]
-        );
+        // Keep the canonical title and course_title_history in sync. If only
+        // course.title is updated, a later read through title history can make
+        // the old title appear to have returned.
+        await recordRenamedTitle(id, title, null, client);
       }
 
       results.push({ courseCode, status: 'updated', oldTitle, newTitle: title });

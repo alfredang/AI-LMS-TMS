@@ -4,6 +4,8 @@ import pool from '../../../lib/db';
 import { splitTrainerList } from '@/lib/trainerInvitations';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
