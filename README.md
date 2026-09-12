@@ -441,15 +441,15 @@ ai-lms-tms/
 │   ├── common/                 # Shared components
 │   ├── LoginScreen.tsx         # Authentication screen
 │   ├── AiChatbot.tsx           # Floating WhatsApp/Telegram chat launcher + template picker
-│   ├── chatTemplates.ts        # 40 TMS request templates for the chat launcher
+│   ├── chatTemplates.ts        # 44 TMS request templates for the chat launcher
 │   ├── CourseDetail.tsx         # Course detail view
 │   ├── GradingView.tsx         # Assessment grading
 │   └── ...
 │
 ├── pages/                      # Next.js pages & API routes
 │   ├── api/
-│   │   ├── admin/              # Admin operations (~189 endpoints)
-│   │   ├── external/           # External/machine APIs (~69 endpoints)
+│   │   ├── admin/              # Admin operations (~215 endpoints)
+│   │   ├── external/           # External/machine APIs (~79 endpoints)
 │   │   ├── auth/               # Authentication (9 endpoints)
 │   │   ├── courses/            # Course management (25 endpoints)
 │   │   ├── enrolment/          # Enrolment operations
