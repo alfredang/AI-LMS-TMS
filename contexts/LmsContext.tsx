@@ -6,6 +6,7 @@ import { courseService } from '@lib/services/courseService';
 import { authService, User } from '@lib/services/authService';
 import { resetTutorChat } from '@lib/services/geminiService';
 import { initializeColorScheme } from '@utils/colorUtils';
+import { clearMyEventsCache } from '@lib/calendar/myEventsCache';
 
 // Function to fetch training provider info for all users
 const fetchTrainingProviderInfo = async (userId?: string): Promise<{ uen?: string; companyLogoUrl: string; companyName: string; companyShortname?: string; companyWebsite?: string; companyEmail?: string; supportEmail?: string; contactTel?: string; companyAddress?: string; showLessonPlanLearnerView?: boolean; showCertificateDelivery?: boolean; certificateDeliveryLabel?: string; certificateDeliveryLink?: string; feedbackFormEnabled?: boolean; feedbackFormExternalLink?: string; briefingOnAssessment?: string; referenceLinks?: any; virtualMeetingProvider?: 'google_meet' | 'zoom' | 'teams' }> => {
@@ -1001,6 +1002,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSubmissions([]);
     setCertificate(null);
     setCalendarEvents([]);
+    clearMyEventsCache(); // My Calendar's cross-mount event cache (incl. sessionStorage)
 
     // Clear URL parameters — but only if we're not already at "/" with no
     // query string. Next.js 16 throws "Invariant: attempted to hard

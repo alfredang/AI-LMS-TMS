@@ -19,35 +19,47 @@ const isoToCompact = (iso: string): string => iso.replace(/-/g, '');
 const compactToIso = (compact: string): string =>
   compact && compact.length === 8 ? `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}` : compact || '';
 
-const TRAINER_SCOPE = `(
-  cr.assigned_trainer_id::text = $3
-  OR cr.tpg_assigned_trainer_id::text = $3
-  OR EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id AND crt.trainer_id::text = $3)
-  OR EXISTS (SELECT 1 FROM course_session css WHERE css.course_run_id = cr.id AND css.deleted = false AND css.trainer_id::text = $3)
-  OR EXISTS (
-    -- Email fallback: assignment rows written before the trainer account /
-    -- trainer_profile existed carry only the email — still their class.
-    SELECT 1 FROM app_user me
-    WHERE me.id::text = $3
-      AND NULLIF(BTRIM(me.email), '') IS NOT NULL
-      AND (
-        LOWER(cr.assigned_trainer_email) = LOWER(BTRIM(me.email))
-        OR LOWER(cr.tpg_assigned_trainer_email) = LOWER(BTRIM(me.email))
-        OR EXISTS (
-          SELECT 1 FROM course_run_trainer crt2
-          WHERE crt2.course_run_id = cr.id
-            AND LOWER(crt2.trainer_email) = LOWER(BTRIM(me.email))
-        )
-      )
-  )
-)`;
+/**
+ * The caller's own runs, as a UNION of id sources rather than one big OR over
+ * course_run.
+ *
+ * The previous form OR-ed five conditions in a single WHERE, the last of which
+ * (the email fallback) correlated app_user against `cr.assigned_trainer_email`.
+ * Postgres could not hoist that subquery out of the OR, so it re-scanned all
+ * ~9.3k app_user rows ONCE PER course_run — 8k+ loops, ~1.8M buffer hits, and a
+ * measured 19s per request on production data. Resolving the caller's email a
+ * single time in the `me` CTE removes the correlation entirely: each branch of
+ * the UNION is an independent indexable lookup, and the same result set comes
+ * back in ~50ms.
+ *
+ * Each branch is one of the ways a run can belong to a trainer; UNION (not
+ * UNION ALL) de-duplicates when several branches match the same run.
+ */
+const TRAINER_RUN_IDS = `
+  -- legacy scalars on course_run
+  SELECT cr.id AS run_id FROM course_run cr
+  WHERE cr.assigned_trainer_id::text = $3 OR cr.tpg_assigned_trainer_id::text = $3
+  UNION
+  -- canonical many-to-many junction
+  SELECT crt.course_run_id AS run_id FROM course_run_trainer crt WHERE crt.trainer_id::text = $3
+  UNION
+  -- per-session trainer override
+  SELECT css.course_run_id AS run_id FROM course_session css
+  WHERE css.deleted = false AND css.trainer_id::text = $3
+  UNION
+  -- Email fallback: assignment rows written before the trainer account /
+  -- trainer_profile existed carry only the email — still their class.
+  SELECT cr.id AS run_id FROM course_run cr, me
+  WHERE me.email IS NOT NULL
+    AND (LOWER(cr.assigned_trainer_email) = me.email OR LOWER(cr.tpg_assigned_trainer_email) = me.email)
+  UNION
+  SELECT crt2.course_run_id AS run_id FROM course_run_trainer crt2, me
+  WHERE me.email IS NOT NULL AND LOWER(crt2.trainer_email) = me.email`;
 
-const LEARNER_SCOPE = `EXISTS (
-  SELECT 1 FROM enrollment e
-  WHERE e.course_run_id = cr.id
-    AND e.user_id::text = $3
-    AND (e.enrolment_status IS NULL OR e.enrolment_status NOT ILIKE 'cancel%')
-)`;
+const LEARNER_RUN_IDS = `
+  SELECT e.course_run_id AS run_id FROM enrollment e
+  WHERE e.user_id::text = $3
+    AND (e.enrolment_status IS NULL OR e.enrolment_status NOT ILIKE 'cancel%')`;
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -75,11 +87,20 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     const result = await pool.query(
       `
-      WITH my_runs AS (
+      WITH me AS (
+        -- The caller's email, resolved ONCE so the trainer email fallback below
+        -- is not a correlated subquery. Unreferenced on the learner path, where
+        -- enrolment is matched by user_id alone.
+        SELECT LOWER(NULLIF(BTRIM(email), '')) AS email FROM app_user WHERE id::text = $3
+      ),
+      my_run_ids AS (
+        ${role === 'trainer' ? TRAINER_RUN_IDS : LEARNER_RUN_IDS}
+      ),
+      my_runs AS (
         SELECT cr.id, cr.course_run_id, cr.class_status, c.title AS course_title, c.course_code
         FROM course_run cr
+        JOIN my_run_ids mri ON mri.run_id = cr.id
         JOIN course c ON c.id = cr.course_id
-        WHERE ${role === 'trainer' ? TRAINER_SCOPE : LEARNER_SCOPE}
       ),
       day_agg AS (
         SELECT
