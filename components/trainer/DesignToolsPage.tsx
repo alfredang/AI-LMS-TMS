@@ -9,6 +9,12 @@ const DESIGN_TOOLS = [
     icon: IconName.Create,
     href: 'https://alfredang.github.io/logomaker/',
   },
+  {
+    title: 'AR/VR Playground',
+    description: 'Explore and experiment with augmented and virtual reality scenes in the browser',
+    icon: IconName.Video,
+    href: 'https://alfredang.github.io/arvr-playground/',
+  },
 ];
 
 const DesignToolsPage: React.FC = () => {
