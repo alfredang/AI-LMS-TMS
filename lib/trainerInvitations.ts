@@ -105,7 +105,8 @@ export function formatDateLabel(dateValue: string | Date | null | undefined) {
  * rows. Fields are loosely typed so either SQL or pre-formatted values work.
  */
 export interface InvitationClassRow {
-  course_run_id?: string | null;          // external/TPG course run id
+  course_run_id?: string | null;          // external/TPG course run id (NOT course_run.id)
+  external_course_run_id?: string | null; // same value under the alias used by trainer_invitation-shaped rows
   course_title?: string | null;
   course_code?: string | null;
   course_mode?: string | null;            // mode_of_learning: Physical/Virtual/Hybrid
@@ -153,6 +154,27 @@ export function resolveClassDurationDays(row: Pick<InvitationClassRow, 'num_of_d
 }
 
 /**
+ * Resolve the human-readable SSG/TPG course run id (e.g. "1132033") for
+ * {COURSE_RUN_ID}.
+ *
+ * Callers pass rows of two different shapes: a `course_run`-shaped row, where
+ * `course_run_id` IS the external id, and a `trainer_invitation`-shaped row,
+ * where `course_run_id` is the internal UUID foreign key and the external id
+ * arrives as `external_course_run_id`. Feeding the latter straight through put
+ * a UUID into trainers' reminder emails, so prefer the explicit alias and
+ * never emit a value that is shaped like a UUID.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function resolveExternalCourseRunId(row: Pick<InvitationClassRow, 'course_run_id' | 'external_course_run_id'>): string {
+  for (const candidate of [row.external_course_run_id, row.course_run_id]) {
+    const value = (candidate ?? '').toString().trim();
+    if (value && !UUID_RE.test(value)) return value;
+  }
+  return '';
+}
+
+/**
  * Build the full placeholder map used by `renderInvitationTemplate` +
  * `renderInvitationHtmlEmail`. Centralized here so the manual-send endpoint
  * (`/api/admin/send-trainer-invitation`) and the auto-escalation path
@@ -196,7 +218,7 @@ export function buildInvitationReplacements(opts: {
     COURSE_CODE: classRow.course_code || '',
     CLASS_TYPE: classRow.course_mode || 'N/A',
     COURSE_TYPE: classRow.course_type || classRow.course_mode || 'N/A',
-    COURSE_RUN_ID: classRow.course_run_id || '',
+    COURSE_RUN_ID: resolveExternalCourseRunId(classRow),
     START_DATE: formatDateLabel(classRow.start_date),
     END_DATE: formatDateLabel(classRow.end_date),
     DURATION: durationLabel,
