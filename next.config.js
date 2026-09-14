@@ -45,7 +45,7 @@ const nextConfig = {
     unoptimized: process.env.NODE_ENV !== 'production',
   },
 
-  serverExternalPackages: ['node-cron', '@anthropic-ai/claude-agent-sdk'],
+  serverExternalPackages: ['node-cron', '@anthropic-ai/claude-agent-sdk', '@openai/codex-sdk'],
 
   // Force-include the Claude Agent SDK's runtime files in the standalone
   // bundle. The SDK loads `cli.js` and `vendor/` (ripgrep + audio-capture)
@@ -57,6 +57,7 @@ const nextConfig = {
   outputFileTracingIncludes: {
     '/api/**': [
       './node_modules/@anthropic-ai/claude-agent-sdk/**',
+      './node_modules/@openai/codex-sdk/**',
     ],
   },
 

@@ -26,6 +26,18 @@
 
 ---
 
+## AI OAuth provider selection
+
+[AI Provider settings](https://lms-tms.tertiaryinfotech.com/ai-provider) lets an
+Admin or Training Provider connect OpenAI and Claude OAuth, test the connections,
+and select the provider used by chat, courseware, assessments, audits, SEO and
+supporting-document processing. OpenAI uses the Codex SDK with `gpt-5.6-sol`;
+Claude uses the Claude SDK with `claude-opus-5`. Optional Claude fallback retries
+failed OpenAI requests. Credentials are encrypted on the server.
+See [setup and verification](docs/ai-provider.md).
+
+![AI provider settings](screenshot.png)
+
 ## Overview
 
 AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages the complete training lifecycle - from course creation and scheduling to learner enrollment, progress tracking, assessments, and certification. Built with modern technologies and deep integration with Singapore's SkillsFuture ecosystem, it provides a seamless experience for training providers, trainers, and learners.
@@ -101,7 +113,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **K8s Tools** — [Ubuntu Playground](https://killercoda.com/playgrounds/scenario/ubuntu), [Kubernetes Playground](https://killercoda.com/playgrounds/scenario/kubernetes)
 - **Blockchain Tools** — [Certify NFT](https://alfredang.github.io/certifynft/), [Supply Verify](https://alfredang.github.io/supplyverify/), [Hashing Tool](https://alfredang.github.io/hashgenerator/)
 - **Quantum Tools** — [Quantum Labs](https://alfredang.github.io/quantumlabs/), [IBM Composer](https://quantum.cloud.ibm.com/composer), [Quantum Programming Studio](https://quantum-circuit.com/)
-- **Design Tools** — [Logo Maker](https://alfredang.github.io/logomaker/)
+- **Design Tools** — [Logo Maker](https://alfredang.github.io/logomaker/), [AR/VR Playground](https://alfredang.github.io/arvr-playground/)
 - **GenAI Tools** — Curated links across:
   - **Text**: ChatGPT, Gemini, Claude, Grok, DeepSeek, Kimi, Qwen, Perplexity
   - **Image**: Firefly, Nano Banana, Microsoft Designer, Leonardo, Face Swap
@@ -429,15 +441,15 @@ ai-lms-tms/
 │   ├── common/                 # Shared components
 │   ├── LoginScreen.tsx         # Authentication screen
 │   ├── AiChatbot.tsx           # Floating WhatsApp/Telegram chat launcher + template picker
-│   ├── chatTemplates.ts        # 40 TMS request templates for the chat launcher
+│   ├── chatTemplates.ts        # 44 TMS request templates for the chat launcher
 │   ├── CourseDetail.tsx         # Course detail view
 │   ├── GradingView.tsx         # Assessment grading
 │   └── ...
 │
 ├── pages/                      # Next.js pages & API routes
 │   ├── api/
-│   │   ├── admin/              # Admin operations (~189 endpoints)
-│   │   ├── external/           # External/machine APIs (~69 endpoints)
+│   │   ├── admin/              # Admin operations (~215 endpoints)
+│   │   ├── external/           # External/machine APIs (~79 endpoints)
 │   │   ├── auth/               # Authentication (9 endpoints)
 │   │   ├── courses/            # Course management (25 endpoints)
 │   │   ├── enrolment/          # Enrolment operations

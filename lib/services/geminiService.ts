@@ -65,6 +65,14 @@ Please ensure the content aligns with these course requirements and learning out
 `;
 };
 
+class SelectedProviderError extends Error {}
+async function checkSelectedProvider(response: Response) {
+  if (!response.ok) {
+    const result = await response.clone().json().catch(() => ({}));
+    if (result.providerLocked) throw new SelectedProviderError(result.error || 'The selected AI provider failed.');
+  }
+}
+
 interface GenerateContentOptions {
   responseFormat?: 'text' | 'json';
   responseSchema?: any;
@@ -82,11 +90,13 @@ const callGeminiAPI = async (prompt: string, modelName = 'gemini-2.5-flash', opt
           messages: [{ role: 'user', content: prompt }]
         })
       });
+      await checkSelectedProvider(chatRes);
       if (chatRes.ok) {
         const data = await chatRes.json();
         return cleanMarkdownCodeBlocks(data.text);
       }
     } catch (e) {
+      if (e instanceof SelectedProviderError) throw e;
       console.warn('Multi-provider endpoint failed for content generation, falling back to Gemini:', e);
     }
   }
@@ -790,10 +800,12 @@ export const getTutorResponseStream = async function* (
         })
       });
 
+      await checkSelectedProvider(chatRes);
       if (!chatRes.ok) throw new Error(`Chat API error: ${chatRes.status}`);
       const data = await chatRes.json();
       response = data.text;
     } catch (chatError) {
+      if (chatError instanceof SelectedProviderError) throw chatError;
       // Fallback to direct Gemini API if multi-provider endpoint fails
       console.warn('Multi-provider chat failed, falling back to Gemini:', chatError);
       const conversationHistory = tutorChatSession.messages
@@ -864,10 +876,12 @@ export const getAdvisorResponseStream = async function* (
         })
       });
 
+      await checkSelectedProvider(chatRes);
       if (!chatRes.ok) throw new Error(`Chat API error: ${chatRes.status}`);
       const data = await chatRes.json();
       response = data.text;
     } catch (chatError) {
+      if (chatError instanceof SelectedProviderError) throw chatError;
       console.warn('Multi-provider chat failed, falling back to Gemini:', chatError);
       const conversationHistory = advisorChatSession.messages
         .slice(-10)

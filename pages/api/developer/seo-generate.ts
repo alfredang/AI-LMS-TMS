@@ -1,7 +1,7 @@
+import { getGenerationCredential } from '@lib/ai/settings';
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import pool from '../../../lib/db';
+import { query } from '@lib/ai/query';
 import { buildClaudeEnv } from '../../../lib/anthropic-auth';
 
 const SEO_WSQ_TEMPLATE = `As a digital marketing consultant, your primary role is to assist small business owners in optimizing their websites for SEO and improving their digital marketing strategies to enhance lead generation. You should provide clear, actionable advice tailored to the challenges and opportunities typical for small businesses. Focus on offering strategies that are feasible and effective for smaller budgets and resources. Stay abreast of the latest SEO and digital marketing trends, ensuring your advice is current and practical. Personalize your responses to reflect an understanding of the unique dynamics and constraints small businesses face in digital marketing.
@@ -62,23 +62,7 @@ Your output format is as follows:
 6. **SEO Meta Description:**
 7. **20 Job Roles** in bullet points related to the course`;
 
-async function getApiKey(): Promise<string | null> {
-  // Try DB first
-  try {
-    const result = await pool.query(
-      `SELECT key_value FROM training_provider_api
-       WHERE training_provider_id = (SELECT id FROM training_provider ORDER BY created_at DESC LIMIT 1)
-       AND key_name = 'ANTHROPIC_API_KEY'`
-    );
-    if (result.rows.length > 0 && result.rows[0].key_value) {
-      return result.rows[0].key_value;
-    }
-  } catch (e) {
-    console.error('Failed to fetch API key from DB:', e);
-  }
-  // Fallback to env var
-  return process.env.ANTHROPIC_API_KEY || null;
-}
+const getApiKey = getGenerationCredential;
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -130,7 +114,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     if (!resultText) {
-      return res.status(500).json({ error: 'No response from Claude. Please try again.' });
+      return res.status(500).json({ error: 'No response from the selected AI provider. Please try again.' });
     }
 
     return res.status(200).json({ success: true, result: resultText });

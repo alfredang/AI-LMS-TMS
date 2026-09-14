@@ -5,24 +5,24 @@
  * (trainer: assigned runs; learner: enrolled runs), one chip per
  * (course run, session day). Data: /api/calendar/my-events.
  * Clicking a chip or a day opens a details popup for that day.
+ *
+ * This view is rendered from a switch in TrainerLayout/LearnerLayout, so it
+ * unmounts on every navigation away. Fetched ranges therefore go through
+ * lib/calendar/myEventsCache, which outlives the mount: a range already seen
+ * paints INSTANTLY from cache and only revalidates in the background, so
+ * returning to My Calendar no longer shows an empty grid and a spinner.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon, IconName } from './ui/Icon';
 import { getApiUrl } from '@/lib/urlHelpers';
-
-interface MyClassEvent {
-  courseRunUuid: string;
-  courseRunId: string;
-  courseCode: string;
-  courseTitle: string;
-  classStatus: string;
-  date: string; // YYYY-MM-DD
-  startTime: string;
-  endTime: string;
-  dayNumber: number;
-  totalDays: number;
-  sessionCount: number;
-}
+import { useLms } from '@contexts/LmsContext';
+import {
+  type MyClassEvent,
+  cacheKey,
+  fetchRange as fetchCachedRange,
+  getCached,
+  isStale,
+} from '@/lib/calendar/myEventsCache';
 
 type ViewMode = 'day' | 'month' | 'year';
 
@@ -77,9 +77,14 @@ interface MyCalendarViewProps {
 }
 
 const MyCalendarView: React.FC<MyCalendarViewProps> = ({ role }) => {
+  const { currentUser } = useLms();
+  const userId = currentUser?.id ? String(currentUser.id) : '';
+
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [cursor, setCursor] = useState<Date>(() => new Date());
   const [events, setEvents] = useState<MyClassEvent[]>([]);
+  // Only true when there is nothing cached to show — a background revalidation
+  // of an already-painted range must not blank the grid or flash the spinner.
   const [loading, setLoading] = useState(false);
   const [dayModal, setDayModal] = useState<string | null>(null); // YYYY-MM-DD
 
@@ -100,23 +105,33 @@ const MyCalendarView: React.FC<MyCalendarViewProps> = ({ role }) => {
     return { start: ymd(days[0]), end: ymd(days[days.length - 1]) };
   }, [cursor, viewMode]);
 
+  // Paint from cache first, then revalidate. The cache is module-level, so it
+  // survives this component unmounting when the user visits another page.
   useEffect(() => {
+    if (!userId) return;
     let alive = true;
-    (async () => {
+
+    const key = cacheKey(userId, role, range.start, range.end);
+    const cached = getCached(key);
+
+    if (cached) {
+      setEvents(cached.events);
+      setLoading(false);
+      // Fresh enough — no network call at all.
+      if (!isStale(cached)) return;
+    } else {
+      setEvents([]);
       setLoading(true);
-      try {
-        const params = new URLSearchParams({ role, start: range.start, end: range.end });
-        const res = await fetch(getApiUrl(`/api/calendar/my-events?${params}`));
-        const data = await res.json();
-        if (alive) setEvents(data?.success ? (data.data?.events || []) : []);
-      } catch {
-        if (alive) setEvents([]);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
+    }
+
+    const params = new URLSearchParams({ role, start: range.start, end: range.end });
+    fetchCachedRange(key, getApiUrl(`/api/calendar/my-events?${params}`))
+      .then((fetched) => { if (alive) setEvents(fetched); })
+      .catch(() => { if (alive && !cached) setEvents([]); })
+      .finally(() => { if (alive) setLoading(false); });
+
     return () => { alive = false; };
-  }, [role, range.start, range.end]);
+  }, [userId, role, range.start, range.end]);
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, MyClassEvent[]>();

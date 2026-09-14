@@ -38,6 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       python3-pip \
       python3-venv \
       ca-certificates \
+      poppler-utils \
     && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
@@ -63,6 +64,9 @@ RUN playwright install --with-deps chromium
 # install path instead. Chromium downloads to /root/.cache/ms-playwright.
 RUN npm install -g playwright@1.59.1 \
     && /usr/local/bin/playwright install chromium
+
+# Pinned official client for OpenAI OAuth login and generation.
+RUN npm install -g @openai/codex@0.149.0
 
 # Copy only what Next.js standalone needs
 COPY --from=builder /app/public ./public

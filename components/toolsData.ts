@@ -158,6 +158,7 @@ export const QUANTUM_TOOL_ITEMS: ToolLinkItem[] = [
 
 export const DESIGN_TOOL_ITEMS: ToolLinkItem[] = [
   { label: 'Logo Maker', icon: IconName.Create, href: 'https://alfredang.github.io/logomaker/' },
+  { label: 'AR/VR Playground', icon: IconName.Video, href: 'https://alfredang.github.io/arvr-playground/' },
 ];
 
 export const GENAI_LINK_GROUPS: ToolLinkGroup[] = [

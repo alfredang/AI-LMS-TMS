@@ -3,6 +3,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
 import { recordCourseChanges } from '../../../lib/courseChangeLog';
+import { recordRenamedTitle } from '../../../lib/courseCode';
 import { IncomingForm, File as FormidableFile } from 'formidable';
 import fs from 'fs';
 import path from 'path';
@@ -317,16 +318,6 @@ async function handler(
       });
     }
     
-    if (!courseData.tscTitle) {
-      console.log('⚠️ Missing tscTitle, using default');
-      courseData.tscTitle = courseData.title; // Use title as fallback
-    }
-    
-    if (!courseData.tscCode) {
-      console.log('⚠️ Missing tscCode, using default');
-      courseData.tscCode = courseData.courseCode; // Use courseCode as fallback
-    }
-
     // Handle modeOfLearning conversion (array to string)
     const modeOfLearning = Array.isArray(courseData.modeOfLearning) 
       ? courseData.modeOfLearning[0] || 'Physical'
@@ -510,8 +501,10 @@ async function handler(
           title = $1,
           image_url = $2,
           course_code = $3,
-          tsc_title = $4,
-          tsc_code = $5,
+          -- Preserve blank legacy TSC metadata when the user is correcting an
+          -- unrelated field such as the course title.
+          tsc_title = COALESCE($4, tsc_title),
+          tsc_code = COALESCE($5, tsc_code),
           training_hours = $6,
           assessment_hours = $7,
           mode_of_learning = $8,
@@ -565,8 +558,8 @@ async function handler(
         courseData.title,
         fileUrls.imageUrl || courseData.imageUrl, // Use uploaded file URL if available, otherwise keep existing
         courseData.courseCode,
-        courseData.tscTitle || courseData.title,
-        courseData.tscCode || courseData.courseCode,
+        courseData.tscTitle || null,
+        courseData.tscCode || null,
         courseData.trainingHours,
         courseData.assessmentHours,
         modeOfLearning, // Use converted value
@@ -603,6 +596,11 @@ async function handler(
         courseId,
         courseData.newCourseCode === undefined ? null : courseData.newCourseCode
       ]);
+
+      // Keep the canonical title history in lockstep with course.title. Some
+      // workflows resolve courses through their historical identities; leaving
+      // the previous title marked current allows a later read/sync to restore it.
+      await recordRenamedTitle(courseId, courseData.title, null, client);
 
       // Per-course favorite trainers (starred by admin/developer). Written
       // separately from the big positional UPDATE so the param list stays
@@ -929,6 +927,7 @@ async function handler(
         message: 'Course updated successfully',
         data: {
           courseId,
+          title: courseData.title.trim(),
           updatedFiles: Object.keys(fileUrls),
           assessmentFilesUploaded: Object.keys(assessmentFilesMap).length,
           filesDeleted: pendingFileDeletions.length,

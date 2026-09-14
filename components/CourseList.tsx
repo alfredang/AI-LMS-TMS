@@ -337,7 +337,10 @@ const ManagementCourseList: React.FC = () => {
 
         try {
             console.log(`🔄 Loading complete course data for ${mode}...`);
-            const response = await fetch(`/api/courses/edit-data?courseId=${course.id}`);
+            const response = await fetch(
+                `/api/courses/edit-data?courseId=${course.id}&_t=${Date.now()}`,
+                { cache: 'no-store' }
+            );
             const result = await response.json();
 
             if (result.success && result.data) {

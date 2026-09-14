@@ -3662,6 +3662,7 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                         {renderSubsectionHeader('LLM', isLlmCredentialsOpen, () => setIsLlmCredentialsOpen(prev => !prev))}
                         {isLlmCredentialsOpen && (
                             <div className="rounded-md border border-default bg-surface p-5">
+                                <a href="/ai-provider" className="mb-4 block font-semibold text-primary underline">AI Provider — select Claude OAuth or OpenAI OAuth</a>
                                 {renderCredentialInputs(LLM_API_KEY_NAMES)}
                             </div>
                         )}

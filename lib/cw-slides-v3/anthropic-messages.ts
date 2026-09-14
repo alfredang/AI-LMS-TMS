@@ -1,3 +1,8 @@
+import { CLAUDE_MODEL } from '../ai/models';
+import { query } from '../ai/query';
+import { buildClaudeEnv } from '../anthropic-auth';
+import { OPENAI_CREDENTIAL } from '../ai/credentials';
+import { generateOpenAi } from '../ai/settings';
 /**
  * Direct Anthropic Messages API wrapper for the slides pipeline.
  *
@@ -54,7 +59,18 @@ export interface ClaudeCallOpts {
  * Throws on non-retriable errors. Retries 429/5xx/network up to maxRetries.
  */
 export async function callClaudeText(opts: ClaudeCallOpts): Promise<string> {
-  const { apiKey, model, system, prompt, maxTokens = 4096, maxRetries = 2 } = opts;
+  const { apiKey, system, prompt, maxTokens = 4096, maxRetries = 2 } = opts;
+  const model = CLAUDE_MODEL;
+  if (apiKey === OPENAI_CREDENTIAL) return generateOpenAi({ prompt, system });
+  if (apiKey.trim().startsWith('sk-ant-oat')) {
+    let text = '';
+    for await (const event of query({ prompt, options: { systemPrompt: system, model,
+      env: { ...buildClaudeEnv(apiKey), CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(maxTokens) }, allowedTools: [], maxTurns: 1 } })) {
+      if (event.type === 'assistant') for (const block of event.message.content) if (block.type === 'text') text += block.text;
+    }
+    if (!text.trim()) throw new Error('The selected AI provider returned an empty response.');
+    return text;
+  }
   const client = getClient(apiKey);
 
   let lastErr: any = null;

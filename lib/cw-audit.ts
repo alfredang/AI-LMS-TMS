@@ -17,7 +17,7 @@
  */
 
 import mammoth from 'mammoth';
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { query } from '@lib/ai/query';
 import * as XLSX from 'xlsx';
 import { buildClaudeEnv } from './anthropic-auth';
 

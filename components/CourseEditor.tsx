@@ -10,6 +10,8 @@ import { getCourseBannerDataUrl } from '@utils/courseBanner';
 import { getApiUrl } from '@/lib/urlHelpers';
 import QuizEditorModal, { QuizQuestion } from './QuizEditorModal';
 import { TopicAccordion } from './CourseDetail';
+import ManualDateInput from './ui/ManualDateInput';
+import { displayDateToIso, isoDateToDisplayValue } from '@lib/manualDateInput';
 
 const inputGhostClasses = (isTitle: boolean) =>
     `flex-grow border border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:border-gray-300 dark:focus:border-gray-600 rounded-md px-2 py-1 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-800 focus:bg-gray-50 dark:focus:bg-gray-800 focus:outline-none w-full transition-colors dark:text-white ${isTitle ? 'font-bold text-xl' : 'text-base'}`;
@@ -550,6 +552,13 @@ const CourseEditor: React.FC = () => {
         // Leave blank when unset — the standard branded banner is rendered as the fallback
         imageUrl: editingCourse.imageUrl || ''
     });
+    const [fundingValidityStartInput, setFundingValidityStartInput] = useState(
+        () => isoDateToDisplayValue(editingCourse.fundingValidityStart)
+    );
+    const [fundingValidityEndInput, setFundingValidityEndInput] = useState(
+        () => isoDateToDisplayValue(editingCourse.fundingValidity)
+    );
+    const [dateValidationAttempted, setDateValidationAttempted] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
     const [availableTrainers, setAvailableTrainers] = useState<TrainerOption[]>([]);
@@ -723,6 +732,12 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             };
         });
     }, [editingCourse]);
+
+    useEffect(() => {
+        setFundingValidityStartInput(isoDateToDisplayValue(editingCourse.fundingValidityStart));
+        setFundingValidityEndInput(isoDateToDisplayValue(editingCourse.fundingValidity));
+        setDateValidationAttempted(false);
+    }, [editingCourse.id, editingCourse.fundingValidityStart, editingCourse.fundingValidity]);
 
     const normalizeApprovedTrainerName = (trainerName: string) =>
         String(trainerName || '')
@@ -1060,10 +1075,33 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         if (type === 'number' || inputMode === 'decimal') {
             // Allow empty, digits, and one decimal point — preserve raw string for typing
             if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                setCourse({ ...course, [name]: value });
+                setCourse(prev => ({ ...prev, [name]: value }));
             }
         } else {
-            setCourse({ ...course, [name]: value });
+            // Use the latest state so another field update (for example an
+            // image-generation response) cannot restore the previous title.
+            setCourse(prev => ({ ...prev, [name]: value }));
+        }
+    };
+
+    const handleFundingDateChange = (
+        field: 'fundingValidityStart' | 'fundingValidity',
+        displayValue: string
+    ) => {
+        if (field === 'fundingValidityStart') {
+            setFundingValidityStartInput(displayValue);
+        } else {
+            setFundingValidityEndInput(displayValue);
+        }
+
+        // Keep the canonical course state in ISO format whenever the typed
+        // value is complete. Incomplete input stays visible but cannot save.
+        const isoValue = displayDateToIso(displayValue);
+        if (isoValue !== null) {
+            setCourse(prev => ({
+                ...prev,
+                [field]: isoValue || (field === 'fundingValidityStart' ? null : ''),
+            }));
         }
     };
 
@@ -1131,22 +1169,48 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
     };
 
     const handleSaveCourse = async (continueEditing = false) => {
+        setDateValidationAttempted(true);
+        const fundingValidityStartIso = displayDateToIso(fundingValidityStartInput);
+        const fundingValidityEndIso = displayDateToIso(fundingValidityEndInput);
+
+        if (fundingValidityStartIso === null) {
+            document.getElementById('fundingValidityStart')?.focus();
+            alert('Funding Validity Start Date must be a valid date in dd/mm/yyyy format.');
+            return;
+        }
+        if (fundingValidityEndIso === null) {
+            document.getElementById('fundingValidity')?.focus();
+            alert('Funding Validity End Date must be a valid date in dd/mm/yyyy format.');
+            return;
+        }
+
         // Validation for required fields
-        const requiredFields = [
+        const requiredFields: Array<{ field: unknown; name: string }> = [
             { field: course.title, name: 'Course Title' },
             { field: course.courseCode, name: 'Course Code' },
-            { field: course.trainingHours, name: 'Training Hours' },
-            { field: course.assessmentHours, name: 'Assessment Hours' },
             { field: course.courseType, name: 'Course Type' }
         ];
+
+        // Historical course rows can predate the duration columns. Do not stop
+        // a title/link correction merely because those unrelated values were
+        // already blank; new courses and previously-populated fields retain the
+        // normal required validation.
+        if (isNewCourse || editingCourse.trainingHours !== null && editingCourse.trainingHours !== undefined) {
+            requiredFields.push({ field: course.trainingHours, name: 'Training Hours' });
+        }
+        if (isNewCourse || editingCourse.assessmentHours !== null && editingCourse.assessmentHours !== undefined) {
+            requiredFields.push({ field: course.assessmentHours, name: 'Assessment Hours' });
+        }
 
         // TSC Title and TSC Code are required for WSQ, CASL and IBF courses
         const isTscRequired = course.courseType === 'WSQ' || course.courseType === 'CASL' || course.courseType === 'IBF';
         if (isTscRequired) {
-            requiredFields.push(
-                { field: course.tscTitle || '', name: 'TSC Title' },
-                { field: course.tscCode || '', name: 'TSC Code' }
-            );
+            if (isNewCourse || editingCourse.tscTitle) {
+                requiredFields.push({ field: course.tscTitle || '', name: 'TSC Title' });
+            }
+            if (isNewCourse || editingCourse.tscCode) {
+                requiredFields.push({ field: course.tscCode || '', name: 'TSC Code' });
+            }
         }
 
         const missingFields = requiredFields.filter(({ field }) => !field || field === '').map(({ name }) => name);
@@ -1155,12 +1219,14 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
         const selectedMode = course.modeOfLearning?.[0] || ModeOfLearning.Physical;
 
         // Validate training hours > 0; assessment hours can be 0
-        if (course.trainingHours <= 0) {
+        const hasTrainingHours = String(course.trainingHours ?? '').trim() !== '';
+        if (hasTrainingHours && Number(course.trainingHours) <= 0) {
             alert('Training Hours must be greater than 0');
             return;
         }
 
-        if (course.assessmentHours < 0) {
+        const hasAssessmentHours = String(course.assessmentHours ?? '').trim() !== '';
+        if (hasAssessmentHours && Number(course.assessmentHours) < 0) {
             alert('Assessment Hours cannot be negative');
             return;
         }
@@ -1231,8 +1297,8 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                 courseLink: course.courseLink || null,
                 brochureLink: course.brochureLink || null,
                 skillsfutureLink: course.skillsfutureLink || null,
-                fundingValidity: course.fundingValidity || null,
-                fundingValidityStart: course.fundingValidityStart || null,
+                fundingValidity: fundingValidityEndIso || null,
+                fundingValidityStart: fundingValidityStartIso || null,
                 assessmentRecordLink: course.assessmentRecordLink || null,
                 assessmentSummaryRecordUrl: course.assessmentSummaryRecordUrl || '',
                 numOfTrainers: selectedApprovedTrainers.length,
@@ -1442,18 +1508,38 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
             const result = await response.json();
 
             if (response.ok && result.success) {
+                const savedCourseId = result.data?.courseId || course.id;
+                if (!savedCourseId) {
+                    throw new Error('Course saved but no course ID was returned for verification.');
+                }
+
+                // Read back the committed row instead of trusting transport
+                // success. This keeps the editor and context aligned with the
+                // database and catches a title that was not actually persisted.
+                const readbackResponse = await fetch(
+                    `/api/courses/edit-data?courseId=${encodeURIComponent(savedCourseId)}&_t=${Date.now()}`,
+                    { cache: 'no-store' }
+                );
+                const readbackResult = await readbackResponse.json();
+                if (!readbackResponse.ok || !readbackResult.success || !readbackResult.data) {
+                    throw new Error('Course was saved, but the saved record could not be verified. Please reload the course.');
+                }
+
+                const savedCourse = readbackResult.data as Course;
+                if (savedCourse.title?.trim() !== courseData.title.trim()) {
+                    throw new Error(`Course title was not saved. The database still contains "${savedCourse.title || ''}".`);
+                }
+
                 // Clear the files marked for deletion since they were successfully processed
                 setFilesToDelete([]);
                 setDeletedAssessments([]);
 
                 if (continueEditing) {
-                    // Stay on the edit page — reload course data to get fresh state
-                    if (isNewCourse && result.data?.courseId) {
-                        // For new courses, update the course with the real ID from the server
-                        setCourse(prev => ({ ...prev, id: result.data.courseId }));
-                        setEditingCourse({ ...course, id: result.data.courseId } as any);
-                        setCourseEditMode('edit');
-                    }
+                    // Stay on the edit page with the verified committed data.
+                    setCourse(savedCourse);
+                    setEditingCourse(savedCourse);
+                    setResourceLinks((savedCourse as any).resourceLinks || []);
+                    setCourseEditMode('edit');
                     // Reset file inputs since files were already uploaded
                     setFiles({
                         assessmentFiles: [],
@@ -2087,32 +2173,30 @@ const isWrittenAssessmentUrl = !course.writtenAssessmentLink || course.writtenAs
                                 <label htmlFor="fundingValidityStart" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                     Funding Validity Start Date
                                 </label>
-                                <input type="date" id="fundingValidityStart" name="fundingValidityStart" value={(() => {
-                                    if (!course.fundingValidityStart) return '';
-                                    if (/^\d{4}-\d{2}-\d{2}/.test(course.fundingValidityStart)) return course.fundingValidityStart.slice(0, 10);
-                                    const d = new Date(course.fundingValidityStart);
-                                    if (isNaN(d.getTime())) return '';
-                                    const yyyy = d.getFullYear();
-                                    const mm = String(d.getMonth() + 1).padStart(2, '0');
-                                    const dd = String(d.getDate()).padStart(2, '0');
-                                    return `${yyyy}-${mm}-${dd}`;
-                                })()} onChange={handleCourseChange} className={inputClasses} />
+                                <ManualDateInput
+                                    id="fundingValidityStart"
+                                    name="fundingValidityStart"
+                                    value={fundingValidityStartInput}
+                                    onChange={(value) => handleFundingDateChange('fundingValidityStart', value)}
+                                    className={inputClasses}
+                                    calendarLabel="Choose funding validity start date from calendar"
+                                    validationAttempted={dateValidationAttempted}
+                                />
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Date from which the course funding is valid</p>
                             </div>
                             <div>
                                 <label htmlFor="fundingValidity" className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                     Funding Validity End Date
                                 </label>
-                                <input type="date" id="fundingValidity" name="fundingValidity" value={(() => {
-                                    if (!course.fundingValidity) return '';
-                                    if (/^\d{4}-\d{2}-\d{2}/.test(course.fundingValidity)) return course.fundingValidity.slice(0, 10);
-                                    const d = new Date(course.fundingValidity);
-                                    if (isNaN(d.getTime())) return '';
-                                    const yyyy = d.getFullYear();
-                                    const mm = String(d.getMonth() + 1).padStart(2, '0');
-                                    const dd = String(d.getDate()).padStart(2, '0');
-                                    return `${yyyy}-${mm}-${dd}`;
-                                })()} onChange={handleCourseChange} className={inputClasses} />
+                                <ManualDateInput
+                                    id="fundingValidity"
+                                    name="fundingValidity"
+                                    value={fundingValidityEndInput}
+                                    onChange={(value) => handleFundingDateChange('fundingValidity', value)}
+                                    className={inputClasses}
+                                    calendarLabel="Choose funding validity end date from calendar"
+                                    validationAttempted={dateValidationAttempted}
+                                />
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Date until which the course funding is valid</p>
                             </div>
                             <div>

@@ -1,9 +1,9 @@
+import { getGenerationCredential } from '@lib/ai/settings';
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import formidable, { File } from 'formidable';
 import fs from 'fs';
 import os from 'os';
-import pool from '../../../lib/db';
 import {
   AUDIT_DOC_TYPES,
   AUDIT_FIELD_KEYS,
@@ -40,19 +40,7 @@ interface AuditApiResponse {
   error?: string;
 }
 
-async function getApiKey(): Promise<string | null> {
-  try {
-    const result = await pool.query(
-      `SELECT key_value FROM training_provider_api
-       WHERE training_provider_id = (SELECT id FROM training_provider ORDER BY created_at DESC LIMIT 1)
-       AND key_name = 'ANTHROPIC_API_KEY'`,
-    );
-    if (result.rows.length > 0 && result.rows[0].key_value) return result.rows[0].key_value;
-  } catch (e) {
-    console.error('Failed to fetch API key from DB:', e);
-  }
-  return process.env.ANTHROPIC_API_KEY || null;
-}
+const getApiKey = getGenerationCredential;
 
 function asArray<T>(v: T | T[] | undefined): T[] {
   if (!v) return [];

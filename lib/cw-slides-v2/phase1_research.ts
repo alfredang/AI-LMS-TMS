@@ -13,7 +13,7 @@
  *   4. Empty research entry (caller handles via padding, NOT fake source pool)
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { query } from '@lib/ai/query';
 import { buildClaudeEnv } from '../anthropic-auth';
 import { searchWebMulti } from '../cw-slides-websearch';
 import { RESEARCH_SYSTEM_PROMPT, RESEARCH_KNOWLEDGE_SYSTEM_PROMPT } from './prompts';

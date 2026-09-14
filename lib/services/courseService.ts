@@ -31,7 +31,8 @@ export const courseService = {
   async getDeveloperCourses() {
     try {
       const response = await apiClient.get<Course[]>(
-        `/api/courses/developer`
+        `/api/courses/developer`,
+        { cache: 'no-store' }
       );
       
       return response;
