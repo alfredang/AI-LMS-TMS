@@ -851,6 +851,7 @@ export async function sfcStage1ParseMatchAndPersist(input: {
           excelNric: individualNric,
           excelCourseRef: courseRefNumber,
           daApplicationId,
+          claimId,
         });
         if (!verify.ok) {
           resolvedMatchStatus = 'needs_review';

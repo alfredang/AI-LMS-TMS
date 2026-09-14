@@ -65,6 +65,19 @@ function fmtMoney(v: string | number | null | undefined): string {
   return `$${n.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// A DA row's SFC invoice is normally numbered "SFC-{applicationId}", but a MANUAL-placeholder
+// application (no real MySkillsFuture id) deliberately gets the bare claim id as its DocNumber
+// instead (see createDirectApplicationSfcInvoice — Finance didn't want "SFC-MANUAL-ENR-…" numbers).
+// Must recognize both forms as "already has one", or this keeps offering "Generate Invoice" for a
+// row that already has a real, correctly-linked SFC invoice.
+function hasSfcInvoice(row: Pick<SfcPreviewRow, 'matched_qbo_doc_number' | 'claim_id'>): boolean {
+  const doc = String(row.matched_qbo_doc_number || '').trim();
+  if (!doc) return false;
+  if (/^SFC-/i.test(doc)) return true;
+  const claimId = String(row.claim_id || '').trim();
+  return !!claimId && doc.toUpperCase() === claimId.toUpperCase();
+}
+
 const matchBadgeClass = (s: string) => {
   switch (s) {
     case 'ready': return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400';
@@ -463,7 +476,7 @@ const SfcPaymentSyncView: React.FC = () => {
   };
 
   const daReadyMissingSfc = useMemo(
-    () => rows.filter((r) => r.is_da && r.match_status === 'ready' && !(r.matched_qbo_doc_number && /^SFC-/i.test(r.matched_qbo_doc_number))),
+    () => rows.filter((r) => r.is_da && r.match_status === 'ready' && !hasSfcInvoice(r)),
     [rows]
   );
 
@@ -910,7 +923,7 @@ const SfcPaymentSyncView: React.FC = () => {
                         <td className="px-3 py-2 text-xs font-mono">
                           {!r.is_da ? (
                             '-'
-                          ) : r.matched_qbo_doc_number && /^SFC-/i.test(r.matched_qbo_doc_number) ? (
+                          ) : hasSfcInvoice(r) ? (
                             r.matched_qbo_doc_number
                           ) : (
                             <div className="space-y-1">

@@ -312,6 +312,7 @@ export async function applySfcImportRows(input: {
             excelNric: String(row.individual_nric || ''),
             excelCourseRef: String(row.course_reference_number || ''),
             daApplicationId,
+            claimId,
           });
           if (!verify.ok) {
             throw new Error(`Refusing to apply: resolved invoice ${qboInvoiceId} failed content verification — ${verify.reason}`);

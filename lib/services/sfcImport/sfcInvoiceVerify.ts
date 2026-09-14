@@ -92,22 +92,34 @@ export async function verifySfcInvoiceMatch(input: {
    * either, and a genuinely correct invoice failed verification against the wrong one.
    */
   daApplicationId?: string | null;
+  /**
+   * This row's own claim id. A DA application carrying only the synthetic `MANUAL-…`
+   * placeholder (no real MySkillsFuture id) gets its SFC-CA invoice numbered with the bare
+   * claim id instead of "SFC-{id}" — a deliberate convention (see createDirectApplicationSfcInvoice:
+   * Finance didn't want "SFC-MANUAL-ENR-…" numbers, which don't match their "SFC-CA-…" pattern).
+   * Supplying this lets that invoice type verify; omitting it just means that specific invoice
+   * shape won't be recognized — the exact-equality check below never accepts a bare number that
+   * merely resembles a claim id, only this row's own.
+   */
+  claimId?: string | null;
 }): Promise<SfcInvoiceVerifyResult> {
   const doc = String(input.docNumber || '').trim();
   if (!doc) return { ok: false, reason: 'No invoice DocNumber to verify against' };
 
   const isTc = /^TC/i.test(doc);
   const isSfcCa = /^SFC-CA-/i.test(doc);
-  if (!isTc && !isSfcCa) {
+  const claimIdUpper = String(input.claimId || '').trim().toUpperCase();
+  const isClaimIdNumbered = !!claimIdUpper && doc.toUpperCase() === claimIdUpper;
+  if (!isTc && !isSfcCa && !isClaimIdNumbered) {
     return {
       ok: false,
-      reason: `Invoice ${doc} is not a Customer (TC...) or SFC (SFC-CA-...) invoice — refusing to apply an SFC payment to it`,
+      reason: `Invoice ${doc} is not a Customer (TC...) or SFC (SFC-CA-... or claim-id-numbered) invoice — refusing to apply an SFC payment to it`,
     };
   }
 
   const text = invoiceLineText(input.invoiceRaw);
 
-  if (isSfcCa) {
+  if (isSfcCa || isClaimIdNumbered) {
     // SFC-CA invoice descriptions cite either the real Application ID or, for manually-enrolled
     // learners with no MySkillsFuture application, the enrolment id — but the exact wording and
     // spacing has varied across invoices generated at different times (confirmed: real examples

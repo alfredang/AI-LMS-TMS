@@ -3,7 +3,6 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@/lib/db';
 import { requireFinanceOrAdmin } from '@/lib/services/grantImport/requireFinanceOrAdmin';
 import { generateSfcInvoiceForRow } from '@/lib/services/sfcImport/generateSfcInvoiceForRow';
-import { realApplicationId } from '@/lib/daApplicationId';
 
 /**
  * Bulk counterpart to generate-sfc-invoice.ts — runs it for every DA row in this batch that's
@@ -25,6 +24,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     await requireFinanceOrAdmin(req);
 
+    // da_application_id IS NOT NULL is enough on its own — MANUAL-placeholder applications (no
+    // real MySkillsFuture id) are fully supported by createDirectApplicationSfcInvoice, which
+    // numbers their invoice with the bare claim id instead of "SFC-{id}" (a deliberate Finance
+    // naming convention, not a gap). Excluding them here used to mean a MANUAL row's SFC invoice
+    // could never be generated via this bulk button at all — confirmed live: a Ready DA row with
+    // no invoice yet was silently skipped every run, "1 processed" never moving off zero.
+    // "Already has one" must recognize both DocNumber shapes too, or an invoice this route (or the
+    // single-row button) already correctly created gets offered for (re-)generation forever.
     const r = await pool.query(
       `SELECT id, claim_id, matched_enrolment_id, da_application_id, main_qbo_doc_number,
               claim_amount::float AS claim_amount
@@ -32,19 +39,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
        WHERE batch_id = $1::int
          AND match_status = 'ready'
          AND da_application_id IS NOT NULL
-         AND (matched_qbo_doc_number IS NULL OR matched_qbo_doc_number NOT ILIKE 'SFC-%')
+         AND (
+           matched_qbo_doc_number IS NULL
+           OR (matched_qbo_doc_number NOT ILIKE 'SFC-%' AND matched_qbo_doc_number IS DISTINCT FROM claim_id)
+         )
        ORDER BY row_index ASC`,
       [batchId]
     );
 
-    const eligible = (r.rows as Array<{
+    const eligible = r.rows as Array<{
       id: number;
       claim_id: string | null;
       matched_enrolment_id: string | null;
       da_application_id: string | null;
       main_qbo_doc_number: string | null;
       claim_amount: number | null;
-    }>).filter((row) => !!realApplicationId(row.da_application_id));
+    }>;
 
     const total = eligible.length;
     let generated = 0;

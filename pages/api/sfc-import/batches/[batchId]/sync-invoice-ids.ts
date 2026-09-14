@@ -231,7 +231,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // Getting this branch wrong is exactly how a DA row's payment could end up pointed at the
     // wrong invoice TYPE even when NRIC/course content genuinely matches the learner.
     const r = await pool.query(
-      `SELECT sr.id, sr.matched_enrolment_id, sr.individual_nric, sr.course_reference_number,
+      `SELECT sr.id, sr.claim_id, sr.matched_enrolment_id, sr.individual_nric, sr.course_reference_number,
               da.application_id AS da_application_id,
               NULLIF(TRIM(se.course_run_id::text), '') AS course_run_id,
               ${RUN_START_NORM_SQL} AS course_start_date_iso
@@ -250,6 +250,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     const allUnmatchedRows = r.rows as Array<{
       id: number;
+      claim_id: string | null;
       matched_enrolment_id: string;
       individual_nric: string | null;
       course_reference_number: string | null;
@@ -375,6 +376,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           excelNric: row.individual_nric,
           excelCourseRef: row.course_reference_number,
           daApplicationId: appId,
+          claimId: row.claim_id,
         });
         if (!verify.ok) {
           console.warn(`[sfc-import/sync-invoice-ids] rejected DA candidate ${desiredDoc} for enrolment ${enrolmentId}: ${verify.reason} — trying Stage 2's TC-invoice scan instead`);
