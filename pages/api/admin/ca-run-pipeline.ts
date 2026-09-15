@@ -127,7 +127,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       failed: number;
       // Human-readable reasons a group was skipped/failed, so Auto-Process can
       // tell the admin WHY no invoice appeared instead of failing silently.
-      errors: string[];
+      errors: Array<string | {
+        groupKey: string;
+        employerUen: string;
+        employerOrgName: string;
+        courseRunId: string;
+        error: string;
+        isCustomerNotFound: boolean;
+      }>;
       note: string | null;
     } | null = null;
     try {

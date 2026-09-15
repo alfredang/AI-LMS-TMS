@@ -389,7 +389,12 @@ const columnMatchers: Array<[string, (header: string) => boolean]> = [
 
 const getCellText = (value: unknown): string => {
   if (value == null) return '';
-  if (value instanceof Date) return value.toLocaleDateString('en-GB');
+  if (value instanceof Date) {
+    const day = String(value.getDate()).padStart(2, '0');
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const year = value.getFullYear();
+    return `${day}-${month}-${year}`;
+  }
   return String(value).trim();
 };
 
@@ -412,7 +417,7 @@ type BackendStallInfo = {
   /** Never got an ENR- id — auto-enrol failed for these. */
   notEnrolled: string[];
   /** Rows carrying an auto-enrol error message. */
-  failed: string[];
+  failed: Array<{ name: string; error: string }>;
   /** Enrolled + grant settled, but no QBO invoice yet. */
   awaitingInvoice: number;
   /** False when rows are still 'pending' — i.e. we gave up waiting, the worker didn't finish. */
@@ -508,14 +513,38 @@ const statusCheckboxClass = (checked: boolean, color: 'green' | 'blue' | 'amber'
   return `w-3.5 h-3.5 rounded border-gray-300 ${checked ? accent : ''}`;
 };
 
-const parseCompanyApplicationRows = async (file: File): Promise<CompanyApplicationRow[]> => {
+const isPasswordProtectedWorkbookError = (err: unknown): boolean => {
+  const message = err instanceof Error ? err.message : String(err || '');
+  return /password-protected|password protected|password is required|bad password|incorrect password|invalid password/i.test(message);
+};
+
+const readCompanyApplicationWorkbook = async (file: File, password?: string) => {
   const XLSX = await import('xlsx');
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+  try {
+    return XLSX.read(buffer, { type: 'array', cellDates: true, password });
+  } catch (err) {
+    if (!password || !isPasswordProtectedWorkbookError(err)) throw err;
+
+    // SheetJS CE exposes a password option but does not decrypt every modern
+    // XLSX encryption variant. Use xlsx-populate only for the encrypted path,
+    // then hand the decrypted workbook back to SheetJS so the existing parsing
+    // behavior stays unchanged.
+    const mod: any = await import('xlsx-populate/browser/xlsx-populate');
+    const XlsxPopulate = mod.default || mod;
+    const decryptedWorkbook = await XlsxPopulate.fromDataAsync(buffer, { password });
+    const decryptedBuffer = await decryptedWorkbook.outputAsync({ type: 'arraybuffer' });
+    return XLSX.read(decryptedBuffer, { type: 'array', cellDates: true });
+  }
+};
+
+const parseCompanyApplicationRows = async (file: File, password?: string): Promise<CompanyApplicationRow[]> => {
+  const XLSX = await import('xlsx');
+  const workbook = await readCompanyApplicationWorkbook(file, password);
   if (!workbook.SheetNames.length) throw new Error('Excel file has no sheets.');
 
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rawRows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+  const rawRows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
   const headerRowIndex = rawRows.findIndex(row => {
     const text = row.map(normalize).join(' ');
     return text.includes('course title') && text.includes('employer') && (text.includes('trainee') || text.includes('nric'));
@@ -863,6 +892,10 @@ export const UploadCompanyApplicationView: React.FC = () => {
   const [backendDoneCount, setBackendDoneCount] = useState(0);
   const [backendProgress, setBackendProgress] = useState(0); // 0..1, finer-grained per-step progress
   const [backendStall, setBackendStall] = useState<BackendStallInfo | null>(null);
+  const [workbookPassword, setWorkbookPassword] = useState('');
+  const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [pendingPasswordAction, setPendingPasswordAction] = useState<'prepare' | 'upload'>('prepare');
   // Learners the pipeline marked Not Grant Eligible (not a Singapore Citizen or
   // PR). Shown in both the complete and stalled panels — they are billed at the
   // full course fee, which the admin should see without hunting the table.
@@ -897,6 +930,9 @@ export const UploadCompanyApplicationView: React.FC = () => {
     setBackendStall(null);
     setBackendIneligible([]);
     setRunConfirmGroups([]);
+    setWorkbookPassword('');
+    setPasswordPromptOpen(false);
+    setPasswordError(null);
   };
 
   const pollBackendProcessing = (ids: string[]) => {
@@ -951,7 +987,7 @@ export const UploadCompanyApplicationView: React.FC = () => {
         // worker actually finished (every row stamped a final status)?
         const awaitingGrant: string[] = [];
         const notEnrolled: string[] = [];
-        const failedRows: string[] = [];
+        const failedRows: Array<{ name: string; error: string }> = [];
         const ineligibleNames: string[] = [];
         let awaitingInvoice = 0;
         let stillPending = 0;
@@ -968,8 +1004,9 @@ export const UploadCompanyApplicationView: React.FC = () => {
           // below so an errored row still contributes its reason.
           const traineeName = String(row['Trainee FULL Name as on government ID*'] || '').trim() || '(unnamed)';
           const status = String(row['Auto-Enrol Status'] || '').trim().toLowerCase();
+          const autoEnrolError = String(row['Auto-Enrol Error'] || '').trim();
           if (status === '' || status === 'pending') stillPending++;
-          if (hasError) failedRows.push(traineeName);
+          if (hasError) failedRows.push({ name: traineeName, error: autoEnrolError || 'Auto-enrol failed without an error message.' });
           if (isIneligible && !hasGrantId) ineligibleNames.push(traineeName);
           // A learner billed by hand is not awaiting anything — Finance is
           // adding them to an invoice that already exists in QuickBooks, so
@@ -994,7 +1031,6 @@ export const UploadCompanyApplicationView: React.FC = () => {
           // won't come.
           if (hasError) {
             stepUnits += STEPS_PER_ROW;
-            rowsFullyDone++;
             continue;
           }
 
@@ -1011,6 +1047,20 @@ export const UploadCompanyApplicationView: React.FC = () => {
         setBackendDoneCount(rowsFullyDone);
         setBackendProgress(totalSteps > 0 ? stepUnits / totalSteps : 1);
         setBackendIneligible(ineligibleNames);
+
+        if (failedRows.length > 0) {
+          setBackendStall({
+            doneCount: rowsFullyDone,
+            total: ids.length,
+            awaitingGrant,
+            notEnrolled,
+            failed: failedRows,
+            awaitingInvoice,
+            workerFinished: true,
+          });
+          setBackendStatus('stalled');
+          return;
+        }
 
         if (matchingRows.length >= ids.length && rowsFullyDone >= ids.length) {
           setBackendProgress(1);
@@ -1079,7 +1129,7 @@ export const UploadCompanyApplicationView: React.FC = () => {
     setError(null);
     setValidationErrors([]);
     try {
-      const rows = await parseCompanyApplicationRows(file);
+      const rows = await parseCompanyApplicationRows(file, workbookPassword || undefined);
       if (rows.length === 0) {
         setError('No data rows found in that file.');
         return;
@@ -1121,6 +1171,18 @@ export const UploadCompanyApplicationView: React.FC = () => {
         })),
       );
     } catch (err) {
+      if (isPasswordProtectedWorkbookError(err) && !workbookPassword) {
+        setPendingPasswordAction('prepare');
+        setPasswordError(null);
+        setPasswordPromptOpen(true);
+        return;
+      }
+      if (workbookPassword && isPasswordProtectedWorkbookError(err)) {
+        setPendingPasswordAction('prepare');
+        setPasswordError('That password did not unlock the workbook. Please check it and try again.');
+        setPasswordPromptOpen(true);
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to read the Excel file.');
     } finally {
       setIsPreparing(false);
@@ -1144,7 +1206,7 @@ export const UploadCompanyApplicationView: React.FC = () => {
     setBackendIneligible([]);
     setRunConfirmGroups([]);
     try {
-      const rows = await parseCompanyApplicationRows(file);
+      const rows = await parseCompanyApplicationRows(file, workbookPassword || undefined);
       const result = await uploadRows(rows, courseRunOverrides);
       setUploadResult(result);
       pollBackendProcessing(result.insertedIds);
@@ -1152,11 +1214,35 @@ export const UploadCompanyApplicationView: React.FC = () => {
       if (err instanceof UploadValidationError) {
         setError(err.message);
         setValidationErrors(err.validationErrors);
+      } else if (isPasswordProtectedWorkbookError(err) && !workbookPassword) {
+        setPendingPasswordAction('upload');
+        setPasswordError(null);
+        setPasswordPromptOpen(true);
+      } else if (workbookPassword && isPasswordProtectedWorkbookError(err)) {
+        setPendingPasswordAction('upload');
+        setPasswordError('That password did not unlock the workbook. Please check it and try again.');
+        setPasswordPromptOpen(true);
       } else {
         setError(err instanceof Error ? err.message : 'Failed to parse company application file.');
       }
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const submitWorkbookPassword = () => {
+    const password = workbookPassword.trim();
+    if (!password) {
+      setPasswordError('Enter the workbook password to continue.');
+      return;
+    }
+    setPasswordPromptOpen(false);
+    setPasswordError(null);
+    setError(null);
+    if (pendingPasswordAction === 'upload') {
+      void handleUpload();
+    } else {
+      void beginUpload();
     }
   };
 
@@ -1175,6 +1261,9 @@ export const UploadCompanyApplicationView: React.FC = () => {
     setBackendStall(null);
     setBackendIneligible([]);
     setRunConfirmGroups([]);
+    setWorkbookPassword('');
+    setPasswordPromptOpen(false);
+    setPasswordError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -1376,7 +1465,14 @@ export const UploadCompanyApplicationView: React.FC = () => {
                 {backendStall.failed.length > 0 && (
                   <div className="text-sm text-amber-800 dark:text-amber-200">
                     <p className="font-medium">Errors reported ({backendStall.failed.length}):</p>
-                    <p className="text-amber-700 dark:text-amber-300">{backendStall.failed.join(', ')}</p>
+                    <div className="mt-1 space-y-2">
+                      {backendStall.failed.map((f, idx) => (
+                        <div key={`${f.name}-${idx}`} className="rounded-md border border-amber-200 dark:border-amber-700/60 bg-white/60 dark:bg-gray-900/30 px-3 py-2">
+                          <p className="font-semibold text-amber-900 dark:text-amber-100">{f.name}</p>
+                          <p className="mt-0.5 text-xs whitespace-pre-wrap text-amber-700 dark:text-amber-300">{f.error}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -1433,6 +1529,24 @@ export const UploadCompanyApplicationView: React.FC = () => {
         />
       )}
 
+      {passwordPromptOpen && (
+        <WorkbookPasswordModal
+          fileName={file?.name}
+          password={workbookPassword}
+          error={passwordError}
+          isBusy={isPreparing || isUploading}
+          onPasswordChange={(value) => {
+            setWorkbookPassword(value);
+            setPasswordError(null);
+          }}
+          onCancel={() => {
+            setPasswordPromptOpen(false);
+            setPasswordError(null);
+          }}
+          onSubmit={submitWorkbookPassword}
+        />
+      )}
+
       {validationErrors.length > 0 && (
         <ValidationErrorsModal
           errors={validationErrors}
@@ -1445,6 +1559,80 @@ export const UploadCompanyApplicationView: React.FC = () => {
           }}
         />
       )}
+    </div>
+  );
+};
+
+const WorkbookPasswordModal: React.FC<{
+  fileName?: string;
+  password: string;
+  error: string | null;
+  isBusy: boolean;
+  onPasswordChange: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}> = ({ fileName, password, error, isBusy, onPasswordChange, onCancel, onSubmit }) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="w-full max-w-md rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-start gap-3">
+          <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+            <Icon name={IconName.Shield} className="w-5 h-5 text-amber-600 dark:text-amber-300" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">File is password-protected</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+              {fileName || 'Enter the workbook password to continue.'}
+            </p>
+          </div>
+        </div>
+
+        <form
+          className="p-5 space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit();
+          }}
+        >
+          <label className="block">
+            <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Workbook password</span>
+            <input
+              type="password"
+              autoFocus
+              value={password}
+              onChange={(e) => onPasswordChange(e.target.value)}
+              className={inputClasses}
+              placeholder="Enter password"
+              disabled={isBusy}
+            />
+          </label>
+
+          {error && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <Icon name={IconName.Warning} className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-1">
+            <Button type="button" variant="ghost" onClick={onCancel} disabled={isBusy}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isBusy || password.trim() === ''}>
+              {isBusy ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Unlocking...
+                </>
+              ) : (
+                <>
+                  <Icon name={IconName.CheckCircle} className="w-4 h-4 mr-2" />Unlock File
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
@@ -2890,19 +3078,33 @@ export const ViewCompanyApplicationView: React.FC = () => {
       // Surface WHY invoices didn't generate — otherwise Auto-Process silently
       // skips (awaiting grant / not enrolled / QBO customer) and looks broken.
       const invGenerated = Number(inv?.generated || 0);
-      const invSkipReasons = Number(inv?.skippedAwaitingGrants || 0) + Number(inv?.skippedNotEnrolled || 0) + Number(inv?.failed || 0);
+      const skippedAwaitingGrants = Number(inv?.skippedAwaitingGrants || 0);
+      const skippedNotEnrolled = Number(inv?.skippedNotEnrolled || 0);
+      const invFailed = Number(inv?.failed || 0);
+      const invSkipReasons = skippedAwaitingGrants + skippedNotEnrolled + invFailed;
       const invErrors: string[] = Array.isArray(inv?.errors)
-        ? inv.errors.map((e: any) => (typeof e === 'string' ? e : e?.message || JSON.stringify(e)))
+        ? inv.errors.map((e: any) => (typeof e === 'string' ? e : e?.error || e?.message || JSON.stringify(e)))
         : [];
       if (invGenerated === 0 && (invSkipReasons > 0 || invErrors.length > 0)) {
+        const onlyNotEnrolled = skippedNotEnrolled > 0 && skippedAwaitingGrants === 0 && invFailed === 0;
+        const onlyAwaitingGrants = skippedAwaitingGrants > 0 && skippedNotEnrolled === 0 && invFailed === 0;
+        const guidance = onlyNotEnrolled
+          ? 'Re-run Auto-Process for the flagged learner(s). Once they have an ENR- enrolment ID, retry Generate Invoice.'
+          : onlyAwaitingGrants
+            ? 'Grants land asynchronously (seconds to ~15 min). Click "Sync Grants", then "Generate Invoice" — or mark full-fee learners "Not Grant Eligible" so they invoice without a grant.'
+            : 'Clear the blockers above, then retry Generate Invoice. If the blocker is a pending grant, click "Sync Grants" first.';
         setAutoProcessPopup({
           tone: 'warning',
-          title: 'Enrolment done — but no invoice was generated',
+          title: onlyNotEnrolled
+            ? 'Invoice skipped — learner not yet SSG-enrolled'
+            : onlyAwaitingGrants
+              ? 'Enrolment done — awaiting grant before invoice'
+              : 'Invoice skipped — action needed',
           subtitle: inv?.note || 'Some invoice group(s) were skipped.',
           message: [
             inv?.note,
             ...invErrors,
-            'Grants land asynchronously (seconds to ~15 min). Click "Sync Grants", then "Generate Invoice" — or mark full-fee learners "Not Grant Eligible" so they invoice without a grant.',
+            guidance,
           ]
             .filter(Boolean)
             .join('\n\n'),
