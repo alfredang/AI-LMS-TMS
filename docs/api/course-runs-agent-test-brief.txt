@@ -1,0 +1,220 @@
+===============================================================================
+TEST BRIEF: LMS-TMS COURSE-RUNS ENDPOINTS
+For: OpenClaw AI agents (Kael / Jarvis / Orion)
+Verified against production: 2026-09-15
+===============================================================================
+
+Base URL:    https://lms-tms.tertiaryinfotech.com
+Auth header: x-api-key: $EXTERNAL_API_KEY_FOR_CLAWDBOT
+Method:      GET only. Both endpoints are read-only and safe to retry.
+Full spec:   docs/api/course-runs-agent-spec.md (ai-lms-tms repo)
+
+Do NOT use NEXT_PUBLIC_SCHEDULER_SECRET. It is exposed in the client bundle
+and is rejected.
+
+These two endpoints answer two DIFFERENT questions. Picking the wrong one is
+the main failure mode.
+
+  "Which classes are we actually running?
+   Who do I invite / remind / invoice?"        -> Endpoint A
+
+  "What does SkillsFuture show?
+   Does our schedule match the portal?"        -> Endpoint B
+
+
+-------------------------------------------------------------------------------
+ENDPOINT A - UPCOMING COURSE RUNS (runs WITH enrolment)
+-------------------------------------------------------------------------------
+
+GET /api/external/course-runs?course_code=TGS-2025052468&from=2026-09-15&has_enrolments=true&limit=500
+
+Local database read. These are the classes we are actually delivering - they
+have learners, trainers, sessions, attendance and invoices attached.
+
+USE FOR: trainer invitations, class reminders, attendance chasing, invoicing,
+"what's on next week", anything that touches a real learner.
+
+Parameters:
+  has_enrolments    Set to "true" for the "runs with enrolment" sense.
+                    If omitted you also get empty runs that happen to be in DB.
+  course_code       e.g. TGS-2025052468
+  course_run_id     exact SSG run id, e.g. 1127324
+  status            Confirmed | Pending | Cancelled | Reschedule
+  from / to         YYYY-MM-DD, filters on start_date.
+                    NO implicit "upcoming" - pass from=<today> yourself.
+  include_sessions  "true" nests each run's day/session rows
+  limit / offset    default 100 / 0, max limit 500
+
+Example curl:
+  curl -H "x-api-key: $EXTERNAL_API_KEY_FOR_CLAWDBOT" \
+    "https://lms-tms.tertiaryinfotech.com/api/external/course-runs?course_code=TGS-2025052468&from=2026-09-15&has_enrolments=true&limit=500"
+
+Key response fields:
+  course_run_id      SSG run id (join key to Endpoint B)
+  course_run_uuid    LMS internal id (used by other LMS endpoints)
+  start_date         YYYY-MM-DD
+  end_date           YYYY-MM-DD
+  class_status       Confirmed | Pending | Cancelled | Reschedule
+  enrolled_count     active enrolments
+  assigned_trainer_name / assigned_trainer_email
+  course_title / course_code / course_fee
+  training_hours / assessment_hours
+  venue_block / venue_street / venue_building / venue_floor /
+  venue_unit / venue_postal_code / venue_room     (FLAT columns)
+  registration_opening_date / registration_closing_date
+  course_admin_email
+
+
+-------------------------------------------------------------------------------
+ENDPOINT B - SSG COURSE RUNS (WITH and WITHOUT enrolment)
+-------------------------------------------------------------------------------
+
+GET /api/external/ssg-course-runs?course_code=TGS-2025052468
+
+Live call to SSG. Returns EVERY run SSG publishes for the code, including runs
+nobody has signed up for. This is the list that matches the MySkillsFuture
+"Course Dates" tab.
+
+USE FOR: schedule audits, "does our calendar match the portal", spotting runs
+SSG has that the LMS does not, checking a published schedule before marketing.
+
+DO NOT USE to decide who to email or invoice - most of these runs have no
+learners.
+
+Why the counts differ from Endpoint A:
+  The nightly sync deliberately SKIPS SSG runs with zero enrolments, so those
+  runs never enter the LMS database at all. Endpoint A physically cannot see
+  them. Endpoint B bypasses the DB and asks SSG directly, which is why it
+  tallies with the portal.
+
+Parameters:
+  course_code       REQUIRED, e.g. TGS-2025052468
+  from              DEFAULTS TO TODAY (SGT). YYYY-MM-DD.
+                    Use from=all for every run including past ones.
+  to                YYYY-MM-DD, filters on start date
+  include_expired   "true" to ask SSG for expired courses too
+  page_size         default 100, max 100
+
+Example curl:
+  curl -H "x-api-key: $EXTERNAL_API_KEY_FOR_CLAWDBOT" \
+    "https://lms-tms.tertiaryinfotech.com/api/external/ssg-course-runs?course_code=TGS-2025052468"
+
+Top-level response fields:
+  total                runs after the date filter (report this as "upcoming")
+  ssg_total_returned   everything SSG returned before filtering
+  with_enrolments      how many have active enrolments
+  without_enrolments   how many do not
+
+Per-run fields:
+  course_run_id, course_code
+  start_date / end_date                YYYY-MM-DD
+  mode_of_learning
+  registration_opening_date / registration_closing_date
+  vacancy_code / vacancy_description
+  venue                                NESTED OBJECT from SSG
+                                       (block, building, floor, postalCode,
+                                        room, street, unit, wheelChairAccess)
+  in_lms                               false = SSG has it, the LMS does not
+  enrolled_count                       0 when in_lms is false
+
+NOTE: Endpoint A returns FLAT venue_* columns; Endpoint B returns a NESTED
+venue object. They are not interchangeable.
+
+
+-------------------------------------------------------------------------------
+EXPECTED RESULTS - PASS/FAIL CRITERIA for TGS-2025052468
+Verified on production 2026-09-15
+-------------------------------------------------------------------------------
+
+  CHECK                                          EXPECTED
+  ---------------------------------------------  --------------------------
+  A, has_enrolments=true, from today             1 run: 1127324,
+                                                 2026-09-26, enrolled_count 2
+  A, no enrolment filter, from today             14 runs
+  B, from today                                  total 23,
+                                                 with_enrolments 1,
+                                                 without_enrolments 22
+  B vs MySkillsFuture portal                     23 matches exactly
+  B, count of in_lms=false                       9
+  B, distinct (start_date,end_date) pairs        14
+
+Cross-check: every run A returns with enrolled_count > 0 must appear in B with
+in_lms=true and the SAME enrolled_count. Both endpoints share one definition of
+an active enrolment, so a mismatch is a real bug worth reporting.
+
+
+-------------------------------------------------------------------------------
+GOTCHAS - THINGS THAT WILL TRIP YOU UP
+-------------------------------------------------------------------------------
+
+1. DATES ARE YYYY-MM-DD SINGAPORE CALENDAR DATES.
+   Do not re-interpret them in UTC. An off-by-one bug here was fixed on
+   2026-09-15; if you see every date one day early you are hitting a stale
+   deploy - report it.
+
+2. include_sessions DATES ARE A DIFFERENT FORMAT.
+   Run-level dates are "2026-09-26", but nested sessions[].start_date and
+   sessions[].end_date come back as raw 8-digit text "20260926", because that
+   column is stored as text. Normalise before comparing the two.
+
+3. ASYMMETRIC DATE DEFAULTS.
+   Endpoint B defaults to upcoming-only. Endpoint A does NOT.
+   Always pass from=<today> on A when you mean "future".
+
+4. SSG PUBLISHES DUPLICATES.
+   Of the 23 runs there are only 14 distinct start/end date pairs. 9 dates
+   carry two run ids each, e.g. 1361792 and 1200351 are both 7-8 Oct 2026.
+   In every case the 136xxxx run is in the LMS and the 120xxxx twin is not
+   (in_lms=false), which accounts for all 9 in_lms=false rows.
+
+   So the portal's "23 upcoming" is 14 real classroom dates plus 9 duplicate
+   listings. Endpoint B reports SSG faithfully rather than silently
+   de-duplicating.
+     - To count CLASSES: group by (start_date, end_date).
+     - To reconcile against the portal: use the raw count.
+   Flag same-date pairs for a human; the stale 120xxxx series probably wants
+   deleting on the SSG side.
+
+5. CHECK "success", NOT JUST THE HTTP STATUS.
+   Errors come back as {"success": false, "error": "..."}.
+
+6. course_run_id IS THE JOIN KEY between A and B.
+   "B minus A" = runs SSG publishes that we are not tracking.
+
+7. SPEED AND RELIABILITY DIFFER.
+   B depends on a live SSG call: it takes seconds and can fail when SSG is
+   down. A is a local DB read: fast and reliable.
+
+
+-------------------------------------------------------------------------------
+ERROR HANDLING
+-------------------------------------------------------------------------------
+
+  CODE  MEANING                              AGENT ACTION
+  ----  -----------------------------------  ---------------------------------
+  200   OK                                   -
+  400   missing course_code (B only)         fix the call
+  401   bad or missing x-api-key             check env var, do NOT retry blindly
+  405   wrong method                         use GET
+  502   SSG unreachable / credential problem transient - back off and retry;
+        (B only)                             fall back to A and state that the
+                                             figure is LMS-only
+  500   server error                         report it, do not hammer
+
+
+-------------------------------------------------------------------------------
+SHARED SEMANTICS
+-------------------------------------------------------------------------------
+
+"Active enrolment" means the same thing in both endpoints: an enrolment whose
+status is NOT "admin removed", "cancelled" or "withdrawn". So has_enrolments=true
+on A and enrolled_count > 0 on B always agree.
+
+Worked example for TGS-2025052468:
+  A says "we are running 1 class."
+  B says "SSG lists 23 dates."
+Both are true and not in conflict. Report whichever the question actually
+asked for. If a human asks why the numbers differ, the answer is that runs
+with no enrolments never enter the LMS.
+
+===============================================================================
