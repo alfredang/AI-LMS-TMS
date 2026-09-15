@@ -16,8 +16,14 @@ import pool from '../../../lib/db';
  *   from            — start_date >= this date (YYYY-MM-DD)
  *   to              — start_date <= this date (YYYY-MM-DD)
  *   include_sessions — "true" to nest each run's sessions (morning/afternoon etc.)
+ *   has_enrolments  — "true" to return only runs with at least one active enrolment
  *   limit           — max rows (default 100, max 500)
  *   offset          — pagination offset (default 0)
+ *
+ * NOTE: this reads the local course_run table, which only holds runs that have
+ * enrolments (the nightly sync skips empty SSG runs). For the list that tallies
+ * with MySkillsFuture — runs with AND without enrolments — use
+ * /api/external/ssg-course-runs.
  *
  * When include_sessions=true each run gains a `sessions` array:
  *   [{ session_id, session_number, title, start_date, end_date, start_time, end_time, mode_of_training }]
@@ -64,6 +70,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       conditions.push(`cr.start_date <= $${idx++}`);
       params.push(String(to));
     }
+    // has_enrolments=true restricts to runs we are actually running (the
+    // "upcoming course runs" sense). For the SSG-tallied list that also
+    // includes runs with no enrolments, use /api/external/ssg-course-runs.
+    if (String(req.query.has_enrolments ?? '') === 'true') {
+      conditions.push(`EXISTS (SELECT 1 FROM enrollment e
+                                WHERE e.course_run_id = cr.id
+                                  AND LOWER(COALESCE(e.enrolment_status, ''))
+                                      NOT IN ('admin removed', 'cancelled', 'withdrawn'))`);
+    }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -72,13 +87,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
          cr.id AS course_run_uuid,
          cr.course_run_id,
          cr.class_status,
-         cr.start_date,
-         cr.end_date,
+         -- to_char, not the bare date column: node-postgres returns a DATE as a
+         -- local-midnight Date, which JSON.stringify then renders in UTC and
+         -- shifts back one day in SGT. Emit the calendar date as text instead.
+         to_char(cr.start_date, 'YYYY-MM-DD') AS start_date,
+         to_char(cr.end_date,   'YYYY-MM-DD') AS end_date,
          cr.mode_of_learning,
          cr.assigned_trainer_name,
          cr.assigned_trainer_email,
-         cr.registration_opening_date,
-         cr.registration_closing_date,
+         to_char(cr.registration_opening_date, 'YYYY-MM-DD') AS registration_opening_date,
+         to_char(cr.registration_closing_date, 'YYYY-MM-DD') AS registration_closing_date,
          cr.course_admin_email,
          cr.venue_block,
          cr.venue_street,
@@ -111,6 +129,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const sessionsRes = await pool.query(
         `SELECT course_run_id AS run_uuid,
                 id AS session_id, session_number, title,
+                -- course_session.start_date/end_date are TEXT already, so no
+                -- to_char here (unlike course_run's DATE columns).
                 start_date, end_date, start_time, end_time, mode_of_training
            FROM course_session
           WHERE course_run_id = ANY($1::uuid[]) AND COALESCE(deleted, false) = false
