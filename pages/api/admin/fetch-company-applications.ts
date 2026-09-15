@@ -72,7 +72,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         ca.employer_contact_designation, ca.employer_contact_phone, ca.employer_contact_email,
         ca.ssg_funding_before, ca.consent_ssg_terms, ca.declaration_truthful, ca.consent_marketing,
         ca.grant_application_nos, ca.course_reference_number, ca.course_run_id, ca.enrolment_id,
-        ca.enrolment_status, ca.auto_enrol_status, ca.auto_enrol_error, ca.pipeline_warnings,
+        ca.enrolment_status, ca.grant_id AS ca_grant_id, ca.grant_amount AS ca_grant_amount,
+        ca.auto_enrol_status, ca.auto_enrol_error, ca.pipeline_warnings,
         ca.calendar_added, ca.grant_ineligible,
         ca.billed_manually, ca.billed_manually_invoice_ref,
         ca.invoice_id, ca.invoice_doc_number,
@@ -178,6 +179,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const v = r[dbCol];
         out[label] = v == null ? '' : String(v);
       });
+      // The split Grant ID columns are derived from `ssg_grants`, but the CA row
+      // itself also stores the grant found during auto-enrolment. If the rollup
+      // join is missing or temporarily stale, still show the learner as granted.
+      if (!out['Grant ID (BL)'] && !out['Grant ID'] && r.ca_grant_id) {
+        out['Grant ID'] = String(r.ca_grant_id);
+      }
+      if (!out['TG Amt'] && r.ca_grant_amount != null) {
+        out['TG Amt'] = String(r.ca_grant_amount);
+      }
       // Meta fields used by the UI to highlight rows that need admin attention.
       //
       // `pipeline_warnings` is an APPEND-ONLY history: a step that failed once
