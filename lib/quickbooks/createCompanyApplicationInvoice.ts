@@ -1559,9 +1559,22 @@ export async function generateInvoicesForApplications(
       if (missing.length > 0) {
         result.skipped++;
         result.skippedNotEnrolled++;
+        const names = missing
+          .map(r => String(r.trainee_full_name || '').trim() || String(r.trainee_nric || '').trim() || '(unnamed)')
+          .slice(0, 5)
+          .join(', ');
+        const more = missing.length > 5 ? ` (+${missing.length - 5} more)` : '';
         console.log(
-          `[ca-invoice] Skipping group ${key}: ${missing.length} row(s) not yet enrolled with SSG`
+          `[ca-invoice] Skipping group ${key}: ${missing.length} row(s) not yet enrolled with SSG — ${names}${more}`
         );
+        result.errors.push({
+          groupKey: key,
+          employerUen: String(first.employer_uen || '').trim(),
+          employerOrgName: String(first.employer_org_name || '').trim(),
+          courseRunId: String(first.course_run_id || '').trim(),
+          error: `${missing.length} learner(s) not yet SSG-enrolled: ${names}${more}.`,
+          isCustomerNotFound: false,
+        });
         continue;
       }
 

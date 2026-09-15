@@ -83,7 +83,7 @@ interface ParsedDate {
   day: number;
 }
 
-// Parse strictly as DD-MM-YYYY (the Excel column header says so). Rejects
+// Parse as DD-MM-YYYY or DD/MM/YYYY (Excel may display either). Rejects
 // 06-24-1984 (month 24) which would otherwise silently become an Invalid
 // Date downstream in the SSG payload.
 function parseDdMmYyyy(raw: string): ParsedDate | null {
@@ -267,7 +267,7 @@ function validateRow(
   if (dobRaw) {
     dobParsed = parseDdMmYyyy(dobRaw);
     if (!dobParsed) {
-      issues.push(`Date of Birth "${dobRaw}" is not a valid DD-MM-YYYY date (check that the day/month aren't swapped)`);
+      issues.push(`Date of Birth "${dobRaw}" is not a valid DD-MM-YYYY or DD/MM/YYYY date (check that the day/month aren't swapped)`);
     } else {
       const now = new Date();
       if (dobParsed.year < 1900 || dobParsed.year > now.getUTCFullYear()) {
@@ -281,7 +281,7 @@ function validateRow(
   if (startRaw) {
     startParsed = parseDdMmYyyy(startRaw);
     if (!startParsed) {
-      issues.push(`Course Start Date "${startRaw}" is not a valid DD-MM-YYYY date (check that the day/month aren't swapped)`);
+      issues.push(`Course Start Date "${startRaw}" is not a valid DD-MM-YYYY or DD/MM/YYYY date (check that the day/month aren't swapped)`);
     }
   }
 

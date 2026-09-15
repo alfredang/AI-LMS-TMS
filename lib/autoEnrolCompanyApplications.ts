@@ -159,6 +159,37 @@ async function markFailed(id: string, step: string, err: unknown): Promise<void>
   });
 }
 
+function enrichCompanyEnrolmentError(
+  err: unknown,
+  record: any
+): Error {
+  const message = err instanceof Error ? err.message : String(err);
+  if (!/TGS-?403|verify particulars/i.test(message)) {
+    return err instanceof Error ? err : new Error(message);
+  }
+
+  const missing = [
+    !String(record.trainee_name || '').trim() && 'trainee full name',
+    !String(record.trainee_id || '').trim() && 'NRIC/FIN',
+    !String(record.trainee_id_type || '').trim() && 'ID type',
+    !String(record.date_of_birth || '').trim() && 'date of birth',
+  ].filter(Boolean);
+
+  const details = [
+    `${message}`,
+    'SSG rejected the trainee particulars but did not say which exact field failed.',
+    'Check the trainee full name, ID type, NRIC/FIN, date of birth, mobile, email, citizenship/identity type, employer UEN, and selected course run against the Excel row and the trainee government ID/MyInfo record.',
+  ];
+
+  if (missing.length > 0) {
+    details.push(`Missing/blank required field(s): ${missing.join(', ')}.`);
+  }
+
+  details.push('Most common fix: correct the trainee name, NRIC/FIN, ID type, or DOB in the Excel/LMS, then retry enrolment.');
+
+  return new Error(details.join('\n'));
+}
+
 async function loadSsgContext(): Promise<SSGContext> {
   const credentials = await getSSGCredentialsService().getSSGCredentials();
 
@@ -891,8 +922,9 @@ export async function processCompanyApplication(
         });
         caRecord = buildCompanyApplicationRecord(row, run, enrolmentReference);
       } else {
-        await markFailed(appId, 'enrolment', err);
-        enrolmentError = err instanceof Error ? err.message : String(err);
+        const enrichedErr = enrichCompanyEnrolmentError(err, caRecord);
+        await markFailed(appId, 'enrolment', enrichedErr);
+        enrolmentError = enrichedErr.message;
 
         console.error('[company auto-enrol] enrolment failed:', {
           companyApplicationId: appId,
