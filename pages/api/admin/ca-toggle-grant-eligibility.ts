@@ -30,6 +30,32 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   try {
     await ensureCompanyApplicationsTable();
+    if (ineligible) {
+      const grantCheck = await pool.query(
+        `SELECT ca.grant_id,
+                EXISTS (
+                  SELECT 1
+                    FROM public.ssg_grants sg
+                   WHERE LOWER(TRIM(sg.enrollment_id::text)) = LOWER(TRIM(ca.enrolment_id::text))
+                     AND COALESCE(sg.status, '') <> 'Cancelled'
+                     AND COALESCE(sg.grant_id, '') <> ''
+                ) AS has_grant_row
+           FROM public.company_application ca
+          WHERE ca.id = $1`,
+        [id]
+      );
+
+      if (grantCheck.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Row not found' });
+      }
+      if (String(grantCheck.rows[0].grant_id || '').trim() || grantCheck.rows[0].has_grant_row === true) {
+        return res.status(409).json({
+          success: false,
+          error: 'This learner already has a grant and cannot be marked Not Grant Eligible.',
+        });
+      }
+    }
+
     const result = await pool.query(
       `UPDATE public.company_application
           SET grant_ineligible = $1,

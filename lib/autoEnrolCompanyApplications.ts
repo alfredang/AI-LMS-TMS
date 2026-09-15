@@ -948,6 +948,7 @@ export async function processCompanyApplication(
           grant_id: grantId,
           grant_amount: grantAmount,
           grant_application_nos: grantId || row.grant_application_nos || null,
+          grant_ineligible: false,
         });
       }
     } catch (err) {
@@ -1169,6 +1170,27 @@ export async function sweepGrantsByCourseRunForApplications(applicationIds: stri
   const ids = Array.from(new Set(applicationIds.filter(Boolean)));
   if (ids.length === 0) return;
 
+  // Rows rescued from an existing/native enrolment can have enrolment_id filled
+  // while course_run_id/start date are still blank. The run-wide grant sweep
+  // needs course_run_id, so repair that link from the canonical enrollment row
+  // before deciding there is nothing to search.
+  await pool.query(
+    `UPDATE public.company_application ca
+        SET course_run_id = COALESCE(NULLIF(TRIM(ca.course_run_id), ''), cr.course_run_id::text),
+            course_start_date = COALESCE(ca.course_start_date, cr.start_date::date),
+            updated_at = now()
+       FROM public.enrollment e
+       JOIN public.course_run cr ON cr.id = e.course_run_id
+      WHERE ca.id = ANY($1::uuid[])
+        AND e.enrolment_id = ca.enrolment_id
+        AND (
+             ca.course_run_id IS NULL
+          OR TRIM(ca.course_run_id) = ''
+          OR ca.course_start_date IS NULL
+        )`,
+    [ids]
+  );
+
   const runRes = await pool.query(
     `SELECT DISTINCT course_run_id
        FROM public.company_application
@@ -1233,6 +1255,7 @@ export async function sweepGrantsByCourseRunForApplications(applicationIds: stri
           SET grant_id = sg.grant_id,
               grant_amount = sg.amount,
               grant_application_nos = COALESCE(ca.grant_application_nos, sg.grant_id),
+              grant_ineligible = false,
               updated_at = now()
         FROM (
           SELECT DISTINCT ON (LOWER(TRIM(enrollment_id)))
