@@ -23,6 +23,7 @@ interface StudentData {
   source: 'manual' | 'ssg';
   is_competent: boolean;
   submitted_assessments: string[];
+  traqom_completed?: boolean;
 }
 
 // Abbreviations for each assessment method (WA = Written Exam, PP = Practical Exam, ...)
@@ -68,6 +69,9 @@ const AssessmentGrading: React.FC = () => {
 
   // Mark All Competent state
   const [markingAllCompetent, setMarkingAllCompetent] = useState(false);
+
+  // TRAQOM survey tick — manual, per learner (SSG gives no completion feed)
+  const [savingTraqom, setSavingTraqom] = useState<Record<string, boolean>>({});
 
   // Send Certificate state
   const [selectedForCert, setSelectedForCert] = useState<Set<string>>(new Set());
@@ -213,6 +217,36 @@ const AssessmentGrading: React.FC = () => {
       alert('Failed to save assessment status. Please try again.');
     } finally {
       setSavingStatus(prev => ({ ...prev, [studentId]: false }));
+    }
+  };
+
+  const handleToggleTraqom = async (student: StudentData, index: number) => {
+    const newState = !student.traqom_completed;
+    const studentId = student.enrolment_id || student.student_name;
+
+    // Optimistic UI update — functional so rapid ticks down the roster don't
+    // clobber each other via a stale `students` snapshot.
+    setStudents(prev => prev.map((s, i) =>
+      i === index ? { ...s, traqom_completed: newState } : s
+    ));
+
+    setSavingTraqom(prev => ({ ...prev, [studentId]: true }));
+
+    try {
+      const res = await fetch('/api/trainer/traqom-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enrolmentId: student.enrolment_id, completed: newState })
+      });
+      if (!res.ok) throw new Error('Failed to update');
+    } catch (e) {
+      console.error('Failed to save TRAQOM status', e);
+      setStudents(prev => prev.map((s, i) =>
+        i === index ? { ...s, traqom_completed: !newState } : s
+      ));
+      alert('Failed to save TRAQOM status. Please try again.');
+    } finally {
+      setSavingTraqom(prev => ({ ...prev, [studentId]: false }));
     }
   };
 
@@ -400,6 +434,23 @@ const AssessmentGrading: React.FC = () => {
                   </div>
                 );
               })}
+              {/* TRAQOM completion count — manually ticked by the trainer */}
+              {students.length > 0 && (() => {
+                const traqomCount = students.filter(s => s.traqom_completed).length;
+                return (
+                  <div
+                    title={`TRAQOM survey: ${traqomCount} of ${students.length} learners completed`}
+                    className={`text-xs px-3 py-1 rounded-full border ${
+                      traqomCount === students.length
+                        ? 'text-indigo-700 bg-indigo-50 border-indigo-200 dark:text-indigo-300 dark:bg-indigo-900/20 dark:border-indigo-800'
+                        : 'text-indigo-600 bg-white border-gray-200 dark:text-indigo-300 dark:bg-gray-700 dark:border-gray-600'
+                    }`}
+                  >
+                    <span className="font-semibold">TRAQOM</span>{' '}
+                    <span className="font-semibold">{traqomCount}/{students.length}</span>
+                  </div>
+                );
+              })()}
               <div className="text-xs text-gray-500 bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
                 {students.length} Enrolments
               </div>
@@ -496,11 +547,12 @@ const AssessmentGrading: React.FC = () => {
                 <span className="text-xs text-gray-500 dark:text-gray-400">
                   {selectedForCert.size === students.length ? 'Deselect All' : 'Select All'}
                 </span>
-                {assessmentMethods.length > 0 && (
-                  <span className="ml-auto text-[10px] text-gray-400 dark:text-gray-500">
-                    Submission status: {assessmentMethods.map(m => `${(METHOD_INFO[m] || { abbr: m }).abbr} = ${(METHOD_INFO[m] || { label: m }).label}`).join(' · ')}
-                  </span>
-                )}
+                <span className="ml-auto text-[10px] text-gray-400 dark:text-gray-500">
+                  {assessmentMethods.length > 0 && (
+                    <>Submission status: {assessmentMethods.map(m => `${(METHOD_INFO[m] || { abbr: m }).abbr} = ${(METHOD_INFO[m] || { label: m }).label}`).join(' · ')} · </>
+                  )}
+                  TQ = TRAQOM Survey (tick manually)
+                </span>
               </div>
 
               <ul className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -538,35 +590,54 @@ const AssessmentGrading: React.FC = () => {
                       </div>
 
                       <div className="flex items-center space-x-4">
-                        {/* Assessment submission status — ticked when the learner has submitted that method */}
-                        {assessmentMethods.length > 0 && (
-                          <div className="flex items-center gap-3 pr-3 border-r border-gray-200 dark:border-gray-700">
-                            {assessmentMethods.map(m => {
-                              const info = METHOD_INFO[m] || { abbr: m, label: m };
-                              const submitted = student.submitted_assessments?.includes(m);
-                              return (
-                                <label
-                                  key={m}
-                                  title={`${info.label}: ${submitted ? 'Submitted' : 'Not submitted'}`}
-                                  className="flex items-center gap-1 w-10 cursor-default select-none"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={!!submitted}
-                                    readOnly
-                                    tabIndex={-1}
-                                    className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 accent-green-600 pointer-events-none"
-                                  />
-                                  <span className={`text-[10px] font-semibold ${
-                                    submitted ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
-                                  }`}>
-                                    {info.abbr}
-                                  </span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
+                        {/* Assessment submission status — ticked when the learner has submitted
+                            that method — plus the trainer-ticked TRAQOM survey box */}
+                        <div className="flex items-center gap-3 pr-3 border-r border-gray-200 dark:border-gray-700">
+                          {assessmentMethods.map(m => {
+                            const info = METHOD_INFO[m] || { abbr: m, label: m };
+                            const submitted = student.submitted_assessments?.includes(m);
+                            return (
+                              <label
+                                key={m}
+                                title={`${info.label}: ${submitted ? 'Submitted' : 'Not submitted'}`}
+                                className="flex items-center gap-1 w-10 cursor-default select-none"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!submitted}
+                                  readOnly
+                                  tabIndex={-1}
+                                  className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 accent-green-600 pointer-events-none"
+                                />
+                                <span className={`text-[10px] font-semibold ${
+                                  submitted ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
+                                }`}>
+                                  {info.abbr}
+                                </span>
+                              </label>
+                            );
+                          })}
+                          {/* TRAQOM survey — manual tick (SSG publishes no per-learner completion) */}
+                          <label
+                            title={`TRAQOM Survey: ${student.traqom_completed ? 'Completed' : 'Not completed'} — click to toggle`}
+                            className={`flex items-center gap-1 w-10 select-none ${
+                              savingTraqom[sId] ? 'opacity-50 cursor-wait' : 'cursor-pointer'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!student.traqom_completed}
+                              onChange={() => handleToggleTraqom(student, idx)}
+                              disabled={savingTraqom[sId]}
+                              className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 accent-indigo-600 cursor-pointer disabled:cursor-wait"
+                            />
+                            <span className={`text-[10px] font-semibold ${
+                              student.traqom_completed ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500'
+                            }`}>
+                              TQ
+                            </span>
+                          </label>
+                        </div>
 
                         {/* Certificate Status Badge — verified against Google Drive.
                             Fixed-width column (always rendered) so the submission

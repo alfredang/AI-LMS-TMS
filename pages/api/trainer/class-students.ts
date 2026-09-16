@@ -36,6 +36,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 e.nric,
                 e.assessment_status as competent_status,
                 e.certificate,
+                COALESCE(e.traqom_completed, false) as traqom_completed,
                 CASE WHEN e.enrolment_id IS NOT NULL THEN 'ssg' ELSE 'manual' END as source
             FROM enrollment e
             LEFT JOIN app_user u ON e.user_id = u.id
@@ -87,6 +88,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const finalStudents = students.map(s => ({
             ...s,
             is_competent: s.competent_status === 'Competent' || s.competent_status === 'Passed',
+            traqom_completed: s.traqom_completed === true,
             submitted_assessments: (s.user_id && submittedByUser[s.user_id]) || []
         })).sort((a, b) => a.student_name.localeCompare(b.student_name));
 
