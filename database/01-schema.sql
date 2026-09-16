@@ -1265,7 +1265,8 @@ CREATE TABLE public.company_application (
     application_key text,
     grant_amount numeric,
     native_enrollment_id uuid,
-    invoice_id text
+    invoice_id text,
+    attention_ignored_at timestamp with time zone
 );
 
 
@@ -1369,6 +1370,7 @@ CREATE TABLE public.course (
     practical_performance_assessment_link text,
     written_assessment_link text,
     trainers_list text,
+    favorite_trainers text,
     resource_links jsonb,
     assessment_methods jsonb,
     published_assessment_methods jsonb DEFAULT '{}'::jsonb,

@@ -72,6 +72,7 @@ const ORDERED_COLUMNS: Array<{ name: string; type: string }> = [
   // warnings so admins can see partial failures even when auto_enrol_status
   // isn't 'failed'. ca-stuck-count drives the sidebar badge off this.
   { name: 'pipeline_warnings', type: "jsonb DEFAULT '[]'::jsonb" },
+  { name: 'attention_ignored_at', type: 'timestamptz' },
   // Supporting-document verification — gates invoice email sending. Admin
   // uploads a doc per learner (NRIC/payslip/CPF/etc.), reviews it side-by-
   // side against the Excel row in the SupportingDocsModal, and confirms
