@@ -454,6 +454,15 @@ export interface CourseRunOverride {
   courseRunId: string;
 }
 
+interface CourseRunChoiceTarget {
+  applicationId: string;
+  traineeName: string;
+  courseTitle: string;
+  courseStartDate: string;
+  autoEnrolError?: string | null;
+  candidates: CourseRunCandidate[];
+}
+
 // Custom error class so handleUpload can pluck the structured row-level
 // validation errors off the rejection and render them in a popup, instead
 // of just showing a single string in the red banner.
@@ -2029,6 +2038,97 @@ const ValidationErrorsModal: React.FC<ValidationErrorsModalProps> = ({
   );
 };
 
+const CourseRunChoiceModal: React.FC<{
+  target: CourseRunChoiceTarget;
+  isSaving?: boolean;
+  onChoose: (courseRunId: string) => void;
+  onClose: () => void;
+}> = ({ target, isSaving, onChoose, onClose }) => {
+  const [picked, setPicked] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
+        <div className="flex items-start justify-between gap-3 p-6 border-b border-gray-200 dark:border-gray-700">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Choose course run for enrolment</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {target.traineeName || 'This learner'} cannot be SSG-enrolled until the correct run is selected.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSaving}
+            className="w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-center flex-shrink-0 disabled:opacity-50"
+            aria-label="Close"
+          >
+            <Icon name={IconName.Close} className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">{target.courseTitle}</p>
+            <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+              Uploaded start date {target.courseStartDate || '(none)'}
+            </p>
+          </div>
+
+          {target.candidates.length === 0 ? (
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              No likely course runs were found. Create or sync the course run first, then retry Auto-Process.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {target.candidates.map(c => {
+                const selected = picked === c.courseRunId;
+                return (
+                  <button
+                    key={c.courseRunId}
+                    type="button"
+                    onClick={() => setPicked(c.courseRunId)}
+                    disabled={isSaving}
+                    className={`w-full text-left rounded-xl border p-3 transition-colors disabled:opacity-60 ${
+                      selected
+                        ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/25'
+                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-blue-300'
+                    }`}
+                  >
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-gray-900 dark:text-white">{c.courseTitle}</span>
+                        <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          Run {c.courseRunId}
+                          {c.courseCode ? ` · ${c.courseCode}` : ''}
+                          {' · '}{c.startDate}
+                          {c.endDate && c.endDate !== c.startDate ? ` to ${c.endDate}` : ''}
+                        </span>
+                      </span>
+                      <span
+                        className={`mt-1 w-4 h-4 rounded-full border-[3px] flex-shrink-0 ${
+                          selected ? 'border-blue-500 dark:border-blue-300' : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                      />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end items-center gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+          <Button variant="secondary" onClick={onClose} disabled={isSaving}>Cancel</Button>
+          <Button onClick={() => picked && onChoose(picked)} disabled={!picked || isSaving}>
+            {isSaving ? 'Saving...' : 'Save run & retry'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface InvoiceError {
   groupKey: string;
   employerUen: string;
@@ -2398,6 +2498,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
     subtitle?: string;
     message: string;
   } | null>(null);
+  const [courseRunChoice, setCourseRunChoice] = useState<CourseRunChoiceTarget | null>(null);
+  const [isLoadingCourseRunChoice, setIsLoadingCourseRunChoice] = useState(false);
+  const [isSavingCourseRunChoice, setIsSavingCourseRunChoice] = useState(false);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const [invoiceMessage, setInvoiceMessage] = useState<string | null>(null);
   // Tracks the hovered invoice group so all rows sharing an Invoice ID
@@ -2591,6 +2694,81 @@ export const ViewCompanyApplicationView: React.FC = () => {
       setRows([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const openCourseRunChoiceForApplication = async (applicationId: string) => {
+    setIsLoadingCourseRunChoice(true);
+    try {
+      const res = await fetch(`/api/admin/ca-course-run-candidates?applicationId=${encodeURIComponent(applicationId)}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `Could not load course run choices (${res.status})`);
+      }
+      setAutoProcessPopup(null);
+      setCourseRunChoice({
+        applicationId,
+        traineeName: String(data.application?.traineeName || ''),
+        courseTitle: String(data.application?.courseTitle || ''),
+        courseStartDate: String(data.application?.courseStartDate || ''),
+        autoEnrolError: data.application?.autoEnrolError || null,
+        candidates: Array.isArray(data.candidates) ? data.candidates : [],
+      });
+    } catch (err) {
+      setAutoProcessPopup({
+        tone: 'danger',
+        title: 'Could not load course runs',
+        message: err instanceof Error ? err.message : 'Unknown error.',
+      });
+    } finally {
+      setIsLoadingCourseRunChoice(false);
+    }
+  };
+
+  const saveCourseRunChoiceAndRetry = async (courseRunId: string) => {
+    if (!courseRunChoice) return;
+    setIsSavingCourseRunChoice(true);
+    setPipelineMessage(null);
+    try {
+      const saveRes = await fetch('/api/admin/ca-set-course-run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId: courseRunChoice.applicationId, courseRunId }),
+      });
+      const saveData = await saveRes.json();
+      if (!saveRes.ok || !saveData.success) {
+        throw new Error(saveData.error || `Could not save course run (${saveRes.status})`);
+      }
+
+      const runRes = await fetch('/api/admin/ca-run-pipeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationIds: [courseRunChoice.applicationId] }),
+      });
+      const runData = await runRes.json();
+      if (!runRes.ok || !runData.success) {
+        throw new Error(runData.error || `Auto-Process failed (${runRes.status})`);
+      }
+
+      setCourseRunChoice(null);
+      await reloadRows();
+      const failed = Number(runData.failed || 0);
+      const enrolmentId = runData.results?.[0]?.enrolmentId;
+      setPipelineMessage(
+        failed > 0
+          ? `Run ${courseRunId} saved, but Auto-Process still failed — check the row error popup.`
+          : `Run ${courseRunId} saved${enrolmentId ? ` · enrolled as ${enrolmentId}` : ''}.`
+      );
+    } catch (err) {
+      setAutoProcessPopup({
+        tone: 'danger',
+        title: 'Could not enrol learner',
+        subtitle: `Course run ${courseRunId} was selected`,
+        message: err instanceof Error ? err.message : 'Unknown error.',
+      });
+      void reloadRows();
+    } finally {
+      setIsSavingCourseRunChoice(false);
     }
   };
 
@@ -3055,6 +3233,12 @@ export const ViewCompanyApplicationView: React.FC = () => {
         throw new Error(data.error || `Request failed (${res.status})`);
       }
       await reloadRows();
+      const ambiguousResult = Array.isArray(data.results)
+        ? data.results.find((r: any) => /Ambiguous course run/i.test(String(r?.error || '')))
+        : null;
+      if (ambiguousResult?.id) {
+        void openCourseRunChoiceForApplication(String(ambiguousResult.id));
+      }
       const processed = Number(data.processed || 0);
       const enroled = Number(data.enroled || 0);
       const granted = Number(data.granted || 0);
@@ -3768,6 +3952,29 @@ export const ViewCompanyApplicationView: React.FC = () => {
             target={rescueTarget}
             onClose={() => setRescueTarget(null)}
             onLinked={onRescueLinked}
+          />
+        )}
+        {isLoadingCourseRunChoice && (
+          <ConfirmPopup
+            tone="warning"
+            icon={IconName.Search}
+            title="Finding matching course runs"
+            subtitle="Auto-Process needs you to choose the exact run"
+            confirmLabel="OK"
+            hideCancel
+            disableConfirm
+            onConfirm={() => {}}
+            onCancel={() => {}}
+          >
+            <p className="text-sm text-gray-700 dark:text-gray-200">Loading candidate runs...</p>
+          </ConfirmPopup>
+        )}
+        {courseRunChoice && (
+          <CourseRunChoiceModal
+            target={courseRunChoice}
+            isSaving={isSavingCourseRunChoice}
+            onChoose={(courseRunId) => void saveCourseRunChoiceAndRetry(courseRunId)}
+            onClose={() => setCourseRunChoice(null)}
           />
         )}
         {autoProcessPopup && (
