@@ -21,6 +21,18 @@ import pool from '../../../lib/db';
  * trainer, prefer a TPG-assigned trainer; otherwise take the latest assigned
  * (local) trainer. "Latest" = most recent run by start_date, then updated_at.
  * Name/email prefer the TPG value, falling back to the local assignment.
+ *
+ * Courseware fields mirror the Courseware card in the LMS course view. Note the
+ * one name that differs from the column: Learner Slides is `slides_url` in the
+ * DB but is exposed as `learner_slides_url`, matching the MMS storefront's own
+ * field name so a consumer can map 1:1.
+ *
+ * Approved trainers (`trainers_list` / `trainers_email_list`) are returned RAW —
+ * the stored delimited strings, not arrays. Split them with the same rule as
+ * lib/trainerInvitations.ts::splitTrainerList: pipe `|` when present, else comma.
+ * The two lists are positionally independent (a name may have no matching email
+ * and vice versa), so pair them by position ONLY after checking both lengths
+ * match; otherwise treat the email list as the authoritative identity source.
  */
 
 // Output field name -> SQL select expression. Identifiers come ONLY from this
@@ -46,6 +58,11 @@ const FIELD_MAP: Record<string, string> = {
   course_link: 'c.course_link',
   brochure_link: 'c.brochure_link',
   learner_slides_url: 'c.slides_url AS learner_slides_url',
+  learner_guide_url: 'c.learner_guide_url',
+  lesson_plan_url: 'c.lesson_plan_url',
+  trainer_slides_url: 'c.trainer_slides_url',
+  trainers_list: 'c.trainers_list',
+  trainers_email_list: 'c.trainers_email_list',
   skillsfuture_link: 'c.skillsfuture_link',
   sf_for_business_link: 'c.sf_for_business_link',
   description: 'c.description',

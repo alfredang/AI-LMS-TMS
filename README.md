@@ -88,7 +88,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **My Classes** — View assigned classes (upcoming, ongoing, completed)
 - **My Calendar** — personal month calendar of the trainer's assigned classes
 - **E-Attendance** — Digital attendance tracking
-- **Assessment Grading** — Rubric-based grading with Assessment Summary Record support; each learner row shows per-method submission status (WA Written, PP Practical, CS Case Study, RP Role Play, OQ Oral Questioning) ticked when the learner has submitted, with per-method submission counts (e.g. WA 3/7) and a refresh button in the roster header, plus Mark All Competent and bulk certificate sending
+- **Assessment Grading** — Rubric-based grading with Assessment Summary Record support; each learner row shows per-method submission status (WA Written, PP Practical, CS Case Study, RP Role Play, OQ Oral Questioning) ticked when the learner has submitted, alongside a manually-ticked **TQ (TRAQOM survey)** box — SSG publishes no per-learner survey completion feed, so the trainer confirms it — with per-method and TRAQOM completion counts (e.g. WA 3/7, TRAQOM 5/7) and a refresh button in the roster header, plus Mark All Competent and bulk certificate sending
 - **Training Hours** — Trainer training hours tracking
 - **Past Attendance** / **Past Assessment** — Historical records
 - **Lesson Delivery Guide** / **Assessment Guide**
@@ -410,6 +410,8 @@ POST /api/enrolments/bulk-create  # Bulk create enrolments
 POST /api/assessments/publish     # Publish assessment
 POST /api/submissions/submit      # Submit assessment
 POST /api/grading/update-grading  # Grade submission
+POST /api/trainer/grade-student   # Toggle learner competency
+POST /api/trainer/traqom-status   # Tick TRAQOM survey completion (single or batch)
 POST /api/assessments/ssg-create  # Create SSG assessment
 PUT  /api/assessments/ssg-update  # Update SSG assessment
 ```

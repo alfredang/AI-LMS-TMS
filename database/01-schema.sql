@@ -1934,6 +1934,8 @@ CREATE TABLE public.enrollment (
     calendar_added boolean DEFAULT false,
     grant_id text,
     grant_amount text,
+    traqom_completed boolean DEFAULT false NOT NULL,
+    traqom_completed_at timestamp with time zone,
     CONSTRAINT enrollment_progress_percent_check CHECK (((progress_percent >= (0)::numeric) AND (progress_percent <= (100)::numeric)))
 );
 

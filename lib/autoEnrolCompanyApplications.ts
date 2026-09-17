@@ -159,6 +159,37 @@ async function markFailed(id: string, step: string, err: unknown): Promise<void>
   });
 }
 
+function enrichCompanyEnrolmentError(
+  err: unknown,
+  record: any
+): Error {
+  const message = err instanceof Error ? err.message : String(err);
+  if (!/TGS-?403|verify particulars/i.test(message)) {
+    return err instanceof Error ? err : new Error(message);
+  }
+
+  const missing = [
+    !String(record.trainee_name || '').trim() && 'trainee full name',
+    !String(record.trainee_id || '').trim() && 'NRIC/FIN',
+    !String(record.trainee_id_type || '').trim() && 'ID type',
+    !String(record.date_of_birth || '').trim() && 'date of birth',
+  ].filter(Boolean);
+
+  const details = [
+    `${message}`,
+    'SSG rejected the trainee particulars but did not say which exact field failed.',
+    'Check the trainee full name, ID type, NRIC/FIN, date of birth, mobile, email, citizenship/identity type, employer UEN, and selected course run against the Excel row and the trainee government ID/MyInfo record.',
+  ];
+
+  if (missing.length > 0) {
+    details.push(`Missing/blank required field(s): ${missing.join(', ')}.`);
+  }
+
+  details.push('Most common fix: correct the trainee name, NRIC/FIN, ID type, or DOB in the Excel/LMS, then retry enrolment.');
+
+  return new Error(details.join('\n'));
+}
+
 async function loadSsgContext(): Promise<SSGContext> {
   const credentials = await getSSGCredentialsService().getSSGCredentials();
 
@@ -891,8 +922,9 @@ export async function processCompanyApplication(
         });
         caRecord = buildCompanyApplicationRecord(row, run, enrolmentReference);
       } else {
-        await markFailed(appId, 'enrolment', err);
-        enrolmentError = err instanceof Error ? err.message : String(err);
+        const enrichedErr = enrichCompanyEnrolmentError(err, caRecord);
+        await markFailed(appId, 'enrolment', enrichedErr);
+        enrolmentError = enrichedErr.message;
 
         console.error('[company auto-enrol] enrolment failed:', {
           companyApplicationId: appId,
@@ -948,6 +980,7 @@ export async function processCompanyApplication(
           grant_id: grantId,
           grant_amount: grantAmount,
           grant_application_nos: grantId || row.grant_application_nos || null,
+          grant_ineligible: false,
         });
       }
     } catch (err) {
@@ -1169,6 +1202,27 @@ export async function sweepGrantsByCourseRunForApplications(applicationIds: stri
   const ids = Array.from(new Set(applicationIds.filter(Boolean)));
   if (ids.length === 0) return;
 
+  // Rows rescued from an existing/native enrolment can have enrolment_id filled
+  // while course_run_id/start date are still blank. The run-wide grant sweep
+  // needs course_run_id, so repair that link from the canonical enrollment row
+  // before deciding there is nothing to search.
+  await pool.query(
+    `UPDATE public.company_application ca
+        SET course_run_id = COALESCE(NULLIF(TRIM(ca.course_run_id), ''), cr.course_run_id::text),
+            course_start_date = COALESCE(ca.course_start_date, cr.start_date::date),
+            updated_at = now()
+       FROM public.enrollment e
+       JOIN public.course_run cr ON cr.id = e.course_run_id
+      WHERE ca.id = ANY($1::uuid[])
+        AND e.enrolment_id = ca.enrolment_id
+        AND (
+             ca.course_run_id IS NULL
+          OR TRIM(ca.course_run_id) = ''
+          OR ca.course_start_date IS NULL
+        )`,
+    [ids]
+  );
+
   const runRes = await pool.query(
     `SELECT DISTINCT course_run_id
        FROM public.company_application
@@ -1233,6 +1287,7 @@ export async function sweepGrantsByCourseRunForApplications(applicationIds: stri
           SET grant_id = sg.grant_id,
               grant_amount = sg.amount,
               grant_application_nos = COALESCE(ca.grant_application_nos, sg.grant_id),
+              grant_ineligible = false,
               updated_at = now()
         FROM (
           SELECT DISTINCT ON (LOWER(TRIM(enrollment_id)))
