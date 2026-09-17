@@ -67,8 +67,12 @@ async function withRunLock<T>(runUuid: string, fn: () => Promise<T>): Promise<T>
 export interface EnsureResult { status: 'ok' | 'skipped'; created: number; adopted: number; kept: number; errors: number; reason?: string; }
 
 /**
- * Ensure a calendar event exists for every session date of the class. Does NOT
- * touch attendees (see syncClassAttendees). Idempotent + advisory-locked.
+ * Ensure a calendar event exists for every session date of the class. Also
+ * backfills the Course Title/Code/Run ID block onto a kept or adopted event
+ * that's missing it (append-only — never overwrites existing description
+ * text), which is how a pre-LMS or manually-created event picks up a
+ * resolvable Run ID. Does NOT touch attendees (see syncClassAttendees).
+ * Idempotent + advisory-locked.
  */
 export async function ensureClassCalendarEvent(courseRunId: string): Promise<EnsureResult> {
   const out: EnsureResult = { status: 'ok', created: 0, adopted: 0, kept: 0, errors: 0 };
@@ -98,6 +102,26 @@ export async function ensureClassCalendarEvent(courseRunId: string): Promise<Ens
       events = (await calendar.events.list({ calendarId, timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString(), singleEvents: true, maxResults: 250 })).data.items || [];
     } catch (e) { /* will fall through to create */ }
 
+    // An event this run only KEEPS or ADOPTS (never creates fresh) may predate the
+    // LMS entirely — manually made, or from an older sync pathway — and so never
+    // got the Course Title/Code/Run ID block written into it. Mirror the same
+    // append-only stamp confirmTrainerOnCalendar already uses elsewhere: add the
+    // block if missing, never overwrite whatever text (a Zoom link, notes) was
+    // already there. Runs on every kept/adopted event, not just newly-adopted
+    // ones, so a previously-adopted-but-unstamped event gets fixed on the next
+    // reconcile too.
+    const stampDescriptionIfMissing = async (evt: calendar_v3.Schema$Event) => {
+      if (!evt.id || (evt.description || '').toLowerCase().includes('course run id')) return;
+      try {
+        const newDesc = `${evt.description ? evt.description + '\n\n' : ''}${description}`;
+        await calendar.events.patch({
+          calendarId, eventId: evt.id,
+          requestBody: { description: newDesc },
+          sendUpdates: 'none',
+        });
+      } catch (e) { /* cosmetic — don't fail the reconcile over a description stamp */ }
+    };
+
     for (const dateIso of dates) {
       try {
         // 1) exact path — stored mapping that still exists in Calendar
@@ -112,7 +136,11 @@ export async function ensureClassCalendarEvent(courseRunId: string): Promise<Ens
           // wrongly "kept" and never recreated.
           const live = events.find(e => e.id === mapped.google_event_id)
             || await calendar.events.get({ calendarId, eventId: mapped.google_event_id }).then(r => r.data).catch(() => null);
-          if (live && live.status !== 'cancelled') { out.kept++; continue; }
+          if (live && live.status !== 'cancelled') {
+            out.kept++;
+            await stampDescriptionIfMissing(live);
+            continue;
+          }
           // stored event vanished (404) or was deleted/cancelled — drop the stale row, fall through to adopt/create
           await pool.query(`DELETE FROM course_run_calendar_event WHERE course_run_id = $1 AND event_date = $2::date`, [run.id, dateIso]);
         }
@@ -126,6 +154,7 @@ export async function ensureClassCalendarEvent(courseRunId: string): Promise<Ens
             [run.id, dateIso, match.id, baseOf(match.id)]
           );
           if (ins.rowCount && ins.rowCount > 0) out.adopted++; else out.kept++;
+          await stampDescriptionIfMissing(match);
           continue;
         }
 
