@@ -36,19 +36,27 @@ export interface PushTrainerResult {
  */
 export async function resolveRunTrainerEditPayloads(courseRunUuid: string): Promise<any[]> {
   interface Candidate { name: string; email: string | null; trainerId: string | null; }
-  const junction = await pool.query<{ trainer_name: string; trainer_email: string | null; trainer_id: string | null }>(
-    `SELECT trainer_name, trainer_email, trainer_id FROM course_run_trainer WHERE course_run_id = $1 ORDER BY assigned_at ASC`,
+  const run = (await pool.query<{
+    tpg_assigned_trainer_id: string | null;
+    tpg_assigned_trainer_name: string | null;
+    tpg_assigned_trainer_email: string | null;
+    tpg_sync_status: string | null;
+  }>(
+    `SELECT tpg_assigned_trainer_id, tpg_assigned_trainer_name, tpg_assigned_trainer_email, tpg_sync_status
+       FROM course_run WHERE id = $1`,
     [courseRunUuid]
-  );
-  let candidates: Candidate[];
-  if (junction.rows.length > 0) {
-    candidates = junction.rows.map((r) => ({ name: r.trainer_name, email: r.trainer_email, trainerId: r.trainer_id }));
-  } else {
-    const s = (await pool.query<{ assigned_trainer_name: string | null; assigned_trainer_email: string | null; assigned_trainer_id: string | null }>(
-      `SELECT assigned_trainer_name, assigned_trainer_email, assigned_trainer_id FROM course_run WHERE id = $1`, [courseRunUuid]
-    )).rows[0];
-    candidates = s?.assigned_trainer_name ? [{ name: s.assigned_trainer_name, email: s.assigned_trainer_email, trainerId: s.assigned_trainer_id }] : [];
-  }
+  )).rows[0];
+
+  // Session edits should preserve a trainer already synced to TPG, but should
+  // not try to assign an LMS-only trainer. SSG rejects the whole session edit
+  // when linkCourseRunTrainer contains someone missing from TP Profile.
+  if (!run || run.tpg_sync_status !== 'synced' || !run.tpg_assigned_trainer_name) return [];
+
+  const candidates: Candidate[] = [{
+    name: run.tpg_assigned_trainer_name,
+    email: run.tpg_assigned_trainer_email,
+    trainerId: run.tpg_assigned_trainer_id,
+  }];
 
   const payloads: any[] = [];
   for (const cand of candidates) {
