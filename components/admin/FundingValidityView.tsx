@@ -1141,7 +1141,13 @@ const FundingValidityView: React.FC = () => {
                           className={`${inputClass} w-32`}
                         />
                       ) : (
-                        course.renewalApplicationNo || '—'
+                        <span
+                          className={course.renewalApplicationNo === 'NOT Found'
+                            ? 'font-semibold text-red-600 dark:text-red-400'
+                            : undefined}
+                        >
+                          {course.renewalApplicationNo || '—'}
+                        </span>
                       )}
                     </td>
                     <td className="px-3 py-1.5">
