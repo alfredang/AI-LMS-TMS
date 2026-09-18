@@ -2,7 +2,7 @@
 //
 // The column is free text. The Renew tick on Course Funding Validity writes
 // 'To Renew'; the bulk Excel upload and the course editor can write richer
-// values ('Waiting For Renewal', 'Approved / Renewed', 'Rejected / Expired').
+// values such as 'Processing', 'Approved / Renewed', and 'Rejected/Expired'.
 // Both the Funding Validity table and the Expired Course List classify it the
 // same way so a course never reads as renewed on one page and not the other.
 
@@ -13,12 +13,17 @@ export const classifyRenewStatus = (value?: string | null): RenewClass => {
   if (!v) return 'Not Set';
   if (v.includes('approved') || v.includes('renewed')) return 'Approved';
   if (v.includes('rejected') || v.includes('expired')) return 'Rejected';
-  // 'To Renew' is a to-do, not a submission — the opposite of the others, and
-  // the value the old Renew tick-box used to write. It must keep its expiry
-  // warning; only a renewal actually lodged with SSG loses it.
-  if (v.includes('to renew')) return 'ToDo';
-  // Anything else set by hand ('Waiting For Renewal', 'Processing',
-  // 'Submitted') means the renewal is with SSG and has not come back yet.
+  // These statuses still need somebody to complete or follow up on the renewal,
+  // so they keep the course's expiry warning visible.
+  if (
+    v.includes('to renew') ||
+    v === 'others' ||
+    v.includes('action required') ||
+    v === 'draft' ||
+    v.includes('pending sub')
+  ) return 'ToDo';
+  // Remaining non-final statuses ('Pending Payment', 'Processing',
+  // 'Pending Ack.', plus legacy values) are already in progress.
   return 'Waiting';
 };
 
@@ -30,26 +35,17 @@ export const RENEW_BADGE_CLASSES: Record<RenewClass, string> = {
   'Not Set': 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
 };
 
-// The statuses the Renew Status dropdown offers. Blank ('') clears the column.
-// Kept as the literal strings already in the database so the Expired Course
-// List filter and older bulk uploads keep matching.
-// The label is what people read; the value is what the column already holds, so
-// existing rows and older uploads keep working. 'Waiting For Renewal' reads as
-// "Renewed — Processing" because that is what it means in practice: the trainer
-// has renewed it and SSG has not come back yet.
-//
-// 'To Renew' is deliberately NOT offered — it says nothing that 'Not Set'
-// doesn't. It stays in RENEW_STATUS_VALUES so the rows that already hold it
-// keep working, and it still classifies as ToDo (warning kept).
-// 'Not Set' is selectable, so a status can always be taken back off a course —
-// without it every change is one-way and a mis-click can only be undone from
-// the database. It stores NULL, which is what a course that nobody has spoken
-// for looks like.
+// The statuses the Renew Status dropdown offers, in display order.
 export const RENEW_STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: '', label: 'Not Set' },
-  { value: 'Waiting For Renewal', label: 'Renewed — Processing' },
+  { value: 'Others', label: 'Others' },
+  { value: 'Pending Payment', label: 'Pending Payment' },
+  { value: 'Processing', label: 'Processing' },
   { value: 'Approved / Renewed', label: 'Approved / Renewed' },
-  { value: 'Rejected / Expired', label: 'Rejected / Expired' },
+  { value: 'Action Required', label: 'Action Required' },
+  { value: 'Draft', label: 'Draft' },
+  { value: 'Pending Ack.', label: 'Pending Ack.' },
+  { value: 'Pending Sub.', label: 'Pending Sub.' },
+  { value: 'Rejected/Expired', label: 'Rejected/Expired' },
 ];
 
 // How a stored status reads on screen, so every page words it the same way.
@@ -62,19 +58,32 @@ export const renewStatusLabel = (value?: string | null): string => {
   return match ? match.label : stored;
 };
 
-// Everything a write is allowed to store. The first three are the dropdown's;
-// 'To Renew' and 'Processing' are legacy values already in the column, kept
-// writable so selecting a row's own stored value is never rejected.
+// Everything a write is allowed to store. Legacy values stay writable so old
+// rows and integrations continue to work even though they are not offered by
+// the dropdown.
 export const RENEW_STATUS_VALUES: readonly string[] = [
+  ...RENEW_STATUS_OPTIONS.map(option => option.value),
   'Waiting For Renewal',
-  'Approved / Renewed',
   'Rejected / Expired',
   'To Renew',
-  'Processing',
 ];
 
 export const isKnownRenewStatus = (value?: string | null) =>
   RENEW_STATUS_OPTIONS.some(option => option.value && option.value === (value || '').trim());
+
+// A renewal is considered lodged only when it has a real application number.
+// TPG captures unresolved lookups as "NOT Found", which must continue to warn
+// in the same way as an empty value.
+export const hasRenewalApplicationNo = (value?: string | null): boolean => {
+  const applicationNo = (value || '').trim();
+  return applicationNo.length > 0 && applicationNo.toLowerCase() !== 'not found';
+};
+
+export const isWithinRenewalWarningWindow = (
+  validityDate: Date | null,
+  today: Date,
+  windowEnd: Date,
+): boolean => !!validityDate && validityDate >= today && validityDate <= windowEnd;
 
 // A renewal that has been sent off and is still with SSG — the course is
 // expiring/expired on paper but nobody needs to chase it.
