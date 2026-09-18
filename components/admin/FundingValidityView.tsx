@@ -5,7 +5,9 @@ import { getLocalYMD } from '@/lib/dateHelpers';
 import { apiClient } from '@lib/services/apiClient';
 import {
   classifyRenewStatus,
+  hasRenewalApplicationNo,
   isKnownRenewStatus,
+  isWithinRenewalWarningWindow,
   RENEW_STATUS_OPTIONS,
   renewStatusLabel,
   type RenewClass,
@@ -101,9 +103,9 @@ const FundingValidityView: React.FC = () => {
   // Optimistic renewal status per course, held until the refetch lands.
   const [renewStatusOverrides, setRenewStatusOverrides] = useState<Record<string, string | null>>({});
   // Bulk selection — for setting the same Renew Status across many rows, e.g.
-  // marking a batch as 'Renewed — Processing' after they go to SSG together.
+  // marking a batch as 'Processing' after they go to SSG together.
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
-  const [bulkStatus, setBulkStatus] = useState<string>('Waiting For Renewal');
+  const [bulkStatus, setBulkStatus] = useState<string>('Others');
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [whitelistingIds, setWhitelistingIds] = useState<Record<string, boolean>>({});
   const [whitelistStateOverrides, setWhitelistStateOverrides] = useState<Record<string, boolean>>({});
@@ -239,21 +241,22 @@ const FundingValidityView: React.FC = () => {
   });
   const monthlyMax = Math.max(1, ...monthlyExpiry.map(bucket => bucket.total));
 
-  // Expired or expiring within 1 month and not yet marked as renewed — the
-  // same set the daily reminder email (funding_renewal_reminder cron) sends.
+  // Expiring from today through the next month without a usable renewal
+  // application number — the same set the daily reminder email sends. Already
+  // expired courses are excluded. A blank value or the TPG lookup sentinel
+  // "NOT Found" still needs attention.
   const oneMonthAhead = startOfDay(addMonthsTo(today, 1));
   const pendingRenewalCourses = wsqCourses.filter(course => {
     const validityDate = parseValidityDate(course.fundingValidity);
-    return !!validityDate && validityDate <= oneMonthAhead && !isCourseRenewed(course);
+    return isWithinRenewalWarningWindow(validityDate, today, oneMonthAhead) && !hasRenewalApplicationNo(course.renewalApplicationNo);
   });
 
-  // Same rule with a 3-month horizon — every course already inside its renewal
-  // window (the Earliest Renewal Date is 3 months before expiry) that is not
-  // yet marked as renewed. Cumulative, so it includes the 1-month list above.
+  // Same application-number rule with a 3-month horizon. Cumulative, so it
+  // includes the 1-month list above.
   const threeMonthsAhead = startOfDay(addMonthsTo(today, 3));
   const pendingRenewal3mCourses = wsqCourses.filter(course => {
     const validityDate = parseValidityDate(course.fundingValidity);
-    return !!validityDate && validityDate <= threeMonthsAhead && !isCourseRenewed(course);
+    return isWithinRenewalWarningWindow(validityDate, today, threeMonthsAhead) && !hasRenewalApplicationNo(course.renewalApplicationNo);
   });
 
   const expiryStatusLabel = (validityDate: Date) => {
@@ -704,13 +707,13 @@ const FundingValidityView: React.FC = () => {
       <Card className="mb-8 dark:bg-gray-800 dark:border-gray-700">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Expiring Within 1 Month — Not Yet Renewed
+            Expiring Within 1 Month — Renewal Application No Missing
             <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
               {pendingRenewalCourses.length}
             </span>
           </h4>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Courses whose funding validity has expired or ends within 1 month and are not marked as renewed. This list is emailed daily by the Funding Renewal Reminder task.
+            Courses whose funding validity ends from today through the next month and whose Renewal Application No is blank or NOT Found. Already-expired courses are excluded. This list is emailed daily by the Funding Renewal Reminder task.
           </p>
         </div>
         {pendingRenewalCourses.length === 0 ? (
@@ -726,6 +729,7 @@ const FundingValidityView: React.FC = () => {
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Type</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Validity End Date</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Renewal Application No</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Status</th>
                 </tr>
               </thead>
@@ -739,6 +743,7 @@ const FundingValidityView: React.FC = () => {
                       <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.newCourseCode || course.courseCode || '—'}</td>
                       <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{displayCourseType(course.courseType)}</td>
                       <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{formatValidityDate(course.fundingValidity)}</td>
+                      <td className="px-3 py-1.5 font-semibold text-red-600 dark:text-red-400 whitespace-nowrap">{course.renewalApplicationNo?.trim() || '—'}</td>
                       <td className={`px-3 py-1.5 font-semibold whitespace-nowrap ${status.cls}`}>{status.text}</td>
                     </tr>
                   );
@@ -752,13 +757,13 @@ const FundingValidityView: React.FC = () => {
       <Card className="mb-8 dark:bg-gray-800 dark:border-gray-700">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Expiring Within 3 Months — Not Yet Renewed
+            Expiring Within 3 Months — Renewal Application No Missing
             <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
               {pendingRenewal3mCourses.length}
             </span>
           </h4>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Courses already inside their renewal window (the earliest renewal date is 3 months before expiry) and not marked as renewed. Includes the 1-month list above.
+            Courses expiring from today through the next 3 months whose Renewal Application No is blank or NOT Found. Already-expired courses are excluded. Includes the 1-month list above.
           </p>
         </div>
         {pendingRenewal3mCourses.length === 0 ? (
@@ -774,6 +779,7 @@ const FundingValidityView: React.FC = () => {
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Course Ref Code</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Type</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Validity End Date</th>
+                  <th className="px-3 py-2 font-semibold whitespace-nowrap">Renewal Application No</th>
                   <th className="px-3 py-2 font-semibold whitespace-nowrap">Status</th>
                 </tr>
               </thead>
@@ -787,6 +793,7 @@ const FundingValidityView: React.FC = () => {
                       <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{course.newCourseCode || course.courseCode || '—'}</td>
                       <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{displayCourseType(course.courseType)}</td>
                       <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap">{formatValidityDate(course.fundingValidity)}</td>
+                      <td className="px-3 py-1.5 font-semibold text-red-600 dark:text-red-400 whitespace-nowrap">{course.renewalApplicationNo?.trim() || '—'}</td>
                       <td className={`px-3 py-1.5 font-semibold whitespace-nowrap ${status.cls}`}>{status.text}</td>
                     </tr>
                   );
@@ -1005,7 +1012,7 @@ const FundingValidityView: React.FC = () => {
                 <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Renewal Application No</th>
                 <th
                   className={`${stickyTh} font-semibold whitespace-nowrap`}
-                  title="Where this course's renewal stands. Set it to Renewed — Processing once the renewal is with SSG: the course then reads as Renewal Pending instead of Expiring Soon / Expired, until the new validity end date comes through."
+                  title="Where this course's renewal stands. In-progress statuses show as Renewal Pending until the new validity end date comes through."
                 >
                   Renew Status
                 </th>
