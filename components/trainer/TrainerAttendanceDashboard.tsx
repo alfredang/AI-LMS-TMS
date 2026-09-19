@@ -23,6 +23,25 @@ const formatSessionLabel = (session: Session): string => {
   return `${sessionSuffix} · ${formatted} ${session.startTime}–${session.endTime}`;
 };
 
+// SSG's "trainee" schema varies by endpoint — email can be a string or { full },
+// and phone shows up under different keys with a `mobile` or `phoneNumber` sub-field.
+const extractContact = (trainee: any): { email: string; phone: string } => {
+  const email: string = trainee?.email?.full || trainee?.email || '';
+
+  const raw = trainee?.contactNumber || trainee?.phone || trainee?.mobileNumber || trainee?.mobile;
+  let phone = '';
+  if (raw) {
+    if (typeof raw === 'object') {
+      const country = raw.countryCode ? `+${raw.countryCode}` : '';
+      const areaCode = raw.areaCode && Number(raw.areaCode) !== 0 ? raw.areaCode : '';
+      phone = [country, areaCode, raw.phoneNumber || raw.mobile].filter(Boolean).join(' ');
+    } else {
+      phone = String(raw);
+    }
+  }
+  return { email, phone };
+};
+
 const StatusBadge: React.FC<{ value: string }> = ({ value }) => {
   if (!value || value === '—') return <span className="text-muted">—</span>;
   const v = value.toLowerCase();
@@ -1493,6 +1512,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                   )}
                 </div>
               </th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Email</th>
+              <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Phone</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Type</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Status</th>
               <th className="px-3 py-3 text-left font-semibold text-on-surface-secondary whitespace-nowrap">Entry Mode</th>
@@ -1503,7 +1524,7 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             {isLoadingAttendance ? (
               Array.from({ length: 5 }).map((_, idx) => (
                 <tr key={idx} className="border-b border-default">
-                  {Array.from({ length: 7 }).map((__, col) => (
+                  {Array.from({ length: 9 }).map((__, col) => (
                     <td key={col} className="px-3 py-3">
                       <div className="h-3 rounded bg-surface-elevated animate-pulse" style={{ width: col === 1 ? '70%' : '50%' }} />
                     </td>
@@ -1513,6 +1534,15 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
             ) : attendanceRecords.length > 0 ? (
               attendanceRecords.map((record: any, idx: number) => {
                 const nric: string = record.nric || record.trainee?.id || '';
+                const enrolMatch = enrolmentRecords.find((item: any) => {
+                  const t = (item?.enrolment ?? item)?.trainee ?? {};
+                  return (t?.id || t?.nric) === nric;
+                });
+                const enrolTrainee = enrolMatch ? ((enrolMatch?.enrolment ?? enrolMatch)?.trainee ?? {}) : {};
+                const inline = extractContact(record.trainee);
+                const looked = extractContact(enrolTrainee);
+                const email = inline.email || looked.email || '—';
+                const phone = inline.phone || looked.phone || '—';
                 return (
                   <tr key={idx} className="border-b border-default hover:bg-surface-elevated transition-colors">
                     <td className="px-3 py-3 text-center text-on-surface-secondary">{idx + 1}</td>
@@ -1522,6 +1552,8 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
                         ? (showNric ? nric : (nric.length >= 5 ? `${nric[0]}XXXX${nric.slice(-4)}` : nric))
                         : '—'}
                     </td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{email}</td>
+                    <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{phone}</td>
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.trainee?.attendeeType || '—'}</td>
                     <td className="px-3 py-3"><StatusBadge value={record.status || '—'} /></td>
                     <td className="px-3 py-3 text-on-surface-secondary whitespace-nowrap">{record.entryMode || '—'}</td>

@@ -5545,6 +5545,28 @@ const modeOfTrainingLabel = (code: string): string => {
     return map[code] || code;
 };
 
+// SSG's "trainee" schema is shared across endpoints but not every endpoint populates
+// every field the same way — email can arrive as a string or as { full }, and phone
+// numbers show up under different keys (contactNumber / phone / mobileNumber / mobile)
+// with either a `mobile` or `phoneNumber` sub-field. Handle all the shapes we've seen.
+const extractContact = (trainee: any): { email: string; phone: string } => {
+    const email: string = trainee?.email?.full || trainee?.email || '';
+
+    const raw = trainee?.contactNumber || trainee?.phone || trainee?.mobileNumber || trainee?.mobile;
+    let phone = '';
+    if (raw) {
+        if (typeof raw === 'object') {
+            const country = raw.countryCode ? `+${raw.countryCode}` : '';
+            const parts = [country, raw.areaCode, raw.phoneNumber || raw.mobile].filter(Boolean);
+            phone = parts.join(' ');
+        } else {
+            phone = String(raw);
+        }
+    }
+
+    return { email, phone };
+};
+
 export const CourseSessionAttendanceView: React.FC = () => {
     const { trainingProviderProfile } = useLms();
     const [uen, setUen] = useState<string>(trainingProviderProfile?.uen || '');
@@ -5555,6 +5577,7 @@ export const CourseSessionAttendanceView: React.FC = () => {
     const [searchError, setSearchError] = useState<string | null>(null);
     const [notFound, setNotFound] = useState(false);
     const [parsedData, setParsedData] = useState<any>(null);
+    const [contactByNric, setContactByNric] = useState<Record<string, { email: string; phone: string }>>({});
 
     const isFormValid = uen.trim() && courseCode.trim() && sessionId.trim() && courseRunId.trim();
 
@@ -5568,6 +5591,7 @@ export const CourseSessionAttendanceView: React.FC = () => {
         setSearchError(null);
         setNotFound(false);
         setParsedData(null);
+        setContactByNric({});
 
         try {
             const params = new URLSearchParams({
@@ -5590,6 +5614,26 @@ export const CourseSessionAttendanceView: React.FC = () => {
             }
 
             setParsedData(data.data);
+
+            // The attendance endpoint itself only returns id/name/NRIC — email and
+            // phone live on the trainee's SSG enrolment record, so fetch enrolments
+            // for this course run and join them in by NRIC.
+            try {
+                const enrolRes = await fetch(`/api/enrolments/by-run?courseRunId=${encodeURIComponent(courseRunId.trim())}`);
+                const enrolData = await enrolRes.json();
+                if (enrolData.success && Array.isArray(enrolData.data)) {
+                    const map: Record<string, { email: string; phone: string }> = {};
+                    enrolData.data.forEach((enrol: any) => {
+                        const trainee = enrol?.trainee ?? {};
+                        const nric: string | undefined = trainee?.id || trainee?.nric || enrol?.nric;
+                        if (!nric) return;
+                        map[nric] = extractContact(trainee);
+                    });
+                    setContactByNric(map);
+                }
+            } catch {
+                // Non-fatal — attendance table still renders without contact info.
+            }
         } catch (err) {
             setSearchError(err instanceof Error ? err.message : 'Failed to fetch attendance data.');
         } finally {
@@ -5605,6 +5649,7 @@ export const CourseSessionAttendanceView: React.FC = () => {
         setSearchError(null);
         setNotFound(false);
         setParsedData(null);
+        setContactByNric({});
     };
 
     // API returns decrypted SSG data directly — handle both possible nesting levels
@@ -5842,6 +5887,8 @@ export const CourseSessionAttendanceView: React.FC = () => {
                                             <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">#</th>
                                             <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Name</th>
                                             <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">NRIC</th>
+                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Email</th>
+                                            <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Phone</th>
                                             <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Type</th>
                                             <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Status</th>
                                             <th className="pb-3 pr-4 font-semibold text-gray-600 dark:text-gray-300">Entry Mode</th>
@@ -5849,7 +5896,13 @@ export const CourseSessionAttendanceView: React.FC = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {attendance.map((record: any, idx: number) => (
+                                        {attendance.map((record: any, idx: number) => {
+                                            const nric = record.nric || record.trainee?.id;
+                                            const inline = extractContact(record.trainee);
+                                            const looked = contactByNric[nric];
+                                            const email = inline.email || looked?.email || '—';
+                                            const phone = inline.phone || looked?.phone || '—';
+                                            return (
                                             <tr
                                                 key={record.id}
                                                 className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50"
@@ -5857,6 +5910,8 @@ export const CourseSessionAttendanceView: React.FC = () => {
                                                 <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">{idx + 1}</td>
                                                 <td className="py-3 pr-4 font-medium text-gray-900 dark:text-white">{record.trainee?.name ?? '—'}</td>
                                                 <td className="py-3 pr-4 font-mono text-gray-700 dark:text-gray-300">{record.nric}</td>
+                                                <td className="py-3 pr-4 text-gray-700 dark:text-gray-300">{email}</td>
+                                                <td className="py-3 pr-4 text-gray-700 dark:text-gray-300">{phone}</td>
                                                 <td className="py-3 pr-4">
                                                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${record.trainee?.attendeeType === 'Trainer'
                                                         ? 'bg-purple-100 text-purple-800 border-purple-200'
@@ -5873,7 +5928,8 @@ export const CourseSessionAttendanceView: React.FC = () => {
                                                 <td className="py-3 pr-4 text-gray-600 dark:text-gray-400">{record.entryMode}</td>
                                                 <td className="py-3 text-gray-600 dark:text-gray-400 text-xs">{record.sentToTraqom}</td>
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
