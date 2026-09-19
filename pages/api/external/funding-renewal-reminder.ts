@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { emailService } from '../../../lib/services/emailService';
+import { hasRenewalApplicationNo, isWithinRenewalWarningWindow } from '../../../lib/courseRenewalStatus';
 
 /**
  * External API — Funding Renewal Reminder Email
@@ -13,9 +14,9 @@ import { emailService } from '../../../lib/services/emailService';
  *   1. Tenant gate: recipients come from the FUNDING_REMINDER_RECIPIENTS env
  *      var (comma-separated email list). Not set → single 'skipped' log row +
  *      return, so tenants without the var are unaffected.
- *   2. Select courses whose funding_validity has expired or expires within
- *      1 month (SGT, day precision) and whose renewed_status is empty — the
- *      same set shown in the "Expiring Within 1 Month — Not Yet Renewed"
+ *   2. Select courses whose funding_validity expires from today through the
+ *      next month (SGT, day precision) and whose renewal_application_no is blank
+ *      or "NOT Found" — the same set shown in the 1-month warning
  *      section of the Course Funding Validity page.
  *   3. Nothing pending → 'success' log row, no email. Otherwise one email
  *      listing all pending courses is sent to all recipients via the shared
@@ -99,20 +100,23 @@ export async function runAutomation(): Promise<FundingReminderSummary> {
   oneMonthAhead.setMonth(oneMonthAhead.getMonth() + 1);
 
   const result = await pool.query(`
-    SELECT id, title, course_code, new_course_code, course_type, funding_validity
+    SELECT id, title, course_code, new_course_code, course_type,
+           funding_validity, renewal_application_no
     FROM course
     WHERE funding_validity IS NOT NULL
       AND btrim(funding_validity) <> ''
-      AND (renewed_status IS NULL OR btrim(renewed_status) = '')
   `);
 
   const pending = result.rows
     .map((row: any) => ({ ...row, validityDate: parseValidityDate(row.funding_validity) }))
-    .filter((row: any) => row.validityDate && row.validityDate <= oneMonthAhead)
+    .filter((row: any) =>
+      isWithinRenewalWarningWindow(row.validityDate, today, oneMonthAhead) &&
+      !hasRenewalApplicationNo(row.renewal_application_no)
+    )
     .sort((a: any, b: any) => a.validityDate.getTime() - b.validityDate.getTime());
 
   if (pending.length === 0) {
-    const message = 'No courses expired or expiring within 1 month are pending renewal — no email sent.';
+    const message = 'No courses expiring from today through the next month have a missing Renewal Application No — no email sent.';
     console.log(`📭 funding-renewal-reminder: ${message}`);
     await logRun('nothing_pending', 0, recipients.join(', '), null);
     return { status: 'nothing_pending', courseCount: 0, recipients, message };
@@ -132,13 +136,14 @@ export async function runAutomation(): Promise<FundingReminderSummary> {
       <td style="padding:6px 10px;border:1px solid #ddd;white-space:nowrap;">${escapeHtml(row.new_course_code || row.course_code || '—')}</td>
       <td style="padding:6px 10px;border:1px solid #ddd;">${displayCourseType(row.course_type)}</td>
       <td style="padding:6px 10px;border:1px solid #ddd;white-space:nowrap;">${formatDate(row.validityDate)}</td>
+      <td style="padding:6px 10px;border:1px solid #ddd;white-space:nowrap;color:#dc2626;font-weight:bold;">${escapeHtml((row.renewal_application_no || '').trim() || '—')}</td>
       <td style="padding:6px 10px;border:1px solid #ddd;white-space:nowrap;color:${row.validityDate < today ? '#dc2626' : '#d97706'};font-weight:bold;">${statusText(row.validityDate)}</td>
     </tr>`).join('');
 
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;">
       <p>Dear team,</p>
-      <p>The following <strong>${pending.length}</strong> course(s) have funding validity that has <strong>expired or expires within 1 month</strong> and are <strong>not yet marked as renewed</strong> on the Course Funding Validity page:</p>
+      <p>The following <strong>${pending.length}</strong> course(s) have funding validity that <strong>expires from today through the next month</strong> and a Renewal Application No that is <strong>blank or NOT Found</strong>:</p>
       <table style="border-collapse:collapse;font-size:13px;">
         <thead>
           <tr style="background:#f3f4f6;">
@@ -146,22 +151,23 @@ export async function runAutomation(): Promise<FundingReminderSummary> {
             <th style="padding:6px 10px;border:1px solid #ddd;text-align:left;">Ref Code</th>
             <th style="padding:6px 10px;border:1px solid #ddd;text-align:left;">Type</th>
             <th style="padding:6px 10px;border:1px solid #ddd;text-align:left;">Validity End</th>
+            <th style="padding:6px 10px;border:1px solid #ddd;text-align:left;">Renewal Application No</th>
             <th style="padding:6px 10px;border:1px solid #ddd;text-align:left;">Status</th>
           </tr>
         </thead>
         <tbody>${tableRows}</tbody>
       </table>
-      <p>Please arrange the funding renewal, then tick the <strong>Renew</strong> checkbox on the Course Funding Validity page to stop reminders for that course.</p>
+      <p>Please enter the <strong>Renewal Application No</strong> on the Course Funding Validity page to stop reminders for that course.</p>
       <p style="color:#6b7280;font-size:12px;">This is an automated daily reminder from the LMS Task Scheduler (Funding Renewal Reminder).</p>
     </div>`;
 
   const text = [
-    `${pending.length} course(s) have funding validity expired or expiring within 1 month and are not yet renewed:`,
+    `${pending.length} course(s) have funding validity expiring from today through the next month and a blank or NOT Found Renewal Application No:`,
     '',
     ...pending.map((row: any) =>
-      `- ${row.title} [${row.new_course_code || row.course_code || '—'}] (${displayCourseType(row.course_type)}) — ends ${formatDate(row.validityDate)} — ${statusText(row.validityDate)}`),
+      `- ${row.title} [${row.new_course_code || row.course_code || '—'}] (${displayCourseType(row.course_type)}) — application no: ${(row.renewal_application_no || '').trim() || '—'} — ends ${formatDate(row.validityDate)} — ${statusText(row.validityDate)}`),
     '',
-    'Tick the Renew checkbox on the Course Funding Validity page once renewed to stop reminders for that course.',
+    'Enter the Renewal Application No on the Course Funding Validity page to stop reminders for that course.',
   ].join('\n');
 
   const subject = `[LMS] Funding renewal reminder — ${pending.length} course(s) expiring within 1 month`;

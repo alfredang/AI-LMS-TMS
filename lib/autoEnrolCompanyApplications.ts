@@ -728,7 +728,14 @@ export async function processCompanyApplication(
 
   await updateCompanyRow(appId, { auto_enrol_status: 'pending', auto_enrol_error: null });
 
-  const run = await resolveCourseRun(row);
+  let run: ResolvedRun | null = null;
+  try {
+    run = await resolveCourseRun(row);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await markFailed(appId, 'course_run', err);
+    return { id: appId, success: false, finalStatus: 'failed', error: message };
+  }
 
   if (!run) {
     const message = `Could not resolve course run for "${row.course_title || ''}" on "${row.course_start_date || ''}"`;

@@ -61,6 +61,7 @@ const FIELD_MAP: Record<string, string> = {
   learner_guide_url: 'c.learner_guide_url',
   lesson_plan_url: 'c.lesson_plan_url',
   trainer_slides_url: 'c.trainer_slides_url',
+  activities_url: 'c.activities_url',
   trainers_list: 'c.trainers_list',
   trainers_email_list: 'c.trainers_email_list',
   skillsfuture_link: 'c.skillsfuture_link',
