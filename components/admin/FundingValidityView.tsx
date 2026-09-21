@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useDeveloperCourses } from '@hooks/useDeveloperCourses';
 import { Card } from '../ui/Card';
+import TpgRenewalTrial from './TpgRenewalTrial';
 import { getLocalYMD } from '@/lib/dateHelpers';
 import { apiClient } from '@lib/services/apiClient';
 import {
@@ -878,7 +879,8 @@ const FundingValidityView: React.FC = () => {
             <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Course Validity List</h4>
             <p className="text-sm text-gray-600 dark:text-gray-400">Sorted from earliest validity date to latest. Courses expiring within 4 months are highlighted.</p>
           </div>
-          <div className="shrink-0 flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <TpgRenewalTrial onApplied={refetch} />
             <button
               onClick={handleExport}
               disabled={exporting || wsqCourses.length === 0}
@@ -1165,6 +1167,7 @@ const FundingValidityView: React.FC = () => {
                         className={`${inputClass} w-40`}
                         aria-label={`Renewal status for ${course.title}`}
                       >
+                        <option value="">Not Set</option>
                         {legacyRenewStatus && <option value={legacyRenewStatus} disabled>{legacyRenewStatus}</option>}
                         {RENEW_STATUS_OPTIONS.map(option => (
                           <option key={option.value} value={option.value}>{option.label}</option>
