@@ -8,7 +8,6 @@ import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdent
 
 const ENROLMENT_PAGE_SIZE = 100;
 const MAX_ENROLMENT_PAGES = 20;
-const MAX_RUNS_TO_AUDIT = 20;
 const MAX_FOCUS_RUN_IDS = 20;
 
 type SsgRun = {
@@ -428,13 +427,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return true;
     });
 
-    if (runsToAudit.length > MAX_RUNS_TO_AUDIT) {
-      return res.status(400).json({
-        success: false,
-        error: `This audit would check ${runsToAudit.length} runs. Narrow the dates or focus run IDs to ${MAX_RUNS_TO_AUDIT} or fewer runs.`,
-      });
-    }
-
     const runIds = runsToAudit.map(extractRunId).filter(Boolean);
     const tpgVisibility = checkTpgatewayVisibility
       ? await fetchTpgatewayVisibility(courseCode, runIds)
@@ -510,7 +502,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         upcoming_from: includePastRuns ? null : todayIso,
         course_run_ids: [...runIdFilter],
         include_all_runs: includeAllRuns,
-        max_runs_to_audit: MAX_RUNS_TO_AUDIT,
       },
       visibility_update_available: false,
       visibility_update_blocker:

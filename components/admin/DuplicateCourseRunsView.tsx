@@ -41,7 +41,6 @@ type AuditResponse = {
     upcoming_from?: string | null;
     course_run_ids?: string[];
     include_all_runs?: boolean;
-    max_runs_to_audit?: number;
   };
   visibility_update_available: boolean;
   visibility_update_blocker: string;
@@ -316,7 +315,6 @@ const DuplicateCourseRunsView: React.FC = () => {
               </>
             )}
             {' '}| public visibility {data.tpgateway_visibility_checked ? 'checked from TPGateway cookie' : 'not confirmed'}
-            {data.filters?.max_runs_to_audit ? <> | max audit size <span className="font-medium text-on-surface">{data.filters.max_runs_to_audit}</span></> : null}
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
