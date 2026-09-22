@@ -37,14 +37,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
     }
 
-    // Enrich rows with DA flag (enrolment_id exists in da_application)
+    // Enrich rows with DA flag (enrolment_id exists in da_application with a real MySkillsFuture
+    // application id). A row carrying only the synthetic `MANUAL-…` placeholder — minted for a
+    // manual enrolment, or left behind when the learner's actual Direct Application was cancelled
+    // and never adopted — can never generate a correctly-numbered SFC-CA invoice, so it must not be
+    // flagged "DA" here either: that flag is what drives the "Generate Invoice" button.
     const enrolmentIds = Array.from(new Set(rows.map((r: any) => String(r.matched_enrolment_id || '')).filter(Boolean)));
     const daEnrolmentSet = new Set<string>();
     if (enrolmentIds.length > 0) {
       const daRes = await pool.query(
         `SELECT DISTINCT enrolment_id::text AS enrolment_id
          FROM public.da_application
-         WHERE enrolment_id = ANY($1::text[])`,
+         WHERE enrolment_id = ANY($1::text[])
+           AND UPPER(TRIM(COALESCE(application_id, ''))) NOT LIKE 'MANUAL-%'`,
         [enrolmentIds]
       );
       for (const row of daRes.rows) daEnrolmentSet.add(String(row.enrolment_id));
