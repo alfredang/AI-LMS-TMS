@@ -126,6 +126,92 @@ function buildSfcInvoiceDocNumber(
   return String(fallbackClaimId || '').trim().toUpperCase();
 }
 
+/**
+ * Re-read `da_application.application_id` at generation time rather than trusting
+ * whatever value the caller was handed — a `sfc_import_rows` batch row can be stale
+ * if the real MySkillsFuture id was adopted (placeholder -> CA-...) after the batch
+ * was last previewed, and pressing "Generate SFC Invoice" should always use the
+ * current truth.
+ */
+async function fetchFreshApplicationId(
+  enrolmentId: string,
+  fallback: string | null
+): Promise<string | null> {
+  try {
+    const res = await pool.query(
+      `SELECT application_id FROM public.da_application
+        WHERE LOWER(TRIM(COALESCE(enrolment_id,''))) = LOWER(TRIM($1::text))
+        LIMIT 1`,
+      [enrolmentId]
+    );
+    if (res.rows.length === 0) return fallback;
+    const fresh = res.rows[0]?.application_id;
+    const trimmed = String(fresh ?? '').trim();
+    return trimmed || fallback;
+  } catch (err) {
+    console.warn('[QBO sfc invoice] fresh application_id lookup failed (using passed-in value):', err);
+    return fallback;
+  }
+}
+
+const SFC_TC_LINE_PATTERN = /^\s*(SkillsFuture Credit Usage\/Claim|To\s*Less\s*Skillsfuture\s*Credit)/i;
+
+/**
+ * Ensure the main/TC invoice carries a correct negative SkillsFuture Credit
+ * deduction line matching the SFC-CA invoice just created/reused — replacing a
+ * stale or wrongly-worded line (including the legacy "To Less Skillsfuture
+ * Credit" text some invoices were cut with) or adding one if it's missing
+ * entirely. A no-op if the line is already correct. Best-effort: failures here
+ * must not undo the SFC-CA invoice that was already created.
+ */
+async function syncSfcDeductionLineOnMainInvoice(params: {
+  mainInvoiceDocNumber: string;
+  applicationId: string | null;
+  enrolmentId: string;
+  amount: number;
+  item: { id: string; name: string; description?: string | null };
+  taxOosRef: string;
+}): Promise<void> {
+  const { mainInvoiceDocNumber, applicationId, enrolmentId, amount, item, taxOosRef } = params;
+  const mainInvoice = await qboFindInvoiceByDocNumber(undefined, mainInvoiceDocNumber, { ignoreVoided: true });
+  if (!mainInvoice?.id || !mainInvoice.syncToken) return;
+
+  const existingLines: any[] = Array.isArray(mainInvoice.raw?.Line) ? mainInvoice.raw.Line : [];
+  const desiredDescription = buildSfcCreditLineText(applicationId, enrolmentId, item.description);
+  const desiredAmount = -Math.abs(amount);
+
+  const isCorrect = (line: any) =>
+    line?.SalesItemLineDetail?.ItemRef?.value === item.id &&
+    String(line?.Description ?? '') === desiredDescription &&
+    Number(line?.Amount) === desiredAmount &&
+    line?.SalesItemLineDetail?.TaxCodeRef?.value === taxOosRef;
+
+  const buildLine = (existing?: any) => ({
+    ...(existing?.Id ? { Id: existing.Id } : {}),
+    DetailType: 'SalesItemLineDetail',
+    Amount: desiredAmount,
+    Description: desiredDescription,
+    SalesItemLineDetail: {
+      ItemRef: { value: item.id, name: item.name },
+      Qty: 1,
+      UnitPrice: desiredAmount,
+      TaxCodeRef: { value: taxOosRef },
+    },
+  });
+
+  const idx = existingLines.findIndex((l) => SFC_TC_LINE_PATTERN.test(String(l?.Description ?? '')));
+  let nextLines: any[];
+  if (idx === -1) {
+    nextLines = [...existingLines, buildLine()];
+  } else if (!isCorrect(existingLines[idx])) {
+    nextLines = existingLines.map((l, i) => (i === idx ? buildLine(l) : l));
+  } else {
+    return; // already correct
+  }
+
+  await qboSparseUpdateInvoice(undefined, mainInvoice.id, mainInvoice.syncToken, { Line: nextLines });
+}
+
 async function resolveClaimAmount(
   enrolmentId: string,
   sfcClaimId: string,
@@ -156,7 +242,8 @@ export async function createDirectApplicationSfcInvoice(
   input: SfcInvoiceInput
 ): Promise<CreatedSfcInvoice | null> {
   const rawClaimId = String(input.sfcClaimId || '').trim();
-  const docNumber = buildSfcInvoiceDocNumber(input.applicationId, rawClaimId);
+  const applicationId = await fetchFreshApplicationId(input.enrolmentId, input.applicationId ?? null);
+  const docNumber = buildSfcInvoiceDocNumber(applicationId, rawClaimId);
   if (!docNumber) {
     throw new Error('createDirectApplicationSfcInvoice: applicationId or sfcClaimId is required');
   }
@@ -172,6 +259,43 @@ export async function createDirectApplicationSfcInvoice(
     );
   }
 
+  const itemName = resolveSkillsFutureCreditItemName();
+  const item = await qboFindItemByName(undefined, itemName);
+  if (!item?.id) {
+    throw new Error(
+      `SFC invoice requires QBO Product/Service "${itemName}" to exist. Create it in QuickBooks or set QBO_SFC_DA_ITEM_NAME / QBO_SFC_ITEM_NAME.`
+    );
+  }
+
+  const taxOos = await qboResolveOosTaxCodeRef(undefined);
+
+  const mainInvoiceDocNumber = input.mainInvoiceDocNumber ? input.mainInvoiceDocNumber.trim() : '';
+  const syncMainInvoice = async () => {
+    if (!mainInvoiceDocNumber) return;
+    // Only touch the TC invoice when there's a real CA number to cite. A `MANUAL-…`
+    // placeholder means we don't actually know whether this is a genuine DA case
+    // awaiting adoption or a genuinely non-DA enrolment (e.g. the real application
+    // was cancelled) — for the latter, the TC invoice correctly has no SFC line at
+    // all (it's settled by a payment, not a deduction line), and overwriting that
+    // is a real mistake, confirmed live on ENR-2608-120388.
+    if (!realApplicationId(applicationId)) return;
+    try {
+      await syncSfcDeductionLineOnMainInvoice({
+        mainInvoiceDocNumber,
+        applicationId,
+        enrolmentId: input.enrolmentId,
+        amount,
+        item,
+        taxOosRef: taxOos,
+      });
+    } catch (err) {
+      console.warn(
+        `[QBO sfc invoice] Failed to sync SFC deduction line on main invoice ${mainInvoiceDocNumber}:`,
+        err
+      );
+    }
+  };
+
   // Idempotency first. Also reuse older invoices keyed by the raw claim id.
   // A void is not a reusable invoice; skipping it allows a reissue.
   const existing = await qboFindInvoiceByDocNumber(undefined, docNumber, { ignoreVoided: true });
@@ -183,33 +307,25 @@ export async function createDirectApplicationSfcInvoice(
   if (existingInvoice?.id) {
     // Backfill PONumber if the existing invoice was created before PO linking
     // was added and mainInvoiceDocNumber is now available.
-    const desiredPo = input.mainInvoiceDocNumber ? input.mainInvoiceDocNumber.trim() : '';
-    if (desiredPo && existingInvoice.syncToken) {
+    if (mainInvoiceDocNumber && existingInvoice.syncToken) {
       try {
         await qboSparseUpdateInvoice(
           undefined,
           existingInvoice.id,
           existingInvoice.syncToken,
-          await buildPurchaseOrderInvoiceFields(desiredPo, existingInvoice.raw)
+          await buildPurchaseOrderInvoiceFields(mainInvoiceDocNumber, existingInvoice.raw)
         );
       } catch (err) {
         console.warn(`[QBO sfc invoice] Failed to backfill PONumber on invoice ${existingInvoice.id}:`, err);
       }
     }
+    await syncMainInvoice();
     return {
       invoiceId: existingInvoice.id,
       docNumber,
       amount,
       reusedExisting: true,
     };
-  }
-
-  const itemName = resolveSkillsFutureCreditItemName();
-  const item = await qboFindItemByName(undefined, itemName);
-  if (!item?.id) {
-    throw new Error(
-      `SFC invoice requires QBO Product/Service "${itemName}" to exist. Create it in QuickBooks or set QBO_SFC_DA_ITEM_NAME / QBO_SFC_ITEM_NAME.`
-    );
   }
 
   const term = await qboFindTermByName(undefined, SFC_TERM_NAME);
@@ -220,7 +336,6 @@ export async function createDirectApplicationSfcInvoice(
   }
 
   const customerRef = await resolveSupplementalCustomerRef();
-  const taxOos = await qboResolveOosTaxCodeRef(undefined);
   const txnDate = new Date().toISOString().slice(0, 10);
 
   const invoiceBody: Record<string, any> = {
@@ -234,7 +349,7 @@ export async function createDirectApplicationSfcInvoice(
       {
         DetailType: 'SalesItemLineDetail',
         Amount: amount,
-        Description: buildSfcCreditLineText(input.applicationId, input.enrolmentId, item.description),
+        Description: buildSfcCreditLineText(applicationId, input.enrolmentId, item.description),
         SalesItemLineDetail: {
           ItemRef: { value: item.id, name: item.name },
           Qty: 1,
@@ -245,8 +360,8 @@ export async function createDirectApplicationSfcInvoice(
     ],
   };
 
-  if (input.mainInvoiceDocNumber && input.mainInvoiceDocNumber.trim()) {
-    Object.assign(invoiceBody, await buildPurchaseOrderInvoiceFields(input.mainInvoiceDocNumber));
+  if (mainInvoiceDocNumber) {
+    Object.assign(invoiceBody, await buildPurchaseOrderInvoiceFields(mainInvoiceDocNumber));
   }
 
   // As with the grant invoice: the claim reference is the number, so a reissue
@@ -258,6 +373,8 @@ export async function createDirectApplicationSfcInvoice(
   if (!created.id) {
     throw new Error('QB SFC invoice create returned no Id');
   }
+
+  await syncMainInvoice();
 
   return {
     invoiceId: created.id,

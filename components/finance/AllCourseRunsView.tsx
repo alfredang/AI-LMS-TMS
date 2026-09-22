@@ -712,11 +712,14 @@ const AllCourseRunsView: React.FC = () => {
   /**
    * Single "Generate Invoice" entry point. Selected rows are split by DA-ness
    * BEFORE anything is called — a DA enrolment's applicationId only ever goes
-   * to /api/admin/da-generate-invoice (the exact pipeline the View Direct
-   * Application page uses: main + Grant + SFC invoice), and a non-DA
+   * to /api/admin/da-generate-invoice (the same pipeline the View Direct
+   * Application page uses: main + Grant + SFC invoice, but with sendEmail:
+   * false so it only creates the invoice here — this page's own "Send
+   * invoice" button is the only thing that emails it), and a non-DA
    * enrolment's id only ever goes to the existing /api/finance/invoice-jobs
-   * enqueue+poll flow. The two lists never mix, so a row can't be routed
-   * through the wrong pipeline and produce the wrong invoice.
+   * enqueue+poll flow (which likewise only creates, never sends). The two
+   * lists never mix, so a row can't be routed through the wrong pipeline
+   * and produce the wrong invoice.
    */
   const generateInvoices = async () => {
     if (selectedEnrolmentIds.length === 0) return;
@@ -751,7 +754,9 @@ const AllCourseRunsView: React.FC = () => {
           const res = await fetch('/api/admin/da-generate-invoice', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ applicationIds: daApplicationIds }),
+            // This page has its own separate "Send invoice" step, so generation
+            // here must only create the invoice — never email it automatically.
+            body: JSON.stringify({ applicationIds: daApplicationIds, sendEmail: false }),
           });
           const json = await res.json();
           const results = Array.isArray(json.results) ? (json.results as { success: boolean }[]) : [];
