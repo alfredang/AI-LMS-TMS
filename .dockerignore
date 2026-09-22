@@ -1,16 +1,7 @@
-.git
 .gitignore
-.local-work-archive
-.agents
-.claude
-.codex
-.deploy-*
-.tmp
-scratch
 .env.local
 .env*.local
 node_modules
 .next
-tsconfig.tsbuildinfo
 *.log
 README.md

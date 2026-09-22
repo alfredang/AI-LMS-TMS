@@ -193,13 +193,3 @@ eraser-ring-dashed.png
 
 # Raw TPGateway financial transaction reports — real learner PII (names, NRIC, payment refs).
 transaction data/
-
-# Local snapshots of unfinished branch work (never upload to Git)
-.local-work-archive/
-
-# Local agent tooling and generated working outputs
-.agents/
-outputs/
-
-# Rebuilt from the extension and guides by npm prebuild.
-public/downloads/tpg-renewal/
