@@ -72,6 +72,7 @@ import SupportTicketsView from '../components/admin/SupportTicketsView';
 import SupportTicketDetailView from '../components/admin/SupportTicketDetailView';
 import MasterListView from '../components/admin/MasterListView';
 import WsqScheduleSyncView from '../components/admin/WsqScheduleSyncView';
+import DuplicateCourseRunsView from '../components/admin/DuplicateCourseRunsView';
 import SoftwareCredentialsView from '../components/admin/SoftwareCredentialsView';
 import RescheduleCancelView from '../components/admin/RescheduleCancelView';
 import { UploadCompanyApplicationView, ViewCompanyApplicationView, CheckSupportingDocumentView } from '../components/admin/CompanyApplicationViews';
@@ -230,6 +231,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.SoftwareCredentials]: 'Software Credentials',
   [AdminPage.RescheduleCancel]: 'Reschedule & Cancel',
   [AdminPage.SupportTicketDetail]: 'Ticket Detail',
+  [AdminPage.DuplicateCourseRuns]: 'Duplicate Course Runs',
 };
 
 const AdminLayout: React.FC = () => {
@@ -257,6 +259,7 @@ const AdminLayout: React.FC = () => {
       { title: "Edit Course Run", description: "Update course run details and trainer assignments.", icon: IconName.Create, onClick: () => setAdminPage(AdminPage.EditCourseRun) },
       { title: "Upload Course Runs", description: "Bulk upload course runs to SSG using Excel.", icon: IconName.FileText, onClick: () => setAdminPage(AdminPage.UploadCourseRuns) },
       { title: "Delete Course Run", description: "Remove an uploaded course run record.", icon: IconName.Delete, onClick: () => setAdminPage(AdminPage.DeleteCourseRun) },
+      { title: "Duplicate Course Runs", description: "Audit duplicate SSG run dates and enrolments before hiding public duplicates.", icon: IconName.Search, onClick: () => setAdminPage(AdminPage.DuplicateCourseRuns) },
     ],
     [AdminPage.TpgCourseSession]: [
       { title: "Add Sessions", description: "Create the session schedule for a course run.", icon: IconName.Add, onClick: () => setAdminPage(AdminPage.AddSessions) },
@@ -509,6 +512,8 @@ const AdminLayout: React.FC = () => {
         return <MasterListView />;
       case AdminPage.WsqScheduleSync:
         return <WsqScheduleSyncView />;
+      case AdminPage.DuplicateCourseRuns:
+        return <DuplicateCourseRunsView />;
       case AdminPage.SoftwareCredentials:
         return <SoftwareCredentialsView />;
       case AdminPage.RescheduleCancel:
@@ -549,7 +554,7 @@ const AdminLayout: React.FC = () => {
         {/* Main Content Area */}
         <main className="flex-1 min-w-0 overflow-x-hidden">
           <div className={`w-full px-4 sm:px-6 lg:px-8 ${editingCourse ? 'pt-3 pb-8' : 'py-8'}`}>
-            {[AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.ClassDetail, AdminPage.ViewClassByDate, AdminPage.SearchCourseRuns, AdminPage.ViewCourseRun, AdminPage.EditCourseRun, AdminPage.UploadCourseRuns, AdminPage.DeleteCourseRun, AdminPage.AddSessions, AdminPage.CourseSessionTiming, AdminPage.CourseSessions, AdminPage.EnrollLearners, AdminPage.UploadEnrolments, AdminPage.SearchEnrolment, AdminPage.ViewEnrolment, AdminPage.UpdateEnrolment, AdminPage.CancelEnrolment, AdminPage.UpdateEnrolmentFees, AdminPage.CourseSessionAttendance, AdminPage.CheckAttendance, AdminPage.SubmitAssessment, AdminPage.UpdateAssessment, AdminPage.BulkUpdateAssessment, AdminPage.SearchAssessments, AdminPage.ViewAssessment, AdminPage.SearchGrant, AdminPage.ViewGrantStatus].includes(adminPage) && <SsgAppSelector />}
+            {[AdminPage.CreateNewClass, AdminPage.EditClass, AdminPage.ClassDetail, AdminPage.ViewClassByDate, AdminPage.SearchCourseRuns, AdminPage.ViewCourseRun, AdminPage.EditCourseRun, AdminPage.UploadCourseRuns, AdminPage.DeleteCourseRun, AdminPage.DuplicateCourseRuns, AdminPage.AddSessions, AdminPage.CourseSessionTiming, AdminPage.CourseSessions, AdminPage.EnrollLearners, AdminPage.UploadEnrolments, AdminPage.SearchEnrolment, AdminPage.ViewEnrolment, AdminPage.UpdateEnrolment, AdminPage.CancelEnrolment, AdminPage.UpdateEnrolmentFees, AdminPage.CourseSessionAttendance, AdminPage.CheckAttendance, AdminPage.SubmitAssessment, AdminPage.UpdateAssessment, AdminPage.BulkUpdateAssessment, AdminPage.SearchAssessments, AdminPage.ViewAssessment, AdminPage.SearchGrant, AdminPage.ViewGrantStatus].includes(adminPage) && <SsgAppSelector />}
             {renderContent()}
           </div>
         </main>

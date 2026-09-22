@@ -295,6 +295,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                     <NavItem page={AdminPage.UploadCourseRuns} label="Upload Course Runs" isSubItem />
                     <NavItem page={AdminPage.DeleteCourseRun} label="Delete Course Run" isSubItem />
                     <NavItem page={AdminPage.WsqScheduleSync} label="WSQ Schedule Sync" isSubItem />
+                    <NavItem page={AdminPage.DuplicateCourseRuns} label="Duplicate Course Runs" isSubItem />
                 </SubSection>
 
                 <SubSection title="Session" isOpen={openSections.tpgSession} onToggle={() => toggleSection('tpgSession')}>
