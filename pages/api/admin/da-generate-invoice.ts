@@ -82,10 +82,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { applicationIds } = req.body || {};
+  const { applicationIds, sendEmail } = req.body || {};
   if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
     return res.status(400).json({ success: false, error: 'applicationIds array is required' });
   }
+  // Default true preserves the View Direct Application page's established
+  // behaviour (generate = send immediately). The Consolidated Finance page
+  // has its own separate "Send invoice" step and passes sendEmail: false so
+  // "Generate Invoice" there only creates the invoice, not emails it.
+  const wantsEmail = sendEmail !== false;
 
   try {
     const rows = await pool.query(
@@ -138,7 +143,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       try {
         pipelineResult = await processDirectApplication(row.id, undefined, {
           forceInvoice: true,
-          sendInvoiceEmail: true,
+          sendInvoiceEmail: wantsEmail,
+          suppressInvoiceEmail: !wantsEmail,
         });
       } catch (pipelineErr) {
         const error = pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr);
