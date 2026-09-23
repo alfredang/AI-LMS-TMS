@@ -7,7 +7,9 @@ import {
   WHATSAPP_MIN_GAP_MINUTES,
   WHATSAPP_PENDING_TTL_HOURS,
 } from '../../../lib/trainerWhatsapp';
-import { findAcknowledgedTrainerTgs } from '../../../lib/calendar/trainerAcknowledgement';
+import { getTrainerReminderSnapshot } from '../../../lib/calendar/trainerReminderService';
+import { buildReminderSnapshot } from '../../../lib/calendar/trainerReminderSnapshot';
+import { isIsoDate, queuedReminderMatches, type QueuedReminder } from '../../../lib/calendar/reminderEligibilityRules';
 
 /**
  * External API — Trainer WhatsApp Notification Queue (rate-gated dispatcher)
@@ -72,6 +74,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       createdAt: r.created_at,
       dispatchedAt: r.dispatched_at,
       sentAt: r.sent_at,
+      sessionDate: r.session_date,
+      calendarEventId: r.calendar_event_id,
+      trainerUserId: r.trainer_user_id,
     });
 
     // Non-pending statuses: plain read-only listing (audit/monitoring).
@@ -118,6 +123,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // Housekeeping 3: staleness guards — nudges are queued at email-send time
     // but released later, so re-check the LMS state at dispatch time and
     // cancel anything that no longer applies.
+    let verifiedReminderIds: string[] | null = null;
     if (channelName === 'invitation') {
       // (a) The class already has a trainer accepted/assigned in the LMS —
       //     "please accept the invitation" would be wrong for everyone.
@@ -141,55 +147,33 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             )`
       );
     } else if (channelName === 'class_reminder') {
-      // Re-check live Calendar acceptance immediately before release. This
-      // cancels old queue rows too: one accepted trainer suppresses every
-      // pending reminder for the same TGS and class date.
-      const pendingTgsRows = (await pool.query<{
-        run_uuid: string;
-        course_code: string | null;
-        start_date: string;
-      }>(
-        `SELECT DISTINCT cr.id AS run_uuid, c.course_code, cr.start_date::date::text AS start_date
-           FROM trainer_whatsapp_notification n
-           JOIN course_run cr ON cr.id = n.course_run_id
-           JOIN course c ON c.id = cr.course_id
-          WHERE n.status = 'pending' AND n.kind = 'class_reminder'`,
-      )).rows;
-      const acknowledgedTgs = await findAcknowledgedTrainerTgs(pendingTgsRows.map((row) => ({
-        runUuid: row.run_uuid,
-        courseCode: row.course_code,
-        dateIso: row.start_date,
-      })));
-      for (const acknowledgement of acknowledgedTgs.values()) {
-        await pool.query(
-          `UPDATE trainer_whatsapp_notification n
-              SET status = 'cancelled',
-                  error = 'Trainer accepted Calendar invite for this TGS/date - reminder no longer needed'
-             FROM course_run cr
-             JOIN course c ON c.id = cr.course_id
-            WHERE n.course_run_id = cr.id
-              AND n.status = 'pending'
-              AND n.kind = 'class_reminder'
-              AND upper(btrim(c.course_code)) = $1
-              AND cr.start_date::date = $2::date`,
-          [acknowledgement.courseCode, acknowledgement.dateIso],
-        );
+      // Legacy rows lack event/session/person provenance and remain held for review.
+      // Every release must pass the same fresh source decision used by report and queue.
+      verifiedReminderIds = [];
+      const pending = (await pool.query<QueuedReminder>(`
+        SELECT n.id, n.course_run_id AS "runUuid", n.session_date::text AS "sessionDate",
+               n.calendar_event_id AS "eventId", n.trainer_user_id AS "trainerUserId",
+               n.trainer_email AS "trainerEmail", n.trainer_phone AS "trainerPhone",
+               n.status, cr.start_date::date::text AS "runStartDate"
+          FROM trainer_whatsapp_notification n JOIN course_run cr ON cr.id=n.course_run_id
+         WHERE n.status='pending' AND n.kind='class_reminder'`)).rows;
+      const dates = [...new Set(pending.flatMap(q => isIsoDate(q.sessionDate) && q.eventId && q.trainerUserId ? [q.sessionDate] : []))];
+      try {
+        for (const date of dates) {
+          const snapshot = await getTrainerReminderSnapshot(date, date);
+          for (const queued of pending.filter(q => q.sessionDate === date)) {
+            const rows = buildReminderSnapshot({ ...snapshot.input, ignoreNotificationId: queued.id });
+            if (rows.some(row => queuedReminderMatches(queued, row))) verifiedReminderIds.push(queued.id);
+          }
+        }
+      } catch (error) {
+        console.error('Class reminder dispatch source verification failed', error);
+        return res.status(503).json({ success: false, count: 0, notifications: [], reason: 'source_verification_failed' });
       }
-
-      // Symmetric guard: a class reminder only goes to a trainer of a class
-      // that is STILL Confirmed with that trainer still assigned.
-      await pool.query(
-        `UPDATE trainer_whatsapp_notification n
-            SET status = 'cancelled', error = 'Class is no longer Confirmed with this trainer assigned'
-          WHERE n.status = 'pending' AND n.kind = 'class_reminder'
-            AND NOT EXISTS (
-              SELECT 1 FROM course_run cr
-              JOIN course_run_trainer crt ON crt.course_run_id = cr.id
-              WHERE cr.id = n.course_run_id
-                AND cr.class_status = 'Confirmed'
-                AND LOWER(crt.trainer_email) = LOWER(COALESCE(n.trainer_email, ''))
-            )`
-      );
+      if (!verifiedReminderIds.length) return res.status(200).json({
+        success: true, count: 0, notifications: [], channel: channelName,
+        reason: pending.length ? 'verification_hold' : 'empty_queue',
+      });
     }
 
     // Sending window for THIS channel.
@@ -251,12 +235,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         WHERE n.id = (
           SELECT id FROM trainer_whatsapp_notification
            WHERE status = 'pending' AND kind = ANY($1::text[])
+             AND ($2::uuid[] IS NULL OR id=ANY($2::uuid[]))
            ORDER BY created_at ASC
            LIMIT 1
            FOR UPDATE SKIP LOCKED
         )
         RETURNING n.*, (SELECT cr.course_run_id FROM course_run cr WHERE cr.id = n.course_run_id) AS course_run_id`,
-      [channel.kinds]
+      [channel.kinds, verifiedReminderIds]
     );
     return res.status(200).json({
       success: true,
