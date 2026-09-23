@@ -10,7 +10,11 @@ export function stripPrefixes(t: string): string {
 
 /** The YYYY-MM-DD date of a calendar event (timed or all-day). */
 export function eventDateIso(evt: calendar_v3.Schema$Event): string {
-  return evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '';
+  if (evt.start?.dateTime) {
+    const instant = Date.parse(evt.start.dateTime);
+    return Number.isNaN(instant) ? '' : new Date(instant + 8 * 3600_000).toISOString().slice(0, 10);
+  }
+  return evt.start?.date || '';
 }
 
 export interface MatchTarget {
@@ -95,7 +99,7 @@ export function findEventOnDate(
  * same-day clash). Tolerant of the location too.
  */
 export function extractEventRunId(evt: calendar_v3.Schema$Event): string | null {
-  const text = (evt.description || '') + ' ' + (evt.location || '');
+  const text = ((evt.description || '') + ' ' + (evt.location || '')).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
   const m = text.match(/course\s*run\s*id\s*:?\s*([a-z0-9-]+)/i);
   return m ? m[1].toLowerCase() : null;
 }
@@ -111,12 +115,12 @@ export function extractEventRunId(evt: calendar_v3.Schema$Event): string | null 
  *      have some) so this doesn't accidentally swallow unrelated text.
  */
 export function extractEventCourseCode(evt: calendar_v3.Schema$Event): string | null {
-  const text = (evt.description || '') + ' ' + (evt.location || '');
+  const text = ((evt.description || '') + ' ' + (evt.location || '')).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ');
   const labeled = text.match(/course\s*code\s*:?\s*([a-z0-9-]+)/i);
   if (labeled) return labeled[1].toUpperCase();
 
   // Real course_code length range in this system is 4-14 chars (e.g. "C251", "TGS-2023035977").
-  const bare = (evt.description || '').trim();
+  const bare = (evt.description || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
   if (/^[A-Z0-9-]{4,20}$/i.test(bare)) return bare.toUpperCase();
 
   return null;

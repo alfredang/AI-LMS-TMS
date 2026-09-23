@@ -1,4 +1,6 @@
 import pool from './db';
+import { normalizeSgPhone, isIsoDate } from './calendar/reminderEligibilityRules';
+export { normalizeSgPhone } from './calendar/reminderEligibilityRules';
 
 /**
  * WhatsApp nudges for trainer invitations/reminders — queue side.
@@ -45,6 +47,13 @@ export async function ensureTrainerWhatsappTable() {
   await pool.query(
     `ALTER TABLE trainer_whatsapp_notification ADD COLUMN IF NOT EXISTS dispatched_at TIMESTAMPTZ`
   );
+  await pool.query(`ALTER TABLE trainer_whatsapp_notification
+    ADD COLUMN IF NOT EXISTS session_date DATE,
+    ADD COLUMN IF NOT EXISTS calendar_event_id TEXT,
+    ADD COLUMN IF NOT EXISTS trainer_user_id UUID`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_class_reminder_session_trainer
+    ON trainer_whatsapp_notification(course_run_id, session_date, trainer_user_id)
+    WHERE kind='class_reminder' AND session_date IS NOT NULL AND trainer_user_id IS NOT NULL`);
 }
 
 /**
@@ -95,44 +104,22 @@ export function secondsUntilWhatsappWindow(
   return Math.max(60, Math.ceil((next.getTime() - sgtMs) / 1000));
 }
 
-/**
- * Normalize a stored phone to E.164 (+65XXXXXXXX for local numbers).
- * Returns null when the value can't plausibly be a real number — the row is
- * then queued as 'no_phone' so the gap is visible instead of silently lost.
- */
-export function normalizeSgPhone(tel: string | null | undefined): string | null {
-  if (!tel) return null;
-  const digits = String(tel).replace(/\D/g, '');
-  if (!digits) return null;
-  let formatted: string;
-  if (digits.startsWith('65') && digits.length === 10) formatted = `+${digits}`;
-  else if (digits.length === 8) formatted = `+65${digits}`;
-  else if (String(tel).trim().startsWith('+')) formatted = `+${digits}`;
-  else formatted = `+${digits}`;
-  const len = formatted.replace(/\D/g, '').length;
-  return len >= 8 && len <= 15 ? formatted : null;
-}
-
 const fmtDate = (v: any): string => {
   if (!v) return 'N/A';
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleDateString('en-GB');
 };
 
-/**
- * Queue one WhatsApp nudge for a trainer about a course run. Resolves the
- * phone from trainer_profile.tel via the trainer's email. Never throws.
- */
-/**
- * Queue the "upcoming class in 3 days" reminder for one trainer of a
- * CONFIRMED class. The LMS composes the message from its own record (the
- * single source of truth) — this replaced Tael's self-assembled reminders,
- * which had wrong/blank Course Duration and Mode of Training fields.
- * Deduped per (run, trainer): queued at most once per run/trainer within 10
- * days. Never throws.
+/** Queue an already-verified Calendar session recipient. Exact run/date/person deduplication
+ * includes historical attempts; failed/expired/legacy records need review before retrying.
+ * The partial unique index prevents concurrent schedulers from creating duplicate reminders.
  */
 export async function queueClassReminderWhatsApp(opts: {
   courseRunUuid: string;
+  sessionDate: string;
+  calendarEventId: string;
+  trainerUserId: string;
+  trainerEmails: string[];
   trainerName: string;
   trainerEmail: string | null;
   trainerPhone: string | null; // already E.164-normalized, or null
@@ -140,33 +127,36 @@ export async function queueClassReminderWhatsApp(opts: {
 }): Promise<'queued' | 'skipped_duplicate' | 'error'> {
   const { courseRunUuid, trainerName, trainerEmail, trainerPhone, message } = opts;
   try {
+    if (!isIsoDate(opts.sessionDate) || !opts.calendarEventId || !opts.trainerUserId || !normalizeSgPhone(trainerPhone)) return 'error';
     await ensureTrainerWhatsappTable();
     const dup = await pool.query(
-      `SELECT 1 FROM trainer_whatsapp_notification
-        WHERE course_run_id = $1
-          AND kind = 'class_reminder'
-          AND LOWER(COALESCE(trainer_email, trainer_name)) = LOWER(COALESCE($2, $3))
-          AND created_at > NOW() - INTERVAL '10 days'
+      `SELECT 1 FROM trainer_whatsapp_notification n JOIN course_run cr ON cr.id=n.course_run_id
+        WHERE n.course_run_id = $1
+          AND n.kind = 'class_reminder'
+          AND COALESCE(n.session_date,cr.start_date::date) = $2::date
+          AND (n.trainer_user_id=$3 OR LOWER(n.trainer_email)=ANY($4::text[]))
         LIMIT 1`,
-      [courseRunUuid, trainerEmail, trainerName]
+      [courseRunUuid, opts.sessionDate, opts.trainerUserId, opts.trainerEmails.map(e => e.toLowerCase())]
     );
     if (dup.rows.length > 0) return 'skipped_duplicate';
 
-    await pool.query(
+    const inserted = await pool.query(
       `INSERT INTO trainer_whatsapp_notification
-         (course_run_id, trainer_name, trainer_email, trainer_phone, kind, message, status, error)
-       VALUES ($1, $2, $3, $4, 'class_reminder', $5, $6, $7)`,
+         (course_run_id, trainer_name, trainer_email, trainer_phone, kind, message, status, session_date, calendar_event_id, trainer_user_id)
+       VALUES ($1, $2, $3, $4, 'class_reminder', $5, 'pending', $6::date, $7, $8)
+       ON CONFLICT DO NOTHING RETURNING id`,
       [
         courseRunUuid,
         trainerName,
         trainerEmail,
         trainerPhone,
         message,
-        trainerPhone ? 'pending' : 'no_phone',
-        trainerPhone ? null : 'No usable phone number on trainer profile',
+        opts.sessionDate,
+        opts.calendarEventId,
+        opts.trainerUserId,
       ]
     );
-    return 'queued';
+    return inserted.rows.length ? 'queued' : 'skipped_duplicate';
   } catch (err) {
     console.error('❌ [trainerWhatsapp] class-reminder queue failed:', err);
     return 'error';
