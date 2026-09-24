@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { requireCourseRunTrainer } from '@lib/auth/courseRunAccess';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
@@ -34,6 +35,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ApiResponse>) {
         error: 'Missing required fields: courseRunId, assessmentId, published' 
       });
     }
+
+    // Only staff or an assigned trainer of this class may publish.
+    if (!(await requireCourseRunTrainer((req as AuthedApiRequest).authUser!, res, String(courseRunId)))) return;
 
     console.log(`🔍 Publishing assessment: courseRunId=${courseRunId}, assessmentId=${assessmentId}, published=${published}`);
 
@@ -73,4 +77,4 @@ async function handler(req: NextApiRequest, res: NextApiResponse<ApiResponse>) {
   }
 }
 
-export default withAuth(handler);
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

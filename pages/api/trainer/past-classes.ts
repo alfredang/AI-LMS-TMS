@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { requireSelfTrainer } from '@lib/auth/courseRunAccess';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -12,6 +13,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (!email || typeof email !== 'string') {
         return res.status(400).json({ message: 'Trainer email is required' });
     }
+
+    // A trainer may only list their own assigned classes.
+    if (!(await requireSelfTrainer((req as AuthedApiRequest).authUser!, res, { email }))) return;
 
     try {
         const query = `

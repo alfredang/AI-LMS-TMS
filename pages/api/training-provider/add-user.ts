@@ -64,7 +64,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             await client.query('DELETE FROM user_role_map WHERE user_id = $1', [newUserId]);
 
             // Insert new roles
-            const insertRoleQuery = `INSERT INTO user_role_map (user_id, role) VALUES ($1, $2)`;
+            const insertRoleQuery = `INSERT INTO user_role_map (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING`;
             for (const role of roles) {
                 await client.query(insertRoleQuery, [newUserId, role]);
             }
@@ -89,7 +89,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             await client.query(insertProfileQuery, [newUserId, telephone]);
 
             // Insert roles
-            const insertRoleQuery = `INSERT INTO user_role_map (user_id, role) VALUES ($1, $2)`;
+            const insertRoleQuery = `INSERT INTO user_role_map (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING`;
             for (const role of roles) {
                 await client.query(insertRoleQuery, [newUserId, role]);
             }

@@ -56,7 +56,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // Insert new roles
     for (const role of roles) {
       await client.query(
-        'INSERT INTO public.user_role_map (user_id, role) VALUES ($1, $2)',
+        'INSERT INTO public.user_role_map (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING',
         [userId, role]
       );
     }

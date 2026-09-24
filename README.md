@@ -85,7 +85,8 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Tools** — the full trainer tools catalogue mirrored in the learner sidebar (Ed Tools, Project Mgt, Six Sigma, Cyber Security, Networking, Finance, HR, Data Analytics, ML, Statistical, DOE, SPC, Sustainability, K8s, Blockchain, Quantum, Design, GenAI, Agentic AI, Virtual Tools), shared via `components/toolsData.ts`; clicking a tools group opens the same tool card page as the trainer role (GenAI Tools stays link-only for learners)
 
 ### Trainer Features
-- **My Classes** — View assigned classes (upcoming, ongoing, completed)
+- **My Classes** — View assigned classes (upcoming, ongoing, completed). Trainer mode is scoped server-side to classes the trainer is assigned to (`course_run_trainer` or the legacy assigned-trainer columns, matched by user id or any of the trainer's emails) — listing, opening, publishing assessments and grading all return `403` for unassigned classes
+- **Trainer + Learner dual role** — trainers who enrol in the provider's own courses sign in and pick **Learner** mode (their enrolled classes, lessons, assessment submissions) or **Trainer** mode (only their assigned classes), switchable from the header's *View As* menu. Gated per tenant by `training_provider.trainer_learner_dual_role` (default off); enabling it backfills the Learner role onto every trainer and a `user_role_map` trigger grants it to every new trainer. A trainer can never grade their own enrolment
 - **My Calendar** — personal month calendar of the trainer's assigned classes
 - **E-Attendance** — Digital attendance tracking
 - **Assessment Grading** — Rubric-based grading with Assessment Summary Record support; each learner row shows per-method submission status (WA Written, PP Practical, CS Case Study, RP Role Play, OQ Oral Questioning) ticked when the learner has submitted, alongside a manually-ticked **TQ (TRAQOM survey)** box — SSG publishes no per-learner survey completion feed, so the trainer confirms it — with per-method and TRAQOM completion counts (e.g. WA 3/7, TRAQOM 5/7) and a refresh button in the roster header, plus Mark All Competent and bulk certificate sending
@@ -258,7 +259,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | Role | Description | Key Permissions |
 |------|-------------|-----------------|
 | **Learner** | Course participants | Enroll in courses, track progress, submit assessments, download certificates, raise support tickets |
-| **Trainer** | Course instructors | View assigned classes, take attendance, grade assessments, access Ed Tools and GenAI tools |
+| **Trainer** | Course instructors | View, publish assessments for, and grade only their assigned classes; take attendance; access Ed Tools and GenAI tools. Can also hold Learner (dual-role flag) to attend courses |
 | **Developer** | Course developers | Create and edit course content, assessments, learning materials, SEO metadata generation |
 | **Admin** | System administrators | Full class management, trainer/learner assignment, TPG management, certificate generation, ticket system, workflow guides |
 | **Finance** | Financial operations | Financial dashboard, FMS automation, QuickBooks, claims, grants, personal/company invoice workflows, Bizfile lookup |
@@ -407,7 +408,8 @@ POST /api/enrolments/bulk-create  # Bulk create enrolments
 ### Assessments & Grading
 
 ```
-POST /api/assessments/publish     # Publish assessment
+PUT  /api/assessments/publish     # Publish/unpublish assessment (staff or assigned trainer)
+PUT  /api/assessments/publish-link # Publish/unpublish an assessment method link (staff or assigned trainer)
 POST /api/submissions/submit      # Submit assessment
 POST /api/grading/update-grading  # Grade submission
 POST /api/trainer/grade-student   # Toggle learner competency
@@ -472,6 +474,7 @@ ai-lms-tms/
 │   │   ├── withAuth.ts         # Route guard wrapper (roles + service key)
 │   │   ├── requireRole.ts      # Session/role resolution
 │   │   ├── session.ts          # Session token issue/revoke (hashed at rest)
+│   │   ├── courseRunAccess.ts  # Trainer-mode class authorization (assigned trainer / staff)
 │   │   └── serviceKey.ts       # Machine (x-api-key) authentication
 │   ├── services/               # Business logic services
 │   │   ├── authService.ts      # Client-side auth state

@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { requireSelfTrainer } from '@lib/auth/courseRunAccess';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -42,6 +43,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       error: 'Missing required parameters: trainerUserId and courseRunId' 
     });
   }
+
+  // A trainer may only open classes as themself (assignment is checked by the query below).
+  if (!(await requireSelfTrainer((req as AuthedApiRequest).authUser!, res, { id: String(trainerUserId) }))) return;
 
   try {
     // Both learner and trainer roles now provide courseRunId as UUID

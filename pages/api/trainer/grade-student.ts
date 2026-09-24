@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { isStaff, requireCourseRunTrainer } from '@lib/auth/courseRunAccess';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { Pool } from 'pg';
 
@@ -24,6 +25,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         if (source !== 'manual' && source !== 'ssg') {
             return res.status(400).json({ message: 'Invalid source. Must be manual or ssg.' });
         }
+
+        // Trainers only grade classes they are assigned to — never their own enrolment
+        // in a class they attend as a learner.
+        const authUser = (req as AuthedApiRequest).authUser!;
+        const run = await pool.query(`SELECT course_run_id, user_id FROM enrollment WHERE id::text = $1`, [String(enrolmentId)]);
+        if (run.rows.length === 0) {
+            return res.status(404).json({ message: 'Enrolment not found' });
+        }
+        if (!isStaff(authUser) && run.rows[0].user_id === authUser.id) {
+            return res.status(403).json({ message: 'You cannot grade your own enrolment' });
+        }
+        if (!(await requireCourseRunTrainer(authUser, res, String(run.rows[0].course_run_id)))) return;
 
         // Unconditionally update assessment_status only (decoupled from certificates per user request)
         await pool.query(

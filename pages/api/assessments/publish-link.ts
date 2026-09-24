@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { requireCourseRunTrainer } from '@lib/auth/courseRunAccess';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -16,6 +17,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (!courseRunId || !field || typeof published !== 'boolean') {
     return res.status(400).json({ success: false, error: 'Missing required fields: courseRunId, field, published' });
   }
+
+  // Only staff or an assigned trainer of this class may publish.
+  if (!(await requireCourseRunTrainer((req as AuthedApiRequest).authUser!, res, String(courseRunId)))) return;
 
   const legacyFields: Record<string, string> = {
     written: 'written_assessment_published',
@@ -51,4 +55,4 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-export default withAuth(handler);
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

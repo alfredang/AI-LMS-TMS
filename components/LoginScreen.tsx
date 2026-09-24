@@ -619,8 +619,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   {getRoleDisplayName(role)}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                  {role === UserRole.Learner && 'Access courses and track your learning progress'}
-                  {role === UserRole.Trainer && 'Manage classes and grade assessments'}
+                  {role === UserRole.Learner && 'Your enrolled classes and assessments'}
+                  {role === UserRole.Trainer && 'Only the classes you are assigned to teach'}
                   {role === UserRole.Developer && 'Create and edit course content'}
                   {role === UserRole.Admin && 'Manage users, classes, and system settings'}
                   {role === UserRole.Finance && 'Manage grants, claims, and financial records'}

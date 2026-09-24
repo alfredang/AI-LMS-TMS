@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { requireCourseRunTrainer } from '@lib/auth/courseRunAccess';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { Pool } from 'pg';
 
@@ -24,6 +25,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (!courseRunId || typeof courseRunId !== 'string') {
         return res.status(400).json({ message: 'Course run UUID is required' });
     }
+
+    // Trainers only see the roster of classes they are assigned to.
+    if (!(await requireCourseRunTrainer((req as AuthedApiRequest).authUser!, res, courseRunId))) return;
 
     try {
         // Fetch all enrolments from the unified `enrollment` table
