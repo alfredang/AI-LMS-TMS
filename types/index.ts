@@ -153,6 +153,7 @@ export enum AdminPage {
   FeedbackForm = 'feedbackForm',
   FeedbackFormResponses = 'feedbackFormResponses',
   WsqScheduleSync = 'wsqScheduleSync',
+  DuplicateCourseRuns = 'duplicateCourseRuns',
 }
 
 export interface FeedbackFormField {

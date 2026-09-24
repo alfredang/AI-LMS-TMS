@@ -115,15 +115,30 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         courseId = courseUpsert.rows[0].id;
       }
 
-      const runUpsert = await client.query(
-        `INSERT INTO course_run (course_id, course_run_id, digital_attendance_id, start_date, end_date, mode_of_learning, class_status)
-         VALUES ($1, $2, $3, $4, $5, 'Physical', 'Confirmed')
-         ON CONFLICT (course_id, course_run_id) DO UPDATE
-           SET digital_attendance_id = COALESCE(EXCLUDED.digital_attendance_id, course_run.digital_attendance_id)
-         RETURNING id`,
-        [courseId, String(runData.id), digitalAttendanceId, startDate, endDate]
+      const existingRun = await client.query(
+        `SELECT id FROM course_run WHERE course_run_id = $1 AND COALESCE(is_deleted, false) = false LIMIT 1`,
+        [String(runData.id)]
       );
-      courseRunUuid = runUpsert.rows[0].id;
+      if (existingRun.rows[0]) {
+        await client.query(
+          `UPDATE course_run
+              SET digital_attendance_id = COALESCE($2, digital_attendance_id),
+                  start_date = COALESCE($3::date, start_date),
+                  end_date = COALESCE($4::date, end_date),
+                  updated_at = NOW()
+            WHERE id = $1`,
+          [existingRun.rows[0].id, digitalAttendanceId, startDate, endDate]
+        );
+        courseRunUuid = existingRun.rows[0].id;
+      } else {
+        const runInsert = await client.query(
+          `INSERT INTO course_run (course_id, course_run_id, digital_attendance_id, start_date, end_date, mode_of_learning, class_status)
+           VALUES ($1, $2, $3, $4, $5, 'Physical', 'Confirmed')
+           RETURNING id`,
+          [courseId, String(runData.id), digitalAttendanceId, startDate, endDate]
+        );
+        courseRunUuid = runInsert.rows[0].id;
+      }
 
       await client.query('COMMIT');
     } catch (insertErr) {

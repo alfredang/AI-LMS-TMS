@@ -7,6 +7,11 @@ import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getSSGCredentialsService } from '../../../../../lib/ssg/services/credentials-service';
 import { OptionalSelector } from '../../../../../lib/ssg/models/course-runs';
+import { createSSGCourseAPI } from '../../../../../lib/ssg/api/course-api';
+import {
+  assertNoDuplicateCourseRunDates,
+  DuplicateCourseRunDateError,
+} from '../../../../../lib/ssg/courseRunDuplicateGuard';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -97,6 +102,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
     };
 
+    const baseUrl = credentials.ssgApiBaseUrl || process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
+    await assertNoDuplicateCourseRunDates({
+      api: createSSGCourseAPI(baseUrl, credentials),
+      courseReferenceNumber: requestData.course.courseReferenceNumber,
+      runs: cleanedRuns,
+      uen: credentials.uen,
+    });
 
     // Build the request manually to bypass TypeScript validation issues
     // This matches exactly what the Python add_course_run.py does
@@ -104,7 +116,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const { Cryptography } = await import('../../../../../lib/ssg/utils/cryptography');
 
     const builder = new HTTPRequestBuilder()
-      .withEndpoint(process.env.SSG_API_URL || 'https://api.ssg-wsg.sg', '/courses/courseRuns/publish')
+      .withEndpoint(baseUrl, '/courses/courseRuns/publish')
       .withMethod(HttpMethod.POST)
       .withHeader('Content-Type', 'application/json');
 
@@ -131,7 +143,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     
     // Create HTTP client and make the request
     const { HttpClient } = await import('../../../../../lib/ssg/utils/http-utils');
-    const httpClient = new HttpClient(process.env.SSG_API_URL || 'https://api.ssg-wsg.sg', {
+    const httpClient = new HttpClient(baseUrl, {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     });
@@ -152,6 +164,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   } catch (error) {
     console.error('Course run creation error:', error);
+
+    if (error instanceof DuplicateCourseRunDateError) {
+      return res.status(error.status).json({
+        error: 'Duplicate course run blocked',
+        message: error.message,
+        existingRunId: error.existingRunId,
+        courseReferenceNumber: error.courseReferenceNumber,
+        startDate: error.startDate,
+        endDate: error.endDate,
+      });
+    }
     
     res.status(500).json({ 
       error: 'Internal server error',

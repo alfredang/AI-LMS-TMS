@@ -168,22 +168,34 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
             if (courseId) {
               // Upsert course_run — always update with SSG values
-              const newRunUuid = crypto.randomUUID();
-              const upsert = await client.query(
-                `INSERT INTO course_run (id, course_id, course_run_id, class_status,
-                   start_date, end_date, mode_of_learning, digital_attendance_id,
-                   created_at, updated_at)
-                 VALUES ($1,$2,$3,'Confirmed',$4,$5,$6,$7,NOW(),NOW())
-                 ON CONFLICT (course_id, course_run_id) DO UPDATE SET
-                   start_date            = COALESCE(EXCLUDED.start_date,            course_run.start_date),
-                   end_date              = COALESCE(EXCLUDED.end_date,              course_run.end_date),
-                   mode_of_learning      = COALESCE(EXCLUDED.mode_of_learning,      course_run.mode_of_learning),
-                   digital_attendance_id = COALESCE(EXCLUDED.digital_attendance_id, course_run.digital_attendance_id),
-                   updated_at            = NOW()
-                 RETURNING id`,
-                [newRunUuid, courseId, String(courseRunId), runStartDate, runEndDate, modeOfLearning, digitalAttendId]
+              const existingRun = await client.query(
+                `SELECT id FROM course_run WHERE course_run_id = $1 AND COALESCE(is_deleted, false) = false LIMIT 1`,
+                [String(courseRunId)]
               );
-              courseRunUuid = upsert.rows[0]?.id ?? null;
+
+              if (existingRun.rows[0]) {
+                await client.query(
+                  `UPDATE course_run
+                      SET start_date            = COALESCE($2::date, start_date),
+                          end_date              = COALESCE($3::date, end_date),
+                          mode_of_learning      = COALESCE($4::mode_of_learning, mode_of_learning),
+                          digital_attendance_id = COALESCE($5, digital_attendance_id),
+                          updated_at            = NOW()
+                    WHERE id = $1`,
+                  [existingRun.rows[0].id, runStartDate, runEndDate, modeOfLearning, digitalAttendId]
+                );
+                courseRunUuid = existingRun.rows[0].id;
+              } else {
+                const inserted = await client.query(
+                  `INSERT INTO course_run (id, course_id, course_run_id, class_status,
+                     start_date, end_date, mode_of_learning, digital_attendance_id,
+                     created_at, updated_at)
+                   VALUES ($1,$2,$3,'Confirmed',$4,$5,$6,$7,NOW(),NOW())
+                   RETURNING id`,
+                  [crypto.randomUUID(), courseId, String(courseRunId), runStartDate, runEndDate, modeOfLearning, digitalAttendId]
+                );
+                courseRunUuid = inserted.rows[0]?.id ?? null;
+              }
 
               // Fallback if ON CONFLICT returned nothing (shouldn't happen but safety net)
               if (!courseRunUuid) {

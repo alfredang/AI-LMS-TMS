@@ -121,6 +121,43 @@ function daysBetween(a: string, b: string): number {
   return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);
 }
 
+function extractRuns(payload: any): any[] {
+  const data = payload?.data ?? payload ?? {};
+  return data?.course?.runs ?? data?.runs ?? [];
+}
+
+async function findExistingSsgRunForDates(
+  api: ReturnType<typeof createSSGCourseAPI>,
+  courseCode: string,
+  startDate: string,
+  endDate: string,
+  uen?: string,
+): Promise<string | null> {
+  for (let page = 0; page < 10; page++) {
+    const result = await api.searchCourseRunsByCode(courseCode, {
+      page,
+      pageSize: 100,
+      includeExpired: true,
+      uen,
+    });
+    if (result.error?.code || result.error?.message || result.status !== 200) {
+      throw new Error(result.error?.message || result.error?.code || `SSG returned status ${result.status}`);
+    }
+
+    const runs = extractRuns(result.data);
+    for (const run of runs) {
+      const ssgStart = normDate(run?.courseStartDate ?? run?.courseDates?.start);
+      const ssgEnd = normDate(run?.courseEndDate ?? run?.courseDates?.end);
+      if (ssgStart === startDate && ssgEnd === endDate) {
+        const runId = run?.id ?? run?.runId ?? run?.courseRunId;
+        return runId == null ? '(unknown run id)' : String(runId);
+      }
+    }
+    if (runs.length < 100) break;
+  }
+  return null;
+}
+
 /** SSG modeOfTraining code → local mode_of_learning label (mirrors upcoming-course-runs). */
 function modeCodeToLocal(code: string): string {
   switch (code) {
@@ -182,6 +219,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       [courseCode]
     )).rows[0];
     if (!course) return res.status(404).json({ success: false, error: `Course ${courseCode} not found` });
+
+    const localDuplicate = (await pool.query<{ id: string; course_run_id: string | null }>(
+      `SELECT id, course_run_id
+         FROM course_run
+        WHERE course_id = $1
+          AND start_date = $2::date
+          AND end_date = $3::date
+          AND COALESCE(is_deleted, false) = false
+          AND COALESCE(course_run_id, '') NOT LIKE 'STAGED-%'
+        LIMIT 1`,
+      [course.id, startDate, endDate]
+    )).rows[0];
+    if (localDuplicate) {
+      return res.status(409).json({
+        success: false,
+        error: `A local course run already exists for ${courseCode} on ${startDate} to ${endDate}.`,
+        existing: {
+          id: localDuplicate.id,
+          course_run_id: localDuplicate.course_run_id,
+        },
+      });
+    }
 
     // ── Find the clone template: most recent run WITH sessions ──────────────────
     const template = (await pool.query<{
@@ -427,6 +486,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const baseUrl = credentials.ssgApiBaseUrl || process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
     const ssgApi = createSSGCourseAPI(baseUrl, credentials);
+    const existingSsgRunId = await findExistingSsgRunForDates(
+      ssgApi,
+      courseCode,
+      startDate,
+      endDate,
+      credentials.uen || tp.uen,
+    );
+    if (existingSsgRunId) {
+      return res.status(409).json({
+        success: false,
+        error: `SSG already has a course run for ${courseCode} on ${startDate} to ${endDate}; refusing to create a duplicate.`,
+        existing: {
+          course_run_id: existingSsgRunId,
+          start_date: startDate,
+          end_date: endDate,
+        },
+      });
+    }
+
     const ssgResult = await ssgApi.addCourseRun(runInfo, OptionalSelector.NO);
 
     if (ssgResult.error) {
