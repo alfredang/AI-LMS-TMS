@@ -45,6 +45,14 @@ export async function ensureTrainerWhatsappTable() {
   await pool.query(
     `ALTER TABLE trainer_whatsapp_notification ADD COLUMN IF NOT EXISTS dispatched_at TIMESTAMPTZ`
   );
+  // The specific class date this reminder is for. A multi-week recurring run
+  // (one course_run, several course_session dates weeks apart) needs one
+  // reminder per session block, not just one ever — without this, the old
+  // (run, trainer)-only dedup below silently ate every reminder after the
+  // run's first block. NULL on rows written before this column existed.
+  await pool.query(
+    `ALTER TABLE trainer_whatsapp_notification ADD COLUMN IF NOT EXISTS class_date DATE`
+  );
 }
 
 /**
@@ -128,8 +136,12 @@ const fmtDate = (v: any): string => {
  * CONFIRMED class. The LMS composes the message from its own record (the
  * single source of truth) — this replaced Tael's self-assembled reminders,
  * which had wrong/blank Course Duration and Mode of Training fields.
- * Deduped per (run, trainer): queued at most once per run/trainer within 10
- * days. Never throws.
+ * Deduped per (run, trainer, class date): queued at most once per
+ * run/trainer/session-date. A specific classDate is required so a multi-week
+ * recurring run gets a fresh reminder for each of its session blocks instead
+ * of only ever firing for the first one. Rows written before class_date
+ * existed are NULL, so they still fall back to the old 10-day window check.
+ * Never throws.
  */
 export async function queueClassReminderWhatsApp(opts: {
   courseRunUuid: string;
@@ -137,8 +149,9 @@ export async function queueClassReminderWhatsApp(opts: {
   trainerEmail: string | null;
   trainerPhone: string | null; // already E.164-normalized, or null
   message: string;
+  classDate: string; // YYYY-MM-DD, the specific session date this reminder is for
 }): Promise<'queued' | 'skipped_duplicate' | 'error'> {
-  const { courseRunUuid, trainerName, trainerEmail, trainerPhone, message } = opts;
+  const { courseRunUuid, trainerName, trainerEmail, trainerPhone, message, classDate } = opts;
   try {
     await ensureTrainerWhatsappTable();
     const dup = await pool.query(
@@ -146,16 +159,24 @@ export async function queueClassReminderWhatsApp(opts: {
         WHERE course_run_id = $1
           AND kind = 'class_reminder'
           AND LOWER(COALESCE(trainer_email, trainer_name)) = LOWER(COALESCE($2, $3))
-          AND created_at > NOW() - INTERVAL '10 days'
+          AND (
+            class_date = $4::date
+            -- Rows written before class_date existed have no exact date to compare —
+            -- fall back to a short recency window (guards against re-running the
+            -- same day's cron twice) rather than the old 10-day window, which is
+            -- long enough to wrongly treat a genuinely distinct later occurrence
+            -- of a multi-week recurring run as a duplicate of an earlier one.
+            OR (class_date IS NULL AND created_at > NOW() - INTERVAL '2 days')
+          )
         LIMIT 1`,
-      [courseRunUuid, trainerEmail, trainerName]
+      [courseRunUuid, trainerEmail, trainerName, classDate]
     );
     if (dup.rows.length > 0) return 'skipped_duplicate';
 
     await pool.query(
       `INSERT INTO trainer_whatsapp_notification
-         (course_run_id, trainer_name, trainer_email, trainer_phone, kind, message, status, error)
-       VALUES ($1, $2, $3, $4, 'class_reminder', $5, $6, $7)`,
+         (course_run_id, trainer_name, trainer_email, trainer_phone, kind, message, status, error, class_date)
+       VALUES ($1, $2, $3, $4, 'class_reminder', $5, $6, $7, $8::date)`,
       [
         courseRunUuid,
         trainerName,
@@ -164,6 +185,7 @@ export async function queueClassReminderWhatsApp(opts: {
         message,
         trainerPhone ? 'pending' : 'no_phone',
         trainerPhone ? null : 'No usable phone number on trainer profile',
+        classDate,
       ]
     );
     return 'queued';

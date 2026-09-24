@@ -108,14 +108,25 @@ export async function runAutomation(): Promise<QueueSummary> {
       FROM course_run cr
       JOIN course c ON c.id = cr.course_id
      WHERE cr.class_status = 'Confirmed'
-       AND cr.start_date::date = (NOW() AT TIME ZONE 'Asia/Singapore')::date + ($1::int * INTERVAL '1 day')
+       AND EXISTS (
+             -- A run's own start_date is only its FIRST day — a multi-week
+             -- recurring run (one course_run, several session dates weeks
+             -- apart) needs a fresh reminder for EACH block, not just once
+             -- ever for day 1. Matching against course_session dates (like
+             -- trainer-reminders.ts already does) instead of cr.start_date
+             -- lets every later block trigger its own reminder too.
+             SELECT 1 FROM course_session cs
+              WHERE cs.course_run_id = cr.id
+                AND COALESCE(cs.deleted, false) = false
+                AND cs.start_date IS NOT NULL
+                AND cs.start_date::date = (NOW() AT TIME ZONE 'Asia/Singapore')::date + ($1::int * INTERVAL '1 day')
+           )
        AND EXISTS (SELECT 1 FROM course_run_trainer crt WHERE crt.course_run_id = cr.id)
      ORDER BY cr.start_date ASC`,
     [daysInAdvance]
   );
 
-  const targetDate = rows.rows[0]?.start_date
-    || new Date(Date.now() + daysInAdvance * 86400000).toISOString().slice(0, 10);
+  const targetDate = new Date(Date.now() + daysInAdvance * 86400000).toLocaleString('en-CA', { timeZone: 'Asia/Singapore' }).slice(0, 10);
 
   const acknowledgedTgs = await findAcknowledgedTrainerTgs(rows.rows.map((row) => ({
     runUuid: row.course_run_uuid,
@@ -180,6 +191,7 @@ export async function runAutomation(): Promise<QueueSummary> {
         trainerEmail: t.email || null,
         trainerPhone: normalizeSgPhone(t.tel),
         message,
+        classDate: targetDate,
       });
       if (result === 'queued') {
         if (normalizeSgPhone(t.tel)) queued++; else noPhone++;
