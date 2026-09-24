@@ -5,6 +5,8 @@ import { getSSGCredentialsService, SSGCredentials } from '../../../../lib/ssg/se
 import { HTTPRequestBuilder, HttpMethod, handleRequest, HttpClient } from '../../../../lib/ssg/utils/http-utils';
 import { Cryptography } from '../../../../lib/ssg/utils/cryptography';
 import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../../lib/courseCode';
+import { createSSGCourseAPI } from '../../../../lib/ssg/api/course-api';
+import { getTrainingPartnerIdentifiers } from '../../../../lib/trainingPartnerIdentifiers';
 
 type SubmitItem = {
   course_code: string;
@@ -21,6 +23,7 @@ type ItemResult = {
   local_run_id?: string;
   message?: string;
 };
+type SsgRunDateCache = Map<string, Promise<Map<string, string>>>;
 
 // ── Session builder (mirrors buildAutoSessions in AddSessionsView.tsx) ────────
 
@@ -43,6 +46,67 @@ const addDays = (dateStr: string, n: number): string => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().split('T')[0];
 };
+
+const parseSsgDate = (value: unknown): string | null => {
+  if (value == null) return null;
+  const s = String(value).trim();
+  if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return null;
+};
+
+async function fetchLiveSsgRunDateMap(
+  courseCode: string,
+  credentials: SSGCredentials,
+  ssgBaseUrl: string,
+): Promise<Map<string, string>> {
+  const api = createSSGCourseAPI(ssgBaseUrl, credentials);
+  const tp = await getTrainingPartnerIdentifiers().catch(() => ({ uen: '' }));
+  const pageSize = 100;
+  const byDate = new Map<string, string>();
+
+  for (let page = 0; page < 10; page++) {
+    const result = await api.searchCourseRunsByCode(courseCode, {
+      page,
+      pageSize,
+      includeExpired: true,
+      uen: credentials.uen || tp.uen,
+    });
+    if (result.error?.code || result.error?.message || result.status !== 200) {
+      throw new Error(result.error?.message || result.error?.code || `SSG returned status ${result.status}`);
+    }
+    const data = (result.data as any)?.data ?? result.data ?? {};
+    const runs: any[] = data?.course?.runs ?? data?.runs ?? [];
+    for (const run of runs) {
+      const start = parseSsgDate(run?.courseStartDate ?? run?.courseDates?.start);
+      const end = parseSsgDate(run?.courseEndDate ?? run?.courseDates?.end);
+      if (!start || !end) continue;
+      const id = String(run?.id ?? run?.runId ?? run?.courseRunId ?? '').trim();
+      const key = `${start}|${end}`;
+      const existing = byDate.get(key);
+      byDate.set(key, [existing, id].filter(Boolean).join('/'));
+    }
+    if (runs.length < pageSize) break;
+  }
+
+  return byDate;
+}
+
+async function findLiveSsgRunForDates(
+  courseCode: string,
+  startDate: string,
+  endDate: string,
+  credentials: SSGCredentials,
+  ssgBaseUrl: string,
+  cache: SsgRunDateCache,
+): Promise<string | null> {
+  const normalizedCode = courseCode.trim();
+  if (!cache.has(normalizedCode)) {
+    cache.set(normalizedCode, fetchLiveSsgRunDateMap(normalizedCode, credentials, ssgBaseUrl));
+  }
+  const byDate = await cache.get(normalizedCode)!;
+  return byDate.get(`${startDate}|${endDate}`) || null;
+}
 
 const buildSessions = (
   timing: Record<string, any>,
@@ -145,6 +209,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   // ── Process items ─────────────────────────────────────────────────────────
   const results: ItemResult[] = [];
+  const ssgRunDateCache: SsgRunDateCache = new Map();
 
   for (const item of items) {
     const { course_code, start_date, end_date } = item || ({} as SubmitItem);
@@ -182,6 +247,37 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         ssg_run_id: existingRow.rows[0].course_run_id,
         local_run_id: existingRow.rows[0].id,
         message: 'Already submitted to SSG',
+      });
+      continue;
+    }
+
+    try {
+      const liveSsgRunId = await findLiveSsgRunForDates(
+        course_code,
+        start_date,
+        end_date,
+        credentials,
+        ssgBaseUrl,
+        ssgRunDateCache,
+      );
+      if (liveSsgRunId) {
+        results.push({
+          course_code,
+          start_date,
+          end_date,
+          status: 'exists',
+          ssg_run_id: liveSsgRunId,
+          message: 'Already exists in live SSG/TPGateway; skipped to prevent duplicate publishing',
+        });
+        continue;
+      }
+    } catch (e: any) {
+      results.push({
+        course_code,
+        start_date,
+        end_date,
+        status: 'ssg_error',
+        message: `Could not verify live SSG duplicates, so nothing was submitted: ${e?.message || e}`,
       });
       continue;
     }
@@ -352,9 +448,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         // the run ID but have the wrong start/end. Fix the dates to match Magento.
         const existingById = await pool.query<{ id: string }>(
           `SELECT id FROM course_run
-            WHERE course_id = $1 AND course_run_id = $2 AND is_deleted = false
+            WHERE course_run_id = $1 AND is_deleted = false
             LIMIT 1`,
-          [courseId, ssgRunId],
+          [ssgRunId],
         );
 
         if (existingById.rows.length > 0) {

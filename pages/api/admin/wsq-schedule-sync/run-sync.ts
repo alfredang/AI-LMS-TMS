@@ -5,6 +5,8 @@ import { getSSGCredentialsService, SSGCredentials } from '../../../../lib/ssg/se
 import { HTTPRequestBuilder, HttpMethod, handleRequest, HttpClient } from '../../../../lib/ssg/utils/http-utils';
 import { Cryptography } from '../../../../lib/ssg/utils/cryptography';
 import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../../lib/courseCode';
+import { createSSGCourseAPI } from '../../../../lib/ssg/api/course-api';
+import { getTrainingPartnerIdentifiers } from '../../../../lib/trainingPartnerIdentifiers';
 
 /**
  * POST /api/admin/wsq-schedule-sync/run-sync
@@ -25,6 +27,7 @@ type ItemResult = {
   status: 'submitted' | 'exists' | 'no_course' | 'no_session_timing' | 'ssg_error' | 'error';
   ssg_run_id?: string; local_run_id?: string; message?: string;
 };
+type SsgRunDateCache = Map<string, Promise<Map<string, string>>>;
 
 // ── Session helpers (mirrors submit-to-ssg.ts) ────────────────────────────────
 
@@ -60,6 +63,67 @@ const addDays = (dateStr: string, n: number): string => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().split('T')[0];
 };
+
+const parseSsgDate = (value: unknown): string | null => {
+  if (value == null) return null;
+  const s = String(value).trim();
+  if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return null;
+};
+
+async function fetchLiveSsgRunDateMap(
+  courseCode: string,
+  credentials: SSGCredentials,
+  ssgBaseUrl: string,
+): Promise<Map<string, string>> {
+  const api = createSSGCourseAPI(ssgBaseUrl, credentials);
+  const tp = await getTrainingPartnerIdentifiers().catch(() => ({ uen: '' }));
+  const pageSize = 100;
+  const byDate = new Map<string, string>();
+
+  for (let page = 0; page < 10; page++) {
+    const result = await api.searchCourseRunsByCode(courseCode, {
+      page,
+      pageSize,
+      includeExpired: true,
+      uen: credentials.uen || tp.uen,
+    });
+    if (result.error?.code || result.error?.message || result.status !== 200) {
+      throw new Error(result.error?.message || result.error?.code || `SSG returned status ${result.status}`);
+    }
+    const data = (result.data as any)?.data ?? result.data ?? {};
+    const runs: any[] = data?.course?.runs ?? data?.runs ?? [];
+    for (const run of runs) {
+      const start = parseSsgDate(run?.courseStartDate ?? run?.courseDates?.start);
+      const end = parseSsgDate(run?.courseEndDate ?? run?.courseDates?.end);
+      if (!start || !end) continue;
+      const id = String(run?.id ?? run?.runId ?? run?.courseRunId ?? '').trim();
+      const key = `${start}|${end}`;
+      const existing = byDate.get(key);
+      byDate.set(key, [existing, id].filter(Boolean).join('/'));
+    }
+    if (runs.length < pageSize) break;
+  }
+
+  return byDate;
+}
+
+async function findLiveSsgRunForDates(
+  courseCode: string,
+  startDate: string,
+  endDate: string,
+  credentials: SSGCredentials,
+  ssgBaseUrl: string,
+  cache: SsgRunDateCache,
+): Promise<string | null> {
+  const normalizedCode = courseCode.trim();
+  if (!cache.has(normalizedCode)) {
+    cache.set(normalizedCode, fetchLiveSsgRunDateMap(normalizedCode, credentials, ssgBaseUrl));
+  }
+  const byDate = await cache.get(normalizedCode)!;
+  return byDate.get(`${startDate}|${endDate}`) || null;
+}
 
 const MONTHS: Record<string, number> = {
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
@@ -542,6 +606,7 @@ async function processItem(
   ssgBaseUrl: string,
   companyEmail: string,
   todaySg: string,
+  ssgRunDateCache: SsgRunDateCache,
 ): Promise<ItemResult> {
   const { start_date, end_date } = item;
   // MMS can send course codes with stray whitespace (e.g. a trailing tab) that
@@ -566,6 +631,35 @@ async function processItem(
   if (existingRow.rows[0]) {
     return { course_code, start_date, end_date, status: 'exists',
       ssg_run_id: existingRow.rows[0].course_run_id, local_run_id: existingRow.rows[0].id };
+  }
+
+  try {
+    const liveSsgRunId = await findLiveSsgRunForDates(
+      course_code,
+      start_date,
+      end_date,
+      credentials,
+      ssgBaseUrl,
+      ssgRunDateCache,
+    );
+    if (liveSsgRunId) {
+      return {
+        course_code,
+        start_date,
+        end_date,
+        status: 'exists',
+        ssg_run_id: liveSsgRunId,
+        message: 'Already exists in live SSG/TPGateway; skipped to prevent duplicate publishing',
+      };
+    }
+  } catch (e: any) {
+    return {
+      course_code,
+      start_date,
+      end_date,
+      status: 'ssg_error',
+      message: `Could not verify live SSG duplicates, so nothing was submitted: ${e?.message || e}`,
+    };
   }
 
   // Session times come from buildRunSessions() so the dry-run preview in
@@ -664,8 +758,8 @@ async function processItem(
       localRunId = stagedRow.rows[0].id;
     } else {
       const byRunId = await pool.query<{ id: string }>(
-        `SELECT id FROM course_run WHERE course_id = $1 AND course_run_id = $2 AND is_deleted = false LIMIT 1`,
-        [courseId, ssgRunId],
+        `SELECT id FROM course_run WHERE course_run_id = $1 AND is_deleted = false LIMIT 1`,
+        [ssgRunId],
       );
       if (byRunId.rows[0]) {
         await pool.query(
@@ -716,12 +810,13 @@ async function runInBackground(
   ).toISOString().split('T')[0];
 
   let totalSubmitted = 0, totalExists = 0, totalSsgErrors = 0, totalSkipped = 0;
+  const ssgRunDateCache: SsgRunDateCache = new Map();
 
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
     const batch = items.slice(i, i + BATCH_SIZE);
     const results: ItemResult[] = [];
     for (const item of batch) {
-      results.push(await processItem(item, credentials, ssgBaseUrl, companyEmail, todaySg));
+      results.push(await processItem(item, credentials, ssgBaseUrl, companyEmail, todaySg, ssgRunDateCache));
     }
 
     const batchSubmitted = results.filter(r => r.status === 'submitted').length;

@@ -116,25 +116,33 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           console.warn(`⚠️ Could not resolve courseId for course_code: ${courseCode}`);
         } else {
           // ── 2. Upsert course_run — always update dates/mode/qr from SSG ──
-          const newRunUuid = crypto.randomUUID();
-          const upsertResult = await client.query(
-            `INSERT INTO course_run (
-               id, course_id, course_run_id, class_status,
-               start_date, end_date, mode_of_learning,
-               digital_attendance_id, created_at, updated_at
-             ) VALUES ($1, $2, $3, 'Confirmed', $4, $5, $6, $7, NOW(), NOW())
-             ON CONFLICT (course_id, course_run_id) DO UPDATE SET
-               start_date            = COALESCE(EXCLUDED.start_date,           course_run.start_date),
-               end_date              = COALESCE(EXCLUDED.end_date,             course_run.end_date),
-               mode_of_learning      = COALESCE(EXCLUDED.mode_of_learning,     course_run.mode_of_learning),
-               digital_attendance_id = COALESCE(EXCLUDED.digital_attendance_id, course_run.digital_attendance_id),
-               updated_at            = NOW()
-             RETURNING id, xmax`,
-            [newRunUuid, courseId, runIdStr, startDate, endDate, modeOfLearning, digitalAttendId]
+          const existingRun = await client.query(
+            `SELECT id FROM course_run WHERE course_run_id = $1 AND COALESCE(is_deleted, false) = false LIMIT 1`,
+            [runIdStr]
           );
+          const wasInsert = existingRun.rows.length === 0;
 
-          // xmax = 0 means it was an INSERT, non-zero means UPDATE
-          const wasInsert = upsertResult.rows[0]?.xmax === '0';
+          if (wasInsert) {
+            await client.query(
+              `INSERT INTO course_run (
+                 id, course_id, course_run_id, class_status,
+                 start_date, end_date, mode_of_learning,
+                 digital_attendance_id, created_at, updated_at
+               ) VALUES ($1, $2, $3, 'Confirmed', $4, $5, $6, $7, NOW(), NOW())`,
+              [crypto.randomUUID(), courseId, runIdStr, startDate, endDate, modeOfLearning, digitalAttendId]
+            );
+          } else {
+            await client.query(
+              `UPDATE course_run
+                  SET start_date            = COALESCE($2::date, start_date),
+                      end_date              = COALESCE($3::date, end_date),
+                      mode_of_learning      = COALESCE($4::mode_of_learning, mode_of_learning),
+                      digital_attendance_id = COALESCE($5, digital_attendance_id),
+                      updated_at            = NOW()
+                WHERE id = $1`,
+              [existingRun.rows[0].id, startDate, endDate, modeOfLearning, digitalAttendId]
+            );
+          }
           console.log(`✅ course_run ${runIdStr} ${wasInsert ? 'inserted' : 'updated'} (${startDate} → ${endDate}, ${modeOfLearning}, qr:${digitalAttendId})`);
         }
 
