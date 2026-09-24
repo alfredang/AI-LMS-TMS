@@ -26,6 +26,10 @@ import {
 import { HttpClient, HTTPRequestBuilder, HttpMethod, handleRequest } from '../utils/http-utils';
 import { Cryptography } from '../utils/cryptography';
 import { SSGCredentials } from '../services/credentials-service';
+import {
+  assertNoDuplicateCourseRunDates,
+  DuplicateCourseRunDateError,
+} from '../courseRunDuplicateGuard';
 
 export class SSGCourseAPI {
   private httpClient: HttpClient;
@@ -148,6 +152,13 @@ export class SSGCourseAPI {
         throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
       }
 
+      await assertNoDuplicateCourseRunDates({
+        api: this,
+        courseReferenceNumber: runInfo.courseReferenceNumber,
+        runs: runInfo.runs,
+        uen: this.credentials.uen,
+      });
+
       const builder = new HTTPRequestBuilder()
         .withEndpoint(this.baseUrl, '/courses/courseRuns/publish')
         .withMethod(HttpMethod.POST)
@@ -180,6 +191,20 @@ export class SSGCourseAPI {
       const config = builder.build();
       return await handleRequest<AddCourseRunResponse>(this.httpClient, config);
     } catch (error) {
+      if (error instanceof DuplicateCourseRunDateError) {
+        return {
+          error: {
+            code: 'DUPLICATE_COURSE_RUN_DATE',
+            message: error.message,
+            details: [{
+              field: 'courseRunDates',
+              message: `Existing run ${error.existingRunId} for ${error.courseReferenceNumber} on ${error.startDate} to ${error.endDate}`,
+            }],
+          },
+          status: error.status,
+        };
+      }
+
       return {
         error: {
           code: 'ADD_COURSE_RUN_ERROR',
