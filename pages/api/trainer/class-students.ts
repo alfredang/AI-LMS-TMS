@@ -15,6 +15,76 @@ const LEGACY_TYPE_MAP: Record<string, string> = {
     practical: 'practicalExam',
 };
 
+interface RosterRow {
+    enrolment_id: string;
+    user_id: string | null;
+    student_name: string;
+    email: string | null;
+    nric: string | null;
+    competent_status: string | null;
+    certificate: string | null;
+    traqom_completed: boolean;
+    source: 'manual' | 'ssg';
+    is_competent: boolean;
+    submitted_assessments: string[];
+}
+
+export interface RosterLearner extends RosterRow {
+    /** Every enrolment row this learner has in the run (primary first). */
+    enrolment_ids: string[];
+    /** Distinct emails across those rows (primary first). */
+    emails: string[];
+}
+
+const normName = (s: string) => s.trim().toUpperCase().replace(/\s+/g, ' ');
+const normNric = (s: string | null) => (s ? s.trim().toUpperCase() : '');
+
+/**
+ * The same learner often has two enrolment rows in one run — a manual LMS
+ * signup (personal email, no NRIC) and the SSG-synced one (work email, NRIC).
+ * Collapse rows that share a name, as long as their NRICs don't disagree, into
+ * one learner so the roster shows them once with both emails. The SSG row is
+ * primary (it carries the NRIC and the certificate); grading/TRAQOM actions
+ * use `enrolment_ids` to update every row.
+ */
+function mergeDuplicateLearners(rows: RosterRow[]): RosterLearner[] {
+    const groups = new Map<string, RosterRow[]>();
+    for (const row of rows) {
+        const key = row.user_id ? normName(row.student_name) : `enrolment:${row.enrolment_id}`;
+        const nric = normNric(row.nric);
+        const group = groups.get(key);
+        const conflict = group?.some(g => nric && normNric(g.nric) && normNric(g.nric) !== nric);
+        if (group && !conflict) group.push(row);
+        else groups.set(conflict ? `${key}|${nric}` : key, [row]);
+    }
+
+    return Array.from(groups.values()).map(group => {
+        const ordered = [...group].sort((a, b) => {
+            if (a.source !== b.source) return a.source === 'ssg' ? -1 : 1;
+            if (!!a.certificate !== !!b.certificate) return a.certificate ? -1 : 1;
+            return 0;
+        });
+        const primary = ordered[0];
+        const uniq = (vals: (string | null)[]) => Array.from(new Set(vals.filter((v): v is string => !!v)));
+        const isCompetent = ordered.some(r => r.is_competent);
+        return {
+            ...primary,
+            nric: primary.nric ?? ordered.find(r => r.nric)?.nric ?? null,
+            email: primary.email || ordered.find(r => r.email)?.email || null,
+            emails: uniq(ordered.map(r => r.email)),
+            enrolment_ids: ordered.map(r => r.enrolment_id),
+            source: ordered.some(r => r.source === 'ssg') ? 'ssg' : 'manual',
+            certificate: primary.certificate ?? ordered.find(r => r.certificate)?.certificate ?? null,
+            is_competent: isCompetent,
+            competent_status: isCompetent
+                ? (ordered.find(r => r.is_competent)?.competent_status ?? primary.competent_status)
+                : primary.competent_status,
+            traqom_completed: ordered.some(r => r.traqom_completed),
+            submitted_assessments: METHOD_ORDER.filter(m => ordered.some(r => r.submitted_assessments.includes(m))),
+        };
+    });
+}
+
 async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'GET') {
         return res.status(405).json({ message: 'Method Not Allowed' });
@@ -89,12 +159,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
 
         // Standardize competent_status flags
-        const finalStudents = students.map(s => ({
+        const normalized = students.map(s => ({
             ...s,
             is_competent: s.competent_status === 'Competent' || s.competent_status === 'Passed',
             traqom_completed: s.traqom_completed === true,
             submitted_assessments: (s.user_id && submittedByUser[s.user_id]) || []
-        })).sort((a, b) => a.student_name.localeCompare(b.student_name));
+        }));
+
+        const finalStudents = mergeDuplicateLearners(normalized)
+            .sort((a, b) => a.student_name.localeCompare(b.student_name));
 
         if (withMeta === '1') {
             return res.status(200).json({ students: finalStudents, assessment_methods: assessmentMethods });

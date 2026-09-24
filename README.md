@@ -89,7 +89,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Trainer + Learner dual role** — trainers who enrol in the provider's own courses sign in and pick **Learner** mode (their enrolled classes, lessons, assessment submissions) or **Trainer** mode (only their assigned classes), switchable from the header's *View As* menu. Gated per tenant by `training_provider.trainer_learner_dual_role` (default off); enabling it backfills the Learner role onto every trainer and a `user_role_map` trigger grants it to every new trainer. A trainer can never grade their own enrolment
 - **My Calendar** — personal month calendar of the trainer's assigned classes
 - **E-Attendance** — Digital attendance tracking
-- **Assessment Grading** — Rubric-based grading with Assessment Summary Record support; each learner row shows per-method submission status (WA Written, PP Practical, CS Case Study, RP Role Play, OQ Oral Questioning) ticked when the learner has submitted, alongside a manually-ticked **TQ (TRAQOM survey)** box — SSG publishes no per-learner survey completion feed, so the trainer confirms it — with per-method and TRAQOM completion counts (e.g. WA 3/7, TRAQOM 5/7) and a refresh button in the roster header, plus Mark All Competent and bulk certificate sending
+- **Assessment Grading** — Rubric-based grading with Assessment Summary Record support; each learner row shows per-method submission status (WA Written, PP Practical, CS Case Study, RP Role Play, OQ Oral Questioning) ticked when the learner has submitted, alongside a manually-ticked **TQ (TRAQOM survey)** box — SSG publishes no per-learner survey completion feed, so the trainer confirms it — with per-method and TRAQOM completion counts (e.g. WA 3/7, TRAQOM 5/7) and a refresh button in the roster header, plus Mark All Competent and bulk certificate sending. A learner who holds several enrolment rows in the same run (a manual LMS signup plus the SSG-synced record) appears **once**, listing every email they enrolled under; the SSG row is primary (NRIC, certificate), submissions are unioned across rows, and competency/TRAQOM toggles update every row
 - **Training Hours** — Trainer training hours tracking
 - **Past Attendance** / **Past Assessment** — Historical records
 - **Lesson Delivery Guide** / **Assessment Guide**
@@ -412,7 +412,7 @@ PUT  /api/assessments/publish     # Publish/unpublish assessment (staff or assig
 PUT  /api/assessments/publish-link # Publish/unpublish an assessment method link (staff or assigned trainer)
 POST /api/submissions/submit      # Submit assessment
 POST /api/grading/update-grading  # Grade submission
-POST /api/trainer/grade-student   # Toggle learner competency
+POST /api/trainer/grade-student   # Toggle learner competency (single enrolmentId or enrolmentIds[] for a merged learner)
 POST /api/trainer/traqom-status   # Tick TRAQOM survey completion (single or batch)
 POST /api/assessments/ssg-create  # Create SSG assessment
 PUT  /api/assessments/ssg-update  # Update SSG assessment
