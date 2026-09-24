@@ -286,9 +286,13 @@ export async function runPostSsgEnrolSync(input: PostSsgEnrolSyncInput): Promise
           );
           // Fire-and-forget, and imported lazily: the DA pipeline makes slow SSG
           // and QuickBooks calls, and the caller is an interactive enrol action.
+          // skipInvoicing: true — enrolling a learner must never create (or send)
+          // a QBO invoice by itself. Calendar sync and grant lookup still run;
+          // the invoice is only ever created via an explicit admin action (tick
+          // the row + "Generate Invoice" on the Consolidated Finance page).
           void import('../autoEnrolDirectApplications')
             .then(({ processDirectApplication }) =>
-              processDirectApplication(daRow.daApplicationId, undefined, { sendInvoiceEmail: true })
+              processDirectApplication(daRow.daApplicationId, undefined, { skipInvoicing: true })
             )
             .catch((e: unknown) =>
               console.warn('[post-ssg-enrol] DA pipeline run failed (non-blocking):', e)
@@ -303,6 +307,9 @@ export async function runPostSsgEnrolSync(input: PostSsgEnrolSyncInput): Promise
       // the bridge took ownership.
       if (!handedToDaPipeline) {
         try {
+          // Queue only — never auto-process. Invoice creation must always be an
+          // explicit admin action (tick the row + "Generate Invoice" on the
+          // Consolidated Finance page), never a side effect of enrolling.
           await enqueueInvoiceJob({
             enrolmentId: trimmedEnrolmentId,
             userId: learnerId,

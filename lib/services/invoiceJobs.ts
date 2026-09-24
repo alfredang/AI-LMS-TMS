@@ -106,9 +106,12 @@ export async function ensureInvoiceJobsTable(): Promise<void> {
 
 export interface EnqueueInvoiceJobOptions {
   /**
-   * When true, only queue the row — no immediate `runPendingInvoiceJobs` (use for bulk SSG sync so QBO isn’t hit N times in parallel).
+   * When true, immediately runs the job after queuing it. Default is false —
+   * queuing never processes on its own; only an explicit admin action (the
+   * Consolidated Finance page's own "Generate Invoice" flow) processes the
+   * queue, so an invoice is never created as a side effect of enrolling.
    */
-  skipAutoProcess?: boolean;
+  autoProcess?: boolean;
   /**
    * Bypass {@link isQboAutoInvoiceAfterEnrolmentEnabled} (e.g. future admin-only enqueue). Omit for normal enrolment flows.
    */
@@ -151,7 +154,10 @@ export async function enqueueInvoiceJob(
     [input.batchId ?? null, input.enrolmentId, input.userId, input.learnerEmail, input.courseCode]
   );
   const out = { id: r.rows[0].id, status: r.rows[0].status as InvoiceJobStatus };
-  if (!options?.skipAutoProcess) {
+  // Safe-by-default: queuing a job never processes it on its own. Only the
+  // explicit "Generate Invoice" flow opts in via autoProcess, so an invoice
+  // can never be created as a side effect of enrolling or syncing.
+  if (options?.autoProcess) {
     void import('./invoiceJobsRunner')
       .then(({ runPendingInvoiceJobs }) => runPendingInvoiceJobs(5))
       .catch((e: unknown) =>
@@ -390,7 +396,7 @@ export async function enqueueInvoiceJobsFromConsolidatedFinance(
           courseCode,
           batchId: 'consolidated_finance',
         },
-        { force: true, skipAutoProcess: true }
+        { force: true }
       );
       results.push({ enrolmentId, ok: true, jobId: out.id });
     } catch (e) {
@@ -474,16 +480,13 @@ export async function tryEnqueueInvoiceFromSsgRecord(record: any): Promise<void>
   if (existing?.status === 'done') return;
 
   try {
-    await enqueueInvoiceJob(
-      {
-        enrolmentId,
-        userId,
-        learnerEmail,
-        courseCode,
-        batchId: null,
-      },
-      { skipAutoProcess: true }
-    );
+    await enqueueInvoiceJob({
+      enrolmentId,
+      userId,
+      learnerEmail,
+      courseCode,
+      batchId: null,
+    });
   } catch (e) {
     console.warn('[invoice_jobs] tryEnqueueInvoiceFromSsgRecord failed:', e);
   }

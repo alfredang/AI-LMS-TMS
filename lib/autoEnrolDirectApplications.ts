@@ -768,7 +768,15 @@ export async function addTrainerToCalendarEvent(
 export async function processDirectApplication(
   appId: string,
   sharedCtx?: SSGContext,
-  options?: { forceInvoice?: boolean; suppressInvoiceEmail?: boolean; sendInvoiceEmail?: boolean }
+  options?: {
+    forceInvoice?: boolean;
+    suppressInvoiceEmail?: boolean;
+    sendInvoiceEmail?: boolean;
+    /** Enrol, sync grant + calendar, but never touch invoicing — used at enrolment
+     *  time so a QBO invoice is only ever created by an explicit admin action
+     *  (tick a row + "Generate Invoice" on the Consolidated Finance page). */
+    skipInvoicing?: boolean;
+  }
 ): Promise<DaPipelineResult> {
   const rowRes = await pool.query(
     `SELECT
@@ -1061,7 +1069,7 @@ export async function processDirectApplication(
   }
 
   // Step 3: QuickBooks invoice
-  if (!autoInvoice && !options?.forceInvoice) {
+  if (options?.skipInvoicing || (!autoInvoice && !options?.forceInvoice)) {
     try {
       await createNativeEnrolmentForPipeline(appId);
     } catch (err) {

@@ -197,9 +197,11 @@ export async function ingestDirectApplicationEmail(payload: DirectApplicationEma
     [row.id]
   );
 
-  const automationOptions = action === 'inserted'
-    ? { sendInvoiceEmail: true }
-    : { suppressInvoiceEmail: true };
+  // Email ingestion enrols/refreshes the DA application automatically, but must
+  // never create (or send) a QBO invoice on its own — that only ever happens
+  // via an explicit admin action (tick a row + "Generate Invoice" on the
+  // Consolidated Finance page, then "Send invoice").
+  const automationOptions = { skipInvoicing: true };
 
   setImmediate(() => {
     processDirectApplication(row.id, undefined, automationOptions).catch(async (err) => {

@@ -323,16 +323,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const grantsOk = grantResults.filter((r) => r.success).length;
     const grantsFailed = grantResults.length - grantsOk;
 
-    try {
-      const { runPendingInvoiceJobs } = await import('@/lib/services/invoiceJobsRunner');
-      // Runner caps at 10 jobs per call — loop until queue is drained (typical page size ≤ 20).
-      for (let wave = 0; wave < 15; wave++) {
-        const r = await runPendingInvoiceJobs(10);
-        if (r.picked === 0) break;
-      }
-    } catch (e: unknown) {
-      console.warn('[sync-all-course-runs-from-ssg] runPendingInvoiceJobs:', e instanceof Error ? e.message : e);
-    }
+    // Refresh from SSG only syncs data — it must never generate invoices on its
+    // own. tryEnqueueInvoiceFromSsgRecord (above) may queue a job, but nothing
+    // here processes the queue: the admin must tick a row and press "Generate
+    // Invoice" for a QBO invoice to actually be created.
 
     const claimBackfill = await backfillClaimsEnrollmentId();
 

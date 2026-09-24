@@ -28,9 +28,7 @@ import {
   qboReadInvoice,
   qboResolveInvoiceLineTaxCodeRef,
   qboResolveOosTaxCodeRef,
-  qboSendInvoice,
 } from './qboInvoiceService';
-import { shouldSendQboInvoiceEmailFromQuickBooks } from './qboInvoiceEmailPolicy';
 import { getLocalYMD } from '../dateHelpers';
 
 // QB items are cached at module level so subsequent invoice jobs don't re-query
@@ -755,18 +753,11 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   const mainCustomerInvoiceNoForGrn = String(invoiceNo || docNumber || '').trim();
 
   // 6) Post-steps (do not block job completion)
+  // Emailing the invoice is NEVER done here. Job completion only means the
+  // invoice exists in QBO — the Consolidated Finance page's "Send invoice"
+  // button (POST /api/finance/invoice-jobs/send) is the only thing that emails
+  // it, so admins keep full control over when a learner actually receives it.
   void (async () => {
-    // Optionally email invoice from QBO (off by default — set QBO_SEND_INVOICE_EMAIL=true)
-    try {
-      if (shouldSendQboInvoiceEmailFromQuickBooks()) {
-        await step('QBO send invoice', () => qboSendInvoice(undefined, invoiceId));
-      } else {
-        console.log('[invoice-job] Skipping QBO customer email (set QBO_SEND_INVOICE_EMAIL=true to enable)');
-      }
-    } catch (e) {
-      console.warn('[invoice-job] QBO send invoice (post-step):', e);
-    }
-
     // Download PDF + upload to Drive
     try {
       const pdf = await step('QBO fetch invoice PDF', () => qboFetchInvoicePdf(undefined, invoiceId));

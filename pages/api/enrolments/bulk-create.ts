@@ -253,6 +253,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const st = (enrolmentStatus as string | undefined) || 'Confirmed';
     if (enrolmentId && userId && traineeEmail && courseCode && isEnrolmentEligibleForAutoInvoice(st)) {
       try {
+        // Queue only — never auto-process. Invoice creation must always be an
+        // explicit admin action (tick the row + "Generate Invoice" on the
+        // Consolidated Finance page), never a side effect of enrolling.
         await enqueueInvoiceJob({
           enrolmentId,
           userId,
