@@ -24,7 +24,14 @@ interface StudentData {
   is_competent: boolean;
   submitted_assessments: string[];
   traqom_completed?: boolean;
+  // A learner with several enrolment rows in the run (manual + SSG-synced) is
+  // merged server-side; grading actions must hit every row.
+  enrolment_ids?: string[];
+  emails?: string[];
 }
+
+const enrolmentIdsOf = (s: StudentData) =>
+  s.enrolment_ids && s.enrolment_ids.length > 0 ? s.enrolment_ids : [s.enrolment_id];
 
 // Abbreviations for each assessment method (WA = Written Exam, PP = Practical Exam, ...)
 const METHOD_INFO: Record<string, { abbr: string; label: string }> = {
@@ -196,7 +203,7 @@ const AssessmentGrading: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          enrolmentId: student.enrolment_id,
+          enrolmentIds: enrolmentIdsOf(student),
           source: student.source,
           isCompetent: newCompetentState
         })
@@ -236,7 +243,7 @@ const AssessmentGrading: React.FC = () => {
       const res = await fetch('/api/trainer/traqom-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enrolmentId: student.enrolment_id, completed: newState })
+        body: JSON.stringify({ enrolmentIds: enrolmentIdsOf(student), completed: newState })
       });
       if (!res.ok) throw new Error('Failed to update');
     } catch (e) {
@@ -293,7 +300,7 @@ const AssessmentGrading: React.FC = () => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              enrolmentId: student.enrolment_id,
+              enrolmentIds: enrolmentIdsOf(student),
               source: student.source,
               isCompetent: true,
             }),
@@ -583,9 +590,12 @@ const AssessmentGrading: React.FC = () => {
                               </span>
                             )}
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {student.email || 'No email provided'}
-                          </p>
+                          {/* A merged learner lists every email they enrolled under */}
+                          {(student.emails && student.emails.length > 0 ? student.emails : [student.email]).map((email, i) => (
+                            <p key={email || i} className="text-xs text-gray-500 dark:text-gray-400">
+                              {email || 'No email provided'}
+                            </p>
+                          ))}
                         </div>
                       </div>
 

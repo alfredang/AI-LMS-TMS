@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { requireSelfTrainer } from '@lib/auth/courseRunAccess';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getLocalYMD } from '../../../lib/dateHelpers';
@@ -20,6 +21,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (!trainerId) {
       return res.status(400).json({ message: 'Trainer ID is required' });
     }
+
+    // A trainer may only list their own assigned classes.
+    if (!(await requireSelfTrainer((req as AuthedApiRequest).authUser!, res, { id: String(trainerId) }))) return;
 
     // Base SQL query — query course_run directly without requiring trainer_profile
     let sqlQuery = `

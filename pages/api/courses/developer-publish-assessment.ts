@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { requireCourseRunTrainer } from '@lib/auth/courseRunAccess';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 
@@ -28,6 +29,9 @@ async function handler(
         message: 'Course Run ID, Assessment ID, and published status are required' 
       });
     }
+
+    // Only staff or an assigned trainer of this class may publish.
+    if (!(await requireCourseRunTrainer((req as AuthedApiRequest).authUser!, res, String(courseRunId)))) return;
 
     console.log('🔍 Developer Publish Assessment API:', { courseRunId, assessmentId, published });
 
@@ -66,4 +70,4 @@ async function handler(
   }
 }
 
-export default withAuth(handler);
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'developer', 'trainer'] });

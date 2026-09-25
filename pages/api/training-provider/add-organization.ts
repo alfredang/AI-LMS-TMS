@@ -275,6 +275,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           await client.query(`
           INSERT INTO user_role_map (user_id, role)
           VALUES ($1, $2::user_role)
+          ON CONFLICT DO NOTHING
         `, [userId, role]);
         }
 
@@ -308,6 +309,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           await client.query(`
           INSERT INTO user_role_map (user_id, role)
           VALUES ($1, $2::user_role)
+          ON CONFLICT DO NOTHING
         `, [userId, role]);
         }
         console.log('✅ Assigned all roles to owner:', allRoles);
