@@ -89,7 +89,7 @@ Symptom: homepage HTML loads, but `/api/health` hangs ~15s and the app logs `Con
 
 ## Project tooling (`.claude/`)
 
-- **Skills:** `/lms-health-check` (health/liveness/perf + known auto-fix), `/lms-security-scan` (TLS, headers, DB exposure, firewall integrity, secret hygiene).
+- **Skills:** `/lms-health-check` (health/liveness/perf + known auto-fix), `/lms-security-scan` (TLS, headers, DB exposure, firewall integrity, secret hygiene), `/daily-log` (every session: log production issues diagnosed/fixed to `.claude/daily-logs/YYYY-MM-DD.md`, gitignored; retrieve on request — "today's log", "what did we fix on <date>").
 - **Agents:** `lms-monitor` (scheduled health/perf/log monitor + DB auto-fix), `lms-security-scanner` (posture scan). Both sanitized; infra specifics come from env in the gitignored `.claude/settings.local.json`.
 - **Commands:** `/lms-status` (quick snapshot), `/lms-fix-db` (outage runbook).
 - **Hook:** `PreToolUse(Bash)` guard blocks `DROP/TRUNCATE` and writing inline DB creds to files (`.claude/hooks/guard-prod-db.sh`).
