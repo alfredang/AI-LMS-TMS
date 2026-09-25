@@ -494,14 +494,24 @@ export function stampDocx(bytes: Buffer, details: AssessorDetails): StampResult 
     sigDrawing = buildSignatureDrawingXml(sigRelId, cx, cy);
   }
 
-  // Collect absolute edits (replacements and insertions), then apply them
-  // back-to-front so earlier offsets stay valid.
-  const edits: { start: number; end: number; str: string }[] = [];
-  const filled: LabelKey[] = [];
+  // Each fill is applied INSIDE the <w:t> that holds the label's last character,
+  // at the exact character offset: templates often keep two labels in one text
+  // node ("Assessor Name:      Assessor NRIC:"), so appending after the node
+  // would put the first value behind the second label. Per text node we keep a
+  // char mask (underscore blanks removed) plus raw-XML insertions by offset,
+  // then re-render the node once.
+  interface NodeModel { seg: DocxSegment; chars: (string | null)[]; inserts: Map<number, string[]> }
+  const models = new Map<DocxSegment, NodeModel>();
+  const modelFor = (seg: DocxSegment): NodeModel => {
+    let m = models.get(seg);
+    if (!m) { m = { seg, chars: Array.from(seg.text), inserts: new Map() }; models.set(seg, m); }
+    return m;
+  };
   const withUnderline = (rPr: string) => {
     if (/<w:u\b/.test(rPr)) return rPr;
     return rPr ? rPr.replace('</w:rPr>', '<w:u w:val="single"/></w:rPr>') : '<w:rPr><w:u w:val="single"/></w:rPr>';
   };
+  const filled: LabelKey[] = [];
 
   for (const f of fills) {
     const line = lines[f.line];
@@ -510,39 +520,36 @@ export function stampDocx(bytes: Buffer, details: AssessorDetails): StampResult 
     if (!seg) continue;
 
     // Templates draw the blank as a run of underscores after the label
-    // ("Assessor Name: ______"). Remove them so the value takes their place
+    // ("Assessor Name: ______"). Drop them so the value takes their place
     // instead of trailing after the line and wrapping.
     let removedBlank = false;
     for (const t of line.segments) {
       if (t.elStart < 0) continue;
-      const tStart = t.start, tEnd = t.start + t.text.length;
-      const lo = Math.max(tStart, f.at), hi = Math.min(tEnd, f.blankEnd);
+      const lo = Math.max(t.start, f.at), hi = Math.min(t.start + t.text.length, f.blankEnd);
       if (lo >= hi) continue;
-      const slice = t.text.slice(lo - tStart, hi - tStart);
-      if (!/[_]/.test(slice)) continue;
-      const cleaned = t.text.slice(0, lo - tStart) + slice.replace(/_+/g, '') + t.text.slice(hi - tStart);
-      edits.push({ start: t.elStart, end: t.insertAt, str: `<w:t xml:space="preserve">${xmlEscape(cleaned)}</w:t>` });
-      removedBlank = true;
+      const m = modelFor(t);
+      for (let i = lo - t.start; i < hi - t.start; i++) {
+        if (m.chars[i] === '_') { m.chars[i] = null; removedBlank = true; }
+      }
     }
 
     const rPr = enclosingRunProps(xml, seg.insertAt);
-
+    let xmlToInsert: string;
     if (f.key === 'signature') {
       if (!sigDrawing) continue;
-      edits.push({ start: seg.insertAt, end: seg.insertAt, str: `</w:r><w:r>${rPr}${sigDrawing}</w:r><w:r>${rPr}` });
-      filled.push(f.key);
-      continue;
+      xmlToInsert = `</w:r><w:r>${rPr}${sigDrawing}</w:r><w:r>${rPr}`;
+    } else {
+      const value = valueFor(f.key, details);
+      if (!value) continue;
+      const text = removedBlank ? ` ${value} ` : ` ${value}`;
+      const valueRPr = removedBlank ? withUnderline(rPr) : rPr;
+      xmlToInsert = `</w:r><w:r>${valueRPr}<w:t xml:space="preserve">${xmlEscape(text)}</w:t></w:r><w:r>${rPr}`;
     }
-
-    const value = valueFor(f.key, details);
-    if (!value) continue;
-    const text = removedBlank ? ` ${value} ` : ` ${value}`;
-    const valueRPr = removedBlank ? withUnderline(rPr) : rPr;
-    edits.push({
-      start: seg.insertAt,
-      end: seg.insertAt,
-      str: `</w:r><w:r>${valueRPr}<w:t xml:space="preserve">${xmlEscape(text)}</w:t></w:r><w:r>${rPr}`,
-    });
+    const m = modelFor(seg);
+    const off = f.at - seg.start;
+    const list = m.inserts.get(off) || [];
+    list.push(xmlToInsert);
+    m.inserts.set(off, list);
     filled.push(f.key);
   }
 
@@ -550,9 +557,22 @@ export function stampDocx(bytes: Buffer, details: AssessorDetails): StampResult 
     return { buffer: bytes, filled: [], noLabelsFound: false };
   }
 
-  // Back-to-front; at equal start, pure insertions go first so a replacement
-  // ending at that offset is applied to the untouched original slice.
-  edits.sort((a, b) => (b.start - a.start) || ((b.end - b.start) - (a.end - a.start)));
+  // Render each touched text node: text runs become <w:t>, insertions are
+  // emitted at their offset (the run is closed/reopened inside the insert XML).
+  const wrapT = (t: string) => (t ? `<w:t xml:space="preserve">${xmlEscape(t)}</w:t>` : '');
+  const edits: { start: number; end: number; str: string }[] = [];
+  for (const m of models.values()) {
+    let out = '';
+    let buf = '';
+    for (let i = 0; i <= m.chars.length; i++) {
+      const ins = m.inserts.get(i);
+      if (ins) { out += wrapT(buf); buf = ''; out += ins.join(''); }
+      if (i < m.chars.length && m.chars[i] !== null) buf += m.chars[i];
+    }
+    out += wrapT(buf);
+    edits.push({ start: m.seg.elStart, end: m.seg.insertAt, str: out });
+  }
+  edits.sort((a, b) => b.start - a.start);
   for (const e of edits) xml = xml.slice(0, e.start) + e.str + xml.slice(e.end);
   zip.file('word/document.xml', xml);
 

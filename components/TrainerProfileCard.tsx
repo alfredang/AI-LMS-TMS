@@ -1251,7 +1251,7 @@ export const TrainerProfileCard: React.FC<{
                 <Card className="p-8 mt-8">
                     <h2 className="text-xl font-bold mb-1 dark:text-white">Assessor Signature</h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                        Draw your signature once. On <span className="font-semibold">Assessment Grading</span>, ticking <span className="font-semibold">SIG</span> beside a learner stamps your name, NRIC, the assessment date and this signature into the Assessor block of every file they submitted.
+                        Draw your signature once. On <span className="font-semibold">Assessment Grading</span>, ticking <span className="font-semibold">SIGN</span> beside a learner stamps your name, NRIC, the assessment date and this signature into the Assessor block of every file they submitted.
                     </p>
                     <AssessorSignatureForm showDate={false} saveLabel="Save Signature" />
                 </Card>

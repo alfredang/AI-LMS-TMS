@@ -223,7 +223,7 @@ export const AssessorSignatureForm: React.FC<Props> = ({
       </div>
       {exists && !compact && (
         <p className="text-[11px] text-gray-400">
-          These details are stamped onto learners&apos; submitted assessments when you tick <span className="font-semibold">SIG</span> on the grading roster.
+          These details are stamped onto learners&apos; submitted assessments when you tick <span className="font-semibold">SIGN</span> on the grading roster.
         </p>
       )}
     </div>

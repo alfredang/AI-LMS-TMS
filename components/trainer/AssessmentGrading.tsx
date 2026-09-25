@@ -88,14 +88,15 @@ const AssessmentGrading: React.FC = () => {
   const [savingTraqom, setSavingTraqom] = useState<Record<string, boolean>>({});
 
   // Assessor sign-off: the trainer's saved name/NRIC/date/signature, stamped onto
-  // a learner's submitted files when the SIG box is ticked.
+  // a learner's submitted files when the SIGN box is ticked.
   const [assessor, setAssessor] = useState<AssessorRecord | null>(null);
   const [assessorLoaded, setAssessorLoaded] = useState(false);
   const [showAssessorDialog, setShowAssessorDialog] = useState(false);
   const [signingStudent, setSigningStudent] = useState<Record<string, boolean>>({});
-  // Learner whose SIG tick was interrupted by the dialog; resumes once saved.
+  // Learner whose SIGN tick was interrupted by the dialog; resumes once saved.
   const [pendingSign, setPendingSign] = useState<{ student: StudentData; index: number } | null>(null);
   const [signResult, setSignResult] = useState<{ name: string; lines: string[]; ok: boolean } | null>(null);
+  const [showSignDemo, setShowSignDemo] = useState(false);
 
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -596,8 +597,17 @@ const AssessmentGrading: React.FC = () => {
             </div>
             </div>
 
-            {/* Row 2 — actions: assessor signature, mark all competent, send certificates */}
+            {/* Row 2 — actions: demo video, assessor signature, mark all competent, send certificates */}
             <div className="flex items-center justify-end gap-3 flex-wrap">
+              {/* How-to video for the assessor sign-off flow */}
+              <button
+                onClick={() => setShowSignDemo(true)}
+                title="Watch a 1-minute demo of the assessor sign-off"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                <Icon name={IconName.Video} className="w-4 h-4" />
+                Watch Demo
+              </button>
               {/* Trainer's assessor block (name / NRIC / date / signature) */}
               <button
                 onClick={() => { setPendingSign(null); setShowAssessorDialog(true); }}
@@ -732,7 +742,7 @@ const AssessmentGrading: React.FC = () => {
                   {assessmentMethods.length > 0 && (
                     <>Submission status: {assessmentMethods.map(m => `${(METHOD_INFO[m] || { abbr: m }).abbr} = ${(METHOD_INFO[m] || { label: m }).label}`).join(' · ')} · </>
                   )}
-                  TQ = TRAQOM Survey (tick manually) · SIG = Assessor signature stamped on submissions
+                  TQ = TRAQOM Survey (tick manually) · SIGN = Assessor signature stamped on submissions
                 </span>
               </div>
 
@@ -847,7 +857,7 @@ const AssessmentGrading: React.FC = () => {
                             return (
                               <label
                                 title={title}
-                                className={`flex items-center gap-1 w-10 select-none ${
+                                className={`flex items-center gap-1 w-12 select-none ${
                                   busy ? 'opacity-50 cursor-wait' : hasFiles ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
                                 }`}
                               >
@@ -865,7 +875,7 @@ const AssessmentGrading: React.FC = () => {
                                 <span className={`text-[10px] font-semibold ${
                                   student.assessor_signed ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'
                                 }`}>
-                                  SIG
+                                  SIGN
                                 </span>
                               </label>
                             );
@@ -972,6 +982,31 @@ const AssessmentGrading: React.FC = () => {
               </ul>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Assessor sign-off demo video */}
+      {showSignDemo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowSignDemo(false)}>
+          <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-4 w-full max-w-4xl mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">Demo: Assessor Sign-off</h3>
+              <button
+                onClick={() => setShowSignDemo(false)}
+                className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                aria-label="Close"
+              >
+                <Icon name={IconName.Close} className="w-5 h-5" />
+              </button>
+            </div>
+            <video
+              src="/videos/assessor-sign-off-demo.mp4"
+              controls
+              autoPlay
+              playsInline
+              className="w-full rounded-lg bg-black aspect-video"
+            />
           </div>
         </div>
       )}

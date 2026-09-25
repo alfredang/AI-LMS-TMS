@@ -117,6 +117,22 @@ test('stampDocx writes values into split runs, replaces underscore blanks, embed
   assert.deepEqual(stampDocx(out.buffer, details).filled, []);
 });
 
+test('stampDocx places each value after its own label when two labels share one text node', () => {
+  // Word often keeps "Assessor Name:      Assessor NRIC:" as a single <w:t>.
+  const input = docxWithBody(
+    p(r('Grade: C / NYC (delete as appropriate)')) +
+    p(r('Assessor Name:                      Assessor NRIC:')) +
+    p(r('Date:                               Signature:')),
+  );
+  const out = stampDocx(input, details);
+  assert.deepEqual(out.filled, ['name', 'nric', 'date', 'signature']);
+  const text = docText(out.buffer);
+  assert.match(text, /Assessor Name: Dr\. Alfred Ang\s+Assessor NRIC: S1234567A/);
+  assert.match(text, /Date: 25\/09\/2026\s+Signature:$/);
+  const xml = new PizZip(out.buffer).file('word/document.xml')!.asText();
+  assert.match(xml, /Signature:<\/w:t><\/w:r><w:r><w:rPr><w:sz w:val="22"\/><\/w:rPr><w:drawing>/);
+});
+
 test('stampDocx reports when no assessor block exists', () => {
   const out = stampDocx(docxWithBody(p(r('Just a question paper'))), details);
   assert.deepEqual(out.filled, []);
