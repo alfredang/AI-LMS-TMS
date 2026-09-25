@@ -500,11 +500,13 @@ const AssessmentGrading: React.FC = () => {
       {/* Student List */}
       {selectedCourseRunId && (
         <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800 flex justify-between items-center">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800 flex flex-col gap-3">
+            {/* Row 1 — title, refresh and the submission / TRAQOM / SIG counts */}
+            <div className="flex justify-between items-center flex-wrap gap-y-2">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
               Student Grading Roster
             </h2>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap justify-end">
               {/* Refresh assessment submission status */}
               <button
                 onClick={() => fetchStudents(true)}
@@ -572,6 +574,11 @@ const AssessmentGrading: React.FC = () => {
               <div className="text-xs text-gray-500 bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
                 {students.length} Enrolments
               </div>
+            </div>
+            </div>
+
+            {/* Row 2 — actions: assessor signature, mark all competent, send certificates */}
+            <div className="flex items-center justify-end gap-3 flex-wrap">
               {/* Trainer's assessor block (name / NRIC / date / signature) */}
               <button
                 onClick={() => { setPendingSign(null); setShowAssessorDialog(true); }}
@@ -715,8 +722,7 @@ const AssessmentGrading: React.FC = () => {
                   const sId = student.enrolment_id || student.student_name;
                   const isSaving = savingStatus[sId];
                   return (
-                    <li key={sId} className="px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                      {/* Row 1 — who the learner is */}
+                    <li key={sId} className="px-5 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                       <div className="flex items-center">
                         <input
                           type="checkbox"
@@ -748,12 +754,10 @@ const AssessmentGrading: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Row 2 — submission ticks on the left, certificate + competency on the right.
-                          Indented to line up under the learner's name. */}
-                      <div className="mt-3 flex items-center justify-between flex-wrap gap-x-4 gap-y-2 sm:pl-[7.75rem]">
+                      <div className="flex items-center space-x-4">
                         {/* Assessment submission status — ticked when the learner has submitted
                             that method — plus the trainer-ticked TRAQOM survey box */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 pr-3 border-r border-gray-200 dark:border-gray-700">
                           {assessmentMethods.map(m => {
                             const info = METHOD_INFO[m] || { abbr: m, label: m };
                             const submitted = student.submitted_assessments?.includes(m);
@@ -836,10 +840,9 @@ const AssessmentGrading: React.FC = () => {
                           })()}
                         </div>
 
-                        <div className="relative flex items-center gap-4 ml-auto">
                         {/* Certificate Status Badge — verified against Google Drive.
-                            Fixed-width column (always rendered) so the competency
-                            controls stay aligned across rows. */}
+                            Fixed-width column (always rendered) so the submission
+                            checkboxes stay aligned across rows. */}
                         <div className="w-32 flex justify-start flex-shrink-0">
                         {student.is_competent && (() => {
                           const verification = certVerification[sId];
@@ -894,7 +897,7 @@ const AssessmentGrading: React.FC = () => {
                         })()}
                         </div>
 
-                        <span className={`inline-block w-36 text-right whitespace-nowrap text-xs font-semibold uppercase tracking-wider ${
+                        <span className={`inline-block w-40 text-right whitespace-nowrap text-xs font-semibold uppercase tracking-wider ${
                             student.is_competent ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-500'
                           }`}>
                             {student.is_competent ? 'Competent' : 'Not Yet Competent'}
@@ -926,11 +929,10 @@ const AssessmentGrading: React.FC = () => {
                         </div>
                         
                         {isSaving && (
-                          <div className="absolute -left-6">
+                          <div className="absolute right-[6.5rem]">
                             <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin text-blue-500" />
                           </div>
                         )}
-                        </div>
                       </div>
                     </li>
                   );

@@ -54,10 +54,16 @@ const nextConfig = {
   // SDK throws: "Native CLI binary for linux-x64 not found." Including
   // the whole package directory ensures every runtime asset travels into
   // the standalone output.
+  // pdfjs-dist (assessor sign-off PDF stamping) loads its worker,
+  // legacy/build/pdf.worker.mjs, via a dynamic import the tracer misses:
+  // "Setting up fake worker failed: Cannot find module .../pdf.worker.mjs".
   outputFileTracingIncludes: {
     '/api/**': [
       './node_modules/@anthropic-ai/claude-agent-sdk/**',
       './node_modules/@openai/codex-sdk/**',
+      './node_modules/pdfjs-dist/package.json',
+      './node_modules/pdfjs-dist/legacy/build/pdf.mjs',
+      './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
     ],
   },
 
