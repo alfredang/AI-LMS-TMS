@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
 import { cancelInvoiceJobOnEnrolmentCancelled } from '../../../lib/services/invoiceJobs';
 import { cleanupDaInvoicesForEnrolment } from '../../../lib/services/daInvoiceCleanup';
+import { syncClassAttendees, type AttendeeSyncResult } from '../../../lib/calendar/ensureClassCalendarEvent';
 
 function decryptSsgResponseBody(rawData: unknown, encKey: Buffer, iv: Buffer): any {
   const rawBody = typeof rawData === 'string' ? rawData : JSON.stringify(rawData);
@@ -240,6 +241,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         console.warn('[enrolment/cancel] invoice job cancel:', e instanceof Error ? e.message : e);
       }
 
+      // Drop the cancelled learner from the live Google Calendar event's attendee list.
+      // syncClassAttendees compares Confirmed enrolments (desired) against everyone ever
+      // associated with the run (known) — now that the status flip above has taken effect,
+      // this learner is known-but-no-longer-desired and gets removed. sendUpdates:'none',
+      // best-effort — never fails the cancellation itself.
+      let calendarResult: AttendeeSyncResult | { status: 'error' } = { status: 'skipped', added: 0, removed: 0, errors: 0 };
+      try {
+        calendarResult = await syncClassAttendees(courseRunId);
+      } catch (e: unknown) {
+        console.warn('[enrolment/cancel] calendar attendee sync:', e instanceof Error ? e.message : e);
+        calendarResult = { status: 'error' };
+      }
+
       void cleanupDaInvoicesForEnrolment(enrolmentRef)
         .then(({ found, warnings }) => {
           if (!found) return;
@@ -258,6 +272,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         data: parsed?.data ?? parsed,
         qbInvoiceDeleted: qbResult.qbDeleted,
         qbWarnings: qbResult.warnings,
+        calendarAttendeeRemoved: calendarResult,
       });
     }
 
