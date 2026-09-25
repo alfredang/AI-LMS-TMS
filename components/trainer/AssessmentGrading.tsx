@@ -715,7 +715,8 @@ const AssessmentGrading: React.FC = () => {
                   const sId = student.enrolment_id || student.student_name;
                   const isSaving = savingStatus[sId];
                   return (
-                    <li key={sId} className="px-5 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    <li key={sId} className="px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                      {/* Row 1 — who the learner is */}
                       <div className="flex items-center">
                         <input
                           type="checkbox"
@@ -747,10 +748,12 @@ const AssessmentGrading: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-4">
+                      {/* Row 2 — submission ticks on the left, certificate + competency on the right.
+                          Indented to line up under the learner's name. */}
+                      <div className="mt-3 flex items-center justify-between flex-wrap gap-x-4 gap-y-2 sm:pl-[7.75rem]">
                         {/* Assessment submission status — ticked when the learner has submitted
                             that method — plus the trainer-ticked TRAQOM survey box */}
-                        <div className="flex items-center gap-3 pr-3 border-r border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-3">
                           {assessmentMethods.map(m => {
                             const info = METHOD_INFO[m] || { abbr: m, label: m };
                             const submitted = student.submitted_assessments?.includes(m);
@@ -833,9 +836,10 @@ const AssessmentGrading: React.FC = () => {
                           })()}
                         </div>
 
+                        <div className="relative flex items-center gap-4 ml-auto">
                         {/* Certificate Status Badge — verified against Google Drive.
-                            Fixed-width column (always rendered) so the submission
-                            checkboxes stay aligned across rows. */}
+                            Fixed-width column (always rendered) so the competency
+                            controls stay aligned across rows. */}
                         <div className="w-32 flex justify-start flex-shrink-0">
                         {student.is_competent && (() => {
                           const verification = certVerification[sId];
@@ -890,7 +894,7 @@ const AssessmentGrading: React.FC = () => {
                         })()}
                         </div>
 
-                        <span className={`inline-block w-40 text-right whitespace-nowrap text-xs font-semibold uppercase tracking-wider ${
+                        <span className={`inline-block w-36 text-right whitespace-nowrap text-xs font-semibold uppercase tracking-wider ${
                             student.is_competent ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-500'
                           }`}>
                             {student.is_competent ? 'Competent' : 'Not Yet Competent'}
@@ -922,10 +926,11 @@ const AssessmentGrading: React.FC = () => {
                         </div>
                         
                         {isSaving && (
-                          <div className="absolute right-[6.5rem]">
+                          <div className="absolute -left-6">
                             <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin text-blue-500" />
                           </div>
                         )}
+                        </div>
                       </div>
                     </li>
                   );

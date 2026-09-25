@@ -32,6 +32,7 @@
 
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import PizZip from 'pizzip';
+import { ensurePdfjsNodeGlobals } from './pdfjsNodePolyfill';
 
 export type LabelKey = 'name' | 'nric' | 'date' | 'signature';
 
@@ -200,7 +201,9 @@ const PDF_VALUE_GAP = 4;
 
 async function extractPdfLines(bytes: Buffer): Promise<PdfLine[]> {
   // pdfjs is ESM-only; import lazily so this module stays importable from
-  // CommonJS API routes and the Next server bundle.
+  // CommonJS API routes and the Next server bundle. It also reads DOMMatrix at
+  // load time, which Node lacks — see pdfjsNodePolyfill.
+  ensurePdfjsNodeGlobals();
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const doc = await pdfjs.getDocument({
     data: new Uint8Array(bytes),
