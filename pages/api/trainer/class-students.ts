@@ -27,6 +27,10 @@ interface RosterRow {
     source: 'manual' | 'ssg';
     is_competent: boolean;
     submitted_assessments: string[];
+    /** Files the learner uploaded for this run (all methods). */
+    submission_count: number;
+    /** True when every uploaded file carries the assessor sign-off stamp. */
+    assessor_signed: boolean;
 }
 
 export interface RosterLearner extends RosterRow {
@@ -81,6 +85,8 @@ function mergeDuplicateLearners(rows: RosterRow[]): RosterLearner[] {
                 : primary.competent_status,
             traqom_completed: ordered.some(r => r.traqom_completed),
             submitted_assessments: METHOD_ORDER.filter(m => ordered.some(r => r.submitted_assessments.includes(m))),
+            submission_count: Math.max(...ordered.map(r => r.submission_count)),
+            assessor_signed: ordered.some(r => r.assessor_signed),
         };
     });
 }
@@ -119,7 +125,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const [resData, subsData, methodsData] = await Promise.all([
             pool.query(query, [courseRunId]),
             pool.query(
-                `SELECT user_id, array_agg(DISTINCT assessment_type) as types
+                `SELECT user_id,
+                        array_agg(DISTINCT assessment_type) as types,
+                        COUNT(*)::int AS submission_count,
+                        bool_and(assessor_signed_at IS NOT NULL) AS assessor_signed
                  FROM link_assessment_submission
                  WHERE course_run_id = $1
                  GROUP BY user_id`,
@@ -135,13 +144,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         ]);
         const students = resData.rows;
 
-        // Per-user set of submitted assessment methods (normalized to canonical keys)
+        // Per-user set of submitted assessment methods (normalized to canonical keys),
+        // plus the file count and whether the assessor stamp is on every file.
         const submittedByUser: Record<string, string[]> = {};
+        const submissionMetaByUser: Record<string, { count: number; signed: boolean }> = {};
         subsData.rows.forEach(row => {
             const normalized = new Set<string>(
                 (row.types || []).map((t: string) => LEGACY_TYPE_MAP[t] || t)
             );
             submittedByUser[row.user_id] = METHOD_ORDER.filter(m => normalized.has(m));
+            submissionMetaByUser[row.user_id] = { count: row.submission_count || 0, signed: row.assessor_signed === true };
         });
 
         // Which assessment methods this course uses (drives the columns shown in the UI)
@@ -163,7 +175,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             ...s,
             is_competent: s.competent_status === 'Competent' || s.competent_status === 'Passed',
             traqom_completed: s.traqom_completed === true,
-            submitted_assessments: (s.user_id && submittedByUser[s.user_id]) || []
+            submitted_assessments: (s.user_id && submittedByUser[s.user_id]) || [],
+            submission_count: (s.user_id && submissionMetaByUser[s.user_id]?.count) || 0,
+            assessor_signed: !!(s.user_id && submissionMetaByUser[s.user_id]?.signed),
         }));
 
         const finalStudents = mergeDuplicateLearners(normalized)

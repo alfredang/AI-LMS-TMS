@@ -5,6 +5,7 @@ import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
 import Spinner from './ui/Spinner';
 import { useLms } from '@contexts/LmsContext';
+import { AssessorSignatureForm } from './trainer/AssessorSignatureForm';
 import { ensureAbsoluteImageUrl } from '@utils/imageUtils';
 import { getApiUrl, getUploadUrl, getDeleteFileUrl, getProfileImageImportUrl, stripBaseUrl } from '@/lib/urlHelpers';
 import { ThemeMode, getCurrentTheme, applyTheme } from '@utils/colorUtils';
@@ -1246,6 +1247,15 @@ export const TrainerProfileCard: React.FC<{
                 userId={userId}
                 onPasswordUpdate={handlePasswordUpdate}
             />
+            {!isEditing && (
+                <Card className="p-8 mt-8">
+                    <h2 className="text-xl font-bold mb-1 dark:text-white">Assessor Signature</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                        Draw your signature once. On <span className="font-semibold">Assessment Grading</span>, ticking <span className="font-semibold">SIG</span> beside a learner stamps your name, NRIC, the assessment date and this signature into the Assessor block of every file they submitted.
+                    </p>
+                    <AssessorSignatureForm showDate={false} saveLabel="Save Signature" />
+                </Card>
+            )}
             {!isEditing && (
                 <Card className="p-8 mt-8">
                     <h2 className="text-xl font-bold mb-4 dark:text-white">Appearance</h2>

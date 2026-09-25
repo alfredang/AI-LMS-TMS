@@ -89,7 +89,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Trainer + Learner dual role** — trainers who enrol in the provider's own courses sign in and pick **Learner** mode (their enrolled classes, lessons, assessment submissions) or **Trainer** mode (only their assigned classes), switchable from the header's *View As* menu. Gated per tenant by `training_provider.trainer_learner_dual_role` (default off); enabling it backfills the Learner role onto every trainer and a `user_role_map` trigger grants it to every new trainer. A trainer can never grade their own enrolment
 - **My Calendar** — personal month calendar of the trainer's assigned classes
 - **E-Attendance** — Digital attendance tracking
-- **Assessment Grading** — Rubric-based grading with Assessment Summary Record support; each learner row shows per-method submission status (WA Written, PP Practical, CS Case Study, RP Role Play, OQ Oral Questioning) ticked when the learner has submitted, alongside a manually-ticked **TQ (TRAQOM survey)** box — SSG publishes no per-learner survey completion feed, so the trainer confirms it — with per-method and TRAQOM completion counts (e.g. WA 3/7, TRAQOM 5/7) and a refresh button in the roster header, plus Mark All Competent and bulk certificate sending. A learner who holds several enrolment rows in the same run (a manual LMS signup plus the SSG-synced record) appears **once**, listing every email they enrolled under; the SSG row is primary (NRIC, certificate), submissions are unioned across rows, and competency/TRAQOM toggles update every row
+- **Assessment Grading** — Rubric-based grading with Assessment Summary Record support; each learner row shows per-method submission status (WA Written, PP Practical, CS Case Study, RP Role Play, OQ Oral Questioning) ticked when the learner has submitted, alongside a manually-ticked **TQ (TRAQOM survey)** box — SSG publishes no per-learner survey completion feed, so the trainer confirms it — with per-method and TRAQOM completion counts (e.g. WA 3/7, TRAQOM 5/7) and a refresh button in the roster header, plus Mark All Competent and bulk certificate sending. A learner who holds several enrolment rows in the same run (a manual LMS signup plus the SSG-synced record) appears **once**, listing every email they enrolled under; the SSG row is primary (NRIC, certificate), submissions are unioned across rows, and competency/TRAQOM toggles update every row. Beside TQ sits a **SIG (assessor signature)** box: the trainer records their assessor block once — name, NRIC, date and a mouse/touch-drawn signature (Trainer Profile → Assessor Signature, or the dialog on the roster) — and ticking SIG stamps it into the "Assessor Name / NRIC / Date / Signature" block of every PDF or Word file the learner submitted, uploading the stamped copy next to the original in Google Drive; unticking restores the originals
 - **Training Hours** — Trainer training hours tracking
 - **Past Attendance** / **Past Assessment** — Historical records
 - **Lesson Delivery Guide** / **Assessment Guide**
@@ -414,6 +414,8 @@ POST /api/submissions/submit      # Submit assessment
 POST /api/grading/update-grading  # Grade submission
 POST /api/trainer/grade-student   # Toggle learner competency (single enrolmentId or enrolmentIds[] for a merged learner)
 POST /api/trainer/traqom-status   # Tick TRAQOM survey completion (single or batch)
+GET/POST /api/trainer/assessor-signature  # Trainer's assessor block (name, NRIC, date, drawn signature)
+POST /api/trainer/sign-assessments        # Stamp / unstamp the assessor block on a learner's submitted files
 POST /api/assessments/ssg-create  # Create SSG assessment
 PUT  /api/assessments/ssg-update  # Update SSG assessment
 ```
@@ -470,6 +472,7 @@ ai-lms-tms/
 │   └── index.tsx               # Main SPA entry
 │
 ├── lib/                        # Core libraries
+│   ├── assessment/             # Assessor sign-off stamping (PDF via pdfjs/pdf-lib, DOCX via PizZip) + Drive round trip
 │   ├── auth/                   # API authentication & authorization
 │   │   ├── withAuth.ts         # Route guard wrapper (roles + service key)
 │   │   ├── requireRole.ts      # Session/role resolution

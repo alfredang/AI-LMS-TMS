@@ -188,4 +188,27 @@ pool
     console.warn('Auto-migration warning:', err.message);
   });
 
+// Assessor sign-off on learner assessment submissions (trainer name / NRIC /
+// date / drawn signature stamped onto submitted PDF/DOCX files).
+// See database/migrations/add_assessor_signature.sql.
+pool
+  .query(`
+    CREATE TABLE IF NOT EXISTS trainer_assessor_signature (
+      user_id        uuid PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE,
+      assessor_name  text NOT NULL,
+      nric           text NOT NULL DEFAULT '',
+      sign_date      date NOT NULL DEFAULT CURRENT_DATE,
+      signature_png  text,
+      created_at     timestamptz NOT NULL DEFAULT now(),
+      updated_at     timestamptz NOT NULL DEFAULT now()
+    );
+    ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS assessor_signed_at timestamptz;
+    ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS assessor_signed_by uuid;
+    ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS original_file_url text;
+    ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS original_file_name character varying(255);
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
 export default pool;

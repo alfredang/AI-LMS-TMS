@@ -2201,6 +2201,10 @@ CREATE TABLE public.link_assessment_submission (
     file_name character varying(255) NOT NULL,
     file_url text NOT NULL,
     submitted_at timestamp with time zone DEFAULT now(),
+    assessor_signed_at timestamp with time zone,
+    assessor_signed_by uuid,
+    original_file_url text,
+    original_file_name character varying(255),
     CONSTRAINT link_assessment_submission_assessment_type_check CHECK (((assessment_type)::text = ANY ((ARRAY['written'::character varying, 'practical'::character varying, 'writtenAssessment'::character varying, 'practicalExam'::character varying, 'caseStudy'::character varying, 'rolePlay'::character varying, 'oralQuestioning'::character varying, 'project'::character varying, 'assignment'::character varying])::text[])))
 );
 
@@ -2761,6 +2765,21 @@ CREATE TABLE public.topic_completion (
     course_run_id uuid NOT NULL,
     topic_id uuid NOT NULL,
     completed_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: trainer_assessor_signature; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.trainer_assessor_signature (
+    user_id uuid NOT NULL,
+    assessor_name text NOT NULL,
+    nric text DEFAULT ''::text NOT NULL,
+    sign_date date DEFAULT CURRENT_DATE NOT NULL,
+    signature_png text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -4211,6 +4230,14 @@ ALTER TABLE ONLY public.trainer_invitation
 
 
 --
+-- Name: trainer_assessor_signature trainer_assessor_signature_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.trainer_assessor_signature
+    ADD CONSTRAINT trainer_assessor_signature_pkey PRIMARY KEY (user_id);
+
+
+--
 -- Name: trainer_profile trainer_profile_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5433,6 +5460,14 @@ ALTER TABLE ONLY public.support_ticket
 
 ALTER TABLE ONLY public.trainer_invitation
     ADD CONSTRAINT trainer_invitation_course_run_id_fkey FOREIGN KEY (course_run_id) REFERENCES public.course_run(id) ON DELETE CASCADE;
+
+
+--
+-- Name: trainer_assessor_signature trainer_assessor_signature_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.trainer_assessor_signature
+    ADD CONSTRAINT trainer_assessor_signature_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.app_user(id) ON DELETE CASCADE;
 
 
 --
