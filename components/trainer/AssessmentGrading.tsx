@@ -591,8 +591,12 @@ const AssessmentGrading: React.FC = () => {
                   </div>
                 );
               })()}
-              <div className="text-xs text-gray-500 bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
-                {students.length} Enrolments
+              <div
+                title={`${students.length} learners enrolled in this class`}
+                className="text-xs px-3 py-1 rounded-full border text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-300 dark:bg-sky-900/30 dark:border-sky-700"
+              >
+                <span className="font-semibold">{students.length}</span>{' '}
+                <span className="font-semibold">Enrolments</span>
               </div>
             </div>
             </div>

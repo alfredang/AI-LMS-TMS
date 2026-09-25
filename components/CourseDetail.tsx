@@ -2072,6 +2072,48 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
                     );
                 })}
             </ul>
+            {(userRole === UserRole.Trainer || userRole === UserRole.Developer) && (
+                <div
+                    id="critical-reminders"
+                    className="mx-2 mb-2 mt-1 rounded-xl border-2 border-red-400 bg-red-50 dark:border-red-500/70 dark:bg-red-950/40 p-4"
+                >
+                    <div className="flex items-center gap-2 mb-3">
+                        <Icon name={IconName.Warning} className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                        <h4 className="text-sm font-extrabold uppercase tracking-wide text-red-700 dark:text-red-300">Critical Reminders</h4>
+                    </div>
+                    <ol className="space-y-2.5 text-[13px] leading-snug text-gray-800 dark:text-gray-200">
+                        {([
+                            {
+                                text: <><span className="font-bold">TRAQOM is mandatory.</span> If a learner misses the TRAQOM survey, the trainer payout will be delayed.</>,
+                                target: null,
+                            },
+                            {
+                                text: <>Go to the <span className="font-bold">Assessment Grading</span> section to mark each learner <span className="font-bold">Competent</span> after they submit all the assessments.</>,
+                                target: 'Grading',
+                            },
+                            {
+                                text: <><span className="font-bold">Digitally sign</span> the assessment for each learner in the <span className="font-bold">Assessment Grading</span> section.</>,
+                                target: 'Grading',
+                            },
+                        ] as { text: React.ReactNode; target: string | null }[]).map((item, i) => (
+                            <li key={i} className="flex gap-2.5">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center mt-px">{i + 1}</span>
+                                {item.target ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleItemClick(item.target as string)}
+                                        className="text-left hover:underline decoration-red-400 underline-offset-2"
+                                    >
+                                        {item.text}
+                                    </button>
+                                ) : (
+                                    <span>{item.text}</span>
+                                )}
+                            </li>
+                        ))}
+                    </ol>
+                </div>
+            )}
         </>
     );
 };
