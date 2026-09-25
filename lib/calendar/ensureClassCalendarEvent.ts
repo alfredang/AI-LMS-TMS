@@ -99,7 +99,7 @@ export async function ensureClassCalendarEvent(courseRunId: string): Promise<Ens
     const timeMax = new Date(dates[dates.length - 1] + 'T00:00:00Z'); timeMax.setUTCDate(timeMax.getUTCDate() + 2);
     let events: calendar_v3.Schema$Event[] = [];
     try {
-      events = (await calendar.events.list({ calendarId, timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString(), singleEvents: true, maxResults: 250 })).data.items || [];
+      events = (await calendar.events.list({ calendarId, timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString(), singleEvents: true, maxResults: 250, q: run.title })).data.items || [];
     } catch (e) { /* will fall through to create */ }
 
     // An event this run only KEEPS or ADOPTS (never creates fresh) may predate the
@@ -220,7 +220,7 @@ export async function removeClassCalendarEvents(courseRunId: string, _opts: { re
       if (loBase && hiBase) {
         const lo = new Date(loBase + 'T00:00:00Z'); lo.setUTCDate(lo.getUTCDate() - 1);
         const hi = new Date(hiBase + 'T00:00:00Z'); hi.setUTCDate(hi.getUTCDate() + 2);
-        const events = (await calendar.events.list({ calendarId, timeMin: lo.toISOString(), timeMax: hi.toISOString(), singleEvents: true, maxResults: 250 })).data.items || [];
+        const events = (await calendar.events.list({ calendarId, timeMin: lo.toISOString(), timeMax: hi.toISOString(), singleEvents: true, maxResults: 250, q: run.title })).data.items || [];
         for (const e of events) {
           if (e.id && !ids.has(e.id) && eventBelongsToRun(e, run.course_run_id)) ids.add(e.id);
         }

@@ -153,6 +153,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           timeMax: hi.toISOString(),
           singleEvents: true,
           maxResults: 250,
+          q: run.course_title,
         });
         const events = evResp.data.items || [];
         calendarChecked = true;

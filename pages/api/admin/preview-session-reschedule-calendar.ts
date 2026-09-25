@@ -57,7 +57,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const lo = new Date(oldDate + 'T00:00:00Z'); lo.setUTCDate(lo.getUTCDate() - 1);
       const hi = new Date(oldDate + 'T00:00:00Z'); hi.setUTCDate(hi.getUTCDate() + 2);
       const events = (await client.calendar.events.list({
-        calendarId: client.calendarId, timeMin: lo.toISOString(), timeMax: hi.toISOString(), singleEvents: true, maxResults: 250,
+        calendarId: client.calendarId, timeMin: lo.toISOString(), timeMax: hi.toISOString(), singleEvents: true, maxResults: 250, q: run.course_title,
       })).data.items || [];
       ev = findEventOnDate(events, { courseRunId: run.course_run_id, courseTitle: run.course_title, dateIso: oldDate }) || null;
     }

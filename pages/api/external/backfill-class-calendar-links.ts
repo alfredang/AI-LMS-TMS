@@ -68,7 +68,7 @@ export async function runBackfill(opts: { apply: boolean; limit?: number } = { a
       const timeMax = new Date(dates[dates.length - 1] + 'T00:00:00Z'); timeMax.setUTCDate(timeMax.getUTCDate() + 2);
       const evs = (await calendar.events.list({
         calendarId, timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString(),
-        singleEvents: true, maxResults: 250,
+        singleEvents: true, maxResults: 250, q: run.course_title,
       })).data.items || [];
 
       for (const dateIso of dates) {

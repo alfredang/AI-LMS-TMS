@@ -164,7 +164,7 @@ async function findRunEvents(
   const lo = new Date(sorted[0] + 'T00:00:00Z'); lo.setUTCDate(lo.getUTCDate() - 1);
   const hi = new Date(sorted[sorted.length - 1] + 'T00:00:00Z'); hi.setUTCDate(hi.getUTCDate() + 2);
   const resp = await calendar.events.list({
-    calendarId, timeMin: lo.toISOString(), timeMax: hi.toISOString(), singleEvents: true, maxResults: 250,
+    calendarId, timeMin: lo.toISOString(), timeMax: hi.toISOString(), singleEvents: true, maxResults: 250, q: run.title,
   });
   const all = resp.data.items || [];
   const byId = new Map<string, calendar_v3.Schema$Event>();
