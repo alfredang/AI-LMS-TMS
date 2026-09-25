@@ -29,6 +29,8 @@ interface StudentData {
   submission_count?: number;
   /** True when every uploaded file carries the assessor sign-off stamp. */
   assessor_signed?: boolean;
+  /** Learner's "Assessment Records" folder in Google Drive, when they have uploaded. */
+  assessment_folder_url?: string | null;
   // A learner with several enrolment rows in the run (manual + SSG-synced) is
   // merged server-side; grading actions must hit every row.
   enrolment_ids?: string[];
@@ -512,7 +514,7 @@ const AssessmentGrading: React.FC = () => {
                 onClick={() => fetchStudents(true)}
                 disabled={loadingStudents || refreshingStudents}
                 title="Refresh assessment submission status"
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border text-gray-600 bg-white border-gray-200 hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full bg-blue-600 text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Icon name={IconName.Sync} className={`w-3.5 h-3.5 ${refreshingStudents ? 'animate-spin' : ''}`} />
                 {refreshingStudents ? 'Refreshing...' : 'Refresh'}
@@ -566,8 +568,25 @@ const AssessmentGrading: React.FC = () => {
                         : 'text-amber-600 bg-white border-gray-200 dark:text-amber-300 dark:bg-gray-700 dark:border-gray-600'
                     }`}
                   >
-                    <span className="font-semibold">SIG</span>{' '}
+                    <span className="font-semibold">Assessor SIG</span>{' '}
                     <span className="font-semibold">{signedCount}/{withFiles.length}</span>
+                  </div>
+                );
+              })()}
+              {/* Competent count */}
+              {students.length > 0 && (() => {
+                const competentCount = students.filter(s => s.is_competent).length;
+                return (
+                  <div
+                    title={`Competent: ${competentCount} of ${students.length} learners`}
+                    className={`text-xs px-3 py-1 rounded-full border ${
+                      competentCount === students.length
+                        ? 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/20 dark:border-emerald-800'
+                        : 'text-emerald-600 bg-white border-gray-200 dark:text-emerald-300 dark:bg-gray-700 dark:border-gray-600'
+                    }`}
+                  >
+                    <span className="font-semibold">Competent</span>{' '}
+                    <span className="font-semibold">{competentCount}/{students.length}</span>
                   </div>
                 );
               })()}
@@ -745,10 +764,23 @@ const AssessmentGrading: React.FC = () => {
                               </span>
                             )}
                           </p>
-                          {/* A merged learner lists every email they enrolled under */}
+                          {/* A merged learner lists every email they enrolled under; the first
+                              line also links to their assessment-records folder in Drive */}
                           {(student.emails && student.emails.length > 0 ? student.emails : [student.email]).map((email, i) => (
-                            <p key={email || i} className="text-xs text-gray-500 dark:text-gray-400">
-                              {email || 'No email provided'}
+                            <p key={email || i} className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                              <span>{email || 'No email provided'}</span>
+                              {i === 0 && student.assessment_folder_url && (
+                                <a
+                                  href={student.assessment_folder_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Open this learner's assessment records folder in Google Drive"
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                                >
+                                  <Icon name={IconName.Folder} className="w-3.5 h-3.5" />
+                                  Assessment Records
+                                </a>
+                              )}
                             </p>
                           ))}
                         </div>

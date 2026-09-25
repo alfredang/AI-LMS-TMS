@@ -1,5 +1,6 @@
 import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
 import { requireCourseRunTrainer } from '@lib/auth/courseRunAccess';
+import { resolveSubmissionFolders, driveFolderUrl } from '@lib/google-drive/submissionFolder';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { Pool } from 'pg';
 
@@ -31,6 +32,8 @@ interface RosterRow {
     submission_count: number;
     /** True when every uploaded file carries the assessor sign-off stamp. */
     assessor_signed: boolean;
+    /** Learner's "Assessment Records" folder in Google Drive, when known. */
+    assessment_folder_url: string | null;
 }
 
 export interface RosterLearner extends RosterRow {
@@ -87,6 +90,7 @@ function mergeDuplicateLearners(rows: RosterRow[]): RosterLearner[] {
             submitted_assessments: METHOD_ORDER.filter(m => ordered.some(r => r.submitted_assessments.includes(m))),
             submission_count: Math.max(...ordered.map(r => r.submission_count)),
             assessor_signed: ordered.some(r => r.assessor_signed),
+            assessment_folder_url: ordered.find(r => r.assessment_folder_url)?.assessment_folder_url ?? null,
         };
     });
 }
@@ -128,7 +132,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 `SELECT user_id,
                         array_agg(DISTINCT assessment_type) as types,
                         COUNT(*)::int AS submission_count,
-                        bool_and(assessor_signed_at IS NOT NULL) AS assessor_signed
+                        bool_and(assessor_signed_at IS NOT NULL) AS assessor_signed,
+                        MAX(drive_folder_id) AS drive_folder_id,
+                        MIN(file_url) AS any_file_url
                  FROM link_assessment_submission
                  WHERE course_run_id = $1
                  GROUP BY user_id`,
@@ -156,6 +162,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             submissionMetaByUser[row.user_id] = { count: row.submission_count || 0, signed: row.assessor_signed === true };
         });
 
+        // Learner's Drive folder (Course > Assessment Records > Session > Learner);
+        // back-filled from the file's parent for rows uploaded before it was stored.
+        const folderByUser = await resolveSubmissionFolders(
+            courseRunId,
+            subsData.rows.map(row => ({ user_id: row.user_id, drive_folder_id: row.drive_folder_id, file_url: row.any_file_url })),
+        );
+
         // Which assessment methods this course uses (drives the columns shown in the UI)
         const courseRow = methodsData.rows[0];
         let assessmentMethods: string[] = [];
@@ -178,6 +191,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             submitted_assessments: (s.user_id && submittedByUser[s.user_id]) || [],
             submission_count: (s.user_id && submissionMetaByUser[s.user_id]?.count) || 0,
             assessor_signed: !!(s.user_id && submissionMetaByUser[s.user_id]?.signed),
+            assessment_folder_url: s.user_id && folderByUser[s.user_id] ? driveFolderUrl(folderByUser[s.user_id]) : null,
         }));
 
         const finalStudents = mergeDuplicateLearners(normalized)

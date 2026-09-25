@@ -206,6 +206,7 @@ pool
     ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS assessor_signed_by uuid;
     ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS original_file_url text;
     ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS original_file_name character varying(255);
+    ALTER TABLE link_assessment_submission ADD COLUMN IF NOT EXISTS drive_folder_id text;
   `)
   .catch((err) => {
     console.warn('Auto-migration warning:', err.message);

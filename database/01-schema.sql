@@ -2205,6 +2205,7 @@ CREATE TABLE public.link_assessment_submission (
     assessor_signed_by uuid,
     original_file_url text,
     original_file_name character varying(255),
+    drive_folder_id text,
     CONSTRAINT link_assessment_submission_assessment_type_check CHECK (((assessment_type)::text = ANY ((ARRAY['written'::character varying, 'practical'::character varying, 'writtenAssessment'::character varying, 'practicalExam'::character varying, 'caseStudy'::character varying, 'rolePlay'::character varying, 'oralQuestioning'::character varying, 'project'::character varying, 'assignment'::character varying])::text[])))
 );
 

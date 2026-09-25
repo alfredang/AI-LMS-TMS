@@ -447,7 +447,8 @@ const AssessmentsSection: React.FC<{
                         courseRunId,
                         assessmentType,
                         fileName: file.name,
-                        fileUrl: uploadData.data.fileUrl
+                        fileUrl: uploadData.data.fileUrl,
+                        folderId: uploadData.data.studentFolderId
                     }),
                 });
 
