@@ -1424,7 +1424,7 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
     const isTrainerOrAdmin = userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider;
 
     return (
-        <ContentSection title="Announcements" collapsible>
+        <ContentSection title="Announcements" collapsible defaultOpen={userRole !== UserRole.Trainer}>
             <div className="space-y-4">
                 {isTrainerOrAdmin && !composing && (
                     <div className="flex justify-between items-center">
@@ -3400,6 +3400,7 @@ export const CourseDetail: React.FC = () => {
                                                         courseId={selectedCourse?.id}
                                                         latestQuizScores={latestQuizScores}
                                                         onQuizSubmitted={handleQuizSubmitted}
+                                                        defaultOpen={userRole !== UserRole.Trainer}
                                                     />
                                                 );
                                             })}

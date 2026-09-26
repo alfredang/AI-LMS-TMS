@@ -124,7 +124,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
     };
 
     return (
-        <ContentSection title="Assessment Summary Record (Virtual Class)" collapsible>
+        <ContentSection title="Assessment Summary Record (Virtual Class)" collapsible defaultOpen={userRole !== UserRole.Trainer}>
             <div className="space-y-4">
                 {course.assessmentSummaryRecordUrl && (
                     <a
