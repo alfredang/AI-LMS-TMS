@@ -350,8 +350,6 @@ const AssessmentGrading: React.FC = () => {
     }
   };
 
-  const selectedClass = classes.find(c => c.run_id === selectedCourseRunId);
-  const classEndDateIso = selectedClass?.end_date ? String(selectedClass.end_date).slice(0, 10) : undefined;
 
   const toggleCertSelection = (enrolmentId: string) => {
     setSelectedForCert(prev => {

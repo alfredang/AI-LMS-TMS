@@ -212,4 +212,46 @@ pool
     console.warn('Auto-migration warning:', err.message);
   });
 
+// Assessment Summary Record e-signing (learner + trainer blocks, generated PDF).
+// See database/migrations/add_assessment_summary_signature.sql.
+pool
+  .query(`
+    CREATE TABLE IF NOT EXISTS learner_signature (
+      user_id        uuid PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE,
+      learner_name   text NOT NULL,
+      nric           text NOT NULL DEFAULT '',
+      signature_png  text,
+      created_at     timestamptz NOT NULL DEFAULT now(),
+      updated_at     timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS assessment_summary_record (
+      id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      course_run_id          uuid NOT NULL REFERENCES course_run(id) ON DELETE CASCADE,
+      learner_user_id        uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+      learner_name           text,
+      learner_nric           text,
+      learner_sign_date      date,
+      learner_signature_png  text,
+      learner_signed_at      timestamptz,
+      trainer_user_id        uuid REFERENCES app_user(id) ON DELETE SET NULL,
+      trainer_name           text,
+      trainer_nric           text,
+      trainer_sign_date      date,
+      trainer_signature_png  text,
+      trainer_signed_at      timestamptz,
+      template_file_id       text,
+      file_id                text,
+      file_url               text,
+      file_name              character varying(255),
+      generated_at           timestamptz,
+      created_at             timestamptz NOT NULL DEFAULT now(),
+      updated_at             timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT assessment_summary_record_run_learner_key UNIQUE (course_run_id, learner_user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_assessment_summary_record_run ON assessment_summary_record (course_run_id);
+  `)
+  .catch((err) => {
+    console.warn('Auto-migration warning:', err.message);
+  });
+
 export default pool;
