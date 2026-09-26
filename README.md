@@ -76,7 +76,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - Course browsing and enrollment
 - Courseware access — Learner Guide, Learner Slides, Activities/Lab and SkillsFuture link cards, unlocked from 8:30 AM SGT on the course start date
 - Progress tracking through learning units and subtopics
-- Assessment submission and grade viewing
+- Assessment submission and grade viewing — the course page re-reads the trainer's publish state every minute while visible and on tab focus, so a Written/Practical exam published mid-class appears without a reload
 - AI chatbot for personalized course assistance (external OpenClaw/Hermes agent via WhatsApp/Telegram)
 - Certificate download after completion — issued only once the class has ended (from 6:00 PM SGT on the last day, or earlier if the trainer marks the learner Competent) and the minimum attendance is met; admins/trainers can still issue manually
 - Job search integration
