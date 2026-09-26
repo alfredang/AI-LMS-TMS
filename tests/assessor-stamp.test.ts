@@ -4,7 +4,8 @@ import zlib from 'node:zlib';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import PizZip from 'pizzip';
 
-import { planFills, stampDocx, stampPdf, formatSignDate } from '../lib/assessment/assessorStamp';
+import { planFills, stampDocx, stampPdf, formatSignDate, detectStampFormat } from '../lib/assessment/assessorStamp';
+import { stampOdt } from '../lib/assessment/odtStamp';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -137,6 +138,66 @@ test('stampDocx reports when no assessor block exists', () => {
   const out = stampDocx(docxWithBody(p(r('Just a question paper'))), details);
   assert.deepEqual(out.filled, []);
   assert.equal(out.noLabelsFound, true);
+});
+
+// ── ODT ───────────────────────────────────────────────────────────────────────
+
+function odtWithBody(bodyXml: string): Buffer {
+  const zip = new PizZip();
+  zip.file('mimetype', 'application/vnd.oasis.opendocument.text', { compression: 'STORE' });
+  zip.file('META-INF/manifest.xml', `<?xml version="1.0" encoding="UTF-8"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/></manifest:manifest>`);
+  zip.file('content.xml', `<?xml version="1.0" encoding="UTF-8"?><office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" office:version="1.2"><office:automatic-styles/><office:body><office:text>${bodyXml}</office:text></office:body></office:document-content>`);
+  return zip.generate({ type: 'nodebuffer' }) as Buffer;
+}
+const tp = (inner: string) => `<text:p text:style-name="P1">${inner}</text:p>`;
+const ts = (t: string) => `<text:span text:style-name="T1">${t}</text:span>`;
+const odtText = (buf: Buffer) => {
+  const xml = new PizZip(buf).file('content.xml')!.asText();
+  const body = xml.slice(xml.indexOf('<office:text>'));
+  return body
+    .replace(/<text:tab\/>/g, '\t')
+    .replace(/<text:s text:c="(\d+)"\/>/g, (_, n) => ' '.repeat(+n))
+    .replace(/<text:s\/>/g, ' ')
+    .replace(/<\/text:p>/g, '\n')
+    .replace(/<[^>]+>/g, '');
+};
+
+test('stampOdt fills the LibreOffice-style block (tabs, text:s, underscores) and embeds the signature', () => {
+  const input = odtWithBody(
+    tp(ts('Learner Name: John Tan')) +
+    tp(ts('Date: 01/09/2026<text:tab/>Signature: (learner)')) +
+    tp(ts('Grade: ') + ts('<text:s text:c="20"/>') + ts('(C / NYC)')) +
+    tp(ts('Assessor Name: _______________ <text:tab/><text:tab/>Assessor NRIC: _____________') + ts('')) +
+    tp(ts('Date: _________________<text:tab/><text:tab/>Signature: <text:s/>_________________')),
+  );
+  const out = stampOdt(input, details);
+  assert.deepEqual(out.filled, ['name', 'nric', 'date', 'signature']);
+
+  const text = odtText(out.buffer);
+  assert.match(text, /Assessor Name:\s+Dr\. Alfred Ang\s+\t\tAssessor NRIC:\s+S1234567A/);
+  assert.match(text, /Date:\s+25\/09\/2026\s*\t\tSignature:/);
+  assert.match(text, /^Date: 01\/09\/2026\tSignature: \(learner\)$/m, 'learner declaration untouched');
+  assert.doesNotMatch(text, /_/, 'underscore blanks replaced');
+
+  const zip = new PizZip(out.buffer);
+  assert.ok(zip.file('Pictures/assessor_signature.png'), 'picture added');
+  assert.match(zip.file('META-INF/manifest.xml')!.asText(), /Pictures\/assessor_signature\.png/);
+  const xml = zip.file('content.xml')!.asText();
+  assert.match(xml, /<office:automatic-styles><style:style style:name="LmsAssessorValue"/);
+  assert.match(xml, /Signature: <draw:frame draw:style-name="LmsAssessorSig" draw:name="assessor_signature" text:anchor-type="as-char"/);
+  assert.match(xml, /<text:span text:style-name="LmsAssessorValue"> Dr\. Alfred Ang <\/text:span>/);
+  // mimetype must stay first and stored
+  assert.equal(Object.keys(zip.files)[0], 'mimetype');
+  assert.equal(out.buffer.toString('ascii', 30, 38), 'mimetype');
+  assert.equal(out.buffer.readUInt16LE(8), 0, 'mimetype entry uses STORE');
+
+  assert.deepEqual(stampOdt(out.buffer, details).filled, [], 're-stamp is a no-op');
+});
+
+test('detectStampFormat recognises odt by extension and mime type', () => {
+  assert.equal(detectStampFormat('WA - Learner.odt'), 'odt');
+  assert.equal(detectStampFormat('x', 'application/vnd.oasis.opendocument.text'), 'odt');
+  assert.equal(detectStampFormat('x.rtf', 'application/rtf'), null);
 });
 
 // ── PDF ───────────────────────────────────────────────────────────────────────

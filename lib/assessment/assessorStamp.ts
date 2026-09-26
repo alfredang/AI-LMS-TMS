@@ -149,7 +149,7 @@ export function planFills(
   return { fills, sawAnyLabel };
 }
 
-function valueFor(key: LabelKey, d: AssessorDetails): string {
+export function valueFor(key: LabelKey, d: AssessorDetails): string {
   switch (key) {
     case 'name': return d.name;
     case 'nric': return d.nric;
@@ -319,10 +319,10 @@ const EMU_PER_INCH = 914400;
 /** Signature image height in the document, in inches. */
 const DOCX_SIGNATURE_HEIGHT_IN = 0.45;
 
-const xmlEscape = (s: string) =>
+export const xmlEscape = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const xmlUnescape = (s: string) =>
+export const xmlUnescape = (s: string) =>
   s
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -582,13 +582,23 @@ export function stampDocx(bytes: Buffer, details: AssessorDetails): StampResult 
 
 // ── Dispatcher ────────────────────────────────────────────────────────────────
 
-export type StampFormat = 'pdf' | 'docx';
+export type StampFormat = 'pdf' | 'docx' | 'odt';
+
+export const STAMP_MIME: Record<StampFormat, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  odt: 'application/vnd.oasis.opendocument.text',
+};
+
+/** Human-readable list of supported formats for error messages. */
+export const STAMP_FORMATS_LABEL = 'PDF, DOCX and ODT';
 
 export function detectStampFormat(fileName: string, mimeType?: string | null): StampFormat | null {
   const ext = (fileName || '').toLowerCase().split('.').pop() || '';
   const mt = (mimeType || '').toLowerCase();
-  if (ext === 'pdf' || mt === 'application/pdf') return 'pdf';
-  if (ext === 'docx' || mt === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
+  if (ext === 'pdf' || mt === STAMP_MIME.pdf) return 'pdf';
+  if (ext === 'docx' || mt === STAMP_MIME.docx) return 'docx';
+  if (ext === 'odt' || mt === STAMP_MIME.odt) return 'odt';
   return null;
 }
 
@@ -597,7 +607,13 @@ export async function stampAssessment(
   format: StampFormat,
   details: AssessorDetails,
 ): Promise<StampResult> {
-  return format === 'pdf' ? stampPdf(bytes, details) : stampDocx(bytes, details);
+  if (format === 'pdf') return stampPdf(bytes, details);
+  if (format === 'odt') {
+    // Lazy: keeps the ODT writer out of the module graph unless needed.
+    const { stampOdt } = await import('./odtStamp');
+    return stampOdt(bytes, details);
+  }
+  return stampDocx(bytes, details);
 }
 
 /** dd/mm/yyyy for an ISO date or Date, Singapore convention. */

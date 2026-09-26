@@ -20,6 +20,8 @@ import pool from '../db';
 import { getDriveClient, extractGoogleFileId } from '../google-drive/drive-helpers';
 import {
   detectStampFormat,
+  STAMP_MIME,
+  STAMP_FORMATS_LABEL,
   formatSignDate,
   signatureDataUrlToPng,
   stampAssessment,
@@ -213,7 +215,7 @@ export async function signLearnerSubmissions(params: {
       const src = await downloadSubmission(drive, fileId);
       const format = detectStampFormat(src.name, src.mimeType);
       if (!format) {
-        results.push({ ...base, status: 'skipped', reason: `Unsupported file type (${src.name}) — only PDF and DOCX can be signed` });
+        results.push({ ...base, status: 'skipped', reason: `Unsupported file type (${src.name}) — only ${STAMP_FORMATS_LABEL} can be signed` });
         continue;
       }
 
@@ -231,7 +233,7 @@ export async function signLearnerSubmissions(params: {
 
       const uploaded = await uploadSigned(drive, {
         name: signedFileName(src.name),
-        mimeType: format === 'pdf' ? 'application/pdf' : DOCX_MIME,
+        mimeType: STAMP_MIME[format],
         parents: src.parents,
         buffer: stamped.buffer,
       });
