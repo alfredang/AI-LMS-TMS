@@ -1426,6 +1426,61 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [role, updateURL, currentUser, bookmarkedSubtopics, currentView]);
 
+  // Learners load the course page once, so an assessment the trainer publishes
+  // afterwards stayed invisible until they reloaded (2026-09-26 class: every
+  // learner opened the page at 09:40, the publish landed at 12:43). Re-read the
+  // publish flags and links every minute while the tab is visible, and again
+  // when the tab regains focus, patching courseDetail only when they changed.
+  useEffect(() => {
+    if (role !== UserRole.Learner) return;
+    const userId = currentUser?.id;
+    const courseId = selectedCourse?.id;
+    const courseRunUuid = courseDetail?.courseRunUuid;
+    if (!userId || !courseId || !courseRunUuid) return;
+
+    const PUBLISH_KEYS = [
+      'writtenAssessmentPublished',
+      'practicalAssessmentPublished',
+      'publishedAssessmentMethods',
+      'assessmentMethods',
+      'writtenAssessmentLink',
+      'practicalPerformanceAssessmentLink',
+    ] as const;
+
+    let cancelled = false;
+    const refreshPublishState = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      try {
+        const response = await fetch(`/api/courses/detail?userId=${userId}&courseId=${courseId}&courseRunId=${courseRunUuid}`);
+        const result = await response.json();
+        if (cancelled || !result?.success || !result.data) return;
+        const fresh = result.data as Record<string, unknown>;
+        setCourseDetail(prev => {
+          if (!prev || prev.courseRunUuid !== fresh.courseRunUuid) return prev;
+          const changed = PUBLISH_KEYS.some(
+            key => JSON.stringify((prev as unknown as Record<string, unknown>)[key] ?? null) !== JSON.stringify(fresh[key] ?? null)
+          );
+          if (!changed) return prev;
+          const patch: Record<string, unknown> = {};
+          PUBLISH_KEYS.forEach(key => { patch[key] = fresh[key]; });
+          return { ...prev, ...patch } as CourseDetail;
+        });
+      } catch {
+        // Transient network error: the next tick retries.
+      }
+    };
+
+    const intervalId = window.setInterval(refreshPublishState, 60_000);
+    document.addEventListener('visibilitychange', refreshPublishState);
+    window.addEventListener('focus', refreshPublishState);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', refreshPublishState);
+      window.removeEventListener('focus', refreshPublishState);
+    };
+  }, [role, currentUser?.id, selectedCourse?.id, courseDetail?.courseRunUuid]);
+
   const toggleBookmark = useCallback(async (subtopicId: string) => {
     if (!selectedCourse?.id || !currentUser?.id) {
       console.error('❌ No selectedCourse or currentUser available for bookmark operation');
