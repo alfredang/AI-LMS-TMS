@@ -569,7 +569,7 @@ const AssessmentGrading: React.FC = () => {
                         : 'text-amber-600 bg-white border-gray-200 dark:text-amber-300 dark:bg-gray-700 dark:border-gray-600'
                     }`}
                   >
-                    <span className="font-semibold">Assessor SIG</span>{' '}
+                    <span className="font-semibold">Assessor Sign</span>{' '}
                     <span className="font-semibold">{signedCount}/{withFiles.length}</span>
                   </div>
                 );
