@@ -2049,6 +2049,43 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
 
     const navItems = userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin ? trainerNavItems : learnerNavItems;
 
+    // Role-specific "Critical Reminders" card rendered under the nav. Trainers (and Developers
+    // previewing the trainer view) see grading duties; learners see the TRAQOM + assessment
+    // submission steps. Each item can deep-link to a section via `target`.
+    type CriticalReminder = { text: React.ReactNode; target: string | null };
+    const trainerReminders: CriticalReminder[] = [
+        {
+            text: <><span className="font-bold">TRAQOM is mandatory.</span> If a learner misses the TRAQOM survey, the trainer payout will be delayed.</>,
+            target: null,
+        },
+        {
+            text: <>Go to the <span className="font-bold">Assessment Grading</span> section to mark each learner <span className="font-bold">Competent</span> after they submit all the assessments.</>,
+            target: 'Grading',
+        },
+        {
+            text: <><span className="font-bold">Digitally sign</span> the assessment for each learner in the <span className="font-bold">Assessment Grading</span> section.</>,
+            target: 'Grading',
+        },
+    ];
+    const learnerReminders: CriticalReminder[] = [
+        {
+            text: <><span className="font-bold">TRAQOM is mandatory.</span> Learners must fill up the TRAQOM to be <span className="font-bold">COMPETENT</span>.</>,
+            target: 'TRAQOM Survey',
+        },
+        {
+            text: <><span className="font-bold">Download</span> the assessment question as a <span className="font-bold">Word Document</span>.</>,
+            target: 'Assessment',
+        },
+        {
+            text: <><span className="font-bold">All questions must be answered.</span> Once completed, <span className="font-bold">submit the assessment online</span>. You must see the <span className="font-bold text-green-700 dark:text-green-400">green notification</span> that the assessment is submitted successfully.</>,
+            target: 'Assessment',
+        },
+    ];
+    const criticalReminders: CriticalReminder[] =
+        userRole === UserRole.Trainer || userRole === UserRole.Developer ? trainerReminders
+        : userRole === UserRole.Learner ? learnerReminders
+        : [];
+
     return (
         <>
             {(userRole === UserRole.Learner || userRole === UserRole.Trainer || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider || userRole === UserRole.Admin) && <CourseInfoPanel course={selectedCourse} userRole={userRole} />}
@@ -2072,7 +2109,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
                     );
                 })}
             </ul>
-            {(userRole === UserRole.Trainer || userRole === UserRole.Developer) && (
+            {criticalReminders.length > 0 && (
                 <div
                     id="critical-reminders"
                     className="mx-2 mb-2 mt-1 rounded-xl border-2 border-red-400 bg-red-50 dark:border-red-500/70 dark:bg-red-950/40 p-4"
@@ -2082,20 +2119,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
                         <h4 className="text-sm font-extrabold uppercase tracking-wide text-red-700 dark:text-red-300">Critical Reminders</h4>
                     </div>
                     <ol className="space-y-2.5 text-[13px] leading-snug text-gray-800 dark:text-gray-200">
-                        {([
-                            {
-                                text: <><span className="font-bold">TRAQOM is mandatory.</span> If a learner misses the TRAQOM survey, the trainer payout will be delayed.</>,
-                                target: null,
-                            },
-                            {
-                                text: <>Go to the <span className="font-bold">Assessment Grading</span> section to mark each learner <span className="font-bold">Competent</span> after they submit all the assessments.</>,
-                                target: 'Grading',
-                            },
-                            {
-                                text: <><span className="font-bold">Digitally sign</span> the assessment for each learner in the <span className="font-bold">Assessment Grading</span> section.</>,
-                                target: 'Grading',
-                            },
-                        ] as { text: React.ReactNode; target: string | null }[]).map((item, i) => (
+                        {criticalReminders.map((item, i) => (
                             <li key={i} className="flex gap-2.5">
                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center mt-px">{i + 1}</span>
                                 {item.target ? (
