@@ -163,6 +163,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
     // Dialogs
     const [showLearnerDialog, setShowLearnerDialog] = useState(false);
     const [showAssessorDialog, setShowAssessorDialog] = useState(false);
+    const [showSignDemo, setShowSignDemo] = useState(false);
     const [assessor, setAssessor] = useState<AssessorRecord | null>(null);
     const [assessorLoaded, setAssessorLoaded] = useState(false);
     const [pendingSign, setPendingSign] = useState<'self' | string[] | null>(null);
@@ -478,13 +479,25 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                 <span className="text-[11px] text-gray-500 dark:text-gray-400">
                                     Learner {learnerSignedCount}/{learners.length} · Trainer {trainerSignedCount}/{learners.length} · Both {bothSignedCount}/{learners.length}
                                 </span>
+                                {/* How-to video for signing the ASR online (virtual classes) */}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSignDemo(true)}
+                                    title="Watch a short demo of signing the Assessment Summary Record online"
+                                    className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                                >
+                                    <Icon name={IconName.Video} className="w-4 h-4" />
+                                    Watch Demo
+                                </button>
                                 <button
                                     type="button"
                                     onClick={loadStatus}
                                     disabled={loading}
-                                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50"
+                                    title="Refresh signing status"
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full bg-blue-600 text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
-                                    <Icon name={IconName.Spinner} className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+                                    <Icon name={IconName.Sync} className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                                    {loading ? 'Refreshing...' : 'Refresh'}
                                 </button>
                                 <button
                                     type="button"
@@ -645,6 +658,36 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                     </div>
                 </details>
             </div>
+
+            {/* Trainer demo: signing the Assessment Summary Record online (virtual classes only) */}
+            {showSignDemo && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowSignDemo(false)}>
+                    <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-4 w-full max-w-4xl mx-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-3 px-1">
+                            <div>
+                                <h3 className="text-base font-bold text-gray-900 dark:text-white">Demo: Sign the Assessment Summary Record online</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Virtual classes only — physical classes keep the printed record.</p>
+                            </div>
+                            <button
+                                onClick={() => setShowSignDemo(false)}
+                                className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                aria-label="Close"
+                            >
+                                <Icon name={IconName.Close} className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <video
+                            src="/videos/asr-sign-off-demo.mp4"
+                            controls
+                            autoPlay
+                            playsInline
+                            className="w-full rounded-lg bg-black aspect-video"
+                        >
+                            <track kind="captions" src="/videos/asr-sign-off-demo.vtt" srcLang="en" label="English" />
+                        </video>
+                    </div>
+                </div>
+            )}
 
             <LearnerSignatureDialog
                 open={showLearnerDialog}
