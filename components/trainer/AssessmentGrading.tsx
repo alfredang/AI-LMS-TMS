@@ -1016,7 +1016,6 @@ const AssessmentGrading: React.FC = () => {
         open={showAssessorDialog}
         onClose={() => { setShowAssessorDialog(false); setPendingSign(null); }}
         onSaved={handleAssessorSaved}
-        defaultSignDate={classEndDateIso}
       />
     </div>
   );

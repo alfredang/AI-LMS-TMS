@@ -20,6 +20,35 @@ export interface AssessorRecord {
   updated_at?: string;
 }
 
+/** Wording / endpoint of the signature block; the assessor variant is the default. */
+export interface SignatureFormVariant {
+  /** GET/POST endpoint returning { success, exists, data } */
+  endpoint: string;
+  nameLabel: string;
+  nricLabel: string;
+  /** Key of the name field in the endpoint's record (assessor_name / learner_name) */
+  nameKey: string;
+  /** Footnote under the form on the profile page */
+  hint?: React.ReactNode;
+}
+
+export const ASSESSOR_VARIANT: SignatureFormVariant = {
+  endpoint: '/api/trainer/assessor-signature',
+  nameLabel: 'Assessor Name',
+  nricLabel: 'Assessor NRIC',
+  nameKey: 'assessor_name',
+  hint: (
+    <>These details are stamped onto learners&apos; submitted assessments when you tick <span className="font-semibold">SIGN</span> on the grading roster.</>
+  ),
+};
+
+export const LEARNER_VARIANT: SignatureFormVariant = {
+  endpoint: '/api/learner/signature',
+  nameLabel: 'Name (as in NRIC)',
+  nricLabel: 'NRIC',
+  nameKey: 'learner_name',
+};
+
 interface Props {
   /** Pre-fill the date (e.g. the class end date) when the trainer has no saved record yet */
   defaultSignDate?: string;
@@ -29,6 +58,7 @@ interface Props {
   onCancel?: () => void;
   saveLabel?: string;
   compact?: boolean;
+  variant?: SignatureFormVariant;
 }
 
 const inputClass =
@@ -46,6 +76,7 @@ export const AssessorSignatureForm: React.FC<Props> = ({
   onCancel,
   saveLabel = 'Save',
   compact = false,
+  variant = ASSESSOR_VARIANT,
 }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,17 +93,18 @@ export const AssessorSignatureForm: React.FC<Props> = ({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch('/api/trainer/assessor-signature')
+    fetch(variant.endpoint)
       .then(r => r.json())
       .then(json => {
         if (cancelled) return;
-        if (!json?.success) throw new Error(json?.error || 'Failed to load assessor details');
+        if (!json?.success) throw new Error(json?.error || 'Failed to load signature details');
         const d: AssessorRecord = json.data;
         setExists(!!json.exists);
-        setName(d.assessor_name || '');
+        setName((d as any)[variant.nameKey] || d.assessor_name || '');
         setNric(d.nric || '');
-        // A saved date is the trainer's last choice; a fresh record takes the class date.
-        setSignDate(json.exists && d.sign_date ? d.sign_date : (defaultSignDate || todayIso()));
+        // The date is the signing date, so it always resets to today (or an
+        // explicit override) when the dialog opens — never the last saved value.
+        setSignDate(defaultSignDate || todayIso());
         setSavedSignature(d.signature_png || null);
         setRedrawing(!d.signature_png);
       })
@@ -84,7 +116,7 @@ export const AssessorSignatureForm: React.FC<Props> = ({
 
   const handleSave = async () => {
     setError(null);
-    if (!name.trim()) { setError('Assessor name is required.'); return; }
+    if (!name.trim()) { setError(`${variant.nameLabel} is required.`); return; }
 
     let signaturePng: string | null | undefined = undefined; // keep saved
     if (redrawing) {
@@ -104,14 +136,14 @@ export const AssessorSignatureForm: React.FC<Props> = ({
 
     setSaving(true);
     try {
-      const res = await fetch('/api/trainer/assessor-signature', {
+      const res = await fetch(variant.endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), nric: nric.trim(), signDate, signaturePng }),
       });
       const json = await res.json();
       if (!res.ok || !json?.success) throw new Error(json?.error || 'Failed to save');
-      const rec: AssessorRecord = json.data;
+      const rec: AssessorRecord = { ...json.data, assessor_name: json.data?.[variant.nameKey] ?? json.data?.assessor_name ?? '' };
       setExists(true);
       setSavedSignature(rec.signature_png || null);
       setRedrawing(!rec.signature_png);
@@ -127,7 +159,7 @@ export const AssessorSignatureForm: React.FC<Props> = ({
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-sm text-gray-500 py-6">
-        <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin" /> Loading assessor details…
+        <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin" /> Loading signature details…
       </div>
     );
   }
@@ -137,12 +169,12 @@ export const AssessorSignatureForm: React.FC<Props> = ({
       <div className={`grid gap-3 ${showDate ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
         <div>
           <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Assessor Name <span className="text-red-500">*</span>
+            {variant.nameLabel} <span className="text-red-500">*</span>
           </label>
           <input type="text" value={name} onChange={e => setName(e.target.value)} className={inputClass} placeholder="As shown on the assessment" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Assessor NRIC</label>
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{variant.nricLabel}</label>
           <input type="text" value={nric} onChange={e => setNric(e.target.value.toUpperCase())} className={inputClass} placeholder="e.g. S1234567A" />
         </div>
         {showDate && (
@@ -221,10 +253,8 @@ export const AssessorSignatureForm: React.FC<Props> = ({
           {saving ? 'Saving…' : saveLabel}
         </button>
       </div>
-      {exists && !compact && (
-        <p className="text-[11px] text-gray-400">
-          These details are stamped onto learners&apos; submitted assessments when you tick <span className="font-semibold">SIGN</span> on the grading roster.
-        </p>
+      {exists && !compact && variant.hint && (
+        <p className="text-[11px] text-gray-400">{variant.hint}</p>
       )}
     </div>
   );
@@ -253,6 +283,33 @@ export const AssessorSignatureDialog: React.FC<{
           Your name, NRIC, the date and your signature are stamped into the <span className="font-semibold">Assessor</span> block of each learner&apos;s submitted assessment (PDF or Word). The signature you save here is also kept on your Trainer Profile.
         </p>
         <AssessorSignatureForm defaultSignDate={defaultSignDate} onSaved={onSaved} onCancel={onClose} saveLabel="Save & Use" compact />
+      </div>
+    </div>
+  );
+};
+
+/** Modal wrapper for the learner's candidate block (Assessment Summary Record). */
+export const LearnerSignatureDialog: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  onSaved: (record: AssessorRecord) => void;
+}> = ({ open, onClose, onSaved }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-2xl mx-4" onClick={e => e.stopPropagation()}>
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          aria-label="Close"
+        >
+          <Icon name={IconName.Close} className="w-5 h-5" />
+        </button>
+        <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">Learner Signature</h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          Your name, NRIC (only the last 3 digits and letter are printed), the date and your signature are stamped into the <span className="font-semibold">Candidate</span> block of the Assessment Summary Record. Saved once and reused for every class you sign.
+        </p>
+        <AssessorSignatureForm variant={LEARNER_VARIANT} showDate={false} onSaved={onSaved} onCancel={onClose} saveLabel="Save & Use" compact />
       </div>
     </div>
   );
