@@ -118,7 +118,7 @@ const SectionHeader: React.FC<{ title: string; count?: number; right?: React.Rea
 
 const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdminMode = false }) => {
   const router = useRouter();
-  const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId, setSelectedCourse } = useLms();
+  const { currentUser, pendingAttendanceCourseRunId, setPendingAttendanceCourseRunId, loadCourseData } = useLms();
   const [sourceCourse, setSourceCourse] = useState<any | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -132,7 +132,10 @@ const TrainerAttendanceDashboard: React.FC<{ isAdminMode?: boolean }> = ({ isAdm
     if (typeof window !== 'undefined') {
       try { sessionStorage.removeItem('attendanceSourceCourse'); } catch {}
     }
-    setSelectedCourse(sourceCourse);
+    // Reload the full class (selectedCourse + courseDetail together). A bare
+    // setSelectedCourse left the previously loaded courseDetail in place, so the
+    // class page could show one class's title while its QR codes pointed at another.
+    void loadCourseData(sourceCourse).catch(err => console.error('Failed to reload class:', err));
   };
   const { courses, loading: coursesLoading } = useTrainerCourses(isAdminMode ? undefined : currentUser?.id, false, true);
 

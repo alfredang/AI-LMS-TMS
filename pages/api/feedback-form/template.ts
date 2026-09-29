@@ -44,11 +44,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             [course_run_id]
           )
         : await pool.query(
+            // An exact run-code match always wins. When only a course code is given, pick
+            // the run in progress today (SGT), else the one nearest to today — not simply
+            // the furthest-future run, which is never the class the learner is sitting in.
             `SELECT cr.id AS course_run_id, cr.course_run_id AS course_run_code, cr.start_date, cr.end_date,
                     c.title AS course_title, c.course_code, ${trainerSubq}
              FROM course_run cr JOIN course c ON c.id = cr.course_id
-             WHERE cr.course_run_id = $1 OR c.course_code = $1
-             ORDER BY cr.start_date DESC NULLS LAST LIMIT 1`,
+             WHERE cr.course_run_id = $1 OR c.course_code = $1 OR c.new_course_code = $1
+             ORDER BY (cr.course_run_id = $1) DESC,
+                      (cr.start_date <= (now() AT TIME ZONE 'Asia/Singapore')::date
+                       AND cr.end_date >= (now() AT TIME ZONE 'Asia/Singapore')::date) DESC,
+                      ABS(cr.start_date - (now() AT TIME ZONE 'Asia/Singapore')::date) ASC NULLS LAST
+             LIMIT 1`,
             [course_run_id]
           );
       runContext = r.rows[0] || null;

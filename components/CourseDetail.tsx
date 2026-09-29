@@ -2066,6 +2066,10 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
             text: <><span className="font-bold">Digitally sign</span> the assessment for each learner in the <span className="font-bold">Assessment Grading</span> section.</>,
             target: 'Grading',
         },
+        {
+            text: <><span className="font-bold">Trainer payment will not be made</span> for learners who provide an overall course review rating of <span className="font-bold">2 out of 5 or below</span>.</>,
+            target: null,
+        },
     ];
     const learnerReminders: CriticalReminder[] = [
         {
@@ -2757,9 +2761,13 @@ export const CourseDetail: React.FC = () => {
     const traqomQrCodeUrl = '/qr_codes/traqom_survey_qr_code.png';
     // Certificate Delivery card now points to the customizable feedback form.
     // Admin can override the URL via training_provider.feedback_form_external_link.
-    // Use whichever class identifier is available: real UUID, the TGS-* code, or course code.
+    // The QR must point at the SAME class whose title/code/dates are shown on this page.
+    // Those come from effectiveDetail (the loaded course detail), so prefer its run UUID.
+    // selectedCourse can lag behind it (e.g. "Back to Class" from Attendance/Grading restores
+    // a stashed course object without reloading the detail), which previously sent learners
+    // to another class's feedback form. Fall back to the selected run, then the course code.
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const feedbackRouteId = selectedCourse?.courseRunUuid
+    const feedbackRouteId = effectiveDetail?.courseRunUuid
         || selectedCourse?.courseRunId
         || convertedCourse?.courseCode
         || '';
