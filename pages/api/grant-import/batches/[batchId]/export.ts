@@ -11,6 +11,19 @@ function csvEscape(v: unknown): string {
   return s;
 }
 
+/**
+ * Force Excel to keep a value as literal text instead of auto-converting it (dates being
+ * the reported case: Excel reinterprets "2026-09-04" as its own date type, then shows
+ * "####" whenever the resulting display format doesn't fit the column width). The
+ * ="value" formula trick is the standard, reliable fix — a plain leading apostrophe is
+ * not always honoured depending on Excel version/locale, this is.
+ */
+function csvForceText(v: unknown): string {
+  const s = v == null ? '' : String(v);
+  if (!s) return '';
+  return csvEscape(`="${s}"`);
+}
+
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', ['GET']);
@@ -52,10 +65,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       'apply_error',
     ];
 
+    const forceTextColumns = new Set(['payment_date_parsed']);
+
     const lines: string[] = [];
     lines.push(headers.join(','));
     for (const r of filtered) {
-      const row = headers.map((h) => csvEscape((r as any)[h]));
+      const row = headers.map((h) =>
+        forceTextColumns.has(h) ? csvForceText((r as any)[h]) : csvEscape((r as any)[h])
+      );
       lines.push(row.join(','));
     }
 
