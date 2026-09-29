@@ -643,6 +643,29 @@ export async function sumAppliedReceivedByEnrolment(enrolmentIds: string[]): Pro
   return out;
 }
 
+/**
+ * TC-prefixed main Customer Invoice DocNumber per enrolment, for reference display only —
+ * separate from the GRN-prefixed grant invoice this feature actually writes to. An
+ * enrolment is either a Direct Application or a Company Application, never both, so this
+ * checks da_application first and falls back to company_application.
+ */
+export async function getTcInvoiceDocNumbersByEnrolment(enrolmentIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (enrolmentIds.length === 0) return out;
+  const r = await pool.query(
+    `SELECT enrolment_id, invoice_doc_number FROM public.da_application
+      WHERE enrolment_id = ANY($1::text[]) AND COALESCE(TRIM(invoice_doc_number), '') <> ''
+     UNION ALL
+     SELECT enrolment_id, invoice_doc_number FROM public.company_application
+      WHERE enrolment_id = ANY($1::text[]) AND COALESCE(TRIM(invoice_doc_number), '') <> ''`,
+    [enrolmentIds]
+  );
+  for (const row of r.rows) {
+    if (!out.has(row.enrolment_id)) out.set(String(row.enrolment_id), String(row.invoice_doc_number));
+  }
+  return out;
+}
+
 export async function sumExpectedByEnrolmentFromSsgGrants(enrolmentIds: string[]): Promise<Map<string, number>> {
   const out = new Map<string, number>();
   if (enrolmentIds.length === 0) return out;

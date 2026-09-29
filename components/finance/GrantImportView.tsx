@@ -24,6 +24,8 @@ type PreviewRow = {
   /** Set by preview API for live FMS/QB status */
   fms_updated_live?: boolean;
   qb_applied_live?: boolean;
+  /** TC-prefixed main Customer Invoice DocNumber, for reference only — separate from the GRN grant invoice this feature writes to */
+  tc_invoice_doc_number?: string | null;
 };
 
 type PreviewPayload = {
@@ -1312,6 +1314,7 @@ const GrantImportView: React.FC = () => {
                     <th className="px-3 py-2 text-xs text-left">#</th>
                     <th className="px-3 py-2 text-xs text-left">ENR</th>
                     <th className="px-3 py-2 text-xs text-left">GRN</th>
+                    <th className="px-3 py-2 text-xs text-left">TC Invoice</th>
                     <th className="px-3 py-2 text-xs text-left">Scheme</th>
                     <th className="px-3 py-2 text-xs text-right">Amount</th>
                     <th className="px-3 py-2 text-xs text-left">Payment Date</th>
@@ -1324,7 +1327,7 @@ const GrantImportView: React.FC = () => {
                 <tbody className="divide-y divide-default">
                   {filteredRows.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="px-4 py-6 text-center text-xs text-on-surface-secondary">
+                      <td colSpan={12} className="px-4 py-6 text-center text-xs text-on-surface-secondary">
                         No rows match the selected filter.
                       </td>
                     </tr>
@@ -1369,6 +1372,7 @@ const GrantImportView: React.FC = () => {
                         <td className="px-3 py-2 text-xs font-mono">{r.row_number}</td>
                         <td className="px-3 py-2 text-xs font-mono">{r.enrolment_id || '-'}</td>
                         <td className="px-3 py-2 text-xs font-mono">{r.grant_id || '-'}</td>
+                        <td className="px-3 py-2 text-xs font-mono">{r.tc_invoice_doc_number || '-'}</td>
                         <td className="px-3 py-2 text-xs">{r.scheme || '-'}</td>
                         <td className="px-3 py-2 text-xs text-right font-mono">
                           {r.amount_raw || (r.amount_parsed ? fmtMoney(Number(r.amount_parsed)) : '-') }

@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireFinanceOrAdmin } from '@/lib/services/grantImport/requireFinanceOrAdmin';
 import {
   getGrantImportBatchPreview,
+  getTcInvoiceDocNumbersByEnrolment,
   listAlreadyAppliedGrantIds,
   sumAppliedReceivedByEnrolment,
   sumExpectedByEnrolmentFromSsgGrants,
@@ -33,6 +34,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const enrolmentIds = Array.from(new Set(rows.map((r: any) => String(r.enrolment_id || '').trim()).filter(Boolean)));
     const expectedMap = await sumExpectedByEnrolmentFromSsgGrants(enrolmentIds);
     const receivedMap = await sumAppliedReceivedByEnrolment(enrolmentIds);
+    const tcInvoiceMap = await getTcInvoiceDocNumbersByEnrolment(enrolmentIds);
 
     const willReceiveByEnr = new Map<string, number>();
     for (const row of rows) {
@@ -69,9 +71,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     const rowsWithLive = rows.map((r: any) => {
       const grn = String(r.grant_id || '').trim();
+      const enr = String(r.enrolment_id || '').trim();
       const fms_updated_live = !!(grn && fmsUpdatedSet.has(grn));
       const qb_applied_live = !!r.matched_qb_object_id;
-      return { ...r, fms_updated_live, qb_applied_live };
+      const tc_invoice_doc_number = enr ? tcInvoiceMap.get(enr) || null : null;
+      return { ...r, fms_updated_live, qb_applied_live, tc_invoice_doc_number };
     });
 
     return res.status(200).json({ success: true, data: { batch, rows: rowsWithLive, enrolmentImpact } });
