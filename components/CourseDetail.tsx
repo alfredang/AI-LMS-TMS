@@ -2066,6 +2066,10 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
             text: <><span className="font-bold">Digitally sign</span> the assessment for each learner in the <span className="font-bold">Assessment Grading</span> section.</>,
             target: 'Grading',
         },
+        {
+            text: <><span className="font-bold">Trainer payment will not be made</span> for learners who provide an overall course review rating of <span className="font-bold">2 out of 5 or below</span>.</>,
+            target: null,
+        },
     ];
     const learnerReminders: CriticalReminder[] = [
         {
