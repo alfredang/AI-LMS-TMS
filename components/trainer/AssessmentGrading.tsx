@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLms } from '../../contexts/LmsContext';
 import { Icon, IconName } from '../ui/Icon';
+import { AssessorSignatureDialog, AssessorRecord } from './AssessorSignatureForm';
 
 interface ClassData {
   course_id: string;
@@ -24,6 +25,12 @@ interface StudentData {
   is_competent: boolean;
   submitted_assessments: string[];
   traqom_completed?: boolean;
+  /** Files the learner uploaded for this run (all methods). */
+  submission_count?: number;
+  /** True when every uploaded file carries the assessor sign-off stamp. */
+  assessor_signed?: boolean;
+  /** Learner's "Assessment Records" folder in Google Drive, when they have uploaded. */
+  assessment_folder_url?: string | null;
   // A learner with several enrolment rows in the run (manual + SSG-synced) is
   // merged server-side; grading actions must hit every row.
   enrolment_ids?: string[];
@@ -79,6 +86,29 @@ const AssessmentGrading: React.FC = () => {
 
   // TRAQOM survey tick — manual, per learner (SSG gives no completion feed)
   const [savingTraqom, setSavingTraqom] = useState<Record<string, boolean>>({});
+
+  // Assessor sign-off: the trainer's saved name/NRIC/date/signature, stamped onto
+  // a learner's submitted files when the SIGN box is ticked.
+  const [assessor, setAssessor] = useState<AssessorRecord | null>(null);
+  const [assessorLoaded, setAssessorLoaded] = useState(false);
+  const [showAssessorDialog, setShowAssessorDialog] = useState(false);
+  const [signingStudent, setSigningStudent] = useState<Record<string, boolean>>({});
+  // Learner whose SIGN tick was interrupted by the dialog; resumes once saved.
+  const [pendingSign, setPendingSign] = useState<{ student: StudentData; index: number } | null>(null);
+  const [signResult, setSignResult] = useState<{ name: string; lines: string[]; ok: boolean } | null>(null);
+  const [showSignDemo, setShowSignDemo] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    fetch('/api/trainer/assessor-signature')
+      .then(r => r.json())
+      .then(json => {
+        if (json?.success && json.exists && json.data?.signature_png) setAssessor(json.data);
+        else setAssessor(null);
+      })
+      .catch(() => setAssessor(null))
+      .finally(() => setAssessorLoaded(true));
+  }, [currentUser?.id]);
 
   // Send Certificate state
   const [selectedForCert, setSelectedForCert] = useState<Set<string>>(new Set());
@@ -257,6 +287,70 @@ const AssessmentGrading: React.FC = () => {
     }
   };
 
+  const runSign = async (student: StudentData, index: number, signed: boolean) => {
+    if (!student.user_id || !selectedCourseRunId) return;
+    const studentId = student.enrolment_id || student.student_name;
+    setSigningStudent(prev => ({ ...prev, [studentId]: true }));
+    setSignResult(null);
+    try {
+      const res = await fetch('/api/trainer/sign-assessments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseRunId: selectedCourseRunId, learnerUserId: student.user_id, signed }),
+      });
+      const json = await res.json();
+      if (res.status === 409 && (json?.code === 'NO_ASSESSOR_PROFILE' || json?.code === 'NO_SIGNATURE')) {
+        setPendingSign({ student, index });
+        setShowAssessorDialog(true);
+        return;
+      }
+      if (!res.ok || !json?.success) throw new Error(json?.error || 'Failed to update assessor signature');
+
+      const results: { fileName: string; status: string; reason?: string; filled?: string[] }[] = json.results || [];
+      setStudents(prev => prev.map((s, i) => (i === index ? { ...s, assessor_signed: !!json.signed } : s)));
+
+      const lines = results.map(r => {
+        if (r.status === 'signed') return `✓ ${r.fileName}`;
+        if (r.status === 'unsigned') return `↩ ${r.fileName} restored`;
+        return `• ${r.fileName}: ${r.reason || r.status}`;
+      });
+      const ok = signed ? results.some(r => r.status === 'signed') : results.every(r => r.status !== 'error');
+      if (!ok || results.some(r => r.status === 'skipped' || r.status === 'error')) {
+        setSignResult({ name: student.student_name, lines, ok });
+      }
+    } catch (e: any) {
+      console.error('Assessor sign failed', e);
+      alert(e?.message || 'Failed to update assessor signature. Please try again.');
+    } finally {
+      setSigningStudent(prev => ({ ...prev, [studentId]: false }));
+    }
+  };
+
+  const handleToggleAssessorSigned = (student: StudentData, index: number) => {
+    const next = !student.assessor_signed;
+    if (next && !assessor) {
+      // No saved signature yet — collect it first, then sign.
+      setPendingSign({ student, index });
+      setShowAssessorDialog(true);
+      return;
+    }
+    if (!next && !confirm(`Remove the assessor sign-off from ${student.student_name}'s submitted assessments? The original files will be restored.`)) {
+      return;
+    }
+    runSign(student, index, next);
+  };
+
+  const handleAssessorSaved = (record: AssessorRecord) => {
+    setAssessor(record.signature_png ? record : null);
+    setShowAssessorDialog(false);
+    if (pendingSign && record.signature_png) {
+      const { student, index } = pendingSign;
+      setPendingSign(null);
+      runSign(student, index, true);
+    }
+  };
+
+
   const toggleCertSelection = (enrolmentId: string) => {
     setSelectedForCert(prev => {
       const next = new Set(prev);
@@ -407,17 +501,19 @@ const AssessmentGrading: React.FC = () => {
       {/* Student List */}
       {selectedCourseRunId && (
         <div className="bg-surface rounded-lg border border-default shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800 flex justify-between items-center">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <div className="px-5 py-4 border-b border-default bg-gray-50 dark:bg-gray-800 flex flex-col gap-3">
+            {/* Row 1 — title, refresh and the submission / TRAQOM / SIG counts */}
+            <div className="flex justify-between items-center flex-wrap gap-y-2">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
               Student Grading Roster
             </h2>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap justify-end">
               {/* Refresh assessment submission status */}
               <button
                 onClick={() => fetchStudents(true)}
                 disabled={loadingStudents || refreshingStudents}
                 title="Refresh assessment submission status"
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border text-gray-600 bg-white border-gray-200 hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full bg-blue-600 text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Icon name={IconName.Sync} className={`w-3.5 h-3.5 ${refreshingStudents ? 'animate-spin' : ''}`} />
                 {refreshingStudents ? 'Refreshing...' : 'Refresh'}
@@ -458,9 +554,76 @@ const AssessmentGrading: React.FC = () => {
                   </div>
                 );
               })()}
-              <div className="text-xs text-gray-500 bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600">
-                {students.length} Enrolments
+              {/* Assessor sign-off count — learners whose uploaded files are stamped */}
+              {students.length > 0 && (() => {
+                const withFiles = students.filter(s => (s.submission_count || 0) > 0);
+                const signedCount = withFiles.filter(s => s.assessor_signed).length;
+                return (
+                  <div
+                    title={`Assessor signature: ${signedCount} of ${withFiles.length} learners with submissions signed`}
+                    className={`text-xs px-3 py-1 rounded-full border ${
+                      withFiles.length > 0 && signedCount === withFiles.length
+                        ? 'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800'
+                        : 'text-amber-600 bg-white border-gray-200 dark:text-amber-300 dark:bg-gray-700 dark:border-gray-600'
+                    }`}
+                  >
+                    <span className="font-semibold">Assessor Sign</span>{' '}
+                    <span className="font-semibold">{signedCount}/{withFiles.length}</span>
+                  </div>
+                );
+              })()}
+              {/* Competent count */}
+              {students.length > 0 && (() => {
+                const competentCount = students.filter(s => s.is_competent).length;
+                return (
+                  <div
+                    title={`Competent: ${competentCount} of ${students.length} learners`}
+                    className={`text-xs px-3 py-1 rounded-full border ${
+                      competentCount === students.length
+                        ? 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/20 dark:border-emerald-800'
+                        : 'text-emerald-600 bg-white border-gray-200 dark:text-emerald-300 dark:bg-gray-700 dark:border-gray-600'
+                    }`}
+                  >
+                    <span className="font-semibold">Competent</span>{' '}
+                    <span className="font-semibold">{competentCount}/{students.length}</span>
+                  </div>
+                );
+              })()}
+              <div
+                title={`${students.length} learners enrolled in this class`}
+                className="text-xs px-3 py-1 rounded-full border text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-300 dark:bg-sky-900/30 dark:border-sky-700"
+              >
+                <span className="font-semibold">{students.length}</span>{' '}
+                <span className="font-semibold">Enrolments</span>
               </div>
+            </div>
+            </div>
+
+            {/* Row 2 — actions: demo video, assessor signature, mark all competent, send certificates */}
+            <div className="flex items-center justify-end gap-3 flex-wrap">
+              {/* How-to video for the assessor sign-off flow */}
+              <button
+                onClick={() => setShowSignDemo(true)}
+                title="Watch a 1-minute demo of the assessor sign-off"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                <Icon name={IconName.Video} className="w-4 h-4" />
+                Watch Demo
+              </button>
+              {/* Trainer's assessor block (name / NRIC / date / signature) */}
+              <button
+                onClick={() => { setPendingSign(null); setShowAssessorDialog(true); }}
+                disabled={!assessorLoaded}
+                title={assessor ? `Assessor: ${assessor.assessor_name} — click to edit` : 'Set up your assessor name, NRIC, date and signature'}
+                className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition-colors disabled:opacity-50 ${
+                  assessor
+                    ? 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800 dark:hover:bg-amber-900/40'
+                    : 'text-gray-600 bg-white border-gray-200 hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600'
+                }`}
+              >
+                <Icon name={IconName.Edit} className="w-3.5 h-3.5" />
+                {assessor ? 'Assessor Signature' : 'Set Up Signature'}
+              </button>
               {students.length > 0 && (
                 <button
                   onClick={handleMarkAllCompetent}
@@ -529,7 +692,30 @@ const AssessmentGrading: React.FC = () => {
               )}
             </div>
           )}
-          
+
+          {/* Assessor sign-off result — only shown when a file was skipped or failed */}
+          {signResult && (
+            <div className={`mx-5 mt-3 p-3 rounded-lg text-sm ${
+              signResult.ok
+                ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'
+            }`}>
+              <div className="flex justify-between items-center">
+                <span className="font-semibold">
+                  Assessor signature — {signResult.name}{signResult.ok ? '' : ': nothing was signed'}
+                </span>
+                <button onClick={() => setSignResult(null)} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                  <Icon name={IconName.Close} className="w-4 h-4" />
+                </button>
+              </div>
+              <ul className="mt-2 space-y-1">
+                {signResult.lines.map((line, i) => (
+                  <li key={i} className="text-xs">{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="p-0">
             {loadingStudents ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-500">
@@ -558,7 +744,7 @@ const AssessmentGrading: React.FC = () => {
                   {assessmentMethods.length > 0 && (
                     <>Submission status: {assessmentMethods.map(m => `${(METHOD_INFO[m] || { abbr: m }).abbr} = ${(METHOD_INFO[m] || { label: m }).label}`).join(' · ')} · </>
                   )}
-                  TQ = TRAQOM Survey (tick manually)
+                  TQ = TRAQOM Survey (tick manually) · SIGN = Assessor signature stamped on submissions
                 </span>
               </div>
 
@@ -578,9 +764,6 @@ const AssessmentGrading: React.FC = () => {
                         <div className="flex-shrink-0 mr-4 text-gray-400 font-mono text-sm w-6 text-right">
                           {idx + 1}.
                         </div>
-                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-lg border border-blue-200 dark:border-blue-800 mr-4 select-none">
-                          {student.student_name.charAt(0).toUpperCase()}
-                        </div>
                         <div>
                           <p className="text-sm font-medium text-gray-900 dark:text-white">
                             {student.student_name}
@@ -590,10 +773,23 @@ const AssessmentGrading: React.FC = () => {
                               </span>
                             )}
                           </p>
-                          {/* A merged learner lists every email they enrolled under */}
+                          {/* A merged learner lists every email they enrolled under; the first
+                              line also links to their assessment-records folder in Drive */}
                           {(student.emails && student.emails.length > 0 ? student.emails : [student.email]).map((email, i) => (
-                            <p key={email || i} className="text-xs text-gray-500 dark:text-gray-400">
-                              {email || 'No email provided'}
+                            <p key={email || i} className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                              <span>{email || 'No email provided'}</span>
+                              {i === 0 && student.assessment_folder_url && (
+                                <a
+                                  href={student.assessment_folder_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Open this learner's assessment records folder in Google Drive"
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                                >
+                                  <Icon name={IconName.Folder} className="w-3.5 h-3.5" />
+                                  Assessment Records
+                                </a>
+                              )}
                             </p>
                           ))}
                         </div>
@@ -647,6 +843,42 @@ const AssessmentGrading: React.FC = () => {
                               TQ
                             </span>
                           </label>
+                          {/* Assessor sign-off — stamps name/NRIC/date/signature onto the
+                              learner's uploaded PDF/DOCX files (tick to sign, untick to restore) */}
+                          {(() => {
+                            const hasFiles = (student.submission_count || 0) > 0 && !!student.user_id;
+                            const busy = !!signingStudent[sId];
+                            const title = !hasFiles
+                              ? 'Assessor signature: learner has not uploaded any assessment yet'
+                              : student.assessor_signed
+                                ? 'Assessor signature: stamped on all submitted files — untick to restore originals'
+                                : `Assessor signature: tick to stamp your name, NRIC, date and signature on ${student.submission_count} file${student.submission_count === 1 ? '' : 's'}`;
+                            return (
+                              <label
+                                title={title}
+                                className={`flex items-center gap-1 w-12 select-none ${
+                                  busy ? 'opacity-50 cursor-wait' : hasFiles ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+                                }`}
+                              >
+                                {busy ? (
+                                  <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                                ) : (
+                                  <input
+                                    type="checkbox"
+                                    checked={!!student.assessor_signed}
+                                    onChange={() => handleToggleAssessorSigned(student, idx)}
+                                    disabled={!hasFiles}
+                                    className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 accent-amber-600 cursor-pointer disabled:cursor-not-allowed"
+                                  />
+                                )}
+                                <span className={`text-[10px] font-semibold ${
+                                  student.assessor_signed ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400 dark:text-gray-500'
+                                }`}>
+                                  SIGN
+                                </span>
+                              </label>
+                            );
+                          })()}
                         </div>
 
                         {/* Certificate Status Badge — verified against Google Drive.
@@ -752,6 +984,37 @@ const AssessmentGrading: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Assessor sign-off demo video */}
+      {showSignDemo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowSignDemo(false)}>
+          <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-4 w-full max-w-4xl mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">Demo: Assessor Sign-off</h3>
+              <button
+                onClick={() => setShowSignDemo(false)}
+                className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                aria-label="Close"
+              >
+                <Icon name={IconName.Close} className="w-5 h-5" />
+              </button>
+            </div>
+            <video
+              src="/videos/assessor-sign-off-demo.mp4"
+              controls
+              autoPlay
+              playsInline
+              className="w-full rounded-lg bg-black aspect-video"
+            />
+          </div>
+        </div>
+      )}
+
+      <AssessorSignatureDialog
+        open={showAssessorDialog}
+        onClose={() => { setShowAssessorDialog(false); setPendingSign(null); }}
+        onSaved={handleAssessorSaved}
+      />
     </div>
   );
 };

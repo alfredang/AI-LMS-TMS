@@ -471,6 +471,25 @@ const ManagementCourseList: React.FC = () => {
         );
     };
 
+    /**
+     * Funding validity status for the course card.
+     * - expired:  end date is before today
+     * - expiring: end date is within the next 3 months
+     * - active:   end date is 3 months or more away
+     */
+    const getFundingValidityStatus = (fundingValidity?: string | null): { expiry: Date | null; status: 'active' | 'expiring' | 'expired' | 'unknown' } => {
+        if (!fundingValidity) return { expiry: null, status: 'unknown' };
+        const expiry = new Date(fundingValidity);
+        if (isNaN(expiry.getTime())) return { expiry: null, status: 'unknown' };
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (expiry < today) return { expiry, status: 'expired' };
+        const threeMonthsAhead = new Date(today);
+        threeMonthsAhead.setMonth(threeMonthsAhead.getMonth() + 3);
+        if (expiry < threeMonthsAhead) return { expiry, status: 'expiring' };
+        return { expiry, status: 'active' };
+    };
+
     const CourseBlockView = () => (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {paginatedCourses.map(course => {
@@ -478,6 +497,7 @@ const ManagementCourseList: React.FC = () => {
                     return <TrainerCourseCard key={course.id} course={course} />;
                 }
                 const totalHours = Number(course.trainingHours) + Number(course.assessmentHours);
+                const validity = getFundingValidityStatus(course.fundingValidity);
                 return (
                     <Card key={course.id} className="flex flex-col bg-surface border-default">
                         <div className="aspect-[16/9] w-full overflow-hidden">
@@ -492,7 +512,10 @@ const ManagementCourseList: React.FC = () => {
                             />
                         </div>
                         <div className="p-6 flex flex-col flex-grow">
-                            <h3 className="text-xl font-bold mb-4 h-14 line-clamp-2 overflow-hidden">{course.title}</h3>
+                            <h3 className="text-xl font-bold mb-4 h-14 line-clamp-2 overflow-hidden">
+                                {validity.status === 'expired' && <span className="text-red-600 dark:text-red-400">(Expired) </span>}
+                                {course.title}
+                            </h3>
 
                             <div className="text-xs space-y-2 mb-4 flex-grow min-h-[180px]">
                                 <DetailRow label="TGS Ref" value={displayCourseCodes(course)} />
@@ -504,6 +527,14 @@ const ManagementCourseList: React.FC = () => {
                                     </span>
                                 } />
                                 <DetailRow label="Mode of Training" value={course.modeOfLearning.join(', ')} />
+                                <DetailRow label="Course Duration" value={
+                                    <div className="flex flex-col items-end">
+                                        <span>{totalHours} Hours Total</span>
+                                        <span className="text-gray-400 font-normal">
+                                            ({course.trainingHours}T + {course.assessmentHours}A)
+                                        </span>
+                                    </div>
+                                } />
                                 {(() => {
                                     const start = (course as any).fundingValidityStart ? new Date((course as any).fundingValidityStart) : null;
                                     const startRow = (
@@ -513,28 +544,36 @@ const ManagementCourseList: React.FC = () => {
                                                 : 'N/A'
                                         } />
                                     );
-                                    if (!course.fundingValidity) return <>{startRow}<DetailRow label="Funding Validity End" value="N/A" /></>;
-                                    const expiry = new Date(course.fundingValidity);
-                                    const isExpired = expiry < new Date();
+                                    if (!validity.expiry) {
+                                        return (
+                                            <>
+                                                {startRow}
+                                                <DetailRow label="Funding Validity End" value="N/A" />
+                                                <DetailRow label="Status" value="N/A" />
+                                            </>
+                                        );
+                                    }
+                                    const endColor = validity.status === 'expired'
+                                        ? 'text-red-600 dark:text-red-400'
+                                        : validity.status === 'expiring'
+                                            ? 'text-orange-500 dark:text-orange-400'
+                                            : 'text-green-600 dark:text-green-400';
                                     return (
                                         <>
                                             {startRow}
                                             <DetailRow label="Funding Validity End" value={
-                                                <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${isExpired ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'}`}>
-                                                    {expiry.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })} {isExpired ? '· Expired' : '· Valid'}
+                                                <span className={`font-semibold ${endColor}`}>
+                                                    {validity.expiry.toLocaleDateString('en-SG', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                </span>
+                                            } />
+                                            <DetailRow label="Status" value={
+                                                <span className={`font-semibold ${validity.status === 'expired' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                                    {validity.status === 'expired' ? 'Expired' : 'Active'}
                                                 </span>
                                             } />
                                         </>
                                     );
                                 })()}
-                                <DetailRow label="Course Duration" value={
-                                    <div className="flex flex-col items-end">
-                                        <span>{totalHours} Hours Total</span>
-                                        <span className="text-gray-400 font-normal">
-                                            ({course.trainingHours}T + {course.assessmentHours}A)
-                                        </span>
-                                    </div>
-                                } />
                                 {(role === UserRole.Admin || role === UserRole.TrainingProvider) && (
                                     <>
                                         <DetailRow label="Schedule ID" value={course.scheduleId || '—'} />

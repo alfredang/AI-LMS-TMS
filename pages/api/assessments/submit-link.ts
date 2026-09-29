@@ -51,7 +51,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const { userId, courseRunId, assessmentType, fileName, fileUrl } = req.body;
+  const { userId, courseRunId, assessmentType, fileName, fileUrl, folderId } = req.body;
+  // Drive folder the upload landed in (from /api/upload/google-drive) — lets the
+  // grading roster link to the learner's assessment-records folder.
+  const driveFolderId = typeof folderId === 'string' && /^[A-Za-z0-9_-]{10,}$/.test(folderId) ? folderId : null;
 
   if (!userId || !courseRunId || !assessmentType || !fileName || !fileUrl) {
     return res.status(400).json({
@@ -71,10 +74,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     // Always insert a new submission (multiple files allowed)
     const result = await pool.query(
-      `INSERT INTO link_assessment_submission (user_id, course_run_id, assessment_type, file_name, file_url, submitted_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+      `INSERT INTO link_assessment_submission (user_id, course_run_id, assessment_type, file_name, file_url, drive_folder_id, submitted_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
        RETURNING id`,
-      [userId, courseRunId, assessmentType, fileName, fileUrl]
+      [userId, courseRunId, assessmentType, fileName, fileUrl, driveFolderId]
     );
 
     console.log(`✅ Link assessment submitted: ${assessmentType} for user ${userId} — file: ${fileName}`);

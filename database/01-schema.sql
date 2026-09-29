@@ -2201,6 +2201,11 @@ CREATE TABLE public.link_assessment_submission (
     file_name character varying(255) NOT NULL,
     file_url text NOT NULL,
     submitted_at timestamp with time zone DEFAULT now(),
+    assessor_signed_at timestamp with time zone,
+    assessor_signed_by uuid,
+    original_file_url text,
+    original_file_name character varying(255),
+    drive_folder_id text,
     CONSTRAINT link_assessment_submission_assessment_type_check CHECK (((assessment_type)::text = ANY ((ARRAY['written'::character varying, 'practical'::character varying, 'writtenAssessment'::character varying, 'practicalExam'::character varying, 'caseStudy'::character varying, 'rolePlay'::character varying, 'oralQuestioning'::character varying, 'project'::character varying, 'assignment'::character varying])::text[])))
 );
 
@@ -2761,6 +2766,64 @@ CREATE TABLE public.topic_completion (
     course_run_id uuid NOT NULL,
     topic_id uuid NOT NULL,
     completed_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: learner_signature; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.learner_signature (
+    user_id uuid NOT NULL,
+    learner_name text NOT NULL,
+    nric text DEFAULT ''::text NOT NULL,
+    signature_png text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: assessment_summary_record; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.assessment_summary_record (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    course_run_id uuid NOT NULL,
+    learner_user_id uuid NOT NULL,
+    learner_name text,
+    learner_nric text,
+    learner_sign_date date,
+    learner_signature_png text,
+    learner_signed_at timestamp with time zone,
+    trainer_user_id uuid,
+    trainer_name text,
+    trainer_nric text,
+    trainer_sign_date date,
+    trainer_signature_png text,
+    trainer_signed_at timestamp with time zone,
+    template_file_id text,
+    file_id text,
+    file_url text,
+    file_name character varying(255),
+    generated_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: trainer_assessor_signature; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.trainer_assessor_signature (
+    user_id uuid NOT NULL,
+    assessor_name text NOT NULL,
+    nric text DEFAULT ''::text NOT NULL,
+    sign_date date DEFAULT CURRENT_DATE NOT NULL,
+    signature_png text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -4211,6 +4274,38 @@ ALTER TABLE ONLY public.trainer_invitation
 
 
 --
+-- Name: learner_signature learner_signature_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.learner_signature
+    ADD CONSTRAINT learner_signature_pkey PRIMARY KEY (user_id);
+
+
+--
+-- Name: assessment_summary_record assessment_summary_record_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assessment_summary_record
+    ADD CONSTRAINT assessment_summary_record_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: assessment_summary_record assessment_summary_record_run_learner_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assessment_summary_record
+    ADD CONSTRAINT assessment_summary_record_run_learner_key UNIQUE (course_run_id, learner_user_id);
+
+
+--
+-- Name: trainer_assessor_signature trainer_assessor_signature_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.trainer_assessor_signature
+    ADD CONSTRAINT trainer_assessor_signature_pkey PRIMARY KEY (user_id);
+
+
+--
 -- Name: trainer_profile trainer_profile_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4467,6 +4562,13 @@ CREATE INDEX idx_company_invoice_batch_course ON public.company_invoice_batch US
 --
 
 CREATE INDEX idx_course_announcement_course_run_id ON public.course_announcement USING btree (course_run_id);
+
+
+--
+-- Name: idx_assessment_summary_record_run; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assessment_summary_record_run ON public.assessment_summary_record USING btree (course_run_id);
 
 
 --
@@ -5433,6 +5535,46 @@ ALTER TABLE ONLY public.support_ticket
 
 ALTER TABLE ONLY public.trainer_invitation
     ADD CONSTRAINT trainer_invitation_course_run_id_fkey FOREIGN KEY (course_run_id) REFERENCES public.course_run(id) ON DELETE CASCADE;
+
+
+--
+-- Name: learner_signature learner_signature_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.learner_signature
+    ADD CONSTRAINT learner_signature_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.app_user(id) ON DELETE CASCADE;
+
+
+--
+-- Name: assessment_summary_record assessment_summary_record_course_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assessment_summary_record
+    ADD CONSTRAINT assessment_summary_record_course_run_id_fkey FOREIGN KEY (course_run_id) REFERENCES public.course_run(id) ON DELETE CASCADE;
+
+
+--
+-- Name: assessment_summary_record assessment_summary_record_learner_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assessment_summary_record
+    ADD CONSTRAINT assessment_summary_record_learner_user_id_fkey FOREIGN KEY (learner_user_id) REFERENCES public.app_user(id) ON DELETE CASCADE;
+
+
+--
+-- Name: assessment_summary_record assessment_summary_record_trainer_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assessment_summary_record
+    ADD CONSTRAINT assessment_summary_record_trainer_user_id_fkey FOREIGN KEY (trainer_user_id) REFERENCES public.app_user(id) ON DELETE SET NULL;
+
+
+--
+-- Name: trainer_assessor_signature trainer_assessor_signature_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.trainer_assessor_signature
+    ADD CONSTRAINT trainer_assessor_signature_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.app_user(id) ON DELETE CASCADE;
 
 
 --

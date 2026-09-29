@@ -2,104 +2,17 @@ import { withAuth, type AuthedApiRequest } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
-import { drive_v3 } from 'googleapis';
 import { cors } from '../../../lib/cors';
 import pool from '../../../lib/db';
 import { getGoogleDriveFolderId } from '../../../lib/googleDriveFolder';
-import {
-    getDriveClient,
-    findSubfolder,
-    findSessionFolderByStartDate,
-    createSubfolder,
-    buildSessionFolderName,
-    buildStartDatePrefix,
-} from '../../../lib/google-drive/drive-helpers';
+import { getDriveClient } from '../../../lib/google-drive/drive-helpers';
+import { ensureLearnerAssessmentFolder } from '../../../lib/google-drive/assessmentRecordFolder';
 
 export const config = {
     api: {
         bodyParser: false,
     },
 };
-
-/**
- * Get or create a subfolder for the student inside the parent folder.
- */
-async function getOrCreateStudentFolder(
-    drive: drive_v3.Drive,
-    parentFolderId: string,
-    studentName: string
-): Promise<string> {
-    const existing = await findSubfolder(drive, parentFolderId, studentName);
-    if (existing) {
-        return existing;
-    }
-    return await createSubfolder(drive, parentFolderId, studentName);
-}
-
-/**
- * Robust hierarchy builder matching learner upload flow
- */
-async function ensureStudentUploadPath(
-    drive: drive_v3.Drive,
-    rootFolderId: string,
-    courseCode: string,
-    courseName: string,
-    studentName: string,
-    sessionFolderName: string | null,
-    startDatePrefix: string | null,
-    trainerCommonName?: string
-): Promise<string> {
-    // 1. Course Folder
-    let courseFolderId = null;
-    let tgsRef = courseCode;
-    if (!tgsRef) {
-        const tgsMatch = courseName.match(/(TGS-\d+)/);
-        if (tgsMatch) {
-            tgsRef = tgsMatch[1];
-        }
-    }
-
-    const expectedCourseFolderName = tgsRef && courseName && !courseName.includes(tgsRef)
-        ? `${tgsRef} ${courseName}`.trim()
-        : (`${courseCode} ${courseName}`).trim() || 'Unknown Course';
-
-    if (tgsRef) {
-        const safeTgsRef = tgsRef.replace(/'/g, "\\'");
-        const tgsResponse = await drive.files.list({
-            q: `'${rootFolderId}' in parents and name contains '${safeTgsRef}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-            fields: 'files(id, name)',
-            spaces: 'drive',
-        });
-        if (tgsResponse.data.files && tgsResponse.data.files.length > 0) {
-            courseFolderId = tgsResponse.data.files[0].id!;
-        }
-    } else {
-        courseFolderId = await findSubfolder(drive, rootFolderId, expectedCourseFolderName);
-    }
-
-    if (!courseFolderId) {
-        courseFolderId = await createSubfolder(drive, rootFolderId, expectedCourseFolderName);
-    }
-
-    // 2. Assessment Records Subfolder
-    let assessmentRecordsId = await findSubfolder(drive, courseFolderId, 'Assessment Records');
-    if (!assessmentRecordsId) {
-        assessmentRecordsId = await createSubfolder(drive, courseFolderId, 'Assessment Records');
-    }
-
-    // 3. Session Subfolder
-    let targetParentId = assessmentRecordsId;
-    if (startDatePrefix && sessionFolderName) {
-        let sessionFolderId = await findSessionFolderByStartDate(drive, assessmentRecordsId, startDatePrefix, trainerCommonName);
-        if (!sessionFolderId) {
-            sessionFolderId = await createSubfolder(drive, assessmentRecordsId, sessionFolderName);
-        }
-        targetParentId = sessionFolderId;
-    }
-
-    // 4. Learner Folder
-    return await getOrCreateStudentFolder(drive, targetParentId, studentName);
-}
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (cors(req, res)) return;
@@ -179,24 +92,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
 
         const run = runResult.rows[0];
-        const startDate = new Date(run.start_date);
-        const endDate = new Date(run.end_date);
-        const trainerName = run.trainer_common_name || run.assigned_trainer_name || 'Unknown Trainer';
-        
-        const sessionFolderName = buildSessionFolderName(startDate, endDate, trainerName);
-        const startDatePrefix = buildStartDatePrefix(startDate);
-
         const drive = await getDriveClient();
-        const studentFolderId = await ensureStudentUploadPath(
-            drive,
-            parentFolderId,
-            run.course_code,
-            run.course_title,
-            studentName,
-            sessionFolderName,
-            startDatePrefix,
-            run.trainer_common_name
-        );
+        const studentFolderId = await ensureLearnerAssessmentFolder(drive, parentFolderId, {
+            courseCode: run.course_code,
+            courseTitle: run.course_title,
+            startDate: run.start_date,
+            endDate: run.end_date,
+            trainerName: run.trainer_common_name || run.assigned_trainer_name || 'Unknown Trainer',
+            trainerCommonName: run.trainer_common_name,
+        }, studentName);
 
         const originalName = uploadedFile.originalFilename || 'Assessment_Summary_Record.pdf';
         const mimeType = uploadedFile.mimetype || 'application/pdf';

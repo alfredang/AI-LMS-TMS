@@ -45,7 +45,7 @@ const nextConfig = {
     unoptimized: process.env.NODE_ENV !== 'production',
   },
 
-  serverExternalPackages: ['node-cron', '@anthropic-ai/claude-agent-sdk', '@openai/codex-sdk'],
+  serverExternalPackages: ['node-cron', '@anthropic-ai/claude-agent-sdk', '@openai/codex-sdk', 'pdfjs-dist'],
 
   // Force-include the Claude Agent SDK's runtime files in the standalone
   // bundle. The SDK loads `cli.js` and `vendor/` (ripgrep + audio-capture)
@@ -54,10 +54,16 @@ const nextConfig = {
   // SDK throws: "Native CLI binary for linux-x64 not found." Including
   // the whole package directory ensures every runtime asset travels into
   // the standalone output.
+  // pdfjs-dist (assessor sign-off PDF stamping) loads its worker,
+  // legacy/build/pdf.worker.mjs, via a dynamic import the tracer misses:
+  // "Setting up fake worker failed: Cannot find module .../pdf.worker.mjs".
   outputFileTracingIncludes: {
     '/api/**': [
       './node_modules/@anthropic-ai/claude-agent-sdk/**',
       './node_modules/@openai/codex-sdk/**',
+      './node_modules/pdfjs-dist/package.json',
+      './node_modules/pdfjs-dist/legacy/build/pdf.mjs',
+      './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
     ],
   },
 
