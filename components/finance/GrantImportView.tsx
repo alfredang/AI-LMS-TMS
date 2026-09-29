@@ -176,6 +176,15 @@ const GrantImportView: React.FC = () => {
     const total = rows.length;
     const by = (k: string) => rows.filter((r) => String(r.match_status) === k).length;
     const problem = by('unmatched') + by('ambiguous') + by('invalid');
+    // Matches export.ts's mode=problem filter exactly: match-time problems PLUS rows that
+    // matched fine but failed at apply time (e.g. "no QuickBooks invoice found") — the
+    // Download Failed Rows button needs this, not just `problem`, or a batch of otherwise-
+    // ready rows that all failed on apply would show a disabled button with count 0.
+    const failedToDownload = rows.filter((r) => {
+      const ms = String(r.match_status || '');
+      const as = String(r.apply_status || '');
+      return ms === 'unmatched' || ms === 'ambiguous' || ms === 'invalid' || as === 'failed';
+    }).length;
     return {
       total,
       ready: rows.filter(isStillReady).length,
@@ -184,6 +193,7 @@ const GrantImportView: React.FC = () => {
       ambiguous: by('ambiguous'),
       invalid: by('invalid'),
       problem,
+      failedToDownload,
     };
   }, [preview]);
 
@@ -630,6 +640,39 @@ const GrantImportView: React.FC = () => {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) throw new Error(json?.error || `Failed to update row selection (chunk ${i + 1}-${i + chunk.length})`);
+    }
+  };
+
+  const [downloadingFailed, setDownloadingFailed] = useState(false);
+
+  /** Download failed/unmatched/ambiguous/invalid rows as a CSV (Excel opens these directly) for sharing. */
+  const downloadFailedRows = async () => {
+    if (!batchId) return;
+    setDownloadingFailed(true);
+    try {
+      const res = await fetch(`/api/grant-import/batches/${encodeURIComponent(batchId)}/export?mode=problem`, {
+        headers: { 'x-actor-user-id': actorUserId },
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(text || `Download failed (HTTP ${res.status})`);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const filename = match?.[1] || `grant_import_failed_${batchId}.csv`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setFetchError(e?.message || 'Could not download failed rows');
+    } finally {
+      setDownloadingFailed(false);
     }
   };
 
@@ -1103,6 +1146,14 @@ const GrantImportView: React.FC = () => {
                 <span className="text-xs text-on-surface-secondary">
                   Selected: <span className="font-semibold text-on-surface">{selectedCount}</span>
                 </span>
+                <Button
+                  variant="outline"
+                  onClick={() => void downloadFailedRows()}
+                  disabled={downloadingFailed || !batchId || counts.failedToDownload === 0}
+                  title="Download failed / unmatched / ambiguous / invalid rows as CSV (opens in Excel)"
+                >
+                  {downloadingFailed ? 'Downloading…' : `Download Failed Rows (${counts.failedToDownload})`}
+                </Button>
               </div>
 
               <div className="flex items-center gap-3 flex-wrap justify-end">
