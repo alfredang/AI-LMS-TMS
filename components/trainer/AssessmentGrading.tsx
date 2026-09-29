@@ -52,7 +52,7 @@ const METHOD_INFO: Record<string, { abbr: string; label: string }> = {
 };
 
 const AssessmentGrading: React.FC = () => {
-  const { currentUser, pendingGradingCourseRunId, setPendingGradingCourseRunId, setSelectedCourse } = useLms();
+  const { currentUser, pendingGradingCourseRunId, setPendingGradingCourseRunId, loadCourseData } = useLms();
   // Course the trainer navigated from (stashed by CourseDetail's Assessment Grading
   // link) — drives the "Back to Class" button, same pattern as E-Attendance.
   const [sourceCourse, setSourceCourse] = useState<any | null>(null);
@@ -68,7 +68,9 @@ const AssessmentGrading: React.FC = () => {
     if (typeof window !== 'undefined') {
       try { sessionStorage.removeItem('gradingSourceCourse'); } catch {}
     }
-    setSelectedCourse(sourceCourse);
+    // Reload the full class (selectedCourse + courseDetail together) so the class
+    // page's title, dates and QR codes all describe the same run.
+    void loadCourseData(sourceCourse).catch(err => console.error('Failed to reload class:', err));
   };
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
