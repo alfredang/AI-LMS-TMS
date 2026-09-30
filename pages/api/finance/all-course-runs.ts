@@ -225,7 +225,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         (da_chk.found IS NOT NULL) AS is_da,
         da_chk.da_application_id,
         da_chk.sfc_invoice_id,
-        da_chk.sfc_invoice_drive_web_view_link
+        da_chk.sfc_invoice_drive_web_view_link,
+        (ca_chk.found IS NOT NULL) AS is_company,
+        ca_chk.company_application_id,
+        CASE
+          WHEN da_chk.found IS NOT NULL THEN 'DA'
+          WHEN ca_chk.found IS NOT NULL THEN 'COMPANY'
+          WHEN LOWER(TRIM(COALESCE(se.sponsorship_type, ''))) = 'employer' THEN 'COMPANY'
+          ELSE 'NON-DA'
+        END AS enrolment_type
       FROM ssg_enrolments se
       LEFT JOIN LATERAL (
         SELECT inv.invoice_no, inv.qbo_invoice_id, inv.qbo_doc_number, inv.invoice_sent_at, inv.qbo_sfc_status, inv.grn_doc_number, inv.drive_web_view_link, inv.grn_drive_web_view_link
@@ -269,6 +277,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         WHERE LOWER(TRIM(COALESCE(da.enrolment_id,''))) = LOWER(TRIM(COALESCE(se.enrolment_id,'')))
         LIMIT 1
       ) da_chk ON true
+      LEFT JOIN LATERAL (
+        SELECT 1 AS found, ca.id AS company_application_id
+        FROM public.company_application ca
+        WHERE LOWER(TRIM(COALESCE(ca.enrolment_id,''))) = LOWER(TRIM(COALESCE(se.enrolment_id,'')))
+        LIMIT 1
+      ) ca_chk ON true
       ${whereClause}
       ORDER BY se.enrolment_id ${sort}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}

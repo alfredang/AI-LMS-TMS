@@ -59,6 +59,9 @@ interface CourseRunRow {
   da_application_id?: string | null;
   sfc_invoice_id?: string | null;
   sfc_invoice_drive_web_view_link?: string | null;
+  is_company?: boolean | null;
+  company_application_id?: string | null;
+  enrolment_type?: 'DA' | 'COMPANY' | 'NON-DA' | null;
 }
 
 interface Stats {
@@ -1224,7 +1227,7 @@ const AllCourseRunsView: React.FC = () => {
                 {/* Enrolment (5) */}
                 <th className={headerCell}>Status</th>
                 <th className={headerCell}>Enrolment ID</th>
-                <th className={headerCell}>DA</th>
+                <th className={headerCell}>Type</th>
                 <th className={headerCell}>Invoice ID</th>
                 <th className={headerCell}>Invoice No</th>
                 <th className={headerCell}>GRN Ref</th>
@@ -1338,9 +1341,20 @@ const AllCourseRunsView: React.FC = () => {
                     </td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.enrolment_id || '-'}</td>
                     <td className={cell}>
-                      {r.is_da ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">DA</span>
-                      ) : null}
+                      {(() => {
+                        const type = r.enrolment_type
+                          || (r.is_da ? 'DA' : r.is_company || (r.sponsorship_type || '').toLowerCase() === 'employer' ? 'COMPANY' : 'NON-DA');
+                        const style = type === 'DA'
+                          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                          : type === 'COMPANY'
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+                        return (
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${style}`}>
+                            {type === 'NON-DA' ? 'Non-DA' : type === 'COMPANY' ? 'Company' : 'DA'}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_id || '-'}</td>
                     <td className={`${cell} text-on-surface-secondary font-mono`}>{r.invoice_no || '-'}</td>
