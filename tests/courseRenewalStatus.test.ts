@@ -8,6 +8,8 @@ import {
   RENEW_STATUS_OPTIONS,
   RENEW_STATUS_VALUES,
   renewStatusLabel,
+  renewStatusOptions,
+  isOfferedRenewStatus,
 } from '../lib/courseRenewalStatus';
 
 const expectedStatuses = [
@@ -52,6 +54,15 @@ test('former approved status normalizes to the canonical database value', () => 
   assert.equal(normalizeRenewStatus('Approved'), 'Approved');
   assert.equal(renewStatusLabel('Approved / Renewed'), 'Approved');
   assert.ok(RENEW_STATUS_VALUES.includes('Approved / Renewed'));
+});
+
+test('tenant flag preserves the legacy dropdown and label when off', () => {
+  assert.ok(renewStatusOptions(false).some(option => option.value === 'Approved / Renewed'));
+  assert.ok(!renewStatusOptions(false).some(option => option.value === 'Approved'));
+  assert.equal(renewStatusLabel('Approved / Renewed', false), 'Approved / Renewed');
+  assert.equal(isOfferedRenewStatus('Approved / Renewed', false), true);
+  assert.equal(isOfferedRenewStatus('Approved / Renewed', true), false);
+  assert.equal(isOfferedRenewStatus('Approved', true), true);
 });
 
 test('renewal warnings require a real Renewal Application No', () => {

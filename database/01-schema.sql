@@ -3036,6 +3036,7 @@ CREATE TABLE public.training_provider (
     zoom_connected_at timestamp with time zone,
     zoom_enabled boolean DEFAULT false NOT NULL,
     payroll_enabled boolean DEFAULT false NOT NULL,
+    course_validity_tpg_enabled boolean DEFAULT false NOT NULL,
     app1_cert_expiry timestamp with time zone,
     app2_cert_expiry timestamp with time zone,
     app3_cert_expiry timestamp with time zone,

@@ -5,6 +5,7 @@ import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
 import { recordCourseChanges } from '../../../lib/courseChangeLog';
 import { recordRenamedTitle } from '../../../lib/courseCode';
 import { normalizeRenewStatus } from '../../../lib/courseRenewalStatus';
+import { isCourseValidityTpgEnabled } from '@lib/courseValidityFeature';
 import { IncomingForm, File as FormidableFile } from 'formidable';
 import fs from 'fs';
 import path from 'path';
@@ -463,6 +464,7 @@ async function handler(
       }
     }
 
+    const enhancedCourseValidity = await isCourseValidityTpgEnabled();
     // Start transaction
     const client = await pool.connect();
     
@@ -581,7 +583,7 @@ async function handler(
         courseData.afterNormalFunding || null,
         courseData.afterMcesFunding || null,
         !!courseData.isUtapEligible,
-        normalizeRenewStatus(courseData.renewedStatus),
+        enhancedCourseValidity ? normalizeRenewStatus(courseData.renewedStatus) : courseData.renewedStatus || null,
         sanitizeGoogleLink(fileUrls.writtenAssessmentLink || courseData.writtenAssessmentLink) || null,
         sanitizeGoogleLink(fileUrls.practicalPerformanceAssessmentLink || courseData.practicalPerformanceAssessmentLink) || null,
         courseData.courseLink ?? null,

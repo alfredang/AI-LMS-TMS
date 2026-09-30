@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { normalizeRenewStatus, RENEW_STATUS_VALUES } from '@lib/courseRenewalStatus';
 import { recordCourseChanges } from '../../../lib/courseChangeLog';
+import { isCourseValidityTpgEnabled } from '@lib/courseValidityFeature';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT') {
@@ -21,10 +22,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   let nextStatus: string | null;
   if (status !== undefined) {
     const trimmed = String(status ?? '').trim();
-    if (trimmed && !RENEW_STATUS_VALUES.includes(trimmed)) {
+    const enhanced = await isCourseValidityTpgEnabled();
+    if (trimmed && (!RENEW_STATUS_VALUES.includes(trimmed) || (!enhanced && trimmed === 'Approved'))) {
       return res.status(400).json({ success: false, message: `Unknown renewal status "${trimmed}"` });
     }
-    nextStatus = normalizeRenewStatus(trimmed);
+    nextStatus = enhanced ? normalizeRenewStatus(trimmed) : trimmed || null;
   } else if (typeof renew === 'boolean') {
     nextStatus = renew ? 'To Renew' : null;
   } else {

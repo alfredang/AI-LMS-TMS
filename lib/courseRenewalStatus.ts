@@ -55,11 +55,19 @@ export const RENEW_STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string 
   { value: 'Rejected/Expired', label: 'Rejected/Expired' },
 ];
 
+export const LEGACY_RENEW_STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> =
+  RENEW_STATUS_OPTIONS.map(option => option.value === 'Approved'
+    ? { value: 'Approved / Renewed', label: 'Approved / Renewed' }
+    : option);
+
+export const renewStatusOptions = (enhanced: boolean) =>
+  enhanced ? RENEW_STATUS_OPTIONS : LEGACY_RENEW_STATUS_OPTIONS;
+
 // How a stored status reads on screen, so every page words it the same way.
-export const renewStatusLabel = (value?: string | null): string => {
-  const stored = normalizeRenewStatus(value);
+export const renewStatusLabel = (value?: string | null, enhanced = true): string => {
+  const stored = enhanced ? normalizeRenewStatus(value) : (value || '').trim();
   if (!stored) return 'Not Set';
-  const match = RENEW_STATUS_OPTIONS.find(
+  const match = renewStatusOptions(enhanced).find(
     option => option.value && option.value.toLowerCase() === stored.toLowerCase()
   );
   return match ? match.label : stored;
@@ -78,6 +86,9 @@ export const RENEW_STATUS_VALUES: readonly string[] = [
 
 export const isKnownRenewStatus = (value?: string | null) =>
   RENEW_STATUS_OPTIONS.some(option => option.value && option.value === normalizeRenewStatus(value));
+
+export const isOfferedRenewStatus = (value: string | null | undefined, enhanced: boolean) =>
+  renewStatusOptions(enhanced).some(option => option.value && option.value === (value || '').trim());
 
 // A renewal is considered lodged only when it has a real application number.
 // TPG captures unresolved lookups as "NOT Found", which must continue to warn

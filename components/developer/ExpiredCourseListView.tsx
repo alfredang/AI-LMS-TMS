@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useDeveloperCourses } from '@hooks/useDeveloperCourses';
 import { Card } from '../ui/Card';
 import { renewStatusLabel } from '@lib/courseRenewalStatus';
+import { useCourseValidityFeature } from '@hooks/useCourseValidityFeature';
 
 const startOfDay = (date: Date) => {
   const next = new Date(date);
@@ -55,6 +56,7 @@ type RenewFilter = 'All' | RenewClass;
 
 const ExpiredCourseListView: React.FC = () => {
   const { courses, loading, error } = useDeveloperCourses();
+  const featureEnabled = useCourseValidityFeature();
   const [search, setSearch] = useState('');
   const [renewFilter, setRenewFilter] = useState<RenewFilter>('All');
 
@@ -86,7 +88,7 @@ const ExpiredCourseListView: React.FC = () => {
     [expiredCourses]
   );
 
-  if (loading) {
+  if (loading || featureEnabled === null) {
     return <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">Loading courses…</div>;
   }
 
@@ -143,7 +145,7 @@ const ExpiredCourseListView: React.FC = () => {
               className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
             >
               <option value="All">All Renew Statuses</option>
-              <option value="Approved">Approved</option>
+              <option value="Approved">{featureEnabled ? 'Approved' : 'Approved / Renewed'}</option>
               <option value="Waiting">Waiting For Renewal</option>
               <option value="Rejected">Rejected / Expired</option>
               <option value="Not Set">Not Set</option>
@@ -181,7 +183,7 @@ const ExpiredCourseListView: React.FC = () => {
                       </td>
                       <td className="px-3 py-1.5 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${RENEW_BADGE_CLASSES[renewClass]}`}>
-                          {renewStatusLabel(course.renewedStatus)}
+                          {featureEnabled ? renewStatusLabel(course.renewedStatus) : (course.renewedStatus || '').trim() || 'Not Set'}
                         </span>
                       </td>
                     </tr>
