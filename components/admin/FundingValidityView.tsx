@@ -8,6 +8,7 @@ import {
   hasRenewalApplicationNo,
   isKnownRenewStatus,
   isWithinRenewalWarningWindow,
+  normalizeRenewStatus,
   RENEW_STATUS_OPTIONS,
   renewStatusLabel,
   type RenewClass,
@@ -54,7 +55,7 @@ const isRenewed = (value?: string | null) => !!value && value.trim().length > 0;
 
 // Which pill an expiring / expired funded course shows.
 //
-// 'Approved / Renewed' does NOT clear the warning: an approved renewal comes with
+// 'Approved' does NOT clear the warning: an approved renewal comes with
 // a new validity end date, so a course that is still counting down has either not
 // had that date keyed in yet or is carrying a stale flag from an earlier round.
 // Either way it still needs a human, so it keeps Expiring Soon and explains
@@ -73,7 +74,7 @@ const validityPill = (renewClass: RenewClass, expired: boolean): { text: string;
     return { ...base, title: 'Marked "To Renew" — the renewal has not gone to SSG yet.' };
   }
   return renewClass === 'Approved'
-    ? { ...base, title: 'Marked "Approved / Renewed", but the funding validity end date has not been extended — either the new date is not keyed in yet, or the status is left over from an earlier renewal.' }
+    ? { ...base, title: 'Marked "Approved", but the funding validity end date has not been extended — either the new date is not keyed in yet, or the status is left over from an earlier renewal.' }
     : base;
 };
 
@@ -177,7 +178,7 @@ const FundingValidityView: React.FC = () => {
 
   const effectiveRenewStatus = (course: any): string | null => {
     const override = renewStatusOverrides[course.id];
-    return override === undefined ? (course.renewedStatus || null) : override;
+    return normalizeRenewStatus(override === undefined ? course.renewedStatus : override);
   };
 
   const isCourseRenewed = (course: any) => isRenewed(effectiveRenewStatus(course));
@@ -426,13 +427,15 @@ const FundingValidityView: React.FC = () => {
           'Validity Start Date': parseValidityDate(course.fundingValidityStart) || '',
           'Validity End Date': validityDate || '',
           'Earliest Renewal Date': earliestRenewalDate || '',
-          'Actual Renew Date': parseValidityDate(course.actualRenewDate) || '',
-          'Renewal Application No': course.renewalApplicationNo || '',
-          'Status': !validityDate ? '' : validityDate < today ? 'Expired' : validityDate <= fourMonthsAhead ? 'Expiring Soon' : 'Valid',
+          'Submit Date': parseValidityDate(course.actualRenewDate) || '',
+          'Submit No': course.renewalApplicationNo || '',
+          'Submit Type': course.submissionType || '',
+          'Status': effectiveRenewStatus(course) || '',
+          'TRAQOM %': course.traqomResponseRate ?? '',
+          'TRAQOM Rating': course.traqomQualityRating ?? '',
           'CAS': course.casScore != null ? Number(course.casScore) : '',
           'ES': course.esScore != null ? Number(course.esScore) : '',
           'Whitelist': (whitelistStateOverrides[course.id] ?? !!course.whitelistStatus) ? 'Yes' : 'No',
-          'Renew': isCourseRenewed(course) ? 'Yes' : 'No',
         };
       });
 
@@ -440,7 +443,7 @@ const FundingValidityView: React.FC = () => {
 
       // Header-row dropdowns in Excel — the Type column filters to WSQ / CASL.
       ws['!autofilter'] = { ref: ws['!ref'] };
-      ws['!cols'] = [{ wch: 60 }, { wch: 20 }, { wch: 20 }, { wch: 8 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 20 }, { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }];
+      ws['!cols'] = [{ wch: 60 }, { wch: 20 }, { wch: 20 }, { wch: 8 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 20 }, { wch: 14 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 10 }];
 
       // Date columns (E-H) render as dd/mm/yyyy like the table.
       for (let r = 1; r <= rows.length; r++) {
@@ -473,8 +476,8 @@ const FundingValidityView: React.FC = () => {
         'Course Ref Code (New)': course.newCourseCode || '',
         'Course Ref Code (Old)': course.courseCode || '',
         'Validity End Date': parseValidityDate(course.fundingValidity) || '',
-        'Actual Renew Date': parseValidityDate(course.actualRenewDate) || '',
-        'Renewal Application No': course.renewalApplicationNo || '',
+        'Submit Date': parseValidityDate(course.actualRenewDate) || '',
+        'Submit No': course.renewalApplicationNo || '',
         'CAS': course.casScore != null ? Number(course.casScore) : '',
         'ES': course.esScore != null ? Number(course.esScore) : '',
         'Whitelist': (whitelistStateOverrides[course.id] ?? !!course.whitelistStatus) ? 'Yes' : 'No',
@@ -496,8 +499,8 @@ const FundingValidityView: React.FC = () => {
         [''],
         ['1.', 'Edit the "Funding Status" sheet, then upload this file back with the "Upload Excel" button.'],
         ['2.', 'Courses are matched by Course Ref Code (New), falling back to Course Ref Code (Old). Do not edit the ref code or title columns.'],
-        ['3.', 'Editable columns: Validity End Date, Actual Renew Date, Renewal Application No, CAS, ES, Whitelist, Renew.'],
-        ['4.', 'Validity End Date / Actual Renew Date: use a real Excel date (dd/mm/yyyy).'],
+        ['3.', 'Editable columns: Validity End Date, Submit Date, Submit No, CAS, ES, Whitelist, Renew.'],
+        ['4.', 'Validity End Date / Submit Date: use a real Excel date (dd/mm/yyyy).'],
         ['5.', 'Whitelist / Renew: Yes or No.'],
         ['6.', 'A BLANK cell means "leave unchanged" — it never clears the stored value. To clear a value, use the Edit button on the dashboard.'],
         ['7.', 'Rows you delete from the sheet are simply not updated.'],
@@ -554,8 +557,10 @@ const FundingValidityView: React.FC = () => {
             title: String(row['Course Title'] ?? '').trim(),
           };
           if (!blank(row['Validity End Date'])) update.fundingValidity = cellToYMD(row['Validity End Date']);
-          if (!blank(row['Actual Renew Date'])) update.actualRenewDate = cellToYMD(row['Actual Renew Date']);
-          if (!blank(row['Renewal Application No'])) update.renewalApplicationNo = String(row['Renewal Application No']).trim();
+          const submitDate = !blank(row['Submit Date']) ? row['Submit Date'] : row['Actual Renew Date'];
+          const submitNo = !blank(row['Submit No']) ? row['Submit No'] : row['Renewal Application No'];
+          if (!blank(submitDate)) update.actualRenewDate = cellToYMD(submitDate);
+          if (!blank(submitNo)) update.renewalApplicationNo = String(submitNo).trim();
           if (!blank(row['CAS'])) update.casScore = Number(row['CAS']);
           if (!blank(row['ES'])) update.esScore = Number(row['ES']);
           const whitelist = cellToYesNo(row['Whitelist']);
@@ -603,10 +608,9 @@ const FundingValidityView: React.FC = () => {
     );
   }
 
-  // Sticky header cells: opaque background (a translucent one lets scrolled rows
-  // show through) and the divider carried on the cell, since a border on a
-  // sticky row does not travel with it.
-  const stickyTh = "sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-3 py-2";
+  // Keep both grouped header rows visible while the course rows scroll.
+  const stickyTh = "sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 align-middle font-semibold whitespace-nowrap";
+  const stickySubTh = "sticky top-6 z-10 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 font-semibold whitespace-nowrap";
 
   const inputClass = "w-full px-1.5 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
 
@@ -890,7 +894,7 @@ const FundingValidityView: React.FC = () => {
               onClick={handleDownloadTemplate}
               disabled={downloadingTemplate || wsqCourses.length === 0}
               className="px-3 py-1.5 text-xs font-medium rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-              title="Pre-filled template — edit the validity dates, CAS/ES, Whitelist and Renew columns, then upload it back"
+              title="Pre-filled template — edit the validity and submit dates, submit number, CAS/ES, Whitelist and Renew columns, then upload it back"
             >
               {downloadingTemplate ? 'Preparing…' : 'Download Template'}
             </button>
@@ -988,10 +992,10 @@ const FundingValidityView: React.FC = () => {
         {/* Fixed-height scroller so only the rows move; the header sticks to the
             top of it (sticky lives on each th — a sticky thead is unreliable). */}
         <div className="overflow-auto max-h-[70vh]">
-          <table className="min-w-full text-xs">
+          <table className="w-max border-separate border-spacing-0 text-xs [&_th]:border-r [&_td]:border-r [&_th]:border-gray-200 [&_td]:border-gray-200 dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-700 [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1">
             <thead>
-              <tr className="text-left text-gray-600 dark:text-gray-300">
-                <th className={`${stickyTh} w-8`}>
+              <tr className="h-6 text-left text-gray-600 dark:text-gray-300">
+                <th rowSpan={2} className={`${stickyTh} w-8`}>
                   <input
                     type="checkbox"
                     checked={allVisibleSelected}
@@ -1001,25 +1005,36 @@ const FundingValidityView: React.FC = () => {
                     aria-label="Select all courses shown"
                   />
                 </th>
-                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Course Title</th>
-                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Course Ref Code (New)</th>
-                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Course Ref Code (Old)</th>
-                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Type</th>
-                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Validity Start Date</th>
-                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Validity End Date</th>
-                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Earliest Renewal Date</th>
-                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Actual Renew Date</th>
-                <th className={`${stickyTh} font-semibold whitespace-nowrap`}>Renewal Application No</th>
+                <th rowSpan={2} scope="col" className={stickyTh}>Course Title</th>
+                <th colSpan={2} scope="colgroup" className={`${stickyTh} text-center`}>Course Ref. Code</th>
+                <th rowSpan={2} scope="col" className={stickyTh}>Type</th>
+                <th colSpan={2} scope="colgroup" className={`${stickyTh} text-center`}>Validity Date</th>
+                <th rowSpan={2} scope="col" className={stickyTh}>Earliest Renewal Date</th>
+                <th colSpan={3} scope="colgroup" className={`${stickyTh} text-center`}>Submit</th>
                 <th
-                  className={`${stickyTh} font-semibold whitespace-nowrap`}
+                  rowSpan={2}
+                  scope="col"
+                  className={stickyTh}
                   title="Where this course's renewal stands. In-progress statuses show as Renewal Pending until the new validity end date comes through."
                 >
-                  Renew Status
+                  Status
                 </th>
-                <th className={`${stickyTh} font-semibold text-right whitespace-nowrap`}>CAS</th>
-                <th className={`${stickyTh} font-semibold text-right whitespace-nowrap`}>ES</th>
-                <th className={`${stickyTh} font-semibold text-center whitespace-nowrap`}>Whitelist</th>
-                <th className={`${stickyTh} font-semibold text-center w-20`}></th>
+                <th colSpan={2} scope="colgroup" className={`${stickyTh} text-center`}>TRAQOM</th>
+                <th rowSpan={2} scope="col" className={`${stickyTh} text-right`}>CAS</th>
+                <th rowSpan={2} scope="col" className={`${stickyTh} text-right`}>ES</th>
+                <th rowSpan={2} scope="col" className={`${stickyTh} text-center`}>Whitelist</th>
+                <th rowSpan={2} className={`${stickyTh} text-center w-16`}></th>
+              </tr>
+              <tr className="h-6 text-left text-gray-600 dark:text-gray-300">
+                <th scope="col" aria-label="Course Ref Code (New)" className={stickySubTh}>New</th>
+                <th scope="col" aria-label="Course Ref Code (Old)" className={stickySubTh}>Old</th>
+                <th scope="col" aria-label="Validity Start Date" className={stickySubTh}>Start</th>
+                <th scope="col" aria-label="Validity End Date" className={stickySubTh}>End</th>
+                <th scope="col" aria-label="Submit Date" className={stickySubTh}>Date</th>
+                <th scope="col" aria-label="Submit No" className={stickySubTh}>No.</th>
+                <th scope="col" aria-label="Submit Type" className={stickySubTh}>Type</th>
+                <th scope="col" aria-label="TRAQOM %" className={`${stickySubTh} text-right`}>%</th>
+                <th scope="col" aria-label="TRAQOM Rating" className={stickySubTh}>Rating</th>
               </tr>
             </thead>
             <tbody>
@@ -1157,20 +1172,24 @@ const FundingValidityView: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-1.5">
+                    <td className="px-3 py-1.5 whitespace-nowrap">{course.submissionType || ''}</td>
+                    <td className="px-3 py-1.5" title={renewStatusLabel(renewStatus)}>
                       <select
                         value={renewStatus || ''}
                         disabled={!!renewingIds[course.id]}
                         onChange={(e) => handleRenewStatusChange(course.id, e.target.value)}
-                        className={`${inputClass} w-40`}
+                        className="w-40 min-w-[10rem] px-1.5 py-0.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                         aria-label={`Renewal status for ${course.title}`}
                       >
+                        {!renewStatus && <option value="">Not set</option>}
                         {legacyRenewStatus && <option value={legacyRenewStatus} disabled>{legacyRenewStatus}</option>}
                         {RENEW_STATUS_OPTIONS.map(option => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </select>
                     </td>
+                    <td className="px-3 py-1.5 text-right whitespace-nowrap">{course.traqomResponseRate != null ? course.traqomResponseRate.toFixed(2) : ''}</td>
+                    <td className="px-3 py-1.5 whitespace-nowrap">{course.traqomQualityRating != null ? course.traqomQualityRating.toFixed(2) : ''}</td>
                     <td className="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
                       {isEditing ? (
                         <input

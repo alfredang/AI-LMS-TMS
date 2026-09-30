@@ -4,6 +4,7 @@ import pool from '../../../lib/db';
 import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
 import { recordCourseChanges } from '../../../lib/courseChangeLog';
 import { recordRenamedTitle } from '../../../lib/courseCode';
+import { normalizeRenewStatus } from '../../../lib/courseRenewalStatus';
 import { IncomingForm, File as FormidableFile } from 'formidable';
 import fs from 'fs';
 import path from 'path';
@@ -580,7 +581,7 @@ async function handler(
         courseData.afterNormalFunding || null,
         courseData.afterMcesFunding || null,
         !!courseData.isUtapEligible,
-        courseData.renewedStatus || null,
+        normalizeRenewStatus(courseData.renewedStatus),
         sanitizeGoogleLink(fileUrls.writtenAssessmentLink || courseData.writtenAssessmentLink) || null,
         sanitizeGoogleLink(fileUrls.practicalPerformanceAssessmentLink || courseData.practicalPerformanceAssessmentLink) || null,
         courseData.courseLink ?? null,

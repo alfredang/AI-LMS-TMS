@@ -177,7 +177,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
 
         // Whitelist / Renew are Yes/No in the sheet, but the DB stores richer
-        // statuses (e.g. renewed_status = 'Approved / Renewed'). Only write when
+        // statuses (e.g. renewed_status = 'Approved'). Only write when
         // the Yes/No actually flips the stored truthiness, so a round-trip never
         // downgrades an existing status to the generic value.
         const hasRenewed = !!String(current.renewed_status ?? '').trim();

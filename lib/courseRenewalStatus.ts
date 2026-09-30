@@ -2,11 +2,18 @@
 //
 // The column is free text. The Renew tick on Course Funding Validity writes
 // 'To Renew'; the bulk Excel upload and the course editor can write richer
-// values such as 'Processing', 'Approved / Renewed', and 'Rejected/Expired'.
+// values such as 'Processing', 'Approved', and 'Rejected/Expired'.
 // Both the Funding Validity table and the Expired Course List classify it the
 // same way so a course never reads as renewed on one page and not the other.
 
 export type RenewClass = 'Approved' | 'Waiting' | 'Rejected' | 'ToDo' | 'Not Set';
+
+// Older rows and clients may still send the former label. Store and display
+// the shorter canonical value without changing any other status.
+export const normalizeRenewStatus = (value?: string | null): string | null => {
+  const status = (value || '').trim();
+  return status.toLowerCase() === 'approved / renewed' ? 'Approved' : status || null;
+};
 
 export const classifyRenewStatus = (value?: string | null): RenewClass => {
   const v = (value || '').trim().toLowerCase();
@@ -40,7 +47,7 @@ export const RENEW_STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string 
   { value: 'Others', label: 'Others' },
   { value: 'Pending Payment', label: 'Pending Payment' },
   { value: 'Processing', label: 'Processing' },
-  { value: 'Approved / Renewed', label: 'Approved / Renewed' },
+  { value: 'Approved', label: 'Approved' },
   { value: 'Action Required', label: 'Action Required' },
   { value: 'Draft', label: 'Draft' },
   { value: 'Pending Ack.', label: 'Pending Ack.' },
@@ -50,7 +57,7 @@ export const RENEW_STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string 
 
 // How a stored status reads on screen, so every page words it the same way.
 export const renewStatusLabel = (value?: string | null): string => {
-  const stored = (value || '').trim();
+  const stored = normalizeRenewStatus(value);
   if (!stored) return 'Not Set';
   const match = RENEW_STATUS_OPTIONS.find(
     option => option.value && option.value.toLowerCase() === stored.toLowerCase()
@@ -63,13 +70,14 @@ export const renewStatusLabel = (value?: string | null): string => {
 // the dropdown.
 export const RENEW_STATUS_VALUES: readonly string[] = [
   ...RENEW_STATUS_OPTIONS.map(option => option.value),
+  'Approved / Renewed',
   'Waiting For Renewal',
   'Rejected / Expired',
   'To Renew',
 ];
 
 export const isKnownRenewStatus = (value?: string | null) =>
-  RENEW_STATUS_OPTIONS.some(option => option.value && option.value === (value || '').trim());
+  RENEW_STATUS_OPTIONS.some(option => option.value && option.value === normalizeRenewStatus(value));
 
 // A renewal is considered lodged only when it has a real application number.
 // TPG captures unresolved lookups as "NOT Found", which must continue to warn

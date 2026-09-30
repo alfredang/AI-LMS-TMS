@@ -1,7 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
-import { RENEW_STATUS_VALUES } from '@lib/courseRenewalStatus';
+import { normalizeRenewStatus, RENEW_STATUS_VALUES } from '@lib/courseRenewalStatus';
 import { recordCourseChanges } from '../../../lib/courseChangeLog';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -24,7 +24,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (trimmed && !RENEW_STATUS_VALUES.includes(trimmed)) {
       return res.status(400).json({ success: false, message: `Unknown renewal status "${trimmed}"` });
     }
-    nextStatus = trimmed || null;
+    nextStatus = normalizeRenewStatus(trimmed);
   } else if (typeof renew === 'boolean') {
     nextStatus = renew ? 'To Renew' : null;
   } else {

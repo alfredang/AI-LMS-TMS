@@ -4,15 +4,17 @@ import {
   classifyRenewStatus,
   hasRenewalApplicationNo,
   isWithinRenewalWarningWindow,
+  normalizeRenewStatus,
   RENEW_STATUS_OPTIONS,
   RENEW_STATUS_VALUES,
+  renewStatusLabel,
 } from '../lib/courseRenewalStatus';
 
 const expectedStatuses = [
   'Others',
   'Pending Payment',
   'Processing',
-  'Approved / Renewed',
+  'Approved',
   'Action Required',
   'Draft',
   'Pending Ack.',
@@ -39,8 +41,17 @@ test('Renew Status workflow classes distinguish in-progress and actionable state
   ['Others', 'Action Required', 'Draft', 'Pending Sub.'].forEach(status => {
     assert.equal(classifyRenewStatus(status), 'ToDo');
   });
+  assert.equal(classifyRenewStatus('Approved'), 'Approved');
   assert.equal(classifyRenewStatus('Approved / Renewed'), 'Approved');
   assert.equal(classifyRenewStatus('Rejected/Expired'), 'Rejected');
+});
+
+test('former approved status normalizes to the canonical database value', () => {
+  assert.equal(normalizeRenewStatus('Approved / Renewed'), 'Approved');
+  assert.equal(normalizeRenewStatus('approved / renewed'), 'Approved');
+  assert.equal(normalizeRenewStatus('Approved'), 'Approved');
+  assert.equal(renewStatusLabel('Approved / Renewed'), 'Approved');
+  assert.ok(RENEW_STATUS_VALUES.includes('Approved / Renewed'));
 });
 
 test('renewal warnings require a real Renewal Application No', () => {
