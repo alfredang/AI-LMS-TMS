@@ -7,7 +7,8 @@ import { voidQboInvoice } from '../../../lib/quickbooks/voidCompanyApplicationIn
 import { reissueSharedCompanyApplicationInvoice } from '../../../lib/quickbooks/createCompanyApplicationInvoice';
 import { removeCaLearnerFromCalendar } from '../../../lib/google-calendar/ca-calendar-sync';
 
-const MAX_DELETE_BATCH = 10;
+const MAX_DELETE_BATCH = 5;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * POST /api/admin/ca-delete
@@ -53,7 +54,7 @@ interface CaRow {
 interface RowResult {
   id: string;
   trainee: string;
-  deleted: boolean;
+  cancelled: boolean;
   archived: boolean;
   steps: string[];
   error: string | null;
@@ -95,10 +96,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     await ensureCompanyApplicationsTable();
 
-    const idsRaw = Array.isArray(req.body?.applicationIds) ? req.body.applicationIds : [];
-    const ids = Array.from(new Set(idsRaw.map((v: unknown) => String(v || '').trim()).filter(Boolean)));
+    const idsRaw: unknown[] = Array.isArray(req.body?.applicationIds) ? req.body.applicationIds : [];
+    const ids: string[] = Array.from(new Set(idsRaw.map((v) => String(v || '').trim()).filter(Boolean)));
     if (ids.length === 0) {
       return res.status(400).json({ success: false, error: 'applicationIds is required' });
+    }
+    const invalidIds = ids.filter(id => !UUID_RE.test(id));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'applicationIds must be valid Company Application row UUIDs.',
+      });
     }
     if (ids.length > MAX_DELETE_BATCH) {
       return res.status(400).json({
@@ -196,7 +204,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const rr: RowResult = {
         id: row.id,
         trainee: row.trainee_full_name || '(unnamed)',
-        deleted: false,
+        cancelled: false,
         archived: false,
         steps: [],
         error: null,
@@ -234,6 +242,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           );
         } catch (e) {
           console.warn('[ca-delete] native enrolment cancel failed:', row.id, e);
+          rr.error = `Local enrolment status update failed: ${e instanceof Error ? e.message : String(e)}. Row left in place.`;
+          results.push(rr);
+          continue;
         }
       }
 
@@ -286,7 +297,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           [row.id, String(actor), JSON.stringify(snapshot)]
         );
         if (archived.rowCount) {
-          rr.deleted = true;
+          rr.cancelled = true;
           rr.archived = true;
           rr.steps.push('row archived');
           archivedRows.push(row);
@@ -360,7 +371,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const failed = results.filter(r => !r.archived);
     return res.status(200).json({
       success: true,
-      deleted: archivedRows.length,
+      cancelled: archivedRows.length,
       archived: archivedRows.length,
       failedCount: failed.length,
       warnings,

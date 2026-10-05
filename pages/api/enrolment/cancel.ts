@@ -10,12 +10,16 @@ import { cancelInvoiceJobOnEnrolmentCancelled } from '../../../lib/services/invo
 import { cleanupDaInvoicesForEnrolment } from '../../../lib/services/daInvoiceCleanup';
 import { syncClassAttendees, type AttendeeSyncResult } from '../../../lib/calendar/ensureClassCalendarEvent';
 
-function decryptSsgResponseBody(rawData: unknown, encKey: Buffer, iv: Buffer): any {
+function parseSsgResponseBody(rawData: unknown, encKey: Buffer, iv: Buffer): any {
   const rawBody = typeof rawData === 'string' ? rawData : JSON.stringify(rawData);
-  const decipher = crypto.createDecipheriv('aes-256-cbc', encKey, iv);
-  let decrypted = decipher.update(rawBody, 'base64', 'utf8');
-  decrypted += decipher.final('utf8');
-  return JSON.parse(decrypted);
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-cbc', encKey, iv);
+    let decrypted = decipher.update(rawBody, 'base64', 'utf8');
+    decrypted += decipher.final('utf8');
+    return JSON.parse(decrypted);
+  } catch {
+    return JSON.parse(rawBody);
+  }
 }
 
 function ssgErrorMessage(parsed: any): string {
@@ -72,6 +76,41 @@ function buildEnrichedCancelPayload(enrolmentData: any, courseRunId: string) {
   return payload;
 }
 
+function buildDedicatedCancelPayload(enrolmentData: any, courseRunId: string) {
+  const enrolment = enrolmentData?.enrolment ?? enrolmentData;
+  const trainee = enrolment?.trainee ?? {};
+  const course = enrolment?.course ?? {};
+  const trainingPartner = enrolment?.trainingPartner ?? {};
+
+  const payload: any = {
+    enrolment: {
+      course: {
+        run: { id: String(courseRunId) },
+      },
+      trainee: {},
+      trainingPartner: {},
+    },
+  };
+
+  if (course?.referenceNumber) {
+    payload.enrolment.course.referenceNumber = String(course.referenceNumber).trim();
+  }
+  if (trainee?.id) {
+    payload.enrolment.trainee.id = String(trainee.id).trim().toUpperCase();
+  }
+  if (trainee?.idType) {
+    payload.enrolment.trainee.idType = trainee.idType;
+  }
+  if (trainingPartner?.uen) {
+    payload.enrolment.trainingPartner.uen = String(trainingPartner.uen).trim().toUpperCase();
+  }
+  if (trainingPartner?.code) {
+    payload.enrolment.trainingPartner.code = String(trainingPartner.code).trim();
+  }
+
+  return payload;
+}
+
 async function postEncryptedCancelPayload(opts: {
   ssgBaseUrl: string;
   enrolmentId: string;
@@ -79,16 +118,22 @@ async function postEncryptedCancelPayload(opts: {
   encKey: Buffer;
   iv: Buffer;
   credentials: any;
+  path?: string;
+  queryUen?: string;
 }) {
-  const { ssgBaseUrl, enrolmentId, payload, encKey, iv, credentials } = opts;
+  const { ssgBaseUrl, enrolmentId, payload, encKey, iv, credentials, path, queryUen } = opts;
   const cipher = crypto.createCipheriv('aes-256-cbc', encKey, iv);
   let encryptedPayload = cipher.update(JSON.stringify(payload), 'utf8', 'base64');
   encryptedPayload += cipher.final('base64');
 
   const builder = new HTTPRequestBuilder()
-    .withEndpoint(ssgBaseUrl, `/tpg/enrolments/details/${enrolmentId}`)
+    .withEndpoint(ssgBaseUrl, path || `/tpg/enrolments/details/${enrolmentId}`)
     .withMethod(HttpMethod.POST)
     .withBody(encryptedPayload);
+
+  if (queryUen) {
+    builder.withParam('uen', queryUen);
+  }
 
   if (credentials?.certificateContent && credentials.privateKeyContent) {
     builder.withCertificate(credentials.certificateContent, credentials.privateKeyContent);
@@ -97,23 +142,31 @@ async function postEncryptedCancelPayload(opts: {
   const httpClient = new HttpClient(ssgBaseUrl, { 'Content-Type': 'application/json', 'Accept': 'application/json' });
   const httpResponse = await httpClient.request(builder.build());
 
+  let parsed: any = null;
+  try {
+    parsed = parseSsgResponseBody(httpResponse.data, encKey, iv);
+  } catch {
+    parsed = null;
+  }
+
   if (httpResponse.status !== 200) {
     return {
       ok: false,
       httpStatus: httpResponse.status,
-      parsed: null,
+      parsed,
       raw: httpResponse.data,
-      message: `SSG error ${httpResponse.status}`,
+      message: ssgErrorMessage(parsed) || `SSG error ${httpResponse.status}`,
     };
   }
 
-  const parsed = decryptSsgResponseBody(httpResponse.data, encKey, iv);
   return {
-    ok: !hasSsgError(parsed),
+    ok: parsed !== null && !hasSsgError(parsed),
     httpStatus: httpResponse.status,
     parsed,
     raw: httpResponse.data,
-    message: ssgErrorMessage(parsed) || `SSG status ${parsed?.status || httpResponse.status}`,
+    message: parsed === null
+      ? 'Unable to parse SSG response'
+      : ssgErrorMessage(parsed) || `SSG status ${parsed?.status || httpResponse.status}`,
   };
 }
 
@@ -195,23 +248,40 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       console.log('Cancel enrolment SSG response:', JSON.stringify(parsed ?? cancelResult.raw));
 
       if (!cancelResult.ok && parsed && isEmployerUenCancelValidation(parsed)) {
-        console.warn(`[enrolment/cancel] Employer.UEN validation failed for ${enrolmentRef}; retrying with enriched enrolment payload`);
+        console.warn(`[enrolment/cancel] Employer.UEN validation failed for ${enrolmentRef}; retrying with dedicated cancel payload`);
         const api = createSSGEnrolmentAPI(ssgBaseUrl, credentials);
         const view = await api.viewEnrolment(enrolmentRef);
         if (!view?.error && view?.data) {
-          const enrichedPayload = buildEnrichedCancelPayload(view.data, String(courseRunId));
+          const dedicatedCancelPayload = buildDedicatedCancelPayload(view.data, String(courseRunId));
           cancelResult = await postEncryptedCancelPayload({
             ssgBaseUrl,
             enrolmentId: enrolmentRef,
-            payload: enrichedPayload,
+            payload: dedicatedCancelPayload,
+            path: `/tpg/enrolments/${enrolmentRef}/cancel`,
+            queryUen: credentials.uen,
             encKey,
             iv,
             credentials,
           });
           parsed = cancelResult.parsed;
-          console.log('Cancel enrolment enriched SSG response:', JSON.stringify(parsed ?? cancelResult.raw));
+          console.log('Cancel enrolment dedicated SSG response:', JSON.stringify(parsed ?? cancelResult.raw));
+
+          if (!cancelResult.ok) {
+            console.warn(`[enrolment/cancel] Dedicated cancel failed for ${enrolmentRef}; retrying with enriched enrolment payload`);
+            const enrichedPayload = buildEnrichedCancelPayload(view.data, String(courseRunId));
+            cancelResult = await postEncryptedCancelPayload({
+              ssgBaseUrl,
+              enrolmentId: enrolmentRef,
+              payload: enrichedPayload,
+              encKey,
+              iv,
+              credentials,
+            });
+            parsed = cancelResult.parsed;
+            console.log('Cancel enrolment enriched SSG response:', JSON.stringify(parsed ?? cancelResult.raw));
+          }
         } else {
-          console.warn('[enrolment/cancel] Could not fetch enrolment for enriched retry:', view?.error);
+          console.warn('[enrolment/cancel] Could not fetch enrolment for dedicated cancel retry:', view?.error);
         }
       }
 
