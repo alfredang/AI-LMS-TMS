@@ -3,6 +3,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
+import { OptionalSelector } from '../../../lib/ssg/models/course-runs';
+import { extractCourseRun, normalizeCourseRunResponse } from '../../../lib/ssg/course-run-response';
 import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
 
 function parseToISO(d: number | string | undefined): string | null {
@@ -60,13 +62,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
     const api = createSSGCourseAPI(ssgBaseUrl, credentials);
-    const ssgResult = await api.viewCourseRun(courseRunId);
+    const ssgResult = await api.viewCourseRun(courseRunId, OptionalSelector.YES);
+    const normalizedSsgResult = normalizeCourseRunResponse(ssgResult) as any;
 
     const hasError = ssgResult.error && (ssgResult.error.code || ssgResult.error.message ||
       (ssgResult.error.details && ssgResult.error.details.length > 0));
 
-    const courseData: any = ssgResult.data?.course;
-    const run = courseData?.run;
+    const courseData: any = {
+      ...((ssgResult as any).course ?? {}),
+      ...(ssgResult.data?.course ?? {}),
+      ...(normalizedSsgResult.data?.course ?? {}),
+    };
+    const run = extractCourseRun(normalizedSsgResult);
     const courseInfo = courseData;
 
     if (hasError || !run || !courseInfo) {
