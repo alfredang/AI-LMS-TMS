@@ -3,6 +3,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
+import { OptionalSelector } from '../../../lib/ssg/models/course-runs';
+import { extractCourseRun, normalizeCourseRunResponse } from '../../../lib/ssg/course-run-response';
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { refreshGrantsForEnrolments } from '../../../lib/services/billingSync';
@@ -134,7 +136,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   try {
     const api = createSSGCourseAPI(ssgBaseUrl, credentials);
-    const ssgResult = await api.viewCourseRun(courseRunId);
+    const ssgResult = await api.viewCourseRun(courseRunId, OptionalSelector.YES);
+    const normalizedSsgResult = normalizeCourseRunResponse(ssgResult) as any;
 
     const hasError =
       ssgResult.error &&
@@ -142,8 +145,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         ssgResult.error.message ||
         (ssgResult.error.details && ssgResult.error.details.length > 0));
 
-    const courseData: any = ssgResult.data?.course;
-    const run = courseData?.run;
+    const courseData: any = {
+      ...((ssgResult as any).course ?? {}),
+      ...(ssgResult.data?.course ?? {}),
+      ...(normalizedSsgResult.data?.course ?? {}),
+    };
+    const run = extractCourseRun(normalizedSsgResult);
     const courseInfo = courseData;
 
     if (hasError || !run || !courseInfo) {
