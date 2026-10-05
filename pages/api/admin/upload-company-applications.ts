@@ -168,6 +168,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 AND LOWER(TRIM(COALESCE(employer_uen, ''))) = $2
                 AND LOWER(TRIM(COALESCE(course_title, ''))) = $3
                 AND LOWER(TRIM(COALESCE(course_start_date, ''))) = $4
+                AND ca_cancelled_at IS NULL
               ORDER BY created_at ASC
               LIMIT 1`,
             [dedupKey.traineeNric, dedupKey.employerUen, dedupKey.courseTitle, dedupKey.startDate]
@@ -217,6 +218,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                   AND LOWER(TRIM(COALESCE(employer_uen, ''))) = $2
                   AND LOWER(TRIM(COALESCE(course_title, ''))) = $3
                   AND LOWER(TRIM(COALESCE(course_start_date, ''))) = $4
+                  AND ca_cancelled_at IS NULL
                 ORDER BY created_at ASC
                 LIMIT 1`,
               [dedupKey.traineeNric, dedupKey.employerUen, dedupKey.courseTitle, dedupKey.startDate]

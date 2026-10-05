@@ -1327,6 +1327,7 @@ export async function generateInvoicesForApplications(
   const rowsRes = await pool.query(
     `${CA_INVOICE_ROW_SELECT}
      WHERE ca.id = ANY($1::uuid[])
+       AND ca.ca_cancelled_at IS NULL
      ORDER BY ca.created_at, ca.id`,
     [applicationIds]
   );
@@ -2125,6 +2126,15 @@ export interface MergeGroupInvoicesResult {
   newDocNumber?: string;
 }
 
+export interface ReissueSharedCompanyApplicationInvoiceResult {
+  reissued: boolean;
+  /** Why the automatic adjustment could not happen. Present whenever reissued is false. */
+  reason?: string;
+  invoicesDeleted: number;
+  learnersCovered: number;
+  newDocNumber?: string;
+}
+
 /**
  * Collapse the several invoices one employer holds for one course run into a
  * single invoice covering everyone.
@@ -2260,6 +2270,129 @@ export async function mergeGroupInvoices(
   return {
     merged: true,
     invoicesDeleted: distinctInvoiceIds.length,
+    learnersCovered: freedApplicationIds.length,
+    newDocNumber,
+  };
+}
+
+/**
+ * After deleting one learner from a consolidated company invoice, rebuild that
+ * invoice for the remaining learners instead of leaving Finance to adjust it by
+ * hand. This uses the same safety gates as invoice merge/replacement:
+ * every remaining learner must be ready, and the old invoice must be unsent and
+ * unpaid in QuickBooks.
+ */
+export async function reissueSharedCompanyApplicationInvoice(
+  invoiceId: string
+): Promise<ReissueSharedCompanyApplicationInvoiceResult> {
+  const id = String(invoiceId || '').trim();
+  if (!id) {
+    return { reissued: false, reason: 'Invoice ID is required.', invoicesDeleted: 0, learnersCovered: 0 };
+  }
+
+  const rowsRes = await pool.query(
+    `${CA_INVOICE_ROW_SELECT}
+     WHERE TRIM(ca.invoice_id) = $1
+       AND ca.billed_manually IS NOT TRUE
+       AND ca.ca_cancelled_at IS NULL
+     ORDER BY ca.created_at, ca.id`,
+    [id]
+  );
+  const invoicedRows = rowsRes.rows;
+  if (invoicedRows.length === 0) {
+    return {
+      reissued: false,
+      reason: 'No remaining learners were found on this invoice.',
+      invoicesDeleted: 0,
+      learnersCovered: 0,
+    };
+  }
+
+  const first = invoicedRows[0];
+  const uen = String(first.employer_uen || '').trim();
+  const runId = String(first.course_run_id || '').trim();
+  if (!uen || !runId) {
+    return {
+      reissued: false,
+      reason: 'The remaining learners are missing employer or course run details.',
+      invoicesDeleted: 0,
+      learnersCovered: invoicedRows.length,
+    };
+  }
+
+  const lockKey = `ca-inv:${uen}|${runId}`;
+  const lockClient = await pool.connect();
+  let lockAcquired = false;
+  let freedApplicationIds: string[] = [];
+
+  try {
+    const lockRes = await lockClient.query(
+      `SELECT pg_try_advisory_lock(hashtext($1)) AS locked`,
+      [lockKey]
+    );
+    lockAcquired = !!lockRes.rows[0]?.locked;
+    if (!lockAcquired) {
+      return {
+        reissued: false,
+        reason: 'This group is being invoiced right now. Try again in a moment.',
+        invoicesDeleted: 0,
+        learnersCovered: invoicedRows.length,
+      };
+    }
+
+    const outcome = await attemptGroupInvoiceReplacement({
+      groupKey: `${uen}|${runId}`,
+      invoicedRows,
+      pendingRows: [],
+    });
+
+    if (outcome.status !== 'replaced') {
+      return {
+        reissued: false,
+        reason:
+          outcome.status === 'blocked'
+            ? `Cannot adjust automatically - ${outcome.reason}.`
+            : `Not yet - ${outcome.reason}.`,
+        invoicesDeleted: 0,
+        learnersCovered: invoicedRows.length,
+      };
+    }
+    freedApplicationIds = outcome.freedApplicationIds;
+  } finally {
+    if (lockAcquired) {
+      await lockClient
+        .query(`SELECT pg_advisory_unlock(hashtext($1))`, [lockKey])
+        .catch(() => { /* releasing the connection drops it anyway */ });
+    }
+    lockClient.release();
+  }
+
+  const summary = await generateInvoicesForApplications(freedApplicationIds);
+
+  const afterRes = await pool.query(
+    `SELECT DISTINCT invoice_doc_number
+       FROM public.company_application
+      WHERE id = ANY($1::uuid[])
+        AND COALESCE(invoice_doc_number, '') <> ''`,
+    [freedApplicationIds]
+  );
+  const newDocNumber = afterRes.rows[0]?.invoice_doc_number
+    ? String(afterRes.rows[0].invoice_doc_number)
+    : undefined;
+
+  if (summary.generated === 0 && !newDocNumber) {
+    return {
+      reissued: false,
+      reason:
+        'The old shared invoice was removed but the replacement could not be created. Select the remaining learners and click Generate Invoice.',
+      invoicesDeleted: 1,
+      learnersCovered: freedApplicationIds.length,
+    };
+  }
+
+  return {
+    reissued: true,
+    invoicesDeleted: 1,
     learnersCovered: freedApplicationIds.length,
     newDocNumber,
   };

@@ -4,34 +4,48 @@ import pool from '../../../lib/db';
 import { ensureCompanyApplicationsTable } from '../../../lib/companyApplicationsTable';
 import { cancelEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { voidQboInvoice } from '../../../lib/quickbooks/voidCompanyApplicationInvoice';
+import { reissueSharedCompanyApplicationInvoice } from '../../../lib/quickbooks/createCompanyApplicationInvoice';
+import { removeCaLearnerFromCalendar } from '../../../lib/google-calendar/ca-calendar-sync';
+
+const MAX_DELETE_BATCH = 10;
 
 /**
  * POST /api/admin/ca-delete
  *
- * Body: { applicationIds: string[] }   // company_application.id UUIDs
+ * Body: { applicationIds: string[], dryRun?: boolean, confirm?: boolean }
  *
- * Cancel-then-delete. For each row that has an Enrolment ID we first tear the
- * enrolment down before removing the tracking row:
+ * Cancel-then-archive. For each row that has an Enrolment ID we first tear the
+ * enrolment down before archiving the tracking row:
  *   1. Cancel the SSG/TPGateway enrolment (already-cancelled is a no-op).
  *   2. Mark the native `enrollment` row Cancelled.
- *   3. Remove the learner's grant rows (ssg_grants).
- *   4. Void the QBO tax + grant invoice ONLY if no other still-present learner
- *      shares it (consolidated invoices cover multiple learners) — otherwise
- *      flag it for manual adjustment.
- *   5. Delete the company_application row.
+ *   3. Remove the learner from Google Calendar events, if present.
+ *   4. For shared tax invoices, reissue a clean invoice for remaining learners
+ *      when QuickBooks says the old invoice is still unsent and unpaid.
+ *      Otherwise void invoices only when no other still-present learner shares
+ *      them, and flag the rest for manual adjustment.
+ *   5. Archive the company_application row with an audit snapshot.
  *
- * If SSG cancel fails hard, that row is left untouched (NOT deleted) so the
- * admin can retry — we never orphan a live enrolment.
+ * If SSG cancel fails hard, that row is left active so the
+ * admin can retry - we never orphan a live enrolment.
  */
 
 interface CaRow {
   id: string;
   enrolment_id: string | null;
   course_run_id: string | null;
+  course_title: string | null;
+  course_start_date: string | null;
+  trainee_email: string | null;
+  enrolment_status: string | null;
+  auto_enrol_status: string | null;
+  grant_id: string | null;
+  grant_amount: string | null;
   invoice_id: string | null;
   invoice_doc_number: string | null;
   grant_invoice_id: string | null;
   grant_invoice_doc_number: string | null;
+  supporting_doc_drive_file_id: string | null;
+  ca_cancelled_at: string | null;
   employer_org_name: string | null;
   trainee_full_name: string | null;
 }
@@ -40,13 +54,25 @@ interface RowResult {
   id: string;
   trainee: string;
   deleted: boolean;
+  archived: boolean;
   steps: string[];
   error: string | null;
 }
 
+interface PreviewRow {
+  id: string;
+  trainee: string;
+  employer: string;
+  enrolmentId: string;
+  invoiceDocNumber: string;
+  grantInvoiceDocNumber: string;
+  actions: string[];
+  blockers: string[];
+}
+
 // SSG cancel of an enrolment that's already cancelled / not on SSG is, for our
 // purposes, a successful no-op rather than a failure. Match ONLY genuine
-// "nothing to cancel" signals — NOT a bare "cancel" substring, which also
+// "nothing to cancel" signals - NOT a bare "cancel" substring, which also
 // appears in real rejections like "cannot be cancelled in confirmed state"
 // (treating those as success would delete the row + void the invoice while the
 // enrolment is still live on TPGateway).
@@ -74,13 +100,23 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (ids.length === 0) {
       return res.status(400).json({ success: false, error: 'applicationIds is required' });
     }
+    if (ids.length > MAX_DELETE_BATCH) {
+      return res.status(400).json({
+        success: false,
+        error: `Too many rows selected. Cancel at most ${MAX_DELETE_BATCH} Company Application rows at a time.`,
+      });
+    }
 
     const rowsRes = await pool.query<CaRow>(
       `SELECT id, enrolment_id, course_run_id,
+              course_title, course_start_date, trainee_email,
+              enrolment_status, auto_enrol_status, grant_id, grant_amount,
               invoice_id, invoice_doc_number, grant_invoice_id, grant_invoice_doc_number,
+              supporting_doc_drive_file_id, ca_cancelled_at,
               employer_org_name, trainee_full_name
          FROM public.company_application
-        WHERE id = ANY($1::uuid[])`,
+        WHERE id = ANY($1::uuid[])
+          AND ca_cancelled_at IS NULL`,
       [ids]
     );
     const rows = rowsRes.rows;
@@ -88,16 +124,80 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(404).json({ success: false, error: 'No matching rows found' });
     }
 
+    const previewRows: PreviewRow[] = rows.map((row) => {
+      const blockers: string[] = [];
+      const actions: string[] = ['Archive the Company Application row; it will be hidden from the normal view but kept for audit.'];
+      if (row.enrolment_id) {
+        if (row.course_run_id) {
+          actions.push('Cancel the live SSG/TPGateway enrolment.');
+          actions.push('Mark the local LMS enrolment as Cancelled.');
+        } else {
+          blockers.push('Missing course run id; cannot safely cancel the SSG enrolment.');
+        }
+      }
+      if (row.trainee_email && row.course_run_id && row.course_title) {
+        actions.push('Remove the learner from matching Google Calendar events.');
+      }
+      if (row.invoice_id) {
+        actions.push('Void or reissue the tax invoice only after checking whether other active learners still share it.');
+      }
+      if (row.grant_invoice_id) {
+        actions.push('Void the grant invoice only if no other active learner still shares it.');
+      }
+      if (row.supporting_doc_drive_file_id) {
+        actions.push('Keep the uploaded supporting document in Drive; no Drive file will be deleted.');
+      }
+      return {
+        id: row.id,
+        trainee: row.trainee_full_name || '(unnamed)',
+        employer: row.employer_org_name || '',
+        enrolmentId: row.enrolment_id || '',
+        invoiceDocNumber: row.invoice_doc_number || '',
+        grantInvoiceDocNumber: row.grant_invoice_doc_number || '',
+        actions,
+        blockers,
+      };
+    });
+
+    const blockedPreviewRows = previewRows.filter(r => r.blockers.length > 0);
+    if (req.body?.dryRun === true) {
+      return res.status(200).json({
+        success: true,
+        dryRun: true,
+        maxBatch: MAX_DELETE_BATCH,
+        rowCount: rows.length,
+        blockedCount: blockedPreviewRows.length,
+        rows: previewRows,
+      });
+    }
+    if (req.body?.confirm !== true) {
+      return res.status(409).json({
+        success: false,
+        error: 'Preview required before cancelling Company Application rows.',
+        previewRequired: true,
+        maxBatch: MAX_DELETE_BATCH,
+        rows: previewRows,
+      });
+    }
+    if (blockedPreviewRows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'One or more selected rows cannot be safely cancelled.',
+        rows: previewRows,
+      });
+    }
+
     const results: RowResult[] = [];
     const warnings: string[] = [];
-    const deletedRows: CaRow[] = [];
+    const archivedRows: CaRow[] = [];
 
-    // ── Phase 1: cancel enrolment + local cleanup, then delete the row ──
+    // Phase 1: cancel enrolment + local cleanup, then archive the row.
     for (const row of rows) {
       const rr: RowResult = {
         id: row.id,
         trainee: row.trainee_full_name || '(unnamed)',
         deleted: false,
+        archived: false,
         steps: [],
         error: null,
       };
@@ -105,7 +205,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // 1. Cancel the SSG enrolment (if one was ever created).
       if (row.enrolment_id) {
         if (!row.course_run_id) {
-          rr.error = 'Cannot cancel SSG enrolment — missing course run id. Row left in place.';
+          rr.error = 'Cannot cancel SSG enrolment - missing course run id. Row left in place.';
           results.push(rr);
           continue;
         }
@@ -137,36 +237,72 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
       }
 
-      // 3. Remove grant rows (keyed by the SSG enrolment reference).
-      if (row.enrolment_id) {
+      // 3. Remove the learner from Google Calendar events, if present.
+      if (row.trainee_email && row.course_run_id && row.course_title) {
         try {
-          const g = await pool.query(`DELETE FROM public.ssg_grants WHERE enrollment_id = $1`, [row.enrolment_id]);
-          if ((g.rowCount ?? 0) > 0) rr.steps.push(`grant removed (${g.rowCount})`);
+          const cal = await removeCaLearnerFromCalendar(
+            row.trainee_email,
+            row.course_run_id,
+            row.course_title,
+            row.course_start_date
+          );
+          if (cal.removedFrom > 0) rr.steps.push(`calendar removed (${cal.removedFrom})`);
         } catch (e) {
-          console.warn('[ca-delete] grant delete failed:', row.id, e);
+          const message = e instanceof Error ? e.message : String(e);
+          warnings.push(`Could not remove ${rr.trainee} from Google Calendar: ${message}`);
+          console.warn('[ca-delete] calendar remove failed:', row.id, message);
         }
       }
 
-      // 4. Delete the company_application row.
+      // 4. Keep Drive evidence. The previous version deleted the supporting doc;
+      // for an audit-friendly cancellation flow we retain it and archive the row.
+      if (row.supporting_doc_drive_file_id) {
+        rr.steps.push('supporting doc retained');
+      }
+
+      // 5. Archive the company_application row instead of hard-deleting it.
       try {
-        const del = await pool.query(
-          `DELETE FROM public.company_application WHERE id = $1 RETURNING id`,
-          [row.id]
+        const actor =
+          (req as any).authUser?.email ||
+          (req as any).authUser?.username ||
+          (req as any).authUser?.id ||
+          'unknown';
+        const snapshot = {
+          ...row,
+          archivedByApi: '/api/admin/ca-delete',
+          archivedAt: new Date().toISOString(),
+        };
+        const archived = await pool.query(
+          `UPDATE public.company_application
+              SET ca_cancelled_at          = NOW(),
+                  ca_cancelled_by          = $2,
+                  ca_cancellation_snapshot = $3::jsonb,
+                  enrolment_status         = CASE WHEN COALESCE(enrolment_id, '') <> '' THEN 'Cancelled' ELSE enrolment_status END,
+                  auto_enrol_status        = 'cancelled',
+                  updated_at               = NOW()
+            WHERE id = $1
+              AND ca_cancelled_at IS NULL
+            RETURNING id`,
+          [row.id, String(actor), JSON.stringify(snapshot)]
         );
-        if (del.rowCount) {
+        if (archived.rowCount) {
           rr.deleted = true;
-          deletedRows.push(row);
+          rr.archived = true;
+          rr.steps.push('row archived');
+          archivedRows.push(row);
         }
       } catch (e) {
-        rr.error = `Failed to delete row: ${e instanceof Error ? e.message : String(e)}`;
+        rr.error = `Failed to archive row: ${e instanceof Error ? e.message : String(e)}`;
       }
       results.push(rr);
     }
 
-    // ── Phase 2: void invoices, but only those no surviving learner shares ──
-    // Computed AFTER deletions so a consolidated invoice is voided only when
-    // every learner on it is now gone.
+    // Phase 2: adjust or void invoices AFTER deletions.
+    // A shared tax invoice can be safely reissued for the remaining learners if
+    // it has not been emailed or paid. Grant invoices remain per-learner cleanup:
+    // void only when no surviving learner still references them.
     const voided = new Set<string>();
+    const adjustedSharedInvoices = new Set<string>();
 
     const invoiceTargets = [
       { field: 'invoice_id' as const, docField: 'invoice_doc_number' as const, label: 'Tax invoice' },
@@ -175,27 +311,40 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     for (const t of invoiceTargets) {
       const invoiceIds = Array.from(
-        new Set(deletedRows.map(r => String(r[t.field] || '').trim()).filter(Boolean))
+        new Set(archivedRows.map(r => String(r[t.field] || '').trim()).filter(Boolean))
       );
       if (invoiceIds.length === 0) continue;
 
       // Which of these invoices still have a surviving company_application row?
       const survivors = await pool.query(
         `SELECT DISTINCT ${t.field} AS inv FROM public.company_application
-          WHERE ${t.field} = ANY($1::text[])`,
+          WHERE ${t.field} = ANY($1::text[])
+            AND ca_cancelled_at IS NULL`,
         [invoiceIds]
       );
       const stillShared = new Set(survivors.rows.map((r: any) => String(r.inv)));
 
       for (const invId of invoiceIds) {
         if (voided.has(invId)) continue;
-        const sample = deletedRows.find(r => String(r[t.field] || '').trim() === invId);
+        const sample = archivedRows.find(r => String(r[t.field] || '').trim() === invId);
         const docNo = String(sample?.[t.docField] || invId);
         const employer = sample?.employer_org_name || '?';
 
+        if (stillShared.has(invId) && t.field === 'invoice_id') {
+          if (adjustedSharedInvoices.has(invId)) continue;
+          adjustedSharedInvoices.add(invId);
+          const adjustment = await reissueSharedCompanyApplicationInvoice(invId);
+          if (!adjustment.reissued) {
+            warnings.push(
+              `${t.label} ${docNo} (${employer}) is shared with other learners still in the system and could not be adjusted automatically: ${adjustment.reason || 'unknown reason'} Adjust it manually in QuickBooks.`
+            );
+          }
+          continue;
+        }
+
         if (stillShared.has(invId)) {
           warnings.push(
-            `${t.label} ${docNo} (${employer}) is shared with other learners still in the system — void or adjust it manually in QuickBooks.`
+            `${t.label} ${docNo} (${employer}) is shared with other learners still in the system - void or adjust it manually in QuickBooks.`
           );
           continue;
         }
@@ -208,10 +357,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
     }
 
-    const failed = results.filter(r => !r.deleted);
+    const failed = results.filter(r => !r.archived);
     return res.status(200).json({
       success: true,
-      deleted: deletedRows.length,
+      deleted: archivedRows.length,
+      archived: archivedRows.length,
       failedCount: failed.length,
       warnings,
       results,

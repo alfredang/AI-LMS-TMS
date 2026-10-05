@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { ensureCompanyApplicationsTable } from '../../../lib/companyApplicationsTable';
 import {
   processCompanyApplication,
   sweepGrantsByCourseRunForApplications,
@@ -52,6 +53,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
+    await ensureCompanyApplicationsTable();
+
     const results: {
       id: string;
       success: boolean;
@@ -105,6 +108,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
               auto_enrol_error = CASE WHEN enrolment_id IS NULL THEN auto_enrol_error ELSE NULL END,
               updated_at = now()
         WHERE id = ANY($1::uuid[])
+          AND ca_cancelled_at IS NULL
           -- Re-classify both still-'pending' rows AND rows wrongly stuck at
           -- 'failed' that have since acquired an enrolment_id (the first pass
           -- stamped 'failed' before SSG returned the id). Genuinely-failed rows
@@ -183,6 +187,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
               auto_enrol_error = CASE WHEN enrolment_id IS NULL THEN auto_enrol_error ELSE NULL END,
               updated_at = now()
         WHERE id = ANY($1::uuid[])
+          AND ca_cancelled_at IS NULL
           AND (auto_enrol_status IN ('pending', 'enroled', 'grant_found')
                OR (auto_enrol_status = 'failed' AND enrolment_id IS NOT NULL))`,
       [uniqueIds],

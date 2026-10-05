@@ -85,6 +85,12 @@ const ORDERED_COLUMNS: Array<{ name: string; type: string }> = [
   { name: 'supporting_doc_verification_status', type: 'text' },
   { name: 'supporting_doc_verified_at', type: 'timestamptz' },
   { name: 'supporting_doc_verified_by', type: 'text' },
+  // Cancel/delete safety: cancelled CA rows are archived instead of hard-deleted.
+  // The JSON snapshot preserves the original operational values before any
+  // future cleanup changes those columns.
+  { name: 'ca_cancelled_at', type: 'timestamptz' },
+  { name: 'ca_cancelled_by', type: 'text' },
+  { name: 'ca_cancellation_snapshot', type: "jsonb DEFAULT '{}'::jsonb" },
 ];
 
 /**
@@ -169,8 +175,8 @@ export function ensureCompanyApplicationsTable(): Promise<void> {
       // validation, not blocked at the DB layer with an opaque 23505 error.
       //
       // Existing duplicates would block index creation, so we collapse them
-      // first by keeping the newest row per dedup key and deleting the rest.
-      // Safe because the collapsed rows have identical critical fields.
+      // first by keeping the newest active row per dedup key and archiving the
+      // rest. Do not hard-delete: CA rows are audit records.
       await pool.query(`
         WITH dups AS (
           SELECT id,
@@ -183,15 +189,43 @@ export function ensureCompanyApplicationsTable(): Promise<void> {
                    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
                  ) AS rn
             FROM public.company_application
-           WHERE trainee_nric IS NOT NULL AND trainee_nric <> ''
-             AND course_title IS NOT NULL AND course_title <> ''
-             AND course_start_date IS NOT NULL AND course_start_date <> ''
+            WHERE ca_cancelled_at IS NULL
+              AND trainee_nric IS NOT NULL AND trainee_nric <> ''
+              AND course_title IS NOT NULL AND course_title <> ''
+              AND course_start_date IS NOT NULL AND course_start_date <> ''
         )
-        DELETE FROM public.company_application
-         WHERE id IN (SELECT id FROM dups WHERE rn > 1);
+        UPDATE public.company_application ca
+           SET ca_cancelled_at = COALESCE(ca.ca_cancelled_at, now()),
+               ca_cancelled_by = COALESCE(ca.ca_cancelled_by, 'system:dedupe-index-migration'),
+               ca_cancellation_snapshot =
+                 COALESCE(NULLIF(ca.ca_cancellation_snapshot, '{}'::jsonb), to_jsonb(ca))
+                 || jsonb_build_object(
+                      'archivedByApi', 'ensureCompanyApplicationsTable',
+                      'archivedReason', 'duplicate company_application dedup key',
+                      'archivedAt', now()
+                    ),
+               auto_enrol_status = CASE
+                 WHEN COALESCE(ca.auto_enrol_status, '') = '' THEN 'cancelled'
+                 ELSE ca.auto_enrol_status
+               END,
+               updated_at = now()
+         WHERE ca.id IN (SELECT id FROM dups WHERE rn > 1);
       `);
 
       await pool.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+              FROM pg_index i
+              JOIN pg_class c ON c.oid = i.indexrelid
+             WHERE c.relname = 'uq_company_application_dedup'
+               AND pg_get_indexdef(i.indexrelid) NOT ILIKE '%ca_cancelled_at IS NULL%'
+          ) THEN
+            DROP INDEX uq_company_application_dedup;
+          END IF;
+        END $$;
+
         CREATE UNIQUE INDEX IF NOT EXISTS uq_company_application_dedup
           ON public.company_application (
             LOWER(TRIM(trainee_nric)),
@@ -199,7 +233,8 @@ export function ensureCompanyApplicationsTable(): Promise<void> {
             LOWER(TRIM(course_title)),
             LOWER(TRIM(course_start_date))
           )
-          WHERE trainee_nric IS NOT NULL AND trainee_nric <> ''
+          WHERE ca_cancelled_at IS NULL
+            AND trainee_nric IS NOT NULL AND trainee_nric <> ''
             AND course_title IS NOT NULL AND course_title <> ''
             AND course_start_date IS NOT NULL AND course_start_date <> '';
       `);
