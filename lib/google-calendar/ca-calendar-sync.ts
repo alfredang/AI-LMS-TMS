@@ -534,3 +534,168 @@ export async function addCaLearnerToCalendar(
     return result;
   }
 }
+
+/**
+ * Removes a Company Application learner from all relevant Google Calendar
+ * events for a course run. Best-effort cleanup used when a CA row is deleted.
+ *
+ * Unlike the DA helper, this does not delete an event when the attendee list
+ * becomes empty; CA-created events may still be the class schedule shell.
+ */
+export async function removeCaLearnerFromCalendar(
+  learnerEmail: string,
+  courseRunUuid: string,
+  courseTitle: string,
+  fallbackStartDate?: string | Date | null
+): Promise<{ totalSessions: number; removedFrom: number }> {
+  const result = { totalSessions: 0, removedFrom: 0 };
+  if (!learnerEmail || !courseTitle) return result;
+
+  try {
+    const tpRes = await pool.query(
+      `SELECT sync_google_calendar, google_calendar_url FROM training_provider LIMIT 1`
+    );
+    if (!tpRes.rows[0]?.sync_google_calendar || !calendarWritesAllowed()) return result;
+
+    const credentials = await getGoogleCredentials(pool);
+    const oauth2Client = new google.auth.OAuth2(
+      credentials.clientId,
+      credentials.clientSecret,
+      'https://developers.google.com/oauthplayground'
+    );
+    oauth2Client.setCredentials({ refresh_token: credentials.refreshToken });
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    let calendarId = 'primary';
+    const calUrl = tpRes.rows[0].google_calendar_url || '';
+    if (calUrl) {
+      const cidMatch = calUrl.match(/[?&]cid=([^&]+)/);
+      if (cidMatch) {
+        try {
+          calendarId = Buffer.from(cidMatch[1], 'base64').toString('utf-8');
+        } catch {
+          calendarId = cidMatch[1];
+        }
+      } else if (calUrl.includes('@')) {
+        calendarId = calUrl;
+      }
+    }
+
+    const runMetaRes = await pool.query(
+      `SELECT id as resolved_uuid
+         FROM course_run
+        WHERE (id::text = $1 OR course_run_id = $1)
+        LIMIT 1`,
+      [courseRunUuid]
+    );
+    const resolvedUuid = runMetaRes.rows[0]?.resolved_uuid || courseRunUuid;
+
+    const sessionRes = await pool.query(
+      `SELECT start_date::text as start_date
+         FROM course_session
+        WHERE course_run_id::text = $1 AND (deleted IS NOT TRUE)
+        ORDER BY start_date ASC`,
+      [resolvedUuid]
+    );
+
+    let datesToSync: string[] = [];
+    if (sessionRes.rows.length > 0) {
+      datesToSync = sessionRes.rows.map(r => formatDbDate(r.start_date));
+    } else if (fallbackStartDate) {
+      datesToSync = [formatDbDate(fallbackStartDate)];
+    } else {
+      const crRes = await pool.query(
+        `SELECT start_date::text
+           FROM course_run
+          WHERE id::text = $1 OR course_run_id = $1
+          LIMIT 1`,
+        [courseRunUuid]
+      );
+      if (crRes.rows[0]?.start_date) {
+        datesToSync = [formatDbDate(crRes.rows[0].start_date)];
+      }
+    }
+
+    const sortedDates = Array.from(new Set(datesToSync.filter(Boolean))).sort();
+    if (sortedDates.length === 0) return result;
+    result.totalSessions = sortedDates.length;
+
+    const minD = new Date(sortedDates[0] + 'T00:00:00Z');
+    minD.setDate(minD.getDate() - 3);
+    const maxD = new Date(sortedDates[sortedDates.length - 1] + 'T23:59:59Z');
+    maxD.setDate(maxD.getDate() + 3);
+
+    const eventsResponse = await calendar.events.list({
+      calendarId,
+      timeMin: minD.toISOString(),
+      timeMax: maxD.toISOString(),
+      singleEvents: true,
+      maxResults: 2500,
+    });
+
+    const allEvents = eventsResponse.data.items || [];
+    const eventIds = new Set<string>();
+    for (let i = 0; i < sortedDates.length; i++) {
+      const targetDate = sortedDates[i];
+      const dayNumber = i + 1;
+      const dateAndTitleMatches = allEvents.filter(evt => {
+        if (!titlesProbablyMatch(courseTitle, evt.summary || '')) return false;
+        const evtDate = evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '';
+        return evtDate === targetDate;
+      });
+
+      const expectedDayRegex = new RegExp(`\\bday\\s*[-:]?\\s*${dayNumber}\\b`, 'i');
+      const strictDayMatches = dateAndTitleMatches.filter(evt => expectedDayRegex.test((evt.summary || '').toLowerCase()));
+      const matchedEvents = strictDayMatches.length > 0 ? strictDayMatches : dateAndTitleMatches;
+      for (const evt of matchedEvents) {
+        const id = evt.recurringEventId || evt.id;
+        if (id) eventIds.add(id);
+      }
+    }
+
+    const learnerEmailLower = learnerEmail.trim().toLowerCase();
+    const removeAttendeeUnderLock = async (eventId: string) => {
+      const lockKey = `ca-cal-evt-${eventId}`;
+      const lockId = parseInt(crypto.createHash('sha256').update(lockKey).digest('hex').slice(0, 15), 16);
+      const lockClient = await pool.connect();
+      let locked = false;
+      try {
+        await lockClient.query('SELECT pg_advisory_lock($1)', [lockId]);
+        locked = true;
+        const fresh = await calendar.events.get({ calendarId, eventId });
+        const attendees = fresh.data.attendees || [];
+        if (!attendees.some((a: any) => (a.email || '').toLowerCase() === learnerEmailLower)) {
+          return;
+        }
+        const nextAttendees = attendees.filter((a: any) => (a.email || '').toLowerCase() !== learnerEmailLower);
+        await calendar.events.patch({
+          calendarId,
+          eventId,
+          requestBody: { attendees: nextAttendees },
+          sendUpdates: 'none',
+        });
+        result.removedFrom++;
+      } finally {
+        if (locked) {
+          await lockClient.query('SELECT pg_advisory_unlock($1)', [lockId]).catch(unlockErr => {
+            console.warn(`[ca-calendar-remove] advisory_unlock failed:`, unlockErr instanceof Error ? unlockErr.message : unlockErr);
+          });
+        }
+        lockClient.release();
+      }
+    };
+
+    for (const eventId of eventIds) {
+      try {
+        await removeAttendeeUnderLock(eventId);
+      } catch (err) {
+        console.error(`❌ [ca-calendar-remove] Failed to remove ${learnerEmail} from event ${eventId}:`, err);
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error(`❌ [ca-calendar-remove] Fatal error:`, error);
+    return result;
+  }
+}
