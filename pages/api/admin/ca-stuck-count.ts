@@ -24,7 +24,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       SELECT COUNT(*)::int AS count
         FROM public.company_application
        WHERE
-         -- MUST match the isStuck rule in fetch-company-applications.ts. This
+         ca_cancelled_at IS NULL
+         AND
+          -- MUST match the isStuck rule in fetch-company-applications.ts. This
          -- number is a promise that the page can show you that many rows; when
          -- the two drift the badge points at rows the page then filters away,
          -- which is exactly what a badge must never do.
