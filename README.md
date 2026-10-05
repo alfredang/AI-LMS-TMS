@@ -267,7 +267,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 | **Developer** | Course developers | Create and edit course content, assessments, learning materials, SEO metadata generation |
 | **Admin** | System administrators | Full class management, trainer/learner assignment, TPG management, certificate generation, ticket system, workflow guides |
 | **Finance** | Financial operations | Financial dashboard, FMS automation, QuickBooks, claims, grants, personal/company invoice workflows, Bizfile lookup |
-| **Payroll** | Trainer payout operations | Manage payout tiers, per-class trainer payouts (WSQ auto-materialised + hand-entered non-WSQ classes), QuickBooks bill numbers, approval workflow, payout history (gated by `payroll_enabled` feature flag) |
+| **Payroll** | Trainer payout operations | Manage payout tiers, per-class trainer payouts (WSQ auto-materialised + hand-entered non-WSQ classes), QuickBooks bill numbers, approval workflow, payout history, and a per-class **Review Score** column listing each learner's overall course-feedback score (mean of the 1–5 star questions; 2 and below in red, above in green) to apply the no-payout-for-low-rating rule (gated by `payroll_enabled` feature flag) |
 | **Training Provider** | Organization admins | Company settings, user/role management, finance management, scheduler, webhooks, email templates, API documentation |
 
 ## Technology Stack

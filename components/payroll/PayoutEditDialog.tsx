@@ -37,6 +37,8 @@ export interface PayoutRow {
   bill_status?: 'pending' | 'posted' | 'failed' | 'voided' | null;
   /** Current enrolment count for the class — may differ from the frozen figure. */
   live_learners?: number | null;
+  /** Each learner's overall feedback score (1-5) for the class — WSQ rows only. */
+  review_scores?: number[];
 }
 
 /** The invoice a save triggered, when marking a payout completed raised one. */
