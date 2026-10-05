@@ -38,12 +38,15 @@ async function ensureColumns() {
       ADD COLUMN IF NOT EXISTS ca_auto_send_invoice_email boolean DEFAULT false,
       ADD COLUMN IF NOT EXISTS ca_invoice_email_cc text,
       ADD COLUMN IF NOT EXISTS ca_invoice_email_bcc text,
-      -- Whether the AUTOMATIC send after invoicing waits for supporting-doc
-      -- verification. The manual "Send Invoice Email" button has always
-      -- required it; the pipeline never did. That gap was hardcoded and
-      -- invisible — this makes it a visible choice. Default false keeps the
-      -- behaviour the pipeline has always had.
-      ADD COLUMN IF NOT EXISTS ca_auto_send_requires_doc_verification boolean DEFAULT false
+      -- Historical compatibility column. This is now always true:
+      -- supporting documents must be verified before any CA invoice email
+      -- can be sent, whether automatic or manual.
+      ADD COLUMN IF NOT EXISTS ca_auto_send_requires_doc_verification boolean DEFAULT true
+  `);
+  await pool.query(`
+    UPDATE training_provider
+       SET ca_auto_send_requires_doc_verification = true
+     WHERE ca_auto_send_requires_doc_verification IS DISTINCT FROM true
   `);
 }
 
@@ -69,7 +72,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const result = await pool.query(
         `SELECT
             COALESCE(ca_auto_send_invoice_email, false) AS value,
-            COALESCE(ca_auto_send_requires_doc_verification, false) AS requires_doc_verification,
+            true AS requires_doc_verification,
             ca_invoice_email_cc AS cc,
             ca_invoice_email_bcc AS bcc
          FROM training_provider
@@ -88,14 +91,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     }
 
     if (req.method === 'POST') {
-      const { value, cc, bcc, importFromQuickBooks, requiresDocVerification } = req.body || {};
+      const { value, cc, bcc, importFromQuickBooks } = req.body || {};
       if (value !== undefined && typeof value !== 'boolean') {
         return res.status(400).json({ success: false, error: 'value must be a boolean when provided' });
       }
-      if (requiresDocVerification !== undefined && typeof requiresDocVerification !== 'boolean') {
-        return res.status(400).json({ success: false, error: 'requiresDocVerification must be a boolean when provided' });
-      }
-
       if (importFromQuickBooks === true) {
         // Explicit user action — use the bounded pull so a misbehaving QBO
         // can't lock up the UI. Surface the error to the client instead.
@@ -121,22 +120,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const normalizedCc = shouldUpdateCc ? normalizeRecipientList(cc) : null;
       const normalizedBcc = shouldUpdateBcc ? normalizeRecipientList(bcc) : null;
 
-      if (value !== undefined || shouldUpdateCc || shouldUpdateBcc || requiresDocVerification !== undefined) {
+      if (value !== undefined || shouldUpdateCc || shouldUpdateBcc) {
         await pool.query(
           `UPDATE training_provider
            SET ca_auto_send_invoice_email = COALESCE($1::boolean, ca_auto_send_invoice_email),
                ca_invoice_email_cc = CASE WHEN $2::boolean THEN $3::text ELSE ca_invoice_email_cc END,
                ca_invoice_email_bcc = CASE WHEN $4::boolean THEN $5::text ELSE ca_invoice_email_bcc END,
-               ca_auto_send_requires_doc_verification = COALESCE($6::boolean, ca_auto_send_requires_doc_verification),
+               ca_auto_send_requires_doc_verification = true,
                updated_at = NOW()`,
-          [value, shouldUpdateCc, normalizedCc, shouldUpdateBcc, normalizedBcc, requiresDocVerification]
+          [value, shouldUpdateCc, normalizedCc, shouldUpdateBcc, normalizedBcc]
         );
       }
 
       const result = await pool.query(
         `SELECT
             COALESCE(ca_auto_send_invoice_email, false) AS value,
-            COALESCE(ca_auto_send_requires_doc_verification, false) AS requires_doc_verification,
+            true AS requires_doc_verification,
             COALESCE(ca_invoice_email_cc, '') AS cc,
             COALESCE(ca_invoice_email_bcc, '') AS bcc
          FROM training_provider
