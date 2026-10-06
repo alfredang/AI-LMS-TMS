@@ -379,7 +379,6 @@ const AllCourseRunsView: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
   const [syncingGrnPdfs, setSyncingGrnPdfs] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
   // Import Course Run modal (Finance)
@@ -559,15 +558,19 @@ const AllCourseRunsView: React.FC = () => {
           action,
           enrolmentsFetched,
           enrolmentsUpserted,
+          enrolmentsAddedFromLocal,
           enrolmentSyncError,
         } = result.data;
+        const localPart = enrolmentsAddedFromLocal > 0
+          ? ` Added ${enrolmentsAddedFromLocal} more learner${enrolmentsAddedFromLocal === 1 ? '' : 's'} from LMS enrolments.`
+          : '';
         const enrolPart =
           typeof enrolmentsUpserted === 'number'
-            ? enrolmentSyncError
-              ? ` Enrolment sync failed: ${enrolmentSyncError}.`
+            ? (enrolmentSyncError
+              ? ` SSG enrolment pull failed: ${enrolmentSyncError}.`
               : enrolmentsFetched === 0
               ? ' SSG returned no enrolments for this run yet.'
-              : ` Imported ${enrolmentsUpserted}/${enrolmentsFetched} enrolment${enrolmentsFetched === 1 ? '' : 's'}.`
+              : ` Imported ${enrolmentsUpserted}/${enrolmentsFetched} enrolment${enrolmentsFetched === 1 ? '' : 's'}.`) + localPart
             : '';
         setImportResult({
           success: true,
@@ -582,60 +585,6 @@ const AllCourseRunsView: React.FC = () => {
       setImportResult({ success: false, message: 'Network error. Please try again.' });
     } finally {
       setImportLoading(false);
-    }
-  };
-
-  const runSync = async () => {
-    setSyncing(true);
-    setSyncToast(null);
-    lastVerifiedIdsRef.current = ''; // allow re-verification after SSG sync
-    try {
-      const todayIso = getLocalYMD(new Date());
-      const defaultFromIso = getLocalYMD(new Date(Date.now() - 30 * 86400_000));
-      const oneYearAheadIso = getLocalYMD(new Date(Date.now() + 365 * 86400_000));
-
-      const rawFrom = viewFrom || defaultFromIso;
-      const rawTo = viewTo || (includeFutureCourseRuns ? oneYearAheadIso : todayIso);
-      const from = rawFrom <= rawTo ? rawFrom : rawTo;
-      const to = rawFrom <= rawTo ? rawTo : rawFrom;
-
-      if (viewFrom && viewTo && (from !== viewFrom || to !== viewTo)) {
-        setViewFrom(from);
-        setViewTo(to);
-      }
-      const enrolmentIds = rows.map((r) => r.enrolment_id).filter((id): id is string => !!id);
-      const res = await ssgFetch('/api/finance/sync-all-course-runs-from-ssg', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from, to, enrolmentIds }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        const issues = Array.isArray(json.credentialIssues) ? json.credentialIssues.join(' · ') : '';
-        throw new Error([json.error || 'Sync failed', issues].filter(Boolean).join(' — '));
-      }
-      const up = json?.totals?.upsertedEnrolments ?? 0;
-      const byId = json?.totals?.refreshedByEnrolmentId ?? 0;
-      const gr = json?.totals?.enrolmentsForGrantRefresh ?? 0;
-      const cb = json?.totals?.claimsEnrollmentIdBackfilled ?? 0;
-      const errList = Array.isArray(json.errors) ? json.errors : [];
-      const errTail =
-        errList.length > 0
-          ? ` — ${errList.length} SSG warning(s); first: ${errList[0]?.error ?? JSON.stringify(errList[0])}`
-          : '';
-      const extraLocal = Number(json?.extraLocalEnrolmentIdsMerged ?? 0);
-      const modeHint =
-        json?.syncMode === 'viewOnly'
-          ? ` Fast mode: skipped slow per–course-run SSG search.${extraLocal > 0 ? ` Also refreshed ${extraLocal} recent local enrolment(s) not on this page.` : ''}`
-          : '';
-      setSyncToast(
-        `Synced ${up} enrolment row(s) (${byId} from visible list via SSG view), refreshed grants for ${gr}, backfilled ${cb} claim link(s).${modeHint}${errTail}`
-      );
-      await fetchData();
-    } catch (e) {
-      setSyncToast(e instanceof Error ? e.message : 'Sync failed');
-    } finally {
-      setSyncing(false);
     }
   };
 
@@ -1015,7 +964,7 @@ const AllCourseRunsView: React.FC = () => {
                   setViewTo(getLocalYMD(new Date()));
                   setPage(0);
                 }}
-                disabled={syncing || loading || queueing}
+                disabled={loading || queueing}
                 className="px-3 py-2 text-xs font-medium rounded-md border border-default bg-surface hover:bg-surface-hover text-on-surface disabled:opacity-40 transition-colors"
               >
                 Last 30 days
@@ -1023,7 +972,7 @@ const AllCourseRunsView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => { setViewFrom(''); setViewTo(''); setPage(0); }}
-                disabled={syncing || loading || queueing}
+                disabled={loading || queueing}
                 className="px-3 py-2 text-xs font-medium rounded-md border border-default bg-surface hover:bg-surface-hover text-on-surface disabled:opacity-40 transition-colors"
               >
                 Clear
@@ -1047,12 +996,6 @@ const AllCourseRunsView: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             {/* Left: data actions */}
             <div className="flex items-center gap-2 flex-wrap">
-              <Button onClick={() => void runSync()} disabled={syncing || queueing} className="gap-1.5">
-                {syncing
-                  ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Refreshing…</>
-                  : 'Refresh from SSG'
-                }
-              </Button>
               <Button
                 variant="outline"
                 onClick={() => {
@@ -1060,14 +1003,14 @@ const AllCourseRunsView: React.FC = () => {
                   setImportResult(null);
                   setImportRunId(searchedCrId || '');
                 }}
-                disabled={syncing || loading || queueing || sending}
+                disabled={loading || queueing || sending}
               >
                 Import course run
               </Button>
               <Button
                 variant="outline"
                 onClick={() => void syncGrnPdfs()}
-                disabled={syncingGrnPdfs || syncing || loading || queueing}
+                disabled={syncingGrnPdfs || loading || queueing}
               >
                 {syncingGrnPdfs ? 'Syncing GRN PDFs…' : 'Sync GRN PDFs'}
               </Button>
@@ -1137,7 +1080,7 @@ const AllCourseRunsView: React.FC = () => {
                 setImportResult(null);
                 setImportRunId(searchedCrId);
               }}
-              disabled={syncing || loading || queueing || sending}
+              disabled={loading || queueing || sending}
             >
               Import {searchedCrId}
             </button>

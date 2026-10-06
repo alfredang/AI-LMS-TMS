@@ -4,6 +4,7 @@ import pool from '../../../lib/db';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
+import { importSsgEnrolmentsForRun } from '../../../lib/services/consolidatedFinanceSync';
 
 function parseToISO(d: number | string | undefined): string | null {
   if (!d) return null;
@@ -52,12 +53,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   let raCode: string | null;
   let modeOfLearning: string;
 
-  try {
-    const credentials = await getSSGCredentialsService().getSSGCredentials(undefined, (req.headers['x-ssg-app'] as string) || undefined);
-    if (!credentials) {
-      return res.status(500).json({ success: false, error: 'SSG credentials not found' });
-    }
+  const ssgApp = (req.headers['x-ssg-app'] as string) || undefined;
+  const credentials = await getSSGCredentialsService().getSSGCredentials(undefined, ssgApp);
+  if (!credentials) {
+    return res.status(500).json({ success: false, error: 'SSG credentials not found' });
+  }
 
+  try {
     const ssgBaseUrl = process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
     const api = createSSGCourseAPI(ssgBaseUrl, credentials);
     const ssgResult = await api.viewCourseRun(courseRunId);
@@ -146,6 +148,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       action = 'created';
     }
 
+    // Also bring this run's learners into ssg_enrolments so they show on Consolidated
+    // Finance Data. No invoices are enqueued from here — only the Finance import does that.
+    const enrolments = await importSsgEnrolmentsForRun(courseRunId, credentials, { ssgApp });
+
     return res.status(200).json({
       success: true,
       action,
@@ -157,6 +163,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         endDate: endDateISO,
         modeOfLearning,
         raCode,
+        ...enrolments,
       },
     });
 

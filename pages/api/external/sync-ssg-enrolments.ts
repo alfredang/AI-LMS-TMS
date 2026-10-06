@@ -3,6 +3,7 @@ import pool from '../../../lib/db';
 import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { reconcileConsolidatedFinanceEnrolments } from '../../../lib/services/consolidatedFinanceSync';
 
 /**
  * Scheduler endpoint: pulls recent SSG enrolments and inserts new ones
@@ -129,6 +130,16 @@ async function _runAutomationInner(): Promise<{ success: boolean; inserted: numb
       console.error(`❌ [sync-ssg-enrolments] Error for ${dateIso}:`, dayErr.message);
       errors++;
     }
+  }
+
+  // ssg_enrolment_record is not what Consolidated Finance Data reads — carry new
+  // enrolments (and any LMS-only ones) through to ssg_enrolments as well.
+  try {
+    const added = await reconcileConsolidatedFinanceEnrolments();
+    if (added.length > 0) console.log(`📋 [sync-ssg-enrolments] added ${added.length} enrolment(s) to ssg_enrolments`);
+  } catch (e) {
+    console.error('❌ [sync-ssg-enrolments] ssg_enrolments reconcile failed:', e instanceof Error ? e.message : e);
+    errors++;
   }
 
   console.log(`📋 [sync-ssg-enrolments] Done: inserted=${inserted}, skipped=${skipped}, errors=${errors}, daysChecked=${daysToCheck}`);

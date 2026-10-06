@@ -754,10 +754,17 @@ export const UpcomingClassesTable: React.FC<UpcomingClassesTableProps> = ({
             });
             const result = await response.json();
             if (result.success) {
-                const { courseTitle, courseRunId: runId, startDate, endDate, action } = result.data;
+                const {
+                    courseTitle, courseRunId: runId, startDate, endDate, action,
+                    enrolmentsFetched, enrolmentsAddedFromLocal, enrolmentSyncError,
+                } = result.data;
+                const learnerCount = (enrolmentsFetched ?? 0) + (enrolmentsAddedFromLocal ?? 0);
+                const enrolPart = enrolmentSyncError
+                    ? ` SSG enrolment pull failed (${enrolmentSyncError}); ${enrolmentsAddedFromLocal ?? 0} learner(s) added to Consolidated Finance from LMS data.`
+                    : ` ${learnerCount} learner(s) synced to Consolidated Finance.`;
                 setImportResult({
                     success: true,
-                    message: `Course run ${action === 'created' ? 'added' : 'updated'} successfully.`,
+                    message: `Course run ${action === 'created' ? 'added' : 'updated'} successfully.${enrolPart}`,
                     detail: `${courseTitle} (Run ID: ${runId}, ${startDate ?? 'N/A'} → ${endDate ?? 'N/A'})`,
                 });
                 fetchUpcomingClasses();

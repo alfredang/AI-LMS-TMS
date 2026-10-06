@@ -4,6 +4,7 @@ import pool from '../../../lib/db';
 import { ensureInvoiceJobsTable } from '../../../lib/services/invoiceJobs';
 import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
 import { ensureSsgEnrolmentGrantRollupColumns } from '../../../lib/services/grantImport/ensureSsgEnrolmentGrantRollups';
+import { reconcileConsolidatedFinanceEnrolmentsThrottled } from '../../../lib/services/consolidatedFinanceSync';
 
 /** Normalized course run start date as YYYY-MM-DD text (matches sync-all-course-runs-from-ssg). */
 const RUN_START_NORM_SQL = `(
@@ -31,6 +32,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
     await ensureInvoiceJobsTable();
     await ensureSsgEnrolmentGrantRollupColumns();
+    // Learners enrolled through any LMS path (or pulled by the scheduler) but never written
+    // to ssg_enrolments would otherwise be invisible here. Insert-only, throttled to 1/min.
+    await reconcileConsolidatedFinanceEnrolmentsThrottled();
 
     const backfill = await pool.query(
       `SELECT ij.enrolment_id::text AS enrolment_id
