@@ -18,8 +18,13 @@ import type { FeedbackFormSection } from '@app-types';
  * course 2 or below. Best-effort — a feedback lookup failure must not take the
  * payout list down with it.
  */
-async function loadReviewScores(courseRunIds: string[]): Promise<Map<string, number[]>> {
-  const scores = new Map<string, number[]>();
+export interface LearnerReviewScore {
+  learner_name: string;
+  score: number;
+}
+
+async function loadReviewScores(courseRunIds: string[]): Promise<Map<string, LearnerReviewScore[]>> {
+  const scores = new Map<string, LearnerReviewScore[]>();
   if (courseRunIds.length === 0) return scores;
   try {
     const tmpl = await pool.query(`SELECT sections FROM feedback_form_template ORDER BY created_at ASC LIMIT 1`);
@@ -31,7 +36,7 @@ async function loadReviewScores(courseRunIds: string[]): Promise<Map<string, num
     if (ratingIds.length === 0) return scores;
 
     const r = await pool.query(
-      `SELECT course_run_id, answers FROM feedback_form_response
+      `SELECT course_run_id, learner_name, answers FROM feedback_form_response
         WHERE course_run_id = ANY($1::uuid[])
         ORDER BY submitted_at ASC`,
       [courseRunIds]
@@ -44,7 +49,10 @@ async function loadReviewScores(courseRunIds: string[]): Promise<Map<string, num
       if (vals.length === 0) continue;
       const avg = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
       const list = scores.get(row.course_run_id) || [];
-      list.push(avg);
+      list.push({
+        learner_name: String(row.learner_name || answers.learner_name || '').trim() || 'Learner',
+        score: avg,
+      });
       scores.set(row.course_run_id, list);
     }
   } catch (e) {

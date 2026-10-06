@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon, IconName } from '../ui/Icon';
 import PayoutEditDialog, { PayoutRow, RaisedBill } from './PayoutEditDialog';
 import { ConfirmPopup } from '../admin/ConfirmPopup';
@@ -104,27 +105,94 @@ const EstimateCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
   );
 };
 
+const fmtScore = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+// 2 and below is red — no trainer payment is made for that learner.
+const scoreColor = (n: number) =>
+  n <= 2 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400';
+
 /**
- * Each learner's overall course review score (mean of their 1-5 star answers).
- * A score of 2 or below is red — no trainer payment is made for that learner —
- * and anything above is green.
+ * The class's average review score (mean of each learner's overall score) plus
+ * a link that pops up the per-learner scores, so the row stays one line. The
+ * link turns red when any single learner scored 2 or below, since a healthy
+ * class average can otherwise hide a learner the trainer won't be paid for.
  */
 const ReviewScoreCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
-  const scores = row.review_scores || [];
-  if (scores.length === 0) return <span className="text-on-surface-secondary">-</span>;
+  const [open, setOpen] = useState(false);
+  const reviews = row.review_scores || [];
+  if (reviews.length === 0) return <span className="text-on-surface-secondary">-</span>;
+  const avg = Math.round((reviews.reduce((a, r) => a + r.score, 0) / reviews.length) * 10) / 10;
+  const lowCount = reviews.filter((r) => r.score <= 2).length;
   return (
-    <span
-      className="inline-flex flex-wrap gap-x-1.5 gap-y-0.5 tabular-nums"
-      title={`${scores.length} learner review${scores.length === 1 ? '' : 's'}. Scores of 2 and below are shown in red.`}
-    >
-      {scores.map((score, i) => (
-        <span
-          key={i}
-          className={`font-semibold ${score <= 2 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
-        >
-          {Number.isInteger(score) ? score : score.toFixed(1)}
-        </span>
-      ))}
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap tabular-nums">
+      <span className={`font-semibold ${scoreColor(avg)}`}>{fmtScore(avg)}</span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        title={
+          lowCount > 0
+            ? `${lowCount} learner${lowCount === 1 ? '' : 's'} scored 2 or below — click to view each learner's score`
+            : "Click to view each learner's score"
+        }
+        className={`text-xs underline underline-offset-2 hover:opacity-80 ${
+          lowCount > 0 ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-primary'
+        }`}
+      >
+        {reviews.length} review{reviews.length === 1 ? '' : 's'}
+        {lowCount > 0 && ` · ${lowCount} low`}
+      </button>
+      {open &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            // Portals still bubble through the React tree — keep clicks off the row.
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setOpen(false);
+            }}
+          >
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-sm max-h-[80vh] flex flex-col">
+              <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-default">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold leading-tight">Learner Review Scores</h2>
+                  <p className="text-sm font-medium mt-1 truncate" title={row.course_title || ''}>
+                    {row.course_title || '-'}
+                  </p>
+                  <p className="text-xs text-on-surface-secondary mt-0.5 truncate">
+                    {row.course_code || '-'} · {row.course_run_code || '-'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-on-surface-secondary"
+                  aria-label="Close"
+                >
+                  <Icon name={IconName.X} className="w-5 h-5" />
+                </button>
+              </div>
+              <ul className="overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700 px-5">
+                {reviews.map((r, i) => (
+                  <li key={i} className="flex items-center justify-between gap-3 py-2 text-sm">
+                    <span className="truncate" title={r.learner_name}>{r.learner_name}</span>
+                    <span className={`font-semibold tabular-nums ${scoreColor(r.score)}`}>{fmtScore(r.score)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-default text-sm">
+                <span className="text-on-surface-secondary">Class average</span>
+                <span className={`font-semibold tabular-nums ${scoreColor(avg)}`}>{fmtScore(avg)}</span>
+              </div>
+              <p className="px-5 pb-4 text-xs text-on-surface-secondary">
+                Each score is the learner's average of the 1–5 star questions. No trainer payment is made for
+                learners scoring 2 or below.
+              </p>
+            </div>
+          </div>,
+          document.body
+        )}
     </span>
   );
 };
@@ -949,7 +1017,7 @@ const PayoutListView: React.FC = () => {
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtCurrency(r.course_fee)}</td>
                   <td className="px-2 py-2.5 text-right tabular-nums"><EstimateCell row={r} /></td>
                   <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${r.actual_payout != null && r.actual_payout !== '' ? 'text-green-600 dark:text-green-400' : ''}`}>{fmtCurrency(r.actual_payout)}</td>
-                  <td className="px-3 py-2.5 max-w-[10rem]"><ReviewScoreCell row={r} /></td>
+                  <td className="px-3 py-2.5 whitespace-nowrap"><ReviewScoreCell row={r} /></td>
                   <td className="px-3 py-2.5"><StatusBadge status={r.status} /></td>
                   <td className="px-3 py-2.5 whitespace-nowrap"><BillNo value={r.bill_no} /></td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-on-surface-secondary">{fmtDate(r.payment_date)}</td>
@@ -1148,7 +1216,7 @@ const PayoutListView: React.FC = () => {
                                     <td className={`px-2 py-2.5 text-right font-semibold tabular-nums ${hasActual ? 'text-green-600 dark:text-green-400' : ''}`}>
                                       {fmtCurrency(r.actual_payout)}
                                     </td>
-                                    <td className="px-2 py-2.5 max-w-[10rem]"><ReviewScoreCell row={r} /></td>
+                                    <td className="px-2 py-2.5 whitespace-nowrap"><ReviewScoreCell row={r} /></td>
                                     <td className="px-2 py-2.5"><StatusBadge status={r.status} /></td>
                                     <td className="px-2 py-2.5 whitespace-nowrap"><BillNo value={r.bill_no} /></td>
                                     <td className="px-2 py-2.5 whitespace-nowrap text-on-surface-secondary">{fmtDate(r.payment_date)}</td>

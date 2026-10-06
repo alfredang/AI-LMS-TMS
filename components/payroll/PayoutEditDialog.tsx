@@ -38,7 +38,7 @@ export interface PayoutRow {
   /** Current enrolment count for the class — may differ from the frozen figure. */
   live_learners?: number | null;
   /** Each learner's overall feedback score (1-5) for the class — WSQ rows only. */
-  review_scores?: number[];
+  review_scores?: { learner_name: string; score: number }[];
 }
 
 /** The invoice a save triggered, when marking a payout completed raised one. */
