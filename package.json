@@ -12,7 +12,8 @@
     "test": "node --import tsx --test tests/**/*.test.ts",
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
-    "check:api-auth": "node scripts/check-api-auth.js"
+    "check:api-auth": "node scripts/check-api-auth.js",
+    "tpg:renewal-sync": "node scripts/tpg-renewal-sync.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.97",

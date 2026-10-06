@@ -338,6 +338,12 @@ export interface Course {
   actualRenewDate?: string | null;
   /** SSG/TPGateway renewal application number (course.renewal_application_no). */
   renewalApplicationNo?: string | null;
+  /** Submission type of the latest matched TPG application in the recent window. */
+  submissionType?: string | null;
+  /** TRAQOM response rate from the course-related report, in 0–100 percent units. */
+  traqomResponseRate?: number | null;
+  /** TRAQOM quality rating from the course-related report, on a 0–5 scale. */
+  traqomQualityRating?: number | null;
   casScore?: number | null;
   esScore?: number | null;
   isLeaderboardEnabled?: boolean;

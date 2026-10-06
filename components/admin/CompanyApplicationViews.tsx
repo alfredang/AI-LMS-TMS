@@ -701,10 +701,6 @@ const CaEmailToggleBanner: React.FC = () => {
   const [emailToggleSaving, setEmailToggleSaving] = useState(false);
   const [invoiceEmailCc, setInvoiceEmailCc] = useState('');
   const [invoiceEmailBcc, setInvoiceEmailBcc] = useState('');
-  // The automatic send after invoicing has always gone out WITHOUT waiting for
-  // supporting-doc verification, while the manual button refuses without it.
-  // That difference used to be hardcoded where nobody could see it.
-  const [autoSendRequiresDocs, setAutoSendRequiresDocs] = useState(false);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -714,7 +710,6 @@ const CaEmailToggleBanner: React.FC = () => {
         if (ctrl.signal.aborted) return;
         if (j?.success) {
           setEmailToggleOn(!!j.value);
-          setAutoSendRequiresDocs(!!j.requiresDocVerification);
           setInvoiceEmailCc(j.cc || '');
           setInvoiceEmailBcc(j.bcc || '');
         }
@@ -737,26 +732,6 @@ const CaEmailToggleBanner: React.FC = () => {
       if (!json.success) throw new Error(json.error || 'Toggle failed');
     } catch (err) {
       setEmailToggleOn(!next);
-      alert(`Failed to update setting: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    } finally {
-      setEmailToggleSaving(false);
-    }
-  };
-
-  const handleAutoSendDocsToggle = async () => {
-    const next = !autoSendRequiresDocs;
-    setEmailToggleSaving(true);
-    setAutoSendRequiresDocs(next);
-    try {
-      const res = await fetch('/api/admin/ca-email-toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requiresDocVerification: next }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Save failed');
-    } catch (err) {
-      setAutoSendRequiresDocs(!next);
       alert(`Failed to update setting: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setEmailToggleSaving(false);
@@ -829,30 +804,16 @@ const CaEmailToggleBanner: React.FC = () => {
         </button>
       </div>
 
-      {/* The two send paths follow different rules, and until now only one of
-          them said so. The manual button always waits for verified supporting
-          docs; the automatic send after invoicing never did. Surfacing it here
-          makes the difference a decision instead of a surprise. */}
       {emailToggleOn && (
-        <div className="mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-800/60 flex items-start justify-between gap-4 flex-wrap">
+        <div className="mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-800/60">
           <div className="min-w-0">
             <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">
-              Automatic send waits for verified supporting docs: {autoSendRequiresDocs ? 'YES' : 'NO'}
+              Supporting docs must be verified before any invoice email is sent.
             </p>
             <p className="text-[11px] mt-0.5 text-emerald-700 dark:text-emerald-300 max-w-2xl">
-              {autoSendRequiresDocs
-                ? 'The invoice email sent automatically after enrolment now follows the same rule as the manual button — nothing goes out until that learner’s documents are verified.'
-                : 'The invoice email sent automatically after enrolment goes out as soon as the invoice exists, even if supporting docs have not been checked. The manual Send Invoice Email button still requires them.'}
+              This applies to both automatic sends and the manual Send Invoice button.
             </p>
           </div>
-          <button
-            onClick={handleAutoSendDocsToggle}
-            disabled={emailToggleSaving}
-            className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${autoSendRequiresDocs ? 'bg-emerald-500 focus:ring-emerald-500' : 'bg-gray-300 dark:bg-gray-600 focus:ring-amber-500'} ${emailToggleSaving ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}
-            aria-label="Toggle whether the automatic invoice email waits for supporting-doc verification"
-          >
-            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${autoSendRequiresDocs ? 'translate-x-5' : 'translate-x-1'}`} />
-          </button>
         </div>
       )}
       <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
@@ -2302,9 +2263,10 @@ const QboCustomerRescueModal: React.FC<{
 const DeleteConfirmModal: React.FC<{
   rows: CompanyApplicationRow[];
   isDeleting: boolean;
+  previewMessage?: string | null;
   onConfirm: () => void;
   onClose: () => void;
-}> = ({ rows, isDeleting, onConfirm, onClose }) => {
+}> = ({ rows, isDeleting, previewMessage, onConfirm, onClose }) => {
   const count = rows.length;
 
   // Esc-to-close. Skipped while a delete is in flight so the user can't dismiss
@@ -2335,7 +2297,7 @@ const DeleteConfirmModal: React.FC<{
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
-                  Delete {count} Company Application row{count === 1 ? '' : 's'}?
+                  Cancel {count} Company Application row{count === 1 ? '' : 's'}?
                 </h3>
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 ring-1 ring-red-300/60 dark:ring-red-800/60">
                   Destructive
@@ -2343,9 +2305,12 @@ const DeleteConfirmModal: React.FC<{
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
                 For rows with an Enrolment ID this <strong className="text-red-700 dark:text-red-300">cancels the live TPGateway enrolment</strong>,
-                removes its grant, and voids the QBO invoice (only when no other learner shares it), then deletes the row.
+                marks the local LMS enrolment cancelled, removes calendar attendees, and voids the QBO invoice only when no other active learner shares it.
                 A <strong className="text-gray-800 dark:text-gray-200">consolidated invoice</strong> shared with other learners is
-                <strong className="text-gray-800 dark:text-gray-200"> not</strong> voided — you'll be told to adjust it manually in QuickBooks.
+                <strong className="text-gray-800 dark:text-gray-200"> not</strong> voided unless it can be safely reissued.
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+                The Company Application row is archived for audit instead of being hard-deleted, and uploaded supporting documents are retained.
               </p>
             </div>
           </div>
@@ -2411,6 +2376,11 @@ const DeleteConfirmModal: React.FC<{
               </tbody>
             </table>
           </div>
+          {previewMessage && (
+            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-200">
+              {previewMessage}
+            </div>
+          )}
         </div>
 
         <div className="px-6 py-4 border-t dark:border-gray-800 flex items-center justify-between gap-3 bg-white dark:bg-gray-900">
@@ -2435,12 +2405,12 @@ const DeleteConfirmModal: React.FC<{
               {isDeleting ? (
                 <>
                   <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white mr-2" />
-                  Deleting...
+                  Cancelling...
                 </>
               ) : (
                 <>
                   <Icon name={IconName.Delete} className="w-3.5 h-3.5 mr-1.5" />
-                  Confirm Delete
+                  Preview & Cancel
                 </>
               )}
             </button>
@@ -2467,6 +2437,14 @@ function parseRowWarnings(row: CompanyApplicationRow): PipelineWarning[] {
     return [];
   }
 }
+
+const duplicateMatchKey = (value: unknown) =>
+  String(value || '')
+    .replace(/\b(WSQ|CASL|IBF|VIRTUAL|EXTERNAL|HYBRID)\b/gi, ' ')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 
 export const ViewCompanyApplicationView: React.FC = () => {
   const [rows, setRows] = useState<CompanyApplicationRow[]>([]);
@@ -2515,6 +2493,8 @@ export const ViewCompanyApplicationView: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmRows, setDeleteConfirmRows] = useState<CompanyApplicationRow[]>([]);
+  const [deletePreviewMessage, setDeletePreviewMessage] = useState<string | null>(null);
   const [invoiceErrors, setInvoiceErrors] = useState<InvoiceError[]>([]);
   const [rescueTarget, setRescueTarget] = useState<RescueTarget | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -2655,6 +2635,25 @@ export const ViewCompanyApplicationView: React.FC = () => {
     return uen && runId ? `${uen}::${runId}` : null;
   };
 
+  const hasSuccessfulDuplicateRow = (row: CompanyApplicationRow): boolean => {
+    const rowId = String(row.id || '');
+    const traineeKey = duplicateMatchKey(row['Trainee FULL Name as on government ID*']);
+    const courseKey = duplicateMatchKey(row['Course Title*']);
+    if (!rowId || !traineeKey || !courseKey) return false;
+
+    return rows.some(other => {
+      if (String(other.id || '') === rowId) return false;
+      const sameTrainee = duplicateMatchKey(other['Trainee FULL Name as on government ID*']) === traineeKey;
+      const sameCourse = duplicateMatchKey(other['Course Title*']) === courseKey;
+      const enrolled = hasValue(other['Enrolment ID']);
+      const invoiced =
+        hasValue(other['Invoice ID']) ||
+        hasValue(other['Invoice Doc Number']) ||
+        String(other['Auto-Enrol Status'] || '').trim().toLowerCase() === 'invoiced';
+      return sameTrainee && sameCourse && enrolled && invoiced;
+    });
+  };
+
   const toggleRowSelected = (id: string, opts?: { singleRow?: boolean }) => {
     const target = rows.find(r => String(r.id || '') === id);
     const groupKey = target && !opts?.singleRow ? groupKeyForRow(target) : null;
@@ -2778,26 +2777,51 @@ export const ViewCompanyApplicationView: React.FC = () => {
       return;
     }
     setDeleteMessage(null);
+    setDeletePreviewMessage(null);
+    setDeleteConfirmRows(rows.filter(r => selectedIds.has(String(r.id || ''))));
     setDeleteConfirmOpen(true);
   };
 
   const confirmDelete = async () => {
+    const idsToDelete = deleteConfirmRows.map(r => String(r.id || '')).filter(Boolean);
+    if (idsToDelete.length === 0) {
+      setDeleteMessage('No rows selected for deletion.');
+      setDeleteConfirmOpen(false);
+      return;
+    }
+
     setIsDeleting(true);
     setDeleteMessage(null);
+    setDeletePreviewMessage('Checking selected rows before cancelling...');
     try {
+      const previewRes = await fetch('/api/admin/ca-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationIds: idsToDelete, dryRun: true }),
+      });
+      const previewData = await previewRes.json();
+      if (!previewRes.ok || !previewData.success) {
+        throw new Error(previewData.error || `Preview failed (${previewRes.status})`);
+      }
+      if (Number(previewData.blockedCount || 0) > 0) {
+        throw new Error('One or more selected rows cannot be safely cancelled. Check the preview and try again with only safe rows.');
+      }
+      setDeletePreviewMessage(`Preview passed for ${previewData.rowCount || idsToDelete.length} row${(previewData.rowCount || idsToDelete.length) === 1 ? '' : 's'}. Cancelling now...`);
+
       const res = await fetch('/api/admin/ca-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationIds: Array.from(selectedIds) }),
+        body: JSON.stringify({ applicationIds: idsToDelete, confirm: true }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Request failed (${res.status})`);
       }
-      const parts: string[] = [`Deleted ${data.deleted} row${data.deleted === 1 ? '' : 's'} (any linked enrolment/grant/invoice was cancelled).`];
+      const archived = Number(data.archived ?? data.deleted ?? 0);
+      const parts: string[] = [`Cancelled and archived ${archived} row${archived === 1 ? '' : 's'}. Linked SSG enrolments were cancelled where present; original CA rows were kept for audit.`];
       if (data.failedCount > 0) {
         const firstErr = Array.isArray(data.results)
-          ? data.results.find((r: any) => !r.deleted && r.error)?.error
+          ? data.results.find((r: any) => !r.archived && r.error)?.error
           : null;
         parts.push(`${data.failedCount} row${data.failedCount === 1 ? '' : 's'} left in place${firstErr ? ` — ${firstErr}` : ''}.`);
       }
@@ -2806,6 +2830,8 @@ export const ViewCompanyApplicationView: React.FC = () => {
       }
       setDeleteMessage(parts.join(' '));
       setSelectedIds(new Set());
+      setDeleteConfirmRows([]);
+      setDeletePreviewMessage(null);
       setDeleteConfirmOpen(false);
       void reloadRows();
     } catch (err) {
@@ -3891,7 +3917,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
               <button
                 onClick={() => void deleteSelected()}
                 disabled={isDeleting || selectedIds.size === 0}
-                title="Temporary admin cleanup: delete the selected Company Application rows. Does NOT remove the LMS enrolment, invoice, or Drive files — those must be cleaned manually if needed."
+                title="Cancel selected Company Application rows. Cancels live SSG enrolments, marks local enrolments cancelled, removes calendar attendees, archives rows for audit, and voids invoices only when no other active learner shares them."
                 className="inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-lg text-white bg-red-600 hover:bg-red-700 shadow-sm shadow-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isDeleting ? (
@@ -4425,10 +4451,15 @@ export const ViewCompanyApplicationView: React.FC = () => {
         })()}
         {deleteConfirmOpen && (
           <DeleteConfirmModal
-            rows={rows.filter(r => selectedIds.has(String(r.id || '')))}
+            rows={deleteConfirmRows}
             isDeleting={isDeleting}
+            previewMessage={deletePreviewMessage}
             onConfirm={() => void confirmDelete()}
-            onClose={() => setDeleteConfirmOpen(false)}
+            onClose={() => {
+              setDeleteConfirmOpen(false);
+              setDeleteConfirmRows([]);
+              setDeletePreviewMessage(null);
+            }}
           />
         )}
         {toastMsg && (
@@ -4506,6 +4537,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                 const warningTooltip = warnings.length > 0
                   ? warnings.map(w => `[${w.step}] ${w.error}`).join('\n')
                   : '';
+                const canDeleteAsSuccessfulDuplicate = isStuck && !!row.id && hasSuccessfulDuplicateRow(row);
                 const groupKey = (row['Invoice ID'] || '').trim() || String(row.id || `idx-${index}`);
                 const isHovered = hoveredGroupKey === groupKey;
                 return (
@@ -4540,9 +4572,27 @@ export const ViewCompanyApplicationView: React.FC = () => {
                         onChange={() => toggleRowSelected(String(row.id || ''))}
                         disabled={!row.id}
                         title="Click to select all rows from the same employer × course run · Alt-click to select just this row"
-                        className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 cursor-pointer"
+                        className={`${canDeleteAsSuccessfulDuplicate ? 'hidden' : ''} w-3.5 h-3.5 text-blue-600 rounded border-gray-300 cursor-pointer`}
                       />
-                      {isStuck && (
+                      {canDeleteAsSuccessfulDuplicate ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedIds(new Set());
+                            setDeleteConfirmRows([row]);
+                            setDeleteMessage(null);
+                            setDeletePreviewMessage(null);
+                            setDeleteConfirmOpen(true);
+                          }}
+                          disabled={isDeleting}
+                          title="Cancel and archive this failed duplicate row because a successful row already exists for the same learner and course"
+                          aria-label="Cancel and archive this failed duplicate company application row"
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Icon name={IconName.Delete} className="w-2.5 h-2.5" />
+                        </button>
+                      ) : isStuck ? (
                         <button
                           type="button"
                           onClick={() => setRowErrorPopup(row)}
@@ -4558,7 +4608,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
                         >
                           <Icon name={IconName.Warning} className="w-3 h-3" />
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </td>
                   <td className="px-2 py-1.5 text-center">

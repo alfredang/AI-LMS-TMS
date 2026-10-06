@@ -719,7 +719,10 @@ export async function processCompanyApplication(
       };
     }
 
-  const rowRes = await pool.query(`SELECT * FROM public.company_application WHERE id = $1`, [appId]);
+  const rowRes = await pool.query(
+    `SELECT * FROM public.company_application WHERE id = $1 AND ca_cancelled_at IS NULL`,
+    [appId]
+  );
   const row = rowRes.rows[0];
 
   if (!row) {
@@ -1130,22 +1133,15 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
     console.error('[bulkProcessCompanyApplications] invoice generation crashed (non-fatal):', err);
   }
 
-  // Auto-send the consolidated invoice email IF the master switch is ON. The
-  // switch (training_provider.ca_auto_send_invoice_email) is checked inside the
-  // send helper and fails closed (switch OFF → nothing sent, "held in test
-  // mode"). Per product decision, this automatic send does NOT wait for
-  // supporting-doc verification (skipDocVerification: true) — unlike the manual
-  // "Send Invoice Email" button, which still enforces it. Idempotent: the send
-  // helper atomically claims invoice_sent_at, so a later manual click won't
-  // double-send. Non-fatal — a send failure never breaks enrolment.
+  // Auto-send the consolidated invoice email IF the master switch is ON.
+  // The helper still requires supporting_doc_verification_status = verified,
+  // same as the manual Send Invoice button. Idempotent: it atomically claims
+  // invoice_sent_at, so a later manual click will not double-send. Non-fatal:
+  // a send failure never breaks enrolment.
   try {
-    const { sendCompanyApplicationInvoiceEmails, caAutoSendRequiresDocVerification } =
+    const { sendCompanyApplicationInvoiceEmails } =
       await import('./quickbooks/sendCompanyApplicationInvoiceEmails');
-    // Whether the automatic send waits for verified supporting docs is now a
-    // setting rather than a hardcoded skip. Default keeps today's behaviour.
-    const emailSummary = await sendCompanyApplicationInvoiceEmails(uniqueIds, {
-      skipDocVerification: !(await caAutoSendRequiresDocVerification()),
-    });
+    const emailSummary = await sendCompanyApplicationInvoiceEmails(uniqueIds);
     if (emailSummary.toggleDisabled) {
       console.log('[bulkProcessCompanyApplications] invoice email auto-send skipped — master switch OFF (held in test mode)');
     } else {
@@ -1175,7 +1171,7 @@ export async function bulkProcessCompanyApplications(applicationIds: string[]): 
  * Shared with the stranded-row recovery sweep, which has to reach the same
  * verdict from the same evidence — a second copy of this CASE would drift.
  */
-async function finaliseAutoEnrolStatus(applicationIds: string[]): Promise<void> {
+export async function finaliseAutoEnrolStatus(applicationIds: string[]): Promise<void> {
   if (applicationIds.length === 0) return;
   await pool.query(
     `UPDATE public.company_application

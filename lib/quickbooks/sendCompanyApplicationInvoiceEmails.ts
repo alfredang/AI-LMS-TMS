@@ -5,27 +5,16 @@ import { qboSendInvoice } from '../services/qboInvoiceService';
  * Sends one QuickBooks email per unique main tax invoice covering the given
  * Company Application row IDs.
  *
- * Recipient is the EMPLOYER contact email (NOT the trainee email) — CA
- * invoices are billed to the sponsoring company. Grant invoices are NOT
- * emailed; those are internal records billed to WSG.
+ * Recipient is the EMPLOYER contact email (NOT the trainee email). Grant
+ * invoices are not emailed; those are internal records billed to WSG.
  *
- * Callers:
- *   - pages/api/admin/ca-send-invoice-email.ts (manual "Send Invoice Email"
- *     button on View Company Application) — enforces ALL gates below.
- *   - lib/autoEnrolCompanyApplications.ts (auto-send at the end of the enrol
- *     pipeline) — passes { skipDocVerification: true } so the invoice email
- *     goes out as soon as it's generated, WITHOUT waiting for supporting-doc
- *     verification. The master toggle is still honoured either way.
- *
- * Server-side gates (defence in depth — UI also enforces these):
+ * Server-side gates:
  *   - master toggle (training_provider.ca_auto_send_invoice_email) must be ON
  *   - row must have invoice_id
  *   - row must have supporting_doc_verification_status = 'verified'
- *     (skipped only when the caller passes skipDocVerification)
  *
- * Idempotent: rows already marked invoice_sent_at are skipped. Rows sharing
- * a consolidated invoice_id fire exactly one QBO email and all share the
- * same invoice_sent_at / invoice_sent_to so the View page is consistent.
+ * Automatic and manual sends use the same gates. There is no bypass for
+ * supporting-document verification.
  */
 
 export interface CaInvoiceEmailFailure {
@@ -63,42 +52,8 @@ interface Group {
   anyAlreadySent: boolean;
 }
 
-/**
- * Does the AUTOMATIC send have to wait for supporting-doc verification?
- *
- * The two send paths have always disagreed: the manual "Send Invoice Email"
- * button refuses until a learner's documents are verified, while the pipeline's
- * automatic send after invoicing goes out regardless. That was a deliberate
- * product decision, but it was buried in a hardcoded `true` where nobody could
- * see it, let alone change it.
- *
- * Now it is a setting on the same screen as the master email toggle. Default
- * false keeps the behaviour the pipeline has always had, so nothing changes
- * until someone decides it should.
- *
- * Missing column (the setting has never been opened) reads as false for the
- * same reason.
- */
-export async function caAutoSendRequiresDocVerification(): Promise<boolean> {
-  try {
-    const res = await pool.query(
-      `SELECT COALESCE(ca_auto_send_requires_doc_verification, false) AS required
-         FROM training_provider
-        LIMIT 1`
-    );
-    return !!res.rows[0]?.required;
-  } catch (err) {
-    console.warn(
-      '[ca-email] Could not read ca_auto_send_requires_doc_verification; keeping the existing behaviour:',
-      err instanceof Error ? err.message : err
-    );
-    return false;
-  }
-}
-
 export async function sendCompanyApplicationInvoiceEmails(
   applicationIds: string[],
-  opts: { skipDocVerification?: boolean } = {}
 ): Promise<CaInvoiceEmailSummary> {
   const summary: CaInvoiceEmailSummary = {
     sent: 0,
@@ -149,7 +104,8 @@ export async function sendCompanyApplicationInvoiceEmails(
             employer_contact_email,
             supporting_doc_verification_status
        FROM public.company_application
-      WHERE id = ANY($1::uuid[])`,
+      WHERE id = ANY($1::uuid[])
+        AND ca_cancelled_at IS NULL`,
     [uniqueIds]
   );
 
@@ -158,10 +114,8 @@ export async function sendCompanyApplicationInvoiceEmails(
   for (const row of rowsRes.rows) {
     // Server-side verification gate. UI already blocks this case, but a direct
     // API call must not bypass the rule that employers are only emailed once
-    // their docs are confirmed — UNLESS the caller explicitly opts out
-    // (skipDocVerification), used by the auto-send-at-enrol pipeline.
     const verificationStatus = String(row.supporting_doc_verification_status || '').trim().toLowerCase();
-    if (!opts.skipDocVerification && verificationStatus !== 'verified') {
+    if (verificationStatus !== 'verified') {
       summary.skippedNotVerified++;
       summary.skippedNotVerifiedRows.push({
         id: String(row.id),

@@ -8,6 +8,58 @@ import { ensureTrainerUnlinkedColumn } from '@lib/payroll/ensureTrainerUnlinked'
 import { ensureBillNoColumn, BILL_NO_LOCK_NAMESPACE } from '@lib/payroll/billNo';
 import { ensurePayoutColumns, EFFECTIVE_END_DATE } from '@lib/payroll/ensurePayoutColumns';
 import { ensureTrainerBillTable } from '@lib/payroll/ensureTrainerBillTable';
+import { DEFAULT_FEEDBACK_FORM_SECTIONS } from '@lib/feedbackFormDefaults';
+import type { FeedbackFormSection } from '@app-types';
+
+/**
+ * Each learner's overall course review score per class: the mean of the 1-5
+ * star questions on their feedback form, to one decimal. Payroll reads these
+ * against the rule that no trainer payment is made for a learner rating the
+ * course 2 or below. Best-effort — a feedback lookup failure must not take the
+ * payout list down with it.
+ */
+export interface LearnerReviewScore {
+  learner_name: string;
+  score: number;
+}
+
+async function loadReviewScores(courseRunIds: string[]): Promise<Map<string, LearnerReviewScore[]>> {
+  const scores = new Map<string, LearnerReviewScore[]>();
+  if (courseRunIds.length === 0) return scores;
+  try {
+    const tmpl = await pool.query(`SELECT sections FROM feedback_form_template ORDER BY created_at ASC LIMIT 1`);
+    const sections: FeedbackFormSection[] = tmpl.rows[0]?.sections || DEFAULT_FEEDBACK_FORM_SECTIONS;
+    const ratingIds = sections
+      .flatMap((s) => s.fields || [])
+      .filter((f) => f.type === 'rating1to5')
+      .map((f) => f.id);
+    if (ratingIds.length === 0) return scores;
+
+    const r = await pool.query(
+      `SELECT course_run_id, learner_name, answers FROM feedback_form_response
+        WHERE course_run_id = ANY($1::uuid[])
+        ORDER BY submitted_at ASC`,
+      [courseRunIds]
+    );
+    for (const row of r.rows) {
+      const answers = row.answers || {};
+      const vals = ratingIds
+        .map((id) => Number(answers[id]))
+        .filter((n) => Number.isFinite(n) && n >= 1 && n <= 5);
+      if (vals.length === 0) continue;
+      const avg = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
+      const list = scores.get(row.course_run_id) || [];
+      list.push({
+        learner_name: String(row.learner_name || answers.learner_name || '').trim() || 'Learner',
+        score: avg,
+      });
+      scores.set(row.course_run_id, list);
+    }
+  } catch (e) {
+    console.warn('payroll: failed to load review scores', e);
+  }
+  return scores;
+}
 
 async function loadTiers(): Promise<PayoutTier[]> {
   try {
@@ -396,7 +448,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     overview.totalAmount = overview.pendingAmount; // outstanding = all pending
 
     // Merge and order by end_date DESC (undated rows last).
-    const wsqRows = list.rows.map((r) => ({ ...r, source: 'wsq' as const }));
+    const reviewScores = await loadReviewScores([...new Set(list.rows.map((r) => r.course_run_id as string))]);
+    const wsqRows = list.rows.map((r) => ({
+      ...r,
+      source: 'wsq' as const,
+      review_scores: reviewScores.get(r.course_run_id) || [],
+    }));
     const payouts = [...wsqRows, ...manualRows].sort((a, b) => {
       const ae = a.end_date || '';
       const be = b.end_date || '';

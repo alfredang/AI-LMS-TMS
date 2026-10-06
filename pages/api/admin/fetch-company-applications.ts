@@ -171,6 +171,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         FROM public.ssg_grants
         GROUP BY LOWER(TRIM(enrollment_id))
       ) sg ON sg.enrolment_key = LOWER(TRIM(ca.enrolment_id))
+      WHERE ca.ca_cancelled_at IS NULL
       ORDER BY ca.created_at DESC
     `);
     const rows = result.rows.map((r: any) => {
@@ -243,6 +244,25 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return out;
     });
     const stuckCount = rows.filter((r) => r._stuck === '1').length;
+    setImmediate(async () => {
+      try {
+        const { runAutomation } = await import('../external/auto-resume-company-applications');
+        const result = await runAutomation(10);
+        if (result.considered > 0 || result.message) {
+          console.log('[fetch-company-applications] CA resume check:', {
+            considered: result.considered,
+            processed: result.processed,
+            failed: result.failed,
+            message: result.message,
+          });
+        }
+      } catch (resumeErr) {
+        console.warn(
+          '[fetch-company-applications] CA resume check failed:',
+          resumeErr instanceof Error ? resumeErr.message : resumeErr
+        );
+      }
+    });
     return res.status(200).json({ rows, stuckCount });
   } catch (err: any) {
     console.error('fetch-company-applications error:', err);

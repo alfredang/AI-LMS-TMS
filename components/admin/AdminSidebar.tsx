@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
 import { Icon, IconName } from '@components/ui/Icon';
@@ -105,25 +105,6 @@ const USEFUL_LINKS = [
 const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflow, collapsed = false }) => {
     const { adminPage, setAdminPage, setEditingCourseRun, setEditingCourse, setSelectedCourse, setCourseEditMode, trainingProviderProfile } = useLms();
 
-    // Count of company_application rows that need admin attention. Polled
-    // every 60s + on adminPage change so the badge reflects fresh state
-    // when admins return to the sidebar after a sync/retry elsewhere.
-    const [caStuckCount, setCaStuckCount] = useState<number>(0);
-    useEffect(() => {
-        let cancelled = false;
-        const fetchCount = async () => {
-            try {
-                const res = await fetch('/api/admin/ca-stuck-count');
-                const json = await res.json();
-                if (!cancelled) setCaStuckCount(Number(json.count) || 0);
-            } catch {
-                // Non-fatal — badge just stays at its last value.
-            }
-        };
-        void fetchCount();
-        const id = window.setInterval(fetchCount, 60_000);
-        return () => { cancelled = true; window.clearInterval(id); };
-    }, [adminPage]);
 
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({
         calendar: false,
@@ -272,7 +253,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
                 </a>
                 <NavItem page={AdminPage.UploadCompanyApplication} label="Upload Company Application" isSubItem />
                 <NavItem page={AdminPage.CheckSupportingDocument} label="Check Supporting Document" isSubItem />
-                <NavItem page={AdminPage.ViewCompanyApplication} label="View Company Application" isSubItem badge={caStuckCount} />
+                <NavItem page={AdminPage.ViewCompanyApplication} label="View Company Application" isSubItem />
                 <NavItem page={AdminPage.ViewSyncedEnrolments} label="All Synced Enrolments" isSubItem />
             </NavSection>
 

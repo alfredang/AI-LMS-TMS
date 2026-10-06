@@ -2,6 +2,8 @@ import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
+import { normalizeRenewStatus } from '../../../lib/courseRenewalStatus';
+import { isCourseValidityTpgEnabled } from '@lib/courseValidityFeature';
 
 interface CourseRow {
   course_code: string;
@@ -94,6 +96,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(400).json({ success: false, message: 'No course data provided.' });
   }
 
+  const enhanced = await isCourseValidityTpgEnabled();
+
   const results: Array<{
     course_code: string;
     title: string;
@@ -173,7 +177,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           toText(course.description),                                // 31
           toText(course.course_outline),                             // 32
           toBool(course.is_utap_eligible),                           // 33
-          toText(course.renewed_status),                             // 34
+          enhanced ? normalizeRenewStatus(toText(course.renewed_status)) : toText(course.renewed_status), // 34
           toText(course.slides_url),                                 // 35
           toText(course.lesson_plan_url),                            // 36
           toText(course.facilitator_guide_url),                      // 37

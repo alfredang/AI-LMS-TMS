@@ -2,6 +2,7 @@ import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { splitTrainerList } from '@/lib/trainerInvitations';
+import { isCourseValidityTpgEnabled } from '@lib/courseValidityFeature';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Cache-Control', 'no-store, max-age=0');
@@ -11,6 +12,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
+    const enhanced = await isCourseValidityTpgEnabled();
+    // JSON access keeps this query compatible with customer databases that do
+    // not yet have the optional TPG/TRAQOM course columns.
+    const optionalColumns = enhanced
+      ? `to_jsonb(c)->>'submission_type' AS submission_type,
+          to_jsonb(c)->>'traqom_response_rate' AS traqom_response_rate,
+          to_jsonb(c)->>'traqom_quality_rating' AS traqom_quality_rating,`
+      : `NULL::text AS submission_type,
+          NULL::text AS traqom_response_rate,
+          NULL::text AS traqom_quality_rating,`;
     // SQL query to get only courses for developer management (no course runs)
     const sqlQuery = `
       SELECT
@@ -38,6 +49,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           c.renewed_status,
           c.actual_renew_date::text AS actual_renew_date,
           c.renewal_application_no,
+          ${optionalColumns}
           c.cas_score,
           c.es_score,
           c.whitelist_status,
@@ -88,6 +100,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       renewedStatus: row.renewed_status || null,
       actualRenewDate: row.actual_renew_date || null,
       renewalApplicationNo: row.renewal_application_no || null,
+      submissionType: row.submission_type || null,
+      traqomResponseRate: row.traqom_response_rate != null ? Number(row.traqom_response_rate) : null,
+      traqomQualityRating: row.traqom_quality_rating != null ? Number(row.traqom_quality_rating) : null,
       casScore: row.cas_score != null ? parseFloat(row.cas_score) : null,
       esScore: row.es_score != null ? parseFloat(row.es_score) : null,
       whitelistStatus: row.whitelist_status || null,
