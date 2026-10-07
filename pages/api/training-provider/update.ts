@@ -855,6 +855,23 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       ]);
 
       try {
+        const directApplicationIntakeSize = Math.max(1, parseInt(String(profileData.adminSettings?.directApplicationIntakeSize ?? 50), 10) || 50);
+        const directApplicationThreshold = Math.max(1, parseInt(String(profileData.adminSettings?.directApplicationThreshold ?? 20), 10) || 20);
+        await pool.query(
+          `UPDATE training_provider
+              SET admin_settings = COALESCE(admin_settings, '{}'::jsonb)
+                || jsonb_build_object(
+                     'directApplicationIntakeSize', $1::int,
+                     'directApplicationThreshold', $2::int
+                   )
+            WHERE id = $3`,
+          [directApplicationIntakeSize, directApplicationThreshold, trainingProviderId]
+        );
+      } catch (e) {
+        console.error('Failed to save Direct Application Instant Confirm settings:', e);
+      }
+
+      try {
         await pool.query(`
           ALTER TABLE training_provider
             ADD COLUMN IF NOT EXISTS auto_import_da_from_email boolean DEFAULT false NOT NULL

@@ -323,6 +323,8 @@ export interface TrainingProviderProfile extends BaseProfile {
     certificateDeliveryLink: string;
     upcomingClassesThresholdDays: number;
     certificateAttendanceThreshold: number;
+    directApplicationIntakeSize: number;
+    directApplicationThreshold: number;
     casThreshold: number;
     esThreshold: number;
   };
