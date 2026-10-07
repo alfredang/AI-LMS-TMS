@@ -12,6 +12,7 @@ import {
   assertNoDuplicateCourseRunDates,
   DuplicateCourseRunDateError,
 } from '../../../../../lib/ssg/courseRunDuplicateGuard';
+import { getDirectApplicationInstantConfirmSettings } from '../../../../../lib/directApplicationInstantConfirmSettings';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -67,9 +68,20 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(400).json({ error: 'Training Provider UEN is required in course.trainingProvider.uen' });
     }
 
+    const instantConfirmSettings = await getDirectApplicationInstantConfirmSettings();
+
     // Clean up the runs data to remove empty trainer arrays as requested
     const cleanedRuns = requestData.course.runs.map((run: any) => {
       const cleanedRun = { ...run };
+      const intakeSize = Number(cleanedRun.intakeSize);
+      const threshold = Number(cleanedRun.threshold);
+
+      cleanedRun.intakeSize = Number.isFinite(intakeSize) && intakeSize > 0
+        ? intakeSize
+        : instantConfirmSettings.intakeSize;
+      cleanedRun.threshold = Number.isFinite(threshold) && threshold >= 0
+        ? threshold
+        : instantConfirmSettings.threshold;
       
       // Remove linkCourseRunTrainer if it's empty or doesn't exist
       if (!cleanedRun.linkCourseRunTrainer || cleanedRun.linkCourseRunTrainer.length === 0) {

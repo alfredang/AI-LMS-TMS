@@ -226,6 +226,309 @@ export const FundingTypeBadge: React.FC<{
 const RESULTS_PER_PAGE = 10;
 const BATCH_SIZE_DA = 20;
 
+export const RetrieveDirectApplicationView: React.FC = () => {
+    const [loading, setLoading] = useState(false);
+    const [status, setStatus] = useState('Confirmed');
+    const [message, setMessage] = useState<string | null>(null);
+    const [isError, setIsError] = useState(false);
+    const [preview, setPreview] = useState<{ row: any; lms: { applicationStatus: string | null; autoEnrolStatus: string | null; enrolmentId: string | null; enrolled: boolean } | null }[] | null>(null);
+    const [summary, setSummary] = useState<{ retrieved: number; inserted: number; updated: number; skipped: number; failed: number; queued: number } | null>(null);
+    // Application IDs ticked in the preview; only these are enrolled by "Enrol selected".
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    const authHeaders = (): Record<string, string> => {
+        const token = authService.getAuthToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    };
+
+    // Stuck rows (already uploaded, never enrolled) are skipped by the import, so they cannot be selected.
+    const selectableRows = (preview ?? []).filter(({ lms }) => !lms);
+    const allSelected = selectableRows.length > 0 && selectableRows.every(({ row }) => selectedIds.has(row['Application ID']));
+    const toggleSelected = (appId: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(appId)) next.delete(appId); else next.add(appId);
+            return next;
+        });
+    };
+    const toggleAll = () => {
+        setSelectedIds(allSelected ? new Set() : new Set(selectableRows.map(({ row }) => row['Application ID'])));
+    };
+
+    const importRows = async (rows: any[]): Promise<DaResultRow[]> => {
+        const flat: DaResultRow[] = [];
+        for (let i = 0; i < rows.length; i += BATCH_SIZE_DA) {
+            const batch = rows.slice(i, i + BATCH_SIZE_DA);
+            const response = await fetch('/api/admin/upload-da-applications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ data: batch }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Import failed (${response.status})`);
+            }
+            const result = await response.json();
+            (result.newRecords ?? []).forEach((r: any) => flat.push({ action: 'inserted', id: r.id ?? '', application_id: r.application_id ?? '', trainee_name: r.trainee_name ?? '', trainee_id: r.trainee_id ?? '', message: 'Inserted successfully.' }));
+            (result.updatedRecords ?? []).forEach((r: any) => flat.push({ action: 'updated', id: r.id ?? '', application_id: r.application_id ?? '', trainee_name: r.trainee_name ?? '', trainee_id: r.trainee_id ?? '', message: `Status updated to "${r.application_status ?? ''}"` }));
+            (result.errors ?? []).forEach((e: any) => flat.push({ action: 'failed', application_id: e.application_id ?? `Row ${e.row ?? '?'}`, trainee_name: '', trainee_id: '', message: e.error ?? 'Unknown error' }));
+            (result.duplicateIds ?? []).forEach((id: string) => flat.push({ action: 'skipped', application_id: id, trainee_name: '', trainee_id: '', message: `Application ID "${id}" already exists and is already up to date.` }));
+        }
+        return flat;
+    };
+
+    const triggerAutoEnrol = async (rows: DaResultRow[]): Promise<number> => {
+        const eligibleIds = rows
+            .filter(row => (row.action === 'inserted' || row.action === 'updated') && row.id)
+            .map(row => row.id!)
+            .filter(Boolean);
+        if (eligibleIds.length === 0) return 0;
+        const res = await fetch('/api/admin/auto-enrol-direct-applications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ applicationIds: eligibleIds }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Failed to trigger enrolment automation');
+        return json.queued || eligibleIds.length;
+    };
+
+    // Read-only call: retrieves from TPGateway and reports what the LMS already
+    // holds. Nothing is imported or enrolled until importRows/triggerAutoEnrol.
+    // The server limits results to classes starting today or later.
+    const fetchFromTpg = async () => {
+        const res = await fetch('/api/admin/retrieve-da-applications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ applicationStatus: status || undefined }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) throw new Error(json.error || `Retrieve failed (${res.status})`);
+        return json;
+    };
+
+    // Step 1 of 2: fetch and list. Nothing is imported or enrolled here — the
+    // user ticks who to enrol, then enrolSelected() does the work.
+    const fetchApplications = async () => {
+        setLoading(true);
+        setMessage('Fetching direct applications from TPGateway...');
+        setIsError(false);
+        setSummary(null);
+        setPreview(null);
+        try {
+            const json = await fetchFromTpg();
+            const rows: any[] = Array.isArray(json.rows) ? json.rows : [];
+            const lmsStatus = json.lmsStatus || {};
+            // Show only applicants not yet enrolled; already-enrolled ones are counted, not listed.
+            const notEnrolled = rows
+                .map(row => ({ row, lms: lmsStatus[row['Application ID']] ?? null }))
+                .filter(({ lms }) => !lms?.enrolled);
+            setPreview(notEnrolled);
+            setSelectedIds(new Set(notEnrolled.filter(({ lms }) => !lms).map(({ row }) => row['Application ID'])));
+            const enrolledCount = rows.length - notEnrolled.length;
+            const pastNote = json.skippedPastClasses > 0 ? ` ${json.skippedPastClasses} for classes that already started were left out.` : '';
+            setMessage(notEnrolled.length === 0
+                ? (rows.length === 0
+                    ? `No applications found for upcoming classes.${pastNote}`
+                    : `All ${rows.length} applicant(s) are already enrolled. Nothing to do.${pastNote}`)
+                : `Found ${notEnrolled.length} applicant(s) not enrolled yet (${enrolledCount} already enrolled, hidden). Nothing has been enrolled yet — untick anyone you don't want, then click Enrol selected.${pastNote}`);
+        } catch (err) {
+            setIsError(true);
+            setMessage(err instanceof Error ? err.message : 'Failed to fetch direct applications');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const importAndEnrol = async (rows: any[], note = '') => {
+        setMessage(`Importing ${rows.length} direct application(s) into LMS...`);
+        const imported = await importRows(rows);
+        const queued = await triggerAutoEnrol(imported);
+        const counts = {
+            retrieved: rows.length,
+            inserted: imported.filter(row => row.action === 'inserted').length,
+            updated: imported.filter(row => row.action === 'updated').length,
+            skipped: imported.filter(row => row.action === 'skipped').length,
+            failed: imported.filter(row => row.action === 'failed').length,
+            queued,
+        };
+        setSummary(counts);
+        setMessage(`Done. Sent ${counts.retrieved}, imported ${counts.inserted + counts.updated}, queued ${counts.queued} for enrolment automation.${note}`);
+    };
+
+    // Enrols exactly the rows ticked in the preview — no re-fetch, so what you
+    // saw is what is sent.
+    const enrolSelected = async () => {
+        const rows = (preview ?? []).filter(({ row, lms }) => !lms && selectedIds.has(row['Application ID'])).map(({ row }) => row);
+        if (rows.length === 0) return;
+        setLoading(true);
+        setIsError(false);
+        setSummary(null);
+        try {
+            await importAndEnrol(rows);
+            setPreview(null);
+            setSelectedIds(new Set());
+        } catch (err) {
+            setIsError(true);
+            setMessage(err instanceof Error ? err.message : 'Failed to enrol selected applications');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const hasPreview = !!preview && preview.length > 0;
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Retrieve Direct Application</h2>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Pull Instant Confirm applications from TPGateway and send them through the LMS enrolment flow.
+                </p>
+            </div>
+
+            <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+                <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 flex-shrink-0 rounded-full bg-blue-100 dark:bg-blue-800/40 flex items-center justify-center">
+                        <Icon name={IconName.Download} className="w-5 h-5 text-blue-600 dark:text-blue-300" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <h3 className="text-base font-semibold text-gray-900 dark:text-white">Retrieve from TPGateway</h3>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Confirmed Direct Applications are imported into LMS, then enrolment, grant, invoice, and calendar automation continues from there.
+                        </p>
+
+                        <div className="mt-5 flex flex-wrap items-end gap-3">
+                            <label className="block w-full sm:w-56">
+                                <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Status</span>
+                                <select value={status} onChange={event => { setStatus(event.target.value); setPreview(null); setSelectedIds(new Set()); }} disabled={loading} className={inputClasses}>
+                                    <option value="Confirmed">Confirmed</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                    <option value="">All</option>
+                                </select>
+                            </label>
+                            {hasPreview ? (
+                                <>
+                                    <Button variant="outline" onClick={fetchApplications} disabled={loading} className="h-10">
+                                        {loading ? 'Working...' : 'Fetch again'}
+                                    </Button>
+                                    <Button onClick={enrolSelected} disabled={loading || selectedIds.size === 0} className="h-10">
+                                        {loading ? 'Working...' : `Enrol selected (${selectedIds.size})`}
+                                    </Button>
+                                </>
+                            ) : (
+                                <Button onClick={fetchApplications} disabled={loading} className="h-10">
+                                    {loading ? 'Working...' : 'Fetch & Enrol'}
+                                </Button>
+                            )}
+                        </div>
+
+                        <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                            Pulls applications for classes starting today or later only. Past classes are always left out, and learners already in the LMS are skipped.
+                            Fetch &amp; Enrol shows the list first — nothing is enrolled until you untick anyone you don&apos;t want and click Enrol selected.
+                        </p>
+                    </div>
+                </div>
+
+                {message && (
+                    <div className={`mt-5 rounded-lg border p-3 text-sm ${isError
+                        ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200'
+                        : 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200'}`}>
+                        {message}
+                    </div>
+                )}
+
+                {summary && (
+                    <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-3">
+                        {[
+                            ['Retrieved', summary.retrieved],
+                            ['Inserted', summary.inserted],
+                            ['Updated', summary.updated],
+                            ['Skipped', summary.skipped],
+                            ['Failed', summary.failed],
+                            ['Queued', summary.queued],
+                        ].map(([label, value]) => (
+                            <div key={label} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                                <div className="text-xs text-gray-500 dark:text-gray-400">{label}</div>
+                                <div className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{value}</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {preview && preview.length > 0 && (
+                    <div className="mt-5 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                        <table className="min-w-full text-sm">
+                            <thead className="bg-gray-50 dark:bg-gray-900/40 text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+                                <tr>
+                                    <th className="px-3 py-2 w-8">
+                                        <input
+                                            type="checkbox"
+                                            aria-label="Select all"
+                                            checked={allSelected}
+                                            disabled={loading || selectableRows.length === 0}
+                                            onChange={toggleAll}
+                                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+                                        />
+                                    </th>
+                                    <th className="px-3 py-2">#</th>
+                                    <th className="px-3 py-2">Learner</th>
+                                    <th className="px-3 py-2">Course</th>
+                                    <th className="px-3 py-2">Class start</th>
+                                    <th className="px-3 py-2">TPG status</th>
+                                    <th className="px-3 py-2">Application ID</th>
+                                    <th className="px-3 py-2">Fetch & Enrol will</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-gray-900 dark:text-gray-100">
+                                {preview.map(({ row, lms }, i) => (
+                                    <tr key={`${row['Application ID']}-${i}`} className={!lms && !selectedIds.has(row['Application ID']) ? 'opacity-50' : ''}>
+                                        <td className="px-3 py-2">
+                                            {!lms && (
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label={`Select ${row['Trainee Name']}`}
+                                                    checked={selectedIds.has(row['Application ID'])}
+                                                    disabled={loading}
+                                                    onChange={() => toggleSelected(row['Application ID'])}
+                                                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+                                                />
+                                            )}
+                                        </td>
+                                        <td className="px-3 py-2 text-gray-500 dark:text-gray-400">{i + 1}</td>
+                                        <td className="px-3 py-2">
+                                            <div className="font-medium">{row['Trainee Name']}</div>
+                                            <div className="text-xs text-gray-500 dark:text-gray-400">{row['Trainee Email']}</div>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <div>{row['Course Title']}</div>
+                                            <div className="text-xs text-gray-500 dark:text-gray-400">{row['Course Reference Number']} · Run {row['Course Run ID']}</div>
+                                        </td>
+                                        <td className="px-3 py-2 whitespace-nowrap">{row['Course Start Date']}</td>
+                                        <td className="px-3 py-2">{row['Application Status']}</td>
+                                        <td className="px-3 py-2 whitespace-nowrap text-xs">{row['Application ID']}</td>
+                                        <td className="px-3 py-2">
+                                            {lms ? (
+                                                <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-300">
+                                                    Skip — already uploaded but enrolment stuck. Retry in View Direct Application
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex rounded-full bg-green-100 dark:bg-green-900/30 px-2 py-0.5 text-xs text-green-800 dark:text-green-300">
+                                                    {String(row['Application Status'] || '').toLowerCase().startsWith('confirm') ? 'Upload for Enrolment Processing' : 'Upload only (not confirmed)'}
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </Card>
+        </div>
+    );
+};
+
 export const UploadDirectApplicationView: React.FC = () => {
     const { setAdminPage } = useLms();
     const [file, setFile] = useState<File | null>(null);
@@ -595,23 +898,8 @@ export const UploadDirectApplicationView: React.FC = () => {
         if (el) el.scrollTop = el.scrollHeight;
     }, [tpgJob?.log?.length]);
 
-    // Poll the helper's presence. Slow on purpose: this only decides a label,
-    // and a run in progress is already reporting through /status.
-    useEffect(() => {
-        let cancelled = false;
-        const check = async () => {
-            try {
-                const res = await fetch('/api/admin/tpg-confirm/helper', { headers: authHeaders() });
-                const json = await res.json();
-                if (!cancelled && json?.success) {
-                    setTpgHelper({ notNeeded: !!json.notNeeded, online: !!json.online });
-                }
-            } catch { /* leave the last known state rather than flicker */ }
-        };
-        check();
-        const iv = setInterval(check, 20000);
-        return () => { cancelled = true; clearInterval(iv); };
-    }, []);
+    // The old Singpass browser helper is kept hidden only as a temporary rollback
+    // path while the API-based Direct Application flow is verified.
 
     // Elapsed clock, once a second. Covers BOTH halves of a run — the browser
     // phase and the enrolment phase — since either can be the one you are sat
@@ -796,18 +1084,10 @@ export const UploadDirectApplicationView: React.FC = () => {
         tick();
     });
 
-    // Re-attach to a run still in flight after a reload or an accidentally closed
-    // tab. The job (and its scraped rows) live on the server, so picking it back
-    // up is what stops a confirmed application from being stranded. Re-ingesting
-    // is harmless: the upload dedupes on application_id and auto-enrol skips rows
-    // that already hold a real SSG enrolment id.
+    // Clear any saved legacy browser-confirm job so the upload page does not
+    // re-attach to hidden runs from the retired Singpass browser flow.
     useEffect(() => {
-        let saved: string | null = null;
-        try { saved = window.localStorage.getItem(TPG_JOB_KEY); } catch { /* ignore */ }
-        if (!saved) return;
-        setTpgJobId(saved);
-        setTpgRunning(true);
-        void pollTpg(saved);
+        try { window.localStorage.removeItem(TPG_JOB_KEY); } catch { /* ignore */ }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -1445,7 +1725,7 @@ export const UploadDirectApplicationView: React.FC = () => {
                 flow drives a HEADED Chromium that a human signs into with Singpass —
                 impossible on the Coolify container. Showing the card there offered
                 every admin two buttons that could only ever return an error. */}
-            <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
+            <Card className="hidden">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-start gap-3">
                         <div className="w-9 h-9 flex-shrink-0 rounded-full bg-purple-100 dark:bg-purple-800/40 flex items-center justify-center">

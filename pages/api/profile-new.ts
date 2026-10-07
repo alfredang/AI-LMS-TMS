@@ -410,6 +410,7 @@ async function getTrainingProviderProfile(userId: string) {
         tp.id as provider_id,
         tp.force_first_password_change,
         tp.default_password,
+        tp.admin_settings,
         'member' as access_type
     FROM app_user au
     INNER JOIN training_provider_member tpm ON au.id = tpm.user_id
@@ -486,6 +487,7 @@ async function getTrainingProviderProfile(userId: string) {
           tp.id as provider_id,
           tp.force_first_password_change,
           tp.default_password,
+          tp.admin_settings,
           'owner' as access_type
       FROM app_user au
       INNER JOIN training_provider tp ON au.id = tp.id
@@ -562,6 +564,7 @@ async function getTrainingProviderProfile(userId: string) {
           tp.id as provider_id,
           tp.force_first_password_change,
           tp.default_password,
+          tp.admin_settings,
           'admin' as access_type
       FROM app_user au
       INNER JOIN provider_admin_user pau ON au.id = pau.user_id
@@ -615,6 +618,8 @@ async function getTrainingProviderProfile(userId: string) {
   let certificateAttendanceThreshold = 60;
   let casThreshold = 70;
   let esThreshold = 40;
+  let directApplicationIntakeSize = 50;
+  let directApplicationThreshold = 20;
   try {
     const r = await pool.query(`SELECT upcoming_classes_threshold_days, certificate_attendance_threshold, cas_threshold, es_threshold FROM training_provider WHERE id = $1`, [profileData.provider_id]);
     const row = r.rows[0] || {};
@@ -627,6 +632,12 @@ async function getTrainingProviderProfile(userId: string) {
     const parsedEs = parseInt(String(row.es_threshold || '40'), 10);
     if (!Number.isNaN(parsedEs) && parsedEs >= 0) esThreshold = parsedEs;
   } catch (e) { /* columns don't exist yet */ }
+
+  const adminSettings = profileData.admin_settings || {};
+  const parsedDaIntake = parseInt(String(adminSettings.directApplicationIntakeSize || '50'), 10);
+  if (!Number.isNaN(parsedDaIntake) && parsedDaIntake > 0) directApplicationIntakeSize = parsedDaIntake;
+  const parsedDaThreshold = parseInt(String(adminSettings.directApplicationThreshold || '20'), 10);
+  if (!Number.isNaN(parsedDaThreshold) && parsedDaThreshold > 0) directApplicationThreshold = parsedDaThreshold;
 
   // Safely fetch extra integration columns (each group independent so missing columns don't wipe others)
   let refLinks: any = {};
@@ -852,6 +863,8 @@ async function getTrainingProviderProfile(userId: string) {
       feedbackFormExternalLink: profileData.feedback_form_external_link || '',
       upcomingClassesThresholdDays,
       certificateAttendanceThreshold,
+      directApplicationIntakeSize,
+      directApplicationThreshold,
       casThreshold,
       esThreshold,
     },

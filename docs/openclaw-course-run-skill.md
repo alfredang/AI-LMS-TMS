@@ -79,6 +79,12 @@ renewed, and the storefront switches to it immediately. `TGS-2026064861` and
 **Sessions.** Created when a run is confirmed, not when it is created. A
 "session not created" warning on a new run is expected and is not an error.
 
+**Direct Applications Instant Confirm.** New SSG course runs must be published
+with the Direct Application intake size and threshold configured in Company
+Settings. The current default is `intakeSize: 50` and `threshold: 20`.
+TPGateway uses these run-level values when Instant Confirm is enabled for Direct
+Applications.
+
 **Duplicates.** Never submit a date "to make sure" — SSG may already hold a run
 the LMS cannot see, and the result would be a duplicate in a government system.
 
@@ -103,6 +109,9 @@ tell you what is missing.
 
 THE ONE RULE
 Look, report, ask, then act. Never act first.
+
+DIRECT APPLICATIONS INSTANT CONFIRM
+Every new SSG course run must publish with the Direct Application intake size and threshold configured in Company Settings. The current default is intakeSize 50 and threshold 20. These values support TPGateway Instant Confirm for Direct Applications.
 
 ENDPOINTS
 1. See what is missing and why:

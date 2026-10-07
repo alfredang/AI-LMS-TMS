@@ -7,6 +7,7 @@ import { Cryptography } from '../../../../lib/ssg/utils/cryptography';
 import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../../lib/courseCode';
 import { createSSGCourseAPI } from '../../../../lib/ssg/api/course-api';
 import { getTrainingPartnerIdentifiers } from '../../../../lib/trainingPartnerIdentifiers';
+import { getDirectApplicationInstantConfirmSettings } from '../../../../lib/directApplicationInstantConfirmSettings';
 
 type SubmitItem = {
   course_code: string;
@@ -310,6 +311,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     const toInt = (d: string) => parseInt(d.replace(/-/g, ''), 10);
     const sessionVenue = { floor: VENUE.floor, unit: VENUE.unit, postalCode: VENUE.postalCode, room: VENUE.room };
+    const instantConfirmSettings = await getDirectApplicationInstantConfirmSettings();
 
     // 5. Build SSG payload — SSG publish expects nested objects with YYYYMMDD integers
     const payload = {
@@ -333,6 +335,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             modeOfTraining,
             courseAdminEmail: companyEmail,
             courseVacancy: { code: 'A', description: 'Available' },
+            intakeSize: instantConfirmSettings.intakeSize,
+            threshold: instantConfirmSettings.threshold,
+            registeredUserCount: 0,
             sessions: sessions.map((s) => ({
               modeOfTraining: s.modeOfTraining,
               startDate: s.startDate,

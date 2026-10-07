@@ -15,6 +15,11 @@ Never use `NEXT_PUBLIC_SCHEDULER_SECRET` — it is exposed in the client bundle
 and is rejected. Both endpoints are `GET` only and read-only; neither one
 writes, so they are always safe to retry.
 
+Course-run creation paths that publish to SSG must default Direct Applications
+Instant Confirm values from Company Settings. The current default is
+`intake_size` / `intakeSize` = `50` and `threshold` = `20`, unless the caller
+explicitly supplies different values.
+
 ---
 
 ## A. Upcoming course runs — runs WITH enrolment
