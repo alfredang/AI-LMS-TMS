@@ -42,6 +42,34 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
+# LibreOffice (headless) converts learners' Mac Pages (.pages) assessment
+# submissions to PDF so trainers can sign them (lib/assessment/pagesToPdf.ts).
+# The official TDF build is used, not Debian's package: Debian's LibreOffice is
+# built against the system libetonyek 0.1.10, which drops the text inside
+# Pages answer boxes entirely. heif-convert decodes HEIC screenshots pasted
+# into those documents. Only Writer is installed; unused bundled data is pruned.
+ARG LIBREOFFICE_VERSION=26.2.6.3
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl libheif-examples fonts-liberation fonts-dejavu-core \
+      libxinerama1 libdbus-1-3 libcairo2 libcups2 libx11-xcb1 libxrandr2 libnss3 libglib2.0-0 \
+    && case "$(dpkg --print-architecture)" in \
+         amd64) lo_dir=x86_64 lo_arch=x86-64 ;; \
+         arm64) lo_dir=aarch64 lo_arch=aarch64 ;; \
+         *) echo "Unsupported architecture for LibreOffice" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://downloadarchive.documentfoundation.org/libreoffice/old/${LIBREOFFICE_VERSION}/deb/${lo_dir}/LibreOffice_${LIBREOFFICE_VERSION}_Linux_${lo_arch}_deb.tar.gz" -o /tmp/lo.tgz \
+    && mkdir /tmp/lo && tar -xzf /tmp/lo.tgz -C /tmp/lo --strip-components=1 \
+    && cd /tmp/lo/DEBS \
+    && dpkg -i libreoffice*-ure_*.deb libreoffice[0-9]*.[0-9]_*.deb \
+         libobasis*-core_*.deb libobasis*-writer_*.deb libreoffice*-writer_*.deb \
+         libobasis*-en-us_*.deb libreoffice*-en-us_*.deb \
+         libobasis*-graphicfilter_*.deb libobasis*-images_*.deb libobasis*-ooofonts_*.deb \
+    && cd / && rm -rf /tmp/lo /tmp/lo.tgz /var/lib/apt/lists/* \
+    && lo_home="$(ls -d /opt/libreoffice*)" \
+    && rm -rf "$lo_home/help" "$lo_home/share/gallery" "$lo_home/share/template" "$lo_home/share/wizards" \
+    && ln -sf "$lo_home/program/soffice" /usr/bin/soffice \
+    && soffice --version
+
 # Install Python packages used by scripts/*.py (docxtpl, requests, playwright, etc.).
 # --prefer-binary tells pip to pick a wheel over an sdist whenever both
 # exist, so a transient missing wheel for the *latest* version doesn't

@@ -15,7 +15,8 @@ export const config = { api: { responseLimit: false }, maxDuration: 120 };
  * POST { courseRunId, learnerUserId, signed: boolean }
  *
  * signed=true  → stamp the caller's assessor block (name/NRIC/date/signature)
- *                onto every unsigned PDF/DOCX the learner submitted for the run.
+ *                onto every unsigned PDF/DOCX/ODT/Pages file the learner submitted
+ *                for the run (Pages is converted to PDF first).
  * signed=false → restore the learner's original files.
  *
  * The "SIG" checkbox on the Student Grading Roster drives this.
