@@ -233,6 +233,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
             </NavSection>
 
             <NavSection title="Direct Application" icon={IconName.FileText} collapsed={collapsed} isOpen={openSections.directApplication} onToggle={() => toggleSection('directApplication')}>
+                <NavItem page={AdminPage.RetrieveDirectApplication} label="Retrieve Direct Application" isSubItem />
                 <NavItem page={AdminPage.UploadDirectApplication} label="Upload Direct Application" isSubItem />
                 <NavItem page={AdminPage.ViewDirectApplication} label="View Direct Application" isSubItem />
             </NavSection>
