@@ -47,6 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               enrolment_id,
               grant_id,
               invoice_id,
+              invoice_doc_number,
               calendar_added
          FROM da_application
         WHERE application_id = ANY($1::text[])`,
