@@ -2,6 +2,7 @@ import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureCompanyApplicationsTable } from '../../../lib/companyApplicationsTable';
+import { normalizeTraineeIdentityFields } from '../../../lib/traineeIdentity';
 
 const DB_TO_COLUMN: Record<string, string> = {
   course_title: 'Course Title*',
@@ -180,6 +181,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const v = r[dbCol];
         out[label] = v == null ? '' : String(v);
       });
+      const normalizedIdentity = normalizeTraineeIdentityFields({
+        nric: out['Trainee NRIC/FIN Number*'],
+        idType: out['Trainee ID Type*'],
+        identityType: out['Trainee Identity Type*'],
+      });
+      out['Trainee ID Type*'] = normalizedIdentity.idType;
+      out['Trainee Identity Type*'] = normalizedIdentity.identityType;
       // The split Grant ID columns are derived from `ssg_grants`, but the CA row
       // itself also stores the grant found during auto-enrolment. If the rollup
       // join is missing or temporarily stale, still show the learner as granted.

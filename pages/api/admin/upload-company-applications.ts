@@ -3,6 +3,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { ensureCompanyApplicationsTable } from '../../../lib/companyApplicationsTable';
 import { validateCompanyApplicationRows, type CourseRunOverride } from '../../../lib/companyApplicationValidator';
+import { normalizeTraineeIdentityFields } from '../../../lib/traineeIdentity';
 
 export const config = {
   api: {
@@ -133,11 +134,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     let updated = 0;
 
     for (const row of rows) {
-      const dedupKey = makeDedupKey(row);
+      const normalizedIdentity = normalizeTraineeIdentityFields({
+        nric: row['Trainee NRIC/FIN Number*'],
+        idType: row['Trainee ID Type*'],
+        identityType: row['Trainee Identity Type*'],
+      });
+      const normalizedRow: Record<string, string> = {
+        ...row,
+        'Trainee ID Type*': normalizedIdentity.idType,
+        'Trainee Identity Type*': normalizedIdentity.identityType,
+      };
+      const dedupKey = makeDedupKey(normalizedRow);
       const debugMap: Record<string, unknown> = {};
       const baseValues = DB_COLUMNS.map(dbCol => {
         const sourceKey = Object.keys(COLUMN_TO_DB).find(k => COLUMN_TO_DB[k] === dbCol)!;
-        const raw = row[sourceKey];
+        const raw = normalizedRow[sourceKey];
         const val: any = raw == null || raw === '' ? null : String(raw).trim();
         debugMap[dbCol] = val;
         return val;
@@ -149,7 +160,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // original wording is preserved in course_title — we add the answer, we
       // don't rewrite the question.
       const chosenRun = resolvedRunByKey.get(
-        `${String(row['Course Title*'] || '').trim().toLowerCase()}|${String(row['Course Start Date (DD-MM-YYYY)*'] || '').trim()}`
+        `${String(normalizedRow['Course Title*'] || '').trim().toLowerCase()}|${String(normalizedRow['Course Start Date (DD-MM-YYYY)*'] || '').trim()}`
       );
       const COLUMNS = chosenRun ? [...DB_COLUMNS, 'course_run_id', 'course_reference_number'] : DB_COLUMNS;
       const values = chosenRun
