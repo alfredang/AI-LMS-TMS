@@ -51,6 +51,10 @@ function normalizeApplication(app: DirectCourseApplication): Record<string, unkn
     'Application ID': cleanString(app.applicationId),
     'Application Date': isoDateOnly(app.confirmedOn || app.createdOn || app.modifiedOn),
     'Application Status': cleanString(app.applicationStatus),
+    // SSG returns "Confirmed" for both paid and unpaid learners; the portal's
+    // "Confirmed (Pending payment)" comes from paymentDetail.status ("Pending" /
+    // "Paid"). Display only — not a da_application column, so import ignores it.
+    'TPG Payment Status': cleanString((app.paymentDetail as { status?: unknown } | null | undefined)?.status),
     'Application Cancelled By': cleanString(app.cancelledBy),
     'Trainee Name': cleanString(profile.fullName),
     'Trainee ID': cleanString(profile.nric),
@@ -119,6 +123,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       credentials,
     );
 
+    const requestedStatus = cleanString(req.body?.applicationStatus);
+    const wantConfirmed = requestedStatus.toLowerCase() === 'confirmed';
+
     const baseFilter = {
       uen,
       tpCode,
@@ -127,7 +134,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sortOrder: cleanString(req.body?.sortOrder).toLowerCase() === 'desc' ? 'desc' as const : 'asc' as const,
       keyword: cleanString(req.body?.keyword) || undefined,
       applicationId: cleanString(req.body?.applicationId) || undefined,
-      applicationStatus: cleanString(req.body?.applicationStatus) || undefined,
+      // SSG matches this exactly, so "Confirmed" would miss "Confirmed (Pending
+      // payment)" — the status Instant Confirm gives a paid course. For
+      // Confirmed, ask SSG for every status and keep the enrollable ones below.
+      applicationStatus: wantConfirmed ? undefined : requestedStatus || undefined,
       lastUpdateDate,
       runStartDate: {
         from: runStartFrom,
@@ -136,29 +146,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     const allRows: Record<string, unknown>[] = [];
+    const seenIds = new Set<string>();
     let total = 0;
-    let page = 0;
+    let pagesFetched = 0;
 
-    for (; page < MAX_PAGES_PER_REQUEST; page++) {
+    // SSG pages are 1-based and page 0 is served as page 1. Starting at 0
+    // fetched the first page twice, the duplicates made the count look
+    // complete, and the last page was never requested (verified on live:
+    // 132 applications, pages 0 and 1 identical, page 2 held the other 32).
+    // Rows are also de-duplicated by Application ID in case pages overlap.
+    for (let page = 1; page <= MAX_PAGES_PER_REQUEST; page++) {
       const result = await api.retrieveTrainingProviderCourseApplications({
         ...baseFilter,
         page,
       });
+      pagesFetched++;
       const pageApplications = result.data?.courseApplications || [];
-      total = Number(result.meta?.total ?? total ?? pageApplications.length);
-      allRows.push(...pageApplications.map(normalizeApplication));
-
       if (pageApplications.length === 0) break;
-      if (allRows.length >= total) break;
+      total = Number(result.meta?.total ?? total);
+
+      let added = 0;
+      for (const row of pageApplications.map(normalizeApplication)) {
+        const id = String(row['Application ID'] || '');
+        if (id && seenIds.has(id)) continue;
+        if (id) seenIds.add(id);
+        allRows.push(row);
+        added++;
+      }
+
+      if (added === 0) break; // a repeated page — nothing new will follow
+      if (total > 0 && allRows.length >= total) break;
       if (pageApplications.length < pageSize) break;
     }
 
     // Second check in case SSG ignores the run-date filter: drop any class that
     // has already started, and any row whose start date cannot be read.
-    const rows = allRows.filter((row) => {
+    const upcomingRows = allRows.filter((row) => {
       const start = String(row['Course Start Date'] || '');
       return /^\d{4}-\d{2}-\d{2}$/.test(start) && start >= todayIso;
     });
+    // "Confirmed" plus its variants such as "Confirmed (Pending payment)" —
+    // all enrollable per lib/da-status.ts.
+    const rows = wantConfirmed
+      ? upcomingRows.filter((row) => String(row['Application Status'] || '').trim().toLowerCase().startsWith('confirmed'))
+      : upcomingRows;
 
     // Read-only: what the LMS already holds for each application, so a preview
     // can show which rows Fetch & Enrol would actually act on.
@@ -189,10 +220,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       success: true,
       total,
       fetched: rows.length,
-      skippedPastClasses: allRows.length - rows.length,
+      skippedPastClasses: allRows.length - upcomingRows.length,
       lmsStatus,
       upcomingFrom: todayIso,
-      pages: page + 1,
+      pages: pagesFetched,
       rows,
     });
   } catch (err) {
