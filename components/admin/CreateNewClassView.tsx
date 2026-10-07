@@ -148,6 +148,8 @@ const buildAutoSessions = (
 
 export const CreateNewClassView: React.FC = () => {
     const { setAdminPage, trainingProviderProfile } = useLms();
+    const intakeSize = Math.max(1, Number(trainingProviderProfile?.adminSettings?.directApplicationIntakeSize ?? 50) || 50);
+    const threshold = Math.max(1, Number(trainingProviderProfile?.adminSettings?.directApplicationThreshold ?? 20) || 20);
 
     // Course Run Form State
     const [courseReferenceNumber, setCourseReferenceNumber] = useState('');
@@ -183,8 +185,6 @@ export const CreateNewClassView: React.FC = () => {
     const [room, setRoom] = useState('Training room');
 
     // Intake Details
-    const [intakeSize, setIntakeSize] = useState(0);
-    const [threshold, setThreshold] = useState(0);
     const [registeredUserCount, setRegisteredUserCount] = useState(0);
 
     // Course Admin Details
@@ -227,8 +227,8 @@ export const CreateNewClassView: React.FC = () => {
 
     // Optional field visibility states (only needed for intake details now)
     const [showOptionalFields, setShowOptionalFields] = useState({
-        intakeSize: false,
-        threshold: false,
+        intakeSize: true,
+        threshold: true,
         registeredUserCount: false,
         fileName: false,
         fileContent: false
@@ -649,6 +649,9 @@ export const CreateNewClassView: React.FC = () => {
                     code: courseVacancy,
                     description: courseVacancy === 'A' ? 'Available' : 'Full'
                 },
+                intakeSize: Number.isFinite(Number(intakeSize)) && Number(intakeSize) > 0 ? Number(intakeSize) : 50,
+                threshold: Number.isFinite(Number(threshold)) && Number(threshold) >= 0 ? Number(threshold) : 20,
+                registeredUserCount: Number.isFinite(Number(registeredUserCount)) ? Number(registeredUserCount) : 0,
                 file: {
                     Name: ""
                 }
@@ -1183,6 +1186,41 @@ export const CreateNewClassView: React.FC = () => {
                                     </option>
                                 ))}
                             </select>
+                        </div>
+                    </FormSection>
+
+                    {/* Direct Application Instant Confirm */}
+                    <FormSection title="Instant Confirm Settings">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Intake Size
+                                </label>
+                                <input
+                                    type="number"
+                                    value={intakeSize}
+                                    readOnly
+                                    className={`${inputClasses} cursor-not-allowed opacity-80`}
+                                />
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Default from Company Settings for Direct Application Instant Confirm.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Threshold
+                                </label>
+                                <input
+                                    type="number"
+                                    value={threshold}
+                                    readOnly
+                                    className={`${inputClasses} cursor-not-allowed opacity-80`}
+                                />
+                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    Default from Company Settings for Direct Application Instant Confirm.
+                                </p>
+                            </div>
                         </div>
                     </FormSection>
                 </div>
