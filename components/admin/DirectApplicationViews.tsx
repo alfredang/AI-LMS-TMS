@@ -226,6 +226,28 @@ export const FundingTypeBadge: React.FC<{
 const RESULTS_PER_PAGE = 10;
 const BATCH_SIZE_DA = 20;
 
+// SSG reports "Confirmed" for paid and unpaid learners alike; TPGateway's
+// "Confirmed (Pending Payment)" is paymentDetail.status = "Pending".
+const isPendingPayment = (row: any) =>
+    String(row?.['Application Status'] || '').toLowerCase() === 'confirmed'
+    && String(row?.['TPG Payment Status'] || '').toLowerCase() === 'pending';
+
+// "2026-10-08" -> "Thu, 8 Oct 2026"; anything unparseable is shown as-is.
+const formatClassDate = (iso: unknown) => {
+    const s = String(iso || '');
+    const d = new Date(`${s}T00:00:00`);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(d.getTime())
+        ? d.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+        : s;
+};
+
+const pillClasses = {
+    green: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+    amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+    red: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    gray: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+};
+
 export const RetrieveDirectApplicationView: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState('Confirmed');
@@ -235,8 +257,8 @@ export const RetrieveDirectApplicationView: React.FC = () => {
     const [summary, setSummary] = useState<{ retrieved: number; inserted: number; updated: number; skipped: number; failed: number; queued: number } | null>(null);
     // Application IDs ticked in the preview; only these are enrolled by "Enrol selected".
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    // Already-enrolled applicants are kept in the preview but hidden until toggled on.
-    const [showEnrolled, setShowEnrolled] = useState(false);
+    // Counts from the last fetch, shown as the strip above the table.
+    const [fetchStats, setFetchStats] = useState<{ toReview: number; stuck: number; pendingPayment: number; enrolled: number; past: number } | null>(null);
     // Rows sent by "Enrol selected", with their live progress from da_application.
     const [sentRows, setSentRows] = useState<any[]>([]);
     const [sentStatus, setSentStatus] = useState<Record<string, any>>({});
@@ -330,6 +352,7 @@ export const RetrieveDirectApplicationView: React.FC = () => {
         setIsError(false);
         setSummary(null);
         setPreview(null);
+        setFetchStats(null);
         stopPolling();
         setSentPolling(false);
         setSentRows([]);
@@ -337,19 +360,27 @@ export const RetrieveDirectApplicationView: React.FC = () => {
             const json = await fetchFromTpg();
             const rows: any[] = Array.isArray(json.rows) ? json.rows : [];
             const lmsStatus = json.lmsStatus || {};
-            // Keep every applicant; already-enrolled ones are hidden unless "Show already enrolled" is on.
-            const all = rows.map(row => ({ row, lms: lmsStatus[row['Application ID']] ?? null }));
-            const notEnrolled = all.filter(({ lms }) => !lms?.enrolled);
-            setPreview(all);
-            setShowEnrolled(false);
+            // List only applicants with no enrolment yet; already-enrolled ones are counted, not listed.
+            const notEnrolled = rows
+                .map(row => ({ row, lms: lmsStatus[row['Application ID']] ?? null }))
+                .filter(({ lms }) => !lms?.enrolled);
+            setPreview(notEnrolled);
             setSelectedIds(new Set(notEnrolled.filter(({ lms }) => !lms).map(({ row }) => row['Application ID'])));
             const enrolledCount = rows.length - notEnrolled.length;
             const pastNote = json.skippedPastClasses > 0 ? ` ${json.skippedPastClasses} for classes that already started were left out.` : '';
+            setFetchStats({
+                toReview: notEnrolled.length,
+                stuck: notEnrolled.filter(({ lms }) => !!lms).length,
+                pendingPayment: notEnrolled.filter(({ row }) => isPendingPayment(row)).length,
+                enrolled: enrolledCount,
+                past: Number(json.skippedPastClasses) || 0,
+            });
+            // The stats strip and table say it all when there are rows to review.
             setMessage(notEnrolled.length === 0
                 ? (rows.length === 0
                     ? `No applications found for upcoming classes.${pastNote}`
                     : `All ${rows.length} applicant(s) are already enrolled. Nothing to do.${pastNote}`)
-                : `Found ${notEnrolled.length} applicant(s) not enrolled yet (${enrolledCount} already enrolled). Nothing has been enrolled yet — untick anyone you don't want, then click Enrol selected.${pastNote}`);
+                : null);
         } catch (err) {
             setIsError(true);
             setMessage(err instanceof Error ? err.message : 'Failed to fetch direct applications');
@@ -457,6 +488,7 @@ export const RetrieveDirectApplicationView: React.FC = () => {
         try {
             await importAndEnrol(rows);
             setPreview(null);
+            setFetchStats(null);
             setSelectedIds(new Set());
             setSentRows(rows);
             setSentStatus({});
@@ -469,9 +501,23 @@ export const RetrieveDirectApplicationView: React.FC = () => {
         }
     };
 
-    const enrolledRows = (preview ?? []).filter(({ lms }) => lms?.enrolled);
-    const hasPreview = (preview ?? []).some(({ lms }) => !lms?.enrolled);
-    const visibleRows = (preview ?? []).filter(({ lms }) => showEnrolled || !lms?.enrolled);
+    const hasPreview = !!preview && preview.length > 0;
+
+    // Status chosen in the picker but awaiting the warning popup's confirmation.
+    const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+    const applyStatus = (value: string) => {
+        setStatus(value);
+        setPreview(null);
+        setFetchStats(null);
+        setSelectedIds(new Set());
+        setMessage(null);
+    };
+    useEffect(() => {
+        if (pendingStatus === null) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPendingStatus(null); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [pendingStatus]);
 
     return (
         <div className="space-y-6">
@@ -483,46 +529,96 @@ export const RetrieveDirectApplicationView: React.FC = () => {
             </div>
 
             <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
-                <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 flex-shrink-0 rounded-full bg-blue-100 dark:bg-blue-800/40 flex items-center justify-center">
-                        <Icon name={IconName.Download} className="w-5 h-5 text-blue-600 dark:text-blue-300" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <h3 className="text-base font-semibold text-gray-900 dark:text-white">Retrieve from TPGateway</h3>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            Confirmed Direct Applications are imported into LMS, then enrolment, grant, invoice, and calendar automation continues from there.
-                        </p>
-
-                        <div className="mt-5 flex flex-wrap items-end gap-3">
-                            <label className="block w-full sm:w-56">
-                                <span className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Status</span>
-                                <select value={status} onChange={event => { setStatus(event.target.value); setPreview(null); setSelectedIds(new Set()); }} disabled={loading} className={inputClasses}>
-                                    <option value="Confirmed">Confirmed</option>
-                                    <option value="Cancelled">Cancelled</option>
-                                    <option value="">All</option>
-                                </select>
-                            </label>
-                            {hasPreview ? (
-                                <>
-                                    <Button variant="outline" onClick={fetchApplications} disabled={loading} className="h-10">
-                                        {loading ? 'Working...' : 'Fetch again'}
-                                    </Button>
-                                    <Button onClick={enrolSelected} disabled={loading || selectedIds.size === 0} className="h-10">
-                                        {loading ? 'Working...' : `Enrol selected (${selectedIds.size})`}
-                                    </Button>
-                                </>
-                            ) : (
-                                <Button onClick={fetchApplications} disabled={loading} className="h-10">
-                                    {loading ? 'Working...' : 'Fetch & Enrol'}
-                                </Button>
-                            )}
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 flex-shrink-0 rounded-full bg-blue-100 dark:bg-blue-800/40 flex items-center justify-center">
+                            <Icon name={IconName.Download} className="w-5 h-5 text-blue-600 dark:text-blue-300" />
                         </div>
-
-                        <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                            Pulls applications for classes starting today or later only. Past classes are always left out, and learners already in the LMS are skipped.
-                            Fetch &amp; Enrol shows the list first — nothing is enrolled until you untick anyone you don&apos;t want and click Enrol selected.
-                        </p>
+                        <div>
+                            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Retrieve from TPGateway</h3>
+                            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+                                Upcoming classes only · learners already enrolled are hidden
+                            </p>
+                        </div>
                     </div>
+
+                    <ol className="flex flex-wrap items-center gap-2 text-xs">
+                        {['Fetch', 'Review & untick', 'Enrol selected'].map((text, idx) => {
+                            // Step 1 until a list is showing; then the review/enrol steps are live.
+                            const done = hasPreview && idx === 0;
+                            const current = hasPreview ? idx > 0 : idx === 0;
+                            return (
+                                <li key={text} className="flex items-center gap-2">
+                                    {idx > 0 && <span className={`h-px w-6 ${done || current ? 'bg-blue-400' : 'bg-gray-300 dark:bg-gray-600'}`} />}
+                                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold ${done
+                                        ? 'bg-green-500 text-white'
+                                        : current
+                                            ? 'bg-blue-600 text-white ring-4 ring-blue-100 dark:ring-blue-900/50'
+                                            : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+                                        {done ? <Icon name={IconName.Check} className="w-3.5 h-3.5" /> : idx + 1}
+                                    </span>
+                                    <span className={`whitespace-nowrap ${current ? 'font-medium text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>{text}</span>
+                                </li>
+                            );
+                        })}
+                    </ol>
+                </div>
+
+                <div className="mt-6">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Application status</div>
+                    <div role="radiogroup" aria-label="Application status" className="grid gap-3 sm:grid-cols-3">
+                        {([
+                            {
+                                value: 'Confirmed',
+                                title: 'Ready to Enrol',
+                                hint: (
+                                    <span className="flex flex-wrap gap-1">
+                                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${pillClasses.green}`}>Confirmed</span>
+                                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${pillClasses.amber}`}>Confirmed (Pending Payment)</span>
+                                    </span>
+                                ),
+                            },
+                            { value: 'Cancelled', title: 'Cancelled', hint: <span>Withdrawn or cancelled applications</span> },
+                            { value: '', title: 'All Statuses', hint: <span>Every application for upcoming classes</span> },
+                        ]).map(opt => {
+                            const active = status === opt.value;
+                            return (
+                                <button
+                                    key={opt.value || 'all'}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={active}
+                                    disabled={loading}
+                                    onClick={() => {
+                                        if (active) return;
+                                        // Cancelled / All can pull in non-confirmed rows — confirm first.
+                                        if (opt.value === 'Confirmed') applyStatus(opt.value); else setPendingStatus(opt.value);
+                                    }}
+                                    className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 ${active
+                                        ? 'border-blue-500 bg-blue-50/60 ring-1 ring-blue-500 dark:border-blue-400 dark:bg-blue-900/20 dark:ring-blue-400'
+                                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-700/30'}`}
+                                >
+                                    <span className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${active ? 'border-blue-600 dark:border-blue-400' : 'border-gray-300 dark:border-gray-500'}`}>
+                                        {active && <span className="h-2 w-2 rounded-full bg-blue-600 dark:bg-blue-400" />}
+                                    </span>
+                                    <span className="min-w-0">
+                                        <span className={`block text-sm font-semibold ${active ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-200'}`}>{opt.title}</span>
+                                        <span className="mt-1.5 block text-xs text-gray-500 dark:text-gray-400">{opt.hint}</span>
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 dark:border-gray-700 pt-5">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Nothing is enrolled until you click <span className="font-medium text-gray-700 dark:text-gray-300">Enrol selected</span>. Enrolment, grant, invoice and calendar then run automatically.
+                    </p>
+                    <Button variant={hasPreview ? 'outline' : undefined} onClick={fetchApplications} disabled={loading} className="h-10 inline-flex items-center gap-2">
+                        <Icon name={IconName.Sync} className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        {loading ? 'Fetching...' : hasPreview ? 'Fetch again' : 'Fetch applications'}
+                    </Button>
                 </div>
 
                 {message && (
@@ -628,87 +724,182 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                     </div>
                 )}
 
-                {enrolledRows.length > 0 && (
-                    <div className="mt-4">
-                        <Button variant="outline" onClick={() => setShowEnrolled(v => !v)} className="h-9 text-sm">
-                            {showEnrolled ? `Hide already enrolled (${enrolledRows.length})` : `Show already enrolled (${enrolledRows.length})`}
-                        </Button>
+                {fetchStats && hasPreview && (
+                    <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {([
+                            ['To review', fetchStats.toReview, 'text-gray-900 dark:text-white', null],
+                            ['Selected', selectedIds.size, 'text-blue-600 dark:text-blue-400', null],
+                            ['Pending payment', fetchStats.pendingPayment, 'text-amber-600 dark:text-amber-400', null],
+                            ['Already enrolled', fetchStats.enrolled, 'text-gray-500 dark:text-gray-400', fetchStats.past > 0 ? `${fetchStats.past} past classes left out` : null],
+                        ] as const).map(([label, value, tone, note]) => (
+                            <div key={label} className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3">
+                                <div className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</div>
+                                <div className={`mt-1 text-2xl font-semibold ${tone}`}>{value}</div>
+                                {note && <div className="text-[11px] text-gray-400 dark:text-gray-500">{note}</div>}
+                            </div>
+                        ))}
                     </div>
                 )}
 
-                {visibleRows.length > 0 && (
-                    <div className="mt-5 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                        <table className="min-w-full text-sm">
-                            <thead className="bg-gray-50 dark:bg-gray-900/40 text-left text-xs uppercase text-gray-500 dark:text-gray-400">
-                                <tr>
-                                    <th className="px-3 py-2 w-8">
-                                        <input
-                                            type="checkbox"
-                                            aria-label="Select all"
-                                            checked={allSelected}
-                                            disabled={loading || selectableRows.length === 0}
-                                            onChange={toggleAll}
-                                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
-                                        />
-                                    </th>
-                                    <th className="px-3 py-2">#</th>
-                                    <th className="px-3 py-2">Learner</th>
-                                    <th className="px-3 py-2">Course</th>
-                                    <th className="px-3 py-2">Class start</th>
-                                    <th className="px-3 py-2">TPG status</th>
-                                    <th className="px-3 py-2">Application ID</th>
-                                    <th className="px-3 py-2">Fetch & Enrol will</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-gray-900 dark:text-gray-100">
-                                {visibleRows.map(({ row, lms }, i) => (
-                                    <tr key={`${row['Application ID']}-${i}`} className={(!lms && !selectedIds.has(row['Application ID'])) || lms?.enrolled ? 'opacity-50' : ''}>
-                                        <td className="px-3 py-2">
-                                            {!lms && (
-                                                <input
-                                                    type="checkbox"
-                                                    aria-label={`Select ${row['Trainee Name']}`}
-                                                    checked={selectedIds.has(row['Application ID'])}
-                                                    disabled={loading}
-                                                    onChange={() => toggleSelected(row['Application ID'])}
-                                                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
-                                                />
-                                            )}
-                                        </td>
-                                        <td className="px-3 py-2 text-gray-500 dark:text-gray-400">{i + 1}</td>
-                                        <td className="px-3 py-2">
-                                            <div className="font-medium">{row['Trainee Name']}</div>
-                                            <div className="text-xs text-gray-500 dark:text-gray-400">{row['Trainee Email']}</div>
-                                        </td>
-                                        <td className="px-3 py-2">
-                                            <div>{row['Course Title']}</div>
-                                            <div className="text-xs text-gray-500 dark:text-gray-400">{row['Course Reference Number']} · Run {row['Course Run ID']}</div>
-                                        </td>
-                                        <td className="px-3 py-2 whitespace-nowrap">{row['Course Start Date']}</td>
-                                        <td className="px-3 py-2">{row['Application Status']}</td>
-                                        <td className="px-3 py-2 whitespace-nowrap text-xs">{row['Application ID']}</td>
-                                        <td className="px-3 py-2">
-                                            {lms?.enrolled ? (
-                                                <span className="inline-flex rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
-                                                    Skip — already enrolled ({lms.enrolmentId})
-                                                </span>
-                                            ) : lms ? (
-                                                <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-300">
-                                                    Skip — already uploaded but enrolment stuck. Retry in View Direct Application
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex rounded-full bg-green-100 dark:bg-green-900/30 px-2 py-0.5 text-xs text-green-800 dark:text-green-300">
-                                                    {String(row['Application Status'] || '').toLowerCase().startsWith('confirm') ? 'Upload for Enrolment Processing' : 'Upload only (not confirmed)'}
-                                                </span>
-                                            )}
-                                        </td>
+                {hasPreview && (
+                    <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-2.5">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                                <span className="font-semibold">{selectedIds.size}</span> of {selectableRows.length} selected for enrolment
+                                {fetchStats && fetchStats.stuck > 0 && (
+                                    <span className="ml-2 text-xs text-amber-700 dark:text-amber-400">· {fetchStats.stuck} stuck — retry in View Direct Application</span>
+                                )}
+                            </span>
+                            <Button onClick={enrolSelected} disabled={loading || selectedIds.size === 0} className="h-8 text-sm">
+                                {loading ? 'Working...' : `Enrol selected (${selectedIds.size})`}
+                            </Button>
+                        </div>
+                        <div className="max-h-[65vh] overflow-auto">
+                            <table className="min-w-full text-sm">
+                                <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                    <tr>
+                                        <th className="px-4 py-2.5 w-10">
+                                            <input
+                                                type="checkbox"
+                                                aria-label="Select all"
+                                                checked={allSelected}
+                                                disabled={loading || selectableRows.length === 0}
+                                                onChange={toggleAll}
+                                                className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+                                            />
+                                        </th>
+                                        <th className="px-3 py-2.5">Learner</th>
+                                        <th className="px-3 py-2.5">Course</th>
+                                        <th className="px-3 py-2.5 whitespace-nowrap">Class start</th>
+                                        <th className="px-3 py-2.5 whitespace-nowrap">TPG status</th>
+                                        <th className="px-3 py-2.5 whitespace-nowrap">Application ID</th>
+                                        <th className="px-3 py-2.5">Action</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-gray-900 dark:text-gray-100">
+                                    {preview!.map(({ row, lms }, i) => {
+                                        const appId = row['Application ID'];
+                                        const selected = selectedIds.has(appId);
+                                        const pending = isPendingPayment(row);
+                                        const appStatus = String(row['Application Status'] || '');
+                                        const paid = String(row['TPG Payment Status'] || '').toLowerCase() === 'paid';
+                                        const confirmed = appStatus.toLowerCase().startsWith('confirm');
+                                        return (
+                                            <tr
+                                                key={`${appId}-${i}`}
+                                                className={`transition-colors ${lms
+                                                    ? 'bg-amber-50/40 dark:bg-amber-900/10'
+                                                    : selected
+                                                        ? 'bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                                                        : 'opacity-60 hover:opacity-100 hover:bg-gray-50 dark:hover:bg-gray-700/30'}`}
+                                            >
+                                                <td className="px-4 py-3 align-top">
+                                                    {!lms && (
+                                                        <input
+                                                            type="checkbox"
+                                                            aria-label={`Select ${row['Trainee Name']}`}
+                                                            checked={selected}
+                                                            disabled={loading}
+                                                            onChange={() => toggleSelected(appId)}
+                                                            className="mt-0.5 h-4 w-4 rounded border-gray-300 dark:border-gray-600"
+                                                        />
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-3 align-top">
+                                                    <div className="font-medium">{row['Trainee Name']}</div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400">{row['Trainee Email']}</div>
+                                                </td>
+                                                <td className="px-3 py-3 align-top max-w-sm">
+                                                    <div className="leading-snug">{row['Course Title']}</div>
+                                                    <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{row['Course Reference Number']} · Run {row['Course Run ID']}</div>
+                                                </td>
+                                                <td className="px-3 py-3 align-top whitespace-nowrap">{formatClassDate(row['Course Start Date'])}</td>
+                                                <td className="px-3 py-3 align-top">
+                                                    <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${pending ? pillClasses.amber : confirmed ? pillClasses.green : pillClasses.gray}`}>
+                                                        {pending ? 'Confirmed (Pending Payment)' : appStatus}
+                                                    </span>
+                                                    {paid && <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Paid</div>}
+                                                </td>
+                                                <td className="px-3 py-3 align-top whitespace-nowrap font-mono text-xs text-gray-600 dark:text-gray-300">{appId}</td>
+                                                <td className="px-3 py-3 align-top">
+                                                    {lms ? (
+                                                        <span
+                                                            title="Already uploaded but enrolment is stuck. Retry it in View Direct Application."
+                                                            className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${pillClasses.amber}`}
+                                                        >
+                                                            Stuck — retry in View DA
+                                                        </span>
+                                                    ) : (
+                                                        <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${pillClasses.gray}`}>
+                                                            Enrolment on Hold
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
             </Card>
+
+            {pendingStatus !== null && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+                    onClick={() => setPendingStatus(null)}
+                >
+                    <div
+                        role="alertdialog"
+                        aria-modal="true"
+                        aria-labelledby="da-status-warning-title"
+                        className="relative w-full max-w-lg overflow-hidden rounded-xl bg-white dark:bg-gray-900 shadow-2xl ring-1 ring-amber-200/60 dark:ring-amber-900/40"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <span className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500" />
+                        <div className="px-6 py-5 bg-gradient-to-br from-amber-50 via-white to-white dark:from-amber-950/30 dark:via-gray-900 dark:to-gray-900">
+                            <div className="flex items-start gap-4">
+                                <div className="w-11 h-11 flex-shrink-0 rounded-xl bg-amber-100 dark:bg-amber-900/40 ring-1 ring-amber-200 dark:ring-amber-800/60 flex items-center justify-center">
+                                    <Icon name={IconName.Warning} className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 id="da-status-warning-title" className="text-lg font-bold text-gray-900 dark:text-white">
+                                        Switch to {pendingStatus === 'Cancelled' ? 'Cancelled' : 'All Statuses'}?
+                                    </h3>
+                                    <p className="mt-1.5 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                                        {pendingStatus === 'Cancelled'
+                                            ? 'This lists applications that were cancelled or withdrawn on TPGateway. These learners should not be enrolled.'
+                                            : 'This lists every application for upcoming classes — including ones that are cancelled or not confirmed yet.'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 space-y-2 text-sm text-gray-700 dark:text-gray-300 border-t border-gray-100 dark:border-gray-800">
+                            <p className="flex gap-2"><span className="text-amber-500">•</span>Rows are still ticked by default — check every row before clicking Enrol selected.</p>
+                            <p className="flex gap-2"><span className="text-amber-500">•</span>Sending a cancelled application updates the LMS record to Cancelled.</p>
+                            <p className="flex gap-2"><span className="text-amber-500">•</span>To enrol new learners, use <span className="font-semibold">Ready to Enrol</span> instead.</p>
+                        </div>
+                        <div className="px-6 py-4 flex items-center justify-end gap-2 border-t border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-950/40">
+                            <button
+                                type="button"
+                                autoFocus
+                                onClick={() => setPendingStatus(null)}
+                                className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                                Keep current
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { applyStatus(pendingStatus); setPendingStatus(null); }}
+                                className="px-4 py-2 text-sm font-semibold rounded-lg text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-900/20 transition-colors"
+                            >
+                                Yes, switch
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
