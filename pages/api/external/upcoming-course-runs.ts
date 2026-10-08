@@ -6,7 +6,6 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/uti
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { syncEnrolmentToDB } from '../../../lib/ssg/utils/sync-enrolment-to-db';
-import { splitTrainerList } from '../../../lib/trainerInvitations';
 import { getLocalYMD } from '../../../lib/dateHelpers';
 import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../lib/courseCode';
 
@@ -425,17 +424,20 @@ async function _runUpcomingCourseRunsInner() {
 
   // ── Trainer assignment pass ───────────────────────────────────────────────
   // For every course_run processed this batch that still has no assigned trainer,
-  // check SSG linkCourseRunTrainer first, then fall back to course trainers_email_list
-  // (first entry by comma order), then trainers_list (first entry by comma order).
+  // mirror a trainer that a person put DIRECTLY on TPGateway (SSG
+  // linkCourseRunTrainer) into the LMS.
+  //
+  // It deliberately does NOT fall back to the course's approved-trainer list any
+  // more. That fallback silently wrote approved-list #1 onto the class and set it
+  // Confirmed (then the 03:00 Sync-Trainer-to-TPG job registered them on
+  // TPGateway) without any invitation or admin assignment — so classes looked
+  // staffed while the trainer had never been asked. A class now shows
+  // "No trainer" until a trainer accepts an invitation or an admin assigns one.
   if (results.length > 0) {
     const processedRunIds = results.map(r => r.courseRunId);
-    const unassignedResult = await pool.query<{
-      id: string; course_run_id: string;
-      trainers_email_list: string | null; trainers_list: string | null;
-    }>(
-      `SELECT cr.id, cr.course_run_id, c.trainers_email_list, c.trainers_list
+    const unassignedResult = await pool.query<{ id: string; course_run_id: string }>(
+      `SELECT cr.id, cr.course_run_id
        FROM course_run cr
-       JOIN course c ON c.id = cr.course_id
        WHERE cr.course_run_id = ANY($1::text[])
          AND cr.assigned_trainer_id IS NULL
          AND NOT EXISTS (
@@ -492,21 +494,15 @@ async function _runUpcomingCourseRunsInner() {
         }
         if (candidates.length > 0) fromSSG = true;
 
-        // Once the invitation cascade has started on this run, it owns staffing:
-        // never put a trainer who DECLINED back, and never guess from the
-        // approved list. Without this, the list fallback below re-picked
-        // approved-list #1 every night (usually the person who just declined),
-        // re-filling the legacy trainer fields — which put them back on the
-        // Google Calendar and blocked other invitees' Accept.
-        const invRes = await pool.query<{ email: string | null; status: string }>(
-          `SELECT LOWER(BTRIM(trainer_email)) AS email, status
-             FROM trainer_invitation WHERE course_run_id = $1`,
+        // Never put back a TPG trainer who DECLINED this run's invitation.
+        const declinedRes = await pool.query<{ email: string }>(
+          `SELECT DISTINCT LOWER(BTRIM(trainer_email)) AS email
+             FROM trainer_invitation
+            WHERE course_run_id = $1 AND status = 'declined'
+              AND NULLIF(BTRIM(trainer_email), '') IS NOT NULL`,
           [run.id]
         );
-        const inviteFlowActive = invRes.rows.length > 0;
-        const declinedEmails = new Set(
-          invRes.rows.filter(r => r.status === 'declined' && r.email).map(r => r.email as string)
-        );
+        const declinedEmails = new Set(declinedRes.rows.map(r => r.email));
         if (declinedEmails.size > 0 && candidates.length > 0) {
           const kept = candidates.filter(t => !declinedEmails.has((t.email || '').trim().toLowerCase()));
           if (kept.length < candidates.length) {
@@ -515,47 +511,9 @@ async function _runUpcomingCourseRunsInner() {
           candidates.splice(0, candidates.length, ...kept);
           if (candidates.length === 0) fromSSG = false;
         }
-        if (candidates.length === 0 && inviteFlowActive) {
-          console.log(`    ↩️ run ${run.course_run_id}: invitation cascade in progress — not assigning from the approved list`);
-          continue;
-        }
-
-        // 2. Fallback: trainers_email_list (all comma-separated entries, in order)
-        if (candidates.length === 0 && run.trainers_email_list) {
-          for (const email of splitTrainerList(run.trainers_email_list)) {
-            const userRow = await pool.query(
-              `SELECT id, full_name, email FROM app_user WHERE LOWER(email) = LOWER($1) LIMIT 1`,
-              [email]
-            );
-            if (userRow.rows.length > 0) {
-              candidates.push({
-                id:    userRow.rows[0].id,
-                name:  userRow.rows[0].full_name,
-                email: userRow.rows[0].email,
-              });
-            }
-          }
-        }
-
-        // 3. Fallback: trainers_list (all comma-separated name entries, in order)
-        if (candidates.length === 0 && run.trainers_list) {
-          for (const name of splitTrainerList(run.trainers_list)) {
-            const userRow = await pool.query(
-              `SELECT id, full_name, email FROM app_user WHERE LOWER(full_name) = LOWER($1) LIMIT 1`,
-              [name]
-            );
-            if (userRow.rows.length > 0) {
-              candidates.push({
-                id:    userRow.rows[0].id,
-                name:  userRow.rows[0].full_name,
-                email: userRow.rows[0].email,
-              });
-            }
-          }
-        }
 
         if (candidates.length === 0) {
-          console.log(`    ⚠️ no trainer found for run ${run.course_run_id}`);
+          console.log(`    ℹ️ no trainer on TPGateway for run ${run.course_run_id} — left unassigned (invitations / admin assign)`);
           continue;
         }
 
