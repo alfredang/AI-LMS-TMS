@@ -6,6 +6,7 @@ import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdent
 import { getLocalYMD } from '../../../lib/dateHelpers';
 import { OptionalSelector, Vacancy, ModeOfTraining } from '../../../lib/ssg/models/course-runs';
 import { AddRunInfo, AddCourseRunUtils } from '../../../lib/ssg/models/add-course-run';
+import { getDirectApplicationInstantConfirmSettings } from '../../../lib/directApplicationInstantConfirmSettings';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -319,8 +320,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             scheduleInfoTypeDescription = String(ssgRun.scheduleInfoType?.description ?? '').trim();
             scheduleInfo = String(ssgRun.scheduleInfo ?? '').trim();
             modeCode = String(ssgRun.modeOfTraining ?? '').trim();
-            if (Number.isFinite(Number(ssgRun.intakeSize))) templateIntake.intakeSize = Number(ssgRun.intakeSize);
-            if (Number.isFinite(Number(ssgRun.threshold))) templateIntake.threshold = Number(ssgRun.threshold);
+            const templateIntakeSize = Number(ssgRun.intakeSize);
+            const templateThreshold = Number(ssgRun.threshold);
+            if (Number.isFinite(templateIntakeSize) && templateIntakeSize > 0) templateIntake.intakeSize = templateIntakeSize;
+            if (Number.isFinite(templateThreshold) && templateThreshold > 0) templateIntake.threshold = templateThreshold;
             const v = ssgRun.venue;
             if (v) {
               // Fill any venue gaps from the SSG record (local columns win when present).
@@ -417,6 +420,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       warnings.push('No template sessions; generated one 09:30–18:30 session per day.');
     }
 
+    const instantConfirmSettings = await getDirectApplicationInstantConfirmSettings();
+
     // ── Assemble AddRunInfo (same structure the admin form submits) ────────────
     const runInfo: AddRunInfo = {
       courseReferenceNumber: courseCode,
@@ -437,12 +442,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         postalCode: venue.postalCode,
         room: venue.room,
         wheelChairAccess: venue.wheelChair ? OptionalSelector.YES : OptionalSelector.NO,
-        // SSG's own records carry these on every run (all zeros for this provider),
-        // and omitting them draws a bare "Invalid input parameter(s)" naming no field.
-        // Cloned from the template run where available so an intake that IS set is
-        // carried forward rather than silently reset to 0.
-        intakeSize: Number.isFinite(Number(body.intake_size)) ? Number(body.intake_size) : (templateIntake.intakeSize ?? 0),
-        threshold: Number.isFinite(Number(body.threshold)) ? Number(body.threshold) : (templateIntake.threshold ?? 0),
+        // Required for TPGateway Direct Applications Instant Confirm.
+        // Explicit request values win; otherwise prefer useful template values, then defaults.
+        intakeSize: Number.isFinite(Number(body.intake_size)) ? Number(body.intake_size) : (templateIntake.intakeSize ?? instantConfirmSettings.intakeSize),
+        threshold: Number.isFinite(Number(body.threshold)) ? Number(body.threshold) : (templateIntake.threshold ?? instantConfirmSettings.threshold),
         registeredUserCount: 0,
         modeOfTraining: modeCode as ModeOfTraining,
         courseAdminEmail: adminEmail,

@@ -57,7 +57,7 @@ import {
   CourseSessionsView
 } from '../components/admin/GrantManagementViews';
 import EditCourseRunView from '../components/admin/EditCourseRunView';
-import { UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
+import { RetrieveDirectApplicationView, UploadDirectApplicationView, ViewDirectApplicationView, UpdateDirectApplicationView } from '../components/admin/DirectApplicationViews';
 import { BulkUploadEnrolmentView } from '../components/admin/BulkEnrolmentViews';
 import TrainerAttendanceDashboard from '../components/trainer/TrainerAttendanceDashboard';
 import PastAttendance from '../components/trainer/PastAttendance';
@@ -161,6 +161,7 @@ const PAGE_LABELS: Partial<Record<AdminPage, string>> = {
   [AdminPage.TpgAttendance]: 'Attendance',
   [AdminPage.TpgAssessment]: 'Assessment',
   [AdminPage.TpgClaims]: 'Claims',
+  [AdminPage.RetrieveDirectApplication]: 'Retrieve Direct Application',
   [AdminPage.ViewCourses]: 'View Courses',
   [AdminPage.CourseImageGenerator]: 'Course Image Generator',
   [AdminPage.ViewTrainers]: 'View Trainers',
@@ -242,6 +243,7 @@ const AdminLayout: React.FC = () => {
 
   const tpgSubDashboards: Partial<Record<AdminPage, NavBoxProps[]>> = {
     [AdminPage.TpgDirectApplication]: [
+      { title: "Retrieve Direct Application", description: "Pull Instant Confirm applications from TPGateway and enrol them.", icon: IconName.Download, onClick: () => setAdminPage(AdminPage.RetrieveDirectApplication) },
       { title: "Upload Direct Application", description: "Import direct application records into the system.", icon: IconName.Upload, onClick: () => setAdminPage(AdminPage.UploadDirectApplication) },
       { title: "View Direct Application", description: "Review and manage uploaded direct application records.", icon: IconName.Eye, onClick: () => setAdminPage(AdminPage.ViewDirectApplication) },
     ],
@@ -426,6 +428,8 @@ const AdminLayout: React.FC = () => {
         return <CourseSessionTimingView />;
       case AdminPage.ClassDetail:
         return <ClassManagerView courseToEdit={editingCourseRun} viewOnly={true} />;
+      case AdminPage.RetrieveDirectApplication:
+        return <RetrieveDirectApplicationView />;
       case AdminPage.UploadDirectApplication:
         return <UploadDirectApplicationView />;
       case AdminPage.ViewDirectApplication:

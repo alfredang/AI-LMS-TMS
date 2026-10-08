@@ -7,6 +7,7 @@ import { Cryptography } from '../../../../lib/ssg/utils/cryptography';
 import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../../lib/courseCode';
 import { createSSGCourseAPI } from '../../../../lib/ssg/api/course-api';
 import { getTrainingPartnerIdentifiers } from '../../../../lib/trainingPartnerIdentifiers';
+import { getDirectApplicationInstantConfirmSettings } from '../../../../lib/directApplicationInstantConfirmSettings';
 
 /**
  * POST /api/admin/wsq-schedule-sync/run-sync
@@ -674,6 +675,7 @@ async function processItem(
   const regClosing = addDays(start_date, -1);
   const regOpening = todaySg > regClosing ? regClosing : todaySg;
   const toInt = (d: string) => parseInt(d.replace(/-/g, ''), 10);
+  const instantConfirmSettings = await getDirectApplicationInstantConfirmSettings();
 
   const payload = {
     course: {
@@ -689,6 +691,9 @@ async function processItem(
         modeOfTraining: sessions[0].modeOfTraining,
         courseAdminEmail: companyEmail,
         courseVacancy: { code: 'A', description: 'Available' },
+        intakeSize: instantConfirmSettings.intakeSize,
+        threshold: instantConfirmSettings.threshold,
+        registeredUserCount: 0,
         sessions: sessions.map(s => ({
           modeOfTraining: s.modeOfTraining, startDate: s.startDate, endDate: s.endDate,
           startTime: s.startTime, endTime: s.endTime, venue: VENUE,

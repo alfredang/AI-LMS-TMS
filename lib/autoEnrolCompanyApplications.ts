@@ -10,6 +10,7 @@ import { refreshGrantsForEnrolments } from './services/billingSync';
 import { getTrainingPartnerIdentifiers } from './trainingPartnerIdentifiers';
 import { RUN_COURSE_CODE_SQL } from './courseCode';
 import { addCaLearnerToCalendar } from './google-calendar/ca-calendar-sync';
+import { inferTraineeIdType } from './traineeIdentity';
 
 function isRealSsgEnrolmentId(value: unknown): value is string {
   return /^ENR-/i.test(String(value || '').trim());
@@ -517,8 +518,11 @@ function buildCompanyApplicationId(row: any): string {
   return `CA-${compact || row.id}`;
 }
 
-function mapTraineeIdType(value: unknown): string | null {
+function mapTraineeIdType(value: unknown, traineeId?: unknown): string | null {
   const raw = String(value || '').trim();
+  const inferred = inferTraineeIdType(traineeId, raw);
+  if (inferred) return inferred;
+
   const lower = raw.toLowerCase();
 
   if (!raw) return null;
@@ -541,7 +545,7 @@ function buildCompanyApplicationRecord(row: any, run: ResolvedRun, enrolmentId?:
     course_reference_number: run.courseReferenceNumber,
 
     trainee_id: row.trainee_nric,
-    trainee_id_type: mapTraineeIdType(row.trainee_id_type),
+    trainee_id_type: mapTraineeIdType(row.trainee_id_type, row.trainee_nric),
     trainee_name: row.trainee_full_name,
     trainee_email: row.trainee_email,
     trainee_phone: row.trainee_phone,

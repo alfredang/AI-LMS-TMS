@@ -3064,6 +3064,66 @@ export const TrainingProviderProfileCard: React.FC<TrainingProviderProfileCardPr
                     </div>
                     <div className="p-3 bg-surface-elevated rounded-md border border-default">
                         <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            Direct Application Intake Size
+                        </label>
+                        <p className="text-xs text-on-surface-secondary mb-2 font-normal">
+                            Default intake size sent when creating new SSG course runs for Instant Confirm.
+                        </p>
+                        {isEditing ? (
+                            <input
+                                type="number"
+                                min={1}
+                                value={formData.adminSettings.directApplicationIntakeSize ?? 50}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        adminSettings: {
+                                            ...prev.adminSettings,
+                                            directApplicationIntakeSize: Math.max(1, parseInt(e.target.value || '50', 10) || 50),
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="50"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface">
+                                {formData.adminSettings.directApplicationIntakeSize ?? 50}
+                            </p>
+                        )}
+                    </div>
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
+                            Direct Application Threshold
+                        </label>
+                        <p className="text-xs text-on-surface-secondary mb-2 font-normal">
+                            Default threshold sent when creating new SSG course runs for Instant Confirm.
+                        </p>
+                        {isEditing ? (
+                            <input
+                                type="number"
+                                min={1}
+                                value={formData.adminSettings.directApplicationThreshold ?? 20}
+                                onChange={(e) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        adminSettings: {
+                                            ...prev.adminSettings,
+                                            directApplicationThreshold: Math.max(1, parseInt(e.target.value || '20', 10) || 20),
+                                        },
+                                    }))
+                                }
+                                className={inputClasses}
+                                placeholder="20"
+                            />
+                        ) : (
+                            <p className="text-sm text-on-surface">
+                                {formData.adminSettings.directApplicationThreshold ?? 20}
+                            </p>
+                        )}
+                    </div>
+                    <div className="p-3 bg-surface-elevated rounded-md border border-default">
+                        <label className="block text-sm font-medium text-on-surface-secondary mb-1 font-semibold">
                             CAS Threshold (%)
                         </label>
                         {isEditing ? (

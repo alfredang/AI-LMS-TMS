@@ -235,6 +235,7 @@ const Header: React.FC = () => {
     AdminPage.TpgAttendance,
     AdminPage.TpgAssessment,
     AdminPage.TpgClaims,
+    AdminPage.RetrieveDirectApplication,
     AdminPage.UploadDirectApplication,
     AdminPage.ViewDirectApplication,
     AdminPage.UpdateDirectApplication,

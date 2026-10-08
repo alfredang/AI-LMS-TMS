@@ -2,10 +2,12 @@
  * Apply / remove the trainer's assessor sign-off on a learner's assessment
  * submissions (link_assessment_submission rows) for one class.
  *
- * Signing: each unsigned PDF/DOCX submission is downloaded from Google Drive,
+ * Signing: each unsigned PDF/DOCX/ODT submission is downloaded from Google Drive,
  * stamped (see assessorStamp.ts), uploaded next to the original as
  * "<name> (signed).<ext>", and the row's file_url/file_name are switched to the
  * stamped copy with the original kept in original_file_url/original_file_name.
+ * A Mac Pages submission is first converted to PDF (see pagesToPdf.ts) and
+ * signed as "<name> (signed).pdf"; the .pages file stays the original.
  *
  * Unsigning: the row is pointed back at the original and the stamped copy is
  * removed from Drive (best effort).
@@ -28,6 +30,7 @@ import {
   type AssessorDetails,
   type LabelKey,
 } from './assessorStamp';
+import { convertPagesToPdf, isPagesFile, pagesPdfName } from './pagesToPdf';
 
 export interface AssessorRecord {
   user_id: string;
@@ -212,10 +215,15 @@ export async function signLearnerSubmissions(params: {
     }
 
     try {
-      const src = await downloadSubmission(drive, fileId);
+      let src = await downloadSubmission(drive, fileId);
+      if (isPagesFile(src.name, src.mimeType)) {
+        // Pages can't be stamped in place — sign a PDF rendition instead.
+        const pdf = await convertPagesToPdf(src.buffer);
+        src = { ...src, buffer: pdf, name: pagesPdfName(src.name), mimeType: STAMP_MIME.pdf };
+      }
       const format = detectStampFormat(src.name, src.mimeType);
       if (!format) {
-        results.push({ ...base, status: 'skipped', reason: `Unsupported file type (${src.name}) — only ${STAMP_FORMATS_LABEL} can be signed` });
+        results.push({ ...base, status: 'skipped', reason: `Unsupported file type (${src.name}) — only ${STAMP_FORMATS_LABEL} and Mac Pages can be signed` });
         continue;
       }
 

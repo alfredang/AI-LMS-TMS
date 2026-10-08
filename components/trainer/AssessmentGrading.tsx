@@ -846,7 +846,7 @@ const AssessmentGrading: React.FC = () => {
                             </span>
                           </label>
                           {/* Assessor sign-off — stamps name/NRIC/date/signature onto the
-                              learner's uploaded PDF/DOCX files (tick to sign, untick to restore) */}
+                              learner's uploaded PDF/DOCX/ODT/Pages files (tick to sign, untick to restore) */}
                           {(() => {
                             const hasFiles = (student.submission_count || 0) > 0 && !!student.user_id;
                             const busy = !!signingStudent[sId];
