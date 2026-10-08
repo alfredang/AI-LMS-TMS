@@ -136,6 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               cr.start_date, cr.end_date,
               cr.class_type, cr.mode_of_learning::text AS mode_of_learning,
               cr.virtual_meeting_link,
+              cr.assigned_trainer_email AS prev_legacy_trainer_email,
               COALESCE(cr.invitation_replies_blocked, false) AS replies_blocked
        FROM trainer_invitation ti
        JOIN course_run cr ON cr.id = ti.course_run_id
@@ -226,9 +227,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ));
     }
 
-    // If accepting, check if ANY trainer is already assigned locally
-    // (via junction table, legacy scalar, or accepted invitation).
-    // Covers: manual admin assignment, calendar sync, invitation accept.
+    // If accepting, check if ANY other trainer already holds the class:
+    //   1. an LMS assignment (junction table: manual admin assign, earlier accept)
+    //   2. the legacy scalar (course_run.assigned_trainer_*) — set by staff or the
+    //      nightly auto-assign — UNLESS that trainer declined or let an invitation
+    //      for this run expire. A decliner/non-responder must not keep blocking:
+    //      the scalar is re-filled overnight with approved-list #1, which used to
+    //      turn away every later invitee with "Already Assigned".
+    //   3. another accepted invitation
+    // A successful accept below overwrites the scalar with the accepting trainer.
     if (action === 'accept') {
       // Check junction table for any assigned trainer (not this trainer)
       const junctionAssigned = await pool.query(
@@ -238,13 +245,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         [invitation.course_run_id, invitation.trainer_email]
       );
 
-      // Check legacy scalar for any assigned trainer (not this trainer)
+      // Check legacy scalar for another trainer who has NOT declined / let an
+      // invitation for this run expire (see rule 2 above)
       const scalarAssigned = junctionAssigned.rows.length === 0
         ? await pool.query(
-            `SELECT assigned_trainer_name, assigned_trainer_email FROM course_run
-             WHERE id = $1
-               AND assigned_trainer_email IS NOT NULL AND assigned_trainer_email != ''
-               AND LOWER(assigned_trainer_email) != LOWER($2)
+            `SELECT cr.assigned_trainer_name, cr.assigned_trainer_email FROM course_run cr
+             WHERE cr.id = $1
+               AND NULLIF(BTRIM(cr.assigned_trainer_email), '') IS NOT NULL
+               AND LOWER(BTRIM(cr.assigned_trainer_email)) != LOWER(BTRIM($2))
+               AND NOT EXISTS (
+                 SELECT 1 FROM trainer_invitation ti
+                  WHERE ti.course_run_id = cr.id
+                    AND ti.status IN ('declined', 'expired')
+                    AND LOWER(BTRIM(ti.trainer_email)) = LOWER(BTRIM(cr.assigned_trainer_email))
+               )
              LIMIT 1`,
             [invitation.course_run_id, invitation.trainer_email]
           )
@@ -493,6 +507,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (calResult.meetLink) acceptMeetLink = calResult.meetLink;
       } catch (calErr) {
         console.error(`❌ [trainer-invitation/respond] Calendar add failed:`, calErr);
+      }
+
+      // The legacy scalar we just overwrote held a different trainer. The accept
+      // check above only lets this through when that trainer declined or let
+      // their invitation expire, so they are not teaching — but the nightly
+      // LMS→Calendar sync may already have put them on the event. Take them off,
+      // unless they are genuinely assigned in the LMS (co-trainer).
+      const prevEmail = String(invitation.prev_legacy_trainer_email || '').trim();
+      if (prevEmail && prevEmail.toLowerCase() !== String(invitation.trainer_email || '').trim().toLowerCase()) {
+        try {
+          const stillAssigned = await pool.query(
+            `SELECT 1 FROM course_run_trainer
+              WHERE course_run_id = $1 AND LOWER(BTRIM(trainer_email)) = LOWER($2) LIMIT 1`,
+            [invitation.course_run_id, prevEmail]
+          );
+          if (stillAssigned.rows.length === 0) {
+            const cal = await patchRunAttendee(invitation.course_run_id, prevEmail, 'remove');
+            console.log(
+              `📅 [trainer-invitation/respond] removed replaced default trainer ${prevEmail} from calendar: ` +
+              `status=${cal.status} changed=${cal.changed}/${cal.events}${cal.reason ? ` (${cal.reason})` : ''}`
+            );
+          }
+        } catch (calErr) {
+          console.error(`❌ [trainer-invitation/respond] Calendar remove of replaced default trainer failed:`, calErr);
+        }
       }
     }
 
