@@ -7,7 +7,7 @@ import {
   WHATSAPP_MIN_GAP_MINUTES,
   WHATSAPP_PENDING_TTL_HOURS,
 } from '../../../lib/trainerWhatsapp';
-import { findAcknowledgedTrainerTgs } from '../../../lib/calendar/trainerAcknowledgement';
+import { findAcknowledgedTrainerTgsTolerant } from '../../../lib/calendar/trainerAcknowledgement';
 
 /**
  * External API — Trainer WhatsApp Notification Queue (rate-gated dispatcher)
@@ -155,12 +155,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
            JOIN course c ON c.id = cr.course_id
           WHERE n.status = 'pending' AND n.kind = 'class_reminder'`,
       )).rows;
-      const acknowledgedTgs = await findAcknowledgedTrainerTgs(pendingTgsRows.map((row) => ({
+      // Tolerant: if Calendar can't be read right now, skip only this
+      // re-check — the 12:30 queue job already applied it, so delivery must
+      // not stop (it used to throw a 500 here and block every reminder).
+      const ack = await findAcknowledgedTrainerTgsTolerant(pendingTgsRows.map((row) => ({
         runUuid: row.run_uuid,
         courseCode: row.course_code,
         dateIso: row.start_date,
       })));
-      for (const acknowledgement of acknowledgedTgs.values()) {
+      if (ack.calendarUnavailable || ack.failedReads > 0) {
+        console.warn(
+          `⚠️ [whatsapp-notifications] dispatch-time Calendar re-check incomplete ` +
+          `(unavailable=${ack.calendarUnavailable} failedReads=${ack.failedReads}) — releasing without it`
+        );
+      }
+      for (const acknowledgement of ack.acknowledged.values()) {
         await pool.query(
           `UPDATE trainer_whatsapp_notification n
               SET status = 'cancelled',

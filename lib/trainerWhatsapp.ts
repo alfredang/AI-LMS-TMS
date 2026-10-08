@@ -132,6 +132,39 @@ const fmtDate = (v: any): string => {
  * phone from trainer_profile.tel via the trainer's email. Never throws.
  */
 /**
+ * True when a class reminder for this run/trainer/class date was already queued
+ * — whatever its outcome (pending, sent, failed, expired, cancelled, no_phone).
+ * Nothing is ever re-queued for the same date, so failures can't turn into
+ * repeat sends.
+ */
+export async function classReminderExists(
+  courseRunUuid: string,
+  trainerEmail: string | null,
+  trainerName: string,
+  classDate: string
+): Promise<boolean> {
+  await ensureTrainerWhatsappTable();
+  const dup = await pool.query(
+    `SELECT 1 FROM trainer_whatsapp_notification
+      WHERE course_run_id = $1
+        AND kind = 'class_reminder'
+        AND LOWER(COALESCE(trainer_email, trainer_name)) = LOWER(COALESCE($2, $3))
+        AND (
+          class_date = $4::date
+          -- Rows written before class_date existed have no exact date to compare —
+          -- fall back to a short recency window (guards against re-running the
+          -- same day's cron twice) rather than the old 10-day window, which is
+          -- long enough to wrongly treat a genuinely distinct later occurrence
+          -- of a multi-week recurring run as a duplicate of an earlier one.
+          OR (class_date IS NULL AND created_at > NOW() - INTERVAL '2 days')
+        )
+      LIMIT 1`,
+    [courseRunUuid, trainerEmail, trainerName, classDate]
+  );
+  return dup.rows.length > 0;
+}
+
+/**
  * Queue the "upcoming class in 3 days" reminder for one trainer of a
  * CONFIRMED class. The LMS composes the message from its own record (the
  * single source of truth) — this replaced Tael's self-assembled reminders,
@@ -153,25 +186,7 @@ export async function queueClassReminderWhatsApp(opts: {
 }): Promise<'queued' | 'skipped_duplicate' | 'error'> {
   const { courseRunUuid, trainerName, trainerEmail, trainerPhone, message, classDate } = opts;
   try {
-    await ensureTrainerWhatsappTable();
-    const dup = await pool.query(
-      `SELECT 1 FROM trainer_whatsapp_notification
-        WHERE course_run_id = $1
-          AND kind = 'class_reminder'
-          AND LOWER(COALESCE(trainer_email, trainer_name)) = LOWER(COALESCE($2, $3))
-          AND (
-            class_date = $4::date
-            -- Rows written before class_date existed have no exact date to compare —
-            -- fall back to a short recency window (guards against re-running the
-            -- same day's cron twice) rather than the old 10-day window, which is
-            -- long enough to wrongly treat a genuinely distinct later occurrence
-            -- of a multi-week recurring run as a duplicate of an earlier one.
-            OR (class_date IS NULL AND created_at > NOW() - INTERVAL '2 days')
-          )
-        LIMIT 1`,
-      [courseRunUuid, trainerEmail, trainerName, classDate]
-    );
-    if (dup.rows.length > 0) return 'skipped_duplicate';
+    if (await classReminderExists(courseRunUuid, trainerEmail, trainerName, classDate)) return 'skipped_duplicate';
 
     await pool.query(
       `INSERT INTO trainer_whatsapp_notification

@@ -25,10 +25,40 @@ const normalizeName = (value: unknown): string => String(value || '').trim().rep
  * Find TGS codes for which an accepted Calendar attendee matches the TMS
  * trainer directory. A match on any run acknowledges the whole TGS/date.
  * Pending, tentative and declined responses are not acknowledgements.
+ *
+ * STRICT: throws if Calendar is unavailable or any event read fails. Callers
+ * that must keep going for the runs that could be checked should use
+ * findAcknowledgedTrainerTgsTolerant instead.
  */
 export async function findAcknowledgedTrainerTgs(
   candidates: TrainerAcknowledgementCandidate[],
 ): Promise<Map<string, TrainerAcknowledgement>> {
+  const result = await findAcknowledgedTrainerTgsTolerant(candidates);
+  if (result.calendarUnavailable) {
+    throw new Error('Cannot evaluate trainer acknowledgement because Google Calendar is unavailable');
+  }
+  if (result.failedReads > 0) {
+    throw new Error(`Cannot evaluate trainer acknowledgement: ${result.failedReads} Calendar event read(s) failed`);
+  }
+  return result.acknowledged;
+}
+
+export interface TolerantAcknowledgementResult {
+  acknowledged: Map<string, TrainerAcknowledgement>;
+  /** Runs whose acknowledgement could NOT be determined (Calendar down or an event read failed). */
+  uncheckedRunUuids: Set<string>;
+  calendarUnavailable: boolean;
+  failedReads: number;
+}
+
+/**
+ * Same as findAcknowledgedTrainerTgs, but never throws: one unreadable event
+ * (or Calendar being down) only marks the affected runs as unchecked instead
+ * of failing every run. Callers decide what "unchecked" means for them.
+ */
+export async function findAcknowledgedTrainerTgsTolerant(
+  candidates: TrainerAcknowledgementCandidate[],
+): Promise<TolerantAcknowledgementResult> {
   const usable = candidates
     .map((candidate) => ({
       ...candidate,
@@ -36,11 +66,20 @@ export async function findAcknowledgedTrainerTgs(
       dateIso: String(candidate.dateIso || '').slice(0, 10),
     }))
     .filter((candidate) => candidate.runUuid && candidate.courseCode && candidate.dateIso);
-  if (usable.length === 0) return new Map();
+  const empty = (): TolerantAcknowledgementResult => ({
+    acknowledged: new Map(), uncheckedRunUuids: new Set(), calendarUnavailable: false, failedReads: 0,
+  });
+  if (usable.length === 0) return empty();
 
-  const client = await getCalendarReadClient();
+  const allRunUuids = new Set(usable.map((candidate) => candidate.runUuid));
+  let client: Awaited<ReturnType<typeof getCalendarReadClient>> = null;
+  try {
+    client = await getCalendarReadClient();
+  } catch (err) {
+    console.error('⚠️ [trainerAcknowledgement] Calendar client failed:', err);
+  }
   if (!client) {
-    throw new Error('Cannot evaluate trainer acknowledgement because Google Calendar is unavailable');
+    return { ...empty(), uncheckedRunUuids: allRunUuids, calendarUnavailable: true };
   }
 
   const runUuids = [...new Set(usable.map((candidate) => candidate.runUuid))];
@@ -75,10 +114,18 @@ export async function findAcknowledgedTrainerTgs(
       }).then((response) => response.data),
     })),
   );
-  const failedReads = eventResults.filter((result) => result.status === 'rejected');
-  if (failedReads.length > 0) {
-    throw new Error(`Cannot evaluate trainer acknowledgement: ${failedReads.length} Calendar event read(s) failed`);
-  }
+  const uncheckedRunUuids = new Set<string>();
+  let failedReads = 0;
+  eventResults.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      failedReads++;
+      uncheckedRunUuids.add(eventRows[index].course_run_id);
+      console.error(
+        `⚠️ [trainerAcknowledgement] Calendar event read failed for run=${eventRows[index].course_run_id} ` +
+        `event=${eventRows[index].google_event_id}:`, result.reason
+      );
+    }
+  });
 
   const acceptedResponses: CalendarTrainerResponse[] = [];
   for (const result of eventResults) {
@@ -100,7 +147,9 @@ export async function findAcknowledgedTrainerTgs(
       }
     }
   }
-  if (acceptedResponses.length === 0) return new Map();
+  if (acceptedResponses.length === 0) {
+    return { acknowledged: new Map(), uncheckedRunUuids, calendarUnavailable: false, failedReads };
+  }
 
   const allEmails = [...new Set(acceptedResponses.map((response) => normalizeEmail(response.email)).filter(Boolean))];
   const allNames = [...new Set(acceptedResponses.map((response) => normalizeName(response.name)).filter(Boolean))];
@@ -125,5 +174,10 @@ export async function findAcknowledgedTrainerTgs(
     [allEmails, allNames],
   )).rows;
 
-  return matchAcknowledgedTrainerTgs(acceptedResponses, directoryRows);
+  return {
+    acknowledged: matchAcknowledgedTrainerTgs(acceptedResponses, directoryRows),
+    uncheckedRunUuids,
+    calendarUnavailable: false,
+    failedReads,
+  };
 }
