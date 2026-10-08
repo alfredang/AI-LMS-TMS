@@ -19,8 +19,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     try {
         const query = `
-            SELECT 
-                c.id as course_id, 
+            WITH me AS (
+                SELECT au.id, au.email, au.secondary_email, au.additional_emails
+                FROM app_user au
+                WHERE LOWER(TRIM($2)) IN (
+                    SELECT LOWER(TRIM(e))
+                    FROM unnest(ARRAY[au.email, au.secondary_email] || COALESCE(au.additional_emails, '{}')) AS e
+                    WHERE e IS NOT NULL
+                )
+            ),
+            my_emails AS (
+                SELECT LOWER(TRIM(e)) AS email
+                FROM me, unnest(ARRAY[me.email, me.secondary_email] || COALESCE(me.additional_emails, '{}')) AS e
+                WHERE e IS NOT NULL AND TRIM(e) <> ''
+            )
+            SELECT
+                c.id as course_id,
                 c.title as course_title, 
                 c.course_code,
                 cr.id as run_id, 
@@ -38,12 +52,24 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                     SELECT 1 FROM course_run_trainer crt
                     WHERE crt.course_run_id = cr.id AND crt.trainer_email ILIKE $1
                 )
+                -- The run may be assigned by trainer id, or under the trainer's
+                -- secondary/additional email rather than their login email.
+                OR cr.assigned_trainer_id IN (SELECT id FROM me)
+                OR cr.tpg_assigned_trainer_id IN (SELECT id FROM me)
+                OR LOWER(TRIM(cr.assigned_trainer_email)) IN (SELECT email FROM my_emails)
+                OR LOWER(TRIM(cr.tpg_assigned_trainer_email)) IN (SELECT email FROM my_emails)
+                OR EXISTS (
+                    SELECT 1 FROM course_run_trainer crt
+                    WHERE crt.course_run_id = cr.id
+                      AND (crt.trainer_id IN (SELECT id FROM me)
+                           OR LOWER(TRIM(crt.trainer_email)) IN (SELECT email FROM my_emails))
+                )
             )
               AND (cr.end_date IS NULL OR cr.end_date >= CURRENT_DATE)
             ORDER BY cr.start_date DESC
         `;
         
-        const values = [`%${email.trim()}%`];
+        const values = [`%${email.trim()}%`, email];
         const result = await pool.query(query, values);
 
         return res.status(200).json(result.rows);
