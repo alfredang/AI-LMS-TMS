@@ -492,6 +492,34 @@ async function _runUpcomingCourseRunsInner() {
         }
         if (candidates.length > 0) fromSSG = true;
 
+        // Once the invitation cascade has started on this run, it owns staffing:
+        // never put a trainer who DECLINED back, and never guess from the
+        // approved list. Without this, the list fallback below re-picked
+        // approved-list #1 every night (usually the person who just declined),
+        // re-filling the legacy trainer fields — which put them back on the
+        // Google Calendar and blocked other invitees' Accept.
+        const invRes = await pool.query<{ email: string | null; status: string }>(
+          `SELECT LOWER(BTRIM(trainer_email)) AS email, status
+             FROM trainer_invitation WHERE course_run_id = $1`,
+          [run.id]
+        );
+        const inviteFlowActive = invRes.rows.length > 0;
+        const declinedEmails = new Set(
+          invRes.rows.filter(r => r.status === 'declined' && r.email).map(r => r.email as string)
+        );
+        if (declinedEmails.size > 0 && candidates.length > 0) {
+          const kept = candidates.filter(t => !declinedEmails.has((t.email || '').trim().toLowerCase()));
+          if (kept.length < candidates.length) {
+            console.log(`    ↩️ run ${run.course_run_id}: skipping ${candidates.length - kept.length} TPG trainer(s) who declined`);
+          }
+          candidates.splice(0, candidates.length, ...kept);
+          if (candidates.length === 0) fromSSG = false;
+        }
+        if (candidates.length === 0 && inviteFlowActive) {
+          console.log(`    ↩️ run ${run.course_run_id}: invitation cascade in progress — not assigning from the approved list`);
+          continue;
+        }
+
         // 2. Fallback: trainers_email_list (all comma-separated entries, in order)
         if (candidates.length === 0 && run.trainers_email_list) {
           for (const email of splitTrainerList(run.trainers_email_list)) {

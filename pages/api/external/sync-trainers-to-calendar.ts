@@ -104,7 +104,14 @@ export async function runAutomation(opts: RunOptions = {}) {
                   WHERE t.course_run_id = cr.id AND nullif(btrim(t.trainer_email), '') IS NOT NULL),
                 ARRAY[]::text[]
               ) AS junction_emails,
-              nullif(btrim(lower(cr.assigned_trainer_email)), '') AS scalar_email
+              nullif(btrim(lower(cr.assigned_trainer_email)), '') AS scalar_email,
+              COALESCE(
+                (SELECT array_agg(DISTINCT lower(btrim(ti.trainer_email)))
+                   FROM trainer_invitation ti
+                  WHERE ti.course_run_id = cr.id AND ti.status = 'declined'
+                    AND nullif(btrim(ti.trainer_email), '') IS NOT NULL),
+                ARRAY[]::text[]
+              ) AS declined_emails
          FROM course_run cr
          JOIN course c ON c.id = cr.course_id
         WHERE cr.class_status <> 'Cancelled'
@@ -122,9 +129,15 @@ export async function runAutomation(opts: RunOptions = {}) {
     const attention: Array<{ courseRunId: string; trainerEmail: string; message: string }> = [];
 
     for (const run of runsRes.rows) {
+      // The legacy scalar fallback must never push a trainer who declined this
+      // class: it gets re-filled overnight with approved-list #1 (often the
+      // decliner), which used to put them straight back on the calendar after
+      // every decline. Junction rows are real LMS assignments and are trusted.
+      const declined = new Set<string>(run.declined_emails || []);
+      const scalarOk = run.scalar_email && !declined.has(run.scalar_email);
       const emails: string[] = (run.junction_emails && run.junction_emails.length > 0)
         ? run.junction_emails
-        : (run.scalar_email ? [run.scalar_email] : []);
+        : (scalarOk ? [run.scalar_email] : []);
       if (emails.length === 0) continue;
       runsProcessed++;
 

@@ -17,6 +17,7 @@ import { sendNextTrainerInvitationForCourseRun, sendExhaustedListAlert } from '@
 import { pushTrainerToTpgForRun } from '@/lib/ssg/pushTrainerToTpgForRun';
 import { autoShareCourseResourcesWithTrainerByRun } from '@/lib/google-drive/drive-helpers';
 import { confirmTrainerOnCalendar } from '@/lib/calendar/confirmTrainerOnCalendar';
+import { patchRunAttendee } from '@/lib/calendar/runAttendees';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
   const colors = {
@@ -335,6 +336,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           `❌ [trainer-invitation/respond] Failed to clean up trainer assignment on decline:`,
           cleanupErr
         );
+      }
+
+      // 4. Take the declined trainer off the class's Google Calendar event(s).
+      //    They may have been added earlier (nightly LMS→Calendar sync, manual
+      //    add, or a previous accept); leaving them there keeps the class in
+      //    their calendar after they said no. Silent patch (sendUpdates:'none').
+      try {
+        const cal = await patchRunAttendee(invitation.course_run_id, invitation.trainer_email, 'remove');
+        console.log(
+          `📅 [trainer-invitation/respond] calendar remove for declined "${invitation.trainer_name}": ` +
+          `status=${cal.status} changed=${cal.changed}/${cal.events}${cal.reason ? ` (${cal.reason})` : ''}`
+        );
+      } catch (calErr) {
+        console.error(`❌ [trainer-invitation/respond] Calendar remove on decline failed:`, calErr);
       }
     }
 
