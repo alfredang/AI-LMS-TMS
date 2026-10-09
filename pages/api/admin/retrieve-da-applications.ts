@@ -7,6 +7,7 @@ import {
 } from '@lib/ssg/api/direct-course-application-api';
 import { getTrainingPartnerIdentifiers } from '@lib/trainingPartnerIdentifiers';
 import pool from '@lib/db';
+import { collectDirectApplicationPages } from '@lib/directApplicationPagination';
 
 export const config = { maxDuration: 300 };
 
@@ -78,25 +79,19 @@ function normalizeApplication(app: DirectCourseApplication): Record<string, unkn
   };
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
-  }
-
-  const user = await requireRole(req, res, ['admin', 'developer', 'trainingProvider']);
-  if (!user) return;
-
-  try {
+/** Shared read-only retrieval; manual preview and scheduled enrolment use identical filters. */
+export async function retrieveDirectApplications(filters: Record<string, unknown> = {}) {
+    const req = { body: filters };
     const credentials = await getSSGCredentialsService().getSSGCredentials();
     if (!credentials) {
-      return res.status(400).json({ success: false, error: 'SSG credentials are not configured' });
+      throw new Error('SSG credentials are not configured');
     }
 
     const tp = await getTrainingPartnerIdentifiers();
     const uen = cleanString(req.body?.uen) || credentials.uen || tp.uen;
     const tpCode = cleanString(req.body?.tpCode) || tp.code;
     if (!uen || !tpCode) {
-      return res.status(400).json({ success: false, error: 'Missing UEN or Training Provider code' });
+      throw new Error('Missing UEN or Training Provider code');
     }
 
     // Upcoming classes only. Everything retrieved here goes on to be enrolled
@@ -145,39 +140,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     };
 
-    const allRows: Record<string, unknown>[] = [];
-    const seenIds = new Set<string>();
-    let total = 0;
-    let pagesFetched = 0;
-
-    // SSG pages are 1-based and page 0 is served as page 1. Starting at 0
-    // fetched the first page twice, the duplicates made the count look
-    // complete, and the last page was never requested (verified on live:
-    // 132 applications, pages 0 and 1 identical, page 2 held the other 32).
-    // Rows are also de-duplicated by Application ID in case pages overlap.
-    for (let page = 1; page <= MAX_PAGES_PER_REQUEST; page++) {
-      const result = await api.retrieveTrainingProviderCourseApplications({
-        ...baseFilter,
-        page,
-      });
-      pagesFetched++;
-      const pageApplications = result.data?.courseApplications || [];
-      if (pageApplications.length === 0) break;
-      total = Number(result.meta?.total ?? total);
-
-      let added = 0;
-      for (const row of pageApplications.map(normalizeApplication)) {
-        const id = String(row['Application ID'] || '');
-        if (id && seenIds.has(id)) continue;
-        if (id) seenIds.add(id);
-        allRows.push(row);
-        added++;
-      }
-
-      if (added === 0) break; // a repeated page — nothing new will follow
-      if (total > 0 && allRows.length >= total) break;
-      if (pageApplications.length < pageSize) break;
-    }
+    const { applications, total, pages: pagesFetched } = await collectDirectApplicationPages(
+      page => api.retrieveTrainingProviderCourseApplications({ ...baseFilter, page }), pageSize, MAX_PAGES_PER_REQUEST,
+    );
+    const allRows = applications.map(normalizeApplication);
 
     // Second check in case SSG ignores the run-date filter: drop any class that
     // has already started, and any row whose start date cannot be read.
@@ -216,7 +182,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    return res.status(200).json({
+    return {
       success: true,
       total,
       fetched: rows.length,
@@ -225,7 +191,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       upcomingFrom: todayIso,
       pages: pagesFetched,
       rows,
-    });
+    };
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+  if (!await requireRole(req, res, ['admin', 'developer', 'trainingProvider'])) return;
+  try {
+    return res.status(200).json(await retrieveDirectApplications(req.body || {}));
   } catch (err) {
     console.error('retrieve-da-applications error:', err);
     return res.status(500).json({

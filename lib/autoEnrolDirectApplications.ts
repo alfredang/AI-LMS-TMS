@@ -60,6 +60,7 @@ export type AutoEnrolStatus =
   | 'failed';
 
 export interface DaPipelineResult {
+  skipped?: boolean;
   id: string;
   applicationId: string;
   success: boolean;
@@ -765,7 +766,7 @@ export async function addTrainerToCalendarEvent(
 // Single-row pipeline
 // ---------------------------------------------------------------------------
 
-export async function processDirectApplication(
+async function processDirectApplicationUnlocked(
   appId: string,
   sharedCtx?: SSGContext,
   options?: {
@@ -776,6 +777,8 @@ export async function processDirectApplication(
      *  time so a QBO invoice is only ever created by an explicit admin action
      *  (tick a row + "Generate Invoice" on the Consolidated Finance page). */
     skipInvoicing?: boolean;
+    /** Scheduled runs must re-check under the lock: a manual run may have just finished. */
+    onlyUnenrolled?: boolean;
   }
 ): Promise<DaPipelineResult> {
   const rowRes = await pool.query(
@@ -1653,10 +1656,43 @@ export async function processDirectApplication(
 // Bulk pipeline
 // ---------------------------------------------------------------------------
 
+/** Shared by manual, scheduled and invoice flows; prevents overlapping SSG/QBO writes. */
+export async function processDirectApplication(
+  appId: string,
+  sharedCtx?: SSGContext,
+  options?: Parameters<typeof processDirectApplicationUnlocked>[2]
+): Promise<DaPipelineResult> {
+  const { withDaLock } = await import('./daAutomationLock');
+  const result = await withDaLock(pool, `application:${appId}`, async () => {
+    try {
+      if (options?.onlyUnenrolled) {
+        const existing = await pool.query('SELECT application_id, enrolment_id FROM da_application WHERE id = $1', [appId]);
+        if (String(existing.rows[0]?.enrolment_id || '').trim()) {
+          return { id: appId, applicationId: existing.rows[0].application_id, success: true, skipped: true,
+            finalStatus: 'enroled' as const, enrolmentId: existing.rows[0].enrolment_id, failedStep: 'already_enrolled' };
+        }
+      }
+      const result = await processDirectApplicationUnlocked(appId, sharedCtx, options);
+      // Every exit path must persist its real final status, not leave 'pending'.
+      if (result.failedStep !== 'load') {
+        await updateRow(appId, { auto_enrol_status: result.finalStatus });
+      }
+      return result;
+    } catch (error) {
+      await markFailed(appId, 'unexpected', error);
+      return { id: appId, applicationId: '', success: false, finalStatus: 'failed' as const,
+        error: error instanceof Error ? error.message : String(error), failedStep: 'unexpected' };
+    }
+  });
+  return result ?? { id: appId, applicationId: '', success: false, skipped: true,
+    finalStatus: 'pending', error: 'Already processing in another manual or automatic run', failedStep: 'busy' };
+}
+
 export async function bulkProcessDirectApplications(
-  appIds: string[]
+  appIds: string[], options?: { onlyUnenrolled?: boolean }
 ): Promise<DaPipelineResult[]> {
   const results: DaPipelineResult[] = [];
+  appIds = [...new Set(appIds)];
   if (appIds.length === 0) return results;
 
   let sharedCtx: SSGContext | undefined;
@@ -1670,7 +1706,7 @@ export async function bulkProcessDirectApplications(
     const batch = appIds.slice(i, i + BATCH_SIZE);
     for (const appId of batch) {
       try {
-        const result = await processDirectApplication(appId, sharedCtx, { sendInvoiceEmail: true });
+        const result = await processDirectApplication(appId, sharedCtx, { sendInvoiceEmail: true, ...options });
         results.push(result);
       } catch (err) {
         console.error(`❌ auto-enrol [${appId}] unexpected error:`, err);

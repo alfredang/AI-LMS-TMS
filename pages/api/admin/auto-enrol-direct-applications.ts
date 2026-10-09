@@ -25,6 +25,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   try {
     const { applicationIds } = req.body || {};
+    // An explicitly empty/invalid selection must never fall through to 'enrol all'.
+    if (applicationIds !== undefined && !Array.isArray(applicationIds)) {
+      return res.status(400).json({ success: false, error: 'applicationIds must be an array' });
+    }
+    if (Array.isArray(applicationIds) && applicationIds.length === 0) {
+      return res.status(200).json({ success: true, queued: 0, message: 'No eligible rows' });
+    }
 
     let ids: string[] = [];
 

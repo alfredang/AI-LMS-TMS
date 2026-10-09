@@ -301,19 +301,9 @@ async function callSearchEnrolmentSSGBatch(records: Record<string, any>[], tpUen
  * POST /api/admin/upload-da-applications
  * Body: { data: [...Excel rows...] }
  */
-async function handler(req: NextApiRequest, res: NextApiResponse) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ success: false, error: 'Method not allowed' });
-    }
-
-    try {
-        const { data } = req.body;
-
+export async function importDirectApplications(data: Record<string, any>[], options: { enqueue?: boolean } = {}) {
         if (!data || !Array.isArray(data)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid request body. Expected { data: [...] }'
-            });
+            throw new Error('Invalid request body. Expected { data: [...] }');
         }
 
         console.log(`📊 Processing ${data.length} DA application records...`);
@@ -356,12 +346,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const newRecords: Record<string, any>[] = [];
         const duplicates: string[] = [];
         const toUpdate: Record<string, any>[] = [];
-        const errors: { row: number; error: string }[] = [];
+        const errors: { row: number; error: string; application_id?: string }[] = [];
 
         for (let i = 0; i < data.length; i++) {
             try {
                 const row = data[i];
                 const transformed = transformRow(row);
+                transformed.__sourceRow = i + 1;
 
                 const appId = transformed.application_id;
                 if (!appId) {
@@ -376,9 +367,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
                     // Check application status transitions
                     const isExistingConfirmApplication = existingStatus === 'confirm application';
-                    const isExistingConfirmed = existingStatus === 'confirmed';
+                    const isExistingConfirmed = existingStatus.startsWith('confirmed');
                     const isExistingCancelled = existingStatus === 'cancelled';
-                    const isUploadedConfirmed = uploadedStatus === 'confirmed';
+                    const isUploadedConfirmed = uploadedStatus.startsWith('confirmed');
                     const isUploadedCancelled = uploadedStatus === 'cancelled';
 
                     // Valid status updates (not back to "Confirm application"):
@@ -558,7 +549,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             } catch (err) {
                 console.error('Error updating record:', record.application_id, err);
                 errors.push({
-                    row: 0,
+                    row: record.__sourceRow,
+                    application_id: record.application_id,
                     error: `Failed to update status for ${record.application_id}: ${err instanceof Error ? err.message : 'Update failed'}`
                 });
             }
@@ -648,7 +640,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             } catch (err) {
                 console.error('Error inserting record:', record.application_id, err);
                 errors.push({
-                    row: newRecords.indexOf(record) + 1,
+                    row: record.__sourceRow,
+                    application_id: record.application_id,
                     error: err instanceof Error ? err.message : 'Insert failed'
                 });
             }
@@ -672,6 +665,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         // pass below can cover exactly the rows the pipeline will NOT touch,
         // without the two racing each other on the same row.
         const queuedForPipeline = new Set<string>();
+
+        if (options.enqueue !== false) {
 
         // Fire-and-forget auto-enrol pipeline for all eligible records:
         //   - Newly inserted records
@@ -858,8 +853,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         } catch (autoErr) {
             console.error('Error triggering new DA automations', autoErr);
         }
+        }
 
-        return res.status(200).json({
+        return {
             success: true,
             inserted: insertedCount,
             updated: updatedCount,
@@ -876,8 +872,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 results: webhookResult.results,
                 error: webhookResult.error,
             } : undefined,
-        });
+        };
+}
 
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+    if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
+    if (!Array.isArray(req.body?.data)) return res.status(400).json({ success: false, error: 'Invalid request body. Expected { data: [...] }' });
+    try {
+        return res.status(200).json(await importDirectApplications(req.body.data, { enqueue: req.body.deferEnrolment !== true }));
     } catch (error) {
         console.error('❌ Error in upload-da-applications:', error);
         return res.status(500).json({

@@ -5699,6 +5699,23 @@ CREATE INDEX IF NOT EXISTS idx_msredeem_code_created
 
 
 --
+-- Scheduled direct-application retrieval and enrolment audit.
+CREATE TABLE IF NOT EXISTS public.da_automation_run (
+    id uuid PRIMARY KEY,
+    started_at timestamp with time zone NOT NULL DEFAULT now(),
+    completed_at timestamp with time zone,
+    status text NOT NULL CHECK (status IN ('running', 'completed', 'completed_with_errors', 'failed', 'interrupted')),
+    fetched integer NOT NULL DEFAULT 0,
+    imported integer NOT NULL DEFAULT 0,
+    attempted integer NOT NULL DEFAULT 0,
+    enrolled integer NOT NULL DEFAULT 0,
+    already_enrolled integer NOT NULL DEFAULT 0,
+    deferred integer NOT NULL DEFAULT 0,
+    error_count integer NOT NULL DEFAULT 0,
+    errors jsonb NOT NULL DEFAULT '[]'::jsonb
+);
+CREATE INDEX IF NOT EXISTS da_automation_run_started_idx ON public.da_automation_run (started_at DESC);
+
 -- PostgreSQL database dump complete
 --
 

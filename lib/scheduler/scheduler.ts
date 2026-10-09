@@ -10,6 +10,8 @@
 import cron, { ScheduledTask } from 'node-cron';
 import pool from '../db';
 import crypto from 'crypto';
+import type { PoolClient } from 'pg';
+import { DA_AUTOMATION_TASK, DA_AUTOMATION_CRON } from '../directApplicationAutomation';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -117,6 +119,15 @@ async function seedDefaults() {
         days_in_advance?: number;
         default_enabled?: boolean;
     }> = [
+        {
+            id: DA_AUTOMATION_TASK,
+            name: 'Fetch & Enrol Direct Applications',
+            description: 'Fetch confirmed upcoming Instant Confirm applications and enrol them automatically at 9 AM, noon, 3 PM and 6 PM Singapore time. Report available on Retrieve Direct Application.',
+            cron_expression: DA_AUTOMATION_CRON,
+            api_endpoint: '/api/external/auto-retrieve-enrol-direct-applications',
+            // Opt in per tenant; never silently enrol another tenant’s learners.
+            default_enabled: false,
+        },
         {
             id: 'mobile_class_reminders',
             name: 'Mobile Class Reminders',
@@ -376,6 +387,12 @@ const directHandlers = new Map<string, TaskHandler>();
 function getDirectHandler(taskId: string): TaskHandler | undefined {
     // Lazy-register handlers on first call
     if (directHandlers.size === 0) {
+        directHandlers.set(DA_AUTOMATION_TASK, async () => {
+            const { runDirectApplicationAutomation } = await import('../directApplicationAutomation');
+            const result = await runDirectApplicationAutomation();
+            if (result && result.error_count > 0) throw new Error(`Direct application automation: ${result.error_count} issue(s); see Retrieve Direct Application report`);
+            return result;
+        });
         directHandlers.set('auto_create_trainer_folders', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-create-assessment-records');
             return runAutomation();
@@ -503,17 +520,23 @@ async function executeTask(task: SchedulerTask) {
     // shared database so only ONE process globally can execute a given task.
     const lockKey = hashStringToInt(task.id);
     let dbLockAcquired = false;
+    let lockClient: PoolClient | undefined;
     try {
-        const lockResult = await pool.query(
+        lockClient = await pool.connect();
+        const lockResult = await lockClient.query(
             'SELECT pg_try_advisory_lock($1) AS acquired',
             [lockKey]
         );
         dbLockAcquired = lockResult.rows[0]?.acquired === true;
         if (!dbLockAcquired) {
+            lockClient.release();
+            schedulerState.inFlight.delete(task.id);
             console.log(`⏰ [Scheduler] "${task.name}" — DB advisory lock not acquired, another process is already running it — skipping`);
             return { success: false, error: 'another process holds the lock' };
         }
     } catch (lockErr) {
+        lockClient?.release(true);
+        lockClient = undefined;
         // If the advisory lock query itself fails (e.g. DB hiccup), fall
         // through and rely on the in-process lock alone rather than
         // blocking the task entirely.
@@ -584,8 +607,12 @@ async function executeTask(task: SchedulerTask) {
         schedulerState.inFlight.delete(task.id);
 
         // Release the DB advisory lock (if we acquired it)
-        if (dbLockAcquired) {
-            await pool.query('SELECT pg_advisory_unlock($1)', [lockKey]).catch(() => {});
+        if (lockClient) {
+            let destroy = false;
+            try {
+                if (dbLockAcquired) await lockClient.query('SELECT pg_advisory_unlock($1)', [lockKey]);
+            } catch { destroy = true; }
+            lockClient.release(destroy);
         }
     }
 }

@@ -8,6 +8,7 @@ import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
 import { displayApplicationId, realApplicationId } from '@lib/daApplicationId';
 import type { TpgJob } from '@lib/tpg/jobStore';
+import type { DaAutomationRun } from '@lib/directApplicationAutomation';
 
 // Lets the panel re-attach to a TPGateway run that outlived its tab.
 const TPG_JOB_KEY = 'lms.tpgConfirm.jobId';
@@ -248,6 +249,76 @@ const pillClasses = {
     gray: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
 };
 
+const DirectApplicationAutomationReport: React.FC = () => {
+    const [report, setReport] = useState<{
+        enabled: boolean; latest: (DaAutomationRun & { started_at: string }) | null; attentionCount: number;
+        attention: { application_id: string; auto_enrol_status: string | null; auto_enrol_error: string | null }[];
+    } | null>(null);
+    const [error, setError] = useState('');
+    useEffect(() => {
+        const controller = new AbortController();
+        const refresh = async () => {
+            try {
+                const response = await fetch('/api/admin/da-automation-report', { signal: controller.signal, cache: 'no-store' });
+                const json = await response.json();
+                if (!response.ok || !json.success) throw new Error(json.error || 'Unable to load automation report');
+                if (!controller.signal.aborted) { setReport(json); setError(''); }
+            } catch (err) {
+                if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Unable to load automation report');
+            }
+        };
+        void refresh();
+        const timer = setInterval(() => { if (!document.hidden) void refresh(); }, 30000);
+        return () => { controller.abort(); clearInterval(timer); };
+    }, []);
+    const latest = report?.latest;
+    const formatTime = (value: string) => new Date(value).toLocaleString('en-SG', {
+        timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true,
+    });
+    const hasIssues = latest?.error_count > 0 || report?.attentionCount > 0;
+    return (
+        <Card className="p-5 dark:bg-gray-800 dark:border-gray-700">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">Automatic fetch &amp; enrol</h3>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Daily at 9 AM · 12 PM · 3 PM · 6 PM SGT. Confirmed upcoming applications only.</p>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${report?.enabled ? pillClasses.green : pillClasses.amber}`}>
+                    {error ? 'Report unavailable' : !report ? 'Loading…' : report.enabled ? 'Schedule enabled' : 'Schedule disabled'}
+                </span>
+            </div>
+            {error && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {!error && report && (
+                <div aria-live="polite">
+                    <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
+                        {latest ? <>Last auto run: <span className="font-medium">{formatTime(latest.started_at)}</span> · {latest.status.replace(/_/g, ' ')}
+                            {latest.completed_at && <span className="text-xs text-gray-500 dark:text-gray-400"> · finished {formatTime(latest.completed_at)}</span>}</>
+                            : 'No automatic run recorded yet. Manual fetch and enrol remain available below.'}
+                    </p>
+                    {latest && <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        {[
+                            ['Fetched', latest.fetched], ['Newly enrolled', latest.enrolled],
+                            ['Already enrolled', latest.already_enrolled], ['Errors', latest.error_count],
+                        ].map(([label, value]) => <div key={label} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-900/40">
+                            <dt className="text-xs text-gray-500 dark:text-gray-400">{label}</dt>
+                            <dd className={`mt-1 text-xl font-semibold tabular-nums ${label === 'Errors' && Number(value) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>{value}</dd>
+                        </div>)}
+                    </dl>}
+                    {latest?.deferred > 0 && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{latest.deferred} application(s) already processing in another run; not triggered twice.</p>}
+                    {hasIssues && <details className="mt-3 text-sm text-amber-800 dark:text-amber-300">
+                        <summary className="cursor-pointer">Review issues · {latest?.error_count || 0} in last run · {report.attentionCount} upcoming application(s) need attention</summary>
+                        <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs">
+                            {(latest?.errors || []).map((issue, i) => <li key={`run-${i}`}>{issue.applicationId ? `${issue.applicationId}: ` : ''}{issue.step} — {issue.message}</li>)}
+                            {(report.attention || []).map(item => <li key={item.application_id}>{item.application_id}: {item.auto_enrol_error || item.auto_enrol_status || 'Processing has not completed'}</li>)}
+                        </ul>
+                        <p className="mt-2 text-xs">Use View Direct Application for manual investigation. No errors are hidden by a successful fetch.</p>
+                    </details>}
+                </div>
+            )}
+        </Card>
+    );
+};
+
 export const RetrieveDirectApplicationView: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState('Confirmed');
@@ -299,7 +370,7 @@ export const RetrieveDirectApplicationView: React.FC = () => {
             const response = await fetch('/api/admin/upload-da-applications', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders() },
-                body: JSON.stringify({ data: batch }),
+                body: JSON.stringify({ data: batch, deferEnrolment: true }),
             });
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
@@ -528,6 +599,8 @@ export const RetrieveDirectApplicationView: React.FC = () => {
                 </p>
             </div>
 
+            <DirectApplicationAutomationReport />
+
             <Card className="p-6 dark:bg-gray-800 dark:border-gray-700">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex items-start gap-3">
@@ -613,7 +686,7 @@ export const RetrieveDirectApplicationView: React.FC = () => {
 
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 dark:border-gray-700 pt-5">
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Nothing is enrolled until you click <span className="font-medium text-gray-700 dark:text-gray-300">Enrol selected</span>. Enrolment, grant, invoice and calendar then run automatically.
+                        Manual fetch is a preview. Click <span className="font-medium text-gray-700 dark:text-gray-300">Enrol selected</span> to process checked rows. Scheduled runs enrol ready applications automatically.
                     </p>
                     <Button variant={hasPreview ? 'outline' : undefined} onClick={fetchApplications} disabled={loading} className="h-10 inline-flex items-center gap-2">
                         <Icon name={IconName.Sync} className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
