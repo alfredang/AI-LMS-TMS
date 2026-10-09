@@ -7,11 +7,17 @@ import { getGoogleCredentials } from '../../../lib/google-auth/googleAuth';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { getLocalYMD } from '../../../lib/dateHelpers';
 import { calendarWritesAllowed } from '../../../lib/calendar/calendarGuard';
+import { ensureEventsForEnrolledRuns, EnsureEnrolledRunsResult } from '../../../lib/calendar/ensureEventsForEnrolledRuns';
 
 /**
- * Scheduler endpoint: pulls today's (SGT) SSG enrolments, then for each
- * Confirmed enrolment whose class has a Google Calendar event but whose
- * learner email is not yet an attendee, add the email to the event.
+ * Scheduler endpoint (every 3 hours):
+ *   0. Creates (or adopts) the Google Calendar event for any upcoming class that
+ *      has Confirmed learners but no event yet — classes filled by the SSG fetch
+ *      with no trainer used to get none, so admins made events by hand without a
+ *      Course Run ID (see lib/calendar/ensureEventsForEnrolledRuns.ts).
+ *   1–4. Pulls today's (SGT) SSG enrolments, then for each Confirmed enrolment
+ *      whose class has a Google Calendar event but whose learner email is not yet
+ *      an attendee, adds the email to the event.
  */
 
 function stripPrefixes(title: string): string {
@@ -46,6 +52,7 @@ export async function runAutomation(): Promise<{
   alreadyAttendee: number;
   noEvent: number;
   errors: number;
+  eventSweep?: EnsureEnrolledRunsResult | { error: string };
 }> {
   if (gCal.__addTodayCalRunning) {
     console.warn('[auto-add-today-enrolments-to-calendar] Another run is already in progress — skipping');
@@ -53,7 +60,19 @@ export async function runAutomation(): Promise<{
   }
   gCal.__addTodayCalRunning = true;
   try {
-    return await _runAutomationInner();
+    // Step 0 runs first so today's learners (step 4) can land on events it just made.
+    // Isolated: a failure here never blocks the learner-add steps below.
+    let eventSweep: EnsureEnrolledRunsResult | { error: string };
+    try {
+      eventSweep = await ensureEventsForEnrolledRuns({ limit: 25 });
+      console.log(
+        `📅 [auto-add-today-cal] class-event sweep: candidates=${eventSweep.candidates} created=${eventSweep.created} adopted=${eventSweep.adopted} attendees+${eventSweep.learnersAdded} errors=${eventSweep.errors}`
+      );
+    } catch (err) {
+      eventSweep = { error: err instanceof Error ? err.message : String(err) };
+      console.error('❌ [auto-add-today-cal] class-event sweep failed:', err);
+    }
+    return { ...(await _runAutomationInner()), eventSweep };
   } finally {
     gCal.__addTodayCalRunning = false;
   }

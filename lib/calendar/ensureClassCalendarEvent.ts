@@ -253,13 +253,19 @@ export interface AttendeeSyncResult { status: 'ok' | 'skipped'; added: number; r
  * attendees the LMS recognizes as departed learners/trainers — never strips
  * unknown (manually-added) attendees. Patches every recurring instance.
  */
-export async function syncClassAttendees(courseRunId: string): Promise<AttendeeSyncResult> {
+export async function syncClassAttendees(
+  courseRunId: string,
+  opts: { includeTpgTrainer?: boolean } = {}
+): Promise<AttendeeSyncResult> {
   const out: AttendeeSyncResult = { status: 'ok', added: 0, removed: 0, errors: 0 };
   const client = await getCalendarClient();
   if (!client) return { ...out, status: 'skipped', reason: 'calendar sync disabled' };
   const run = await loadRun(courseRunId);
   if (!run) return { ...out, status: 'skipped', reason: 'course run not found' };
   const { calendar, calendarId } = client;
+  // includeTpgTrainer:false leaves the TPG trainer out of BOTH sets (neither added nor
+  // removed) — for automatic paths where TPG may still hold an unconfirmed default.
+  const tpg = opts.includeTpgTrainer !== false;
 
   // Desired = confirmed learners + local trainers + the TPG-assigned trainer (lowercased emails).
   // The TPG trainer is included so the actual SSG/TPG trainer lands on the calendar even when
@@ -273,8 +279,8 @@ export async function syncClassAttendees(courseRunId: string): Promise<AttendeeS
        FROM course_run_trainer t WHERE t.course_run_id = $1 AND nullif(btrim(t.trainer_email),'') IS NOT NULL
       UNION
      SELECT lower(btrim(cr.tpg_assigned_trainer_email)) AS email
-       FROM course_run cr WHERE cr.id = $1 AND nullif(btrim(cr.tpg_assigned_trainer_email),'') IS NOT NULL`,
-    [run.id]
+       FROM course_run cr WHERE cr.id = $1 AND $2::boolean AND nullif(btrim(cr.tpg_assigned_trainer_email),'') IS NOT NULL`,
+    [run.id, tpg]
   );
   const desired = new Set(desiredRows.rows.map(r => r.email));
 
@@ -287,8 +293,8 @@ export async function syncClassAttendees(courseRunId: string): Promise<AttendeeS
     `SELECT lower(btrim(au.email)) AS email FROM enrollment e JOIN app_user au ON au.id=e.user_id WHERE e.course_run_id=$1 AND nullif(btrim(au.email),'') IS NOT NULL
      UNION SELECT lower(btrim(t.trainer_email)) FROM course_run_trainer t WHERE t.course_run_id=$1 AND nullif(btrim(t.trainer_email),'') IS NOT NULL
      UNION SELECT lower(btrim(ti.trainer_email)) FROM trainer_invitation ti WHERE ti.course_run_id=$1 AND nullif(btrim(ti.trainer_email),'') IS NOT NULL
-     UNION SELECT lower(btrim(cr.tpg_assigned_trainer_email)) FROM course_run cr WHERE cr.id=$1 AND nullif(btrim(cr.tpg_assigned_trainer_email),'') IS NOT NULL`,
-    [run.id]
+     UNION SELECT lower(btrim(cr.tpg_assigned_trainer_email)) FROM course_run cr WHERE cr.id=$1 AND $2::boolean AND nullif(btrim(cr.tpg_assigned_trainer_email),'') IS NOT NULL`,
+    [run.id, tpg]
   );
   const known = new Set(knownRows.rows.map(r => r.email));
 

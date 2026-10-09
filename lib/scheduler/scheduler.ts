@@ -308,7 +308,7 @@ async function seedDefaults() {
         {
             id: 'auto_add_today_enrolments_to_calendar',
             name: 'Auto Add Today\'s Enrolments to Calendar',
-            description: 'Pulls today\'s (SGT) enrolments from SSG, and for each Confirmed enrolment whose class has a matching Google Calendar event but whose learner email is not yet an attendee, adds the email to the event. Runs every 3 hours.',
+            description: 'First creates (or adopts) the Google Calendar event for any class starting in the next 30 days that has Confirmed learners but no event yet, with the Course Run ID, the learners and any LMS-assigned trainer (no calendar emails sent). Then pulls today\'s (SGT) enrolments from SSG, and for each Confirmed enrolment whose class has a matching Google Calendar event but whose learner email is not yet an attendee, adds the email to the event. Runs every 3 hours.',
             cron_expression: '0 */3 * * *', // Every 3 hours
             api_endpoint: '/api/external/auto-add-today-enrolments-to-calendar',
         },
