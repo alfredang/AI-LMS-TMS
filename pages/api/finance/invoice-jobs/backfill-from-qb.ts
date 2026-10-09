@@ -4,7 +4,7 @@ import pool from '@/lib/db';
 import { ensureInvoiceJobsTable } from '@/lib/services/invoiceJobs';
 import { callQbProxy } from '@/lib/quickbooks/qbProxyClient';
 
-type QbInvoice = { id: string; docNumber: string | null };
+type QbInvoice = { id: string; docNumber: string | null; privateNote?: string | null };
 
 async function qbQuery(app: string, query: string): Promise<any[] | null> {
   try {
@@ -29,18 +29,20 @@ async function qbFindByDocNumbers(app: string, docNumbers: string[]): Promise<Qb
 async function qbFetchInvoicePage(app: string, startPosition: number): Promise<QbInvoice[]> {
   const rows = await qbQuery(
     app,
-    `SELECT Id, DocNumber FROM Invoice ORDERBY TxnDate DESC STARTPOSITION ${startPosition} MAXRESULTS 1000`
+    `SELECT Id, DocNumber, PrivateNote FROM Invoice ORDERBY TxnDate DESC STARTPOSITION ${startPosition} MAXRESULTS 1000`
   );
   if (!rows) return [];
-  return rows.map((r: any) => ({ id: String(r.Id), docNumber: r.DocNumber ? String(r.DocNumber) : null }));
+  return rows.map((r: any) => ({
+    id: String(r.Id),
+    docNumber: r.DocNumber ? String(r.DocNumber) : null,
+    privateNote: r.PrivateNote ? String(r.PrivateNote) : null,
+  }));
 }
 
-/** Extract last 6 numeric digits from an enrolment ID — mirrors buildTmsInvoiceNo logic. */
-function enrolmentLast6(enrolmentId: string): string {
-  const digits = String(enrolmentId || '').replace(/\D/g, '');
-  if (digits.length >= 6) return digits.slice(-6);
-  if (digits.length > 0) return digits.padStart(6, '0').slice(-6);
-  return '';
+/** The enrolment an invoice belongs to, from the processor's "SSG enrolment: ENR-…" note. */
+function enrolmentIdFromPrivateNote(note: string | null | undefined): string | null {
+  const m = String(note || '').match(/SSG enrolment:\s*(ENR-\d{4}-\d+)/i);
+  return m ? m[1].toUpperCase() : null;
 }
 
 /**
@@ -64,7 +66,12 @@ function isCustomerInvoiceDocNumber(docNumber: string | null | undefined): boole
  *   → search QB by DocNumber IN (...) — DocNumber IS a filterable field in QBO.
  *
  * Pass 3 (bulk scan): enrolments still missing a done invoice_jobs entry
- *   → fetch all QB invoices, match by the last-6-digits suffix in DocNumber (TC26-0315-{last6}).
+ *   → fetch all QB invoices and link a TC customer invoice only when its owner is recorded:
+ *     the PrivateNote ("SSG enrolment: ENR-…", written by the invoice job processor) or the
+ *     da_application / company_application row holding that QB invoice id.
+ *     The DocNumber suffix alone is NOT proof of ownership: the 6-digit enrolment sequence
+ *     repeats across months/years (ENR-2011-041840 vs ENR-2610-041840 → TC26-1008-041840),
+ *     and suffix matching pinned hundreds of invoices on the wrong learner.
  */
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -79,10 +86,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const apps: string[] = appOverride === 'app2' ? ['app2', 'app1'] : ['app1', 'app2'];
 
     // ── Pass 1: local fix (no QB call) ────────────────────────────────────────
+    // Cancelled jobs keep their QB id for audit but must stay cancelled.
     const p1 = await pool.query(
       `UPDATE public.invoice_jobs
        SET status = 'done', updated_at = now()
-       WHERE status != 'done'
+       WHERE status NOT IN ('done', 'cancelled')
          AND qbo_invoice_id IS NOT NULL
        RETURNING enrolment_id`
     );
@@ -155,66 +163,77 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     let pass3Resolved = 0;
 
     if (missingRows.length > 0) {
-      // Build lookup: last6 → [enrolmentId, ...] (may have collisions but rare)
-      const last6Map = new Map<string, string[]>();
-      for (const row of missingRows) {
-        const l6 = enrolmentLast6(row.enrolment_id);
-        if (!l6) continue;
-        const existing = last6Map.get(l6) ?? [];
-        existing.push(row.enrolment_id);
-        last6Map.set(l6, existing);
+      const missingById = new Map(missingRows.map((r) => [r.enrolment_id.trim().toUpperCase(), r]));
+
+      // QB invoice ids already linked to some job — never link one invoice to two enrolments.
+      const linkedRes = await pool.query(
+        `SELECT DISTINCT qbo_invoice_id::text AS id FROM public.invoice_jobs WHERE qbo_invoice_id IS NOT NULL`
+      );
+      const alreadyLinked = new Set<string>(linkedRes.rows.map((r: { id: string }) => r.id));
+
+      // DA / Company invoices are created without the PrivateNote; their own tables record
+      // which enrolment(s) each QB invoice id belongs to (a company group invoice covers
+      // several learners, so one id can legitimately map to many enrolments).
+      const appOwnerRes = await pool.query(
+        `SELECT TRIM(invoice_id::text) AS id, UPPER(TRIM(enrolment_id)) AS enrolment_id
+           FROM public.da_application
+          WHERE NULLIF(TRIM(invoice_id::text), '') IS NOT NULL AND NULLIF(TRIM(enrolment_id), '') IS NOT NULL
+         UNION ALL
+         SELECT TRIM(invoice_id::text), UPPER(TRIM(enrolment_id))
+           FROM public.company_application
+          WHERE NULLIF(TRIM(invoice_id::text), '') IS NOT NULL AND NULLIF(TRIM(enrolment_id), '') IS NOT NULL`
+      );
+      const appOwnersByInvoiceId = new Map<string, Set<string>>();
+      for (const r of appOwnerRes.rows as Array<{ id: string; enrolment_id: string }>) {
+        const set = appOwnersByInvoiceId.get(r.id) ?? new Set<string>();
+        set.add(r.enrolment_id);
+        appOwnersByInvoiceId.set(r.id, set);
       }
 
-      if (last6Map.size > 0) {
-        // Fetch all QB invoices across both apps, paginated
-        const allQbInvoices = new Map<string, QbInvoice>(); // docNumber → invoice
-
-        for (const app of apps) {
-          let startPos = 1;
-          while (true) {
-            const page = await qbFetchInvoicePage(app, startPos);
-            if (!page || page.length === 0) break;
-            for (const inv of page) {
-              if (inv.docNumber && !allQbInvoices.has(inv.docNumber)) {
-                allQbInvoices.set(inv.docNumber, inv);
-              }
+      // Fetch all QB invoices across both apps, paginated
+      const allQbInvoices = new Map<string, QbInvoice>(); // docNumber → invoice
+      for (const app of apps) {
+        let startPos = 1;
+        while (true) {
+          const page = await qbFetchInvoicePage(app, startPos);
+          if (!page || page.length === 0) break;
+          for (const inv of page) {
+            if (inv.docNumber && !allQbInvoices.has(inv.docNumber)) {
+              allQbInvoices.set(inv.docNumber, inv);
             }
-            if (page.length < 1000) break; // last page
-            startPos += 1000;
           }
+          if (page.length < 1000) break; // last page
+          startPos += 1000;
         }
+      }
 
-        // Match QB invoices to missing enrolments by last-6 suffix
-        // DocNumber format: TC{yy}-{mmdd}-{last6}  — last 6 chars of DocNumber = last6
-        // Only TC-format DocNumbers are eligible: GRN-/SFC- supplemental invoices share
-        // the enrolment suffix and would otherwise be misattributed as customer invoices.
-        const enrolmentByLast6 = new Map<string, string>(); // last6 → enrolment_id (unique matches only)
-        for (const [l6, enrolmentIds] of last6Map.entries()) {
-          if (enrolmentIds.length === 1) {
-            enrolmentByLast6.set(l6, enrolmentIds[0]);
-          }
-          // skip if multiple enrolments share the same last6 (collision) — too ambiguous
-        }
+      // Link only TC customer invoices whose owner is recorded (PrivateNote, or the DA /
+      // Company application row). GRN-/SFC- supplemental invoices carry the same note, so
+      // the DocNumber format check stays.
+      for (const [docNumber, inv] of allQbInvoices.entries()) {
+        if (!isCustomerInvoiceDocNumber(docNumber)) continue;
+        const noteOwner = enrolmentIdFromPrivateNote(inv.privateNote);
+        // A per-learner invoice is never linked twice; a company group invoice is shared by design.
+        const owners = noteOwner
+          ? (alreadyLinked.has(inv.id) ? [] : [noteOwner])
+          : [...(appOwnersByInvoiceId.get(inv.id) ?? [])];
 
-        for (const [docNumber, inv] of allQbInvoices.entries()) {
-          if (!isCustomerInvoiceDocNumber(docNumber)) continue;
-          const suffix = docNumber.slice(-6);
-          const enrolmentId = enrolmentByLast6.get(suffix);
-          if (!enrolmentId) continue;
-
-          const enrRow = missingRows.find((r) => r.enrolment_id === enrolmentId);
+        for (const owner of owners) {
+          const enrRow = missingById.get(owner);
           if (!enrRow) continue;
+          const enrolmentId = enrRow.enrolment_id;
 
           try {
             const userId = enrRow.user_id || null;
             if (userId) {
               await pool.query(
                 `INSERT INTO public.invoice_jobs
-                   (enrolment_id, user_id, learner_email, course_code, status, qbo_invoice_id, qbo_doc_number)
-                 VALUES ($1::text, $2::uuid, $3::text, $4::text, 'done', $5::varchar, $6::varchar)
+                   (enrolment_id, user_id, learner_email, course_code, status, qbo_invoice_id, qbo_doc_number, invoice_no)
+                 VALUES ($1::text, $2::uuid, $3::text, $4::text, 'done', $5::varchar, $6::varchar, $6::varchar)
                  ON CONFLICT (enrolment_id) DO UPDATE SET
                    qbo_invoice_id  = EXCLUDED.qbo_invoice_id,
                    qbo_doc_number  = EXCLUDED.qbo_doc_number,
+                   invoice_no      = COALESCE(public.invoice_jobs.invoice_no, EXCLUDED.invoice_no),
                    status          = 'done',
                    updated_at      = now()`,
                 [enrolmentId, userId, enrRow.learner_email || '', enrRow.course_code || '', inv.id, docNumber]
@@ -222,16 +241,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             } else {
               await pool.query(
                 `INSERT INTO public.invoice_jobs
-                   (enrolment_id, user_id, learner_email, course_code, status, qbo_invoice_id, qbo_doc_number)
-                 VALUES ($1::text, gen_random_uuid(), '', '', 'done', $2::varchar, $3::varchar)
+                   (enrolment_id, user_id, learner_email, course_code, status, qbo_invoice_id, qbo_doc_number, invoice_no)
+                 VALUES ($1::text, gen_random_uuid(), '', '', 'done', $2::varchar, $3::varchar, $3::varchar)
                  ON CONFLICT (enrolment_id) DO UPDATE SET
                    qbo_invoice_id  = EXCLUDED.qbo_invoice_id,
                    qbo_doc_number  = EXCLUDED.qbo_doc_number,
+                   invoice_no      = COALESCE(public.invoice_jobs.invoice_no, EXCLUDED.invoice_no),
                    status          = 'done',
                    updated_at      = now()`,
                 [enrolmentId, inv.id, docNumber]
               );
             }
+            alreadyLinked.add(inv.id);
+            missingById.delete(owner);
             pass3Resolved++;
           } catch (e) {
             console.error('[backfill-from-qb] pass3 upsert error:', e instanceof Error ? e.message : e);
