@@ -379,7 +379,6 @@ const AllCourseRunsView: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [syncingGrnPdfs, setSyncingGrnPdfs] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
   // Import Course Run modal (Finance)
   const [showImportModal, setShowImportModal] = useState(false);
@@ -483,7 +482,8 @@ const AllCourseRunsView: React.FC = () => {
         // silent — never blocks the UI
       }
 
-      // Also backfill GRN invoice PDFs (NON-DA_GRANT_QB_invoice_{grnRef}.pdf) to Drive.
+      // Finish any generated invoice whose documents are incomplete: invoice PDF, GRN PDF,
+      // or a GRN invoice that was never created (replaces the old "Sync GRN PDFs" button).
       try {
         const grnRes = await fetch('/api/finance/invoice-jobs/backfill-grn-drive', {
           method: 'POST',
@@ -585,33 +585,6 @@ const AllCourseRunsView: React.FC = () => {
       setImportResult({ success: false, message: 'Network error. Please try again.' });
     } finally {
       setImportLoading(false);
-    }
-  };
-
-  const syncGrnPdfs = async () => {
-    setSyncingGrnPdfs(true);
-    setSyncToast(null);
-    try {
-      const res = await fetch('/api/finance/invoice-jobs/backfill-grn-drive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Sync failed');
-      const d = json.data as { resolved: number; failed: number; total: number; failedRefs?: string[] };
-      if (d.total === 0) {
-        setSyncToast('GRN PDFs: all up to date — no pending rows found.');
-      } else if (d.resolved > 0) {
-        setSyncToast(`GRN PDFs: ${d.resolved} uploaded to Drive.${d.failed > 0 ? ` ${d.failed} could not be found in QuickBooks.` : ''}`);
-        await fetchData();
-      } else {
-        const hint = d.failedRefs && d.failedRefs.length > 0 ? ` (${d.failedRefs.slice(0, 3).join(', ')})` : '';
-        setSyncToast(`GRN PDFs: ${d.failed} invoice(s) not found in QuickBooks${hint}. Check that GRN invoices exist in QB.`);
-      }
-    } catch (e) {
-      setSyncToast(e instanceof Error ? e.message : 'GRN PDF sync failed');
-    } finally {
-      setSyncingGrnPdfs(false);
     }
   };
 
@@ -1006,13 +979,6 @@ const AllCourseRunsView: React.FC = () => {
                 disabled={loading || queueing || sending}
               >
                 Import course run
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => void syncGrnPdfs()}
-                disabled={syncingGrnPdfs || loading || queueing}
-              >
-                {syncingGrnPdfs ? 'Syncing GRN PDFs…' : 'Sync GRN PDFs'}
               </Button>
             </div>
 

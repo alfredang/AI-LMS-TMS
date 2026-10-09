@@ -280,12 +280,20 @@ async function reserveTmsInvoiceNo(jobId: string, enrolmentId: string, existing:
   throw new Error('Could not allocate unique TMS invoice number');
 }
 
-export async function processInvoiceJob(jobId: string): Promise<void> {
+/**
+ * `repair: true` re-runs a DONE job only to finish what its post-steps left undone (GRN
+ * invoice, invoice / GRN PDFs). It never creates a new customer invoice: if the stored QB
+ * invoice is missing it throws, and the caller leaves the job untouched.
+ */
+export async function processInvoiceJob(jobId: string, opts: { repair?: boolean } = {}): Promise<void> {
   // Load job
   const jobRes = await pool.query(`SELECT * FROM public.invoice_jobs WHERE id = $1 LIMIT 1`, [jobId]);
   const job = jobRes.rows[0];
   if (!job) throw new Error('Job not found');
-  if (job.status === 'done') return;
+  if (job.status === 'done' && !opts.repair) return;
+  if (opts.repair && (job.status !== 'done' || !job.qbo_invoice_id)) {
+    throw new Error('Repair only applies to a done job that already has a QuickBooks invoice');
+  }
 
   const enrolmentId: string = job.enrolment_id;
   const userId: string = job.user_id;
@@ -665,6 +673,9 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
     try {
       await qboReadInvoice(undefined, invoiceId);
     } catch (e) {
+      if (opts.repair) {
+        throw new Error(`Repair skipped: QuickBooks invoice ${invoiceId} not found (${e instanceof Error ? e.message : e})`);
+      }
       console.warn('[invoice-job] Stored QBO invoice id not found; will recreate:', e instanceof Error ? e.message : e);
       invoiceId = '';
       docNumber = null;
@@ -757,9 +768,9 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
   // invoice exists in QBO — the Consolidated Finance page's "Send invoice"
   // button (POST /api/finance/invoice-jobs/send) is the only thing that emails
   // it, so admins keep full control over when a learner actually receives it.
-  void (async () => {
-    // Download PDF + upload to Drive
-    try {
+  const postSteps = async () => {
+    // Download PDF + upload to Drive (skip when a repair finds it already saved)
+    if (!job.drive_web_view_link) try {
       const pdf = await step('QBO fetch invoice PDF', () => qboFetchInvoicePdf(undefined, invoiceId));
       const fallbackNo = buildTmsInvoiceNo(enrolmentId, new Date(), 0);
       const fileName = `QB_invoice_${safeText(invoiceNo || docNumber || fallbackNo)}.pdf`;
@@ -841,7 +852,7 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
         );
 
         // Fetch GRN PDF and upload to the same Drive invoices folder.
-        if (grnInvoiceId) {
+        if (grnInvoiceId && !job.grn_drive_web_view_link) {
           try {
             const grnPdf = await qboFetchInvoicePdf(undefined, grnInvoiceId);
             const grnFileName = `NON-DA_GRANT_QB_invoice_${safeText(desiredGrnRef)}.pdf`;
@@ -860,5 +871,9 @@ export async function processInvoiceJob(jobId: string): Promise<void> {
         console.warn('[invoice-job] GRN invoice creation (post-step):', e);
       }
     }
-  })();
+  };
+  // A repair caller needs to know the post-steps finished; a normal run keeps them off the
+  // critical path so Finance sees "done" as soon as the invoice exists.
+  if (opts.repair) await postSteps();
+  else void postSteps();
 }
