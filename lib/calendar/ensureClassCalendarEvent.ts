@@ -263,13 +263,13 @@ export async function syncClassAttendees(
   const run = await loadRun(courseRunId);
   if (!run) return { ...out, status: 'skipped', reason: 'course run not found' };
   const { calendar, calendarId } = client;
-  // includeTpgTrainer:false leaves the TPG trainer out of BOTH sets (neither added nor
-  // removed) — for automatic paths where TPG may still hold an unconfirmed default.
-  const tpg = opts.includeTpgTrainer !== false;
+  // The TPG trainer is left out of BOTH sets by default (neither added nor removed):
+  // trainers are assigned only in the LMS (course_run_trainer), and on classes filled
+  // by the old 02:00 auto-assign TPG still holds an unconfirmed approved-list #1,
+  // which this sync used to add to the event. includeTpgTrainer:true restores it.
+  const tpg = opts.includeTpgTrainer === true;
 
-  // Desired = confirmed learners + local trainers + the TPG-assigned trainer (lowercased emails).
-  // The TPG trainer is included so the actual SSG/TPG trainer lands on the calendar even when
-  // they aren't (yet) a local course_run_trainer.
+  // Desired = confirmed learners + local trainers (+ the TPG trainer only if opted in).
   const desiredRows = await pool.query<{ email: string }>(
     `SELECT lower(btrim(au.email)) AS email
        FROM enrollment e JOIN app_user au ON au.id = e.user_id

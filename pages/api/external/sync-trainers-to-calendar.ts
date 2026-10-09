@@ -7,7 +7,7 @@ import { addTrainerToCalendar } from '@lib/calendar/addTrainerToCalendar';
  *
  * The LMS is the source of truth. For every upcoming class (today .. today +
  * daysAhead, SGT) that has a trainer assigned IN THE LMS (course_run_trainer
- * junction, or the legacy assigned_trainer_email), this pushes that trainer onto
+ * junction only — not the legacy assigned_trainer_email), this pushes that trainer onto
  * the matching Google Calendar event as an attendee — reusing the existing,
  * proven addTrainerToCalendar() (event matching + attendee patch + recurring
  * handling). It only ADDS; it never reads trainers back from the calendar and
@@ -95,32 +95,22 @@ export async function runAutomation(opts: RunOptions = {}) {
   const end = addDays(start, daysAhead as number);
 
   try {
-    // Upcoming/ongoing, non-cancelled runs that have a trainer assigned in the LMS.
+    // Upcoming/ongoing, non-cancelled runs with a REAL LMS assignment
+    // (course_run_trainer: Assign Trainer / Re-Assign / accepted invitation).
+    // The legacy course_run.assigned_trainer_email is deliberately NOT used: on
+    // classes filled by the old 02:00 auto-assign it holds an unconfirmed
+    // approved-list #1, which this job used to push onto the event every night.
     const runsRes = await pool.query(
       `SELECT cr.id, cr.course_run_id,
-              COALESCE(
-                (SELECT array_agg(DISTINCT lower(btrim(t.trainer_email)))
-                   FROM course_run_trainer t
-                  WHERE t.course_run_id = cr.id AND nullif(btrim(t.trainer_email), '') IS NOT NULL),
-                ARRAY[]::text[]
-              ) AS junction_emails,
-              nullif(btrim(lower(cr.assigned_trainer_email)), '') AS scalar_email,
-              COALESCE(
-                (SELECT array_agg(DISTINCT lower(btrim(ti.trainer_email)))
-                   FROM trainer_invitation ti
-                  WHERE ti.course_run_id = cr.id AND ti.status = 'declined'
-                    AND nullif(btrim(ti.trainer_email), '') IS NOT NULL),
-                ARRAY[]::text[]
-              ) AS declined_emails
+              (SELECT array_agg(DISTINCT lower(btrim(t.trainer_email)))
+                 FROM course_run_trainer t
+                WHERE t.course_run_id = cr.id AND nullif(btrim(t.trainer_email), '') IS NOT NULL) AS junction_emails
          FROM course_run cr
          JOIN course c ON c.id = cr.course_id
         WHERE cr.class_status <> 'Cancelled'
           AND cr.end_date >= $1::date
           AND (cr.start_date AT TIME ZONE 'Asia/Singapore')::date <= $2::date
-          AND (
-            EXISTS (SELECT 1 FROM course_run_trainer t WHERE t.course_run_id = cr.id AND nullif(btrim(t.trainer_email), '') IS NOT NULL)
-            OR nullif(btrim(cr.assigned_trainer_email), '') IS NOT NULL
-          )
+          AND EXISTS (SELECT 1 FROM course_run_trainer t WHERE t.course_run_id = cr.id AND nullif(btrim(t.trainer_email), '') IS NOT NULL)
         ORDER BY cr.start_date`,
       [start, end]
     );
@@ -129,15 +119,7 @@ export async function runAutomation(opts: RunOptions = {}) {
     const attention: Array<{ courseRunId: string; trainerEmail: string; message: string }> = [];
 
     for (const run of runsRes.rows) {
-      // The legacy scalar fallback must never push a trainer who declined this
-      // class: it gets re-filled overnight with approved-list #1 (often the
-      // decliner), which used to put them straight back on the calendar after
-      // every decline. Junction rows are real LMS assignments and are trusted.
-      const declined = new Set<string>(run.declined_emails || []);
-      const scalarOk = run.scalar_email && !declined.has(run.scalar_email);
-      const emails: string[] = (run.junction_emails && run.junction_emails.length > 0)
-        ? run.junction_emails
-        : (scalarOk ? [run.scalar_email] : []);
+      const emails: string[] = run.junction_emails || [];
       if (emails.length === 0) continue;
       runsProcessed++;
 
