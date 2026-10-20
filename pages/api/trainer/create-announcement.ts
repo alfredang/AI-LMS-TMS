@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { requireCourseRunTrainer } from '@lib/auth/courseRunAccess';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
@@ -64,6 +65,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             }
             dbCourseRunId = runRes.rows[0].id;
         }
+
+        // Only staff or an assigned trainer of this class may post to it.
+        if (!(await requireCourseRunTrainer((req as AuthedApiRequest).authUser!, res, dbCourseRunId))) return;
 
         let fileName: string | null = null;
         let fileUrl: string | null = null;

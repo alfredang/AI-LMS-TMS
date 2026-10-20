@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import AiChatbot from '../components/AiChatbot';
@@ -46,6 +46,27 @@ const TrainerLayout: React.FC = () => {
   const { currentView, trainerPage, selectedCourse } = useLms();
   const appVersion = useAppVersion();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // The grading roster is wide, so auto-collapse the sidebar to the icon rail
+  // when entering Assessment Grading, and restore it on leaving (unless the
+  // trainer toggled it themselves in the meantime).
+  const isGradingView =
+    currentView !== View.Profile &&
+    currentView !== View.HelpAndSupport &&
+    !selectedCourse &&
+    trainerPage === TrainerPage.AssessmentGrading;
+  const autoCollapsedRef = useRef(false);
+  const isSidebarOpenRef = useRef(isSidebarOpen);
+  isSidebarOpenRef.current = isSidebarOpen;
+  useEffect(() => {
+    if (isGradingView) {
+      autoCollapsedRef.current = isSidebarOpenRef.current;
+      setIsSidebarOpen(false);
+    } else if (autoCollapsedRef.current) {
+      autoCollapsedRef.current = false;
+      setIsSidebarOpen(true);
+    }
+  }, [isGradingView]);
 
   const renderContent = () => {
     if (currentView === View.Profile) return <ProfilePage />;
@@ -136,7 +157,10 @@ const TrainerLayout: React.FC = () => {
             {/* Toggle arrow at top */}
             <div className={`flex ${isSidebarOpen ? 'justify-end' : 'justify-center'} px-2 py-2 border-b border-gray-200 dark:border-gray-700`}>
               <button
-                onClick={() => setIsSidebarOpen(prev => !prev)}
+                onClick={() => {
+                  autoCollapsedRef.current = false;
+                  setIsSidebarOpen(prev => !prev);
+                }}
                 className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                 title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
               >

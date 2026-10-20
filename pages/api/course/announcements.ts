@@ -1,4 +1,5 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { withAuth, AuthedApiRequest } from '@lib/auth/withAuth';
+import { requireCourseRunTrainer } from '@lib/auth/courseRunAccess';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import fs from 'fs';
@@ -51,10 +52,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
 
         try {
-            const selectRes = await pool.query(`SELECT file_url FROM course_announcement WHERE id = $1`, [id]);
+            if (!UUID_RE.test(id)) {
+                return res.status(400).json({ success: false, message: 'Invalid announcement id' });
+            }
+            const selectRes = await pool.query(`SELECT file_url, course_run_id FROM course_announcement WHERE id = $1`, [id]);
             if (selectRes.rows.length === 0) {
                 return res.status(404).json({ success: false, message: 'Announcement not found' });
             }
+
+            // Learners can read a class's posts but only staff or an assigned
+            // trainer of that class may delete them.
+            if (!(await requireCourseRunTrainer((req as AuthedApiRequest).authUser!, res, String(selectRes.rows[0].course_run_id)))) return;
 
             const fileUrl: string | null = selectRes.rows[0].file_url;
             await pool.query(`DELETE FROM course_announcement WHERE id = $1`, [id]);

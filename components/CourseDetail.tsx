@@ -1,5 +1,6 @@
 import { displayCourseCodes } from '@lib/utils/courseCodes';
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useLms } from '@contexts/LmsContext';
 import { Button } from './ui/Button';
 import { Icon, IconName } from './ui/Icon';
@@ -1316,6 +1317,18 @@ const AssessmentsSection: React.FC<{
 };
 
 // --- Announcements Section Component ---
+// Turns http(s) URLs in a post's message into clickable links, so a trainer can
+// share a list of references in one post. Text stays plain (no HTML injection).
+const URL_IN_TEXT_RE = /(https?:\/\/[^\s<>"')\]]+)/g;
+const linkifyText = (text: string): React.ReactNode[] =>
+    text.split(URL_IN_TEXT_RE).map((part, i) =>
+        i % 2 === 1 ? (
+            <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{part}</a>
+        ) : (
+            <React.Fragment key={i}>{part}</React.Fragment>
+        )
+    );
+
 type Announcement = {
     id: string;
     courseRunId: string;
@@ -1328,15 +1341,23 @@ type Announcement = {
     createdAt: string;
 };
 
+const ANNOUNCEMENT_MAX_FILE_BYTES = 50 * 1024 * 1024; // matches create-announcement's formidable limit
+
+const formatPostedAt = (iso: string) =>
+    new Date(iso).toLocaleString(undefined, {
+        weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    });
+
 const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, currentUser: any }> = ({ userRole, courseRunId, currentUser }) => {
     const [announcements, setAnnouncements] = React.useState<Announcement[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [composing, setComposing] = React.useState(false);
     const [submitting, setSubmitting] = React.useState(false);
-    const [title, setTitle] = React.useState('');
     const [message, setMessage] = React.useState('');
     const [linkUrl, setLinkUrl] = React.useState('');
     const [pendingFile, setPendingFile] = React.useState<File | null>(null);
+    const [isDragging, setIsDragging] = React.useState(false);
+    // Chronological (oldest first) by default so the class reads Day 1 → Day N.
+    const [newestFirst, setNewestFirst] = React.useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     const fetchAnnouncements = React.useCallback(async () => {
@@ -1359,21 +1380,34 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
         fetchAnnouncements();
     }, [fetchAnnouncements]);
 
-    const resetComposer = () => {
-        setTitle('');
-        setMessage('');
-        setLinkUrl('');
+    const pickFile = (file: File | null | undefined) => {
+        if (!file) return;
+        if (file.size > ANNOUNCEMENT_MAX_FILE_BYTES) {
+            alert('That file is larger than 50 MB. Please upload a smaller file, or share it as a web link.');
+            return;
+        }
+        setPendingFile(file);
+    };
+
+    const clearFile = () => {
         setPendingFile(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setComposing(false);
+    };
+
+    const resetComposer = () => {
+        setMessage('');
+        setLinkUrl('');
+        clearFile();
     };
 
     const handleSubmit = async () => {
         const trimmedMessage = message.trim();
-        const trimmedLink = linkUrl.trim();
+        let trimmedLink = linkUrl.trim();
+        // Accept "www.example.com" as typed — learners still get a working link.
+        if (trimmedLink && !/^https?:\/\//i.test(trimmedLink)) trimmedLink = `https://${trimmedLink}`;
 
         if (!trimmedMessage && !trimmedLink && !pendingFile) {
-            alert('Add a message, link, or file before posting.');
+            alert('Type a message, add a web link or attach a document before posting.');
             return;
         }
 
@@ -1382,7 +1416,6 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
             const formData = new FormData();
             formData.append('courseRunId', courseRunId);
             formData.append('postedBy', currentUser?.name || currentUser?.email || 'Trainer');
-            if (title.trim()) formData.append('title', title.trim());
             if (trimmedMessage) formData.append('message', trimmedMessage);
             if (trimmedLink) formData.append('linkUrl', trimmedLink);
             if (pendingFile) formData.append('file', pendingFile);
@@ -1406,13 +1439,13 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Delete this announcement?')) return;
+        if (!confirm('Delete this post?')) return;
         try {
             const res = await fetch(`/api/course/announcements?id=${id}`, { method: 'DELETE' });
             if (res.ok) {
                 setAnnouncements(prev => prev.filter(a => a.id !== id));
             } else {
-                alert('Failed to delete announcement');
+                alert('Failed to delete post');
             }
         } catch (err) {
             console.error(err);
@@ -1422,92 +1455,80 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
     if (!courseRunId) return null;
 
     const isTrainerOrAdmin = userRole === UserRole.Trainer || userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider;
+    const sorted = [...announcements].sort((a, b) => {
+        const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return newestFirst ? -diff : diff;
+    });
+    const inputClass = 'w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500';
 
     return (
-        <ContentSection title="Announcements" collapsible defaultOpen={userRole !== UserRole.Trainer}>
+        <ContentSection title={!loading && announcements.length > 0 ? `Announcements (${announcements.length})` : 'Announcements'} collapsible defaultOpen={false}>
             <div className="space-y-4">
-                {isTrainerOrAdmin && !composing && (
-                    <div className="flex justify-between items-center">
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Post messages, links, or documents that all learners in this class can see.
+                {isTrainerOrAdmin && (
+                    <div
+                        className={`p-4 rounded-lg border-2 border-dashed space-y-3 transition-colors ${isDragging ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'}`}
+                        onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={e => { e.preventDefault(); setIsDragging(false); pickFile(e.dataTransfer.files?.[0]); }}
+                    >
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                            Post to this class — every learner sees it on their LMS class page.
                         </p>
-                        <button
-                            onClick={() => setComposing(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
-                        >
-                            <Icon name={IconName.Bell} className="w-4 h-4" />
-                            New Announcement
-                        </button>
-                    </div>
-                )}
-
-                {isTrainerOrAdmin && composing && (
-                    <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg space-y-3">
-                        <input
-                            type="text"
-                            value={title}
-                            onChange={e => setTitle(e.target.value)}
-                            placeholder="Title (optional)"
-                            className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
                         <textarea
                             value={message}
                             onChange={e => setMessage(e.target.value)}
-                            placeholder="Write a message for your learners…"
-                            rows={4}
-                            className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSubmit(); } }}
+                            placeholder="Type an announcement, instructions or a list of references…"
+                            rows={3}
+                            className={inputClass}
                         />
                         <div className="flex items-center gap-2">
-                            <Icon name={IconName.Link} className="w-4 h-4 text-gray-400" />
+                            <Icon name={IconName.Link} className="w-4 h-4 text-gray-400 flex-shrink-0" />
                             <input
-                                type="url"
+                                type="text"
+                                inputMode="url"
                                 value={linkUrl}
                                 onChange={e => setLinkUrl(e.target.value)}
-                                placeholder="https://example.com (optional link)"
-                                className="flex-1 px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Web link (optional), e.g. https://example.com/reading"
+                                className={inputClass}
                             />
                         </div>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={e => setPendingFile(e.target.files?.[0] || null)}
-                                style={{ display: 'none' }}
-                            />
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={e => pickFile(e.target.files?.[0])}
+                            style={{ display: 'none' }}
+                        />
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="flex items-center gap-2 px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 flex-shrink-0"
+                                >
+                                    <Icon name={IconName.Upload} className="w-4 h-4" />
+                                    {pendingFile ? 'Change document' : 'Attach document'}
+                                </button>
+                                {pendingFile ? (
+                                    <span className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-200 min-w-0">
+                                        <Icon name={IconName.FileText} className="w-4 h-4 flex-shrink-0" />
+                                        <span className="truncate" title={pendingFile.name}>{pendingFile.name}</span>
+                                        <button type="button" onClick={clearFile} className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" aria-label="Remove document">
+                                            <Icon name={IconName.X} className="w-4 h-4" />
+                                        </button>
+                                    </span>
+                                ) : (
+                                    <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400">or drag a file here (max 50 MB)</span>
+                                )}
+                            </div>
                             <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="flex items-center gap-2 px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
-                            >
-                                <Icon name={IconName.FileText} className="w-4 h-4" />
-                                {pendingFile ? 'Change file' : 'Attach file'}
-                            </button>
-                            {pendingFile && (
-                                <span className="text-sm text-gray-600 dark:text-gray-300 truncate" title={pendingFile.name}>
-                                    {pendingFile.name}
-                                    <button
-                                        onClick={() => { setPendingFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                                        className="ml-2 text-red-600 hover:underline"
-                                    >
-                                        remove
-                                    </button>
-                                </span>
-                            )}
-                        </div>
-                        <div className="flex justify-end gap-2 pt-1">
-                            <button
-                                onClick={resetComposer}
-                                disabled={submitting}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
+                                type="button"
                                 onClick={handleSubmit}
                                 disabled={submitting}
-                                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
-                                {submitting && <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin" />}
-                                {submitting ? 'Posting…' : 'Post Announcement'}
+                                {submitting ? <Icon name={IconName.Spinner} className="w-4 h-4 animate-spin" /> : <Icon name={IconName.Send} className="w-4 h-4" />}
+                                {submitting ? 'Posting…' : 'Post'}
                             </button>
                         </div>
                     </div>
@@ -1518,64 +1539,81 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
                         <Icon name={IconName.Spinner} className="w-8 h-8 text-blue-500 animate-spin" />
                     </div>
                 ) : announcements.length === 0 ? (
-                    <div className="text-center p-8 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                        <Icon name={IconName.Bell} className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                        <p className="text-gray-600 dark:text-gray-300 font-medium">No announcements yet</p>
-                        {isTrainerOrAdmin && <p className="text-sm text-gray-500 mt-1">Click "New Announcement" to post a message, link, or file.</p>}
+                    <div className="text-center p-6 text-gray-500 dark:text-gray-400">
+                        <Icon name={IconName.Bell} className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                        <p className="font-medium text-gray-600 dark:text-gray-300">No posts yet</p>
+                        {isTrainerOrAdmin && <p className="text-sm mt-1">Use the box above to share a message, web link or document with the class.</p>}
                     </div>
                 ) : (
-                    <ul className="space-y-3">
-                        {announcements.map(a => (
-                            <li key={a.id} className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0 flex-1">
-                                        {a.title && (
-                                            <p className="font-semibold text-gray-900 dark:text-white">{a.title}</p>
+                    <>
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                {announcements.length} {announcements.length === 1 ? 'post' : 'posts'}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => setNewestFirst(v => !v)}
+                                className="text-xs font-medium text-blue-600 hover:underline"
+                            >
+                                {newestFirst ? 'Newest first — show oldest first' : 'Oldest first — show newest first'}
+                            </button>
+                        </div>
+                        <ul className="space-y-3">
+                            {sorted.map(a => (
+                                <li key={a.id} className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                                {formatPostedAt(a.createdAt)} · {a.postedBy}
+                                            </p>
+                                            {a.title && (
+                                                <p className="mt-1 font-semibold text-gray-900 dark:text-white">{a.title}</p>
+                                            )}
+                                        </div>
+                                        {isTrainerOrAdmin && (
+                                            <button
+                                                onClick={() => handleDelete(a.id)}
+                                                className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors flex-shrink-0"
+                                                title="Delete"
+                                            >
+                                                <Icon name={IconName.Delete} className="w-5 h-5" />
+                                            </button>
                                         )}
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                                            Posted by {a.postedBy} • {new Date(a.createdAt).toLocaleString()}
-                                        </p>
                                     </div>
-                                    {isTrainerOrAdmin && (
-                                        <button
-                                            onClick={() => handleDelete(a.id)}
-                                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors flex-shrink-0"
-                                            title="Delete"
-                                        >
-                                            <Icon name={IconName.Delete} className="w-5 h-5" />
-                                        </button>
+                                    {a.message && (
+                                        <p className="mt-2 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">{linkifyText(a.message)}</p>
                                     )}
-                                </div>
-                                {a.message && (
-                                    <p className="mt-2 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">{a.message}</p>
-                                )}
-                                {a.linkUrl && (
-                                    <a
-                                        href={a.linkUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="mt-2 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline break-all"
-                                    >
-                                        <Icon name={IconName.Link} className="w-4 h-4 flex-shrink-0" />
-                                        <span className="truncate">{a.linkUrl}</span>
-                                    </a>
-                                )}
-                                {a.fileUrl && (
-                                    <a
-                                        href={a.fileUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        download={a.fileName || undefined}
-                                        className="mt-2 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline"
-                                    >
-                                        <Icon name={IconName.FileText} className="w-4 h-4 flex-shrink-0" />
-                                        <span className="truncate">{a.fileName || 'Attachment'}</span>
-                                        <Icon name={IconName.ExternalLink} className="w-3.5 h-3.5 flex-shrink-0" />
-                                    </a>
-                                )}
-                            </li>
-                        ))}
-                    </ul>
+                                    {(a.linkUrl || a.fileUrl) && (
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            {a.linkUrl && (
+                                                <a
+                                                    href={a.linkUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-2 max-w-full px-3 py-1.5 text-sm text-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:underline"
+                                                >
+                                                    <Icon name={IconName.Link} className="w-4 h-4 flex-shrink-0" />
+                                                    <span className="truncate">{a.linkUrl}</span>
+                                                </a>
+                                            )}
+                                            {a.fileUrl && (
+                                                <a
+                                                    href={a.fileUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    download={a.fileName || undefined}
+                                                    className="inline-flex items-center gap-2 max-w-full px-3 py-1.5 text-sm text-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded-md hover:underline"
+                                                >
+                                                    <Icon name={IconName.Download} className="w-4 h-4 flex-shrink-0" />
+                                                    <span className="truncate">{a.fileName || 'Attachment'}</span>
+                                                </a>
+                                            )}
+                                        </div>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    </>
                 )}
             </div>
         </ContentSection>
@@ -1997,6 +2035,7 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
 
     const learnerNavItems: NavItem[] = [
         { type: 'link', label: "E-Attendance", icon: IconName.ClipboardCheck },
+        { type: 'link', label: "Announcements", icon: IconName.Bell },
         ...(showLessonPlanForLearner ? [{ type: 'link', label: "Lesson Plan", icon: IconName.BookOpen } as NavItem] : []),
         { type: 'link', label: "Learner Guide", icon: IconName.FileText },
         { type: 'link', label: "Learner Slides", icon: IconName.FileText },
@@ -2004,12 +2043,12 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "TRAQOM Survey", icon: IconName.Edit },
         { type: 'link', label: "Briefing on Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
-        { type: 'link', label: "Announcements", icon: IconName.Bell },
         { type: 'link', label: "Certificate", icon: IconName.FileText },
     ];
 
     let trainerNavItems: NavItem[] = [
         { type: 'link', label: "E-Attendance", icon: IconName.ClipboardCheck },
+        { type: 'link', label: "Announcements", icon: IconName.Bell },
         { type: 'link', label: "Courseware Link", icon: IconName.Link },
         { type: 'link', label: "Assessment Grading", icon: IconName.Edit },
         { type: 'link', label: "Assessment Summary Record", icon: IconName.ClipboardCheck },
@@ -2025,7 +2064,6 @@ const CourseSidebar: React.FC<CourseSidebarProps> = ({ userRole, onSetGradingVie
         { type: 'link', label: "Briefing on Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Assessment", icon: IconName.ClipboardCheck },
         { type: 'link', label: "Grading", icon: IconName.Edit },
-        { type: 'link', label: "Announcements", icon: IconName.Bell },
     ];
 
     if (userRole === UserRole.Developer || userRole === UserRole.Admin) {
@@ -2463,6 +2501,19 @@ export const CourseDetail: React.FC = () => {
     const [latestQuizScores, setLatestQuizScores] = useState<Record<string, { score: number; total: number }>>({});
     const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
     const [isTraqomOpen, setIsTraqomOpen] = useState(false);
+    // Full-window view of the feedback + TRAQOM QR codes so a trainer can project them to the class.
+    const [isQrZoomed, setIsQrZoomed] = useState(false);
+    useEffect(() => {
+        if (!isQrZoomed) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsQrZoomed(false); };
+        window.addEventListener('keydown', onKey);
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            window.removeEventListener('keydown', onKey);
+            document.body.style.overflow = prevOverflow;
+        };
+    }, [isQrZoomed]);
     const [isCourseMenuOpen, setIsCourseMenuOpen] = useState(false);
     const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
 
@@ -2994,6 +3045,15 @@ export const CourseDetail: React.FC = () => {
                                 </div>
                             )}
 
+                            {/* Announcements */}
+                            <div id={toId("Announcements")}>
+                                <AnnouncementsSection
+                                    userRole={userRole}
+                                    courseRunId={convertedCourse.courseRunId || selectedCourse?.courseRunId || ''}
+                                    currentUser={currentUser}
+                                />
+                            </div>
+
                             {/* Virtual Meeting */}
                             {(() => {
                                 const vmp = (
@@ -3012,7 +3072,7 @@ export const CourseDetail: React.FC = () => {
                                     : !!convertedCourse.virtualMeetingLink;
                                 return (
                             <div id={toId("Google Meet")}>
-                                <ContentSection title={providerLabel} collapsible>
+                                <ContentSection title={providerLabel} collapsible defaultOpen={false}>
                                     {/* A link that was entered manually shows even on a Physical class —
                                         the trainer set it deliberately, so surface it either way. */}
                                     {hasVirtualMeetingLink ? (
@@ -3445,17 +3505,28 @@ export const CourseDetail: React.FC = () => {
                             {(userRole === UserRole.Learner || userRole === UserRole.Trainer) && (
                                 <div id={toId("TRAQOM Survey")}>
                                     <Card className="p-0 overflow-hidden">
-                                        <button
-                                            className="w-full text-left p-6 flex justify-between items-center"
-                                            onClick={() => setIsTraqomOpen(!isTraqomOpen)}
-                                            aria-expanded={isTraqomOpen}
-                                        >
-                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{[
-                                                trainingProviderProfile?.showCertificateDelivery ? 'Course Feedback' : null,
-                                                'TRAQOM Survey',
-                                            ].filter(Boolean).join(' & ')}</h3>
-                                            <Icon name={IconName.ChevronDown} className={`w-6 h-6 text-blue-600 flex-shrink-0 transition-transform ${isTraqomOpen ? 'rotate-180' : ''}`} />
-                                        </button>
+                                        <div className="flex items-center gap-2 p-6">
+                                            <button
+                                                className="flex-1 min-w-0 text-left flex justify-between items-center gap-3"
+                                                onClick={() => setIsTraqomOpen(!isTraqomOpen)}
+                                                aria-expanded={isTraqomOpen}
+                                            >
+                                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">{[
+                                                    trainingProviderProfile?.showCertificateDelivery ? 'Course Feedback' : null,
+                                                    'TRAQOM Survey',
+                                                ].filter(Boolean).join(' & ')}</h3>
+                                                <Icon name={IconName.ChevronDown} className={`w-6 h-6 text-blue-600 flex-shrink-0 transition-transform ${isTraqomOpen ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsQrZoomed(true)}
+                                                className="p-2 rounded-md text-blue-600 hover:bg-surface-elevated transition-colors flex-shrink-0"
+                                                title="Show QR codes full screen"
+                                                aria-label="Show QR codes full screen"
+                                            >
+                                                <Icon name={IconName.ZoomIn} className="w-6 h-6" />
+                                            </button>
+                                        </div>
                                         {isTraqomOpen && (
                                             <div className="px-6 pb-6 border-t border-default">
                                                 <div className={`pt-5 grid grid-cols-1 ${trainingProviderProfile?.showCertificateDelivery ? 'md:grid-cols-2' : ''} gap-4`}>
@@ -3468,7 +3539,7 @@ export const CourseDetail: React.FC = () => {
                                                         </div>
                                                         <div className="flex flex-col items-center p-5 bg-surface flex-1 justify-between gap-3">
                                                             <div className="flex flex-col items-center gap-3 w-full">
-                                                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                                                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm cursor-zoom-in" onClick={() => setIsQrZoomed(true)}>
                                                                     <img
                                                                         src={certDeliveryQrCodeUrl}
                                                                         alt="Course Feedback QR Code"
@@ -3511,7 +3582,7 @@ export const CourseDetail: React.FC = () => {
                                                         </div>
                                                         <div className="flex flex-col items-center p-5 bg-surface flex-1 justify-between gap-3">
                                                             <div className="flex flex-col items-center gap-3 w-full">
-                                                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                                                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm cursor-zoom-in" onClick={() => setIsQrZoomed(true)}>
                                                                     <img
                                                                         src={traqomQrCodeUrl}
                                                                         alt="TRAQOM Survey QR Code"
@@ -3549,6 +3620,63 @@ export const CourseDetail: React.FC = () => {
                                             </div>
                                         )}
                                     </Card>
+                                    {isQrZoomed && (() => {
+                                        const panels = [
+                                            ...(trainingProviderProfile?.showCertificateDelivery ? [{
+                                                title: 'Course Feedback',
+                                                titleClass: 'text-blue-300',
+                                                // Request a high-res render so the generated QR stays sharp when enlarged.
+                                                src: certDeliveryQrCodeUrl.replace('size=200x200', 'size=1000x1000'),
+                                                link: certDeliveryLink,
+                                                ref: convertedCourse.courseCode ? `Course Ref: ${convertedCourse.courseCode}` : '',
+                                            }] : []),
+                                            {
+                                                title: 'TRAQOM Survey',
+                                                titleClass: 'text-teal-300',
+                                                src: traqomQrCodeUrl,
+                                                link: traqomSurveyLink,
+                                                ref: convertedCourse.courseRunId ? `Course Run ID: ${convertedCourse.courseRunId}` : '',
+                                            },
+                                        ];
+                                        // Two codes share the width; a single code can use the full height.
+                                        const qrSize = panels.length > 1 ? 'min(70vh, 40vw)' : 'min(78vh, 88vw)';
+                                        return createPortal(
+                                            <div
+                                                className="fixed inset-0 z-[1000] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+                                                role="dialog"
+                                                aria-modal="true"
+                                                aria-label="QR codes full screen"
+                                                onClick={() => setIsQrZoomed(false)}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsQrZoomed(false)}
+                                                    className="absolute top-4 right-4 p-2 rounded-full text-white bg-white/10 hover:bg-white/25 transition-colors"
+                                                    aria-label="Close full screen QR codes"
+                                                >
+                                                    <Icon name={IconName.Close} className="w-7 h-7" />
+                                                </button>
+                                                <div className="flex items-start justify-center gap-6 md:gap-12 w-full">
+                                                    {panels.map(p => (
+                                                        <div key={p.title} className="flex flex-col items-center min-w-0">
+                                                            <h2 className={`text-xl md:text-4xl font-bold mb-4 ${p.titleClass}`}>{p.title}</h2>
+                                                            <div className="bg-white p-3 md:p-5 rounded-2xl">
+                                                                <img
+                                                                    src={p.src}
+                                                                    alt={`${p.title} QR Code`}
+                                                                    className="object-contain"
+                                                                    style={{ width: qrSize, height: qrSize, imageRendering: 'pixelated' }}
+                                                                />
+                                                            </div>
+                                                            {p.ref && <p className="mt-4 text-base md:text-2xl text-white font-medium">{p.ref}</p>}
+                                                            <p className="mt-1 text-xs md:text-sm text-gray-300 break-all text-center" style={{ maxWidth: qrSize }}>{p.link}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>,
+                                            document.body
+                                        );
+                                    })()}
                                 </div>
                             )}
 
@@ -3663,15 +3791,6 @@ export const CourseDetail: React.FC = () => {
                                     </div>
                                 );
                             })()}
-
-                            {/* Announcements */}
-                            <div id={toId("Announcements")}>
-                                <AnnouncementsSection
-                                    userRole={userRole}
-                                    courseRunId={convertedCourse.courseRunId || selectedCourse?.courseRunId || ''}
-                                    currentUser={currentUser}
-                                />
-                            </div>
 
                             {/* Certificate */}
                             <div id={toId("Certificate")}>
