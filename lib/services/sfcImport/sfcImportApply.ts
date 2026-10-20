@@ -421,6 +421,24 @@ export async function applySfcImportRows(input: {
       // silently accept the POST but not apply the payment to the invoice.
       const bareCustomerRef = invoiceCustomerRef || '1405';
 
+      // Safety guard (same rule as Bulk Grant Payment Sync): never create a payment for more than
+      // the invoice still owes. Every SFC-CA invoice bills the one shared WSG customer, so any
+      // excess would be left as unapplied credit on that customer — the money QuickBooks later
+      // spreads onto other open WSG invoices (the spillover found 2026-10). Read the live balance
+      // right before creating; runs after the idempotency checks above, so an invoice already
+      // correctly paid is still recognised as done rather than rejected here.
+      const invoiceNow = await qbReadInvoice(resolvedApp, qboInvoiceId);
+      if (!invoiceNow) {
+        throw new Error(`Could not read balance for QuickBooks invoice ${qboInvoiceId}; refusing to apply blind`);
+      }
+      if (Number(claimAmount.toFixed(2)) - invoiceNow.balance > 0.01) {
+        throw new Error(
+          `SFC claim ${claimId} amount $${claimAmount.toFixed(2)} exceeds invoice ${invoiceNow.docNumber || qboInvoiceId} ` +
+            `remaining balance $${invoiceNow.balance.toFixed(2)} — not applying (the excess would be left as unapplied credit ` +
+            `and spill onto other WSG invoices). Check the invoice in QuickBooks.`
+        );
+      }
+
       // Step 3a — Create bare payment (no Line) to get a stable Id
       const created = await qbCreatePayment(resolvedApp, {
         CustomerRef: { value: bareCustomerRef },
@@ -428,48 +446,87 @@ export async function applySfcImportRows(input: {
         TxnDate: txnDate,
       });
 
-      // Step 3b — Read payment back for fresh SyncToken and UnappliedAmt
-      const fetched = await qbReadPayment(resolvedApp, created.id);
-      if (!fetched || !fetched.syncToken) {
-        throw new Error(`Could not read back SyncToken for payment ${created.id} — manual cleanup may be required in QB`);
-      }
-      const unappliedAmt = fetched.unappliedAmt ?? Number(claimAmount.toFixed(2));
+      // Steps 3b–3d run inside a guard: from here on a bare payment exists in QuickBooks with the
+      // whole claim amount unapplied. If anything below fails, it is voided before the row fails,
+      // so a failed apply can never leave unapplied credit on the WSG customer (which QuickBooks
+      // would later spread onto other open invoices).
+      let newBalance: number | null = null;
+      try {
+        // Step 3b — Read payment back for fresh SyncToken and UnappliedAmt
+        const fetched = await qbReadPayment(resolvedApp, created.id);
+        if (!fetched || !fetched.syncToken) {
+          throw new Error(`Could not read back SyncToken for payment ${created.id} — manual cleanup may be required in QB`);
+        }
+        const unappliedAmt = fetched.unappliedAmt ?? Number(claimAmount.toFixed(2));
 
-      // Step 3c — Update payment to link the invoice (POST with Id = update in QB)
-      const dbsDepositAccountId = await resolveDbsDepositAccountId(resolvedApp);
-      await qbCreatePayment(resolvedApp, {
-        Id: created.id,
-        SyncToken: fetched.syncToken,
-        CustomerRef: { value: invoiceCustomerRef },
-        TotalAmt: unappliedAmt,
-        TxnDate: txnDate,
-        PaymentRefNum: payoutRequestId,
-        PaymentMethodRef: { value: '7' },
-        DepositToAccountRef: { value: dbsDepositAccountId },
-        Line: [
-          {
-            Amount: unappliedAmt,
-            LinkedTxn: [{ TxnId: qboInvoiceId, TxnType: 'Invoice' }],
-          },
-        ],
-      });
+        // Step 3c — Update payment to link the invoice (POST with Id = update in QB)
+        const dbsDepositAccountId = await resolveDbsDepositAccountId(resolvedApp);
+        await qbCreatePayment(resolvedApp, {
+          Id: created.id,
+          SyncToken: fetched.syncToken,
+          CustomerRef: { value: invoiceCustomerRef },
+          TotalAmt: unappliedAmt,
+          TxnDate: txnDate,
+          PaymentRefNum: payoutRequestId,
+          PaymentMethodRef: { value: '7' },
+          DepositToAccountRef: { value: dbsDepositAccountId },
+          Line: [
+            {
+              Amount: unappliedAmt,
+              LinkedTxn: [{ TxnId: qboInvoiceId, TxnType: 'Invoice' }],
+            },
+          ],
+        });
 
-      // Step 3d — Re-fetch invoice to verify new balance
-      const invoiceAfter = await qbReadInvoice(resolvedApp, qboInvoiceId);
-      const newBalance = invoiceAfter?.balance ?? null;
+        // Step 3d — Re-fetch invoice to verify new balance
+        const invoiceAfter = await qbReadInvoice(resolvedApp, qboInvoiceId);
+        newBalance = invoiceAfter?.balance ?? null;
 
-      // If the invoice balance did not decrease, the payment was not applied — fail the row so
-      // the user sees a clear error rather than a false "applied" that hides the orphaned payment.
-      if (
-        invoiceBalanceBefore !== null &&
-        newBalance !== null &&
-        newBalance >= invoiceBalanceBefore
-      ) {
-        throw new Error(
-          `QB payment ${created.id} was created but invoice ${qboInvoiceId} balance did not decrease ` +
-          `(before: $${invoiceBalanceBefore.toFixed(2)}, after: $${newBalance.toFixed(2)}). ` +
-          `The payment may be orphaned in QB — void or delete payment RefNum '${payoutRequestId}' manually before retrying.`
-        );
+        // If the invoice balance did not decrease, the payment was not applied — fail the row so
+        // the user sees a clear error rather than a false "applied" that hides the orphaned payment.
+        if (
+          invoiceBalanceBefore !== null &&
+          newBalance !== null &&
+          newBalance >= invoiceBalanceBefore
+        ) {
+          throw new Error(
+            `QB payment ${created.id} was created but invoice ${qboInvoiceId} balance did not decrease ` +
+            `(before: $${invoiceBalanceBefore.toFixed(2)}, after: $${newBalance.toFixed(2)}). ` +
+            `The payment may be orphaned in QB — void or delete payment RefNum '${payoutRequestId}' manually before retrying.`
+          );
+        }
+
+        // The payment must now be fully applied to this invoice — nothing left as unapplied credit.
+        const linked = await qbReadPayment(resolvedApp, created.id);
+        if (!linked || !paymentLinksInvoice(linked, qboInvoiceId) || (linked.unappliedAmt ?? 0) > 0.009) {
+          throw new Error(
+            `QB payment ${created.id} is not fully applied to invoice ${qboInvoiceId} ` +
+            `(unapplied $${(linked?.unappliedAmt ?? Number(claimAmount.toFixed(2))).toFixed(2)})`
+          );
+        }
+      } catch (e: unknown) {
+        const reason = e instanceof Error ? e.message : String(e);
+        let voidNote: string;
+        try {
+          const current = await qbReadPayment(resolvedApp, created.id);
+          if (current?.syncToken) {
+            await qbVoidPayment(resolvedApp, created.id, current.syncToken);
+            voidNote = `Payment ${created.id} was voided automatically, so no unapplied credit is left.`;
+          } else {
+            voidNote = `Could not read payment ${created.id} to void it — void it manually in QuickBooks.`;
+          }
+        } catch (voidErr: unknown) {
+          voidNote = `Voiding payment ${created.id} failed (${voidErr instanceof Error ? voidErr.message : String(voidErr)}) — void it manually in QuickBooks.`;
+        }
+        try {
+          await insertSfcImportAuditLog({
+            batchId: input.batchId, rowId, event: 'apply_rolled_back',
+            details: { qb_payment_id: created.id, qbo_invoice_id: qboInvoiceId, reason, void_result: voidNote },
+          });
+        } catch {
+          // best-effort: the row's own apply_fail entry below still records the error
+        }
+        throw new Error(`${reason} ${voidNote}`);
       }
 
       const sfcStatus = newBalance === 0 ? 'Paid' : 'Unpaid';
