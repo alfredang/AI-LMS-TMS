@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { getLocalYMD } from '@/lib/dateHelpers';
 import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
+import MmsSyncControl from './MmsSyncControl';
+import MmsSyncOverview from './MmsSyncOverview';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1327,6 +1329,7 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
 
   return (
     <div className="mb-8 overflow-x-clip">
+      <MmsSyncControl masterlistClassId={classRun.id} saving={saving}/>
       {confirmDeleteClass && (
         <ConfirmDialog
           message={
@@ -2700,6 +2703,7 @@ const MasterListView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <MmsSyncOverview/>
       {/* ── Page header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
