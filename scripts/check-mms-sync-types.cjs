@@ -6,7 +6,7 @@ const configPath=ts.findConfigFile(process.cwd(),ts.sys.fileExists,'tsconfig.jso
 const config=ts.readConfigFile(configPath,ts.sys.readFile);
 const parsed=ts.parseJsonConfigFileContent(config.config,ts.sys,path.dirname(configPath));
 const changed=cp.execFileSync('git',['diff','HEAD','--name-only','--diff-filter=M'],{encoding:'utf8'}).trim().split(/\r?\n/).filter(f=>/\.tsx?$/.test(f));
-const newFeature=f=>/\/lib\/mmsSync\/|\/tests\/mms-sync|\/components\/admin\/MmsSync(Control|Overview)\.tsx$|\/pages\/api\/(admin\/mms-sync|external\/mms-sync)/.test(f.replace(/\\/g,'/'));
+const newFeature=f=>/\/lib\/mmsSync\/|\/tests\/mms-(sync|access)|\/components\/admin\/MmsSync(Control|Overview)\.tsx$|\/pages\/api\/(admin\/mms-(sync|access)|external\/mms-sync)/.test(f.replace(/\\/g,'/'));
 function diagnostics(baseline){
   const host=ts.createCompilerHost({...parsed.options,incremental:false});
   if(baseline){

@@ -55,6 +55,7 @@ export interface RunSnapshot {
     learners: SyncPerson[];
     feedback_url: string;
     courseware: Record<string, string>;
+    handover_approval?: { approved_at: string; approved_by: string; first_session_at: string };
 }
 export function dateInSingapore(input: string): string {
     if (/^\d{4}-\d{2}-\d{2}$/.test(input))

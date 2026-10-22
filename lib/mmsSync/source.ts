@@ -96,6 +96,9 @@ export async function buildSnapshot(db: Pool, source: SourceRecord, readClient?:
         throw new MmsSyncError('Configured Calendar changed; review the stored mapping.');
     const events = await Promise.all(source.event_ids.map(eventId => client.calendar.events.get({ calendarId: source.calendar_id, eventId }).then(r => r.data)));
     const liveEvents = events.filter(e => e.status !== 'cancelled');
+    if (!source.tms_run_uuid && liveEvents.some(e => /\b(?:day|session|part)\s*[:#-]?\s*(?:[2-9]|[1-9]\d+)\b/i.test(text(e.summary)))
+        && !liveEvents.some(e => /\b(?:day|session|part)\s*[:#-]?\s*1\b/i.test(text(e.summary))))
+        throw new MmsSyncError('This Calendar entry is a later course day. Resolve the full run including its first session before handover.', 'no_midway');
     for (const e of liveEvents) {
         const currentCode = eventCode(e);
         if (currentCode && assertNonFunded(currentCode) !== code)
@@ -138,6 +141,8 @@ export async function buildSnapshot(db: Pool, source: SourceRecord, readClient?:
         const previous = (await db.query('SELECT snapshot FROM mms_sync_source WHERE source_run_key=$1', [source.source_run_key])).rows[0]?.snapshot;
         sessions.push(...(previous?.sessions || []));
     }
+    if (run?.run.start_date && sessions.length && dateInSingapore(text(run.run.start_date)) < [...sessions].sort((a,b) => a.date.localeCompare(b.date))[0].date)
+        throw new MmsSyncError('The recorded course run starts before these sessions. Resolve the full first teaching session before handover.', 'no_midway');
     const people = new Map<string, SyncPerson>();
     const insertPerson = async (row: Record<string, any>, emailField = 'email', nameField = 'name') => {
         const email = text(row[emailField]).toLowerCase();
@@ -158,7 +163,7 @@ export async function buildSnapshot(db: Pool, source: SourceRecord, readClient?:
     if (run) {
         const enrollments = (await db.query(`SELECT to_jsonb(e) AS e,au.email,au.full_name FROM enrollment e JOIN app_user au ON au.id=e.user_id WHERE e.course_run_id=$1`, [source.tms_run_uuid])).rows;
         for (const row of enrollments)
-            if (active(row.e.enrolment_status))
+            if (confirmed(row.e.enrolment_status) && active(row.e.enrolment_status))
                 await insertPerson({ email: row.email, name: row.full_name, user_id: row.e.user_id });
         for (const table of ['da_application', 'company_application']) {
             const rows = (await db.query(`SELECT to_jsonb(a) AS a FROM ${table} a WHERE course_run_id=$1`, [run.run.course_run_id])).rows;

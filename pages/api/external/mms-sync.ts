@@ -1,11 +1,20 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { withServiceAuth } from '../../../lib/auth/withAuth';
 import { discover, processJobs, mmsSyncEnabled } from '../../../lib/mmsSync/service';
+import { dispatchAccessNotifications, recoverAccessNotifications } from '../../../lib/mmsSync/accessNotifications';
 export async function runMmsSync(mode = 'discovery', dryRun = false) {
     if (!mmsSyncEnabled())
         return { success: true, skipped: true, reason: 'MMS handover is disabled.' };
-    if (mode === 'worker')
-        return { success: true, ...await processJobs() };
+    if (mode === 'worker') {
+        const sync = await processJobs();
+        return { success: true, ...sync, notifications: await dispatchAccessNotifications() };
+    }
+    if (mode === 'notifications') {
+        const { ensureSchema } = await import('../../../lib/mmsSync/service');
+        await ensureSchema();
+        await recoverAccessNotifications();
+        return { success: true, notifications: await dispatchAccessNotifications() };
+    }
     const result = await discover(dryRun);
     return { success: true, ...result };
 }

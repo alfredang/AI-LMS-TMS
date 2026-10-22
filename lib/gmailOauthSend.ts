@@ -147,12 +147,17 @@ export interface GmailSendOptions {
   html?: string;
   from?: string;
   replyTo?: string;
+  /** For durable outboxes: never retry a send with an uncertain outcome. */
+  avoidDuplicateRetry?: boolean;
+  messageId?: string;
 }
 
 export interface GmailSendResult {
   ok: boolean;
   messageId?: string;
   error?: string;
+  uncertain?: boolean;
+  retryable?: boolean;
 }
 
 function buildRawMessage(creds: GmailCreds, options: GmailSendOptions): string {
@@ -165,6 +170,7 @@ function buildRawMessage(creds: GmailCreds, options: GmailSendOptions): string {
     `To: ${options.to}`,
   ];
   if (options.replyTo) headers.push(`Reply-To: ${options.replyTo}`);
+  if (options.messageId) headers.push(`Message-ID: ${options.messageId}`);
   headers.push(
     `Subject: ${encodeMimeHeaderWord(options.subject)}`,
     'MIME-Version: 1.0',
@@ -225,9 +231,13 @@ export async function sendViaGmailOAuth(options: GmailSendOptions): Promise<Gmai
       const resp = await gmail.users.messages.send({
         userId: 'me',
         requestBody: { raw },
-      });
+      }, options.avoidDuplicateRetry ? { retry: false, timeout: 30000 } : {});
       return { ok: true, messageId: resp.data.id || undefined };
     } catch (err: any) {
+      if (options.avoidDuplicateRetry) {
+        const status = Number(err?.response?.status || err?.code);
+        return { ok: false, error: err?.message || 'Gmail send failed', uncertain: !(status >= 400 && status < 500), retryable: status === 429 };
+      }
       console.warn(`[gmail-send] Service account send failed (${err?.message || err}); falling back to OAuth refresh token`);
       cachedJwtClient = null;
       cachedJwtSubject = '';
@@ -254,10 +264,11 @@ export async function sendViaGmailOAuth(options: GmailSendOptions): Promise<Gmai
     const resp = await gmail.users.messages.send({
       userId: 'me',
       requestBody: { raw },
-    });
+    }, options.avoidDuplicateRetry ? { retry: false, timeout: 30000 } : {});
 
     return { ok: true, messageId: resp.data.id || undefined };
   } catch (err: any) {
-    return { ok: false, error: err?.message || String(err) };
+    const status = Number(err?.response?.status || err?.code);
+    return { ok: false, error: err?.message || String(err), ...(options.avoidDuplicateRetry ? { uncertain: !(status >= 400 && status < 500), retryable: status === 429 } : {}) };
   }
 }

@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import pool from '../../../lib/db';
 import crypto from 'crypto';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { learnerMail } from '../../../lib/mmsSync/legacyRouting';
 
 // Fail closed: accept server-side secrets only. NEXT_PUBLIC_* values are baked
 // into the public JS bundle and must never act as an API key; with no key
@@ -112,6 +113,8 @@ async function fetchAlreadySent(taskId: string, courseRunId: string): Promise<Se
 // ── Send confirmation email via Gmail API ────────────────────────────────────
 
 async function sendConfirmationEmail(opts: {
+    runUuid: string;
+    courseCode: string;
     studentName: string;
     studentEmail: string;
     courseName: string;
@@ -155,11 +158,12 @@ async function sendConfirmationEmail(opts: {
         .replace(/\{COMPANY_EMAIL\}/g, tp.companyEmail || '')
         .replace(/\{COMPANY_PHONE\}/g, tpRow.company_tel || '');
 
-    const subject = replacePlaceholders(emailSubject || 'Final Course Confirmation — {COURSE_NAME}');
+    const routed = await learnerMail({ courseCode: opts.courseCode, runUuid: opts.runUuid }, { name: studentName, email: studentEmail, title: courseName, dates: courseDates, venue: courseVenue, support: tp.companyEmail || tpRow.company_email || tpRow.support_email || tpRow.company_tel || 'Training support', confirmation: true });
+    const subject = routed?.subject || replacePlaceholders(emailSubject || 'Final Course Confirmation — {COURSE_NAME}');
     const bodyText = replacePlaceholders(emailBody || `Dear {STUDENT_NAME},\n\nThis is to confirm your enrolment in {COURSE_NAME} starting on {COURSE_START_DATE}.\n\nPlease ensure you arrive on time.\n\nBest regards,\n{COMPANY_SHORT_NAME}`);
 
     const isHtml = /<[a-z][\s\S]*>/i.test(bodyText);
-    const htmlBody = `<div style="font-family: Arial, sans-serif; color: #333;">${isHtml ? bodyText : bodyText.split('\n').map(line => line.trim() ? `<p style="margin:0 0 2px 0;">${line}</p>` : '<br/>').join('\n')}</div>`;
+    const htmlBody = routed?.html || `<div style="font-family: Arial, sans-serif; color: #333;">${isHtml ? bodyText : bodyText.split('\n').map(line => line.trim() ? `<p style="margin:0 0 2px 0;">${line}</p>` : '<br/>').join('\n')}</div>`;
 
     const senderName = tpRow.contact_person_name || '';
     const emailUser = tpRow.email_user;
@@ -361,6 +365,8 @@ async function _runAutomationInner(taskId: string = 'auto_send_course_confirmati
 
                     try {
                         await sendConfirmationEmail({
+                            runUuid: run.db_uuid,
+                            courseCode: run.course_code,
                             studentName: learner.learner_name,
                             studentEmail: learner.learner_email,
                             courseName: run.course_title,

@@ -11,9 +11,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     try {
         await ensureSchema();
         if (req.query.list === 'true') {
-            const data = (await pool.query(`SELECT source_run_key,course_code,last_success_at,last_error,revision,target_result FROM mms_sync_source ORDER BY updated_at DESC LIMIT 100`)).rows;
+            const data = (await pool.query(`SELECT s.source_run_key,s.course_code,s.last_success_at,s.last_error,s.revision,s.target_result,s.approved_at,s.access_calendar_error,
+                (SELECT count(*)::int FROM mms_access_notification n WHERE n.source_run_key=s.source_run_key AND n.state IN ('failed','review')) access_failures
+                FROM mms_sync_source s ORDER BY updated_at DESC LIMIT 100`)).rows;
             const scan = (await pool.query('SELECT created_at,result FROM mms_sync_scan_log ORDER BY id DESC LIMIT 1')).rows[0] || null;
-            return res.json({ success: true, enabled: true, data, scan });
+            return res.json({ success: true, enabled: true, notifications_enabled: process.env.MMS_ACCESS_NOTIFICATIONS_ENABLED === 'true', data, scan });
         }
         const input = { run_uuid: String(req.query.run_uuid || ''), masterlist_class_id: String(req.query.masterlist_class_id || ''), source_run_key: String(req.query.source_run_key || '') };
         const source = await resolveManualSource(input);

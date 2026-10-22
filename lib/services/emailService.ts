@@ -15,11 +15,17 @@ interface SendEmailOptions {
   html?: string;
   replyTo?: string;
   from?: string;
+  avoidDuplicateRetry?: boolean;
+  messageId?: string;
 }
 
 class EmailService {
-  async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; error?: string; messageId?: string; via?: 'smtp' | 'gmail' }> {
+  async sendEmail(options: SendEmailOptions): Promise<{ success: boolean; error?: string; messageId?: string; via?: 'smtp' | 'gmail'; uncertain?: boolean; retryable?: boolean }> {
     const smtpOn = await isSmtpEnabled();
+    if (options.avoidDuplicateRetry) {
+      const r = smtpOn ? await sendViaSmtp(options) : await sendViaGmailOAuth(options);
+      return { success: r.ok, error: r.error, messageId: r.messageId, via: smtpOn ? 'smtp' : 'gmail', uncertain: r.uncertain, retryable: r.retryable };
+    }
 
     // Primary transport
     if (smtpOn) {

@@ -17,6 +17,8 @@
 
 import { google } from 'googleapis';
 import pool from './db';
+import { getAccessContext } from './mmsSync/accessContext';
+import { accessInstruction } from './mmsSync/accessPolicy';
 import { queueTrainerWhatsAppNotification } from './trainerWhatsapp';
 import {
   buildInvitationReplacements,
@@ -455,12 +457,18 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
     tp.trainer_invitation_email_subject || DEFAULT_TRAINER_INVITATION_SUBJECT,
     replacements
   );
+  const access = await getAccessContext({ runUuid: courseRunUuid, courseCode: classRow.course_code });
+  if (access.platform === 'review') throw new Error(access.reason);
+  // An invitation is not teaching access: wait for confirmed assignment even if another trainer has access.
+  const invitationTemplate = access.platform === 'mms'
+    ? `${DEFAULT_TRAINER_INVITATION_BODY}\n\n${accessInstruction({ ...access, state: 'pending' })}`
+    : tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY;
   const textBody = renderInvitationTemplate(
-    tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
+    invitationTemplate,
     replacements
   );
   const htmlBody = renderInvitationHtmlEmail(
-    tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY,
+    invitationTemplate,
     replacements,
     acceptUrl,
     declineUrl

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { assertNonFunded, snapshotHash, MmsSyncError, type RunSnapshot } from './contract';
 import { calendarEvents, resolveEvent, buildSnapshot, type SourceRecord } from './source';
 import { getCalendarReadClient } from '../calendar/calendarClient';
+import { assertRunApproval, firstSessionAt, withApproval } from './accessPolicy';
 export const mmsSyncEnabled = (): boolean => process.env.MMS_SYNC_ENABLED === 'true';
 let schemaReady: Promise<void> | undefined;
 export function requireSyncEnabled(): void {
@@ -13,7 +14,10 @@ export function requireSyncEnabled(): void {
 }
 export async function ensureSchema(): Promise<void> {
     if (!schemaReady)
-        schemaReady = (async () => { await pool.query(await readFile(path.join(process.cwd(), 'database/migrations/create_mms_nonfunded_sync.sql'), 'utf8')); })().catch(e => { schemaReady = undefined; throw e; });
+        schemaReady = (async () => {
+            for (const file of ['create_mms_nonfunded_sync.sql', 'create_mms_class_access.sql'])
+                await pool.query(await readFile(path.join(process.cwd(), 'database/migrations', file), 'utf8'));
+        })().catch(e => { schemaReady = undefined; throw e; });
     await schemaReady;
 }
 function configuration(): {
@@ -41,7 +45,7 @@ async function register(source: SourceRecord): Promise<void> {
     masterlist_class_id=COALESCE(EXCLUDED.masterlist_class_id,mms_sync_source.masterlist_class_id),
     operational_run_id=COALESCE(EXCLUDED.operational_run_id,mms_sync_source.operational_run_id),updated_at=now()`, [source.source_run_key, source.course_code, source.calendar_id, JSON.stringify(source.event_ids), source.tms_run_uuid, source.masterlist_class_id, source.operational_run_id || null]);
 }
-async function currentEligibility(source: SourceRecord): Promise<void> {
+async function currentEligibility(source: SourceRecord, requireApproval = true): Promise<void> {
     assertNonFunded(source.course_code);
     if (source.tms_run_uuid) {
         const rows = (await pool.query('SELECT c.course_code FROM course_run cr JOIN course c ON c.id=cr.course_id WHERE cr.id=$1', [source.tms_run_uuid])).rows;
@@ -53,6 +57,11 @@ async function currentEligibility(source: SourceRecord): Promise<void> {
     const allowlist = (process.env.MMS_SYNC_COURSE_ALLOWLIST || '').split(',').map(v => v.trim().toUpperCase());
     if (!allowlist.includes(source.course_code))
         throw new MmsSyncError('Course is outside the configured pilot allowlist.', 'outside_pilot');
+    if (requireApproval) {
+        const approval = (await pool.query('SELECT approved_at,delivery_platform FROM mms_sync_source WHERE source_run_key=$1', [source.source_run_key])).rows[0];
+        if (!approval?.approved_at || approval.delivery_platform !== 'mms')
+            throw new MmsSyncError('Approve this exact full course run before automatic or manual MMS import.', 'approval_required');
+    }
 }
 export async function queueSource(key: string, trigger: string): Promise<number> {
     requireSyncEnabled();
@@ -94,7 +103,7 @@ export async function discover(dryRun = false): Promise<Record<string, unknown>>
     for (const source of sources.values()) {
         try {
             if (dryRun) {
-                await currentEligibility(source);
+                await currentEligibility(source, false);
                 const snapshot = await buildSnapshot(pool, source);
                 snapshot.revision = 1;
                 snapshot.request_id = `preview:${randomUUID()}`;
@@ -139,6 +148,9 @@ export async function requestManual(input: {
     masterlist_class_id?: string;
     event_id?: string;
     confirm_trainer?: boolean;
+    approve_run?: boolean;
+    first_session_at?: string;
+    actor?: string;
 }): Promise<{
     job_id: number;
     source_run_key: string;
@@ -148,7 +160,21 @@ export async function requestManual(input: {
     await ensureSchema();
     const source = await resolveManualSource(input);
     await register(source);
-    await currentEligibility(source);
+    await currentEligibility(source, false);
+    if (input.approve_run) {
+        const snapshot = await buildSnapshot(pool, source);
+        const start = firstSessionAt(snapshot);
+        if (input.first_session_at !== start || !input.actor)
+            throw new MmsSyncError('Preview and verify the entire run first, then approve its exact first session.');
+        const prior = (await pool.query('SELECT * FROM mms_sync_source WHERE source_run_key=$1', [source.source_run_key])).rows[0];
+        if (!prior.approved_at || new Date(prior.first_session_at).toISOString() !== start) {
+            const approved = { approved_at: new Date().toISOString(), approved_by: input.actor, first_session_at: start };
+            assertRunApproval(approved, snapshot);
+            if (prior.handover_at && new Date(prior.first_session_at).getTime() <= Date.now())
+                throw new MmsSyncError('The approved run already started; its first session cannot be moved or reapproved as a new run.');
+            await pool.query('UPDATE mms_sync_source SET approved_at=$2,approved_by=$3,first_session_at=$4 WHERE source_run_key=$1', [source.source_run_key, approved.approved_at, input.actor, start]);
+        }
+    }
     if (input.confirm_trainer && source.masterlist_class_id) {
         const emails = (await pool.query(`SELECT DISTINCT lower(btrim(trainer_email)) email FROM masterlist_table WHERE class_id=$1 AND nullif(btrim(trainer_email),'') IS NOT NULL`, [source.masterlist_class_id])).rows;
         if (emails.length !== 1)
@@ -182,7 +208,7 @@ export async function processJobs(limit = 20, sourceKey: string | null = null): 
             }
             const source = (await db.query('SELECT * FROM mms_sync_source WHERE source_run_key=$1', [job.source_run_key])).rows[0] as SourceRecord;
             await currentEligibility(source);
-            const snapshot = await buildSnapshot(pool, source);
+            const snapshot = withApproval(await buildSnapshot(pool, source), source as any);
             snapshot.snapshot_hash = snapshotHash(snapshot);
             await db.query('BEGIN');
             const previous = (await db.query('SELECT revision,snapshot_hash FROM mms_sync_source WHERE source_run_key=$1 FOR UPDATE', [job.source_run_key])).rows[0];
@@ -200,7 +226,9 @@ export async function processJobs(limit = 20, sourceKey: string | null = null): 
             const result = await response.json();
             if (!response.ok || !result.success)
                 throw new MmsSyncError(result.error || `MMS returned HTTP ${response.status}`, response.status >= 500 || response.status === 408 || response.status === 429 ? 'retry' : 'needs_review');
-            await db.query('UPDATE mms_sync_source SET target_result=$2::jsonb,last_success_at=now(),last_error=NULL WHERE source_run_key=$1', [job.source_run_key, JSON.stringify(result)]);
+            // MMS also enforces no-midway before commit. Never record a late first handover as ready.
+            assertRunApproval(source as any, snapshot);
+            await db.query('UPDATE mms_sync_source SET target_result=$2::jsonb,last_success_at=now(),last_error=NULL,handover_at=COALESCE(handover_at,now()) WHERE source_run_key=$1', [job.source_run_key, JSON.stringify(result)]);
             await db.query(`UPDATE mms_sync_job SET state=CASE WHEN dirty THEN 'queued' ELSE 'succeeded' END,leased_at=NULL,available_at=now(),last_error=NULL WHERE id=$1`, [job.id]);
             counts.processed++;
         }
@@ -218,6 +246,9 @@ export async function processJobs(limit = 20, sourceKey: string | null = null): 
             db.release();
         }
     }
+    // Notifications have their own outbox and switch; a mail failure must not undo a committed import.
+    const { recoverAccessNotifications } = await import('./accessNotifications');
+    await recoverAccessNotifications(sourceKey).catch(e => console.error('[mms-access] Notification recovery failed:', e instanceof Error ? e.message : 'unknown'));
     return counts;
 }
 export async function syncStatus(filters: {
@@ -228,7 +259,7 @@ export async function syncStatus(filters: {
     if (!mmsSyncEnabled())
         return [];
     await ensureSchema();
-    return (await pool.query(`SELECT s.source_run_key,s.course_code,s.revision,s.target_result,s.last_success_at,s.last_error,
+    return (await pool.query(`SELECT s.source_run_key,s.course_code,s.revision,s.target_result,s.last_success_at,s.last_error,s.approved_at,s.first_session_at,s.handover_at,s.delivery_platform,s.access_calendar_error,
     (SELECT state FROM mms_sync_job j WHERE j.source_run_key=s.source_run_key ORDER BY id DESC LIMIT 1) state
     FROM mms_sync_source s WHERE s.source_run_key=$1 OR s.tms_run_uuid::text=$2 OR s.masterlist_class_id::text=$3`, [filters.source_run_key || '', filters.run_uuid || '', filters.masterlist_class_id || ''])).rows;
 }
@@ -242,7 +273,7 @@ export async function resolveManualSource(input: {
     if (known.length > 1)
         throw new MmsSyncError('The class has multiple source mappings.');
     if (known.length) {
-        await currentEligibility(known[0]);
+        await currentEligibility(known[0], false);
         return known[0];
     }
     let eventId = input.event_id;
@@ -268,6 +299,6 @@ export async function resolveManualSource(input: {
     const source = await resolveEvent(pool, calendar.calendarId, event);
     if (!source)
         throw new MmsSyncError('Funded or cancelled unlinked events cannot be imported.', 'funded_excluded');
-    await currentEligibility(source);
+    await currentEligibility(source, false);
     return source;
 }

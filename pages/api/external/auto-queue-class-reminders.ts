@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { getAccessContext } from '../../../lib/mmsSync/accessContext';
+import { accessInstruction } from '../../../lib/mmsSync/accessPolicy';
 import { resolveClassDurationDays } from '../../../lib/trainerInvitations';
 import { classReminderExists, normalizeSgPhone, queueClassReminderWhatsApp, WHATSAPP_CHANNELS } from '../../../lib/trainerWhatsapp';
 import { findAcknowledgedTrainerTgsTolerant, normalizeTgsCode, tgsDateKey } from '../../../lib/calendar/trainerAcknowledgement';
@@ -202,6 +204,12 @@ export async function runAutomation(): Promise<QueueSummary> {
   type Candidate = { row: any; date: string; trainer: any };
   const candidates: Candidate[] = [];
   for (const row of rows.rows) {
+    const access = await getAccessContext({ runUuid: row.course_run_uuid, courseCode: row.course_code });
+    if (access.platform !== 'tms' && (access.state !== 'ready' || process.env.MMS_ACCESS_NOTIFICATIONS_ENABLED !== 'true')) {
+      errors++;
+      details.push({ courseRunId: row.course_run_id, trainer: '', result: access.reason || 'MMS access pending' });
+      continue;
+    }
     const courseCode = normalizeTgsCode(row.course_code);
     if (ack.uncheckedRunUuids.has(row.course_run_uuid)) {
       skippedCalendarUnchecked++;
@@ -287,8 +295,7 @@ export async function runAutomation(): Promise<QueueSummary> {
       `Course Duration: ${durationLabel}\n` +
       `Mode of Training: ${mode}\n` +
       locationLine +
-      `\nTo view E-Attendance and course-related materials, please log in below:\n` +
-      `${baseUrl}\n\n` +
+      (access.platform === 'mms' ? `\n${accessInstruction(access)}\n\n` : `\nTo view E-Attendance and course-related materials, please log in below:\n${baseUrl}\n\n`) +
       `Training Admin, Tertiary Infotech Academy`;
 
     const result = await queueClassReminderWhatsApp({

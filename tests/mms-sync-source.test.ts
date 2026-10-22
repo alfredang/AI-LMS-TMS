@@ -6,6 +6,12 @@ import { buildSnapshot, resolveEvent, calendarIdentity, type SourceRecord } from
 const event = { id: 'event-1', summary: 'Pilot', description: 'Course Code: C916', start: { dateTime: '2026-11-10T09:30:00+08:00' }, end: { dateTime: '2026-11-10T17:30:00+08:00' } };
 const source: SourceRecord = { source_run_key: calendarIdentity('sales@tertiarycourses.com.sg', 'event-1'), course_code: 'C916', calendar_id: 'sales@tertiarycourses.com.sg', event_ids: ['event-1'], tms_run_uuid: null, masterlist_class_id: 'class-1' };
 const readClient = { calendarId: source.calendar_id, calendar: { events: { get: async () => ({ data: event }) } } } as unknown as CalendarClient;
+test('a later-day Calendar event cannot masquerade as the full first session', async () => {
+    for (const summary of ['DP600 Day 3', 'Pilot Session 2', 'Pilot Part 10']) {
+        const client = { calendarId: source.calendar_id, calendar: { events: { get: async () => ({ data: { ...event, summary } }) } } } as unknown as CalendarClient;
+        await assert.rejects(() => buildSnapshot(database([{ email: 'learner@example.com', name: 'Learner' }]), source, client), /later course day/);
+    }
+});
 function database(master: Record<string, unknown>[], users: Record<string, unknown>[] = []): Pool {
     return { query: async (sql: string) => {
             if (sql.includes('FROM course c WHERE'))

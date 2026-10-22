@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { reminderAccess } from '../../../lib/mmsSync/legacyRouting';
 import { resolveClassDurationDays } from '../../../lib/trainerInvitations';
 import { normalizeSgPhone } from '../../../lib/trainerWhatsapp';
 
@@ -154,7 +155,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
 
-    const classes = result.rows.map((row: any) => {
+    const classes = await Promise.all(result.rows.map(async (row: any) => {
       const { label: durationLabel } = resolveClassDurationDays(row);
       const trainingVal = Number(row.training_hours) || 0;
       const assessmentVal = Number(row.assessment_hours) || 0;
@@ -171,6 +172,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           phone_e164: normalizeSgPhone(t.tel),
         }];
       });
+      const access = await reminderAccess({ runUuid: row.course_run_uuid, courseCode: row.course_code });
       return {
         course_run_id: row.course_run_id,
         course_title: row.course_title,
@@ -190,8 +192,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         learner_count: row.learner_count,
         sessions: row.sessions || [],
         trainers,
+        ...(access || {}),
       };
-    });
+    }));
 
     return res.status(200).json({ success: true, count: classes.length, classes });
   } catch (err) {

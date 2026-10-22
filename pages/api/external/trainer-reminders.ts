@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { reminderAccess } from '../../../lib/mmsSync/legacyRouting';
 import { resolveTrainerForRunDate, TrainerResolutionResult } from '../../../lib/calendar/resolveTrainerFromCalendar';
 import { getCalendarReadClient } from '../../../lib/calendar/calendarClient';
 import { resolveEventsToRuns, CandidateRun } from '../../../lib/calendar/resolveEventToRun';
@@ -201,7 +202,7 @@ const BASE_SELECT = `
  * trainer can legitimately differ day to day (that's the whole reason this resolution exists),
  * so a day-2 reminder must check day-2's calendar event, not day-1's.
  */
-async function resolveAllRows(rows: any[], window?: { start: string; end: string }): Promise<ReturnType<typeof mapRow>[]> {
+async function resolveAllRows(rows: any[], window?: { start: string; end: string }) {
   return Promise.all(
     rows.map(async (row) => {
       const sessionDates: string[] = row.session_dates || [];
@@ -210,7 +211,9 @@ async function resolveAllRows(rows: any[], window?: { start: string; end: string
         : row.start_date;
       const resolution = await resolveTrainerForRunDate(row.run_uuid, String(matchedDate).slice(0, 10));
       const phoneRaw = await lookupTrainerPhone(resolution.trainer?.user_id ?? null);
-      return mapRow(row, resolution, phoneRaw);
+      const mapped = mapRow(row, resolution, phoneRaw);
+      const access = await reminderAccess({ runUuid: row.run_uuid, courseCode: row.course_code });
+      return access ? { ...mapped, ...access, send_reminder: mapped.send_reminder && access.access_state === 'ready' } : mapped;
     })
   );
 }

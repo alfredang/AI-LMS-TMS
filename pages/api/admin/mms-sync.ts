@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { withAuth } from '../../../lib/auth/withAuth';
+import { withAuth, type AuthedApiRequest } from '../../../lib/auth/withAuth';
 import { MmsSyncError } from '../../../lib/mmsSync/contract';
 import { requestManual, processJobs } from '../../../lib/mmsSync/service';
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -9,7 +9,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const body = req.body || {};
         if (!['source_run_key', 'run_uuid', 'masterlist_class_id', 'event_id'].some(k => typeof body[k] === 'string' && body[k].length > 0 && body[k].length <= 255))
             return res.status(400).json({ success: false, error: 'Provide one source class identity.' });
-        const job = await requestManual({ source_run_key: body.source_run_key, run_uuid: body.run_uuid, masterlist_class_id: body.masterlist_class_id, event_id: body.event_id, confirm_trainer: body.confirm_trainer === true });
+        const job = await requestManual({ source_run_key: body.source_run_key, run_uuid: body.run_uuid, masterlist_class_id: body.masterlist_class_id, event_id: body.event_id, confirm_trainer: body.confirm_trainer === true,
+            approve_run: body.approve_run === true, first_session_at: body.first_session_at, actor: (req as AuthedApiRequest).authUser?.id });
         await processJobs(1, job.source_run_key);
         return res.status(200).json({ success: true, ...job });
     }
