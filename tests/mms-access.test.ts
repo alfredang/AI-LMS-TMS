@@ -15,11 +15,14 @@ const source = () => {
 test('funded routing is unchanged even with a hostile existing MMS mapping', () => {
     for (const code of ['TGS123', ' tgs-123 ', 'TgS-2026']) assert.deepEqual(accessContext(code, source(), false, 'https://evil.example'), { platform: 'tms', state: 'legacy' });
 });
-test('run approval uses the full first session, SGT, pilot date and initial handover time', () => {
+test('run approval uses the full first session, SGT and pilot start date even after class begins', () => {
     const snapshot = fixture();
     assert.equal(firstSessionAt(snapshot), '2050-10-23T01:30:00.000Z');
     assert.doesNotThrow(() => assertRunApproval(approval(), snapshot, new Date('2050-10-24')));
-    assert.throws(() => assertRunApproval({ ...approval(), handover_at: null }, snapshot, new Date('2050-10-24')), /before/);
+    assert.doesNotThrow(() => assertRunApproval({ ...approval(), handover_at: null }, snapshot, new Date('2050-10-24')));
+    const late = { ...approval(), approved_at: '2050-10-23T02:00:00Z', handover_at: null };
+    assert.doesNotThrow(() => assertRunApproval(late, snapshot, new Date('2050-10-23T02:01:00Z')));
+    assert.throws(() => assertRunApproval({ ...late, approved_at: '2050-10-23T02:02:00Z' }, snapshot, new Date('2050-10-23T02:01:00Z')), /pilot/);
     assert.throws(() => assertRunApproval({ ...approval(), first_session_at: '2050-10-24T01:30:00Z' }, snapshot), /changed/);
     assert.throws(() => assertRunApproval({}, snapshot), /Approve/);
     const underway = fixture(); underway.sessions[0].date = '2026-10-22';

@@ -40,11 +40,13 @@ test('funded, unsupported and explicit TMS fallback runs never auto-enrol', () =
     assert.equal(courseAllowed('C817', ''), false);
 });
 
-test('automatic runs preserve the no-midway gate, including preapproved but not handed-over runs', () => {
+test('automatic runs accept first assignments during a new pilot class, but reject courses begun before the pilot', () => {
     const data = fixture(); const approval = operationalApproval(data, source, now);
     const started = new Date('2026-10-23T02:00:00Z');
-    assert.throws(() => operationalApproval(data, source, started), /before/);
-    assert.throws(() => operationalApproval(data, { ...source, ...approval }, started), /before/);
+    const lateApproval = operationalApproval(data, source, started);
+    assert.equal(lateApproval.approved_at, started.toISOString());
+    assert.deepEqual(operationalApproval(data, { ...source, ...approval }, started), { ...source, ...approval });
+    assert.doesNotThrow(() => assertRunApproval(lateApproval, data, started));
     const handed = { ...source, ...approval, handover_at: '2026-10-22T06:01:00Z' };
     assert.deepEqual(operationalApproval(data, handed, started), handed);
     const later = fixture(); later.sessions[0].date = '2026-10-24';

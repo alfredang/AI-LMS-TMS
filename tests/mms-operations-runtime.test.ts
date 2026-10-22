@@ -6,7 +6,7 @@ import path from 'node:path';
 import { Pool } from 'pg';
 import { type RunSnapshot } from '../lib/mmsSync/contract';
 
-test('usual TMS assignments bootstrap sync and MMS courseware mail, retaining TMS data and excluding midway/funded runs', { skip: process.env.MMS_ACCESS_ISOLATED_TEST !== '1' }, async () => {
+test('usual TMS assignments bootstrap and update MMS, retaining TMS data and excluding pre-cutoff/funded runs', { skip: process.env.MMS_ACCESS_ISOLATED_TEST !== '1' }, async () => {
     const connection = { host: process.env.MMS_ACCESS_TEST_HOST === 'postgres' ? 'postgres' : '127.0.0.1', port: process.env.MMS_ACCESS_TEST_HOST === 'postgres' ? 5432 : 15439, database: 'mms_access_test', user: 'postgres', password: 'local-test-only' };
     const admin = new Pool(connection);
     assert.equal((await admin.query('SELECT current_database() db')).rows[0].db, 'mms_access_test');
@@ -91,6 +91,13 @@ test('usual TMS assignments bootstrap sync and MMS courseware mail, retaining TM
         assert.equal(mmsSyncEnabled(), true);
         assert.equal(notificationsEnabled(), false);
         assert.equal(await learnerMail({ masterlistClassId: classId, courseCode: ' tgs-123 ' }, { name: '', email: '', title: '', dates: '', venue: '', support: '' }), null);
+        // Move only this disposable fixture's cutoff back: the previously
+        // excluded class must now complete its first handover after starting.
+        await pool.query("UPDATE mms_handover_config SET pilot_start_date='2026-10-20' WHERE id=1");
+        await loadMmsRuntimeConfig(true);
+        await discover(); await processJobs();
+        assert.ok(writes.some(s => s.source_run_key === sources[1].source_run_key));
+        assert.equal((await pool.query('SELECT count(*) n FROM masterlist_table WHERE class_id=$1 AND email=$2', [sources[1].masterlist_class_id, 'old@example.com'])).rows[0].n, '1');
         await pool.query('DELETE FROM mms_handover_config WHERE id=1');
         await loadMmsRuntimeConfig(true);
     } finally {

@@ -1,6 +1,6 @@
 import pool from '../db';
 import { accessContext, type AccessContext } from './accessPolicy';
-import { dateInSingapore, MmsSyncError, normalizeCode } from './contract';
+import { MmsSyncError, normalizeCode } from './contract';
 import { courseAllowed, normalOperationsEnabled, operationalApproval } from './operationPolicy';
 import { getMmsRuntimeConfig, loadMmsRuntimeConfig } from './runtimeConfig';
 
@@ -29,7 +29,7 @@ export async function getAccessContext(identity: ClassIdentity): Promise<AccessC
         const run = (await pool.query('SELECT to_jsonb(cr) run,c.course_code FROM course_run cr JOIN course c ON c.id=cr.course_id WHERE cr.id::text=$1', [identity.runUuid])).rows[0];
         if (normalizeCode(run?.course_code).startsWith('TGS')) return { platform: 'tms', state: 'legacy' };
         const start = String(run?.run?.start_date || '');
-        if (start && (start < getMmsRuntimeConfig().pilotStartDate || start < dateInSingapore(new Date().toISOString())))
+        if (start && start < getMmsRuntimeConfig().pilotStartDate)
             return { platform: 'tms', state: 'legacy' };
     }
     if ((!row?.approved_at || !row) && normalOperationsEnabled() && courseAllowed(identity.courseCode || row?.current_code)) {

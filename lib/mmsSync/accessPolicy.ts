@@ -39,11 +39,8 @@ export function assertRunApproval(approval: RunApproval, snapshot: RunSnapshot, 
     const approved = new Date(approval.approved_at).getTime();
     const reviewed = new Date(approval.first_session_at).getTime();
     const minimum = new Date(`${getMmsRuntimeConfig().pilotStartDate}T00:00:00+08:00`).getTime();
-    if (![first, approved, reviewed, minimum].every(Number.isFinite) || first < minimum || first !== reviewed || approved >= first || approved > now.getTime())
-        throw new MmsSyncError('The full run start changed or is outside the approved pilot. Review it before it starts.', 'no_midway');
-    // An approved future run may be retried, but its INITIAL handover cannot start midway.
-    if (approval.handover_at ? new Date(approval.handover_at).getTime() >= first : now.getTime() >= first)
-        throw new MmsSyncError('Initial MMS handover must finish before the full run starts.', 'no_midway');
+    if (![first, approved, reviewed, minimum].every(Number.isFinite) || first < minimum || first !== reviewed || approved > now.getTime())
+        throw new MmsSyncError('The full run start changed or is outside the approved pilot. Review its complete first session.', 'no_midway');
 }
 export function participantUrls(result: any, origin = getMmsRuntimeConfig().publicOrigin): { login_url: string; class_url: string } {
     const base = new URL(origin);
