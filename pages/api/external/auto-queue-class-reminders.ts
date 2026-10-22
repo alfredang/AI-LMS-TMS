@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getAccessContext } from '../../../lib/mmsSync/accessContext';
 import { accessInstruction } from '../../../lib/mmsSync/accessPolicy';
+import { getMmsRuntimeConfig } from '../../../lib/mmsSync/runtimeConfig';
 import { resolveClassDurationDays } from '../../../lib/trainerInvitations';
 import { classReminderExists, normalizeSgPhone, queueClassReminderWhatsApp, WHATSAPP_CHANNELS } from '../../../lib/trainerWhatsapp';
 import { findAcknowledgedTrainerTgsTolerant, normalizeTgsCode, tgsDateKey } from '../../../lib/calendar/trainerAcknowledgement';
@@ -257,7 +258,7 @@ export async function runAutomation(): Promise<QueueSummary> {
     }
 
     const access = await getAccessContext({ runUuid: row.course_run_uuid, courseCode: row.course_code });
-    if (access.platform !== 'tms' && (access.state !== 'ready' || process.env.MMS_ACCESS_NOTIFICATIONS_ENABLED !== 'true')) {
+    if (access.platform !== 'tms' && (access.state !== 'ready' || !getMmsRuntimeConfig().notificationsEnabled)) {
       errors++;
       details.push({ courseRunId: row.course_run_id, trainer: t.name, result: access.reason || 'MMS access pending' });
       continue;

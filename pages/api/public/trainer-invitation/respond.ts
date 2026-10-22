@@ -20,6 +20,7 @@ import { confirmTrainerOnCalendar } from '@/lib/calendar/confirmTrainerOnCalenda
 import { patchRunAttendee } from '@/lib/calendar/runAttendees';
 import { prepareClassAccess } from '@/lib/mmsSync/accessContext';
 import { accessInstruction } from '@/lib/mmsSync/accessPolicy';
+import { getMmsRuntimeConfig } from '@/lib/mmsSync/runtimeConfig';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
   const colors = {
@@ -586,7 +587,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
         const access = await prepareClassAccess({ runUuid: invitation.course_run_id, courseCode: invitation.course_code });
         const acceptTemplate = access.platform === 'tms' ? tp.trainer_accept_email_body || DEFAULT_TRAINER_ACCEPT_BODY
-          : `${DEFAULT_TRAINER_ACCEPT_BODY}\n\n${accessInstruction({ ...access, state: process.env.MMS_ACCESS_NOTIFICATIONS_ENABLED === 'true' ? access.state : 'pending' })}`;
+          : `${DEFAULT_TRAINER_ACCEPT_BODY}\n\n${accessInstruction({ ...access, state: getMmsRuntimeConfig().notificationsEnabled ? access.state : 'pending' })}`;
         const body = renderInvitationTemplate(
           acceptTemplate,
           replacements

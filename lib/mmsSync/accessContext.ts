@@ -2,12 +2,15 @@ import pool from '../db';
 import { accessContext, type AccessContext } from './accessPolicy';
 import { dateInSingapore, MmsSyncError, normalizeCode } from './contract';
 import { courseAllowed, normalOperationsEnabled, operationalApproval } from './operationPolicy';
+import { getMmsRuntimeConfig, loadMmsRuntimeConfig } from './runtimeConfig';
 
 export interface ClassIdentity { courseCode?: string; runUuid?: string; operationalRunId?: string; sourceKey?: string; masterlistClassId?: string; }
 export async function getAccessContext(identity: ClassIdentity): Promise<AccessContext> {
     // Default-off and funded paths do not query/migrate the integration schema.
-    if (normalizeCode(identity.courseCode).startsWith('TGS') || process.env.MMS_SYNC_ENABLED !== 'true')
+    if (normalizeCode(identity.courseCode).startsWith('TGS'))
         return { platform: 'tms', state: 'legacy' };
+    await loadMmsRuntimeConfig();
+    if (!getMmsRuntimeConfig().enabled) return { platform: 'tms', state: 'legacy' };
     const exists = (await pool.query("SELECT to_regclass('mms_access_notification') AS name")).rows[0]?.name;
     if (!exists) throw new Error('Deploy the MMS access migration before enabling MMS synchronization.');
     const rows = (await pool.query(`SELECT s.*,
@@ -26,7 +29,7 @@ export async function getAccessContext(identity: ClassIdentity): Promise<AccessC
         const run = (await pool.query('SELECT to_jsonb(cr) run,c.course_code FROM course_run cr JOIN course c ON c.id=cr.course_id WHERE cr.id::text=$1', [identity.runUuid])).rows[0];
         if (normalizeCode(run?.course_code).startsWith('TGS')) return { platform: 'tms', state: 'legacy' };
         const start = String(run?.run?.start_date || '');
-        if (start && (start < (process.env.MMS_PILOT_START_DATE || '2026-10-23') || start < dateInSingapore(new Date().toISOString())))
+        if (start && (start < getMmsRuntimeConfig().pilotStartDate || start < dateInSingapore(new Date().toISOString())))
             return { platform: 'tms', state: 'legacy' };
     }
     if ((!row?.approved_at || !row) && normalOperationsEnabled() && courseAllowed(identity.courseCode || row?.current_code)) {

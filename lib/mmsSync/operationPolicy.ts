@@ -1,10 +1,11 @@
 import { assertNonFunded, MmsSyncError, type RunSnapshot } from './contract';
 import { assertRunApproval, firstSessionAt, type RunApproval } from './accessPolicy';
+import { getMmsRuntimeConfig } from './runtimeConfig';
 
 // The integration remains globally default-off. Once enabled, the operator uses
 // normal TMS assignments; MMS-only approval clicks are an optional legacy mode.
-export const normalOperationsEnabled = () => process.env.MMS_SYNC_ENABLED === 'true' && process.env.MMS_SYNC_AUTOMATIC !== 'false';
-export function courseAllowed(code: unknown, configured = process.env.MMS_SYNC_COURSE_ALLOWLIST || ''): boolean {
+export const normalOperationsEnabled = () => getMmsRuntimeConfig().enabled && getMmsRuntimeConfig().automatic;
+export function courseAllowed(code: unknown, configured = getMmsRuntimeConfig().courseAllowlist): boolean {
     try {
         const normalized = assertNonFunded(code);
         const entries = configured.split(',').map(v => v.trim().toUpperCase());

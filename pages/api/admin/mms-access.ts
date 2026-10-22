@@ -6,10 +6,12 @@ import { firstSessionAt, recipients, withApproval } from '../../../lib/mmsSync/a
 import { snapshotHash } from '../../../lib/mmsSync/contract';
 import { previewAccess, requestAccessSend } from '../../../lib/mmsSync/accessNotifications';
 import pool from '../../../lib/db';
+import { loadMmsRuntimeConfig } from '../../../lib/mmsSync/runtimeConfig';
 async function handler(req: AuthedApiRequest, res: NextApiResponse) {
     res.setHeader('Cache-Control', 'no-store');
     if (!['GET', 'POST'].includes(req.method || '')) return res.status(405).json({ success: false, error: 'GET or POST required.' });
     try {
+        await loadMmsRuntimeConfig();
         requireSyncEnabled();
         await ensureSchema();
         const input = req.method === 'GET' ? req.query : req.body || {};

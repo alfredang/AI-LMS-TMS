@@ -7,7 +7,8 @@ import { calendarEvents, resolveEvent, buildSnapshot, type SourceRecord } from '
 import { getCalendarReadClient } from '../calendar/calendarClient';
 import { assertRunApproval, firstSessionAt, withApproval } from './accessPolicy';
 import { courseAllowed, normalOperationsEnabled, operationalApproval } from './operationPolicy';
-export const mmsSyncEnabled = (): boolean => process.env.MMS_SYNC_ENABLED === 'true';
+import { getMmsRuntimeConfig, loadMmsRuntimeConfig } from './runtimeConfig';
+export const mmsSyncEnabled = (): boolean => getMmsRuntimeConfig().enabled;
 let schemaReady: Promise<void> | undefined;
 export function requireSyncEnabled(): void {
     if (!mmsSyncEnabled())
@@ -16,6 +17,7 @@ export function requireSyncEnabled(): void {
 export async function ensureSchema(): Promise<void> {
     if (!schemaReady)
         schemaReady = (async () => {
+            await loadMmsRuntimeConfig();
             for (const file of ['create_mms_nonfunded_sync.sql', 'create_mms_class_access.sql'])
                 await pool.query(await readFile(path.join(process.cwd(), 'database/migrations', file), 'utf8'));
         })().catch(e => { schemaReady = undefined; throw e; });
@@ -25,8 +27,7 @@ function configuration(): {
     url: string;
     key: string;
 } {
-    const url = process.env.MMS_SYNC_URL || '';
-    const key = process.env.MMS_SYNC_API_KEY || '';
+    const { url, apiKey: key } = getMmsRuntimeConfig();
     if (!url || !key)
         throw new MmsSyncError('MMS_SYNC_URL and MMS_SYNC_API_KEY are required.', 'configuration');
     const target = new URL(url);
@@ -72,6 +73,7 @@ async function recordOperationalApproval(source: SourceRecord): Promise<SourceRe
 
 /** Used only by existing send workflows, not by read-only access previews. */
 export async function prepareOperationalAccess(input: Parameters<typeof resolveManualSource>[0]): Promise<void> {
+    await loadMmsRuntimeConfig();
     if (!normalOperationsEnabled()) return;
     configuration();
     await ensureSchema();
@@ -82,6 +84,7 @@ export async function prepareOperationalAccess(input: Parameters<typeof resolveM
     await processJobs(1, source.source_run_key);
 }
 export async function queueSource(key: string, trigger: string): Promise<number> {
+    await loadMmsRuntimeConfig();
     requireSyncEnabled();
     const source = (await pool.query('SELECT * FROM mms_sync_source WHERE source_run_key=$1', [key])).rows[0];
     if (!source)
@@ -92,9 +95,10 @@ export async function queueSource(key: string, trigger: string): Promise<number>
     return Number(job.id);
 }
 export async function discover(dryRun = false): Promise<Record<string, unknown>> {
+    await loadMmsRuntimeConfig();
     requireSyncEnabled();
     await ensureSchema();
-    const { calendarId, events } = await calendarEvents(Number(process.env.MMS_SYNC_HORIZON_DAYS || 60));
+    const { calendarId, events } = await calendarEvents(getMmsRuntimeConfig().horizonDays);
     const result: Record<string, unknown> = { scanned: events.length, queued: 0, excluded: 0, exceptions: [] };
     const sources = new Map<string, SourceRecord>();
     for (const event of events) {
@@ -174,6 +178,7 @@ export async function requestManual(input: {
     job_id: number;
     source_run_key: string;
 }> {
+    await loadMmsRuntimeConfig();
     requireSyncEnabled();
     configuration();
     await ensureSchema();
@@ -207,6 +212,7 @@ export async function processJobs(limit = 20, sourceKey: string | null = null): 
     processed: number;
     failed: number;
 }> {
+    await loadMmsRuntimeConfig();
     requireSyncEnabled();
     const config = configuration();
     await ensureSchema();
@@ -276,6 +282,7 @@ export async function syncStatus(filters: {
     masterlist_class_id?: string;
     source_run_key?: string;
 }): Promise<unknown[]> {
+    await loadMmsRuntimeConfig();
     if (!mmsSyncEnabled())
         return [];
     await ensureSchema();

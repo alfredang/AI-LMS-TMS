@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { getAccessContext } from '../../../lib/mmsSync/accessContext';
 import { accessMessage, recipients } from '../../../lib/mmsSync/accessPolicy';
+import { getMmsRuntimeConfig } from '../../../lib/mmsSync/runtimeConfig';
 import {
   ensureTrainerWhatsappTable,
   secondsUntilWhatsappWindow,
@@ -277,7 +278,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const access = await getAccessContext({ runUuid: row.source_run_uuid, courseCode: row.source_course_code });
         if (access.platform === 'tms') continue;
         const person = access.snapshot && recipients(access.snapshot).find(p => p.role === 'trainer' && p.email === String(row.trainer_email).toLowerCase());
-        if (access.platform !== 'mms' || access.state !== 'ready' || !person || process.env.MMS_ACCESS_NOTIFICATIONS_ENABLED !== 'true') throw new Error(access.reason || 'MMS trainer access is not ready, sending is paused or assignment changed.');
+        if (access.platform !== 'mms' || access.state !== 'ready' || !person || !getMmsRuntimeConfig().notificationsEnabled) throw new Error(access.reason || 'MMS trainer access is not ready, sending is paused or assignment changed.');
         row.message = accessMessage(access, person, 'Training Admin, Tertiary Infotech Academy', 'Upcoming class reminder').text;
         await pool.query('UPDATE trainer_whatsapp_notification SET message=$2 WHERE id=$1', [row.id, row.message]);
       } catch (e) {

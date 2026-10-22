@@ -1,4 +1,5 @@
 import { assertNonFunded, MmsSyncError, normalizeCode, type RunSnapshot, type SyncPerson } from './contract';
+import { getMmsRuntimeConfig } from './runtimeConfig';
 
 export interface RunApproval {
     approved_at?: string | Date | null;
@@ -37,14 +38,14 @@ export function assertRunApproval(approval: RunApproval, snapshot: RunSnapshot, 
     const first = new Date(start).getTime();
     const approved = new Date(approval.approved_at).getTime();
     const reviewed = new Date(approval.first_session_at).getTime();
-    const minimum = new Date(`${process.env.MMS_PILOT_START_DATE || '2026-10-23'}T00:00:00+08:00`).getTime();
+    const minimum = new Date(`${getMmsRuntimeConfig().pilotStartDate}T00:00:00+08:00`).getTime();
     if (![first, approved, reviewed, minimum].every(Number.isFinite) || first < minimum || first !== reviewed || approved >= first || approved > now.getTime())
         throw new MmsSyncError('The full run start changed or is outside the approved pilot. Review it before it starts.', 'no_midway');
     // An approved future run may be retried, but its INITIAL handover cannot start midway.
     if (approval.handover_at ? new Date(approval.handover_at).getTime() >= first : now.getTime() >= first)
         throw new MmsSyncError('Initial MMS handover must finish before the full run starts.', 'no_midway');
 }
-export function participantUrls(result: any, origin = process.env.MMS_PUBLIC_ORIGIN || ''): { login_url: string; class_url: string } {
+export function participantUrls(result: any, origin = getMmsRuntimeConfig().publicOrigin): { login_url: string; class_url: string } {
     const base = new URL(origin);
     if (base.username || base.password || base.pathname !== '/' || base.search || base.hash ||
         (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname))))

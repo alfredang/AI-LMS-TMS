@@ -76,6 +76,23 @@ test('usual TMS assignments bootstrap sync and MMS courseware mail, retaining TM
         assert.equal((await pool.query('SELECT count(*) n FROM masterlist_table WHERE class_id=$1', [classId])).rows[0].n, '2');
         await dispatchAccessNotifications(); assert.equal(messages.length, 3);
         await processJobs(); await dispatchAccessNotifications(); assert.equal(messages.length, 3);
+        // Database settings override the old deployment variables and can be
+        // paused or refreshed without restarting the TMS process.
+        const { loadMmsRuntimeConfig } = require('../lib/mmsSync/runtimeConfig');
+        const { mmsSyncEnabled } = require('../lib/mmsSync/service');
+        const { notificationsEnabled } = require('../lib/mmsSync/accessNotifications');
+        await pool.query(`INSERT INTO mms_handover_config(id,enabled,automatic,notifications_enabled,url,api_key,course_allowlist,public_origin)
+            VALUES(1,false,true,false,'https://mms.example.com/import','fixture-only','C817','https://mms.example.com')`);
+        assert.equal((await loadMmsRuntimeConfig(true)).pilotStartDate, '2026-10-23');
+        assert.equal(mmsSyncEnabled(), false);
+        assert.equal(await learnerMail({ masterlistClassId: classId, courseCode: 'C817' }, { name: '', email: '', title: '', dates: '', venue: '', support: '' }), null);
+        await pool.query('UPDATE mms_handover_config SET enabled=true WHERE id=1');
+        await loadMmsRuntimeConfig(true);
+        assert.equal(mmsSyncEnabled(), true);
+        assert.equal(notificationsEnabled(), false);
+        assert.equal(await learnerMail({ masterlistClassId: classId, courseCode: ' tgs-123 ' }, { name: '', email: '', title: '', dates: '', venue: '', support: '' }), null);
+        await pool.query('DELETE FROM mms_handover_config WHERE id=1');
+        await loadMmsRuntimeConfig(true);
     } finally {
         Module._load = original; globalThis.fetch = oldFetch;
         for (const key of ['MMS_SYNC_ENABLED','MMS_SYNC_AUTOMATIC','MMS_SYNC_COURSE_ALLOWLIST','MMS_SYNC_URL','MMS_SYNC_API_KEY','MMS_PUBLIC_ORIGIN','MMS_ACCESS_NOTIFICATIONS_ENABLED','MMS_ACCESS_SUPPORT']) {

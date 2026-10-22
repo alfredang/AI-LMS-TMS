@@ -27,6 +27,8 @@ export default function MmsSyncOverview() {
     const exceptions = result.scan?.result?.exceptions || [];
     return <details className="rounded border border-gray-200 dark:border-gray-700 p-3 text-sm">
     <summary className="cursor-pointer font-medium">MMS non-funded handover · {failures.length} classes need attention · {exceptions.length} discovery exceptions</summary>
+    <p className="mt-2 text-xs">Connection: {result.connection_configured ? 'configured' : 'needs setup'} · TMS assignments: {result.automatic ? 'automatic' : 'manual approval'} · Course codes: non-funded pilot only</p>
+    {!result.scan && <p className="mt-2 text-xs">No completed Calendar discovery yet. Check the MMS tasks in Task Scheduler.</p>}
     {result.scan && <p className="mt-2 text-xs">Last scan: {new Date(result.scan.created_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })} SGT</p>}
     {!result.notifications_enabled && <p className="mt-2 text-xs">MMS access sending is disabled. Review class previews and enable it before notifying pilot participants.</p>}
     <ul className="mt-2 space-y-2 text-xs" aria-live="polite">

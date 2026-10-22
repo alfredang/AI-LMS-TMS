@@ -4,6 +4,7 @@ import { getAccessContext } from './accessContext';
 import { MmsSyncError } from './contract';
 import { normalizeCode } from './contract';
 import { extractEventCourseCode } from '../calendar/eventMatch';
+import { getMmsRuntimeConfig, loadMmsRuntimeConfig } from './runtimeConfig';
 
 export function calendarAccessDescription(description: string, classUrl: string): string {
     const origins = new Set(['https://lms-tms.tertiaryinfotech.com']);
@@ -19,7 +20,8 @@ export function calendarAccessDescription(description: string, classUrl: string)
     return `${clean.trim()}\n\n[MMS CLASS ACCESS]\nClass delivery: MMS\nOpen MMS class: ${classUrl}\n[/MMS CLASS ACCESS]`;
 }
 export async function updateAccessCalendar(sourceKey: string) {
-    if (process.env.MMS_ACCESS_NOTIFICATIONS_ENABLED !== 'true') return;
+    await loadMmsRuntimeConfig();
+    if (!getMmsRuntimeConfig().notificationsEnabled) return;
     const context = await getAccessContext({ sourceKey });
     if (context.platform !== 'mms' || context.state !== 'ready' || !context.snapshot) return;
     const client = await getCalendarClient();

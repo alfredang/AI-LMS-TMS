@@ -5,6 +5,7 @@ import type { CalendarClient } from '../calendar/calendarClient';
 import { extractEventCourseCode, extractEventRunId } from '../calendar/eventMatch';
 import { assertNonFunded, dateInSingapore, timeInSingapore, sessionKey, validateSnapshot, MmsSyncError, type RunSnapshot, type SyncPerson, type SyncSession, type SyncTrainer } from './contract';
 import { normalOperationsEnabled } from './operationPolicy';
+import { getMmsRuntimeConfig } from './runtimeConfig';
 import type { RunApproval } from './accessPolicy';
 export interface SourceRecord extends RunApproval {
     source_run_key: string;
@@ -236,7 +237,7 @@ export async function buildSnapshot(db: Pool, source: SourceRecord, readClient?:
     for (const [target, field] of Object.entries({ learner_guide_url: 'learner_guide_url', learner_slides_url: 'slides_url', trainer_slides_url: 'trainer_slides_url', lesson_plan_url: 'lesson_plan_url', lab_url: 'activities_url', courseware_link: 'courseware_link', brochure_link: 'brochure_link' }))
         if (text(course[field]))
             courseware[target] = text(course[field]);
-    const feedbackTemplate = text(process.env.MMS_SYNC_FEEDBACK_URL_TEMPLATE);
+    const feedbackTemplate = text(getMmsRuntimeConfig().feedbackUrlTemplate);
     const feedback = (!source.tms_run_uuid && feedbackTemplate.includes('{run_uuid}')) ? '' : feedbackTemplate.replace('{run_uuid}', source.tms_run_uuid || '').replace('{source_run_key}', encodeURIComponent(source.source_run_key));
-    return validateSnapshot({ schema_version: 1, source_provider_id: process.env.MMS_SYNC_PROVIDER_ID || 'tertiary-sg', source_run_key: source.source_run_key, website_id: Number(process.env.MMS_SYNC_WEBSITE_ID || 1), course_code: code, course_title: text(course.title || master[0]?.course_title || events[0]?.summary), tms_run_uuid: source.tms_run_uuid || undefined, calendar_id: source.calendar_id, event_occurrences: source.event_ids, revision: 0, request_id: '', snapshot_hash: '', snapshot_at: new Date().toISOString(), roster_complete: complete, cancelled: liveEvents.length === 0 || !!run?.run.is_deleted || /cancel/i.test(text(run?.run.class_status)) || !!master.length && master.every(r => r.cancelled), sessions, trainers, learners: [...people.values()], feedback_url: feedback, courseware });
+    return validateSnapshot({ schema_version: 1, source_provider_id: getMmsRuntimeConfig().providerId, source_run_key: source.source_run_key, website_id: getMmsRuntimeConfig().websiteId, course_code: code, course_title: text(course.title || master[0]?.course_title || events[0]?.summary), tms_run_uuid: source.tms_run_uuid || undefined, calendar_id: source.calendar_id, event_occurrences: source.event_ids, revision: 0, request_id: '', snapshot_hash: '', snapshot_at: new Date().toISOString(), roster_complete: complete, cancelled: liveEvents.length === 0 || !!run?.run.is_deleted || /cancel/i.test(text(run?.run.class_status)) || !!master.length && master.every(r => r.cancelled), sessions, trainers, learners: [...people.values()], feedback_url: feedback, courseware });
 }

@@ -5,11 +5,12 @@ import { getAccessContext } from './accessContext';
 import { MmsSyncError, snapshotHash } from './contract';
 import { buildSnapshot } from './source';
 import { emailService } from '../services/emailService';
+import { getMmsRuntimeConfig, loadMmsRuntimeConfig } from './runtimeConfig';
 
-export const notificationsEnabled = () => process.env.MMS_SYNC_ENABLED === 'true' && process.env.MMS_ACCESS_NOTIFICATIONS_ENABLED === 'true';
+export const notificationsEnabled = () => getMmsRuntimeConfig().enabled && getMmsRuntimeConfig().notificationsEnabled;
 export async function accessSupport(): Promise<string> {
     const row = (await pool.query('SELECT to_jsonb(tp) tp FROM training_provider tp ORDER BY created_at ASC NULLS LAST LIMIT 1')).rows[0]?.tp || {};
-    const support = process.env.MMS_ACCESS_SUPPORT || row.support_email || row.company_email || row.company_tel;
+    const support = getMmsRuntimeConfig().accessSupport || row.support_email || row.company_email || row.company_tel;
     if (!support || /[\r\n]/.test(support)) throw new MmsSyncError('Configure the MMS access support contact.');
     return String(support);
 }
@@ -33,7 +34,8 @@ async function enqueue(context: AccessContext, actor = 'automatic', resendPerson
     }
 }
 export async function recoverAccessNotifications(sourceKey: string | null = null): Promise<void> {
-    if (process.env.MMS_SYNC_ENABLED !== 'true') return;
+    await loadMmsRuntimeConfig();
+    if (!getMmsRuntimeConfig().enabled) return;
     const sources = (await pool.query(`SELECT * FROM mms_sync_source WHERE approved_at IS NOT NULL AND ($1::text IS NULL OR source_run_key=$1)`, [sourceKey])).rows;
     for (const source of sources) {
         const people = source.delivery_platform === 'mms' && source.snapshot ? recipients(source.snapshot) : [];
@@ -61,6 +63,7 @@ export async function requestAccessSend(sourceKey: string, actor: string, resend
     return dispatchAccessNotifications(20, sourceKey);
 }
 export async function dispatchAccessNotifications(limit = 20, sourceKey: string | null = null) {
+    await loadMmsRuntimeConfig();
     if (!notificationsEnabled()) return { sent: 0, skipped: true, reason: 'MMS access sending is disabled.' };
     // A worker crash after sending cannot be retried automatically: delivery may have succeeded.
     await pool.query("UPDATE mms_access_notification SET state='review',last_error='Worker stopped during send; check mail-service acceptance before resending',updated_at=now() WHERE state='sending' AND leased_at<now()-interval '5 minutes'");
