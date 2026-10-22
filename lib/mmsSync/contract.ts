@@ -58,6 +58,8 @@ export interface RunSnapshot {
     handover_approval?: { approved_at: string; approved_by: string; first_session_at: string };
 }
 export function dateInSingapore(input: string): string {
+    // TMS course_session stores SSG dates as YYYYMMDD; Calendar uses ISO.
+    if (/^\d{8}$/.test(input)) input = `${input.slice(0, 4)}-${input.slice(4, 6)}-${input.slice(6, 8)}`;
     if (/^\d{4}-\d{2}-\d{2}$/.test(input))
         return input;
     const date = new Date(input);

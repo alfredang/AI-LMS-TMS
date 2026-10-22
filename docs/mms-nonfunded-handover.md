@@ -1,5 +1,19 @@
 # Non-funded MMS handover
 
+## Normal TMS operator workflow — 22 October follow-up
+
+This section supersedes the earlier extra per-run MMS approval and trainer-confirmation checkboxes in normal-operations mode.
+
+- Continue the existing TMS operations: save the course/session schedule, confirm/register learners, assign trainers or process their usual invitation acceptance, and send the usual messages. **Keep all TMS assignments and enrolments.** Handover adds corresponding MMS accounts/memberships; it does not remove the TMS side.
+- With `MMS_SYNC_ENABLED=true`, normal-operations mode defaults on. `MMS_SYNC_AUTOMATIC=false` optionally retains the earlier manual rollout mode. A saved TMS trainer assignment is authoritative in automatic mode; Calendar invitees/RSVPs alone are not assignments.
+- Discovery/reconciliation automatically records `tms-normal-operations` as the system policy actor for an eligible exact run. This is not a claim of human MMS review. Empty/unpersisted assignments wait. No extra operator approval click is needed. Two-minute reconciliation plus the one-minute worker covers first assignments; transactional triggers cover subsequent changes.
+- Before existing learner courseware/confirmation or trainer acceptance/reminder messages release teaching access, they prepare the exact handover if needed. Ready messages use the MMS class/login destination. Unready class access is held or described as pending, without an old TMS teaching-access link. TMS invitation/accept-decline operations are retained and an MMS fault does not stop trainer invitations.
+- No global template or URL replacement is made. `TGS` funded courses follow the original paths. An already-started run without a pre-class MMS handover stays in TMS; a later day cannot become a new first session. Normal updates during a run already handed over before class remain supported.
+- Configure `MMS_SYNC_COURSE_ALLOWLIST=C*` and MMS `mmd/tms_handover/course_allowlist=C*` to cover supported Singapore C-code courses without listing each code. Empty scope imports nothing; TGS and unsupported non-C codes are rejected. Both first-session minimums remain `2026-10-23`.
+- Conflicting calendars, schedules, identities and independent MMS memberships are flagged for normal operational correction. A native MMS class with a different Calendar mapping cannot be silently adopted. Correct the operational record in TMS; automatic retry or optional **Sync MMS now** retains the class mapping.
+
+One-time production setup is still required: matching connection key/URL, provider/store/Calendar scope, canonical participant origin, real login/courseware checks, approved feedback route, notifications switch and the three scheduler jobs. Do not mark access verified simply to release mail. These are deployment tasks, not per-class roster preparation or a new operator workflow.
+
 Project branch: `feat/mms-for-non-funded-courses`, based on the existing `chariot-production` checkout. The matching MMS branch has the same name.
 
 TMS discovers course events in its configured Google Calendar (currently `sales@tertiarycourses.com.sg`), resolves the operational class/roster, and sends a complete revisioned snapshot to MMS. All entry points exclude trimmed, case-insensitive `TGS` prefixes. This feature does not change funded-course operations.

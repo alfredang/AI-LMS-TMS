@@ -4,7 +4,9 @@ import { createHash } from 'node:crypto';
 import type { CalendarClient } from '../calendar/calendarClient';
 import { extractEventCourseCode, extractEventRunId } from '../calendar/eventMatch';
 import { assertNonFunded, dateInSingapore, timeInSingapore, sessionKey, validateSnapshot, MmsSyncError, type RunSnapshot, type SyncPerson, type SyncSession, type SyncTrainer } from './contract';
-export interface SourceRecord {
+import { normalOperationsEnabled } from './operationPolicy';
+import type { RunApproval } from './accessPolicy';
+export interface SourceRecord extends RunApproval {
     source_run_key: string;
     course_code: string;
     calendar_id: string;
@@ -113,6 +115,14 @@ export async function buildSnapshot(db: Pool, source: SourceRecord, readClient?:
     const master = source.masterlist_class_id ? (await db.query('SELECT * FROM masterlist_table WHERE class_id=$1 ORDER BY created_at,id', [source.masterlist_class_id])).rows : [];
     if (source.masterlist_class_id && !master.length)
         throw new MmsSyncError('The linked Master List is missing; resolve its deletion before applying a roster.');
+    if (!run && normalOperationsEnabled()) {
+        const dates = [...new Set(master.flatMap(row => text(row.class_date).match(/\d{4}-\d{2}-\d{2}/g) || []))].sort();
+        const eventDates = [...new Set(liveEvents.map(e => dateInSingapore(e.start?.dateTime || e.start?.date || '')))].sort();
+        if (dates.length && (dates[0] < eventDates[0] || dates[dates.length - 1] > eventDates[eventDates.length - 1]))
+            throw new MmsSyncError('Saved course dates extend beyond these Calendar sessions. Resolve the full run, not a later course day.', 'no_midway');
+        if (!dates.length && liveEvents.some(e => e.recurringEventId))
+            throw new MmsSyncError('A recurring class needs its full saved course dates before automatic handover.', 'assignment_pending');
+    }
     const sessions: SyncSession[] = [];
     if (run) {
         const rows = (await db.query('SELECT to_jsonb(s) AS s FROM course_session s WHERE course_run_id=$1 AND COALESCE(deleted,false)=false ORDER BY start_date,start_time', [source.tms_run_uuid])).rows;
@@ -207,7 +217,7 @@ export async function buildSnapshot(db: Pool, source: SourceRecord, readClient?:
         if (emails.length > 1)
             throw new MmsSyncError('Master List contains conflicting trainers.');
         if (emails.length)
-            trainers.push({ source_id: `email:${emails[0]}`, email: emails[0], name: text(master[0]?.trainer), confirmed: source.trainer_approved_email === emails[0] });
+            trainers.push({ source_id: `email:${emails[0]}`, email: emails[0], name: text(master[0]?.trainer), confirmed: normalOperationsEnabled() || source.trainer_approved_email === emails[0] });
     }
     for (const trainer of trainers) {
         const priorId = source.person_aliases?.[trainer.email.toLowerCase()] || source.snapshot?.trainers.find(p => p.email === trainer.email.toLowerCase())?.source_id;

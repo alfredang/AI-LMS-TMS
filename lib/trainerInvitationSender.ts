@@ -17,7 +17,8 @@
 
 import { google } from 'googleapis';
 import pool from './db';
-import { getAccessContext } from './mmsSync/accessContext';
+import { invitationAccess } from './mmsSync/accessContext';
+import { normalOperationsEnabled } from './mmsSync/operationPolicy';
 import { accessInstruction } from './mmsSync/accessPolicy';
 import { queueTrainerWhatsAppNotification } from './trainerWhatsapp';
 import {
@@ -457,11 +458,11 @@ export async function sendNextTrainerInvitationForCourseRun(opts: {
     tp.trainer_invitation_email_subject || DEFAULT_TRAINER_INVITATION_SUBJECT,
     replacements
   );
-  const access = await getAccessContext({ runUuid: courseRunUuid, courseCode: classRow.course_code });
-  if (access.platform === 'review') throw new Error(access.reason);
+  const access = await invitationAccess({ runUuid: courseRunUuid, courseCode: classRow.course_code });
+  if (access.platform === 'review' && !normalOperationsEnabled()) throw new Error(access.reason);
   // An invitation is not teaching access: wait for confirmed assignment even if another trainer has access.
-  const invitationTemplate = access.platform === 'mms'
-    ? `${DEFAULT_TRAINER_INVITATION_BODY}\n\n${accessInstruction({ ...access, state: 'pending' })}`
+  const invitationTemplate = access.platform !== 'tms'
+    ? `${DEFAULT_TRAINER_INVITATION_BODY}\n\n${access.platform === 'mms' ? accessInstruction({ ...access, state: 'pending' }) : 'Class-access instructions will follow after your assignment and platform access are confirmed.'}`
     : tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY;
   const textBody = renderInvitationTemplate(
     invitationTemplate,

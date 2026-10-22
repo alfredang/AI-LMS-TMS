@@ -42,6 +42,7 @@ test('retries have one content hash while changed rosters and cancelled state ge
 test('date conversion uses Singapore calendar dates, not the host timezone', () => {
     assert.equal(dateInSingapore('2026-10-21T16:30:00Z'), '2026-10-22');
     assert.equal(dateInSingapore('2026-10-21'), '2026-10-21');
+    assert.equal(dateInSingapore('20261021'), '2026-10-21');
 });
 test('multiple confirmed trainers cannot be silently collapsed to the first', () => {
     const data = fixture();

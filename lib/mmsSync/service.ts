@@ -6,6 +6,7 @@ import { assertNonFunded, snapshotHash, MmsSyncError, type RunSnapshot } from '.
 import { calendarEvents, resolveEvent, buildSnapshot, type SourceRecord } from './source';
 import { getCalendarReadClient } from '../calendar/calendarClient';
 import { assertRunApproval, firstSessionAt, withApproval } from './accessPolicy';
+import { courseAllowed, normalOperationsEnabled, operationalApproval } from './operationPolicy';
 export const mmsSyncEnabled = (): boolean => process.env.MMS_SYNC_ENABLED === 'true';
 let schemaReady: Promise<void> | undefined;
 export function requireSyncEnabled(): void {
@@ -35,8 +36,7 @@ function configuration(): {
 }
 async function register(source: SourceRecord): Promise<void> {
     assertNonFunded(source.course_code);
-    const allowlist = (process.env.MMS_SYNC_COURSE_ALLOWLIST || '').split(',').map(v => v.trim().toUpperCase()).filter(Boolean);
-    if (!allowlist.includes(source.course_code))
+    if (!courseAllowed(source.course_code))
         throw new MmsSyncError('Course is outside the configured pilot allowlist.', 'outside_pilot');
     await pool.query(`INSERT INTO mms_sync_source(source_run_key,course_code,calendar_id,event_ids,tms_run_uuid,masterlist_class_id,operational_run_id)
     VALUES($1,$2,$3,$4::jsonb,$5,$6,$7) ON CONFLICT(source_run_key) DO UPDATE SET
@@ -54,14 +54,32 @@ async function currentEligibility(source: SourceRecord, requireApproval = true):
         if (assertNonFunded(rows[0].course_code) !== source.course_code)
             throw new MmsSyncError('TMS run course changed.');
     }
-    const allowlist = (process.env.MMS_SYNC_COURSE_ALLOWLIST || '').split(',').map(v => v.trim().toUpperCase());
-    if (!allowlist.includes(source.course_code))
+    if (!courseAllowed(source.course_code))
         throw new MmsSyncError('Course is outside the configured pilot allowlist.', 'outside_pilot');
     if (requireApproval) {
         const approval = (await pool.query('SELECT approved_at,delivery_platform FROM mms_sync_source WHERE source_run_key=$1', [source.source_run_key])).rows[0];
         if (!approval?.approved_at || approval.delivery_platform !== 'mms')
             throw new MmsSyncError('Approve this exact full course run before automatic or manual MMS import.', 'approval_required');
     }
+}
+async function recordOperationalApproval(source: SourceRecord): Promise<SourceRecord> {
+    const previous = (await pool.query('SELECT * FROM mms_sync_source WHERE source_run_key=$1', [source.source_run_key])).rows[0] || source;
+    const approval = operationalApproval(await buildSnapshot(pool, previous), previous);
+    await pool.query(`UPDATE mms_sync_source SET approved_at=$2,approved_by=$3,first_session_at=$4
+        WHERE source_run_key=$1 AND delivery_platform='mms'`, [source.source_run_key, approval.approved_at, approval.approved_by, approval.first_session_at]);
+    return { ...previous, ...approval };
+}
+
+/** Used only by existing send workflows, not by read-only access previews. */
+export async function prepareOperationalAccess(input: Parameters<typeof resolveManualSource>[0]): Promise<void> {
+    if (!normalOperationsEnabled()) return;
+    configuration();
+    await ensureSchema();
+    const source = await resolveManualSource(input);
+    await register(source);
+    await recordOperationalApproval(source);
+    await queueSource(source.source_run_key, 'normal-tms-mail');
+    await processJobs(1, source.source_run_key);
 }
 export async function queueSource(key: string, trigger: string): Promise<number> {
     requireSyncEnabled();
@@ -119,6 +137,7 @@ export async function discover(dryRun = false): Promise<Record<string, unknown>>
                 continue;
             }
             await register(source);
+            if (normalOperationsEnabled()) await recordOperationalApproval(source);
             await queueSource(source.source_run_key, 'discovery');
             result.queued = Number(result.queued) + 1;
         }
@@ -161,7 +180,8 @@ export async function requestManual(input: {
     const source = await resolveManualSource(input);
     await register(source);
     await currentEligibility(source, false);
-    if (input.approve_run) {
+    if (normalOperationsEnabled()) await recordOperationalApproval(source);
+    else if (input.approve_run) {
         const snapshot = await buildSnapshot(pool, source);
         const start = firstSessionAt(snapshot);
         if (input.first_session_at !== start || !input.actor)

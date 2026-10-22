@@ -42,6 +42,19 @@ test('a saved Calendar trainer stays unconfirmed until operations explicitly app
     const confirmed = await buildSnapshot(db, { ...source, trainer_approved_email: 'trainer@example.com' }, readClient);
     assert.equal(confirmed.trainers[0].confirmed, true);
 });
+
+test('normal-operations mode uses the saved trainer assignment, never a Calendar RSVP', async () => {
+    const previous = process.env.MMS_SYNC_ENABLED;
+    process.env.MMS_SYNC_ENABLED = 'true';
+    try {
+        const db = database([{ trainer_email: 'trainer@example.com', trainer: 'Trainer' }], [{ id: 'trainer-id', full_name: 'Trainer', email: 'trainer@example.com', account_status: 'Active', is_trainer: true }]);
+        assert.equal((await buildSnapshot(db, source, readClient)).trainers[0].confirmed, true);
+        const noAssignment = await buildSnapshot(database([{ email: 'learner@example.com', name: 'Learner' }]), source, readClient);
+        assert.equal(noAssignment.trainers.length, 0);
+        const later = database([{ class_date: '2026-11-09~2026-11-10', email: 'learner@example.com', name: 'Learner' }]);
+        await assert.rejects(() => buildSnapshot(later, source, readClient), /full run/);
+    } finally { if (previous === undefined) delete process.env.MMS_SYNC_ENABLED; else process.env.MMS_SYNC_ENABLED = previous; }
+});
 test('source schedule changes are checked against Calendar before import', async () => {
     const db = database([{ email: '', name: '', trainer_email: '', schedule_entries: [{ id: 'session-1', startTime: '10:00', endTime: '17:30' }] }]);
     await assert.rejects(() => buildSnapshot(db, source, readClient), /conflict with Calendar/);

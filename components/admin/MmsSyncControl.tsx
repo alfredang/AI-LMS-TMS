@@ -13,7 +13,8 @@ export default function MmsSyncControl({ runUuid, masterlistClassId, courseCode,
     const [message, setMessage] = useState('');
     const [preview, setPreview] = useState<any>(null);
     const [confirmRun, setConfirmRun] = useState(false);
-    const needsApproval = !status?.approved_at || (!!preview?.first_session_at && new Date(status.first_session_at).toISOString() !== preview.first_session_at);
+    const [automatic, setAutomatic] = useState(false);
+    const needsApproval = !automatic && (!status?.approved_at || (!!preview?.first_session_at && new Date(status.first_session_at).toISOString() !== preview.first_session_at));
     const funded = (courseCode || '').trim().toUpperCase().startsWith('TGS');
     const refresh = useCallback(async () => {
         if (funded)
@@ -26,6 +27,7 @@ export default function MmsSyncControl({ runUuid, masterlistClassId, courseCode,
         const response = await fetch(`/api/admin/mms-sync-status?${query}`);
         const result = await response.json();
         setEligible(result.eligible === true);
+        setAutomatic(result.automatic === true);
         setStatus(result.data?.[0] || null);
         return result.enabled === true;
     }, [runUuid, masterlistClassId, funded]);
@@ -94,15 +96,16 @@ export default function MmsSyncControl({ runUuid, masterlistClassId, courseCode,
       <button type="button" onClick={sync} disabled={busy || saving || status?.state === 'running'} className="min-h-11 cursor-pointer rounded bg-blue-600 px-3 py-1.5 font-medium text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Syncing…' : 'Sync MMS now'}</button>
       <button type="button" onClick={() => accessAction()} disabled={busy || saving} className="min-h-11 rounded border px-3 py-1.5 disabled:opacity-50">Preview MMS access</button>
       {preview && <button type="button" onClick={() => accessAction('send_pending')} disabled={busy || saving || !preview.enabled || preview.context?.state !== 'ready'} className="min-h-11 rounded border px-3 py-1.5 disabled:opacity-50">Send pending MMS access</button>}
-      {masterlistClassId && <label className="flex min-h-11 cursor-pointer items-center gap-2"><input type="checkbox" checked={confirmTrainer} onChange={e => setConfirmTrainer(e.target.checked)}/>I confirm the saved Master List trainer is assigned</label>}
+      {!automatic && masterlistClassId && <label className="flex min-h-11 cursor-pointer items-center gap-2"><input type="checkbox" checked={confirmTrainer} onChange={e => setConfirmTrainer(e.target.checked)}/>I confirm the saved Master List trainer is assigned</label>}
       <span aria-live="polite">{status?.state || 'Not linked'}{target ? ` · ${target.class_id} · ${target.readiness}` : ''}</span>
       {target?.class_url && /^https?:\/\//i.test(target.class_url) && <a href={target.class_url} target="_blank" rel="noreferrer" className="text-blue-600 underline">Open MMS class</a>}
       {status?.last_success_at && <span>Last sync: {new Date(status.last_success_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })} SGT</span>}
     </div>
+    {automatic && <p className="mt-2">Continue assigning learners and trainers in TMS as usual. Saved eligible non-funded assignments also sync to MMS; TMS assignments remain unchanged. No separate MMS approval is needed. Sync MMS now is an optional retry.</p>}
     {preview && <details open className="mt-3">
       <summary className="cursor-pointer font-medium">{preview.course_code} · Full run and participant access</summary>
       <ul className="mt-2 space-y-1">{preview.sessions?.map((s: any) => <li key={s.key}>{s.date} · {s.start_time}–{s.end_time} SGT · {s.venue}</li>)}</ul>
-      <p className="mt-2">{preview.participants?.filter((p: any) => p.role === 'learner').length || 0} active learners. {preview.trainer_confirmation_pending ? 'Trainer confirmation is pending.' : 'Confirmed trainer included.'} Verify the actual roster before approving this run.</p>
+      <p className="mt-2">{preview.participants?.filter((p: any) => p.role === 'learner').length || 0} active learners. {preview.trainer_confirmation_pending ? 'Trainer assignment is pending in TMS.' : 'Assigned trainer included.'} {automatic ? 'Correct any missing assignments in TMS as usual.' : 'Verify the actual roster before approving this run.'}</p>
       <ul className="mt-1 space-y-1">{preview.participants?.map((p: any) => <li key={`${p.person_id}:${p.role}`}>{p.name} · {p.email} · {p.role}</li>)}</ul>
       {needsApproval && <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={confirmRun} onChange={e => setConfirmRun(e.target.checked)}/>I verified these are all sessions of the full course run, including its first session, and approve MMS delivery before it starts.</label>}
       <p className="mt-1">{preview.enabled ? 'Access sending enabled for approved ready runs.' : 'Access sending is disabled; preview only.'} {preview.context?.reason || ''}</p>
