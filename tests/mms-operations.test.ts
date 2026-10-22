@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { courseAllowed, operationalApproval } from '../lib/mmsSync/operationPolicy';
 import { assertRunApproval, firstSessionAt } from '../lib/mmsSync/accessPolicy';
 import { type RunSnapshot } from '../lib/mmsSync/contract';
+import { assertAutomaticSyncOpen, automaticSyncUntil } from '../lib/mmsSync/syncWindow';
 
 const now = new Date('2026-10-22T06:00:00Z');
 const fixture = (): RunSnapshot => ({ schema_version: 1, source_provider_id: 'test', source_run_key: 'calendar:test:operations', website_id: 1, course_code: 'C817', course_title: 'Class', calendar_id: 'sales@example.com', event_occurrences: ['event'], revision: 0, request_id: '', snapshot_hash: '', snapshot_at: now.toISOString(), roster_complete: true, cancelled: false,
@@ -61,4 +62,14 @@ test('retries retain their approval identity; future reschedules may be recorded
     const moved = operationalApproval(data, { ...source, ...approval }, new Date('2026-10-22T07:00:00Z'));
     assert.equal(moved.first_session_at, firstSessionAt(data));
     assert.equal(moved.approved_by, 'tms-normal-operations');
+});
+
+test('automatic sync closes exactly three hours after the last scheduled Singapore session end', () => {
+    const data = fixture();
+    data.sessions.push({ ...data.sessions[0], key: 's7654321', date: '2026-10-24', end_time: '17:30' });
+    const until = automaticSyncUntil(data);
+    assert.equal(until, '2026-10-24T12:30:00.000Z');
+    assert.doesNotThrow(() => assertAutomaticSyncOpen(until, new Date('2026-10-24T12:29:59.999Z')));
+    assert.throws(() => assertAutomaticSyncOpen(until, new Date('2026-10-24T12:30:00.000Z')), /closed three hours/);
+    assert.throws(() => automaticSyncUntil({ sessions: [] }), /session end/);
 });

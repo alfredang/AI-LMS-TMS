@@ -5,6 +5,12 @@ ALTER TABLE mms_sync_source ADD COLUMN IF NOT EXISTS first_session_at timestampt
 ALTER TABLE mms_sync_source ADD COLUMN IF NOT EXISTS handover_at timestamptz;
 ALTER TABLE mms_sync_source ADD COLUMN IF NOT EXISTS delivery_platform text NOT NULL DEFAULT 'mms';
 ALTER TABLE mms_sync_source ADD COLUMN IF NOT EXISTS access_calendar_error text;
+-- Upgrade existing validated snapshots without reopening a class that has ended.
+UPDATE mms_sync_source s SET auto_sync_until=(
+  SELECT max(((session->>'date')||' '||(session->>'end_time'))::timestamp AT TIME ZONE 'Asia/Singapore')+interval '3 hours'
+  FROM jsonb_array_elements(s.snapshot->'sessions') session
+) WHERE s.auto_sync_until IS NULL AND s.snapshot IS NOT NULL;
+CREATE INDEX IF NOT EXISTS mms_sync_active_until ON mms_sync_source(auto_sync_until) WHERE approved_at IS NOT NULL;
 CREATE TABLE IF NOT EXISTS mms_access_notification (
   id bigserial PRIMARY KEY,
   source_run_key text NOT NULL REFERENCES mms_sync_source(source_run_key),

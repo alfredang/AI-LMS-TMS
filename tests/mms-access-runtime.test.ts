@@ -46,12 +46,15 @@ test('durable access queue: readiness, deduplication, late changes, retries, res
         async function save() {
             snapshot.snapshot_hash = snapshotHash(snapshot);
             const target = { success: true, readiness: 'ready', revision: snapshot.revision, snapshot_hash: snapshot.snapshot_hash, class_id: 'C000001', run_id: 42, participant_login_url: 'https://mms.example.com/lmslogin/', participant_class_url: 'https://mms.example.com/lmslogin/index/class/?run_id=42' };
-            await pool.query(`INSERT INTO mms_sync_source(source_run_key,course_code,calendar_id,event_ids,revision,snapshot_hash,snapshot,target_result,approved_at,approved_by,first_session_at,handover_at,last_success_at)
-                VALUES($1,'C916','test@example.com','["event"]',$2,$3,$4,$5,'2026-10-21','operator','2050-10-23T01:30:00Z','2026-10-21T01:00:00Z',now())
+            await pool.query(`INSERT INTO mms_sync_source(source_run_key,course_code,calendar_id,event_ids,revision,snapshot_hash,snapshot,target_result,approved_at,approved_by,first_session_at,handover_at,last_success_at,auto_sync_until)
+                VALUES($1,'C916','test@example.com','["event"]',$2,$3,$4,$5,'2026-10-21','operator','2050-10-23T01:30:00Z','2026-10-21T01:00:00Z',now(),'2050-10-23T12:30:00Z')
                 ON CONFLICT(source_run_key) DO UPDATE SET revision=EXCLUDED.revision,snapshot_hash=EXCLUDED.snapshot_hash,snapshot=EXCLUDED.snapshot,target_result=EXCLUDED.target_result,last_error=NULL,last_success_at=now()`,
                 [snapshot.source_run_key, snapshot.revision, snapshot.snapshot_hash, snapshot, target]);
         }
         await save();
+        await pool.query('UPDATE mms_sync_source SET auto_sync_until=NULL WHERE source_run_key=$1', [snapshot.source_run_key]);
+        await pool.query(migration);
+        assert.equal(new Date((await pool.query('SELECT auto_sync_until FROM mms_sync_source WHERE source_run_key=$1', [snapshot.source_run_key])).rows[0].auto_sync_until).toISOString(), '2050-10-23T12:30:00.000Z');
         const { recoverAccessNotifications, dispatchAccessNotifications, requestAccessSend } = require('../lib/mmsSync/accessNotifications');
         const { calendarAccessDescription } = require('../lib/mmsSync/accessCalendar');
         const calendar = calendarAccessDescription('LMS: https://lms-tms.tertiaryinfotech.com/\nFeedback: https://lms-tms.tertiaryinfotech.com/feedback/test', 'https://mms.example.com/lmslogin/index/class/?run_id=42');
@@ -94,6 +97,11 @@ test('durable access queue: readiness, deduplication, late changes, retries, res
         await dispatchAccessNotifications(); assert.equal(out.length, beforeFunded);
         assert.equal((await pool.query("SELECT state FROM mms_access_notification WHERE person_id='never'")).rows[0].state, 'cancelled');
         await assert.rejects(() => requestAccessSend(snapshot.source_run_key, 'operator'), /not ready/);
+        await pool.query("UPDATE mms_sync_source SET auto_sync_until=now()-interval '1 second' WHERE source_run_key=$1", [snapshot.source_run_key]);
+        await pool.query(`INSERT INTO mms_access_notification(source_run_key,person_id,role,email,kind,generation,actor,revision,destination)
+            VALUES($1,'learner','learner','corrected@example.com','initial','close-test','test',1,'https://mms.example.com/lmslogin/')`, [snapshot.source_run_key]);
+        await recoverAccessNotifications();
+        assert.equal((await pool.query("SELECT state FROM mms_access_notification WHERE generation='close-test'")).rows[0].state, 'cancelled');
     } finally {
         Module._load = original;
         for (const key of ['MMS_SYNC_ENABLED', 'MMS_ACCESS_NOTIFICATIONS_ENABLED', 'MMS_PUBLIC_ORIGIN', 'MMS_ACCESS_SUPPORT', 'MMS_SYNC_COURSE_ALLOWLIST']) {

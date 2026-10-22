@@ -16,8 +16,10 @@ test('usual TMS assignments bootstrap and update MMS, retaining TMS data and exc
     const previous = { ...process.env }; const oldFetch = globalThis.fetch;
     const Module = require('node:module'); const original = Module._load;
     const classId = '00000000-0000-0000-0000-000000000001';
-    const sources = ['future', 'midway'].map(key => ({ source_run_key: `calendar:test:${key}`, course_code: 'C817', calendar_id: 'sales@example.com', event_ids: [key], tms_run_uuid: null, masterlist_class_id: key === 'future' ? classId : '00000000-0000-0000-0000-000000000002' }));
+    const todaySgt = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const sources = ['future', 'midway', 'during'].map((key, i) => ({ source_run_key: `calendar:test:${key}`, course_code: 'C817', calendar_id: 'sales@example.com', event_ids: [key], tms_run_uuid: null, masterlist_class_id: i === 0 ? classId : `00000000-0000-0000-0000-00000000000${i + 1}` }));
     const writes: RunSnapshot[] = []; const messages: any[] = [];
+    let futureEndTime = '17:30';
     const readClient = { calendarId: 'sales@example.com', calendar: { events: { get: async ({ eventId }: any) => ({ data: { id: eventId } }) } } };
     Module._load = function(name: string, parent: any, ...rest: any[]) {
         const resolved = Module._resolveFilename(name, parent);
@@ -26,12 +28,12 @@ test('usual TMS assignments bootstrap and update MMS, retaining TMS data and exc
         if (resolved === path.join(root, 'lib/mmsSync/accessCalendar.ts')) return { updateAccessCalendar: async () => {} };
         if (resolved === path.join(root, 'lib/services/emailService.ts')) return { emailService: { sendEmail: async (message: any) => { messages.push(message); return { success: true, messageId: 'captured-only' }; } } };
         if (resolved === path.join(root, 'lib/mmsSync/source.ts')) return {
-            calendarEvents: async () => ({ calendarId: 'sales@example.com', events: sources.map((s, i) => ({ id: i })) }),
-            resolveEvent: async (_: any, __: any, event: any) => sources[event.id === 'future' ? 0 : event.id === 'midway' ? 1 : event.id],
+            calendarEvents: async () => ({ calendarId: 'sales@example.com', events: sources.map(s => ({ id: s.event_ids[0] })) }),
+            resolveEvent: async (_: any, __: any, event: any) => sources.find(source => source.event_ids[0] === event.id),
             buildSnapshot: async (_: any, source: any): Promise<RunSnapshot> => {
                 const rows = (await pool.query('SELECT * FROM masterlist_table WHERE class_id=$1', [source.masterlist_class_id])).rows;
                 return { schema_version: 1, source_provider_id: 'test', source_run_key: source.source_run_key, website_id: 1, course_code: source.course_code, course_title: 'Fixture', calendar_id: source.calendar_id, event_occurrences: source.event_ids, revision: 0, request_id: '', snapshot_hash: '', snapshot_at: new Date().toISOString(), roster_complete: true, cancelled: false,
-                    sessions: [{ key: 's1234567', source_id: source.event_ids[0], date: source.event_ids[0] === 'future' ? '2050-10-23' : '2026-10-20', start_time: '09:30', end_time: '17:30', venue: 'Room', virtual_link: '', mode: 1 }],
+                    sessions: [{ key: 's1234567', source_id: source.event_ids[0], date: source.event_ids[0] === 'future' ? '2050-10-23' : source.event_ids[0] === 'midway' ? '2026-10-20' : todaySgt, start_time: source.event_ids[0] === 'during' ? '00:00' : '09:30', end_time: source.event_ids[0] === 'during' ? '23:59' : source.event_ids[0] === 'future' ? futureEndTime : '17:30', venue: 'Room', virtual_link: '', mode: 1 }],
                     trainers: rows[0]?.trainer_email ? [{ source_id: 'trainer', email: rows[0].trainer_email, name: 'Trainer', confirmed: true }] : [],
                     learners: rows.filter((r: any) => r.email).map((r: any) => ({ source_id: r.email, email: r.email, name: r.name })), courseware: {}, feedback_url: 'https://tms.example.com/feedback/test' };
             },
@@ -45,7 +47,7 @@ test('usual TMS assignments bootstrap and update MMS, retaining TMS data and exc
             CREATE TABLE masterlist_table(class_id uuid,name text,email text,trainer_email text,calendar_event_id text);
             INSERT INTO training_provider VALUES(now(),'support@example.com');`);
         for (const file of ['create_mms_nonfunded_sync.sql', 'create_mms_class_access.sql']) await pool.query(readFileSync(path.join(root, 'database/migrations', file), 'utf8'));
-        await pool.query("INSERT INTO masterlist_table VALUES($1,'Learner','learner@example.com','trainer@example.com','future'),($2,'Old Learner','old@example.com','oldtrainer@example.com','midway')", [classId, sources[1].masterlist_class_id]);
+        await pool.query("INSERT INTO masterlist_table VALUES($1,'Learner','learner@example.com','trainer@example.com','future'),($2,'Old Learner','old@example.com','oldtrainer@example.com','midway'),($3,'Today Learner','today@example.com','todaytrainer@example.com','during')", [classId, sources[1].masterlist_class_id, sources[2].masterlist_class_id]);
         const before = (await pool.query('SELECT * FROM masterlist_table ORDER BY class_id')).rows;
         globalThis.fetch = async (_url: any, options: any) => {
             const data = JSON.parse(options.body); writes.push(data);
@@ -64,7 +66,7 @@ test('usual TMS assignments bootstrap and update MMS, retaining TMS data and exc
         assert.ok(messages.every(m => m.text.includes('https://mms.example.com/lmslogin/')));
         const { discover, processJobs } = require('../lib/mmsSync/service');
         await discover(); await processJobs();
-        assert.ok(writes.every(s => s.source_run_key === sources[0].source_run_key));
+        assert.ok(writes.every(s => s.source_run_key === sources[0].source_run_key), `Unexpected initial imports: ${writes.map(s => s.source_run_key).join(',')}`);
         assert.equal(await learnerMail({ masterlistClassId: sources[1].masterlist_class_id, courseCode: 'C817' }, { name: 'Old', email: 'old@example.com', title: 'Old', dates: '', venue: '', support: '' }), null);
         const beforeFunded = writes.length;
         assert.equal(await learnerMail({ masterlistClassId: classId, courseCode: ' tgs-123 ' }, { name: '', email: '', title: '', dates: '', venue: '', support: '' }), null);
@@ -76,6 +78,25 @@ test('usual TMS assignments bootstrap and update MMS, retaining TMS data and exc
         assert.equal((await pool.query('SELECT count(*) n FROM masterlist_table WHERE class_id=$1', [classId])).rows[0].n, '2');
         await dispatchAccessNotifications(); assert.equal(messages.length, 3);
         await processJobs(); await dispatchAccessNotifications(); assert.equal(messages.length, 3);
+        futureEndTime = '18:30';
+        await pool.query("UPDATE masterlist_table SET name='Updated learner' WHERE class_id=$1 AND email='learner@example.com'", [classId]);
+        await processJobs();
+        assert.equal(new Date((await pool.query('SELECT auto_sync_until FROM mms_sync_source WHERE source_run_key=$1', [sources[0].source_run_key])).rows[0].auto_sync_until).toISOString(), '2050-10-23T13:30:00.000Z');
+        // Once the stored deadline passes, source edits no longer enqueue work.
+        await pool.query("UPDATE mms_sync_source SET auto_sync_until=now()-interval '1 second' WHERE source_run_key=$1", [sources[0].source_run_key]);
+        const closedWrites = writes.length;
+        await pool.query("INSERT INTO masterlist_table VALUES($1,'After close','closed@example.com',NULL,NULL)", [classId]);
+        assert.equal((await pool.query("SELECT count(*) n FROM mms_sync_job WHERE source_run_key=$1 AND state IN ('queued','running')", [sources[0].source_run_key])).rows[0].n, '0');
+        await pool.query("INSERT INTO mms_sync_job(source_run_key,trigger) VALUES($1,'stale-trigger')", [sources[0].source_run_key]);
+        await processJobs();
+        assert.equal(writes.length, closedWrites);
+        assert.equal((await pool.query("SELECT state FROM mms_sync_job WHERE source_run_key=$1 ORDER BY id DESC LIMIT 1", [sources[0].source_run_key])).rows[0].state, 'cancelled');
+        const { requestManual } = require('../lib/mmsSync/service');
+        const correction = await requestManual({ source_run_key: sources[0].source_run_key, actor: 'test-operator' });
+        await processJobs(1, correction.source_run_key);
+        assert.equal(writes.length, closedWrites + 1);
+        assert.equal(writes.at(-1)?.learners.length, 3);
+        assert.ok(new Date((await pool.query('SELECT auto_sync_until FROM mms_sync_source WHERE source_run_key=$1', [sources[0].source_run_key])).rows[0].auto_sync_until).getTime() < Date.now(), 'One-off correction must not reopen automatic listening.');
         // Database settings override the old deployment variables and can be
         // paused or refreshed without restarting the TMS process.
         const { loadMmsRuntimeConfig } = require('../lib/mmsSync/runtimeConfig');
@@ -91,12 +112,13 @@ test('usual TMS assignments bootstrap and update MMS, retaining TMS data and exc
         assert.equal(mmsSyncEnabled(), true);
         assert.equal(notificationsEnabled(), false);
         assert.equal(await learnerMail({ masterlistClassId: classId, courseCode: ' tgs-123 ' }, { name: '', email: '', title: '', dates: '', venue: '', support: '' }), null);
-        // Move only this disposable fixture's cutoff back: the previously
-        // excluded class must now complete its first handover after starting.
-        await pool.query("UPDATE mms_handover_config SET pilot_start_date='2026-10-20' WHERE id=1");
+        // Move only this disposable fixture's pilot date back. A class begun
+        // today can first hand over after start, but a completed class stays closed.
+        await pool.query('UPDATE mms_handover_config SET pilot_start_date=$1 WHERE id=1', [todaySgt]);
         await loadMmsRuntimeConfig(true);
         await discover(); await processJobs();
-        assert.ok(writes.some(s => s.source_run_key === sources[1].source_run_key));
+        assert.ok(writes.some(s => s.source_run_key === sources[2].source_run_key), `Expected today's initial import; saw ${writes.map(s => s.source_run_key).join(',')}`);
+        assert.ok(!writes.some(s => s.source_run_key === sources[1].source_run_key), `Completed pre-pilot run was imported: ${writes.map(s => s.source_run_key).join(',')}`);
         assert.equal((await pool.query('SELECT count(*) n FROM masterlist_table WHERE class_id=$1 AND email=$2', [sources[1].masterlist_class_id, 'old@example.com'])).rows[0].n, '1');
         await pool.query('DELETE FROM mms_handover_config WHERE id=1');
         await loadMmsRuntimeConfig(true);

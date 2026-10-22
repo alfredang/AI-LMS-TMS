@@ -8,6 +8,7 @@ import { getCalendarReadClient } from '../calendar/calendarClient';
 import { assertRunApproval, firstSessionAt, withApproval } from './accessPolicy';
 import { courseAllowed, normalOperationsEnabled, operationalApproval } from './operationPolicy';
 import { getMmsRuntimeConfig, loadMmsRuntimeConfig } from './runtimeConfig';
+import { assertAutomaticSyncOpen, automaticSyncUntil } from './syncWindow';
 export const mmsSyncEnabled = (): boolean => getMmsRuntimeConfig().enabled;
 let schemaReady: Promise<void> | undefined;
 export function requireSyncEnabled(): void {
@@ -63,12 +64,20 @@ async function currentEligibility(source: SourceRecord, requireApproval = true):
             throw new MmsSyncError('Approve this exact full course run before automatic or manual MMS import.', 'approval_required');
     }
 }
-async function recordOperationalApproval(source: SourceRecord): Promise<SourceRecord> {
+async function recordOperationalApproval(source: SourceRecord, manual = false): Promise<SourceRecord> {
     const previous = (await pool.query('SELECT * FROM mms_sync_source WHERE source_run_key=$1', [source.source_run_key])).rows[0] || source;
-    const approval = operationalApproval(await buildSnapshot(pool, previous), previous);
-    await pool.query(`UPDATE mms_sync_source SET approved_at=$2,approved_by=$3,first_session_at=$4
-        WHERE source_run_key=$1 AND delivery_platform='mms'`, [source.source_run_key, approval.approved_at, approval.approved_by, approval.first_session_at]);
-    return { ...previous, ...approval };
+    if (!manual && previous.auto_sync_until) assertAutomaticSyncOpen(previous.auto_sync_until);
+    const snapshot = await buildSnapshot(pool, previous);
+    const until = automaticSyncUntil(snapshot);
+    if (!manual && new Date(until).getTime() <= Date.now() && previous.auto_sync_until)
+        await pool.query('UPDATE mms_sync_source SET auto_sync_until=$2 WHERE source_run_key=$1 AND auto_sync_until>now()', [source.source_run_key, until]);
+    if (!manual) assertAutomaticSyncOpen(until);
+    const approval = operationalApproval(snapshot, previous);
+    // A one-off manual correction never reopens a previously closed listener.
+    const storedUntil = manual && previous.auto_sync_until && new Date(previous.auto_sync_until).getTime() <= Date.now() ? previous.auto_sync_until : until;
+    await pool.query(`UPDATE mms_sync_source SET approved_at=$2,approved_by=$3,first_session_at=$4,auto_sync_until=$5
+        WHERE source_run_key=$1 AND delivery_platform='mms'`, [source.source_run_key, approval.approved_at, approval.approved_by, approval.first_session_at, storedUntil]);
+    return { ...previous, ...approval, auto_sync_until: storedUntil };
 }
 
 /** Used only by existing send workflows, not by read-only access previews. */
@@ -90,8 +99,9 @@ export async function queueSource(key: string, trigger: string): Promise<number>
     if (!source)
         throw new MmsSyncError('Class is not linked; run Calendar discovery first.');
     await currentEligibility(source);
+    if (trigger !== 'manual') assertAutomaticSyncOpen(source.auto_sync_until);
     const job = (await pool.query(`INSERT INTO mms_sync_job(source_run_key,trigger) VALUES($1,$2)
-    ON CONFLICT(source_run_key) WHERE state IN ('queued','running') DO UPDATE SET dirty=true,available_at=now(),updated_at=now() RETURNING id`, [key, trigger])).rows[0];
+    ON CONFLICT(source_run_key) WHERE state IN ('queued','running') DO UPDATE SET dirty=true,trigger=CASE WHEN EXCLUDED.trigger='manual' THEN 'manual' ELSE mms_sync_job.trigger END,available_at=now(),updated_at=now() RETURNING id`, [key, trigger])).rows[0];
     return Number(job.id);
 }
 export async function discover(dryRun = false): Promise<Record<string, unknown>> {
@@ -124,6 +134,10 @@ export async function discover(dryRun = false): Promise<Record<string, unknown>>
     }
     for (const source of sources.values()) {
         try {
+            if (source.auto_sync_until && new Date(source.auto_sync_until).getTime() <= Date.now()) {
+                result.excluded = Number(result.excluded) + 1;
+                continue;
+            }
             if (dryRun) {
                 await currentEligibility(source, false);
                 const snapshot = await buildSnapshot(pool, source);
@@ -146,13 +160,17 @@ export async function discover(dryRun = false): Promise<Record<string, unknown>>
             result.queued = Number(result.queued) + 1;
         }
         catch (e) {
+            if (e instanceof MmsSyncError && e.code === 'sync_window_closed') {
+                result.excluded = Number(result.excluded) + 1;
+                continue;
+            }
             (result.exceptions as unknown[]).push({ source_run_key: source.source_run_key, reason: e instanceof Error ? e.message : 'Queue failed' });
         }
     }
     // Refresh known classes too: deleted/cancelled events may no longer be returned in the time window.
     if (!dryRun)
         for (const { source_run_key } of (await pool.query(`SELECT source_run_key FROM mms_sync_source
-    WHERE snapshot IS NULL OR (SELECT max(session->>'date') FROM jsonb_array_elements(snapshot->'sessions') session)>=(now() AT TIME ZONE 'Asia/Singapore')::date::text`)).rows) {
+    WHERE auto_sync_until>now() AND (snapshot IS NULL OR (SELECT max(session->>'date') FROM jsonb_array_elements(snapshot->'sessions') session)>=(now() AT TIME ZONE 'Asia/Singapore')::date::text)`)).rows) {
             if (sources.has(source_run_key))
                 continue;
             try {
@@ -185,7 +203,7 @@ export async function requestManual(input: {
     const source = await resolveManualSource(input);
     await register(source);
     await currentEligibility(source, false);
-    if (normalOperationsEnabled()) await recordOperationalApproval(source);
+    if (normalOperationsEnabled()) await recordOperationalApproval(source, true);
     else if (input.approve_run) {
         const snapshot = await buildSnapshot(pool, source);
         const start = firstSessionAt(snapshot);
@@ -197,7 +215,7 @@ export async function requestManual(input: {
             assertRunApproval(approved, snapshot);
             if (prior.handover_at && new Date(prior.first_session_at).getTime() <= Date.now())
                 throw new MmsSyncError('The approved run already started; its first session cannot be moved or reapproved as a new run.');
-            await pool.query('UPDATE mms_sync_source SET approved_at=$2,approved_by=$3,first_session_at=$4 WHERE source_run_key=$1', [source.source_run_key, approved.approved_at, input.actor, start]);
+            await pool.query('UPDATE mms_sync_source SET approved_at=$2,approved_by=$3,first_session_at=$4,auto_sync_until=$5 WHERE source_run_key=$1', [source.source_run_key, approved.approved_at, input.actor, start, automaticSyncUntil(snapshot)]);
         }
     }
     if (input.confirm_trainer && source.masterlist_class_id) {
@@ -233,8 +251,19 @@ export async function processJobs(limit = 20, sourceKey: string | null = null): 
                 continue;
             }
             const source = (await db.query('SELECT * FROM mms_sync_source WHERE source_run_key=$1', [job.source_run_key])).rows[0] as SourceRecord;
+            if (job.trigger !== 'manual' && (!source.auto_sync_until || new Date(source.auto_sync_until).getTime() <= Date.now())) {
+                await db.query("UPDATE mms_sync_job SET state='cancelled',last_error='Automatic sync window closed',leased_at=NULL,updated_at=now() WHERE id=$1", [job.id]);
+                continue;
+            }
             await currentEligibility(source);
             const snapshot = withApproval(await buildSnapshot(pool, source), source as any);
+            const nextUntil = automaticSyncUntil(snapshot);
+            if (job.trigger !== 'manual' && new Date(nextUntil).getTime() <= Date.now()) {
+                await db.query('UPDATE mms_sync_source SET auto_sync_until=$2 WHERE source_run_key=$1 AND auto_sync_until>now()', [job.source_run_key, nextUntil]);
+                await db.query("UPDATE mms_sync_job SET state='cancelled',last_error='Automatic sync window closed after schedule change',leased_at=NULL,updated_at=now() WHERE id=$1", [job.id]);
+                continue;
+            }
+            if (job.trigger !== 'manual') assertAutomaticSyncOpen(nextUntil);
             snapshot.snapshot_hash = snapshotHash(snapshot);
             await db.query('BEGIN');
             const previous = (await db.query('SELECT revision,snapshot_hash FROM mms_sync_source WHERE source_run_key=$1 FOR UPDATE', [job.source_run_key])).rows[0];
@@ -244,10 +273,16 @@ export async function processJobs(limit = 20, sourceKey: string | null = null): 
             for (const person of [...(source.snapshot?.learners || []), ...(source.snapshot?.trainers || []), ...snapshot.learners, ...snapshot.trainers])
                 if (!person.source_id.startsWith('email:'))
                     aliases[person.email] = person.source_id;
-            await db.query('UPDATE mms_sync_source SET revision=$2,snapshot_hash=$3,snapshot=$4::jsonb,person_aliases=$5::jsonb,updated_at=now() WHERE source_run_key=$1', [job.source_run_key, snapshot.revision, snapshot.snapshot_hash, JSON.stringify(snapshot), JSON.stringify(aliases)]);
+            await db.query(`UPDATE mms_sync_source SET revision=$2,snapshot_hash=$3,snapshot=$4::jsonb,person_aliases=$5::jsonb,
+                auto_sync_until=CASE WHEN auto_sync_until>now() THEN $6 ELSE auto_sync_until END,updated_at=now() WHERE source_run_key=$1`,
+                [job.source_run_key, snapshot.revision, snapshot.snapshot_hash, JSON.stringify(snapshot), JSON.stringify(aliases), nextUntil]);
             await db.query('COMMIT');
             // Eligibility is checked again immediately before the outbound operation.
             await currentEligibility(source);
+            if (job.trigger !== 'manual') {
+                assertAutomaticSyncOpen((await db.query('SELECT auto_sync_until FROM mms_sync_source WHERE source_run_key=$1', [job.source_run_key])).rows[0]?.auto_sync_until);
+                assertAutomaticSyncOpen(nextUntil);
+            }
             const response = await fetch(config.url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': config.key }, body: JSON.stringify(snapshot), signal: AbortSignal.timeout(55000) });
             const result = await response.json();
             if (!response.ok || !result.success)

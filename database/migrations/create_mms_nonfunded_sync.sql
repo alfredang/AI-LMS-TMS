@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS mms_sync_source (
   last_error text,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE mms_sync_source ADD COLUMN IF NOT EXISTS auto_sync_until timestamptz;
 CREATE TABLE IF NOT EXISTS mms_sync_job (
   id bigserial PRIMARY KEY,
   source_run_key text NOT NULL REFERENCES mms_sync_source(source_run_key),
@@ -45,6 +46,7 @@ BEGIN
   INSERT INTO mms_sync_job(source_run_key,trigger)
   SELECT s.source_run_key,TG_TABLE_NAME FROM mms_sync_source s
   WHERE upper(btrim(s.course_code)) NOT LIKE 'TGS%'
+    AND s.auto_sync_until>now()
     AND NOT EXISTS (SELECT 1 FROM course_run cr JOIN course c ON c.id=cr.course_id
                     WHERE cr.id=s.tms_run_uuid AND upper(btrim(c.course_code)) LIKE 'TGS%')
     AND ((TG_TABLE_NAME='masterlist_table' AND changed->>'class_id'=s.masterlist_class_id::text)

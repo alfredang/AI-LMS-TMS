@@ -36,7 +36,10 @@ async function enqueue(context: AccessContext, actor = 'automatic', resendPerson
 export async function recoverAccessNotifications(sourceKey: string | null = null): Promise<void> {
     await loadMmsRuntimeConfig();
     if (!getMmsRuntimeConfig().enabled) return;
-    const sources = (await pool.query(`SELECT * FROM mms_sync_source WHERE approved_at IS NOT NULL AND ($1::text IS NULL OR source_run_key=$1)`, [sourceKey])).rows;
+    await pool.query(`UPDATE mms_access_notification n SET state='cancelled',last_error='Automatic access window closed',updated_at=now()
+        FROM mms_sync_source s WHERE n.source_run_key=s.source_run_key AND n.state='pending'
+        AND (s.auto_sync_until IS NULL OR s.auto_sync_until<=now()) AND ($1::text IS NULL OR s.source_run_key=$1)`, [sourceKey]);
+    const sources = (await pool.query(`SELECT * FROM mms_sync_source WHERE approved_at IS NOT NULL AND auto_sync_until>now() AND ($1::text IS NULL OR source_run_key=$1)`, [sourceKey])).rows;
     for (const source of sources) {
         const people = source.delivery_platform === 'mms' && source.snapshot ? recipients(source.snapshot) : [];
         const pending = (await pool.query("SELECT id,person_id,role,email FROM mms_access_notification WHERE source_run_key=$1 AND state IN ('pending','failed')", [source.source_run_key])).rows;
@@ -80,6 +83,11 @@ export async function dispatchAccessNotifications(limit = 20, sourceKey: string 
             key = candidate.source_run_key;
             locked = !!(await db.query('SELECT pg_try_advisory_lock(hashtext($1)) locked', [`mms:${key}`])).rows[0].locked;
             if (!locked) break;
+            const until = (await db.query('SELECT auto_sync_until FROM mms_sync_source WHERE source_run_key=$1', [key])).rows[0]?.auto_sync_until;
+            if (candidate.kind === 'initial' && (!until || new Date(until).getTime() <= Date.now())) {
+                await db.query("UPDATE mms_access_notification SET state='cancelled',last_error='Automatic access window closed',updated_at=now() WHERE id=$1 AND state='pending'", [candidate.id]);
+                continue;
+            }
             const context = await getAccessContext({ sourceKey: key });
             if (context.platform !== 'mms' || context.state !== 'ready') {
                 await db.query("UPDATE mms_access_notification SET state=$3,available_at=now()+interval '1 minute',last_error=$2 WHERE id=$1 AND state='pending'", [candidate.id, context.reason || 'MMS access is awaiting readiness or is excluded for this run', context.platform === 'tms' ? 'cancelled' : 'pending']);

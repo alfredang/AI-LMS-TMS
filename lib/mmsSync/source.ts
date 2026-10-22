@@ -16,6 +16,7 @@ export interface SourceRecord extends RunApproval {
     masterlist_class_id: string | null;
     operational_run_id?: string | null;
     trainer_approved_email?: string;
+    auto_sync_until?: string | Date | null;
     snapshot?: RunSnapshot;
     person_aliases?: Record<string, string>;
 }
@@ -82,7 +83,7 @@ export async function resolveEvent(db: Pool, calendarId: string, event: calendar
     const known = await db.query(`SELECT * FROM mms_sync_source WHERE calendar_id=$1 AND (event_ids ? $2 OR ($3::uuid IS NOT NULL AND tms_run_uuid=$3))`, [calendarId, event.id, run?.id || null]);
     if (known.rows.length > 1)
         throw new MmsSyncError('Resolve duplicate stored source mappings.');
-    return { source_run_key: known.rows[0]?.source_run_key || (run ? `tms:${run.id}` : calendarIdentity(calendarId, event.id)), course_code: code, calendar_id: calendarId, event_ids: [event.id], tms_run_uuid: run?.id || known.rows[0]?.tms_run_uuid || null, masterlist_class_id: master.rows[0]?.class_id || known.rows[0]?.masterlist_class_id || null, operational_run_id: externalRunId || known.rows[0]?.operational_run_id, trainer_approved_email: known.rows[0]?.trainer_approved_email, snapshot: known.rows[0]?.snapshot, person_aliases: known.rows[0]?.person_aliases };
+    return { source_run_key: known.rows[0]?.source_run_key || (run ? `tms:${run.id}` : calendarIdentity(calendarId, event.id)), course_code: code, calendar_id: calendarId, event_ids: [event.id], tms_run_uuid: run?.id || known.rows[0]?.tms_run_uuid || null, masterlist_class_id: master.rows[0]?.class_id || known.rows[0]?.masterlist_class_id || null, operational_run_id: externalRunId || known.rows[0]?.operational_run_id, trainer_approved_email: known.rows[0]?.trainer_approved_email, auto_sync_until: known.rows[0]?.auto_sync_until, snapshot: known.rows[0]?.snapshot, person_aliases: known.rows[0]?.person_aliases };
 }
 function sessionFromEvent(event: calendar_v3.Schema$Event): SyncSession {
     if (!event.start?.dateTime || !event.end?.dateTime || !event.id)
