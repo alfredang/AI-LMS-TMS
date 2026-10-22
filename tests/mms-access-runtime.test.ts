@@ -88,6 +88,13 @@ test('durable access queue: readiness, deduplication, late changes, retries, res
         await dispatchAccessNotifications(); assert.equal(out.length, afterTimeout);
         sendResult = { success: true, messageId: 'captured-correction' };
         await requestAccessSend(snapshot.source_run_key, 'operator', { id: 'learner', role: 'learner' }); assert.equal(out.at(-1).to, 'corrected@example.com');
+        await pool.query("UPDATE mms_sync_source SET auto_sync_until=now()-interval '1 second' WHERE source_run_key=$1", [snapshot.source_run_key]);
+        await assert.rejects(() => requestAccessSend(snapshot.source_run_key, 'operator', { id: 'learner', role: 'learner' }), /closed for automatic access messages/);
+        await pool.query(`INSERT INTO mms_access_notification(source_run_key,person_id,role,email,kind,generation,actor,revision,destination)
+            VALUES($1,'learner','learner','corrected@example.com','resend','close-test','test',1,'https://mms.example.com/lmslogin/')`, [snapshot.source_run_key]);
+        await recoverAccessNotifications();
+        assert.equal((await pool.query("SELECT state FROM mms_access_notification WHERE generation='close-test'")).rows[0].state, 'cancelled');
+        await pool.query("UPDATE mms_sync_source SET auto_sync_until='2050-10-23T12:30:00Z' WHERE source_run_key=$1", [snapshot.source_run_key]);
         // Reclassification must reject even a queued resend and an existing mapping.
         process.env.MMS_ACCESS_NOTIFICATIONS_ENABLED = 'false';
         snapshot.learners.push({ source_id: 'never', email: 'never@example.com', name: 'Never' }); snapshot.revision++; await save(); await recoverAccessNotifications();
@@ -97,11 +104,6 @@ test('durable access queue: readiness, deduplication, late changes, retries, res
         await dispatchAccessNotifications(); assert.equal(out.length, beforeFunded);
         assert.equal((await pool.query("SELECT state FROM mms_access_notification WHERE person_id='never'")).rows[0].state, 'cancelled');
         await assert.rejects(() => requestAccessSend(snapshot.source_run_key, 'operator'), /not ready/);
-        await pool.query("UPDATE mms_sync_source SET auto_sync_until=now()-interval '1 second' WHERE source_run_key=$1", [snapshot.source_run_key]);
-        await pool.query(`INSERT INTO mms_access_notification(source_run_key,person_id,role,email,kind,generation,actor,revision,destination)
-            VALUES($1,'learner','learner','corrected@example.com','initial','close-test','test',1,'https://mms.example.com/lmslogin/')`, [snapshot.source_run_key]);
-        await recoverAccessNotifications();
-        assert.equal((await pool.query("SELECT state FROM mms_access_notification WHERE generation='close-test'")).rows[0].state, 'cancelled');
     } finally {
         Module._load = original;
         for (const key of ['MMS_SYNC_ENABLED', 'MMS_ACCESS_NOTIFICATIONS_ENABLED', 'MMS_PUBLIC_ORIGIN', 'MMS_ACCESS_SUPPORT', 'MMS_SYNC_COURSE_ALLOWLIST']) {

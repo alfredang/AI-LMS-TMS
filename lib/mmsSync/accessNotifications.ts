@@ -60,6 +60,8 @@ export async function recoverAccessNotifications(sourceKey: string | null = null
 export async function requestAccessSend(sourceKey: string, actor: string, resend?: { id: string; role: string }) {
     const context = await getAccessContext({ sourceKey });
     if (context.platform !== 'mms' || context.state !== 'ready') throw new MmsSyncError(context.reason || 'MMS class access is not ready.');
+    const until = (await pool.query('SELECT auto_sync_until FROM mms_sync_source WHERE source_run_key=$1', [sourceKey])).rows[0]?.auto_sync_until;
+    if (!until || new Date(until).getTime() <= Date.now()) throw new MmsSyncError('This class is closed for automatic access messages. Review any late communication manually.', 'sync_window_closed');
     if (!notificationsEnabled()) throw new MmsSyncError('MMS access sending is disabled. Preview remains available.');
     if (resend && !recipients(context.snapshot!).some(p => p.source_id === resend.id && p.role === resend.role)) throw new MmsSyncError('The selected recipient is no longer assigned.');
     await enqueue(context, actor, resend);
@@ -84,7 +86,7 @@ export async function dispatchAccessNotifications(limit = 20, sourceKey: string 
             locked = !!(await db.query('SELECT pg_try_advisory_lock(hashtext($1)) locked', [`mms:${key}`])).rows[0].locked;
             if (!locked) break;
             const until = (await db.query('SELECT auto_sync_until FROM mms_sync_source WHERE source_run_key=$1', [key])).rows[0]?.auto_sync_until;
-            if (candidate.kind === 'initial' && (!until || new Date(until).getTime() <= Date.now())) {
+            if (!until || new Date(until).getTime() <= Date.now()) {
                 await db.query("UPDATE mms_access_notification SET state='cancelled',last_error='Automatic access window closed',updated_at=now() WHERE id=$1 AND state='pending'", [candidate.id]);
                 continue;
             }
