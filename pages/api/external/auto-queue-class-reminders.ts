@@ -204,12 +204,6 @@ export async function runAutomation(): Promise<QueueSummary> {
   type Candidate = { row: any; date: string; trainer: any };
   const candidates: Candidate[] = [];
   for (const row of rows.rows) {
-    const access = await getAccessContext({ runUuid: row.course_run_uuid, courseCode: row.course_code });
-    if (access.platform !== 'tms' && (access.state !== 'ready' || process.env.MMS_ACCESS_NOTIFICATIONS_ENABLED !== 'true')) {
-      errors++;
-      details.push({ courseRunId: row.course_run_id, trainer: '', result: access.reason || 'MMS access pending' });
-      continue;
-    }
     const courseCode = normalizeTgsCode(row.course_code);
     if (ack.uncheckedRunUuids.has(row.course_run_uuid)) {
       skippedCalendarUnchecked++;
@@ -259,6 +253,13 @@ export async function runAutomation(): Promise<QueueSummary> {
     if (phone && budget <= 0) {
       deferredBudget++;
       details.push({ courseRunId: row.course_run_id, trainer: t.name, result: `deferred_daily_budget:${date}` });
+      continue;
+    }
+
+    const access = await getAccessContext({ runUuid: row.course_run_uuid, courseCode: row.course_code });
+    if (access.platform !== 'tms' && (access.state !== 'ready' || process.env.MMS_ACCESS_NOTIFICATIONS_ENABLED !== 'true')) {
+      errors++;
+      details.push({ courseRunId: row.course_run_id, trainer: t.name, result: access.reason || 'MMS access pending' });
       continue;
     }
 

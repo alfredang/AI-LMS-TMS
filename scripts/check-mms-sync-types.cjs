@@ -1,17 +1,18 @@
-/** Compare branch diagnostics to HEAD without checking out or changing user files. */
+/** Compare diagnostics to a selected Git baseline without changing user files. */
 const ts=require('typescript');
 const cp=require('child_process');
 const path=require('path');
 const configPath=ts.findConfigFile(process.cwd(),ts.sys.fileExists,'tsconfig.json');
 const config=ts.readConfigFile(configPath,ts.sys.readFile);
 const parsed=ts.parseJsonConfigFileContent(config.config,ts.sys,path.dirname(configPath));
-const changed=cp.execFileSync('git',['diff','HEAD','--name-only','--diff-filter=M'],{encoding:'utf8'}).trim().split(/\r?\n/).filter(f=>/\.tsx?$/.test(f));
+const baselineRef=process.env.MMS_TYPES_BASE_REF||'HEAD';
+const changed=cp.execFileSync('git',['diff',baselineRef,'--name-only','--diff-filter=M'],{encoding:'utf8'}).trim().split(/\r?\n/).filter(f=>/\.tsx?$/.test(f));
 const newFeature=f=>/\/lib\/mmsSync\/|\/tests\/mms-(sync|access)|\/components\/admin\/MmsSync(Control|Overview)\.tsx$|\/pages\/api\/(admin\/mms-(sync|access)|external\/mms-sync)/.test(f.replace(/\\/g,'/'));
 function diagnostics(baseline){
   const host=ts.createCompilerHost({...parsed.options,incremental:false});
   if(baseline){
     const originalRead=host.readFile;
-    const originals=new Map(changed.map(f=>[path.resolve(f),cp.execFileSync('git',['show',`HEAD:${f}`],{encoding:'utf8'})]));
+    const originals=new Map(changed.map(f=>[path.resolve(f),cp.execFileSync('git',['show',`${baselineRef}:${f}`],{encoding:'utf8'})]));
     host.readFile=f=>originals.has(path.resolve(f))?originals.get(path.resolve(f)):originalRead(f);
   }
   const program=ts.createProgram(parsed.fileNames.filter(f=>!baseline||!newFeature(f)),{...parsed.options,incremental:false},host);
