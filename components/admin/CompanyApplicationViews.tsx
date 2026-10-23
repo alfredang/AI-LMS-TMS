@@ -5,6 +5,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Icon, IconName } from '../ui/Icon';
 import { ConfirmPopup } from './ConfirmPopup';
+import { useCourseFeeCheck, CourseFeeCheckItem } from './CourseFeeCheckPopup';
 import SupportingDocsModal from './SupportingDocsModal';
 // Shared with the Direct Application screen so both read the same way.
 import { FundingTypeBadge, InvoiceGeneratedOnCell, RenewedOnCell } from './DirectApplicationViews';
@@ -133,6 +134,19 @@ const COLUMN_DISPLAY_LABELS: Record<string, string> = {
 };
 
 const VISIBLE_COLUMNS = COMPANY_APPLICATION_COLUMNS;
+
+// Search ignores spacing, punctuation and word order, and words may sit in
+// different columns. A plain substring test hid "CHEW JIA LONG" from a search
+// for "Chew Jialong", so admins thought enrolled learners were missing.
+const compactSearchText = (value: string) => value.toLowerCase().replace(/[^a-z0-9@]+/g, '');
+
+function matchesSearch(row: Record<string, string>, query: string): boolean {
+  const haystack = VISIBLE_COLUMNS.map(column => row[column] || '').join(' ').toLowerCase();
+  const compactHaystack = compactSearchText(haystack);
+  if (compactHaystack.includes(compactSearchText(query))) return true;
+  const words = query.toLowerCase().split(/\s+/).map(compactSearchText).filter(Boolean);
+  return words.length > 0 && words.every(word => compactHaystack.includes(word));
+}
 
 const COLUMN_GROUPS: Array<{ label: string; columns: string[]; className: string }> = [
   {
@@ -850,6 +864,7 @@ const CaEmailToggleBanner: React.FC = () => {
 
 export const UploadCompanyApplicationView: React.FC = () => {
   const { setAdminPage } = useLms();
+  const { confirmCourseFees, courseFeePopup } = useCourseFeeCheck('Upload anyway');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backendTimerRef = useRef<number | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -1177,6 +1192,21 @@ export const UploadCompanyApplicationView: React.FC = () => {
     setRunConfirmGroups([]);
     try {
       const rows = await parseCompanyApplicationRows(file, workbookPassword || undefined);
+      // Upload enrols and invoices straight away, so warn about a blank or
+      // contradicting course fee before anything is sent.
+      const feeItems: CourseFeeCheckItem[] = rows.map(r => {
+        const courseTitle = String((r as any)['Course Title*'] ?? '').trim();
+        const courseStartDate = String((r as any)['Course Start Date (DD-MM-YYYY)*'] ?? '').trim();
+        const override = courseRunOverrides.find(
+          o => o.courseTitle.trim().toLowerCase() === courseTitle.toLowerCase() && o.courseStartDate.trim() === courseStartDate,
+        );
+        return {
+          courseRunId: override?.courseRunId || String((r as any)['Course Run ID'] ?? '').trim(),
+          courseReferenceNumber: String((r as any)['Course Reference Number'] ?? '').trim(),
+          courseTitle,
+        };
+      });
+      if (!(await confirmCourseFees(feeItems))) return;
       const result = await uploadRows(rows, courseRunOverrides);
       setUploadResult(result);
       pollBackendProcessing(result.insertedIds);
@@ -1239,6 +1269,7 @@ export const UploadCompanyApplicationView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {courseFeePopup}
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white leading-tight">Upload Company Application</h1>
@@ -2447,6 +2478,16 @@ const duplicateMatchKey = (value: unknown) =>
     .toLowerCase();
 
 export const ViewCompanyApplicationView: React.FC = () => {
+  const { confirmCourseFees, courseFeePopup } = useCourseFeeCheck();
+  // Rows still to be invoiced → fee-check items (invoiced rows are already billed).
+  const feeItemsFor = (list: CompanyApplicationRow[]): CourseFeeCheckItem[] =>
+    list
+      .filter(r => !hasValue(r['Invoice ID']))
+      .map(r => ({
+        courseRunId: String(r['Course Run ID'] || '').trim(),
+        courseReferenceNumber: String(r['Course Reference Number'] || '').trim(),
+        courseTitle: String(r['Course Title*'] || '').trim(),
+      }));
   const [rows, setRows] = useState<CompanyApplicationRow[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showStuckOnly, setShowStuckOnly] = useState(false);
@@ -2842,12 +2883,13 @@ export const ViewCompanyApplicationView: React.FC = () => {
     }
   };
 
-  const generateInvoiceForSelected = () => {
+  const generateInvoiceForSelected = async () => {
     if (selectedIds.size === 0) {
       setInvoiceMessage('Select at least one row first.');
       return;
     }
     setInvoiceMessage(null);
+    if (!(await confirmCourseFees(feeItemsFor(rows.filter(r => selectedIds.has(String(r.id || ''))))))) return;
     // Always reopen on the safe default rather than inheriting the last run's
     // choice — a sticky "per-learner" would silently split a later batch.
     setInvoiceMode('consolidated');
@@ -3246,6 +3288,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
       return;
     }
 
+    // Auto-Process ends by invoicing, so warn about bad course fees first.
+    if (!(await confirmCourseFees(feeItemsFor(pendingRows)))) return;
+
     setIsRunningPipeline(true);
     setPipelineMessage(null);
     try {
@@ -3465,9 +3510,9 @@ export const ViewCompanyApplicationView: React.FC = () => {
   }, [rows]);
 
   const filteredRows = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = searchQuery.trim();
     const queryMatched = query
-      ? rows.filter(row => VISIBLE_COLUMNS.some(column => (row[column] || '').toLowerCase().includes(query)))
+      ? rows.filter(row => matchesSearch(row, query))
       : rows;
     const matched = showStuckOnly
       ? queryMatched.filter(row => row._stuck === '1')
@@ -3569,6 +3614,7 @@ export const ViewCompanyApplicationView: React.FC = () => {
 
   return (
     <div>
+      {courseFeePopup}
       <div className="mb-6">
         <h2 className="text-3xl font-bold dark:text-white leading-tight">View Company Application</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track enrolment, calendar, and invoice status across uploaded company applications.</p>
