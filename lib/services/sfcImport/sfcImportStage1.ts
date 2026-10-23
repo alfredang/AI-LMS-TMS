@@ -179,6 +179,83 @@ async function qbFindInvoiceByDocNumber(apps: string[], docNumber: string): Prom
   return null;
 }
 
+type ClaimOnTcCache = {
+  paymentsByRef: Map<string, Promise<any[]>>;
+  invoices: Map<string, Promise<any | null>>;
+};
+
+/**
+ * Read-only: was this claim already received on the learner's Customer (TC) invoice — the way
+ * claims were received before SFC-CA invoices existed (most Jan-2026 payouts for 2025 courses)?
+ * Looks for a QuickBooks payment whose PaymentRefNum is this claim's payout ID with a line of
+ * exactly the claim amount linked to a TC invoice, and accepts it only if that TC passes the
+ * strict content check (NRIC, course reference, course date AND course run all in its text) and
+ * it is the only such TC. Used solely to report a row as already applied instead of unmatched —
+ * it never creates or changes anything in QuickBooks.
+ */
+export async function findClaimAlreadyReceivedOnTc(input: {
+  apps: string[];
+  payoutRequestId: string;
+  claimAmount: number;
+  enrolmentId: string;
+  individualNric: string;
+  courseRefNumber: string;
+  courseStartDateIso: string | null;
+  courseRunId: string | null;
+  cache: ClaimOnTcCache;
+}): Promise<{ app: string; invoiceId: string; docNumber: string; balance: number; paymentId: string } | null> {
+  const ref = String(input.payoutRequestId || '').trim();
+  if (!ref || !input.courseStartDateIso || !input.courseRunId || !(input.claimAmount > 0)) return null;
+
+  const hits = new Map<string, { app: string; invoiceId: string; docNumber: string; balance: number; paymentId: string }>();
+  for (const app of input.apps) {
+    const key = `${app}|${ref}`;
+    if (!input.cache.paymentsByRef.has(key)) {
+      input.cache.paymentsByRef.set(key, (async () => {
+        try {
+          const data = await callQbProxy({
+            action: 'query', entity: 'payment', app,
+            query: `SELECT * FROM Payment WHERE PaymentRefNum = '${escapeQbQueryString(ref)}' MAXRESULTS 1000`,
+          });
+          const rows = data?.QueryResponse?.Payment;
+          return Array.isArray(rows) ? rows : rows ? [rows] : [];
+        } catch {
+          return [];
+        }
+      })());
+    }
+    const payments = await input.cache.paymentsByRef.get(key)!;
+    for (const p of payments) {
+      const lines = Array.isArray(p?.Line) ? p.Line : p?.Line ? [p.Line] : [];
+      for (const ln of lines) {
+        if (Math.abs(Number(ln?.Amount) - input.claimAmount) > 0.005) continue;
+        const linked = Array.isArray(ln?.LinkedTxn) ? ln.LinkedTxn : ln?.LinkedTxn ? [ln.LinkedTxn] : [];
+        for (const t of linked) {
+          if (String(t?.TxnType || '') !== 'Invoice') continue;
+          const invKey = `${app}|${t.TxnId}`;
+          if (!input.cache.invoices.has(invKey)) input.cache.invoices.set(invKey, qbGetInvoiceById(app, String(t.TxnId)));
+          const inv = await input.cache.invoices.get(invKey)!;
+          if (!inv || !/^TC/i.test(String(inv.docNumber || ''))) continue;
+          const verify = await verifySfcInvoiceMatch({
+            invoiceRaw: inv.raw,
+            docNumber: inv.docNumber,
+            matchedEnrolmentId: input.enrolmentId,
+            excelNric: input.individualNric,
+            excelCourseRef: input.courseRefNumber,
+            courseStartDateIso: input.courseStartDateIso,
+            courseRunId: input.courseRunId,
+          });
+          if (!verify.ok) continue;
+          hits.set(`${app}|${t.TxnId}`, { app, invoiceId: String(t.TxnId), docNumber: String(inv.docNumber), balance: inv.balance, paymentId: String(p.Id) });
+        }
+      }
+    }
+    if (hits.size > 0) break;
+  }
+  // More than one verified TC carrying this exact payout + amount is ambiguous — never guess.
+  return hits.size === 1 ? Array.from(hits.values())[0] : null;
+}
+
 /**
  * The primary claim -> enrolment match query, factored out so both the normal lookup
  * and the post-backfill re-lookup (see backfillMissingSsgClaim below) use the exact
@@ -198,6 +275,7 @@ async function queryClaimMatch(claimId: string) {
        se.sponsorship_type,
        se.trainee_nric,
        se.trainee_name,
+       se.raw_data->'course'->'run'->>'id' AS course_run_id,
        ij.qbo_invoice_id,
        ij.qbo_doc_number,
        ij.invoice_no,
@@ -417,6 +495,7 @@ export async function sfcStage1ParseMatchAndPersist(input: {
   ]);
 
   const appOverride = (process.env.QBO_GRANT_IMPORT_APP || 'app1').trim() || 'app1';
+  const claimOnTcCache: ClaimOnTcCache = { paymentsByRef: new Map(), invoices: new Map() };
 
   const totalRows = paidRows.length;
   const counts = {
@@ -577,6 +656,46 @@ export async function sfcStage1ParseMatchAndPersist(input: {
     const daApplicationId = match.da_application_id ? String(match.da_application_id) : null;
     const daSfcInvoiceId = match.da_sfc_invoice_id ? String(match.da_sfc_invoice_id) : null;
 
+    // Used only where this row would otherwise be reported "unmatched" for want of a target
+    // invoice: if the claim was already received on the learner's TC (old way), record it as
+    // already applied against that TC + payment instead. Read-only — see findClaimAlreadyReceivedOnTc.
+    const insertIfAlreadyReceivedOnTc = async (): Promise<boolean> => {
+      const onTc = await findClaimAlreadyReceivedOnTc({
+        apps: appOverride === 'app2' ? ['app2', 'app1'] : ['app1', 'app2'],
+        payoutRequestId,
+        claimAmount,
+        enrolmentId,
+        individualNric,
+        courseRefNumber,
+        courseStartDateIso: parseDisbursementDate(courseStartDate),
+        courseRunId: match.course_run_id ? String(match.course_run_id).trim() : null,
+        cache: claimOnTcCache,
+      });
+      if (!onTc) return false;
+      counts.already_applied_count++;
+      await insertSfcImportRow({
+        ...baseFields,
+        match_status: 'already_applied',
+        matched_enrolment_id: enrolmentId,
+        matched_ssg_claim_id: ssgClaimRowId,
+        sponsorship_type: sponsorshipType,
+        da_application_id: daApplicationId,
+        da_sfc_invoice_id: daSfcInvoiceId,
+        main_qbo_invoice_id: onTc.invoiceId,
+        main_qbo_doc_number: onTc.docNumber,
+        matched_qbo_invoice_id: onTc.invoiceId,
+        matched_qbo_doc_number: onTc.docNumber,
+        matched_qbo_invoice_balance: onTc.balance,
+        matched_qb_payment_id: onTc.paymentId,
+        validation_errors: [
+          `Already received on Customer invoice ${onTc.docNumber} (QB payment ${onTc.paymentId}, payout ${payoutRequestId}, $${claimAmount.toFixed(2)})${isDa ? ' — no SFC-CA invoice; received the old way on the TC' : ''}`,
+        ],
+        apply_status: null,
+        apply_error: null,
+      });
+      return true;
+    };
+
     // Step 2b — Independent cross-check that claim_id -> enrolment_id link is actually correct.
     // The SFC Excel carries no enrolment id at all (unlike Bulk Grant Payment Sync, whose Excel
     // includes it and can cross-check against ssg_grants) — the only path from claim_id to an
@@ -685,6 +804,7 @@ export async function sfcStage1ParseMatchAndPersist(input: {
     // creates one, so say plainly that none was found rather than falling through with no invoice
     // attached (da_auto_enrol_error is surfaced when we have it, since it usually explains why).
     if (isDa && !qboInvoiceId) {
+      if (await insertIfAlreadyReceivedOnTc()) continue;
       counts.unmatched_count++;
       const genErr = match.da_auto_enrol_error ? String(match.da_auto_enrol_error) : null;
       await insertSfcImportRow({
@@ -784,6 +904,7 @@ export async function sfcStage1ParseMatchAndPersist(input: {
           // backfill is best-effort — proceed regardless
         }
       } else {
+        if (await insertIfAlreadyReceivedOnTc()) continue;
         counts.unmatched_count++;
         await insertSfcImportRow({
           ...baseFields,
