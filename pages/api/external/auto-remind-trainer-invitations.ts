@@ -1,5 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { invitationAccess } from '../../../lib/mmsSync/accessContext';
+import { normalOperationsEnabled } from '../../../lib/mmsSync/operationPolicy';
+import { accessInstruction } from '../../../lib/mmsSync/accessPolicy';
 import {
   loadTrainingProviderEmailConfig,
   sendGmail,
@@ -137,7 +140,11 @@ async function sendReminderForInvitation(
     tp.trainer_invitation_email_subject || DEFAULT_TRAINER_INVITATION_SUBJECT,
     replacements
   );
-  const bodyTemplate = tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY;
+  const access = await invitationAccess({ runUuid: inv.course_run_id, courseCode: inv.course_code });
+  if (access.platform === 'review' && !normalOperationsEnabled()) throw new Error(access.reason);
+  const bodyTemplate = access.platform !== 'tms'
+    ? `${DEFAULT_TRAINER_INVITATION_BODY}\n\n${access.platform === 'mms' ? accessInstruction({ ...access, state: 'pending' }) : 'Class-access instructions will follow after your assignment and platform access are confirmed.'}`
+    : tp.trainer_invitation_email_body || DEFAULT_TRAINER_INVITATION_BODY;
   const htmlBody = renderInvitationHtmlEmail(bodyTemplate, replacements, acceptUrl, declineUrl);
 
   try {

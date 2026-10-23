@@ -119,6 +119,9 @@ async function seedDefaults() {
         days_in_advance?: number;
         default_enabled?: boolean;
     }> = [
+        {id:'mms_nonfunded_discovery',name:'MMS Non-funded Class Discovery',description:'Read the configured Google Calendar at 10 pm SGT and queue only allowlisted non-funded classes for MMS. TGS courses are excluded.',cron_expression:'0 22 * * *',api_endpoint:'/api/external/mms-sync',default_enabled:false},
+        {id:'mms_nonfunded_reconcile',name:'MMS Non-funded Class Reconciliation',description:'Refresh non-funded class discovery and source data every two minutes, including pre-class and ongoing-class checks. TGS courses are excluded.',cron_expression:'*/2 * * * *',api_endpoint:'/api/external/mms-sync?mode=reconcile',default_enabled:false},
+        {id:'mms_nonfunded_worker',name:'MMS Non-funded Sync Worker',description:'Deliver committed non-funded changes and retry failures every minute. Requires the configured pilot allowlist and integration credentials.',cron_expression:'* * * * *',api_endpoint:'/api/external/mms-sync?mode=worker',default_enabled:false},
         {
             id: DA_AUTOMATION_TASK,
             name: 'Fetch & Enrol Direct Applications',
@@ -407,6 +410,9 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
             if (result && result.error_count > 0) throw new Error(`Direct application automation: ${result.error_count} issue(s); see Retrieve Direct Application report`);
             return result;
         });
+        for (const [id,mode] of [['mms_nonfunded_discovery','discovery'],['mms_nonfunded_reconcile','reconcile'],['mms_nonfunded_worker','worker']]) {
+            directHandlers.set(id,async()=>{const {runMmsSync}=await import('../../pages/api/external/mms-sync');return runMmsSync(mode);});
+        }
         directHandlers.set('auto_create_trainer_folders', async () => {
             const { runAutomation } = await import('../../pages/api/external/auto-create-assessment-records');
             return runAutomation();

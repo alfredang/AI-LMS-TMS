@@ -372,6 +372,17 @@ async function resolveCourseRun(row: any): Promise<ResolvedRun | null> {
         courseFee: run.course_fee == null ? null : Number(run.course_fee),
       };
     }
+
+    // The pinned run is not in course_run (SSG holds runs the LMS never
+    // imported). Do NOT fall through to the title/date matcher: it can only see
+    // runs the LMS has, so it picks some other sitting of the course. That
+    // enrolled three learners pinned to 1324158 onto 1361617 (same course,
+    // same start date) — wrong class, wrong calendar event, wrong invoice.
+    throw new Error(
+      `Course run ${preResolved} is not imported in the LMS. Import run ${preResolved} ` +
+      `(Upcoming Classes → Import Course Run) and retry Auto-Process. ` +
+      `The LMS will not substitute another run of the same course.`
+    );
   }
 
   if (!title) return null;
@@ -763,11 +774,10 @@ export async function processCompanyApplication(
   // A run ID already on the row came either from an admin confirming it at
   // upload, or from the pass that actually enrolled the learner. Both beat a
   // fresh guess. Keep it, and surface the disagreement instead of burying it.
-  // Reaching here with a mismatch means the run ID on the row could not be
-  // loaded from course_run at all (deleted, or never imported) — resolveCourseRun
-  // returns the pinned run untouched whenever it exists. Keeping a run ID that
-  // points at nothing would be worse than useless, so the matcher's answer is
-  // used; the warning is what makes the swap visible instead of silent.
+  // resolveCourseRun now returns the pinned run or throws (it no longer falls
+  // back to the matcher when the pinned run is missing), so a mismatch here
+  // should be unreachable. Kept as a backstop so any future regression is
+  // recorded on the row rather than silently swapping the run.
   const existingRunId = String(row.course_run_id || '').trim();
   if (existingRunId && existingRunId !== run.courseRunId) {
     console.warn(

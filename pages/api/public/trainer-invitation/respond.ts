@@ -18,6 +18,9 @@ import { pushTrainerToTpgForRun } from '@/lib/ssg/pushTrainerToTpgForRun';
 import { autoShareCourseResourcesWithTrainerByRun } from '@/lib/google-drive/drive-helpers';
 import { confirmTrainerOnCalendar } from '@/lib/calendar/confirmTrainerOnCalendar';
 import { patchRunAttendee } from '@/lib/calendar/runAttendees';
+import { prepareClassAccess } from '@/lib/mmsSync/accessContext';
+import { accessInstruction } from '@/lib/mmsSync/accessPolicy';
+import { getMmsRuntimeConfig } from '@/lib/mmsSync/runtimeConfig';
 
 function renderPage(title: string, description: string, tone: 'green' | 'red' | 'gray') {
   const colors = {
@@ -582,8 +585,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           tp.trainer_accept_email_subject || DEFAULT_TRAINER_ACCEPT_SUBJECT,
           replacements
         );
+        const access = await prepareClassAccess({ runUuid: invitation.course_run_id, courseCode: invitation.course_code });
+        const acceptTemplate = access.platform === 'tms' ? tp.trainer_accept_email_body || DEFAULT_TRAINER_ACCEPT_BODY
+          : `${DEFAULT_TRAINER_ACCEPT_BODY}\n\n${accessInstruction({ ...access, state: getMmsRuntimeConfig().notificationsEnabled ? access.state : 'pending' })}`;
         const body = renderInvitationTemplate(
-          tp.trainer_accept_email_body || DEFAULT_TRAINER_ACCEPT_BODY,
+          acceptTemplate,
           replacements
         );
         const htmlBody = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#334155;line-height:1.6;">${convertPlainTextToHtml(body)}</div>`;

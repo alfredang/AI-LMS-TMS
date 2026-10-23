@@ -5,6 +5,7 @@ import pool from '../../../lib/db';
 import crypto from 'crypto';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { autoShareLearnerMaterials } from '../../../lib/google-drive/drive-helpers';
+import { learnerMail } from '../../../lib/mmsSync/legacyRouting';
 
 // Fail closed: accept server-side secrets only. NEXT_PUBLIC_* values are baked
 // into the public JS bundle and must never act as an API key; with no key
@@ -89,6 +90,7 @@ async function logResult(
 // ── Send courseware attendance email via Gmail API ────────────────────────────
 
 async function sendCoursewareAttendanceEmail(opts: {
+    runUuid: string;
     studentName: string;
     studentEmail: string;
     courseName: string;
@@ -136,11 +138,12 @@ async function sendCoursewareAttendanceEmail(opts: {
         .replace(/\{COMPANY_EMAIL\}/g, tp.companyEmail || '')
         .replace(/\{COMPANY_PHONE\}/g, tpRow.company_phone || '');
 
-    const subject = replacePlaceholders(emailSubject || 'Courseware and Attendance Taking for {COURSE_NAME}');
+    const routed = await learnerMail({ courseCode, runUuid: opts.runUuid }, { name: studentName, email: studentEmail, title: courseName, dates: courseDates, venue: courseVenue, support: tp.companyEmail || tpRow.company_email || tpRow.support_email || tpRow.company_phone || 'Training support' });
+    const subject = routed?.subject || replacePlaceholders(emailSubject || 'Courseware and Attendance Taking for {COURSE_NAME}');
     const bodyText = replacePlaceholders(emailBody || `Dear {STUDENT_NAME},\n\nPlease access the courseware platform and complete e-attendance for {COURSE_NAME}.\n\nBest regards,\n{COMPANY_SHORT_NAME}`);
 
     const isHtml = /<[a-z][\s\S]*>/i.test(bodyText);
-    const htmlBody = `<div style="font-family: Arial, sans-serif; color: #333;">${isHtml ? bodyText : bodyText.split('\n').map(line => line.trim() ? `<p style="margin:0 0 2px 0;">${line}</p>` : '<br/>').join('\n')}</div>`;
+    const htmlBody = routed?.html || `<div style="font-family: Arial, sans-serif; color: #333;">${isHtml ? bodyText : bodyText.split('\n').map(line => line.trim() ? `<p style="margin:0 0 2px 0;">${line}</p>` : '<br/>').join('\n')}</div>`;
 
     const senderName = tpRow.contact_person_name || '';
     const emailUser = tpRow.email_user;
@@ -303,6 +306,7 @@ async function _runAutomationInner() {
 
                     try {
                         await sendCoursewareAttendanceEmail({
+                            runUuid: run.db_uuid,
                             studentName: learner.learner_name,
                             studentEmail: learner.learner_email,
                             courseName: run.course_title,

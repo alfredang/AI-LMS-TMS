@@ -4,6 +4,7 @@ import { createSSGEnrolmentAPI } from '../../../lib/ssg/api/enrolment-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
 import { reconcileConsolidatedFinanceEnrolments } from '../../../lib/services/consolidatedFinanceSync';
+import { syncCompanyApplicationsFromSsgRecords } from '../../../lib/companyApplicationFromSsg';
 
 /**
  * Scheduler endpoint: pulls recent SSG enrolments and inserts new ones
@@ -139,6 +140,18 @@ async function _runAutomationInner(): Promise<{ success: boolean; inserted: numb
     if (added.length > 0) console.log(`📋 [sync-ssg-enrolments] added ${added.length} enrolment(s) to ssg_enrolments`);
   } catch (e) {
     console.error('❌ [sync-ssg-enrolments] ssg_enrolments reconcile failed:', e instanceof Error ? e.message : e);
+    errors++;
+  }
+
+  // Employer-sponsored learners enrolled outside the Company Application upload
+  // (TPG Management, Excel bulk, TPGateway portal) → View Company Application.
+  try {
+    const ca = await syncCompanyApplicationsFromSsgRecords();
+    if (ca.created || ca.attached) {
+      console.log(`📋 [sync-ssg-enrolments] company applications: ${ca.created} added, ${ca.attached} linked to SSG`);
+    }
+  } catch (e) {
+    console.error('❌ [sync-ssg-enrolments] company application sweep failed:', e instanceof Error ? e.message : e);
     errors++;
   }
 

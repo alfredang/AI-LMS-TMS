@@ -4,6 +4,7 @@ import { AdminPage } from '@app-types';
 import { getApiUrl } from '@lib/urlHelpers';
 import UpsertFromSsgModal from './UpsertFromSsgModal';
 import { ClassSessionsCard } from './ClassSessionsCard';
+import MmsSyncControl from './MmsSyncControl';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -363,6 +364,7 @@ const EventRow: React.FC<EventRowProps> = ({
       {/* Expanded detail — 13 columns + actions */}
       {expanded && (
         <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-4 py-3">
+          <MmsSyncControl runUuid={event.courseRunUuid} courseCode={event.courseCode}/>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3">
             <DetailCell label="Course Run ID" value={event.courseRunId} />
             <DetailCell label="Course Ref Code" value={event.courseCode} />

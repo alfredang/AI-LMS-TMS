@@ -112,12 +112,16 @@ export interface SmtpSendOptions {
   html?: string;
   from?: string; // overrides config.from
   replyTo?: string;
+  messageId?: string;
+  avoidDuplicateRetry?: boolean;
 }
 
 export interface SmtpSendResult {
   ok: boolean;
   messageId?: string;
   error?: string;
+  uncertain?: boolean;
+  retryable?: boolean;
 }
 
 // Send via SMTP using the current DB config. Does NOT check the toggle —
@@ -138,9 +142,11 @@ export async function sendViaSmtp(options: SmtpSendOptions, overrideConfig?: Smt
       text: options.text,
       html: options.html,
       replyTo: options.replyTo,
+      ...(options.messageId ? { messageId: options.messageId } : {}),
     });
     return { ok: true, messageId: info.messageId };
   } catch (err: any) {
-    return { ok: false, error: err?.message || String(err) };
+    const definite = Number(err?.responseCode) >= 400 || ['EAUTH', 'EENVELOPE'].includes(err?.code);
+    return { ok: false, error: err?.message || String(err), ...(options.avoidDuplicateRetry ? { uncertain: !definite, retryable: Number(err?.responseCode) >= 400 && Number(err?.responseCode) < 500 } : {}) };
   }
 }

@@ -1,5 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { getAccessContext } from '../../../lib/mmsSync/accessContext';
+import { accessInstruction } from '../../../lib/mmsSync/accessPolicy';
+import { getMmsRuntimeConfig } from '../../../lib/mmsSync/runtimeConfig';
 import { resolveClassDurationDays } from '../../../lib/trainerInvitations';
 import { classReminderExists, normalizeSgPhone, queueClassReminderWhatsApp, WHATSAPP_CHANNELS } from '../../../lib/trainerWhatsapp';
 import { findAcknowledgedTrainerTgsTolerant, normalizeTgsCode, tgsDateKey } from '../../../lib/calendar/trainerAcknowledgement';
@@ -254,6 +257,13 @@ export async function runAutomation(): Promise<QueueSummary> {
       continue;
     }
 
+    const access = await getAccessContext({ runUuid: row.course_run_uuid, courseCode: row.course_code });
+    if (access.platform !== 'tms' && (access.state !== 'ready' || !getMmsRuntimeConfig().notificationsEnabled)) {
+      errors++;
+      details.push({ courseRunId: row.course_run_id, trainer: t.name, result: access.reason || 'MMS access pending' });
+      continue;
+    }
+
     const { label: durationDays } = resolveClassDurationDays(row);
     const hours = (Number(row.training_hours) || 0) + (Number(row.assessment_hours) || 0);
     const durationLabel = durationDays !== 'N/A' && hours > 0
@@ -287,8 +297,7 @@ export async function runAutomation(): Promise<QueueSummary> {
       `Course Duration: ${durationLabel}\n` +
       `Mode of Training: ${mode}\n` +
       locationLine +
-      `\nTo view E-Attendance and course-related materials, please log in below:\n` +
-      `${baseUrl}\n\n` +
+      (access.platform === 'mms' ? `\n${accessInstruction(access)}\n\n` : `\nTo view E-Attendance and course-related materials, please log in below:\n${baseUrl}\n\n`) +
       `Training Admin, Tertiary Infotech Academy`;
 
     const result = await queueClassReminderWhatsApp({
