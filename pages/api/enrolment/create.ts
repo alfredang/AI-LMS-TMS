@@ -5,6 +5,7 @@ import { HttpClient, HTTPRequestBuilder, HttpMethod } from '../../../lib/ssg/uti
 import { normalizeSsgCreateEnrolmentData, runPostSsgEnrolSync } from '@/lib/services/postSsgEnrolSync';
 import { searchEnrolment } from '../../../lib/ssg/services/enrolment-service';
 import { getTrainingPartnerIdentifiers } from '../../../lib/trainingPartnerIdentifiers';
+import { registerCompanyApplicationFromSubmission } from '../../../lib/companyApplicationFromSsg';
 import crypto from 'crypto';
 
 // SSG's create-enrolment call can be slow; the old 30s cap frequently aborted
@@ -108,6 +109,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         }
       } else {
         console.warn('[enrolment/create] Skipping local sync — missing traineeEmail, course ref, or run id');
+      }
+
+      // Employer-sponsored learners enrolled here (manual form or Excel bulk)
+      // must also appear on View Company Application. Never fails the enrolment:
+      // the 3-hourly Sync SSG Enrolments sweep catches anything missed here.
+      if (sponsorshipType.toUpperCase() === 'EMPLOYER' && enrolmentRef) {
+        try {
+          await registerCompanyApplicationFromSubmission(enrolment, enrolmentRef);
+        } catch (caErr) {
+          console.warn('[enrolment/create] Company Application record failed (non-blocking):', caErr);
+        }
       }
 
       res.status(200).json({ success: true, data: normalizedData, localEnrollmentSynced, recovered });

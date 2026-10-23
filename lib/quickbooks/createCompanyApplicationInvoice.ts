@@ -996,6 +996,21 @@ export async function createCompanyApplicationInvoice(
     );
   }
 
+  // The course line is priced from the LMS course record, but SSG works the
+  // grant out from its own fee. When the LMS fee and the QuickBooks product
+  // disagree, one of them is stale and the invoice would bill the wrong net —
+  // TGS-2026065048 went out at $700 against SSG's $720, and TGS-2026064175 is
+  // $350 in the LMS against $720. Stop before anything is created and say which
+  // two numbers disagree; a product with no price set is not a disagreement.
+  const productPrice = Number(courseItem.unitPrice || 0);
+  if (productPrice > 0 && Math.abs(productPrice - input.courseFee) > 0.005) {
+    throw new Error(
+      `Course fee mismatch for ${input.courseReferenceNumber}: the LMS course fee is $${input.courseFee.toFixed(2)} ` +
+      `but the QuickBooks product price is $${productPrice.toFixed(2)}. Check the fee on SSG, correct whichever ` +
+      `is wrong, then Generate Invoice again.`
+    );
+  }
+
   const family: FundingFamily = detectFundingFamily(
     courseItem.description,
     courseItem.name,

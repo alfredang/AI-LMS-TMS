@@ -802,6 +802,35 @@ export async function qboFindItemBySku(appOverride: string | undefined, sku: str
   return pickFirstQboItem(data, sku);
 }
 
+/**
+ * Set a product/service's sales price (UnitPrice). Sparse update, so nothing
+ * else on the item changes. Reads the current SyncToken first.
+ */
+export async function qboUpdateItemUnitPrice(
+  appOverride: string | undefined,
+  itemId: string,
+  unitPrice: number
+): Promise<void> {
+  const safe = String(itemId || '').replace(/'/g, "''").trim();
+  if (!safe) throw new Error('QuickBooks item id is required');
+  const data = await qboQuery(appOverride, `SELECT * FROM Item WHERE Id = '${safe}' MAXRESULTS 1`);
+  const raw = data?.QueryResponse?.Item;
+  const item = Array.isArray(raw) ? raw[0] : raw;
+  if (!item?.Id || item.SyncToken == null) throw new Error(`QuickBooks item ${itemId} not found`);
+
+  const creds = await getQBOCredentials(appOverride);
+  if (!creds) throw new Error('QuickBooks credentials not configured');
+  const appKey = `${creds.selectedApp}:${creds.realmId}`;
+  const token = await getAccessToken(creds, appKey);
+  const url = `${baseCompanyUrl(creds.realmId)}/item?minorversion=${MINOR_VERSION}`;
+  await qboFetchJson({
+    token,
+    url,
+    method: 'POST',
+    body: { Id: String(item.Id), SyncToken: String(item.SyncToken), sparse: true, UnitPrice: unitPrice },
+  });
+}
+
 export async function qboFindItemByName(
   appOverride: string | undefined,
   itemName: string

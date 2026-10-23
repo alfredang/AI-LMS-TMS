@@ -6,6 +6,7 @@ import { detectIdType } from '@/lib/utils/id-type';
 import { useLms } from '@contexts/LmsContext';
 import { AdminPage } from '@app-types';
 import { ssgFetch } from '@/lib/ssgAppState';
+import { useCourseFeeCheck } from './CourseFeeCheckPopup';
 
 // Enums based on the Python constants
 enum IdTypeSummary {
@@ -169,6 +170,7 @@ const buildInitialFormData = (uen?: string): EnrolmentFormData => ({
 });
 
 const EnrollLearners: React.FC = () => {
+  const { confirmCourseFees, courseFeePopup } = useCourseFeeCheck('Enrol anyway');
   const { trainingProviderProfile, setAdminPage } = useLms();
   const [formData, setFormData] = useState<EnrolmentFormData>(
     buildInitialFormData(trainingProviderProfile?.uen)
@@ -1126,6 +1128,11 @@ const EnrollLearners: React.FC = () => {
   // (employer_uen, course_run_id) into a single consolidated invoice.
   const submitCaBatch = async (billingMode: CaBillingMode = 'auto') => {
     if (caBatch.length === 0) return;
+    if (!(await confirmCourseFees(caBatch.map(b => ({
+      courseRunId: String((b.row as any)['Course Run ID'] ?? formData.courseRunId ?? '').trim(),
+      courseReferenceNumber: String((b.row as any)['Course Reference Number'] ?? formData.courseReferenceNumber ?? '').trim(),
+      courseTitle: String((b.row as any)['Course Title*'] ?? '').trim(),
+    }))))) return;
     setIsEnrolBatch(true);
     setErrors([]);
     setWarnings([]);
@@ -1211,6 +1218,13 @@ const EnrollLearners: React.FC = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
+      // The Company Application pipeline invoices straight after enrolling, so
+      // warn about a blank or contradicting course fee before going further.
+      if (!(await confirmCourseFees([{
+        courseRunId: formData.courseRunId,
+        courseReferenceNumber: formData.courseReferenceNumber,
+        courseTitle,
+      }]))) return;
       // Does this employer already have an invoice for this class? If so that
       // question comes first — it decides whether a second invoice is even the
       // right outcome, which the "are you enrolling only 1?" popup below
@@ -1586,6 +1600,7 @@ const EnrollLearners: React.FC = () => {
 
   return (
     <div className="bg-white rounded-lg shadow-md dark:bg-gray-800 dark:border-gray-700">
+      {courseFeePopup}
       <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-6 pt-4 dark:text-white">Enroll Learners</h1>
 
