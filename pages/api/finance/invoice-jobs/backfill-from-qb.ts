@@ -3,6 +3,12 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '@/lib/db';
 import { ensureInvoiceJobsTable } from '@/lib/services/invoiceJobs';
 import { callQbProxy } from '@/lib/quickbooks/qbProxyClient';
+import {
+  MANUAL_QB_LINK_BATCH,
+  matchManualInvoices,
+  parseManualInvoice,
+  type ParsedManualInvoice,
+} from '@/lib/services/manualInvoiceMatch';
 
 type QbInvoice = { id: string; docNumber: string | null; privateNote?: string | null };
 
@@ -37,6 +43,128 @@ async function qbFetchInvoicePage(app: string, startPosition: number): Promise<Q
     docNumber: r.DocNumber ? String(r.DocNumber) : null,
     privateNote: r.PrivateNote ? String(r.PrivateNote) : null,
   }));
+}
+
+/** Normalized course run start date as YYYY-MM-DD text (same as pages/api/finance/all-course-runs.ts). */
+const RUN_START_NORM_SQL = `(
+  CASE
+    WHEN (se.raw_data->'course'->'run'->>'startDate') ~ '^[0-9]{8}$' THEN
+      substr((se.raw_data->'course'->'run'->>'startDate'), 1, 4) || '-' ||
+      substr((se.raw_data->'course'->'run'->>'startDate'), 5, 2) || '-' ||
+      substr((se.raw_data->'course'->'run'->>'startDate'), 7, 2)
+    WHEN (se.raw_data->'course'->'run'->>'startDate') ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$' THEN
+      substr((se.raw_data->'course'->'run'->>'startDate'), 7, 4) || '-' ||
+      substr((se.raw_data->'course'->'run'->>'startDate'), 4, 2) || '-' ||
+      substr((se.raw_data->'course'->'run'->>'startDate'), 1, 2)
+    ELSE NULLIF(trim(se.raw_data->'course'->'run'->>'startDate'), '')
+  END
+)`;
+
+const MANUAL_SCAN_DAYS = 270;
+const MANUAL_THROTTLE_MS = 30 * 60_000;
+const gManual = globalThis as unknown as { __manualQbLinkAt?: number; __manualQbLinkRunning?: boolean };
+
+/**
+ * Link hand-made TC invoices (running numbers, no PrivateNote) to their enrolment when the
+ * course run, course code, learner name and NRIC tail on the invoice all agree with exactly
+ * one enrolment that has no invoice yet. See lib/services/manualInvoiceMatch.ts.
+ * Scans the last MANUAL_SCAN_DAYS of invoices, at most once per 30 minutes per process.
+ */
+async function linkManualQbInvoicesThrottled(): Promise<number> {
+  if (gManual.__manualQbLinkRunning) return 0;
+  if (gManual.__manualQbLinkAt && Date.now() - gManual.__manualQbLinkAt < MANUAL_THROTTLE_MS) return 0;
+  gManual.__manualQbLinkRunning = true;
+  try {
+    const since = new Date(Date.now() - MANUAL_SCAN_DAYS * 864e5).toISOString().slice(0, 10);
+    const raw: any[] = [];
+    for (let start = 1; ; start += 1000) {
+      const rows = await qbQuery('app1', `SELECT * FROM Invoice WHERE TxnDate >= '${since}' STARTPOSITION ${start} MAXRESULTS 1000`);
+      if (rows === null) return 0; // QB unreachable — try again next time
+      raw.push(...rows);
+      if (rows.length < 1000) break;
+    }
+    gManual.__manualQbLinkAt = Date.now();
+
+    const linkedRes = await pool.query(
+      `SELECT qbo_invoice_id::text AS id FROM public.invoice_jobs WHERE qbo_invoice_id IS NOT NULL
+       UNION SELECT TRIM(invoice_id::text) FROM public.da_application WHERE NULLIF(TRIM(invoice_id::text), '') IS NOT NULL
+       UNION SELECT TRIM(invoice_id::text) FROM public.company_application WHERE NULLIF(TRIM(invoice_id::text), '') IS NOT NULL`
+    );
+    const linked = new Set<string>(linkedRes.rows.map((r: { id: string }) => r.id));
+    const parsed = raw
+      .filter((inv) => !linked.has(String(inv.Id)))
+      .map(parseManualInvoice)
+      .filter((p): p is ParsedManualInvoice => !!p);
+    if (parsed.length === 0) return 0;
+
+    // Candidates by course code (covers invoices with a Course Run and older ones with only a
+    // Course Date); the matcher then requires run-or-start-date + name + NRIC tail to agree.
+    const enrRes = await pool.query(
+      `SELECT se.enrolment_id AS "enrolmentId",
+              COALESCE(NULLIF(se.course_run_id, ''), se.raw_data->'course'->'run'->>'id') AS "courseRunId",
+              ${RUN_START_NORM_SQL} AS "courseStartDate",
+              se.course_reference AS "courseReference", se.trainee_name AS "traineeName", se.trainee_nric AS "traineeNric"
+         FROM ssg_enrolments se
+        WHERE UPPER(REPLACE(TRIM(se.course_reference), '-', '')) = ANY($1::text[])
+          AND NOT EXISTS (SELECT 1 FROM public.invoice_jobs ij
+                           WHERE UPPER(TRIM(ij.enrolment_id)) = se.enrolment_id AND ij.status = 'done')`,
+      [Array.from(new Set(parsed.map((p) => p.courseCode.replace(/-/g, ''))))]
+    );
+    const grnRes = await pool.query(
+      `SELECT UPPER(grant_id) AS grn, UPPER(enrollment_id) AS enr FROM public.ssg_grants
+        WHERE UPPER(grant_id) = ANY($1::text[]) AND enrollment_id IS NOT NULL`,
+      [Array.from(new Set(parsed.flatMap((p) => p.grnRefs)))]
+    );
+    const grantOwner = new Map<string, string>(grnRes.rows.map((r: { grn: string; enr: string }) => [r.grn, r.enr]));
+
+    let linkedCount = 0;
+    for (const m of matchManualInvoices(parsed, enrRes.rows, grantOwner)) {
+      if (m.kind !== 'match') continue;
+      const inv = m.invoice;
+      try {
+        const r = await pool.query(
+          `INSERT INTO public.invoice_jobs
+             (enrolment_id, user_id, learner_email, course_code, status, batch_id,
+              qbo_invoice_id, qbo_doc_number, invoice_no, grn_doc_number)
+           SELECT $1::text,
+                  COALESCE((SELECT e.user_id FROM enrollment e WHERE UPPER(TRIM(e.enrolment_id)) = $1::text LIMIT 1), gen_random_uuid()),
+                  COALESCE((SELECT u.email FROM enrollment e JOIN app_user u ON u.id = e.user_id
+                             WHERE UPPER(TRIM(e.enrolment_id)) = $1::text LIMIT 1), ''),
+                  $2::text, 'done', $3::text, $4::varchar, $5::varchar,
+                  -- QB DocNumbers are not unique but invoice_jobs.invoice_no is: claim it only if free
+                  -- (the page falls back to qbo_doc_number for display).
+                  CASE WHEN EXISTS (SELECT 1 FROM public.invoice_jobs o WHERE o.invoice_no = $5::varchar)
+                       THEN NULL ELSE $5::varchar END,
+                  $6::text
+           ON CONFLICT (enrolment_id) DO UPDATE SET
+             status = 'done', batch_id = EXCLUDED.batch_id,
+             qbo_invoice_id = EXCLUDED.qbo_invoice_id, qbo_doc_number = EXCLUDED.qbo_doc_number,
+             invoice_no = EXCLUDED.invoice_no, grn_doc_number = EXCLUDED.grn_doc_number,
+             last_error = NULL, updated_at = now()
+           WHERE public.invoice_jobs.status <> 'done'`,
+          [m.enrolmentId, inv.courseCode, MANUAL_QB_LINK_BATCH, inv.qboInvoiceId, inv.docNumber, inv.grnRefs[0] ?? null]
+        );
+        linkedCount += r.rowCount ?? 0;
+        // Direct Application enrolments: also record the hand-made TC as the DA's main invoice when
+        // none is recorded yet — the SFC payment sync and SFC-CA invoice generation read it from there.
+        if ((r.rowCount ?? 0) > 0) {
+          await pool.query(
+            `UPDATE public.da_application SET invoice_id = $2::varchar
+              WHERE UPPER(TRIM(enrolment_id)) = $1::text
+                AND NULLIF(TRIM(COALESCE(invoice_id::text, '')), '') IS NULL
+                AND LOWER(COALESCE(application_status, '')) NOT IN ('cancelled', 'rejected', 'failed')`,
+            [m.enrolmentId, inv.qboInvoiceId]
+          );
+        }
+      } catch (e) {
+        console.error('[backfill-from-qb] pass4 link error:', m.enrolmentId, e instanceof Error ? e.message : e);
+      }
+    }
+    if (linkedCount > 0) console.log(`[backfill-from-qb] pass4 linked ${linkedCount} hand-made QB invoice(s)`);
+    return linkedCount;
+  } finally {
+    gManual.__manualQbLinkRunning = false;
+  }
 }
 
 /** The enrolment an invoice belongs to, from the processor's "SSG enrolment: ENR-…" note. */
@@ -217,6 +345,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         const owners = noteOwner
           ? (alreadyLinked.has(inv.id) ? [] : [noteOwner])
           : [...(appOwnersByInvoiceId.get(inv.id) ?? [])];
+        // invoice_no is UNIQUE: only a per-learner invoice may claim it. Group invoices keep
+        // it NULL (the page shows qbo_doc_number instead).
+        const ownInvoiceNo = noteOwner ? docNumber : null;
 
         for (const owner of owners) {
           const enrRow = missingById.get(owner);
@@ -229,27 +360,27 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
               await pool.query(
                 `INSERT INTO public.invoice_jobs
                    (enrolment_id, user_id, learner_email, course_code, status, qbo_invoice_id, qbo_doc_number, invoice_no)
-                 VALUES ($1::text, $2::uuid, $3::text, $4::text, 'done', $5::varchar, $6::varchar, $6::varchar)
+                 VALUES ($1::text, $2::uuid, $3::text, $4::text, 'done', $5::varchar, $6::varchar, $7::varchar)
                  ON CONFLICT (enrolment_id) DO UPDATE SET
                    qbo_invoice_id  = EXCLUDED.qbo_invoice_id,
                    qbo_doc_number  = EXCLUDED.qbo_doc_number,
                    invoice_no      = COALESCE(public.invoice_jobs.invoice_no, EXCLUDED.invoice_no),
                    status          = 'done',
                    updated_at      = now()`,
-                [enrolmentId, userId, enrRow.learner_email || '', enrRow.course_code || '', inv.id, docNumber]
+                [enrolmentId, userId, enrRow.learner_email || '', enrRow.course_code || '', inv.id, docNumber, ownInvoiceNo]
               );
             } else {
               await pool.query(
                 `INSERT INTO public.invoice_jobs
                    (enrolment_id, user_id, learner_email, course_code, status, qbo_invoice_id, qbo_doc_number, invoice_no)
-                 VALUES ($1::text, gen_random_uuid(), '', '', 'done', $2::varchar, $3::varchar, $3::varchar)
+                 VALUES ($1::text, gen_random_uuid(), '', '', 'done', $2::varchar, $3::varchar, $4::varchar)
                  ON CONFLICT (enrolment_id) DO UPDATE SET
                    qbo_invoice_id  = EXCLUDED.qbo_invoice_id,
                    qbo_doc_number  = EXCLUDED.qbo_doc_number,
                    invoice_no      = COALESCE(public.invoice_jobs.invoice_no, EXCLUDED.invoice_no),
                    status          = 'done',
                    updated_at      = now()`,
-                [enrolmentId, inv.id, docNumber]
+                [enrolmentId, inv.id, docNumber, ownInvoiceNo]
               );
             }
             alreadyLinked.add(inv.id);
@@ -262,11 +393,19 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       }
     }
 
-    const total = localFixed + pass2Resolved + pass3Resolved;
+    // ── Pass 4: TC invoices created by hand in QuickBooks ────────────────────
+    let pass4Resolved = 0;
+    try {
+      pass4Resolved = await linkManualQbInvoicesThrottled();
+    } catch (e) {
+      console.error('[backfill-from-qb] pass4 (manual invoices) failed:', e instanceof Error ? e.message : e);
+    }
+
+    const total = localFixed + pass2Resolved + pass3Resolved + pass4Resolved;
 
     return res.status(200).json({
       success: true,
-      data: { localFixed, pass2Resolved, pass3Resolved, total },
+      data: { localFixed, pass2Resolved, pass3Resolved, pass4Resolved, total },
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Internal server error';
