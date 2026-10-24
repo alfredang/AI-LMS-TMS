@@ -126,6 +126,13 @@ function scheduleCleanup(job: Job) {
   job.cleanupTimer = setTimeout(() => {
     const j = JOBS.get(job.id);
     if (!j) return;
+    // Never expire a job that is still running: a large file can take longer than the TTL, and
+    // deleting it mid-run made the page show "Job not found or expired" and re-run the upload.
+    // runJob() re-schedules this cleanup when it finishes, so the TTL counts from then.
+    if (j.status === 'queued' || j.status === 'running') {
+      scheduleCleanup(j);
+      return;
+    }
     try {
       if (j.tempFilePath) fs.unlink(j.tempFilePath, () => {});
     } catch {
