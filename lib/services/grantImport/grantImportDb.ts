@@ -363,7 +363,9 @@ export async function getGrantImportBatchPreview(batchId: string): Promise<{
         payment_date_parsed::text AS payment_date_parsed,
         bank_reference_id,
         funding_component,
-        raw_row_json,
+        -- raw_row_json (the whole original Excel row) is deliberately NOT selected: nothing reading
+        -- the preview uses it, and on a ~6,000-row file it added ~4 MB to an ~11 MB response —
+        -- large enough that the preview request failed with "Bad Gateway" after a successful upload.
         validation_status::text AS validation_status,
         validation_errors,
         match_status::text AS match_status,
