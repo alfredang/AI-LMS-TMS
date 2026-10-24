@@ -3,7 +3,8 @@ import { getTrainingPartnerIdentifiers } from '@/lib/trainingPartnerIdentifiers'
 import { upsertSsgEnrolmentFromLocalEnrollment } from '@/lib/services/billingSync';
 import { isEnrolmentEligibleForAutoInvoice } from '@/lib/services/invoiceEligibility';
 import { enqueueInvoiceJob } from '@/lib/services/invoiceJobs';
-import { ensureDaApplicationForEnrolment } from '@/lib/services/daApplicationFromEnrolment';
+import { addDaLearnerToCalendar } from '@/lib/google-calendar/da-calendar-sync';
+import { getLocalYMD } from '@/lib/dateHelpers';
 import { COURSE_ID_BY_ANY_CODE_SQL } from '../courseCode';
 
 export interface PostSsgEnrolSyncInput {
@@ -34,6 +35,45 @@ function nameFromEmail(email: string): string {
   return local
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/**
+ * Add a directly enrolled (NON-DA) learner to their course-run calendar events.
+ * Same past-run guard as the DA pipeline: addDaLearnerToCalendar creates a
+ * missing event, so never let it run for a run that has already started.
+ */
+async function addEnrolledLearnerToCalendar(
+  enrollmentId: string,
+  learnerEmail: string,
+  courseRunUuid: string
+): Promise<void> {
+  const runRes = await pool.query(
+    `SELECT c.title, c.course_code, cr.course_run_id, cr.start_date
+       FROM course_run cr
+       JOIN course c ON c.id = cr.course_id
+      WHERE cr.id = $1
+      LIMIT 1`,
+    [courseRunUuid]
+  );
+  const run = runRes.rows[0];
+  if (!run?.title) return;
+
+  const runYmd = getLocalYMD(run.start_date);
+  const todayYmd = getLocalYMD(new Date());
+  if (runYmd && todayYmd && runYmd < todayYmd) return;
+
+  const res = await addDaLearnerToCalendar(
+    learnerEmail,
+    courseRunUuid,
+    run.title,
+    run.start_date,
+    run.course_code,
+    run.course_run_id,
+    { requireActiveDaApplication: false }
+  );
+  if (res.addedTo > 0) {
+    await pool.query(`UPDATE enrollment SET calendar_added = true, updated_at = NOW() WHERE id = $1`, [enrollmentId]);
+  }
 }
 
 /**
@@ -262,65 +302,31 @@ export async function runPostSsgEnrolSync(input: PostSsgEnrolSyncInput): Promise
     const trimmedEnrolmentId = (enrolmentId || '').trim();
     const statusForInvoice = resolvedEnrolmentStatus;
     if (trimmedEnrolmentId && dbEnrollmentId && isEnrolmentEligibleForAutoInvoice(statusForInvoice)) {
-      // Hand the learner to the Direct Application pipeline: it is the only path
-      // that does calendar sync plus the full invoice set (main tax + Grant +
-      // SFC), and rows it owns are covered by the nightly DA sweep if anything
-      // fails. Enrolling here used to stop at a main-invoice-only queue job.
-      let handedToDaPipeline = false;
+      // A learner enrolled here is NON-DA. Only a genuine MySkillsFuture Direct
+      // Application (a real `CA-…` id, arriving via the DA upload/fetch) makes a
+      // row DA. This used to mint a synthetic `MANUAL-<enrolment id>`
+      // da_application row to borrow the DA pipeline, which tagged every
+      // manually enrolled learner DA on Finance and sent them down the wrong
+      // invoice flow (ENR-2610-115140, 2026-10-24).
       try {
-        const daRow = await ensureDaApplicationForEnrolment({
+        // Queue only — never auto-process. Invoice creation must always be an
+        // explicit admin action (tick the row + "Generate Invoice" on the
+        // Consolidated Finance page), never a side effect of enrolling.
+        await enqueueInvoiceJob({
           enrolmentId: trimmedEnrolmentId,
           userId: learnerId,
           learnerEmail: traineeEmail,
-          courseReferenceNumber,
-          courseRunId,
-          traineeName,
-          traineeNric,
-          sponsorshipType,
+          courseCode: courseReferenceNumber,
+          batchId: null,
         });
-
-        if (daRow) {
-          handedToDaPipeline = true;
-          console.log(
-            `[post-ssg-enrol] ${trimmedEnrolmentId} → DA application ${daRow.applicationId} (${daRow.created ? 'created' : 'refreshed'}); running DA pipeline`
-          );
-          // Fire-and-forget, and imported lazily: the DA pipeline makes slow SSG
-          // and QuickBooks calls, and the caller is an interactive enrol action.
-          // skipInvoicing: true — enrolling a learner must never create (or send)
-          // a QBO invoice by itself. Calendar sync and grant lookup still run;
-          // the invoice is only ever created via an explicit admin action (tick
-          // the row + "Generate Invoice" on the Consolidated Finance page).
-          void import('../autoEnrolDirectApplications')
-            .then(({ processDirectApplication }) =>
-              processDirectApplication(daRow.daApplicationId, undefined, { skipInvoicing: true })
-            )
-            .catch((e: unknown) =>
-              console.warn('[post-ssg-enrol] DA pipeline run failed (non-blocking):', e)
-            );
-        }
       } catch (e) {
-        console.warn('[post-ssg-enrol] DA application bridge failed (non-blocking):', e);
+        console.warn('[post-ssg-enrol] Failed to enqueue invoice job (non-blocking):', e);
       }
 
-      // Fallback only. Running both would cut two invoices for one learner —
-      // the DA pipeline creates its own, so the queue job is skipped whenever
-      // the bridge took ownership.
-      if (!handedToDaPipeline) {
-        try {
-          // Queue only — never auto-process. Invoice creation must always be an
-          // explicit admin action (tick the row + "Generate Invoice" on the
-          // Consolidated Finance page), never a side effect of enrolling.
-          await enqueueInvoiceJob({
-            enrolmentId: trimmedEnrolmentId,
-            userId: learnerId,
-            learnerEmail: traineeEmail,
-            courseCode: courseReferenceNumber,
-            batchId: null,
-          });
-        } catch (e) {
-          console.warn('[post-ssg-enrol] Failed to enqueue invoice job (non-blocking):', e);
-        }
-      }
+      // Calendar invite was the other thing the DA bridge provided — keep it.
+      void addEnrolledLearnerToCalendar(dbEnrollmentId, traineeEmail, courseRunUuid).catch((e: unknown) =>
+        console.warn('[post-ssg-enrol] calendar add failed (non-blocking):', e)
+      );
     }
 
     if (trimmedEnrolmentId) {

@@ -72,7 +72,10 @@ export async function addDaLearnerToCalendar(
   courseTitle: string,
   fallbackStartDate?: string | Date | null,
   fallbackCourseCode?: string,
-  fallbackRunId?: string
+  fallbackRunId?: string,
+  // false for learners enrolled directly (TPG Management → Enrol Learners):
+  // they are NON-DA and have no da_application row to gate on.
+  options?: { requireActiveDaApplication?: boolean }
 ): Promise<{ totalSessions: number; addedTo: number }> {
   const result = { totalSessions: 0, addedTo: 0 };
   if (!learnerEmail || !courseTitle) return result;
@@ -91,17 +94,19 @@ export async function addDaLearnerToCalendar(
     }
 
     // 1b. Verify the application is still active (not cancelled)
-    const activeAppRes = await pool.query(
-      `SELECT application_status FROM da_application 
-       WHERE LOWER(trainee_email) = LOWER($1) 
-         AND (course_run_id = $2 OR course_run_id = (SELECT course_run_id FROM course_run WHERE id::text = $2 LIMIT 1))
-         AND (LOWER(application_status) = 'confirm application' OR LOWER(application_status) LIKE 'confirmed%')
-       LIMIT 1`,
-      [learnerEmail, courseRunUuid]
-    );
-    if (activeAppRes.rows.length === 0) {
-      console.log(`📅 [addDaLearnerToCalendar] No active application for ${learnerEmail} in ${courseRunUuid} — skipping add`);
-      return result;
+    if (options?.requireActiveDaApplication !== false) {
+      const activeAppRes = await pool.query(
+        `SELECT application_status FROM da_application
+         WHERE LOWER(trainee_email) = LOWER($1)
+           AND (course_run_id = $2 OR course_run_id = (SELECT course_run_id FROM course_run WHERE id::text = $2 LIMIT 1))
+           AND (LOWER(application_status) = 'confirm application' OR LOWER(application_status) LIKE 'confirmed%')
+         LIMIT 1`,
+        [learnerEmail, courseRunUuid]
+      );
+      if (activeAppRes.rows.length === 0) {
+        console.log(`📅 [addDaLearnerToCalendar] No active application for ${learnerEmail} in ${courseRunUuid} — skipping add`);
+        return result;
+      }
     }
 
     const credentials = await getGoogleCredentials(pool);
