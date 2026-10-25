@@ -6,10 +6,12 @@ import pool from '../../lib/db';
 
 /**
  * GET /api/favicon.png
- * Returns the active training provider's company logo, resized to a square
- * favicon. Defaults to 32x32; pass ?size=16 for the 16x16 variant. Falls back
- * to the static /favicon.ico bytes when no logo is configured or the source
- * file can't be read.
+ * Returns the tenant's favicon, resized to a square. Defaults to 32x32; pass
+ * ?size=16 for the 16x16 variant. Source order:
+ *   1. app_config 'favicon_url' — a dedicated per-tenant favicon (URL or
+ *      /uploads path), for tenants whose company logo isn't icon-shaped
+ *   2. the active training provider's company logo
+ *   3. the static /favicon.ico bytes
  */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -20,18 +22,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const size = requested === 16 ? 16 : 32;
 
   try {
-    const result = await pool.query<{ logo_url: string | null }>(
-      `SELECT company_logo_url AS logo_url
-       FROM training_provider
-       WHERE company_logo_url IS NOT NULL AND company_logo_url <> ''
-       ORDER BY created_at ASC
-       LIMIT 1`
-    );
+    let buffer: Buffer | null = null;
 
-    const logoUrl = result.rows[0]?.logo_url;
-    if (!logoUrl) return sendFallback(res);
+    const faviconUrl = await getConfiguredFaviconUrl();
+    if (faviconUrl) buffer = await loadLogoBytes(faviconUrl);
 
-    const buffer = await loadLogoBytes(logoUrl);
+    if (!buffer) {
+      const result = await pool.query<{ logo_url: string | null }>(
+        `SELECT company_logo_url AS logo_url
+         FROM training_provider
+         WHERE company_logo_url IS NOT NULL AND company_logo_url <> ''
+         ORDER BY created_at ASC
+         LIMIT 1`
+      );
+
+      const logoUrl = result.rows[0]?.logo_url;
+      if (!logoUrl) return sendFallback(res);
+
+      buffer = await loadLogoBytes(logoUrl);
+    }
     if (!buffer) return sendFallback(res);
 
     const resized = await sharp(buffer)
@@ -45,6 +54,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (err) {
     console.warn('[favicon] failed to render dynamic favicon:', err);
     return sendFallback(res);
+  }
+}
+
+async function getConfiguredFaviconUrl(): Promise<string | null> {
+  try {
+    const result = await pool.query<{ value: string }>(
+      `SELECT value FROM app_config WHERE key = 'favicon_url'`
+    );
+    return result.rows[0]?.value?.trim() || null;
+  } catch {
+    // Older tenant schemas may lack app_config — fall through to the logo.
+    return null;
   }
 }
 
