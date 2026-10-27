@@ -29,6 +29,7 @@ const RATING_FIELD_MAP: Record<string, string> = {
 export interface PostReviewInput {
   responseId: string;
   courseRunId?: string | null;
+  courseCode?: string | null;
   learnerName?: string | null;
   answers: Record<string, unknown>;
 }
@@ -77,7 +78,7 @@ export async function postFeedbackReview(input: PostReviewInput): Promise<PostRe
   // Absent config means the integration is simply off (e.g. a tenant that does
   // not publish reviews). That is a skip, not an error.
   if (!baseUrl || !apiKey) return { posted: false, skipped: 'not_configured' };
-  if (!input.courseRunId) return { posted: false, skipped: 'no_course_run' };
+  if (!input.courseRunId && !input.courseCode) return { posted: false, skipped: 'no_course_run' };
 
   const ratings = extractRatings(input.answers);
   if (Object.keys(ratings).length === 0) return { posted: false, skipped: 'no_ratings' };
@@ -89,7 +90,7 @@ export async function postFeedbackReview(input: PostReviewInput): Promise<PostRe
   // A review with no comment is thin but still carries the star ratings, which
   // are the part that moves the course's public score.
   const body = {
-    sku: await resolveSku(input.courseRunId),
+    sku: input.courseRunId ? await resolveSku(input.courseRunId) : input.courseCode?.trim() || null,
     nickname,
     detail: detail || 'Attended the course.',
     ratings,

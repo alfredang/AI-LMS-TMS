@@ -16,7 +16,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   const params: any[] = [];
   if (typeof course_run_id === 'string') {
     params.push(course_run_id);
-    where.push(`r.course_run_id = $${params.length}`);
+    where.push(`(r.course_run_id::text = $${params.length} OR r.source_run_key = $${params.length})`);
   }
   if (typeof from === 'string') {
     params.push(from);
@@ -29,10 +29,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   params.push(parsedLimit);
 
   const sql = `
-    SELECT r.id, r.template_id, r.course_run_id, r.user_id,
+    SELECT r.id, r.template_id, r.course_run_id, r.source_run_key, r.user_id,
            r.learner_email, r.learner_name, r.answers, r.submitted_at,
-           cr.course_run_id AS course_run_code, cr.start_date, cr.end_date,
-           c.title AS course_title, c.course_code,
+           COALESCE(cr.course_run_id, s.target_result->>'class_id', r.source_run_key) AS course_run_code,
+           COALESCE(cr.start_date::text, s.snapshot->'sessions'->0->>'date') AS start_date,
+           COALESCE(cr.end_date::text, s.snapshot->'sessions'->-1->>'date') AS end_date,
+           COALESCE(c.title, s.snapshot->>'course_title') AS course_title,
+           COALESCE(c.course_code, s.course_code) AS course_code,
            (
              SELECT string_agg(DISTINCT crt.trainer_name, ', ' ORDER BY crt.trainer_name)
              FROM course_run_trainer crt
@@ -41,6 +44,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     FROM feedback_form_response r
     LEFT JOIN course_run cr ON cr.id = r.course_run_id
     LEFT JOIN course c ON c.id = cr.course_id
+    LEFT JOIN mms_sync_source s ON s.source_run_key = r.source_run_key
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     ORDER BY r.submitted_at DESC
     LIMIT $${params.length}
