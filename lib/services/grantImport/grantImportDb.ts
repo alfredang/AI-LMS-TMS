@@ -659,7 +659,12 @@ export async function getTcInvoiceDocNumbersByEnrolment(enrolmentIds: string[]):
       WHERE enrolment_id = ANY($1::text[]) AND COALESCE(TRIM(invoice_doc_number), '') <> ''
      UNION ALL
      SELECT enrolment_id, invoice_doc_number FROM public.company_application
-      WHERE enrolment_id = ANY($1::text[]) AND COALESCE(TRIM(invoice_doc_number), '') <> ''`,
+      WHERE enrolment_id = ANY($1::text[]) AND COALESCE(TRIM(invoice_doc_number), '') <> ''
+     UNION ALL
+     -- Last resort: the LMS invoice link (individual learners, and hand-made TCs linked to an
+     -- enrolment) — the same TC Consolidated Finance shows. Display only.
+     SELECT enrolment_id, qbo_doc_number FROM public.invoice_jobs
+      WHERE enrolment_id = ANY($1::text[]) AND status = 'done' AND qbo_doc_number ~* '^TC'`,
     [enrolmentIds]
   );
   for (const row of r.rows) {
