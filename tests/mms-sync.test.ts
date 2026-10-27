@@ -19,6 +19,11 @@ test('missing roster/session evidence cannot pass validation', () => {
     invalid.sessions[0].date = '2026-02-30';
     assert.throws(() => validateSnapshot(invalid), /date/);
 });
+test('course title is required for target catalogue verification', () => {
+    const data = fixture();
+    data.course_title = '   ';
+    assert.throws(() => validateSnapshot(data), /course title/);
+});
 test('same email for two distinct people is an exception rather than a duplicate account', () => {
     assert.throws(() => normalizePeople([{ source_id: 'a', email: 'one@example.com', name: 'A' }, { source_id: 'b', email: 'ONE@example.com', name: 'B' }]), /share/);
 });
