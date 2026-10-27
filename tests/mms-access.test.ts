@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { accessContext, accessMessage, assertRunApproval, firstSessionAt, participantUrls, recipients, withApproval } from '../lib/mmsSync/accessPolicy';
 import { snapshotHash, type RunSnapshot } from '../lib/mmsSync/contract';
+import { renderMmsAccessEmail } from '../lib/mmsSync/accessEmailTemplate';
 
 const fixture = (): RunSnapshot => ({ schema_version: 1, source_provider_id: 'test', source_run_key: 'calendar:pilot', website_id: 1, course_code: 'C916', course_title: 'Pilot <class>', calendar_id: 'test@example.com', event_occurrences: ['event'], revision: 1, request_id: 'test', snapshot_hash: '', snapshot_at: '2026-10-21T00:00:00Z', roster_complete: true, cancelled: false,
     sessions: [{ key: 's1234567', source_id: 'session', date: '2050-10-23', start_time: '09:30', end_time: '17:30', venue: 'Room', virtual_link: 'https://meet.example.com/pilot', mode: 2 }],
@@ -65,4 +66,31 @@ test('access email contains class/login/session/help and no old credentials or f
         assert.match(message.html, /&lt;script&gt;/); assert.doesNotMatch(message.html, /<script>/);
     }
     assert.throws(() => accessMessage({ platform: 'mms', state: 'pending' }, { name: 'A', role: 'learner' }, 'support'), /not ready/);
+});
+test('access email supports a safe editable trainer/learner template', () => {
+    const context = accessContext('C916', source(), false, 'https://mms.example.com');
+    const template = {
+        subject: '{ROLE} access for {COURSE_CODE}\r\nignored',
+        body: 'Hello {RECIPIENT_NAME}. Please {ACTION} {CLASS_ID}. {UNKNOWN}\n{MMS_CLASS_URL}{FEEDBACK_LINE}',
+    };
+    const trainer = accessMessage(context, { name: '<Trainer>', role: 'trainer' }, 'help@example.com', 'Class access', template);
+    const learner = accessMessage(context, { name: 'Learner', role: 'learner' }, 'help@example.com', 'Class access', template);
+    assert.equal(trainer.subject, 'Trainer access for C916 ignored');
+    assert.match(trainer.text, /Please conduct C000001/);
+    assert.match(learner.text, /Please attend C000001/);
+    assert.match(trainer.text, /\{UNKNOWN\}/);
+    assert.match(trainer.text, /Class feedback: https:\/\/tms\.example\.com/);
+    assert.match(trainer.html, /&lt;Trainer&gt;/);
+    assert.doesNotMatch(trainer.html, /<Trainer>/);
+    assert.match(trainer.html, /<br>/);
+    assert.doesNotMatch(trainer.html, /white-space:pre-wrap/);
+});
+test('template renderer replaces in one pass and does not interpret placeholders inside values', () => {
+    const values = {
+        PURPOSE: 'Class access', RECIPIENT_NAME: '{ROLE}', ACTION: 'attend', ROLE: 'Learner', COURSE_TITLE: 'Course',
+        COURSE_CODE: 'C1', CLASS_ID: 'C000001', SESSIONS: 'Session', MMS_CLASS_URL: 'https://mms/class',
+        MMS_LOGIN_URL: 'https://mms/login', FEEDBACK_URL: '', FEEDBACK_LINE: '', SUPPORT: 'Support',
+    };
+    const rendered = renderMmsAccessEmail({ subject: '{PURPOSE}', body: '{RECIPIENT_NAME}' }, values);
+    assert.equal(rendered.text, '{ROLE}');
 });
