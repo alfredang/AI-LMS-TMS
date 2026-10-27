@@ -104,6 +104,10 @@ export function snapshotHash(snapshot: RunSnapshot): string {
 }
 export function validateSnapshot(snapshot: RunSnapshot): RunSnapshot {
     snapshot.course_code = assertNonFunded(snapshot.course_code);
+    const courseTitle = typeof snapshot.course_title === 'string' ? snapshot.course_title.trim() : '';
+    if (!courseTitle || courseTitle.length > 255)
+        throw new MmsSyncError('A valid course title is required for MMS catalogue verification.');
+    snapshot.course_title = courseTitle;
     snapshot.event_occurrences = [...new Set(snapshot.event_occurrences)].sort();
     if (!snapshot.source_run_key || !snapshot.source_provider_id || !snapshot.calendar_id)
         throw new MmsSyncError('Stable source identities are required.');
