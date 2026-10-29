@@ -15,6 +15,7 @@ interface SchedulerTask {
     api_endpoint: string;
     email_template: string | null;
     days_in_advance: number | null;
+    alert_recipients: string | null;
     last_run_at: string | null;
     last_status: string | null;
     created_at: string;
@@ -26,6 +27,9 @@ const EMAIL_TEMPLATE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_
 
 // Tasks that support days-in-advance setting
 const DAYS_IN_ADVANCE_TASKS = ['auto_send_course_confirmation', 'auto_send_class_confirmation', 'sync_google_calendar', 'auto_send_trainer_invitations'];
+
+// Tasks that email an alert to a configurable list (blank = the company email)
+const ALERT_RECIPIENT_TASKS = ['detect_duplicate_course_runs'];
 
 const EMAIL_TEMPLATES: { value: string; label: string }[] = [
     { value: 'final_course_confirmation', label: 'Final Class Confirm Email' },
@@ -160,6 +164,60 @@ const StatusBadge: React.FC<{ status: string | null }> = ({ status }) => {
 };
 
 // ── Task ID → Log Page mapping ────────────────────────────────────────────────
+
+const AlertRecipientsField: React.FC<{
+    task: SchedulerTask;
+    onSaved: (task: SchedulerTask) => void;
+    onMessage: (msg: { type: 'success' | 'error'; text: string }) => void;
+}> = ({ task, onSaved, onMessage }) => {
+    const [value, setValue] = useState(task.alert_recipients ?? '');
+    const [saving, setSaving] = useState(false);
+    useEffect(() => { setValue(task.alert_recipients ?? ''); }, [task.alert_recipients]);
+    const dirty = value.trim() !== (task.alert_recipients ?? '');
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            const res = await fetch('/api/admin/scheduler', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ taskId: task.id, alert_recipients: value }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                onSaved(data.task);
+                onMessage({ type: 'success', text: data.task.alert_recipients
+                    ? `Alerts will be sent to ${data.task.alert_recipients}`
+                    : 'Alert recipients cleared - alerts go to the company email' });
+            } else {
+                onMessage({ type: 'error', text: data.error || 'Failed to save alert recipients' });
+            }
+        } catch {
+            onMessage({ type: 'error', text: 'Failed to save alert recipients' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="mb-4">
+            <label className="font-medium text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Alert Recipients</label>
+            <div className="flex flex-wrap items-center gap-2">
+                <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && dirty && !saving) save(); }}
+                    placeholder="Blank = company email. Separate several with commas."
+                    className="w-full sm:w-96 px-3 py-2 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <Button onClick={save} disabled={!dirty || saving} size="sm">
+                    {saving ? 'Saving...' : 'Save'}
+                </Button>
+            </div>
+        </div>
+    );
+};
 
 const TASK_LOG_PAGE: Record<string, AdminPage> = {
     auto_create_learners:             AdminPage.AutomationLogs,
@@ -686,6 +744,14 @@ export const SchedulerView: React.FC = () => {
                                         </div>
                                     );
                                 })()}
+
+                                {ALERT_RECIPIENT_TASKS.includes(task.id) && (
+                                    <AlertRecipientsField
+                                        task={task}
+                                        onSaved={(t) => setTasks(prev => prev.map(x => x.id === t.id ? t : x))}
+                                        onMessage={setActionMessage}
+                                    />
+                                )}
 
                                 <div className={`grid grid-cols-1 ${editingTaskId === task.id ? 'sm:grid-cols-1' : 'sm:grid-cols-3'} gap-4 text-sm`}>
                                     {/* Schedule */}

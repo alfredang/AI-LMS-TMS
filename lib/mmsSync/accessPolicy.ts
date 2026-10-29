@@ -1,5 +1,11 @@
 import { assertNonFunded, MmsSyncError, normalizeCode, type RunSnapshot, type SyncPerson } from './contract';
 import { getMmsRuntimeConfig } from './runtimeConfig';
+import {
+    DEFAULT_MMS_ACCESS_EMAIL_BODY,
+    DEFAULT_MMS_ACCESS_EMAIL_SUBJECT,
+    renderMmsAccessEmail,
+    type MmsAccessEmailTemplate,
+} from './accessEmailTemplate';
 
 export interface RunApproval {
     approved_at?: string | Date | null;
@@ -81,15 +87,35 @@ export function recipients(snapshot: RunSnapshot): (SyncPerson & { role: 'traine
         ...snapshot.learners.filter(p => p.active !== false).map(p => ({ ...p, role: 'learner' as const })),
     ];
 }
-const escapeHtml = (text: unknown) => String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-export function accessMessage(context: AccessContext, person: { name: string; role: 'trainer' | 'learner' }, support: string, purpose = 'Class access') {
+export function accessMessage(
+    context: AccessContext,
+    person: { name: string; role: 'trainer' | 'learner' },
+    support: string,
+    purpose = 'Class access',
+    template: MmsAccessEmailTemplate = {
+        subject: DEFAULT_MMS_ACCESS_EMAIL_SUBJECT,
+        body: DEFAULT_MMS_ACCESS_EMAIL_BODY,
+    },
+) {
     if (context.platform !== 'mms' || context.state !== 'ready' || !context.snapshot)
         throw new MmsSyncError(context.reason || 'MMS access is not ready.');
     const snapshot = context.snapshot;
     const sessions = snapshot.sessions.map(s => `${s.date}, ${s.start_time}–${s.end_time} SGT${s.venue ? ` — ${s.venue}` : ''}${s.virtual_link ? ` — ${s.virtual_link}` : ''}`).join('\n');
-    const subject = `${purpose}: ${snapshot.course_title.replace(/[\r\n]/g, ' ')} — MMS ${context.class_id}`;
-    const text = `Dear ${person.name},\n\n${person.role === 'trainer' ? 'Please conduct' : 'Please attend'} this class using MMS.\n\n${snapshot.course_title} (${snapshot.course_code})\nClass: ${context.class_id}\n${sessions}\n\nOpen MMS class: ${context.class_url}\nMMS login: ${context.login_url}\n\nUse the email registered for this class. Request an email OTP or use your existing MMS password. Select ${person.role === 'trainer' ? 'Trainer' : 'Learner'} if asked to choose a role. Your TMS password is not automatically your MMS password. Course materials and attendance are available in your MMS class.${snapshot.feedback_url ? `\nClass feedback: ${snapshot.feedback_url}` : ''}\n\nSupport: ${support}`;
-    return { subject, text, html: `<div style="font-family:Arial,sans-serif;white-space:pre-wrap">${escapeHtml(text)}</div>` };
+    return renderMmsAccessEmail(template, {
+        PURPOSE: purpose,
+        RECIPIENT_NAME: person.name,
+        ACTION: person.role === 'trainer' ? 'conduct' : 'attend',
+        ROLE: person.role === 'trainer' ? 'Trainer' : 'Learner',
+        COURSE_TITLE: snapshot.course_title,
+        COURSE_CODE: snapshot.course_code,
+        CLASS_ID: String(context.class_id || ''),
+        SESSIONS: sessions,
+        MMS_CLASS_URL: String(context.class_url || ''),
+        MMS_LOGIN_URL: String(context.login_url || ''),
+        FEEDBACK_URL: snapshot.feedback_url || '',
+        FEEDBACK_LINE: snapshot.feedback_url ? `\nClass feedback: ${snapshot.feedback_url}` : '',
+        SUPPORT: support,
+    });
 }
 export function accessInstruction(context: AccessContext): string {
     return context.state === 'ready' ? `Class delivery: MMS\nOpen MMS class: ${context.class_url}\nMMS login: ${context.login_url}` : 'Class delivery: MMS. Class-access instructions will follow after your assignment and MMS access are confirmed.';

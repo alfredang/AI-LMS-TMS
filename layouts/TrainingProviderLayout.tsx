@@ -26,6 +26,7 @@ import PasswordResetEmailTemplateView from '../components/training-provider/Pass
 import WelcomeSigninEmailTemplateView from '../components/training-provider/WelcomeSigninEmailTemplateView';
 import BriefingOnAssessmentTemplateView from '../components/training-provider/BriefingOnAssessmentTemplateView';
 import TrainerInvitationEmailTemplateView from '../components/training-provider/TrainerInvitationEmailTemplateView';
+import MmsAccessEmailTemplateView from '../components/training-provider/MmsAccessEmailTemplateView';
 import FinalCourseConfirmationEmailTemplateView from '../components/training-provider/FinalCourseConfirmationEmailTemplateView';
 import CourseConfirmationEmailTemplateView from '../components/training-provider/CourseConfirmationEmailTemplateView';
 import CoursewareAttendanceEmailTemplateView from '../components/training-provider/CoursewareAttendanceEmailTemplateView';
@@ -108,6 +109,8 @@ const TrainingProviderLayout: React.FC = () => {
         return <BriefingOnAssessmentTemplateView />;
       case View.TrainerInvitationEmailTemplate:
         return <TrainerInvitationEmailTemplateView />;
+      case View.MmsAccessEmailTemplate:
+        return <MmsAccessEmailTemplateView />;
       case View.TrainerResponseEmailTemplates:
         return <TrainerResponseEmailTemplatesView />;
       case View.WorkflowGuides:

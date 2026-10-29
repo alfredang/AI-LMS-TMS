@@ -6,6 +6,17 @@ import { getTrainingPartnerIdentifiers } from '@lib/trainingPartnerIdentifiers';
 import { renderInvitationHtmlEmail, renderInvitationTemplate, parseCcList } from '@lib/trainerInvitations';
 import { passwordSectionHtml } from '@lib/learner/welcomeSigninEmailTemplate';
 import { loginUrlFrom } from '@lib/learner/selfEnrolment';
+import {
+  DEFAULT_MMS_ACCESS_EMAIL_BODY,
+  DEFAULT_MMS_ACCESS_EMAIL_SUBJECT,
+  renderMmsAccessEmail,
+  type MmsAccessEmailValues,
+} from '@lib/mmsSync/accessEmailTemplate';
+
+function encodeMimeHeaderWord(value: string): string {
+  if (/^[\x00-\x7F]*$/.test(value)) return value;
+  return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
+}
 
 /**
  * POST /api/training-provider/send-test-email
@@ -15,7 +26,8 @@ import { loginUrlFrom } from '@lib/learner/selfEnrolment';
  *
  * templateType: 'certificate' | 'course-confirmation' | 'final-course-confirmation' |
  *               'otp' | 'feedback' | 'password-reset' | 'trainer-invitation' |
- *               'courseware-attendance' | 'proforma-invoice' | 'welcome-signin'
+ *               'courseware-attendance' | 'proforma-invoice' | 'welcome-signin' |
+ *               'mms-access-learner' | 'mms-access-trainer'
  */
 
 // Sample data per template type for variable replacement
@@ -61,6 +73,36 @@ const SAMPLE_DATA: Record<string, Record<string, string>> = {
     '{COURSE_HOURS}': '32h',
     '{CONFIRM_BY}': '04/04/2026, 23:59 PM',
     '{TPG_TRAINER}': 'Dr Alvin Ang Wei Hern',
+  },
+  'mms-access-learner': {
+    '{PURPOSE}': 'Class access',
+    '{RECIPIENT_NAME}': 'Alex Learner',
+    '{ACTION}': 'attend',
+    '{ROLE}': 'Learner',
+    '{COURSE_TITLE}': 'Statistical Process Control (SPC) Training',
+    '{COURSE_CODE}': 'C769',
+    '{CLASS_ID}': 'C004129',
+    '{SESSIONS}': '2026-11-09, 09:30–17:30 SGT — Virtual Classroom — https://meet.google.com/example',
+    '{MMS_CLASS_URL}': 'https://www.tertiarycourses.com.sg/lmslogin/index/class/?run_id=5206',
+    '{MMS_LOGIN_URL}': 'https://www.tertiarycourses.com.sg/lmslogin/',
+    '{FEEDBACK_URL}': 'https://lms-tms.tertiaryinfotech.com/feedback/example',
+    '{FEEDBACK_LINE}': '\nClass feedback: https://lms-tms.tertiaryinfotech.com/feedback/example',
+    '{SUPPORT}': 'support@tertiaryinfotech.com',
+  },
+  'mms-access-trainer': {
+    '{PURPOSE}': 'Class access',
+    '{RECIPIENT_NAME}': 'Danny Trainer',
+    '{ACTION}': 'conduct',
+    '{ROLE}': 'Trainer',
+    '{COURSE_TITLE}': 'Statistical Process Control (SPC) Training',
+    '{COURSE_CODE}': 'C769',
+    '{CLASS_ID}': 'C004129',
+    '{SESSIONS}': '2026-11-09, 09:30–17:30 SGT — Virtual Classroom — https://meet.google.com/example',
+    '{MMS_CLASS_URL}': 'https://www.tertiarycourses.com.sg/lmslogin/index/class/?run_id=5206',
+    '{MMS_LOGIN_URL}': 'https://www.tertiarycourses.com.sg/lmslogin/',
+    '{FEEDBACK_URL}': 'https://lms-tms.tertiaryinfotech.com/feedback/example',
+    '{FEEDBACK_LINE}': '\nClass feedback: https://lms-tms.tertiaryinfotech.com/feedback/example',
+    '{SUPPORT}': 'support@tertiaryinfotech.com',
   },
   'courseware-attendance': {
     '{COURSE_NAME}': 'WSQ - Tax Computations for Individuals and Organizations',
@@ -159,6 +201,20 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       ${renderedBody}
       <p style="margin:0 16px; color: #999; font-size: 11px;">--- This is a test email sent from the Email Template editor ---</p>
       `;
+    } else if (templateType === 'mms-access-learner' || templateType === 'mms-access-trainer') {
+      const values = Object.fromEntries(
+        Object.entries(replacements).map(([key, value]) => [key.replace(/[{}]/g, ''), value]),
+      ) as unknown as MmsAccessEmailValues;
+      const rendered = renderMmsAccessEmail(
+        {
+          subject: subject || DEFAULT_MMS_ACCESS_EMAIL_SUBJECT,
+          body: emailBody || DEFAULT_MMS_ACCESS_EMAIL_BODY,
+        },
+        values,
+      );
+      sampleSubject = rendered.subject;
+      sampleBody = rendered.text;
+      htmlBody = `${rendered.html}<p style="margin:16px 0 0; color:#999; font-size:11px;">--- This is a test email sent from the Email Template editor ---</p>`;
     } else {
       const isHtml = /<[a-z][\s\S]*>/i.test(sampleBody);
 
@@ -197,7 +253,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       headers.push(`Cc: ${ccList.join(', ')}`);
     }
     headers.push(
-      `Subject: [TEST] ${sampleSubject}`,
+      `Subject: ${encodeMimeHeaderWord(`[TEST] ${sampleSubject}`)}`,
       'MIME-Version: 1.0',
       'Content-Type: text/html; charset=UTF-8',
       '',

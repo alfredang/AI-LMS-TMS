@@ -141,7 +141,7 @@ AI-LMS-TMS is a **full-stack, enterprise-grade web application** that manages th
 - **Sign-in Requests** — Login-page self-registrations (auto-enrolled, needs attention, resolved, dismissed); correct a Course Run ID and *Enrol & notify* in one click
 - **Calendar & Scheduler** — View and manage training calendar (top-level View Calendar), search by course code/title/name/date; WSQ class-days are live-matched against Google Calendar and any day with no matching event is highlighted (red dashed ⚠) with a "not on GCal" filter
 - **Course Management** — View courses, trainers, funding validity. The course card view shows the funding validity end date colour-coded by urgency (green: 3+ months away, orange: under 3 months, red: expired), an Active/Expired Status row, and an "(Expired)" prefix on the title of any course whose funding has lapsed
-- **Class Management** — View learners, manage upcoming/ongoing/completed classes, assign trainers and learners, search past learners
+- **Class Management** — View learners, manage upcoming/ongoing/completed classes, assign trainers and learners, search past learners. Class status is derived on load (a run with a trainer and at least one learner becomes Confirmed, otherwise Pending), but Cancelled, Unconfirmed and a manually set Confirmed are never overwritten — so an admin can confirm a class before its learners are enrolled
 - **Direct Application** — Upload, view, and manage direct applications
 - **TPG Management (SkillsFuture)**
   - Course Run: Create, search, view, upload, delete course runs; manage sessions and attendance

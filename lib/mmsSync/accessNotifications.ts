@@ -6,6 +6,11 @@ import { MmsSyncError, snapshotHash } from './contract';
 import { buildSnapshot } from './source';
 import { emailService } from '../services/emailService';
 import { getMmsRuntimeConfig, loadMmsRuntimeConfig } from './runtimeConfig';
+import {
+    DEFAULT_MMS_ACCESS_EMAIL_BODY,
+    DEFAULT_MMS_ACCESS_EMAIL_SUBJECT,
+    type MmsAccessEmailTemplate,
+} from './accessEmailTemplate';
 
 export const notificationsEnabled = () => getMmsRuntimeConfig().enabled && getMmsRuntimeConfig().notificationsEnabled;
 export async function accessSupport(): Promise<string> {
@@ -14,12 +19,22 @@ export async function accessSupport(): Promise<string> {
     if (!support || /[\r\n]/.test(support)) throw new MmsSyncError('Configure the MMS access support contact.');
     return String(support);
 }
+export async function mmsAccessEmailTemplate(): Promise<MmsAccessEmailTemplate> {
+    // to_jsonb keeps deployments backward-compatible before the additive migration
+    // has run: absent columns simply resolve to undefined and use the defaults.
+    const row = (await pool.query('SELECT to_jsonb(tp) tp FROM training_provider tp ORDER BY created_at ASC NULLS LAST LIMIT 1')).rows[0]?.tp || {};
+    return {
+        subject: row.mms_access_email_subject || DEFAULT_MMS_ACCESS_EMAIL_SUBJECT,
+        body: row.mms_access_email_body || DEFAULT_MMS_ACCESS_EMAIL_BODY,
+    };
+}
 export async function previewAccess(sourceKey: string, courseCode?: string) {
     const context = await getAccessContext({ sourceKey, courseCode });
     const source = (await pool.query('SELECT * FROM mms_sync_source WHERE source_run_key=$1', [sourceKey])).rows[0];
     const status = (await pool.query('SELECT id,person_id,role,email,kind,state,attempts,sent_at,last_error,created_at FROM mms_access_notification WHERE source_run_key=$1 ORDER BY id DESC LIMIT 300', [sourceKey])).rows;
     const support = context.state === 'ready' ? await accessSupport() : '';
-    return { enabled: notificationsEnabled(), context, status, messages: context.snapshot ? recipients(context.snapshot).map(person => ({ person_id: person.source_id, email: person.email, role: person.role, ...accessMessage(context, person, support) })) : [], approval: source ? { approved_at: source.approved_at, first_session_at: source.first_session_at, handover_at: source.handover_at } : null };
+    const template = context.state === 'ready' ? await mmsAccessEmailTemplate() : undefined;
+    return { enabled: notificationsEnabled(), context, status, messages: context.snapshot ? recipients(context.snapshot).map(person => ({ person_id: person.source_id, email: person.email, role: person.role, ...accessMessage(context, person, support, 'Class access', template) })) : [], approval: source ? { approved_at: source.approved_at, first_session_at: source.first_session_at, handover_at: source.handover_at } : null };
 }
 async function enqueue(context: AccessContext, actor = 'automatic', resendPerson?: { id: string; role: string }) {
     if (context.state !== 'ready' || !context.snapshot || !context.source_run_key) return;
@@ -73,6 +88,7 @@ export async function dispatchAccessNotifications(limit = 20, sourceKey: string 
     // A worker crash after sending cannot be retried automatically: delivery may have succeeded.
     await pool.query("UPDATE mms_access_notification SET state='review',last_error='Worker stopped during send; check mail-service acceptance before resending',updated_at=now() WHERE state='sending' AND leased_at<now()-interval '5 minutes'");
     let sent = 0;
+    const template = await mmsAccessEmailTemplate();
     for (let index = 0; index < limit; index++) {
         const db = await pool.connect();
         let key: string | undefined;
@@ -109,7 +125,7 @@ export async function dispatchAccessNotifications(limit = 20, sourceKey: string 
                 await db.query("UPDATE mms_access_notification SET state='cancelled',last_error='Participant is no longer eligible',updated_at=now() WHERE id=$1 AND state='pending'", [candidate.id]);
                 continue;
             }
-            const message = accessMessage(context, person, await accessSupport());
+            const message = accessMessage(context, person, await accessSupport(), 'Class access', template);
             const claimed = (await db.query("UPDATE mms_access_notification SET state='sending',leased_at=now(),attempts=attempts+1,rendered=$2::jsonb,revision=$3,destination=$4,updated_at=now() WHERE id=$1 AND state='pending' RETURNING id", [candidate.id, JSON.stringify(message), source.revision, context.class_url])).rows[0];
             if (!claimed) continue;
             id = String(claimed.id);

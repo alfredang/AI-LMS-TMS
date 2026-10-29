@@ -59,6 +59,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             [course_run_id]
           );
       runContext = r.rows[0] || null;
+      if (!runContext && course_run_id.startsWith('calendar:')) {
+        const handover = await pool.query(
+          `SELECT source_run_key, course_code, snapshot, target_result
+             FROM mms_sync_source
+            WHERE source_run_key = $1
+            LIMIT 1`,
+          [course_run_id]
+        );
+        const source = handover.rows[0];
+        if (source) {
+          const snapshot = source.snapshot || {};
+          const sessions = Array.isArray(snapshot.sessions) ? snapshot.sessions : [];
+          const trainers = Array.isArray(snapshot.trainers) ? snapshot.trainers : [];
+          runContext = {
+            course_run_id: source.source_run_key,
+            course_run_code: source.target_result?.class_id || source.source_run_key,
+            course_title: snapshot.course_title || '',
+            course_code: source.course_code || snapshot.course_code || '',
+            start_date: sessions[0]?.date || null,
+            end_date: sessions[sessions.length - 1]?.date || null,
+            trainer_name: trainers.map((trainer: any) => trainer?.name).filter(Boolean).join(', ') || null,
+          };
+        }
+      }
     }
 
     return res.status(200).json({

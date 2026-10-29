@@ -25,6 +25,7 @@ export enum View {
   WelcomeSigninEmailTemplate = 'welcomeSigninEmailTemplate',
   BriefingOnAssessmentTemplate = 'briefingOnAssessmentTemplate',
   TrainerInvitationEmailTemplate = 'trainerInvitationEmailTemplate',
+  MmsAccessEmailTemplate = 'mmsAccessEmailTemplate',
   TrainerResponseEmailTemplates = 'trainerResponseEmailTemplates',
   FinalCourseConfirmationEmailTemplate = 'finalCourseConfirmationEmailTemplate',
   CourseConfirmationEmailTemplate = 'courseConfirmationEmailTemplate',
