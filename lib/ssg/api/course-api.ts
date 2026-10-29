@@ -28,8 +28,10 @@ import { Cryptography } from '../utils/cryptography';
 import { SSGCredentials } from '../services/credentials-service';
 import {
   assertNoDuplicateCourseRunDates,
+  countRunsOnDates,
   DuplicateCourseRunDateError,
 } from '../courseRunDuplicateGuard';
+import { CourseRunPublishBusyError, withCourseRunPublishLock } from '../courseRunPublishLock';
 
 export class SSGCourseAPI {
   private httpClient: HttpClient;
@@ -152,45 +154,54 @@ export class SSGCourseAPI {
         throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
       }
 
-      await assertNoDuplicateCourseRunDates({
-        api: this,
-        courseReferenceNumber: runInfo.courseReferenceNumber,
-        runs: runInfo.runs,
-        uen: this.credentials.uen,
+      // Check, publish and re-check under one per-course lock, so two LMS paths
+      // publishing the same course at once cannot both pass the check.
+      return await withCourseRunPublishLock(runInfo.courseReferenceNumber, async () => {
+        await assertNoDuplicateCourseRunDates({
+          api: this,
+          courseReferenceNumber: runInfo.courseReferenceNumber,
+          runs: runInfo.runs,
+          uen: this.credentials.uen,
+        });
+
+        const builder = new HTTPRequestBuilder()
+          .withEndpoint(this.baseUrl, '/courses/courseRuns/publish')
+          .withMethod(HttpMethod.POST)
+          .withHeader('Content-Type', 'application/json');
+
+        // Add certificate authentication
+        if (this.credentials.certificateContent && this.credentials.privateKeyContent) {
+          builder.withCertificate(this.credentials.certificateContent, this.credentials.privateKeyContent);
+        }
+
+        // Add query parameter
+        switch (includeExpired) {
+          case OptionalSelector.YES:
+            builder.withParam('includeExpiredCourses', 'true');
+            break;
+          case OptionalSelector.NO:
+            builder.withParam('includeExpiredCourses', 'false');
+            break;
+        }
+
+        // Create and clean the payload
+        const payload = AddCourseRunUtils.toPayload(runInfo, this.credentials.uen);
+        const cleanedPayload = AddCourseRunUtils.removeNullFields(payload, ['runs']);
+
+        // Encrypt the payload
+        const encryptedPayload = Cryptography.encryptJSON(this.credentials.encryptionKey, cleanedPayload);
+
+        builder.withBody(encryptedPayload);
+
+        const config = builder.build();
+        const result = await handleRequest<AddCourseRunResponse>(this.httpClient, config);
+        await this.warnIfDuplicatedAfterPublish(runInfo, result);
+        return result;
       });
-
-      const builder = new HTTPRequestBuilder()
-        .withEndpoint(this.baseUrl, '/courses/courseRuns/publish')
-        .withMethod(HttpMethod.POST)
-        .withHeader('Content-Type', 'application/json');
-
-      // Add certificate authentication
-      if (this.credentials.certificateContent && this.credentials.privateKeyContent) {
-        builder.withCertificate(this.credentials.certificateContent, this.credentials.privateKeyContent);
-      }
-
-      // Add query parameter
-      switch (includeExpired) {
-        case OptionalSelector.YES:
-          builder.withParam('includeExpiredCourses', 'true');
-          break;
-        case OptionalSelector.NO:
-          builder.withParam('includeExpiredCourses', 'false');
-          break;
-      }
-
-      // Create and clean the payload
-      const payload = AddCourseRunUtils.toPayload(runInfo, this.credentials.uen);
-      const cleanedPayload = AddCourseRunUtils.removeNullFields(payload, ['runs']);
-      
-      // Encrypt the payload
-      const encryptedPayload = Cryptography.encryptJSON(this.credentials.encryptionKey, cleanedPayload);
-      
-      builder.withBody(encryptedPayload);
-
-      const config = builder.build();
-      return await handleRequest<AddCourseRunResponse>(this.httpClient, config);
     } catch (error) {
+      if (error instanceof CourseRunPublishBusyError) {
+        return { error: { code: 'COURSE_RUN_PUBLISH_BUSY', message: error.message }, status: error.status };
+      }
       if (error instanceof DuplicateCourseRunDateError) {
         return {
           error: {
@@ -212,6 +223,26 @@ export class SSGCourseAPI {
         },
         status: 0
       };
+    }
+  }
+
+  /** Re-check SSG after a successful publish; log loudly if the dates now hold more than one run. */
+  private async warnIfDuplicatedAfterPublish(runInfo: AddRunInfo, result: SSGApiResponse<any>) {
+    const failed = result.error && (result.error.code || result.error.message);
+    if (failed) return;
+    for (const run of runInfo.runs as any[]) {
+      const start = String(run?.courseStartDate ?? run?.courseDates?.start ?? '');
+      const end = String(run?.courseEndDate ?? run?.courseDates?.end ?? '');
+      const iso = (s: string) => (/^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s.slice(0, 10));
+      if (!start || !end) continue;
+      try {
+        const { count, runIds } = await countRunsOnDates(this, runInfo.courseReferenceNumber, iso(start), iso(end), this.credentials.uen);
+        if (count > 1) {
+          console.error(`🚨 [course-run-publish] ${runInfo.courseReferenceNumber} ${iso(start)}..${iso(end)} now has ${count} runs on SSG: ${runIds.join(', ')}`);
+        }
+      } catch (e) {
+        console.warn('[course-run-publish] post-publish duplicate check failed:', e instanceof Error ? e.message : e);
+      }
     }
   }
 
