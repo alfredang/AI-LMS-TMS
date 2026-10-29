@@ -79,6 +79,19 @@ const COL = {
     bundleCode:               'Bundle Code (mandatory if sponsorship type = individual for SCTP course)',
 } as const;
 
+// Header matching is tolerant: case, spacing, '*', hidden characters and the
+// "(mandatory if …)" / "(as on government ID)" hints are ignored, so a header like
+// "Course Reference Code *" or "Trainee Name" still maps to the right COL entry.
+const headerBase = (h: unknown): string =>
+    String(h ?? '')
+        .replace(/\([^)]*\)/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+const COL_BY_BASE: Record<string, string> = Object.fromEntries(
+    Object.values(COL).map(label => [headerBase(label), label])
+);
+
 export const BulkUploadEnrolmentView: React.FC = () => {
     const { trainingProviderProfile } = useLms();
     const [file, setFile] = useState<File | null>(null);
@@ -221,13 +234,32 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                         throw new Error('Excel file has no sheets.');
                     }
 
-                    const sheetName = workbook.SheetNames[0];
+                    // Find the sheet + header row holding the template columns. Usually row 1 of
+                    // the first sheet, but tolerate a title row above it or a reordered workbook.
+                    let sheetName = workbook.SheetNames[0];
+                    let headerRowIdx = 0;
+                    let bestMatches = 0;
+                    for (const name of workbook.SheetNames) {
+                        const probe: any[][] = XLSX.utils.sheet_to_json(workbook.Sheets[name], {
+                            header: 1, blankrows: false, defval: '',
+                        });
+                        probe.slice(0, 10).forEach((r, idx) => {
+                            const matches = r.filter(c => COL_BY_BASE[headerBase(c)]).length;
+                            if (matches > bestMatches) {
+                                bestMatches = matches;
+                                sheetName = name;
+                                headerRowIdx = idx;
+                            }
+                        });
+                    }
                     const worksheet = workbook.Sheets[sheetName];
 
                     const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, {
                         header: 1,
                         blankrows: false,
-                    });
+                        defval: '',
+                        raw: false,
+                    }).slice(headerRowIdx) as any[][];
 
                     console.log('🧪 Raw Excel rows count:', rawRows.length);
                     console.log('🧪 First 3 rows:', rawRows.slice(0, 3));
@@ -249,21 +281,42 @@ export const BulkUploadEnrolmentView: React.FC = () => {
                         );
                     }
 
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-                        defval: '',
-                        raw: false,
+                    // Map each column to its canonical COL label (unrecognised columns keep
+                    // their trimmed header so nothing is silently dropped).
+                    const headers = rawRows[0].map(h => {
+                        const label = COL_BY_BASE[headerBase(h)];
+                        return label || String(h ?? '').replace(/\s+/g, ' ').trim();
                     });
 
-                    // Normalize column headers by removing extra spaces and trimming
-                    const normalizedData = jsonData.map(row => {
-                        const normalizedRow: any = {};
-                        Object.keys(row as object).forEach(key => {
-                            // Replace multiple spaces with single space and trim
-                            const normalizedKey = key.replace(/\s+/g, ' ').trim();
-                            normalizedRow[normalizedKey] = (row as any)[key];
-                        });
-                        return normalizedRow;
-                    });
+                    const missingRequired = [COL.traineeId, COL.courseRefCode, COL.courseRun, COL.traineeEmail]
+                        .filter(label => !headers.includes(label));
+                    if (missingRequired.length) {
+                        throw new Error(
+                            'Could not find these required columns in the uploaded file:\n' +
+                            missingRequired.map(c => `• ${c}`).join('\n') +
+                            `\n\nHeaders found (sheet "${sheetName}", row ${headerRowIdx + 1}):\n` +
+                            rawRows[0].filter(h => String(h).trim()).map(h => `• ${h}`).join('\n') +
+                            '\n\nPlease use the Enrolment Template and keep its header row unchanged.'
+                        );
+                    }
+
+                    const normalizedData = rawRows.slice(1)
+                        .map(r => {
+                            const normalizedRow: any = {};
+                            headers.forEach((label, idx) => {
+                                if (!label) return;
+                                const v = r[idx];
+                                normalizedRow[label] = typeof v === 'string' ? v.trim() : (v ?? '');
+                            });
+                            return normalizedRow;
+                        })
+                        // Skip rows with no real content (e.g. formatted-but-empty rows or
+                        // stray spaces) instead of submitting blank enrolments to SSG.
+                        .filter(row => Object.values(COL).some(label => String(row[label] ?? '').trim() !== ''));
+
+                    if (!normalizedData.length) {
+                        throw new Error('No enrolment rows with data were found below the header row.');
+                    }
 
                     console.log('✅ Parsed', normalizedData.length, 'data rows');
                     if (normalizedData.length > 0) {
