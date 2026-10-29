@@ -15,7 +15,7 @@ import { withAuth } from '@lib/auth/withAuth';
  *     showed them as "synced" even though SSG had no record — hiding genuinely
  *     missing runs.
  *
- * Replacement: submit-to-ssg.ts
+ * Replacement: run-sync.ts (submit-to-ssg.ts, the first replacement, was itself retired 28 Oct 2026)
  *   - Submits directly to SSG in one step.
  *   - Writes the real SSG run ID to course_run on success.
  *   - If a STAGED- row already exists for the same course/dates, updates it
