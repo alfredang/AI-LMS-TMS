@@ -12,6 +12,7 @@ import {
   assertNoDuplicateCourseRunDates,
   DuplicateCourseRunDateError,
 } from '../../../../../lib/ssg/courseRunDuplicateGuard';
+import { CourseRunPublishBusyError, withCourseRunPublishLock } from '../../../../../lib/ssg/courseRunPublishLock';
 import { getDirectApplicationInstantConfirmSettings } from '../../../../../lib/directApplicationInstantConfirmSettings';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -115,52 +116,55 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     };
 
     const baseUrl = credentials.ssgApiBaseUrl || process.env.SSG_API_URL || 'https://api.ssg-wsg.sg';
-    await assertNoDuplicateCourseRunDates({
-      api: createSSGCourseAPI(baseUrl, credentials),
-      courseReferenceNumber: requestData.course.courseReferenceNumber,
-      runs: cleanedRuns,
-      uen: credentials.uen,
+    // Check + publish under the per-course lock shared with every other publish path.
+    const result = await withCourseRunPublishLock(requestData.course.courseReferenceNumber, async () => {
+      await assertNoDuplicateCourseRunDates({
+        api: createSSGCourseAPI(baseUrl, credentials),
+        courseReferenceNumber: requestData.course.courseReferenceNumber,
+        runs: cleanedRuns,
+        uen: credentials.uen,
+      });
+
+      // Build the request manually to bypass TypeScript validation issues
+      // This matches exactly what the Python add_course_run.py does
+      const { HTTPRequestBuilder, HttpMethod, handleRequest } = await import('../../../../../lib/ssg/utils/http-utils');
+      const { Cryptography } = await import('../../../../../lib/ssg/utils/cryptography');
+
+      const builder = new HTTPRequestBuilder()
+        .withEndpoint(baseUrl, '/courses/courseRuns/publish')
+        .withMethod(HttpMethod.POST)
+        .withHeader('Content-Type', 'application/json');
+
+      // Add certificate authentication
+      if (credentials.certificateContent && credentials.privateKeyContent) {
+        builder.withCertificate(credentials.certificateContent, credentials.privateKeyContent);
+      }
+
+      // Add query parameter based on includeExpired
+      switch (includeExpired) {
+        case OptionalSelector.YES:
+          builder.withParam('includeExpiredCourses', 'true');
+          break;
+        case OptionalSelector.NO:
+          builder.withParam('includeExpiredCourses', 'false');
+          break;
+      }
+
+      // Encrypt the payload (matches Python post_encrypted method)
+      const encryptedPayload = Cryptography.encryptJSON(credentials.encryptionKey, finalPayload);
+      builder.withBody(encryptedPayload);
+
+      const config = builder.build();
+
+      // Create HTTP client and make the request
+      const { HttpClient } = await import('../../../../../lib/ssg/utils/http-utils');
+      const httpClient = new HttpClient(baseUrl, {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      });
+
+      return handleRequest(httpClient, config);
     });
-
-    // Build the request manually to bypass TypeScript validation issues
-    // This matches exactly what the Python add_course_run.py does
-    const { HTTPRequestBuilder, HttpMethod, handleRequest } = await import('../../../../../lib/ssg/utils/http-utils');
-    const { Cryptography } = await import('../../../../../lib/ssg/utils/cryptography');
-
-    const builder = new HTTPRequestBuilder()
-      .withEndpoint(baseUrl, '/courses/courseRuns/publish')
-      .withMethod(HttpMethod.POST)
-      .withHeader('Content-Type', 'application/json');
-
-    // Add certificate authentication
-    if (credentials.certificateContent && credentials.privateKeyContent) {
-      builder.withCertificate(credentials.certificateContent, credentials.privateKeyContent);
-    }
-
-    // Add query parameter based on includeExpired
-    switch (includeExpired) {
-      case OptionalSelector.YES:
-        builder.withParam('includeExpiredCourses', 'true');
-        break;
-      case OptionalSelector.NO:
-        builder.withParam('includeExpiredCourses', 'false');
-        break;
-    }
-
-    // Encrypt the payload (matches Python post_encrypted method)
-    const encryptedPayload = Cryptography.encryptJSON(credentials.encryptionKey, finalPayload);
-    builder.withBody(encryptedPayload);
-
-    const config = builder.build();
-    
-    // Create HTTP client and make the request
-    const { HttpClient } = await import('../../../../../lib/ssg/utils/http-utils');
-    const httpClient = new HttpClient(baseUrl, {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    });
-
-    const result = await handleRequest(httpClient, config);
 
     // SSG always returns "error": {} even on success — only treat as error if code/message/details present
     const hasError = result.error && (result.error.code || result.error.message ||
@@ -177,6 +181,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   } catch (error) {
     console.error('Course run creation error:', error);
 
+    if (error instanceof CourseRunPublishBusyError) {
+      return res.status(error.status).json({ error: 'Course run publish busy', message: error.message });
+    }
     if (error instanceof DuplicateCourseRunDateError) {
       return res.status(error.status).json({
         error: 'Duplicate course run blocked',
