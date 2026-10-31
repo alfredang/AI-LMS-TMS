@@ -16,6 +16,12 @@ interface GrantRow {
   trainee_name: string | null;
   trainee_nric: string | null;
   tpg_checked_at: string | null;
+  enrolment_status: string | null;
+  course_run_id: string | null;
+  course_run_start: string | null;
+  course_run_end: string | null;
+  attendance_total_sessions: number;
+  attendance_attended_sessions: number;
 }
 
 interface ClaimRow {
@@ -106,6 +112,40 @@ const LiveStatusCell: React.FC<{ live: LiveStatus; tpgStatus: string; checkedAt:
     </span>
   </div>
 );
+
+const enrolmentStatusStyle = (status: string | null): string => {
+  const s = (status || '').toLowerCase();
+  if (!s) return '';
+  if (s.includes('cancel') || s.includes('removed') || s.includes('withdraw')) return LIVE_STATUS_STYLE.Cancelled;
+  if (s.includes('confirm') || s.includes('enrol') || s.includes('complete')) return LIVE_STATUS_STYLE.Paid;
+  return LIVE_STATUS_STYLE.Pending;
+};
+
+type AttendanceKind = 'full' | 'partial' | 'absent' | 'upcoming' | 'not-taken' | 'unknown';
+
+const ATTENDANCE_STYLE: Record<AttendanceKind, string> = {
+  full: LIVE_STATUS_STYLE.Paid,
+  partial: LIVE_STATUS_STYLE.Pending,
+  absent: LIVE_STATUS_STYLE.Cancelled,
+  upcoming: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  'not-taken': 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  unknown: '',
+};
+
+/** Class attendance from LMS session records: attended / sessions where attendance was taken. */
+const attendanceSummary = (g: GrantRow): { kind: AttendanceKind; label: string } => {
+  const total = g.attendance_total_sessions || 0;
+  const attended = g.attendance_attended_sessions || 0;
+  if (!g.course_run_id) return { kind: 'unknown', label: '-' };
+  if (total === 0) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (g.course_run_start && g.course_run_start > today) return { kind: 'upcoming', label: 'Not started' };
+    return { kind: 'not-taken', label: 'No record' };
+  }
+  if (attended === 0) return { kind: 'absent', label: `Absent (0/${total})` };
+  if (attended >= total) return { kind: 'full', label: `Attended (${attended}/${total})` };
+  return { kind: 'partial', label: `Partial (${attended}/${total})` };
+};
 
 const PAGE_SIZE = 20;
 
@@ -373,6 +413,9 @@ const FinanceManagementView: React.FC = () => {
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary whitespace-nowrap">Enrollment ID</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary whitespace-nowrap">Grant ID</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-on-surface-secondary whitespace-nowrap">Enrolment Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-on-surface-secondary whitespace-nowrap">Course Run</th>
+                  <th className="text-left px-4 py-3 font-medium text-on-surface-secondary" title="Sessions attended / sessions where attendance was taken">Attendance</th>
                   <th className="text-left px-4 py-3 font-medium text-on-surface-secondary">Funding Scheme</th>
                   <th className="text-right px-4 py-3 font-medium text-on-surface-secondary">Estimated</th>
                   <th className="text-right px-4 py-3 font-medium text-on-surface-secondary" title="Amount TPG has paid for this grant">Paid</th>
@@ -380,14 +423,14 @@ const FinanceManagementView: React.FC = () => {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-on-surface-secondary">
+                  <tr><td colSpan={11} className="px-4 py-12 text-center text-on-surface-secondary">
                     <div className="flex items-center justify-center gap-2">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
                       Loading grants...
                     </div>
                   </td></tr>
                 ) : grants.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-12 text-center text-on-surface-secondary">No grants found.</td></tr>
+                  <tr><td colSpan={11} className="px-4 py-12 text-center text-on-surface-secondary">No grants found.</td></tr>
                 ) : grants.map((g, i) => (
                   <tr key={`${g.grant_id}-${i}`} className="border-b border-default hover:bg-surface-hover transition-colors">
                     <td className="px-4 py-3 text-on-surface max-w-[140px] truncate" title={g.trainee_name || ''}>{g.trainee_name || '-'}</td>
@@ -411,6 +454,29 @@ const FinanceManagementView: React.FC = () => {
                         tpgStatus={g.status?.replace('Grant Processing', 'Processing').replace('Grant ', '') || ''}
                         checkedAt={g.tpg_checked_at}
                       />
+                    </td>
+                    <td className="px-4 py-3">
+                      {g.enrolment_status ? (
+                        <span className={`inline-block w-fit px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${enrolmentStatusStyle(g.enrolment_status)}`}>{g.enrolment_status}</span>
+                      ) : <span className="text-on-surface-secondary">-</span>}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-on-surface-secondary font-mono text-xs">{g.course_run_id || '-'}</span>
+                        {g.course_run_start && (
+                          <span className="text-[11px] text-on-surface-secondary">
+                            {formatDate(g.course_run_start)}{g.course_run_end && g.course_run_end !== g.course_run_start ? ` – ${formatDate(g.course_run_end)}` : ''}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const att = attendanceSummary(g);
+                        return att.kind === 'unknown'
+                          ? <span className="text-on-surface-secondary">-</span>
+                          : <span className={`inline-block w-fit px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${ATTENDANCE_STYLE[att.kind]}`}>{att.label}</span>;
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-on-surface-secondary text-xs max-w-[200px] truncate" title={g.funding_scheme_description}>
                       {g.funding_scheme_description || '-'}

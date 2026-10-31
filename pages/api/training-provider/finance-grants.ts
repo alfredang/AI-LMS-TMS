@@ -130,6 +130,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     type Identity = { trainee_name: string | null; trainee_nric: string | null };
     const identityByEnr: Record<string, Identity> = {};
 
+    type ClassInfo = {
+      enrolment_status: string | null;
+      course_run_code: string | null;
+      start_date: string | null;
+      end_date: string | null;
+      total_sessions: number;
+      attended_sessions: number;
+    };
+    const classInfoByEnr: Record<string, ClassInfo> = {};
+
     if (enrolmentIds.length > 0) {
       const idClient = await pool.connect();
       try {
@@ -223,6 +233,64 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
             trainee_nric: existing?.trainee_nric || (r.trainee_nric || '').trim() || null,
           };
         }
+
+        // Enrolment status, course run and class attendance for the visible page.
+        // Local enrollment is preferred (reflects admin removals); ssg_enrolments is the fallback.
+        // Attendance counts only sessions where attendance was actually taken, matching the learner
+        // by user_id or NRIC (same rule as auto-create-certificates).
+        const classInfo = await idClient.query(
+          `WITH k AS (
+             SELECT DISTINCT LOWER(TRIM(x::text)) AS key FROM unnest($1::text[]) x
+           ),
+           le AS (
+             SELECT DISTINCT ON (LOWER(TRIM(e.enrolment_id)))
+                    LOWER(TRIM(e.enrolment_id)) AS key, e.enrolment_status, e.user_id,
+                    COALESCE(lp.nric, e.nric) AS nric, e.course_run_id
+             FROM enrollment e
+             LEFT JOIN learner_profile lp ON lp.user_id = e.user_id
+             WHERE LOWER(TRIM(COALESCE(e.enrolment_id, ''))) IN (SELECT key FROM k)
+             ORDER BY LOWER(TRIM(e.enrolment_id)), e.updated_at DESC
+           ),
+           sse AS (
+             SELECT DISTINCT ON (LOWER(TRIM(s.enrolment_id)))
+                    LOWER(TRIM(s.enrolment_id)) AS key, s.enrolment_status, s.trainee_nric, s.course_run_id
+             FROM ssg_enrolments s
+             WHERE LOWER(TRIM(COALESCE(s.enrolment_id, ''))) IN (SELECT key FROM k)
+             ORDER BY LOWER(TRIM(s.enrolment_id)), s.imported_at DESC
+           ),
+           base AS (
+             SELECT k.key,
+                    COALESCE(NULLIF(TRIM(le.enrolment_status), ''), NULLIF(TRIM(sse.enrolment_status), '')) AS enrolment_status,
+                    le.user_id,
+                    COALESCE(NULLIF(TRIM(le.nric), ''), NULLIF(TRIM(sse.trainee_nric), '')) AS nric,
+                    COALESCE(le.course_run_id, cr2.id) AS run_uuid,
+                    sse.course_run_id AS ssg_run_code
+             FROM k
+             LEFT JOIN le ON le.key = k.key
+             LEFT JOIN sse ON sse.key = k.key
+             LEFT JOIN LATERAL (
+               SELECT id FROM course_run WHERE course_run_id = sse.course_run_id LIMIT 1
+             ) cr2 ON le.course_run_id IS NULL
+           )
+           SELECT b.key, b.enrolment_status,
+                  COALESCE(cr.course_run_id, b.ssg_run_code) AS course_run_code,
+                  cr.start_date::text AS start_date, cr.end_date::text AS end_date,
+                  (SELECT COUNT(*) FROM course_session cs
+                    WHERE cs.course_run_id = b.run_uuid AND cs.deleted = false
+                      AND EXISTS (SELECT 1 FROM course_attendance ca WHERE ca.session_id = cs.id))::int AS total_sessions,
+                  (SELECT COUNT(DISTINCT ca.session_id) FROM course_attendance ca
+                    JOIN course_session cs ON cs.id = ca.session_id
+                    WHERE cs.course_run_id = b.run_uuid AND cs.deleted = false AND ca.is_present = true
+                      AND ((b.user_id IS NOT NULL AND ca.user_id = b.user_id)
+                        OR (b.nric IS NOT NULL AND UPPER(TRIM(ca.nric)) = UPPER(b.nric))))::int AS attended_sessions
+           FROM base b
+           LEFT JOIN course_run cr ON cr.id = b.run_uuid`,
+          [enrolmentIds]
+        );
+        for (const r of classInfo.rows as Array<ClassInfo & { key: string }>) {
+          const { key, ...info } = r;
+          classInfoByEnr[key] = info;
+        }
       } finally {
         idClient.release();
       }
@@ -241,7 +309,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const trainee_nric = fromSeNric || fallback?.trainee_nric || fromApiNric;
       // Strip extra fields used for enrichment
       const { se_trainee_name, se_trainee_nric, se_raw_data, api_response, ...rest } = r;
-      return { ...rest, trainee_name, trainee_nric };
+      const cls = classInfoByEnr[enr.toLowerCase()];
+      return {
+        ...rest,
+        trainee_name,
+        trainee_nric,
+        enrolment_status: cls?.enrolment_status ?? null,
+        course_run_id: cls?.course_run_code ?? null,
+        course_run_start: cls?.start_date ?? null,
+        course_run_end: cls?.end_date ?? null,
+        attendance_total_sessions: cls?.total_sessions ?? 0,
+        attendance_attended_sessions: cls?.attended_sessions ?? 0,
+      };
     });
 
     return res.status(200).json({
