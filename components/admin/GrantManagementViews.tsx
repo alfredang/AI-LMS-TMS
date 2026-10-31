@@ -4442,6 +4442,7 @@ export const CancelEnrolmentView: React.FC = () => {
     const [preview, setPreview] = useState<any>(null);
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
+    const [qbOutcome, setQbOutcome] = useState<{ deleted: boolean; warnings: string[] } | null>(null);
 
     const VIEW_ENROLMENT_API = '/api/enrolment/view';
     const CANCEL_ENROLMENT_API = '/api/enrolment/cancel';
@@ -4483,6 +4484,7 @@ export const CancelEnrolmentView: React.FC = () => {
         setIsSubmitting(true);
         setError(null);
         setResult(null);
+        setQbOutcome(null);
 
         try {
             const body: { enrolmentId: string; courseRunId?: string } = { enrolmentId: enrolmentId.trim() };
@@ -4505,6 +4507,7 @@ export const CancelEnrolmentView: React.FC = () => {
 
             console.log('✅ Cancel enrolment response:', json);
             setResult(json.data);
+            setQbOutcome({ deleted: !!json.qbInvoiceDeleted, warnings: Array.isArray(json.qbWarnings) ? json.qbWarnings : [] });
             setPreview(null);
         } catch (err) {
             console.error('❌ Error cancelling enrolment:', err);
@@ -4520,6 +4523,7 @@ export const CancelEnrolmentView: React.FC = () => {
         setPreview(null);
         setResult(null);
         setError(null);
+        setQbOutcome(null);
     };
 
     const isFormValid = !!enrolmentId.trim();
@@ -4709,7 +4713,24 @@ export const CancelEnrolmentView: React.FC = () => {
                                         <span className="font-medium">Status:</span> {result?.enrolment?.status ?? result?.data?.enrolment?.status}
                                     </p>
                                 )}
+                                {qbOutcome && qbOutcome.warnings.length === 0 && (
+                                    <p className="text-sm text-green-700 dark:text-green-300">
+                                        <span className="font-medium">QuickBooks:</span>{' '}
+                                        {qbOutcome.deleted ? 'invoices for this enrolment deleted' : 'no invoices to delete'}
+                                    </p>
+                                )}
                             </div>
+                        </div>
+                    )}
+
+                    {!error && qbOutcome && qbOutcome.warnings.length > 0 && (
+                        <div className="mt-4 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 dark:border-amber-600 rounded-r-lg p-4">
+                            <h4 className="font-semibold text-amber-900 dark:text-amber-200 mb-2">
+                                QuickBooks: some invoices were not deleted — please check
+                            </h4>
+                            <ul className="list-disc pl-5 space-y-1 text-sm text-amber-800 dark:text-amber-300">
+                                {qbOutcome.warnings.map((w, i) => <li key={i} className="break-words">{w}</li>)}
+                            </ul>
                         </div>
                     )}
 

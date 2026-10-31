@@ -1,40 +1,33 @@
 import pool from '../db';
-import { qboReadInvoice, qboDeleteInvoice } from './qboInvoiceService';
+import { safeDeleteInvoiceById, type InvoiceExpectation } from './cancelInvoiceSafety';
 
 interface DaInvoiceRow {
   application_id: string;
   invoice_id: string | null;
+  invoice_doc_number: string | null;
   grant_invoice_id: string | null;
   sfc_invoice_id: string | null;
+  course_run_id: string | null;
 }
+
+const DA_COLUMNS = `application_id, invoice_id, invoice_doc_number, grant_invoice_id, sfc_invoice_id, course_run_id::text AS course_run_id`;
+const isPlaceholderInvoiceId = (id: string | null | undefined) => /^(manual|n\/a|-)$/i.test((id || '').trim());
 
 /**
  * Best-effort delete of a QBO invoice. Returns a warning string when the
- * deletion failed for a real reason, or `null` when the invoice was deleted
+ * invoice was not deleted (QB error, or refused by a safety check: payment applied,
+ * not the expected invoice, group invoice), or `null` when the invoice was deleted
  * (or was already gone — QBO error 610 = Object Not Found).
  */
 export async function deleteQboInvoiceIfPresent(
   invoiceId: string | null | undefined,
   label: string,
+  expect: InvoiceExpectation = {},
 ): Promise<string | null> {
   const id = (invoiceId || '').trim();
-  if (!id || /^(manual|n\/a|-)$/i.test(id)) return null;
-  try {
-    const inv = await qboReadInvoice(undefined, id);
-    if (inv?.syncToken) {
-      await qboDeleteInvoice(undefined, id, inv.syncToken);
-    } else {
-      return `${label}: QuickBooks returned no SyncToken for invoice ${id}`;
-    }
-    return null;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    const lower = msg.toLowerCase();
-    if (msg.includes('610') || lower.includes('not found') || lower.includes('object not found')) {
-      return null;
-    }
-    return `${label}: ${msg}`;
-  }
+  if (!id || isPlaceholderInvoiceId(id)) return null;
+  const r = await safeDeleteInvoiceById(id, label, expect);
+  return r.status === 'deleted' || r.status === 'gone' ? null : (r.message || `${label}: not deleted`);
 }
 
 /**
@@ -44,9 +37,12 @@ export async function deleteQboInvoiceIfPresent(
  */
 async function deleteDaInvoices(da: DaInvoiceRow, removeInvoice = deleteQboInvoiceIfPresent): Promise<string[]> {
   const [mainW, grantW, sfcW] = await Promise.all([
-    removeInvoice(da.invoice_id, 'main'),
-    removeInvoice(da.grant_invoice_id, 'grant'),
-    removeInvoice(da.sfc_invoice_id, 'sfc'),
+    removeInvoice(da.invoice_id, 'main', {
+      docNumber: isPlaceholderInvoiceId(da.invoice_doc_number) ? null : da.invoice_doc_number,
+      courseRunId: da.course_run_id,
+    }),
+    removeInvoice(da.grant_invoice_id, 'grant', { wsgCustomer: true }),
+    removeInvoice(da.sfc_invoice_id, 'sfc', { docNumber: `SFC-${da.application_id}`, wsgCustomer: true }),
   ]);
   const warnings = [mainW, grantW, sfcW].filter((w): w is string => !!w);
 
@@ -89,24 +85,53 @@ async function deleteDaInvoices(da: DaInvoiceRow, removeInvoice = deleteQboInvoi
 }
 
 /**
- * If this enrolment belongs to a Direct Application, delete the three QBO
- * invoices (main / grant / SFC) attached to the DA row. Best-effort —
+ * DA rows imported without a real enrolment id ('MANUAL' / blank) can't be found by enrolment_id.
+ * Match them to the enrolment by course run + NRIC last 4 — only when exactly one row fits.
+ */
+async function findManualDaRows(enrolmentId: string): Promise<{ rows: DaInvoiceRow[]; warning?: string }> {
+  const en = (await pool.query(
+    `SELECT NULLIF(TRIM(course_run_id::text), '') AS run, UPPER(RIGHT(TRIM(COALESCE(trainee_nric, '')), 4)) AS nric4
+     FROM ssg_enrolments WHERE enrolment_id = $1 ORDER BY imported_at DESC LIMIT 1`,
+    [enrolmentId]
+  )).rows[0];
+  if (!en?.run || !en?.nric4 || en.nric4.length < 4) return { rows: [] };
+  const r = await pool.query(
+    `SELECT ${DA_COLUMNS} FROM da_application
+     WHERE (enrolment_id IS NULL OR TRIM(enrolment_id) = '' OR enrolment_id ~* 'manual')
+       AND TRIM(course_run_id::text) = $1
+       AND UPPER(RIGHT(TRIM(COALESCE(trainee_id, '')), 4)) = $2`,
+    [en.run, en.nric4]
+  );
+  if (r.rows.length > 1) {
+    return { rows: [], warning: `${r.rows.length} MANUAL Direct Applications match run ${en.run} / NRIC …${en.nric4} (${r.rows.map((x) => x.application_id).join(', ')}) — none cleaned; needs review` };
+  }
+  return { rows: r.rows as DaInvoiceRow[] };
+}
+
+/**
+ * If this enrolment belongs to Direct Application(s), delete the three QBO
+ * invoices (main / grant / SFC) attached to each DA row. Best-effort —
  * failures are returned as warnings and never block the caller.
  */
 export async function cleanupDaInvoicesForEnrolment(
   enrolmentId: string
 ): Promise<{ found: boolean; warnings: string[] }> {
   const r = await pool.query(
-    `SELECT application_id, invoice_id, grant_invoice_id, sfc_invoice_id
-     FROM da_application
-     WHERE enrolment_id = $1
-     LIMIT 1`,
+    `SELECT ${DA_COLUMNS} FROM da_application WHERE enrolment_id = $1 ORDER BY application_id`,
     [enrolmentId]
   );
-  const da = r.rows[0] as DaInvoiceRow | undefined;
-  if (!da) return { found: false, warnings: [] };
-  const warnings = await deleteDaInvoices(da);
-  return { found: true, warnings };
+  let rows = r.rows as DaInvoiceRow[];
+  const warnings: string[] = [];
+  if (!rows.length) {
+    const manual = await findManualDaRows(enrolmentId);
+    rows = manual.rows;
+    if (manual.warning) warnings.push(manual.warning);
+  }
+  for (const da of rows) {
+    const w = await deleteDaInvoices(da);
+    warnings.push(...w.map((x) => (rows.length > 1 ? `${da.application_id} ${x}` : x)));
+  }
+  return { found: rows.length > 0 || warnings.length > 0, warnings };
 }
 
 /**
@@ -119,10 +144,7 @@ export async function cleanupDaInvoicesForApplicationId(
   removeInvoice = deleteQboInvoiceIfPresent,
 ): Promise<{ found: boolean; warnings: string[] }> {
   const r = await pool.query(
-    `SELECT application_id, invoice_id, grant_invoice_id, sfc_invoice_id
-     FROM da_application
-     WHERE application_id = $1
-     LIMIT 1`,
+    `SELECT ${DA_COLUMNS} FROM da_application WHERE application_id = $1 LIMIT 1`,
     [applicationId]
   );
   const da = r.rows[0] as DaInvoiceRow | undefined;

@@ -347,9 +347,13 @@ export async function listAlreadyAppliedSfcClaimIds(claimIds: string[]): Promise
   const ids = Array.from(new Set(claimIds.map((x) => String(x || '').trim()).filter(Boolean)));
   if (ids.length === 0) return new Set();
   const r = await pool.query(
+    // Only a payment this tool actually created counts. A previous upload's
+    // match_status = 'already_applied' is just that upload's opinion — counting it made a
+    // single wrong mark stick forever (claims stayed "already applied" on every re-upload
+    // while their SFC-CA invoice was still fully open).
     `SELECT DISTINCT claim_id FROM public.sfc_import_rows
      WHERE claim_id = ANY($1::text[])
-       AND (apply_status = 'applied' OR match_status = 'already_applied')`,
+       AND apply_status = 'applied'`,
     [ids]
   );
   return new Set(r.rows.map((x: any) => String(x.claim_id)));

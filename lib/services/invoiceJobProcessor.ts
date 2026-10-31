@@ -1,4 +1,5 @@
 import pool from '../db';
+import { withDaLock } from '../daAutomationLock';
 import { assessGrantEligibility } from '../grantEligibility';
 import { realApplicationId } from '../daApplicationId';
 import { buildTmsInvoiceNo } from '../utils/tmsInvoiceNo';
@@ -285,7 +286,21 @@ async function reserveTmsInvoiceNo(jobId: string, enrolmentId: string, existing:
  * invoice, invoice / GRN PDFs). It never creates a new customer invoice: if the stored QB
  * invoice is missing it throws, and the caller leaves the job untouched.
  */
+/**
+ * One run per job at a time. The Consolidated Finance "generate" request, the background runner and a
+ * double-click can all reach the same job together; without the lock each saw "no invoice with this
+ * DocNumber yet" and created its own copy (same TC/GRN twice in QuickBooks, created the same second).
+ * A run that finds the job locked skips — the run holding it finishes the job.
+ */
 export async function processInvoiceJob(jobId: string, opts: { repair?: boolean } = {}): Promise<void> {
+  const ran = await withDaLock(pool, `invoice-job:${jobId}`, async () => {
+    await processInvoiceJobUnlocked(jobId, opts);
+    return true;
+  });
+  if (ran === null) console.warn(`[invoice-job] ${jobId} is already being processed by another run — skipped`);
+}
+
+async function processInvoiceJobUnlocked(jobId: string, opts: { repair?: boolean }): Promise<void> {
   // Load job
   const jobRes = await pool.query(`SELECT * FROM public.invoice_jobs WHERE id = $1 LIMIT 1`, [jobId]);
   const job = jobRes.rows[0];

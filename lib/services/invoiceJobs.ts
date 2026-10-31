@@ -1,6 +1,6 @@
 import pool from '../db';
 import { isEnrolmentEligibleForAutoInvoice } from './invoiceEligibility';
-import { qboReadInvoice, qboDeleteInvoice, qboFindInvoiceByDocNumber } from './qboInvoiceService';
+import { safeDeleteInvoiceById, safeDeleteInvoiceByDocNumber } from './cancelInvoiceSafety';
 
 export type InvoiceJobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
 
@@ -509,57 +509,28 @@ export async function tryEnqueueInvoiceFromSsgRecord(record: any): Promise<void>
   }
 }
 
+/** Course run id of an enrolment — TC invoices cite it ("Course Run: 1433997"), the enrolment id they don't. */
+async function courseRunIdForEnrolment(enrolmentId: string): Promise<string | null> {
+  const r = await pool.query(
+    `SELECT COALESCE(
+       (SELECT NULLIF(TRIM(course_run_id::text), '') FROM public.ssg_enrolments
+         WHERE enrolment_id = $1 AND COALESCE(TRIM(course_run_id::text), '') <> '' ORDER BY imported_at DESC LIMIT 1),
+       (SELECT NULLIF(TRIM(cr.course_run_id::text), '') FROM public.enrollment e JOIN public.course_run cr ON cr.id = e.course_run_id
+         WHERE e.enrolment_id = $1 LIMIT 1)
+     ) AS run`,
+    [enrolmentId]
+  );
+  return r.rows[0]?.run ?? null;
+}
+
 /**
  * Called when a non-DA enrolment is cancelled.
- * Deletes the main QB invoice and the GRN invoice (if any), then marks the job cancelled.
- * Non-fatal — errors are logged but never propagate so the cancellation itself isn't blocked.
+ * Deletes the main QB invoice and every GRN invoice of the enrolment's grants, then marks the job cancelled.
+ * Each delete goes through safeDeleteInvoice*: an invoice with a payment/credit, a group invoice, or one that
+ * doesn't belong to this enrolment is left alone and reported. References are cleared only for invoices
+ * confirmed gone, so whatever is left stays traceable.
+ * Non-fatal — errors are returned as warnings and never block the cancellation itself.
  */
-function isQbNotFound(msg: string): boolean {
-  return msg.includes('610') || msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('object not found');
-}
-
-/** Try to delete a QB invoice by ID, attempting app2 then app1 (app2 is the primary invoice app). */
-async function qboDeleteInvoiceAnyApp(invoiceId: string): Promise<void> {
-  const apps: Array<'app2' | 'app1'> = ['app2', 'app1'];
-  let lastErr: string | null = null;
-  for (const app of apps) {
-    try {
-      const inv = await qboReadInvoice(app, invoiceId);
-      if (!inv?.syncToken) continue; // not found in this app — try the other
-      await qboDeleteInvoice(app, invoiceId, inv.syncToken);
-      return; // deleted successfully
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (isQbNotFound(msg)) continue; // not in this app — try the other
-      lastErr = `[${app}] ${msg}`;
-    }
-  }
-  // If neither app found the invoice, it was already deleted — that's fine
-  if (lastErr) throw new Error(lastErr);
-}
-
-/** Try to delete a QB invoice by DocNumber, attempting app2 then app1. */
-async function qboDeleteInvoiceByDocNumberAnyApp(docNumber: string): Promise<void> {
-  const apps: Array<'app2' | 'app1'> = ['app2', 'app1'];
-  let lastErr: string | null = null;
-  for (const app of apps) {
-    try {
-      const inv = await qboFindInvoiceByDocNumber(app, docNumber);
-      if (!inv?.id) continue; // not found in this app — try the other
-      // Re-read to ensure we have a fresh SyncToken
-      const full = await qboReadInvoice(app, inv.id);
-      if (!full?.syncToken) continue;
-      await qboDeleteInvoice(app, inv.id, full.syncToken);
-      return; // deleted successfully
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (isQbNotFound(msg)) continue; // not in this app — try the other
-      lastErr = `[${app}] ${msg}`;
-    }
-  }
-  if (lastErr) throw new Error(lastErr);
-}
-
 export async function cancelInvoiceJobOnEnrolmentCancelled(enrolmentId: string): Promise<{ qbDeleted: boolean; warnings: string[] }> {
   let job: InvoiceJobRow | null = null;
   try {
@@ -578,48 +549,51 @@ export async function cancelInvoiceJobOnEnrolmentCancelled(enrolmentId: string):
   }
 
   const warnings: string[] = [];
+  const courseRunId = await courseRunIdForEnrolment(enrolmentId).catch(() => null);
 
-  // Delete main customer invoice (try both apps)
+  // Main customer invoice: must be this job's TC, cite this course run, and not be shared with another live enrolment.
+  let mainCleared = !job.qbo_invoice_id;
   if (job.qbo_invoice_id) {
-    try {
-      await qboDeleteInvoiceAnyApp(job.qbo_invoice_id);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn('[invoice_jobs] cancel — main invoice delete failed:', msg);
-      warnings.push(`customer invoice: ${msg}`);
+    const shared = await pool.query(
+      `SELECT enrolment_id FROM public.invoice_jobs
+       WHERE qbo_invoice_id = $1 AND id <> $2 AND status <> 'cancelled' LIMIT 3`,
+      [job.qbo_invoice_id, job.id]
+    );
+    if (shared.rows.length) {
+      warnings.push(`customer invoice ${job.qbo_doc_number || job.qbo_invoice_id}: also billed for ${shared.rows.map((r) => r.enrolment_id).join(', ')} — not deleted`);
+    } else if (!courseRunId) {
+      warnings.push(`customer invoice ${job.qbo_doc_number || job.qbo_invoice_id}: course run of ${enrolmentId} unknown, cannot confirm the invoice is its own — not deleted`);
+    } else {
+      const r = await safeDeleteInvoiceById(job.qbo_invoice_id, 'customer invoice', { docNumber: job.qbo_doc_number, courseRunId });
+      if (r.status === 'deleted' || r.status === 'gone') mainCleared = true;
+      else if (r.message) warnings.push(r.message);
     }
   }
 
-  // Collect GRN doc numbers to delete: use invoice_jobs if set, otherwise
-  // fall back to ssg_grants so invoices created before grn_doc_number was
-  // tracked are still cleaned up.
-  const grnDocNumbers: string[] = [];
-  if (job.grn_doc_number) {
-    grnDocNumbers.push(String(job.grn_doc_number));
-  } else {
-    try {
-      const grantRows = await pool.query(
-        `SELECT grant_id::text AS grant_id
-         FROM public.ssg_grants
-         WHERE LOWER(TRIM(COALESCE(enrollment_id::text, ''))) = LOWER(TRIM($1::text))
-           AND grant_id IS NOT NULL AND TRIM(COALESCE(grant_id::text, '')) <> ''`,
-        [enrolmentId]
-      );
-      for (const gr of grantRows.rows) {
-        if (gr.grant_id) grnDocNumbers.push(String(gr.grant_id));
-      }
-    } catch (e) {
-      console.warn('[invoice_jobs] cancel — ssg_grants lookup failed:', e instanceof Error ? e.message : e);
-    }
+  // GRN invoices: one per grant (DocNumber = grant id). An enrolment can have several grants, so take
+  // every grant on ssg_grants plus the job's own grn_doc_number.
+  const grnDocNumbers = new Set<string>();
+  if (job.grn_doc_number) grnDocNumbers.add(String(job.grn_doc_number).trim());
+  try {
+    const grantRows = await pool.query(
+      `SELECT grant_id::text AS grant_id
+       FROM public.ssg_grants
+       WHERE LOWER(TRIM(COALESCE(enrollment_id::text, ''))) = LOWER(TRIM($1::text))
+         AND grant_id IS NOT NULL AND TRIM(COALESCE(grant_id::text, '')) <> ''`,
+      [enrolmentId]
+    );
+    for (const gr of grantRows.rows) if (gr.grant_id) grnDocNumbers.add(String(gr.grant_id).trim());
+  } catch (e) {
+    console.warn('[invoice_jobs] cancel — ssg_grants lookup failed:', e instanceof Error ? e.message : e);
+    warnings.push('ssg_grants lookup failed — GRN invoices not checked');
   }
 
+  let grnCleared = true;
   for (const docNum of grnDocNumbers) {
-    try {
-      await qboDeleteInvoiceByDocNumberAnyApp(docNum);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn('[invoice_jobs] cancel — GRN invoice delete failed:', docNum, msg);
-      warnings.push(`GRN ${docNum}: ${msg}`);
+    const r = await safeDeleteInvoiceByDocNumber(docNum, `GRN ${docNum}`, { wsgCustomer: true });
+    if (r.status !== 'deleted' && r.status !== 'gone') {
+      grnCleared = false;
+      if (r.message) warnings.push(r.message);
     }
   }
 
@@ -627,25 +601,26 @@ export async function cancelInvoiceJobOnEnrolmentCancelled(enrolmentId: string):
   const note = qbDeleted
     ? 'Invoice deleted — enrolment cancelled'
     : `Enrolment cancelled; QB delete warning: ${warnings.join('; ')}`;
+  if (!qbDeleted) console.warn('[invoice_jobs] cancel —', enrolmentId, note);
 
   try {
     await pool.query(
       `UPDATE public.invoice_jobs
        SET status              = 'cancelled',
-           qbo_invoice_id      = NULL,
-           qbo_doc_number      = NULL,
-           invoice_no          = NULL,
-           drive_file_id       = NULL,
-           drive_web_view_link = NULL,
-           grn_doc_number      = NULL,
-           grn_drive_file_id   = NULL,
-           grn_drive_web_view_link = NULL,
-           invoice_sent_at     = NULL,
-           invoice_sent_to     = NULL,
+           qbo_invoice_id      = CASE WHEN $3 THEN NULL ELSE qbo_invoice_id END,
+           qbo_doc_number      = CASE WHEN $3 THEN NULL ELSE qbo_doc_number END,
+           invoice_no          = CASE WHEN $3 THEN NULL ELSE invoice_no END,
+           drive_file_id       = CASE WHEN $3 THEN NULL ELSE drive_file_id END,
+           drive_web_view_link = CASE WHEN $3 THEN NULL ELSE drive_web_view_link END,
+           invoice_sent_at     = CASE WHEN $3 THEN NULL ELSE invoice_sent_at END,
+           invoice_sent_to     = CASE WHEN $3 THEN NULL ELSE invoice_sent_to END,
+           grn_doc_number      = CASE WHEN $4 THEN NULL ELSE grn_doc_number END,
+           grn_drive_file_id   = CASE WHEN $4 THEN NULL ELSE grn_drive_file_id END,
+           grn_drive_web_view_link = CASE WHEN $4 THEN NULL ELSE grn_drive_web_view_link END,
            last_error          = $2,
            updated_at          = now()
        WHERE id = $1`,
-      [job.id, note]
+      [job.id, note, mainCleared, grnCleared]
     );
   } catch (e) {
     console.warn('[invoice_jobs] cancelInvoiceJobOnEnrolmentCancelled — DB update failed:', e instanceof Error ? e.message : e);
