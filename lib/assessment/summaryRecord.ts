@@ -270,15 +270,11 @@ async function fetchTemplatePdf(
   } catch (e: any) {
     const status = e?.code ?? e?.status ?? e?.response?.status;
     if (Number(status) !== 404 && Number(status) !== 403) throw e;
-    // Drive answers 404 for files that exist but aren't shared with us.
-    let account = 'the LMS Google Drive account';
-    try {
-      const about = await drive.about.get({ fields: 'user(emailAddress)' });
-      if (about.data.user?.emailAddress) account = about.data.user.emailAddress;
-    } catch { /* keep the generic wording */ }
+    // The app's Drive account owns the course templates, so a 404 means the
+    // linked file was deleted or the link is wrong.
     throw new Error(
-      `The Assessment Summary Record template${courseCode ? ` of ${courseCode}` : ''} cannot be opened by ${account} — ` +
-      `share the template with that account (Viewer) or update the template link on the course`,
+      `The Assessment Summary Record template link${courseCode ? ` on ${courseCode}` : ''} no longer opens a file in Google Drive ` +
+      `(it may have been deleted or the link is wrong) — update the template link on the course`,
     );
   }
   const mimeType = meta.data.mimeType || '';
