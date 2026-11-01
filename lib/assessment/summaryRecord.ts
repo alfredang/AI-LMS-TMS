@@ -256,16 +256,36 @@ const WORD_MIMES = new Set([
  * The ASR template as PDF bytes. A PDF is downloaded as-is; a Google Doc is
  * exported; a Word file is converted through a temporary Google Doc copy.
  */
-async function fetchTemplatePdf(drive: drive_v3.Drive, templateUrl: string): Promise<{ bytes: Buffer; fileId: string; name: string }> {
+async function fetchTemplatePdf(
+  drive: drive_v3.Drive,
+  templateUrl: string,
+  courseCode: string | null,
+): Promise<{ bytes: Buffer; fileId: string; name: string }> {
   const fileId = extractGoogleFileId(templateUrl);
   if (!fileId) throw new Error('The Assessment Summary Record link on the course is not a Google Drive file');
 
-  const meta = await drive.files.get({ fileId, fields: 'id, name, mimeType' });
+  let meta: { data: drive_v3.Schema$File };
+  try {
+    meta = await drive.files.get({ fileId, fields: 'id, name, mimeType', supportsAllDrives: true });
+  } catch (e: any) {
+    const status = e?.code ?? e?.status ?? e?.response?.status;
+    if (Number(status) !== 404 && Number(status) !== 403) throw e;
+    // Drive answers 404 for files that exist but aren't shared with us.
+    let account = 'the LMS Google Drive account';
+    try {
+      const about = await drive.about.get({ fields: 'user(emailAddress)' });
+      if (about.data.user?.emailAddress) account = about.data.user.emailAddress;
+    } catch { /* keep the generic wording */ }
+    throw new Error(
+      `The Assessment Summary Record template${courseCode ? ` of ${courseCode}` : ''} cannot be opened by ${account} — ` +
+      `share the template with that account (Viewer) or update the template link on the course`,
+    );
+  }
   const mimeType = meta.data.mimeType || '';
   const name = (meta.data.name || 'Assessment Summary Record').replace(/\.(pdf|docx?|gdoc)$/i, '');
 
   if (mimeType === PDF_MIME) {
-    const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
+    const res = await drive.files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
     return { bytes: Buffer.from(res.data as ArrayBuffer), fileId, name };
   }
   if (mimeType === GOOGLE_DOC_MIME) {
@@ -277,6 +297,7 @@ async function fetchTemplatePdf(drive: drive_v3.Drive, templateUrl: string): Pro
       fileId,
       requestBody: { name: `${name} (asr-convert)`, mimeType: GOOGLE_DOC_MIME },
       fields: 'id',
+      supportsAllDrives: true,
     });
     const tmpId = copy.data.id!;
     try {
@@ -326,7 +347,7 @@ export async function regenerateSummaryRecordPdf(courseRunId: string, learnerUse
   if (!rootFolderId) throw new Error('Google Drive Root Folder ID is not configured (Company Setting → Integration → Google)');
 
   const drive = await getDriveClient();
-  const template = await fetchTemplatePdf(drive, run.templateUrl);
+  const template = await fetchTemplatePdf(drive, run.templateUrl, run.courseCode);
   const stamped = await stampSummaryRecord(template.bytes, {
     learner: partyDetails(row, 'learner'),
     trainer: partyDetails(row, 'trainer'),
@@ -398,8 +419,48 @@ export interface Signer {
 }
 
 /**
+ * Regenerate the PDF after a signing change. The signature is already saved,
+ * so a Drive/template failure is reported back as a warning instead of failing
+ * the sign (the PDF can be rebuilt later with regenerateStaleSummaryRecordPdfs).
+ */
+async function tryRegenerate(courseRunId: string, learnerUserId: string): Promise<{ generation: GenerationResult | null; generationError?: string }> {
+  try {
+    return { generation: await regenerateSummaryRecordPdf(courseRunId, learnerUserId) };
+  } catch (e) {
+    const message = (e as Error).message || 'PDF generation failed';
+    console.warn(`ASR: signature saved but PDF not generated (run ${courseRunId}, learner ${learnerUserId}):`, message);
+    return { generation: null, generationError: message };
+  }
+}
+
+/** Signed records whose PDF is missing or older than their latest signature. */
+const STALE_PDF_CONDITION = `
+  (learner_signed_at IS NOT NULL OR trainer_signed_at IS NOT NULL)
+  AND (file_id IS NULL OR generated_at IS NULL OR generated_at < GREATEST(learner_signed_at, trainer_signed_at))`;
+
+/**
+ * Rebuild every missing/out-of-date PDF in a run, e.g. after the course's
+ * template was re-shared with the Drive account.
+ */
+export async function regenerateStaleSummaryRecordPdfs(courseRunId: string): Promise<{ regenerated: number; errors: string[] }> {
+  const r = await pool.query(
+    `SELECT learner_user_id FROM assessment_summary_record
+      WHERE course_run_id::text = $1 AND ${STALE_PDF_CONDITION}`,
+    [courseRunId],
+  );
+  let regenerated = 0;
+  const errors = new Set<string>();
+  for (const { learner_user_id } of r.rows as { learner_user_id: string }[]) {
+    const { generation, generationError } = await tryRegenerate(courseRunId, learner_user_id);
+    if (generation) regenerated++;
+    else if (generationError) errors.add(generationError);
+  }
+  return { regenerated, errors: [...errors] };
+}
+
+/**
  * Record one party's signature and regenerate the PDF. Returns the updated
- * view plus what was drawn.
+ * view plus what was drawn (or why the PDF could not be generated).
  */
 export async function signSummaryRecord(params: {
   courseRunId: string;
@@ -407,7 +468,7 @@ export async function signSummaryRecord(params: {
   party: Party;
   signDate: string; // yyyy-mm-dd
   signer: Signer;
-}): Promise<{ record: SummaryRecordView; generation: GenerationResult }> {
+}): Promise<{ record: SummaryRecordView; generation: GenerationResult | null; generationError?: string }> {
   const { courseRunId, learnerUserId, party, signDate, signer } = params;
   if (party === 'learner') {
     await pool.query(
@@ -434,9 +495,9 @@ export async function signSummaryRecord(params: {
     );
   }
 
-  const generation = await regenerateSummaryRecordPdf(courseRunId, learnerUserId);
+  const gen = await tryRegenerate(courseRunId, learnerUserId);
   const record = (await getSummaryRecord(courseRunId, learnerUserId))!;
-  return { record, generation };
+  return { record, ...gen };
 }
 
 /**
@@ -447,7 +508,7 @@ export async function clearSummaryRecordSignature(params: {
   courseRunId: string;
   learnerUserId: string;
   party: Party;
-}): Promise<{ record: SummaryRecordView | null; generation: GenerationResult | null }> {
+}): Promise<{ record: SummaryRecordView | null; generation: GenerationResult | null; generationError?: string }> {
   const { courseRunId, learnerUserId, party } = params;
   const row = await getRow(courseRunId, learnerUserId);
   if (!row) return { record: null, generation: null };
@@ -472,8 +533,8 @@ export async function clearSummaryRecordSignature(params: {
 
   const after = (await getRow(courseRunId, learnerUserId))!;
   if (after.learner_signed_at || after.trainer_signed_at) {
-    const generation = await regenerateSummaryRecordPdf(courseRunId, learnerUserId);
-    return { record: await getSummaryRecord(courseRunId, learnerUserId), generation };
+    const gen = await tryRegenerate(courseRunId, learnerUserId);
+    return { record: await getSummaryRecord(courseRunId, learnerUserId), ...gen };
   }
 
   // Nobody signed any more — drop the generated file.

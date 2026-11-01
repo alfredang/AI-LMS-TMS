@@ -9,6 +9,7 @@ import {
   getSummaryRunInfo,
   isLearnerEnrolled,
   listSummaryRecords,
+  regenerateStaleSummaryRecordPdfs,
   signSummaryRecord,
 } from '@lib/assessment/summaryRecord';
 import type { Party } from '@lib/assessment/summaryRecordStamp';
@@ -35,7 +36,12 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
  *                     assigned trainer of the run, or staff).
  *   signed=false    → remove that party's signature instead.
  *   Each call regenerates the PDF from the course's template with every block
- *   signed so far and returns the Drive link.
+ *   signed so far and returns the Drive link. The signature is saved even if
+ *   the PDF can't be built; the reason comes back as `generationError`.
+ *
+ * POST { courseRunId, action: 'regenerate' }
+ *   Class trainer / staff: rebuild every missing or out-of-date PDF in the run
+ *   (e.g. after the template was re-shared with the Drive account).
  */
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   const auth = (req as AuthedApiRequest).authUser!;
@@ -80,6 +86,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const body = req.body || {};
     const courseRunId = typeof body.courseRunId === 'string' ? body.courseRunId.trim() : '';
     if (!courseRunId) return res.status(400).json({ success: false, error: 'courseRunId is required' });
+
+    if (body.action === 'regenerate') {
+      if (!(await requireCourseRunTrainer(auth, res, courseRunId))) return;
+      const out = await regenerateStaleSummaryRecordPdfs(courseRunId);
+      return res.status(200).json({ success: true, ...out, learners: await listSummaryRecords(courseRunId) });
+    }
+
     const signed = body.signed !== false;
     const signDate = typeof body.signDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.signDate) ? body.signDate : todayIso();
 
