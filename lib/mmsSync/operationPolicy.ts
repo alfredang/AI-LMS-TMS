@@ -8,14 +8,14 @@ export const normalOperationsEnabled = () => getMmsRuntimeConfig().enabled && ge
 export function courseAllowed(code: unknown, configured = getMmsRuntimeConfig().courseAllowlist): boolean {
     try {
         const normalized = assertNonFunded(code);
-        const entries = configured.split(',').map(v => v.trim().toUpperCase());
-        return entries.includes(normalized) || entries.includes('C*');
+        return normalized.startsWith('C');
     } catch { return false; }
 }
 
 /** Record the existing TMS operation, not a claim that a human reviewed MMS. */
 export function operationalApproval(snapshot: RunSnapshot, source: RunApproval & { tms_run_uuid?: string | null; masterlist_class_id?: string | null }, now = new Date(), requireAssignment = true): RunApproval {
     assertNonFunded(snapshot.course_code);
+    if (snapshot.schema_version === 2) return { ...source, delivery_platform: 'mms', approved_at: source.approved_at || now.toISOString(), approved_by: 'lms-master-list', first_session_at: firstSessionAt(snapshot) || null };
     if (source.delivery_platform === 'tms') throw new MmsSyncError('This run is explicitly retained in TMS.', 'outside_pilot');
     if (!source.tms_run_uuid && !source.masterlist_class_id)
         throw new MmsSyncError('Save the normal TMS course run or Master List assignment first.', 'assignment_pending');

@@ -9,7 +9,7 @@ export function assertNonFunded(code: unknown): string {
         throw new MmsSyncError('Resolve the course code before synchronizing.');
     if (value.startsWith('TGS'))
         throw new MmsSyncError('Funded TGS courses are excluded from MMS handover.', 'funded_excluded');
-    if (!/^C\d[A-Z0-9-]*$/.test(value))
+    if (!/^C[A-Z0-9-]+$/.test(value))
         throw new MmsSyncError(`MMS delivery does not yet support ${value}.`, 'unsupported_code');
     return value;
 }
@@ -35,7 +35,14 @@ export interface SyncSession {
     mode: number;
 }
 export interface RunSnapshot {
-    schema_version: 1;
+    schema_version: 1 | 2;
+    class_start_date?: string | null;
+    class_end_date?: string | null;
+    source_notes?: string[];
+    pending_learners?: { source_id: string; name: string; email: string; phone?: string }[];
+    pending_trainers?: { name: string; email: string }[];
+    pending_sessions?: Record<string, unknown>[];
+    class_details?: { venue: string; virtual_link: string; mode: number; notes: string; zoom_id: string; meeting_id: string };
     source_provider_id: string;
     source_run_key: string;
     website_id: number;
@@ -111,9 +118,9 @@ export function validateSnapshot(snapshot: RunSnapshot): RunSnapshot {
     snapshot.event_occurrences = [...new Set(snapshot.event_occurrences)].sort();
     if (!snapshot.source_run_key || !snapshot.source_provider_id || !snapshot.calendar_id)
         throw new MmsSyncError('Stable source identities are required.');
-    if (!snapshot.roster_complete)
+    if (snapshot.schema_version !== 2 && !snapshot.roster_complete)
         throw new MmsSyncError('An incomplete roster cannot be applied.');
-    if (!snapshot.sessions.length)
+    if (snapshot.schema_version !== 2 && !snapshot.sessions.length)
         throw new MmsSyncError('The exact class sessions are required.');
     const keys = new Set<string>();
     for (const s of snapshot.sessions) {
@@ -130,7 +137,7 @@ export function validateSnapshot(snapshot: RunSnapshot): RunSnapshot {
     snapshot.learners = normalizePeople(snapshot.learners);
     snapshot.trainers = normalizePeople(snapshot.trainers);
     const confirmed = snapshot.trainers.filter(t => t.confirmed && t.active !== false);
-    if (confirmed.length > 1)
+    if (snapshot.schema_version !== 2 && confirmed.length > 1)
         throw new MmsSyncError('Multiple trainers need explicit delivery support before this class can be imported.');
     return snapshot;
 }

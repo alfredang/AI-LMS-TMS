@@ -119,8 +119,8 @@ async function seedDefaults() {
         days_in_advance?: number;
         default_enabled?: boolean;
     }> = [
-        {id:'mms_nonfunded_discovery',name:'MMS Non-funded Class Discovery',description:'Read the configured Google Calendar at 10 pm SGT and queue only allowlisted non-funded classes for MMS. TGS courses are excluded.',cron_expression:'0 22 * * *',api_endpoint:'/api/external/mms-sync',default_enabled:false},
-        {id:'mms_nonfunded_reconcile',name:'MMS Non-funded Class Reconciliation',description:'Refresh non-funded class discovery and source data every two minutes, including pre-class and ongoing-class checks. TGS courses are excluded.',cron_expression:'*/2 * * * *',api_endpoint:'/api/external/mms-sync?mode=reconcile',default_enabled:false},
+        {id:'mms_nonfunded_discovery',name:'MMS Non-funded Master List Sync',description:'Queue existing C-code Master List classes for MMS at 10 pm SGT, including pending, ongoing and future classes. Calendar does not discover classes.',cron_expression:'0 22 * * *',api_endpoint:'/api/external/mms-sync',default_enabled:false},
+        {id:'mms_nonfunded_reconcile',name:'MMS Non-funded Class Reconciliation',description:'Synchronize existing non-funded Master List classes and reconcile MMS registrations every two minutes. TGS courses are excluded.',cron_expression:'*/2 * * * *',api_endpoint:'/api/external/mms-sync?mode=reconcile',default_enabled:false},
         {id:'mms_nonfunded_worker',name:'MMS Non-funded Sync Worker',description:'Deliver committed non-funded changes and retry failures every minute. Requires the configured pilot allowlist and integration credentials.',cron_expression:'* * * * *',api_endpoint:'/api/external/mms-sync?mode=worker',default_enabled:false},
         {
             id: DA_AUTOMATION_TASK,

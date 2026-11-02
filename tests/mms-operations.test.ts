@@ -37,8 +37,8 @@ test('funded, unsupported and explicit TMS fallback runs never auto-enrol', () =
     }
     assert.throws(() => operationalApproval(fixture(), { ...source, delivery_platform: 'tms' }, now), /retained/);
     assert.equal(courseAllowed(' c817 ', ' c* '), true);
-    assert.equal(courseAllowed('C916', 'C817'), false);
-    assert.equal(courseAllowed('C817', ''), false);
+    assert.equal(courseAllowed('C916', 'C817'), true);
+    assert.equal(courseAllowed('C817', ''), true);
 });
 
 test('automatic runs accept first assignments during a new pilot class, but reject courses begun before the pilot', () => {

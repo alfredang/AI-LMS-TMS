@@ -46,10 +46,11 @@ BEGIN
   INSERT INTO mms_sync_job(source_run_key,trigger)
   SELECT s.source_run_key,TG_TABLE_NAME FROM mms_sync_source s
   WHERE upper(btrim(s.course_code)) NOT LIKE 'TGS%'
-    AND s.auto_sync_until>now()
+    AND s.masterlist_class_id IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM course_run cr JOIN course c ON c.id=cr.course_id
                     WHERE cr.id=s.tms_run_uuid AND upper(btrim(c.course_code)) LIKE 'TGS%')
-    AND ((TG_TABLE_NAME='masterlist_table' AND changed->>'class_id'=s.masterlist_class_id::text)
+    AND ((TG_TABLE_NAME='masterlist_table' AND (changed->>'class_id'=s.masterlist_class_id::text
+         OR COALESCE(to_jsonb(s)->'masterlist_class_ids','[]'::jsonb) ? (changed->>'class_id')))
       OR (TG_TABLE_NAME='course_run' AND changed->>'id'=s.tms_run_uuid::text)
       OR (TG_TABLE_NAME IN ('enrollment','course_session','course_run_trainer') AND changed->>'course_run_id'=s.tms_run_uuid::text)
       OR (TG_TABLE_NAME IN ('da_application','company_application') AND
