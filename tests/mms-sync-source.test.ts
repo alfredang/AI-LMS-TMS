@@ -93,3 +93,14 @@ test('linked LMS assignments and session overrides synchronize without a conflic
     assert.equal(snapshot.learners[0].email, 'enrolled@example.com');
     assert.equal(snapshot.sessions.length, 1);
 });
+test('Master List discovery indexes historical runs once, including rows with no run reference', async () => {
+    let referenceReads = 0;
+    const runs = Array.from({ length: 100 }, (_, i) => ({ id: `run-${i}`, course_code: 'C916', get course_run_id() { referenceReads++; return `ref-${i}`; } }));
+    const rows = Array.from({ length: 50 }, (_, i) => ({ id: `${i}`, class_id: `class-${i}`, course_title: 'Pilot', list_date: '2099-11-10' }));
+    const db = database(rows), base = db.query.bind(db);
+    (db as any).query = async (sql: string, args: unknown[]) => sql.includes('FROM course_run cr JOIN course') ? { rows: runs } : base(sql, args);
+    const result = await masterListSources(db, { persistCodes: false });
+    assert.equal(result.length, 1);
+    assert.equal(result[0].masterlist_class_ids?.length, 50);
+    assert.equal(referenceReads, runs.length, 'Each run reference is normalized once, not once per Master List row.');
+});

@@ -26,16 +26,32 @@ export async function masterListSources(db: Pool, options: { persistCodes?: bool
     const known = (await db.query('SELECT * FROM mms_sync_source')).rows;
     const courses = (await db.query('SELECT id,course_code,title FROM course')).rows;
     const runs = (await db.query('SELECT cr.id,cr.course_run_id,c.course_code FROM course_run cr JOIN course c ON c.id=cr.course_id')).rows;
+    // This resolver is also used by status previews. Index once rather than
+    // scanning every historical run for each (usually run-number-free) row.
+    const knownByClass = new Map<string, Row>();
+    for (const source of known) for (const id of [source.masterlist_class_id, ...(source.masterlist_class_ids || [])])
+        if (id && !knownByClass.has(id)) knownByClass.set(id, source);
+    const runsById = new Map(runs.map(run => [run.id, run]));
+    const runsByReference = new Map<string, Row>();
+    for (const run of runs) {
+        const reference = text(run.course_run_id).toLowerCase();
+        if (reference && !runsByReference.has(reference)) runsByReference.set(reference, run);
+    }
+    const coursesByTitle = new Map<string, Row | null>();
+    for (const course of courses) {
+        const title = text(course.title).toLowerCase();
+        coursesByTitle.set(title, coursesByTitle.has(title) ? null : course);
+    }
     const groups = new Map<string, SourceRecord>();
     const today = dateInSingapore(new Date().toISOString());
     for (const row of rows) {
         const eventId = text(row.calendar_event_id).replace(/_\d{4}-\d{2}-\d{2}$/, '');
-        const previous = known.find(s => s.masterlist_class_id === row.class_id || s.masterlist_class_ids?.includes(row.class_id));
-        const run = runs.find(r => text(r.course_run_id).toLowerCase() === text(row.course_run_no).toLowerCase() && text(row.course_run_no));
+        const previous = knownByClass.get(row.class_id);
+        const run = runsByReference.get(text(row.course_run_no).toLowerCase());
         let code = masterListCode(row) || run?.course_code || previous?.course_code || '';
         if (!code) {
-            const exact = courses.filter(c => text(c.title).toLowerCase() === text(row.course_title).toLowerCase());
-            if (exact.length === 1) code = exact[0].course_code;
+            const exact = coursesByTitle.get(text(row.course_title).toLowerCase());
+            if (exact) code = exact.course_code;
         }
         if (!code) { options.exceptions?.push({ masterlist_class_id: row.class_id, reason: 'Master List class needs a course code; no unique LMS catalogue match exists.' }); continue; }
         try { code = assertNonFunded(code); } catch { continue; }
@@ -49,8 +65,9 @@ export async function masterListSources(db: Pool, options: { persistCodes?: bool
             grouped.event_ids = [...new Set([...grouped.event_ids, ...(eventId ? [eventId] : [])])];
             if (run && text(run.course_code).toUpperCase() === code && !grouped.tms_run_uuid) { grouped.tms_run_uuid=run.id; grouped.operational_run_id=run.course_run_id; }
         } else {
-            const linkedRun = runs.find(r => r.id === (run?.id || previous?.tms_run_uuid) && text(r.course_code).toUpperCase() === code);
-            groups.set(identity, { ...previous, source_run_key: previous?.course_code === code ? previous.source_run_key : `masterlist:${row.class_id}${previous ? `:${code}` : ''}`, course_code: code, calendar_id: previous?.calendar_id || 'masterlist',
+            const candidate = runsById.get(run?.id || previous?.tms_run_uuid);
+            const linkedRun = candidate && text(candidate.course_code).toUpperCase() === code ? candidate : null;
+            groups.set(identity, { ...previous, source_run_key: previous && previous.course_code === code ? previous.source_run_key : `masterlist:${row.class_id}${previous ? `:${code}` : ''}`, course_code: code, calendar_id: previous?.calendar_id || 'masterlist',
                 event_ids: eventId ? [eventId] : [], tms_run_uuid: linkedRun?.id || null, operational_run_id: linkedRun?.course_run_id || text(row.course_run_no) || null, masterlist_class_id: row.class_id, masterlist_class_ids: [row.class_id] });
         }
     }
