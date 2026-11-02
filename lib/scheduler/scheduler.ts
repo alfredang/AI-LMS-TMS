@@ -38,6 +38,7 @@ export interface SchedulerTask {
     api_endpoint: string;
     email_template: string | null;
     days_in_advance: number | null;
+    alert_recipients: string | null;
     last_run_at: string | null;
     last_status: string | null;
     created_at: string;
@@ -104,6 +105,21 @@ async function ensureSchedulerTable() {
     await pool.query(`
         ALTER TABLE scheduler_config ADD COLUMN IF NOT EXISTS days_in_advance INTEGER DEFAULT 3
     `);
+    // Comma-separated emails a task's alert goes to (e.g. the duplicate course-run
+    // report). NULL = the task's own fallback. Set per tenant on the Scheduler page.
+    await pool.query(`
+        ALTER TABLE scheduler_config ADD COLUMN IF NOT EXISTS alert_recipients TEXT
+    `);
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** "a@x.com; b@y.com" -> "a@x.com, b@y.com"; blank -> null; throws on a bad address. */
+function normalizeAlertRecipients(raw: string | null): string | null {
+    const emails = String(raw ?? '').split(/[,;\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const bad = emails.filter((e) => !EMAIL_RE.test(e));
+    if (bad.length) throw new Error(`Not a valid email address: ${bad.join(', ')}`);
+    return emails.length ? [...new Set(emails)].join(', ') : null;
 }
 
 // ── Seed default tasks if they don't exist ────────────────────────────────────
@@ -220,6 +236,13 @@ async function seedDefaults() {
             cron_expression: '0 2 * * *', // 2:00 AM SGT daily
             api_endpoint: '/api/external/auto-sync-wsq-schedule',
             default_enabled: false,
+        },
+        {
+            id: 'detect_duplicate_course_runs',
+            name: 'Detect Duplicate Course Runs on SSG',
+            description: 'Daily, read-only: checks every TGS course code on SSG for upcoming class dates that hold more than one course run (duplicates on MySkillsFuture) and emails the list - to the Alert Recipients below if set, otherwise the company email. Catches duplicates from any source, including runs created by hand in TPGateway. Changes nothing. Runs daily at 4:30 AM SGT (~15 min).',
+            cron_expression: '30 4 * * *', // 4:30 AM SGT daily, after the 2 AM WSQ sync
+            api_endpoint: '/api/external/detect-duplicate-course-runs',
         },
         {
             id: 'auto_retry_wsq_blocked',
@@ -444,6 +467,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         directHandlers.set('auto_sync_wsq_schedule', async () => {
             const { runAutoSyncWsqSchedule } = await import('../../pages/api/external/auto-sync-wsq-schedule');
             return runAutoSyncWsqSchedule();
+        });
+        directHandlers.set('detect_duplicate_course_runs', async () => {
+            const { runDuplicateCourseRunCheck } = await import('../ssg/duplicateRunDetector');
+            return runDuplicateCourseRunCheck();
         });
         directHandlers.set('auto_retry_wsq_blocked', async () => {
             const { runAutoRetryWsqBlocked } = await import('../../pages/api/external/auto-retry-wsq-blocked');
@@ -765,7 +792,7 @@ export async function getSchedulerTasks(): Promise<SchedulerTask[]> {
 
 export async function updateTaskSchedule(
     taskId: string,
-    updates: { cron_expression?: string; enabled?: boolean; email_template?: string | null; days_in_advance?: number | null }
+    updates: { cron_expression?: string; enabled?: boolean; email_template?: string | null; days_in_advance?: number | null; alert_recipients?: string | null }
 ): Promise<SchedulerTask | null> {
     const setClauses: string[] = ['updated_at = NOW()'];
     const values: any[] = [];
@@ -792,6 +819,11 @@ export async function updateTaskSchedule(
     if (updates.days_in_advance !== undefined) {
         setClauses.push(`days_in_advance = $${paramIdx++}`);
         values.push(updates.days_in_advance);
+    }
+
+    if (updates.alert_recipients !== undefined) {
+        setClauses.push(`alert_recipients = $${paramIdx++}`);
+        values.push(normalizeAlertRecipients(updates.alert_recipients));
     }
 
     values.push(taskId);

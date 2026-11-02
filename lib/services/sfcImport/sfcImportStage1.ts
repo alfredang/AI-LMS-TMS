@@ -981,8 +981,26 @@ export async function sfcStage1ParseMatchAndPersist(input: {
           // (wrong type — e.g. TG-/GRN- — or wrong learner/course content) must never be shown
           // bare, as if it were a confirmed, valid target for this SFC claim.
           if (qboDocNumber) qboDocNumber = `${qboDocNumber} (rejected — not a valid TC/SFC invoice, or content mismatch)`;
-        } else if (invData.balance === 0 || historicallyMarkedApplied) {
+        } else if (invData.balance === 0) {
           resolvedMatchStatus = 'already_applied';
+        } else if (historicallyMarkedApplied) {
+          // History is not proof on its own. The invoice still has a balance, so it is
+          // "already applied" only when the payment we recorded is actually on it. Otherwise
+          // the money may sit on another invoice (or was removed) — a person must check;
+          // never report it as received while the SFC invoice is still open.
+          const linkedPaymentIds = new Set(
+            (Array.isArray(invData.raw?.LinkedTxn) ? invData.raw.LinkedTxn : [])
+              .filter((t: any) => t?.TxnType === 'Payment')
+              .map((t: any) => String(t.TxnId))
+          );
+          if (storedQbPaymentId && linkedPaymentIds.has(String(storedQbPaymentId))) {
+            resolvedMatchStatus = 'already_applied';
+          } else {
+            resolvedMatchStatus = 'needs_review';
+            reviewReasons.push(
+              `Claim was recorded as applied${storedQbPaymentId ? ` (payment ${storedQbPaymentId})` : ''}, but that payment is not on ${invData.docNumber || qboDocNumber || 'this invoice'}, which still has $${invData.balance.toFixed(2)} open — check where this claim's money is before receiving`
+            );
+          }
         }
 
         // Best-effort, reference-only: a verified SFC-CA invoice already names its own Customer

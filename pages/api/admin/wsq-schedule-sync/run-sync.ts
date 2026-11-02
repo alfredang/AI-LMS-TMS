@@ -8,6 +8,8 @@ import { COURSE_ID_BY_ANY_CODE_SQL } from '../../../../lib/courseCode';
 import { createSSGCourseAPI } from '../../../../lib/ssg/api/course-api';
 import { getTrainingPartnerIdentifiers } from '../../../../lib/trainingPartnerIdentifiers';
 import { getDirectApplicationInstantConfirmSettings } from '../../../../lib/directApplicationInstantConfirmSettings';
+import { fetchMagentoSchedules, futureScheduleItems } from '../../../../lib/wsqScheduleSync';
+import { CourseRunPublishBusyError, withCourseRunPublishLock } from '../../../../lib/ssg/courseRunPublishLock';
 
 /**
  * POST /api/admin/wsq-schedule-sync/run-sync
@@ -28,7 +30,24 @@ type ItemResult = {
   status: 'submitted' | 'exists' | 'no_course' | 'no_session_timing' | 'ssg_error' | 'error';
   ssg_run_id?: string; local_run_id?: string; message?: string;
 };
-type SsgRunDateCache = Map<string, Promise<Map<string, string>>>;
+// byDate: "start|end" → run id(s). byStart: start → every run starting that day.
+type SsgRunIndex = {
+  byDate: Map<string, string>;
+  byStart: Map<string, { id: string; end: string }[]>;
+};
+// Per-job SSG state.
+//  published: runs this job has already published, by course code - merged into
+//    every lookup, since SSG's search may not list a run the instant it exists.
+//  lookups: each course's SSG run list, reused for SSG_LOOKUP_TTL_MS. Refetching
+//    before every item made the weekly retry (~850 dates) ~1,500 SSG calls, which
+//    trips SSG's rate limit; each throttled item then fails "could not verify" and
+//    is never retried again. Within 2 minutes the only other writer is another LMS
+//    path, which is serialized by the publish lock and re-checks SSG itself.
+type JobPublished = {
+  published: Map<string, { id: string; start: string; end: string }[]>;
+  lookups: Map<string, { at: number; index: Promise<SsgRunIndex> }>;
+};
+const SSG_LOOKUP_TTL_MS = 2 * 60_000;
 
 // ── Session helpers (mirrors submit-to-ssg.ts) ────────────────────────────────
 
@@ -77,11 +96,13 @@ async function fetchLiveSsgRunDateMap(
   courseCode: string,
   credentials: SSGCredentials,
   ssgBaseUrl: string,
-): Promise<Map<string, string>> {
+): Promise<SsgRunIndex> {
   const api = createSSGCourseAPI(ssgBaseUrl, credentials);
   const tp = await getTrainingPartnerIdentifiers().catch(() => ({ uen: '' }));
   const pageSize = 100;
   const byDate = new Map<string, string>();
+  const byStart = new Map<string, { id: string; end: string }[]>();
+  const seen = new Set<string>();
 
   for (let page = 0; page < 10; page++) {
     const result = await api.searchCourseRunsByCode(courseCode, {
@@ -94,36 +115,87 @@ async function fetchLiveSsgRunDateMap(
       throw new Error(result.error?.message || result.error?.code || `SSG returned status ${result.status}`);
     }
     const data = (result.data as any)?.data ?? result.data ?? {};
-    const runs: any[] = data?.course?.runs ?? data?.runs ?? [];
+    const runs = data?.course?.runs ?? data?.runs;
+    // Fail closed: a reply with no run list is not "no runs".
+    if (!Array.isArray(runs)) throw new Error('SSG course-run search returned no run list');
+    let fresh = 0;
     for (const run of runs) {
+      const id = String(run?.id ?? run?.runId ?? run?.courseRunId ?? '').trim();
+      if (id && seen.has(id)) continue;
+      if (id) seen.add(id);
+      fresh++;
       const start = parseSsgDate(run?.courseStartDate ?? run?.courseDates?.start);
       const end = parseSsgDate(run?.courseEndDate ?? run?.courseDates?.end);
       if (!start || !end) continue;
-      const id = String(run?.id ?? run?.runId ?? run?.courseRunId ?? '').trim();
       const key = `${start}|${end}`;
       const existing = byDate.get(key);
       byDate.set(key, [existing, id].filter(Boolean).join('/'));
+      if (!byStart.has(start)) byStart.set(start, []);
+      byStart.get(start)!.push({ id, end });
     }
-    if (runs.length < pageSize) break;
+    if (runs.length < pageSize || fresh === 0) break;
   }
 
-  return byDate;
+  return { byDate, byStart };
 }
 
+/**
+ * What SSG already holds for this course on these dates.
+ *
+ * `exact` — a run with the same start AND end: publishing would be a duplicate.
+ * `sameStart` — runs starting the same day but ending on a different one. Usually
+ * legitimate: the storefront sells a daytime and an evening version starting the
+ * same Wednesday. But when the storefront no longer sells the SSG run's dates, it
+ * is a storefront date change: SSG still holds the old run, and publishing the
+ * new dates leaves the class listed twice on MySkillsFuture. Seen Oct 2026 on
+ * TGS-2025053922 (24-25 Dec held, 24-28 Dec published) and TGS-2025053209. The
+ * caller refuses only that stale case - which dates are right is a human decision.
+ *
+ * Read from SSG at most SSG_LOOKUP_TTL_MS before use (not from a list cached for
+ * the whole job), plus whatever this job has published. Called under the
+ * per-course publish lock.
+ */
 async function findLiveSsgRunForDates(
   courseCode: string,
   startDate: string,
   endDate: string,
   credentials: SSGCredentials,
   ssgBaseUrl: string,
-  cache: SsgRunDateCache,
-): Promise<string | null> {
+  published: JobPublished,
+): Promise<{ exact: string | null; sameStart: { id: string; end: string }[] }> {
   const normalizedCode = courseCode.trim();
-  if (!cache.has(normalizedCode)) {
-    cache.set(normalizedCode, fetchLiveSsgRunDateMap(normalizedCode, credentials, ssgBaseUrl));
+  let cached = published.lookups.get(normalizedCode);
+  if (!cached || Date.now() - cached.at > SSG_LOOKUP_TTL_MS) {
+    cached = { at: Date.now(), index: fetchLiveSsgRunDateMap(normalizedCode, credentials, ssgBaseUrl) };
+    published.lookups.set(normalizedCode, cached);
+    cached.index.catch(() => published.lookups.delete(normalizedCode)); // never cache a failure
   }
-  const byDate = await cache.get(normalizedCode)!;
-  return byDate.get(`${startDate}|${endDate}`) || null;
+  const fetched = await cached.index;
+  // Copy before merging so the cached SSG list stays exactly what SSG returned.
+  const byDate = new Map(fetched.byDate);
+  const byStart = new Map([...fetched.byStart].map(([k, v]) => [k, [...v]]));
+  for (const r of published.published.get(normalizedCode) ?? []) {
+    byDate.set(`${r.start}|${r.end}`, [byDate.get(`${r.start}|${r.end}`), r.id].filter(Boolean).join('/'));
+    if (!byStart.has(r.start)) byStart.set(r.start, []);
+    byStart.get(r.start)!.push({ id: r.id, end: r.end });
+  }
+  return {
+    exact: byDate.get(`${startDate}|${endDate}`) || null,
+    sameStart: (byStart.get(startDate) ?? []).filter((r) => r.end !== endDate),
+  };
+}
+
+/** Record a run this job just published, so a repeat of the same item in the job is caught. */
+function rememberPublishedRun(
+  published: JobPublished,
+  courseCode: string,
+  startDate: string,
+  endDate: string,
+  runId: string,
+) {
+  const code = courseCode.trim();
+  if (!published.published.has(code)) published.published.set(code, []);
+  published.published.get(code)!.push({ id: runId, start: startDate, end: endDate });
 }
 
 const MONTHS: Record<string, number> = {
@@ -601,13 +673,38 @@ export async function buildRunSessions(
 
 // ── Per-item processor ────────────────────────────────────────────────────────
 
+/**
+ * One item, under the per-course publish lock: the local check, the fresh SSG
+ * check, the publish and the local save all happen while no other LMS path can
+ * publish this course, so two overlapping syncs cannot both publish one class.
+ */
 async function processItem(
   item: SubmitItem,
   credentials: SSGCredentials,
   ssgBaseUrl: string,
   companyEmail: string,
   todaySg: string,
-  ssgRunDateCache: SsgRunDateCache,
+  published: JobPublished,
+  soldDates: Set<string>,
+): Promise<ItemResult> {
+  const code = (item.course_code ?? '').trim();
+  try {
+    return await withCourseRunPublishLock(code, () =>
+      processItemLocked(item, credentials, ssgBaseUrl, companyEmail, todaySg, published, soldDates));
+  } catch (e: any) {
+    return { course_code: code, start_date: item.start_date, end_date: item.end_date, status: 'ssg_error',
+      message: e instanceof CourseRunPublishBusyError ? e.message : `Could not lock course for publishing, nothing submitted: ${e?.message || e}` };
+  }
+}
+
+async function processItemLocked(
+  item: SubmitItem,
+  credentials: SSGCredentials,
+  ssgBaseUrl: string,
+  companyEmail: string,
+  todaySg: string,
+  published: JobPublished,
+  soldDates: Set<string>,
 ): Promise<ItemResult> {
   const { start_date, end_date } = item;
   // MMS can send course codes with stray whitespace (e.g. a trailing tab) that
@@ -635,22 +732,38 @@ async function processItem(
   }
 
   try {
-    const liveSsgRunId = await findLiveSsgRunForDates(
+    const live = await findLiveSsgRunForDates(
       course_code,
       start_date,
       end_date,
       credentials,
       ssgBaseUrl,
-      ssgRunDateCache,
+      published,
     );
-    if (liveSsgRunId) {
+    if (live.exact) {
       return {
         course_code,
         start_date,
         end_date,
         status: 'exists',
-        ssg_run_id: liveSsgRunId,
+        ssg_run_id: live.exact,
         message: 'Already exists in live SSG/TPGateway; skipped to prevent duplicate publishing',
+      };
+    }
+    // A same-day run the storefront still sells is a separate class (the
+    // daytime and evening versions start on the same Wednesday), not a stale one.
+    const stale = live.sameStart.filter((r) => !soldDates.has(`${course_code}|${start_date}|${r.end}`));
+    if (stale.length > 0) {
+      const held = stale.map((r) => `run ${r.id} (${start_date} to ${r.end})`).join(', ');
+      return {
+        course_code,
+        start_date,
+        end_date,
+        status: 'ssg_error',
+        message:
+          `SSG already has ${held} starting the same day, and the storefront no longer sells those dates - it sells ` +
+          `${start_date} to ${end_date}. Publishing would list this class twice on MySkillsFuture. Not submitted - ` +
+          `correct the dates on whichever side is wrong (edit or cancel the SSG run, or fix the storefront).`,
       };
     }
   } catch (e: any) {
@@ -743,6 +856,21 @@ async function processItem(
   } catch (e: any) {
     return { course_code, start_date, end_date, status: 'ssg_error', message: e?.message || 'SSG request failed' };
   }
+  rememberPublishedRun(published, course_code, start_date, end_date, ssgRunId);
+
+  // Re-check SSG: more than one run on these dates means a duplicate slipped
+  // past every guard (e.g. created in the TPGateway portal at the same moment).
+  let duplicateWarning = '';
+  try {
+    const after = await fetchLiveSsgRunDateMap(course_code, credentials, ssgBaseUrl);
+    const ids = new Set([...(after.byDate.get(`${start_date}|${end_date}`) ?? '').split('/').filter(Boolean), ssgRunId]);
+    if (ids.size > 1) {
+      duplicateWarning = `WARNING: SSG now holds ${ids.size} runs on these dates (${[...ids].join(', ')}) - check for a duplicate.`;
+      console.error(`🚨 [wsq-sync] ${course_code} ${start_date}..${end_date}: ${duplicateWarning}`);
+    }
+  } catch (e: any) {
+    console.warn(`[wsq-sync] post-publish duplicate check failed for ${course_code} ${start_date}:`, e?.message || e);
+  }
 
   let localRunId: string | null = null;
   try {
@@ -792,11 +920,11 @@ async function processItem(
     }
   } catch (e: any) {
     return { course_code, start_date, end_date, status: 'submitted', ssg_run_id: ssgRunId,
-      message: `SSG OK but local DB save failed: ${e?.message}` };
+      message: [`SSG OK but local DB save failed: ${e?.message}`, duplicateWarning].filter(Boolean).join(' ') };
   }
 
   return { course_code, start_date, end_date, status: 'submitted',
-    ssg_run_id: ssgRunId, local_run_id: localRunId ?? undefined };
+    ssg_run_id: ssgRunId, local_run_id: localRunId ?? undefined, message: duplicateWarning || undefined };
 }
 
 // ── Background orchestrator ───────────────────────────────────────────────────
@@ -815,13 +943,25 @@ async function runInBackground(
   ).toISOString().split('T')[0];
 
   let totalSubmitted = 0, totalExists = 0, totalSsgErrors = 0, totalSkipped = 0;
-  const ssgRunDateCache: SsgRunDateCache = new Map();
+  const published: JobPublished = { published: new Map(), lookups: new Map() };
+
+  // Every date the storefront sells, not just this job's items: the cron and the
+  // UI pass only the missing ones. "code|start|end". If the storefront cannot be
+  // read, fall back to the items alone - stricter, never looser.
+  const soldDates = new Set(items.map((it) => `${(it.course_code ?? '').trim()}|${it.start_date}|${it.end_date}`));
+  try {
+    for (const it of futureScheduleItems(await fetchMagentoSchedules(), todaySg)) {
+      soldDates.add(`${it.course_code}|${it.start_date}|${it.end_date}`);
+    }
+  } catch (e: any) {
+    console.warn('[wsq-sync] storefront fetch failed; same-day runs checked against job items only:', e?.message || e);
+  }
 
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
     const batch = items.slice(i, i + BATCH_SIZE);
     const results: ItemResult[] = [];
     for (const item of batch) {
-      results.push(await processItem(item, credentials, ssgBaseUrl, companyEmail, todaySg, ssgRunDateCache));
+      results.push(await processItem(item, credentials, ssgBaseUrl, companyEmail, todaySg, published, soldDates));
     }
 
     const batchSubmitted = results.filter(r => r.status === 'submitted').length;

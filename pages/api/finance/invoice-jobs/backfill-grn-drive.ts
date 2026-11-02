@@ -72,6 +72,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const apps: string[] = appOverride === 'app2' ? ['app2', 'app1'] : ['app1', 'app2'];
 
     const createMissingGrn = req.body?.createMissingGrn === true;
+    // Optional: limit the GRN pass to these refs (the rows on the Finance user's current page).
+    const grnRefs: string[] | null = Array.isArray(req.body?.grnRefs)
+      ? req.body.grnRefs.filter((r: unknown): r is string => typeof r === 'string' && r.trim() !== '').map((r: string) => r.trim().toUpperCase())
+      : null;
 
     let resolved = 0;
     let failed = 0;
@@ -131,8 +135,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           AND NULLIF(TRIM(ij.grn_doc_number), '') IS NOT NULL
           AND ij.grn_drive_web_view_link IS NULL
           AND ${settledAndNotBackedOff.replace(/updated_at/g, 'ij.updated_at').replace(/last_error/g, 'ij.last_error')}
+          ${grnRefs ? 'AND UPPER(TRIM(ij.grn_doc_number)) = ANY($1::text[])' : ''}
         ORDER BY ij.updated_at DESC
-        LIMIT ${PDF_LIMIT}`
+        LIMIT ${PDF_LIMIT}`,
+      grnRefs ? [grnRefs] : []
     )).rows as Array<{ id: string; grn_doc_number: string; repairable: boolean; grant_cancelled: boolean }>;
 
     let repairs = 0;

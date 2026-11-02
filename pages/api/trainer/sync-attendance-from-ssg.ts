@@ -4,7 +4,8 @@ import pool from '../../../lib/db';
 import { createSSGCourseAPI } from '../../../lib/ssg/api/course-api';
 import { createSSGAttendanceAPI } from '../../../lib/ssg/api/attendance-api';
 import { getSSGCredentialsService } from '../../../lib/ssg/services/credentials-service';
-import { extractRecordsFromViewAttendance, normalizeAttendanceRecord } from '../../../lib/ssg/utils/attendance-decrypt';
+import { extractRecordsFromViewAttendance } from '../../../lib/ssg/utils/attendance-decrypt';
+import { upsertSsgAttendanceRecord } from '../../../lib/ssg/utils/upsertSsgAttendance';
 
 /**
  * POST /api/trainer/sync-attendance-from-ssg
@@ -134,29 +135,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           if (!localSessionUuid) continue;
 
           for (const att of records) {
-            const normalized = normalizeAttendanceRecord(att);
-            if (!normalized) continue;
-            const { nric: traineeNric, isPresent } = normalized;
-
-            const userByNric = await pool.query(
-              `SELECT au.id FROM app_user au
-               JOIN learner_profile lp ON lp.user_id = au.id
-               WHERE lp.nric = $1
-               LIMIT 1`,
-              [traineeNric]
-            );
-            const userId = userByNric.rows[0]?.id || null;
-
-            await pool.query(
-              `INSERT INTO course_attendance (session_id, user_id, nric, is_present)
-               VALUES ($1, $2, $3, $4)
-               ON CONFLICT (session_id, nric) DO UPDATE SET
-                 is_present = EXCLUDED.is_present,
-                 user_id = COALESCE(EXCLUDED.user_id, course_attendance.user_id),
-                 updated_at = NOW()`,
-              [localSessionUuid, userId, traineeNric, isPresent]
-            );
-            result.attendanceUpserted++;
+            if (await upsertSsgAttendanceRecord(crUuid, localSessionUuid, att)) {
+              result.attendanceUpserted++;
+            }
           }
         }
       } catch (attErr) {

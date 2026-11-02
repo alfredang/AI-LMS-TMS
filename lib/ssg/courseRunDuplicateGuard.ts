@@ -47,9 +47,15 @@ function normalizeDate(value: unknown): string | null {
   return null;
 }
 
+// Fail closed: a 200 whose body holds no run list is not "no runs". Treating it
+// as empty would wave every date through and publish duplicates.
 function extractRuns(payload: any): any[] {
   const data = payload?.data ?? payload ?? {};
-  return data?.course?.runs ?? data?.runs ?? [];
+  const runs = data?.course?.runs ?? data?.runs;
+  if (!Array.isArray(runs)) {
+    throw new Error('SSG course-run search returned no run list - cannot rule out duplicates');
+  }
+  return runs;
 }
 
 function runIdOf(run: any): string {
@@ -57,13 +63,15 @@ function runIdOf(run: any): string {
   return id == null ? '(unknown run id)' : String(id);
 }
 
-async function fetchExistingRunsByDate(
+/** Every run SSG holds for a course, keyed "start|end" -> run id(s) joined by "/". */
+export async function fetchExistingRunsByDate(
   api: SearchCourseRunsApi,
   courseReferenceNumber: string,
   uen?: string,
 ): Promise<Map<string, string>> {
   const pageSize = 100;
   const byDate = new Map<string, string>();
+  const seen = new Set<string>();
 
   for (let page = 0; page < 10; page++) {
     const result = await api.searchCourseRunsByCode(courseReferenceNumber, {
@@ -78,20 +86,46 @@ async function fetchExistingRunsByDate(
     }
 
     const runs = extractRuns(result.data);
+    let fresh = 0;
     for (const run of runs) {
+      const id = runIdOf(run);
+      const known = id !== '(unknown run id)';
+      if (known && seen.has(id)) continue;
+      if (known) seen.add(id);
+      fresh++;
       const start = normalizeDate(run?.courseStartDate ?? run?.courseDates?.start);
       const end = normalizeDate(run?.courseEndDate ?? run?.courseDates?.end);
       if (!start || !end) continue;
 
       const key = `${start}|${end}`;
       const existing = byDate.get(key);
-      byDate.set(key, [existing, runIdOf(run)].filter(Boolean).join('/'));
+      byDate.set(key, [existing, id].filter(Boolean).join('/'));
     }
 
-    if (runs.length < pageSize) break;
+    // A short page ends the list. So does a page of runs already seen, in case
+    // SSG ever ignores `page` and hands back page 0 again.
+    if (runs.length < pageSize || fresh === 0) break;
   }
 
   return byDate;
+}
+
+/**
+ * After a publish: how many runs SSG now holds on these exact dates. More than one
+ * means a duplicate got through despite the guard (e.g. a run created at the same
+ * moment in the TPGateway portal) - callers log it so the nightly detector is not
+ * the first to notice.
+ */
+export async function countRunsOnDates(
+  api: SearchCourseRunsApi,
+  courseReferenceNumber: string,
+  startDate: string,
+  endDate: string,
+  uen?: string,
+): Promise<{ count: number; runIds: string[] }> {
+  const byDate = await fetchExistingRunsByDate(api, courseReferenceNumber.trim(), uen);
+  const ids = (byDate.get(`${startDate}|${endDate}`) ?? '').split('/').filter(Boolean);
+  return { count: ids.length, runIds: ids };
 }
 
 export async function assertNoDuplicateCourseRunDates(input: {

@@ -13,7 +13,7 @@ import {
  * PUT  /api/admin/scheduler          — Update a task's schedule
  * POST /api/admin/scheduler          — Run a task immediately
  *
- * PUT body:   { taskId, cron_expression?, enabled? }
+ * PUT body:   { taskId, cron_expression?, enabled?, email_template?, days_in_advance?, alert_recipients? }
  * POST body:  { taskId }
  */
 
@@ -34,7 +34,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // PUT — Update schedule
     if (req.method === 'PUT') {
-        const { taskId, cron_expression, enabled, email_template, days_in_advance } = req.body ?? {};
+        const { taskId, cron_expression, enabled, email_template, days_in_advance, alert_recipients } = req.body ?? {};
 
         if (!taskId) {
             return res.status(400).json({ success: false, error: 'taskId is required' });
@@ -46,6 +46,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
                 enabled,
                 email_template,
                 days_in_advance,
+                alert_recipients,
             });
 
             if (!updated) {

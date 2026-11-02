@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { upsertSsgEnrolmentFromLocalEnrollment } from '../../../lib/services/billingSync';
 import { cancelInvoiceJobOnEnrolmentCancelled } from '../../../lib/services/invoiceJobs';
+import { cleanupDaInvoicesForEnrolment } from '../../../lib/services/daInvoiceCleanup';
 
 /**
  * POST /api/enrolments/cancel
@@ -51,12 +52,23 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       console.warn('[enrolments/cancel] invoice job cancel:', e instanceof Error ? e.message : e);
     }
 
+    let daResult: { found: boolean; warnings: string[] } = { found: false, warnings: [] };
+    try {
+      daResult = await cleanupDaInvoicesForEnrolment(enrolmentId.trim());
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('[enrolments/cancel] DA invoice cleanup:', msg);
+      daResult = { found: true, warnings: [`Direct Application clean-up failed: ${msg}`] };
+    }
+    const qbWarnings = [...qbResult.warnings, ...daResult.warnings];
+
     return res.status(200).json({
       success: true,
       updated: result.rows.length,
       enrolmentId,
-      qbInvoiceDeleted: qbResult.qbDeleted,
-      qbWarnings: qbResult.warnings,
+      qbInvoiceDeleted: qbWarnings.length === 0 && (qbResult.qbDeleted || daResult.found),
+      qbWarnings,
+      directApplication: daResult.found,
       message: result.rows.length === 0
         ? 'SSG cancellation succeeded but no matching local enrollment record was found'
         : `${result.rows.length} enrollment record(s) updated to Cancelled`,

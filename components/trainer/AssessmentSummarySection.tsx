@@ -46,6 +46,14 @@ interface RecordView {
     file: { id: string; url: string; name: string | null; generatedAt: string | null } | null;
 }
 
+/** Signed, but the PDF is missing or predates the latest signature. */
+const pdfIsStale = (rec: RecordView | null): boolean => {
+    if (!rec || (!rec.learner && !rec.trainer)) return false;
+    if (!rec.file?.generatedAt) return true;
+    const generated = Date.parse(rec.file.generatedAt);
+    return [rec.learner?.signedAt, rec.trainer?.signedAt].some(t => !!t && Date.parse(t) > generated);
+};
+
 interface LearnerStatus {
     learnerUserId: string;
     learnerName: string;
@@ -159,6 +167,9 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
     const [signing, setSigning] = useState<Set<string>>(new Set());
     const [signError, setSignError] = useState<string | null>(null);
     const [signNotice, setSignNotice] = useState<string | null>(null);
+    // Signature saved, but the PDF could not be (re)generated.
+    const [signWarning, setSignWarning] = useState<string | null>(null);
+    const [regenerating, setRegenerating] = useState(false);
 
     // Dialogs
     const [showLearnerDialog, setShowLearnerDialog] = useState(false);
@@ -236,11 +247,13 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
     const signAsLearner = async (signed = true) => {
         setSignError(null);
         setSignNotice(null);
+        setSignWarning(null);
         withSigning('self', true);
         try {
             const json = await postSign({ party: 'learner', signed });
             setMyRecord(json.record || null);
             setSignNotice(signed ? 'Your signature has been added to the Assessment Summary Record.' : 'Your signature has been removed.');
+            if (json.generationError) setSignWarning(`Your signature is saved, but the signed PDF could not be updated yet: ${json.generationError}. Please let your trainer know.`);
         } catch (e: any) {
             if (e.code === 'NO_LEARNER_SIGNATURE' || e.code === 'NO_SIGNATURE') {
                 setPendingSign('self');
@@ -257,6 +270,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
         if (learnerUserIds.length === 0) return;
         setSignError(null);
         setSignNotice(null);
+        setSignWarning(null);
         if (signed && assessorLoaded && !assessor) {
             setPendingSign(learnerUserIds);
             setShowAssessorDialog(true);
@@ -264,11 +278,13 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
         }
         learnerUserIds.forEach(id => withSigning(id, true));
         const failures: string[] = [];
+        const warnings = new Set<string>();
         let done = 0;
         for (const learnerUserId of learnerUserIds) {
             try {
                 const json = await postSign({ party: 'trainer', learnerUserId, signed });
                 setLearners(prev => prev.map(l => (l.learnerUserId === learnerUserId ? { ...l, record: json.record || null } : l)));
+                if (json.generationError) warnings.add(json.generationError);
                 done++;
             } catch (e: any) {
                 if (e.code === 'NO_ASSESSOR_PROFILE' || e.code === 'NO_SIGNATURE') {
@@ -285,6 +301,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
         }
         if (failures.length) setSignError(failures.join(' · '));
         if (done > 0) setSignNotice(signed ? `Assessor signature added for ${done} learner${done === 1 ? '' : 's'}.` : `Assessor signature removed for ${done} learner${done === 1 ? '' : 's'}.`);
+        if (warnings.size) setSignWarning(`Signatures are saved, but the signed PDF could not be updated: ${[...warnings].join(' · ')}`);
     };
 
     const handleLearnerSaved = (rec: AssessorRecord) => {
@@ -309,10 +326,12 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                 ids.forEach(id => withSigning(id, true));
                 let done = 0;
                 const failures: string[] = [];
+                const warnings = new Set<string>();
                 for (const learnerUserId of ids) {
                     try {
                         const json = await postSign({ party: 'trainer', learnerUserId, signed: true });
                         setLearners(prev => prev.map(l => (l.learnerUserId === learnerUserId ? { ...l, record: json.record || null } : l)));
+                        if (json.generationError) warnings.add(json.generationError);
                         done++;
                     } catch (e: any) {
                         failures.push(e.message || 'failed');
@@ -322,9 +341,27 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                 }
                 if (failures.length) setSignError(failures.join(' · '));
                 if (done > 0) setSignNotice(`Assessor signature added for ${done} learner${done === 1 ? '' : 's'}.`);
+                if (warnings.size) setSignWarning(`Signatures are saved, but the signed PDF could not be updated: ${[...warnings].join(' · ')}`);
             })();
         } else {
             setPendingSign(null);
+        }
+    };
+
+    const regeneratePdfs = async () => {
+        setSignError(null);
+        setSignNotice(null);
+        setSignWarning(null);
+        setRegenerating(true);
+        try {
+            const json = await postSign({ action: 'regenerate' });
+            if (Array.isArray(json.learners)) setLearners(json.learners);
+            if (json.regenerated > 0) setSignNotice(`Generated ${json.regenerated} signed PDF${json.regenerated === 1 ? '' : 's'}.`);
+            if (json.errors?.length) setSignWarning(`Some PDFs could not be generated: ${json.errors.join(' · ')}`);
+        } catch (e: any) {
+            setSignError(e.message || 'PDF generation failed');
+        } finally {
+            setRegenerating(false);
         }
     };
 
@@ -377,6 +414,7 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
     const bothSignedCount = learners.filter(l => l.record?.learner && l.record?.trainer).length;
     const learnerSignedCount = learners.filter(l => l.record?.learner).length;
     const trainerSignedCount = learners.filter(l => l.record?.trainer).length;
+    const stalePdfCount = learners.filter(l => pdfIsStale(l.record)).length;
 
     return (
         <ContentSection title="Assessment Summary Record (Virtual Class)" collapsible defaultOpen={userRole !== UserRole.Trainer}>
@@ -526,6 +564,18 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                                     {signing.size > 0 ? <Icon name={IconName.Spinner} className="w-3.5 h-3.5 animate-spin" /> : <Icon name={IconName.CheckCircle} className="w-3.5 h-3.5" />}
                                     Sign All ({unsignedLearners.length})
                                 </button>
+                                {stalePdfCount > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={regeneratePdfs}
+                                        disabled={regenerating || signing.size > 0 || noTemplate}
+                                        title="Rebuild the signed PDF for records whose PDF is missing or out of date"
+                                        className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <Icon name={regenerating ? IconName.Spinner : IconName.Sync} className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`} />
+                                        {regenerating ? 'Generating…' : `Generate PDFs (${stalePdfCount})`}
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -596,6 +646,11 @@ export const AssessmentSummarySection: React.FC<AssessmentSummarySectionProps> =
                 {signNotice && (
                     <p className="text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-2">
                         <Icon name={IconName.CheckCircle} className="w-4 h-4" /> {signNotice}
+                    </p>
+                )}
+                {signWarning && (
+                    <p className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                        {signWarning}
                     </p>
                 )}
                 {signError && (

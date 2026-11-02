@@ -324,24 +324,26 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
         calendarResult = { status: 'error' };
       }
 
-      void cleanupDaInvoicesForEnrolment(enrolmentRef)
-        .then(({ found, warnings }) => {
-          if (!found) return;
-          if (warnings.length > 0) {
-            console.warn(`[enrolment/cancel] ${enrolmentRef}: DA QB delete warnings: ${warnings.join('; ')}`);
-          } else {
-            console.log(`[enrolment/cancel] ${enrolmentRef}: DA QB invoices deleted (main/grant/sfc as applicable)`);
-          }
-        })
-        .catch((e: unknown) =>
-          console.warn('[enrolment/cancel] DA invoice cleanup:', e instanceof Error ? e.message : e)
-        );
+      // Awaited (not fire-and-forget) so the admin sees what was and wasn't removed from QuickBooks.
+      let daResult: { found: boolean; warnings: string[] } = { found: false, warnings: [] };
+      try {
+        daResult = await cleanupDaInvoicesForEnrolment(enrolmentRef);
+        if (daResult.warnings.length > 0) {
+          console.warn(`[enrolment/cancel] ${enrolmentRef}: DA QB delete warnings: ${daResult.warnings.join('; ')}`);
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn('[enrolment/cancel] DA invoice cleanup:', msg);
+        daResult = { found: true, warnings: [`Direct Application clean-up failed: ${msg}`] };
+      }
 
+      const qbWarnings = [...qbResult.warnings, ...daResult.warnings];
       return res.status(200).json({
         success: true,
         data: parsed?.data ?? parsed,
-        qbInvoiceDeleted: qbResult.qbDeleted,
-        qbWarnings: qbResult.warnings,
+        qbInvoiceDeleted: qbWarnings.length === 0 && (qbResult.qbDeleted || daResult.found),
+        qbWarnings,
+        directApplication: daResult.found,
         calendarAttendeeRemoved: calendarResult,
       });
     }

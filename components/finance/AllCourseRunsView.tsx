@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { Checkbox } from '../ui/Checkbox';
 import { getLocalYMD } from '@/lib/dateHelpers';
@@ -535,6 +535,13 @@ const AllCourseRunsView: React.FC = () => {
       }
     })();
   }, [rows, loading, fetchData]);
+
+  // Banner only covers missing GRN invoices for rows on the current page.
+  const pageMissingGrn = useMemo(() => {
+    if (missingGrn.length === 0) return [];
+    const onPage = new Set(rows.map((r) => r.grn_doc_number?.trim().toUpperCase()).filter(Boolean));
+    return missingGrn.filter((ref) => onPage.has(ref.trim().toUpperCase()));
+  }, [missingGrn, rows]);
 
   useEffect(() => {
     if (!syncToast) return;
@@ -1073,15 +1080,15 @@ const AllCourseRunsView: React.FC = () => {
         </div>
       )}
 
-      {missingGrn.length > 0 && (
+      {pageMissingGrn.length > 0 && (
         <div className="p-3 rounded-lg text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
               <div className="font-medium">
-                {missingGrn.length} generated invoice{missingGrn.length > 1 ? 's are' : ' is'} missing the GRN invoice in QuickBooks.
+                {pageMissingGrn.length} generated invoice{pageMissingGrn.length > 1 ? 's' : ''} on this page {pageMissingGrn.length > 1 ? 'are' : 'is'} missing the GRN invoice in QuickBooks.
               </div>
               <div className="text-[11px] opacity-80">
-                {missingGrn.join(', ')} — create them only if they were not deleted on purpose.
+                {pageMissingGrn.join(', ')} — create them only if they were not deleted on purpose.
               </div>
             </div>
             <button
@@ -1089,16 +1096,19 @@ const AllCourseRunsView: React.FC = () => {
               disabled={creatingGrn}
               onClick={async () => {
                 setCreatingGrn(true);
+                const pageRefs = pageMissingGrn.map((r) => r.trim().toUpperCase());
                 try {
                   const res = await fetch('/api/finance/invoice-jobs/backfill-grn-drive', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ createMissingGrn: true }),
+                    body: JSON.stringify({ createMissingGrn: true, grnRefs: pageRefs }),
                   });
                   const json = await res.json();
                   if (!res.ok || !json?.success) throw new Error(json?.error || 'Failed to create GRN invoices');
-                  // Anything still not created (repair limit per click, or a failed repair) stays listed.
-                  setMissingGrn(Array.isArray(json.data?.failedRefs) ? json.data.failedRefs.filter((r: string) => /^GRN-/i.test(r)) : []);
+                  // Only this page's refs were processed: drop them, then re-add any still not created
+                  // (repair limit per click, or a failed repair). Other pages' refs stay as they were.
+                  const stillFailed: string[] = Array.isArray(json.data?.failedRefs) ? json.data.failedRefs.filter((r: string) => /^GRN-/i.test(r)) : [];
+                  setMissingGrn((prev) => [...prev.filter((r) => !pageRefs.includes(r.trim().toUpperCase())), ...stillFailed]);
                   if (json.data?.resolved > 0) await fetchData();
                 } catch (err) {
                   setError(err instanceof Error ? err.message : 'Failed to create GRN invoices');
