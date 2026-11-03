@@ -26,10 +26,12 @@ export type AccessContext = {
 };
 export function firstSessionAt(snapshot: RunSnapshot): string {
     const first = [...snapshot.sessions].sort((a, b) => `${a.date}T${a.start_time}`.localeCompare(`${b.date}T${b.start_time}`))[0];
+    if (!first && snapshot.schema_version === 2) return snapshot.class_start_date ? new Date(`${snapshot.class_start_date}T00:00:00+08:00`).toISOString() : '';
     if (!first) throw new MmsSyncError('Verify the entire run and its first teaching session.');
     return new Date(`${first.date}T${first.start_time}:00+08:00`).toISOString();
 }
 export function withApproval(snapshot: RunSnapshot, approval: RunApproval): RunSnapshot {
+    if (snapshot.schema_version === 2) return snapshot;
     assertRunApproval(approval, snapshot);
     return { ...snapshot, handover_approval: {
         approved_at: new Date(approval.approved_at!).toISOString(), approved_by: String(approval.approved_by),
@@ -38,6 +40,7 @@ export function withApproval(snapshot: RunSnapshot, approval: RunApproval): RunS
 }
 export function assertRunApproval(approval: RunApproval, snapshot: RunSnapshot, now = new Date()): void {
     assertNonFunded(snapshot.course_code);
+    if (snapshot.schema_version === 2) return;
     const start = firstSessionAt(snapshot);
     if (!approval.approved_at || !approval.approved_by || !approval.first_session_at || approval.delivery_platform === 'tms')
         throw new MmsSyncError('Approve this exact full course run for MMS before importing.', 'approval_required');

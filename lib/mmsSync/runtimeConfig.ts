@@ -1,4 +1,3 @@
-import pool from '../db';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -45,6 +44,7 @@ export async function loadMmsRuntimeConfig(force = false): Promise<MmsRuntimeCon
     if (!force && cache.value && Date.now() < (cache.expires || 0)) return getMmsRuntimeConfig();
     if (cache.pending) return cache.pending;
     cache.pending = (async () => {
+        const { default: pool } = await import('../db');
         if (!cache.schema) cache.schema = readFile(path.join(process.cwd(), 'database/migrations/create_mms_handover_config.sql'), 'utf8')
             .then(sql => pool.query(sql)).then(() => undefined).catch(e => { cache.schema = undefined; throw e; });
         await cache.schema;

@@ -43,6 +43,7 @@ const ENSURE_TABLE = `
 // Run each ALTER separately — node-postgres can silently drop statements after
 // the first when multiple are batched into one pool.query() call.
 const MIGRATE_COLUMNS = [
+  `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS course_code text`,
   `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS qr_attendance   text`,
   `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS zoom_id         text`,
   `ALTER TABLE public.masterlist_table ADD COLUMN IF NOT EXISTS meeting_id      text`,
@@ -101,6 +102,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      const savedCode = (await client.query('SELECT course_code FROM public.masterlist_table WHERE class_id=$1 AND course_code IS NOT NULL LIMIT 1', [classId])).rows[0]?.course_code;
 
       // Delete existing rows for this class_id
       await client.query(
@@ -174,6 +176,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           ],
         );
       }
+
+      await client.query('UPDATE public.masterlist_table SET course_code=$2 WHERE class_id=$1', [classId, rows[0].course_code || savedCode || null]);
 
       await client.query('COMMIT');
       return res.status(200).json({ success: true });

@@ -23,7 +23,7 @@ export async function updateAccessCalendar(sourceKey: string) {
     await loadMmsRuntimeConfig();
     if (!getMmsRuntimeConfig().notificationsEnabled) return;
     const context = await getAccessContext({ sourceKey });
-    if (context.platform !== 'mms' || context.state !== 'ready' || !context.snapshot) return;
+    if (context.platform !== 'mms' || context.state !== 'ready' || !context.snapshot || context.snapshot.schema_version === 2) return;
     const client = await getCalendarClient();
     if (!client || client.calendarId !== context.snapshot.calendar_id) throw new MmsSyncError('Calendar access-link update is disabled or its calendar scope changed.');
     for (const eventId of context.snapshot.event_occurrences) {

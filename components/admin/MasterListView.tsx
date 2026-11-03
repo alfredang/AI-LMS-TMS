@@ -85,6 +85,7 @@ interface ScheduleEntry {
 
 interface ClassRun {
   id: string;
+  courseCode: string;
   courseTitle: string;
   courseRunNo: string;
   trainer: string;
@@ -181,7 +182,7 @@ const newClass = (): ClassRun => {
   const id = crypto.randomUUID();
   return {
     id,
-    courseTitle: '', courseRunNo: '', trainer: '', trainerEmail: '',
+    courseCode: '', courseTitle: '', courseRunNo: '', trainer: '', trainerEmail: '',
     qrAttendance: '', zoomId: '', meetingId: '',
     classDate: '', venue: '', notes: '', calendarEventId: '', calendarOrphaned: false,
     scheduleEntries: [],
@@ -1329,7 +1330,12 @@ const ClassBlock: React.FC<ClassBlockProps> = ({
 
   return (
     <div className="mb-8 overflow-x-clip">
-      <MmsSyncControl masterlistClassId={classRun.id} saving={saving}/>
+      <MmsSyncControl masterlistClassId={classRun.id} courseCode={classRun.courseCode} saving={saving}/>
+      <label className="mb-2 flex flex-wrap items-center gap-2 text-xs text-on-surface-secondary">
+        Course code
+        <input aria-label="Course code" value={classRun.courseCode} onChange={e => onClassChange('courseCode', e.target.value.trim().toUpperCase())}
+          placeholder="e.g. C916" maxLength={64} className="min-h-11 w-32 rounded border border-default bg-transparent px-2 text-on-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" />
+      </label>
       {confirmDeleteClass && (
         <ConfirmDialog
           message={
@@ -1793,6 +1799,7 @@ function rowsToClasses(rows: Record<string, any>[]): ClassRun[] {
     if (!map.has(row.class_id)) {
       map.set(row.class_id, {
         id: row.class_id,
+        courseCode: row.course_code ?? '',
         courseTitle: row.course_title ?? '',
         courseRunNo: row.course_run_no ?? '',
         trainer: row.trainer ?? '',
@@ -1915,6 +1922,7 @@ function classToRows(cr: ClassRun, classType: ClassTab, listDate: string): Recor
     class_type: classType,
     list_date: listDate || null,
     course_title: cr.courseTitle || null,
+    course_code: cr.courseCode || null,
     course_run_no: cr.courseRunNo || null,
     trainer: cr.trainer || null,
     trainer_email: cr.trainerEmail || null,
@@ -1986,7 +1994,7 @@ const traineeMatchesQuery = (t: TraineeRow, q: string): boolean => {
 const classMatchesQuery = (cr: ClassRun, q: string): boolean => {
   if (!q) return true;
   const classFields = [
-    cr.courseTitle, cr.courseRunNo, cr.trainer, cr.trainerEmail,
+    cr.courseCode, cr.courseTitle, cr.courseRunNo, cr.trainer, cr.trainerEmail,
     cr.classDate, cr.venue, cr.notes,
   ];
   if (classFields.some(v => (v || '').toLowerCase().includes(q))) return true;

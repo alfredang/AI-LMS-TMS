@@ -17,21 +17,16 @@ export async function getAccessContext(identity: ClassIdentity): Promise<AccessC
         COALESCE(c.course_code,s.course_code) current_code,
         EXISTS(SELECT 1 FROM mms_sync_job j WHERE j.source_run_key=s.source_run_key AND j.state IN ('queued','running')) dirty
         FROM mms_sync_source s LEFT JOIN course_run cr ON cr.id=s.tms_run_uuid LEFT JOIN course c ON c.id=cr.course_id
-        WHERE s.source_run_key=$1 OR s.tms_run_uuid::text=$2 OR s.masterlist_class_id::text=$3
+        WHERE s.source_run_key=$1 OR s.tms_run_uuid::text=$2 OR s.masterlist_class_id::text=$3 OR COALESCE(to_jsonb(s)->'masterlist_class_ids','[]'::jsonb) ? $3
            OR ($4<>'' AND lower(s.operational_run_id)=lower($4))`,
         [identity.sourceKey || '', identity.runUuid || '', identity.masterlistClassId || '', identity.operationalRunId || ''])).rows;
-    if (rows.length > 1) return { platform: 'review', state: 'pending', reason: 'Multiple source runs match this message.' };
+    if (new Set(rows.map(r => r.target_result?.run_id).filter(Boolean)).size > 1) return { platform: 'review', state: 'pending', reason: 'Select the exact Master List class for this access message.' };
+    rows.sort((a,b) => (new Date(b.last_success_at || 0).getTime() - new Date(a.last_success_at || 0).getTime()));
     const row = rows[0];
+    if (row && !row.masterlist_class_id) return { platform: 'tms', state: 'legacy' };
     if (row && normalizeCode(row.current_code).startsWith('TGS')) return { platform: 'tms', state: 'legacy' };
     if (row && identity.courseCode && normalizeCode(identity.courseCode) !== normalizeCode(row.current_code))
         return { platform: 'review', state: 'pending', reason: 'Course classification changed; review the message.' };
-    if (!row?.approved_at && identity.runUuid && normalOperationsEnabled()) {
-        const run = (await pool.query('SELECT to_jsonb(cr) run,c.course_code FROM course_run cr JOIN course c ON c.id=cr.course_id WHERE cr.id::text=$1', [identity.runUuid])).rows[0];
-        if (normalizeCode(run?.course_code).startsWith('TGS')) return { platform: 'tms', state: 'legacy' };
-        const start = String(run?.run?.start_date || '');
-        if (start && start < getMmsRuntimeConfig().pilotStartDate)
-            return { platform: 'tms', state: 'legacy' };
-    }
     if ((!row?.approved_at || !row) && normalOperationsEnabled() && courseAllowed(identity.courseCode || row?.current_code)) {
         try {
             const { resolveManualSource } = await import('./service');
@@ -44,7 +39,7 @@ export async function getAccessContext(identity: ClassIdentity): Promise<AccessC
             operationalApproval(snapshot, source, new Date(), false);
             return { platform: 'mms', state: 'pending', source_run_key: source.source_run_key, reason: 'Normal TMS assignments are awaiting MMS synchronization.' };
         } catch (e) {
-            if (e instanceof MmsSyncError && ['no_midway', 'outside_pilot', 'funded_excluded'].includes(e.code))
+            if (e instanceof MmsSyncError && ['masterlist_required', 'outside_pilot', 'funded_excluded'].includes(e.code))
                 return { platform: 'tms', state: 'legacy' };
             return { platform: 'review', state: 'pending', reason: e instanceof Error ? e.message : 'MMS handover needs attention.' };
         }

@@ -66,7 +66,7 @@ export async function recoverAccessNotifications(sourceKey: string | null = null
             continue;
         }
         await enqueue(context);
-        if (notificationsEnabled() && context.state === 'ready') {
+        if (notificationsEnabled() && context.state === 'ready' && source.snapshot?.schema_version !== 2) {
             try { const { updateAccessCalendar } = await import('./accessCalendar'); await updateAccessCalendar(source.source_run_key); }
             catch (e) { await pool.query('UPDATE mms_sync_source SET access_calendar_error=$2 WHERE source_run_key=$1', [source.source_run_key, e instanceof Error ? e.message : 'Calendar access update failed']); }
         }

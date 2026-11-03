@@ -35,6 +35,7 @@ test('durable access queue: readiness, deduplication, late changes, retries, res
         process.env.MMS_PUBLIC_ORIGIN = 'https://mms.example.com'; process.env.MMS_ACCESS_SUPPORT = 'support@example.com';
         process.env.MMS_SYNC_COURSE_ALLOWLIST = 'C916';
         await pool.query('CREATE TABLE IF NOT EXISTS course(id uuid PRIMARY KEY,course_code text); CREATE TABLE IF NOT EXISTS course_run(id uuid PRIMARY KEY,course_id uuid,course_run_id text); CREATE TABLE IF NOT EXISTS training_provider(created_at timestamptz,company_email text)');
+        await pool.query("CREATE TABLE masterlist_table(class_id uuid); INSERT INTO masterlist_table VALUES('00000000-0000-0000-0000-000000000001')");
         await pool.query(readFileSync(path.join(root, 'database/migrations/create_mms_nonfunded_sync.sql'), 'utf8'));
         const migration = readFileSync(path.join(root, 'database/migrations/create_mms_class_access.sql'), 'utf8');
         await pool.query(migration); await pool.query(migration);
@@ -50,6 +51,7 @@ test('durable access queue: readiness, deduplication, late changes, retries, res
                 VALUES($1,'C916','test@example.com','["event"]',$2,$3,$4,$5,'2026-10-21','operator','2050-10-23T01:30:00Z','2026-10-21T01:00:00Z',now(),'2050-10-23T12:30:00Z')
                 ON CONFLICT(source_run_key) DO UPDATE SET revision=EXCLUDED.revision,snapshot_hash=EXCLUDED.snapshot_hash,snapshot=EXCLUDED.snapshot,target_result=EXCLUDED.target_result,last_error=NULL,last_success_at=now()`,
                 [snapshot.source_run_key, snapshot.revision, snapshot.snapshot_hash, snapshot, target]);
+            await pool.query("UPDATE mms_sync_source SET masterlist_class_id='00000000-0000-0000-0000-000000000001' WHERE source_run_key=$1",[snapshot.source_run_key]);
         }
         await save();
         await pool.query('UPDATE mms_sync_source SET auto_sync_until=NULL WHERE source_run_key=$1', [snapshot.source_run_key]);

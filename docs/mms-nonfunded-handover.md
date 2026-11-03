@@ -1,5 +1,23 @@
 # Non-funded MMS handover
 
+## Current: continuous Master List synchronization — 2 November 2026
+
+This section supersedes the readiness, Calendar discovery, pilot-start and three-hour closure rules below for LMS synchronization. The LMS sends version 2 snapshots for existing Master List classes only. Calendar is neither queried nor used to discover a course, resolve participants, or approve a class. Existing Calendar identifiers are metadata only.
+
+- Every saved `C*` Master List class that is ongoing, starts today or later, or has dates pending is eligible. `TGS` and other course prefixes are excluded. The old per-course pilot allowlist and 23 October minimum do not restrict version 2 classes.
+- Empty/pending learners, trainers and sessions do not prevent creating/updating the MMS class. Partial details remain in the synchronization result. Account problems are reported per participant while class/roster synchronization continues.
+- Course code identifies the catalogue product. A class matches by product plus start/end dates, irrespective of names, times or Calendar links. Course names are never changed. Undated classes retain their source mapping until dates arrive. If duplicate MMS classes already match, the oldest is used without deleting the others; their direct registrations are consolidated back into LMS.
+- LMS trainer assignments replace MMS assignments, including clearing an unassigned trainer. Linked LMS run assignments and session overrides are exported without the old single-trainer conflict gate.
+- Same-code/date Master List rows share a consolidated roster. Active LMS enrolments/applications are included. Direct MMS registrations return on every sync and merge into the existing Master List by class/email, without duplicating retries or overwriting payment/cancellation fields. An exact linked LMS run also receives normal learner accounts/roles/profiles and enrolments idempotently. Native MMS registrations and passwords are retained.
+- Reconciliation scans Master List every two minutes; the worker delivers every minute. The old three-hour deadline cannot permanently close an ongoing/future class. A final date before today excludes a class from automatic synchronization. Dates use `Asia/Singapore`.
+- The editable **Course code** field supplies an explicit identity when a code cannot be resolved from the saved run reference, prior mapping or a unique exact LMS catalogue title. Missing-code classes appear in scan exceptions.
+
+Deploy the MMS receiver and additive `9999zzz-masterlist-mirroring.sql` migration first, then LMS. LMS `ensureSchema()` applies `add_mms_masterlist_mirroring.sql` and refreshes outbox triggers. Keep private provider/store credentials and integration enablement controls. Existing access-mail switches and account/courseware readiness still control notifications; pending class import sends no mail.
+
+Verification: scoped LMS tests, including the isolated PostgreSQL `mms-operations-runtime.test.ts`, TypeScript baseline comparison, API auth coverage and build; MMS `scripts/tests/run-tms-handover-suite.php` in the isolated fixture (real migrations, legacy compatibility, Master List integration, authenticated HTTP pending/retry and participant login/OTP tests).
+
+The cross-runtime fixture `tests/mms-masterlist-contract-fixture.ts` emits a pending class with Unicode text for MMS `scripts/tests/tms-handover-stdin.php`. In Windows PowerShell, set `$OutputEncoding` and `[Console]::OutputEncoding` to `System.Text.UTF8Encoding` before piping Node output to Docker; the default native-pipe encoding changes Unicode text and produces a false content-hash mismatch. Normal HTTP transport sends UTF-8 directly.
+
 ## Normal TMS operator workflow — 22 October follow-up
 
 This section supersedes the earlier extra per-run MMS approval and trainer-confirmation checkboxes in normal-operations mode.
