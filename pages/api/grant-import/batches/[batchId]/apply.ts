@@ -2,6 +2,7 @@ import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireFinanceOrAdmin } from '@/lib/services/grantImport/requireFinanceOrAdmin';
 import { applyGrantImportBatch } from '@/lib/services/grantImport/grantImportApply';
+import { acquireGrantImportRunLock, withGrantImportRunLock } from '@/lib/services/grantImport/grantImportRunLock';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -20,13 +21,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       ? (req.body.rowIds as unknown[]).map((x) => String(x)).filter(Boolean)
       : undefined;
 
-    const out = await applyGrantImportBatch({
+    // Only one Bulk Grant run at a time across all users — see grantImportRunLock.
+    const lock = await acquireGrantImportRunLock('apply', actorUserId, batchId);
+    if (!lock.ok) return res.status(409).json({ success: false, error: lock.message, busy: lock.holder });
+
+    const out = await withGrantImportRunLock(lock.token, () => applyGrantImportBatch({
       batchId,
       actorUserId,
       dryRun,
       allowOverwriteAlreadyApplied,
       rowIds: rowIds && rowIds.length > 0 ? rowIds : undefined,
-    });
+    }));
 
     return res.status(200).json({ success: true, data: out });
   } catch (e: unknown) {

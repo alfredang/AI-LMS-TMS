@@ -269,8 +269,10 @@ const GrantImportView: React.FC = () => {
       if (!jobId) throw new Error('Upload job did not start');
       setUploadJobId(jobId);
     } catch (e: any) {
-      setError(e?.message || 'Upload failed');
-    } finally {
+      // Close the progress dialog too — otherwise a failed upload left it stuck at "Uploading… 0%".
+      setError(e?.message === 'Failed to fetch' ? 'Upload failed — the connection to the server dropped. Please try again.' : e?.message || 'Upload failed');
+      setUploading(false);
+      setUploadPct(0);
     }
   };
 

@@ -2,6 +2,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import type { GrantImportBatchPreview } from './tpGatewayDisbursementTypes';
 import { stage1UploadParseValidateMatchAndPersist } from './grantImportStage1';
+import { acquireGrantImportRunLock, withGrantImportRunLock } from './grantImportRunLock';
 import os from 'os';
 import path from 'path';
 
@@ -22,6 +23,8 @@ type Job = GrantImportUploadJobSnapshot & {
   tempFilePath: string;
   filename: string | null;
   actorUserId: string | null;
+  /** Bulk Grant run lock taken by the upload request (see grantImportRunLock). */
+  lockToken?: string | null;
   cleanupTimer?: NodeJS.Timeout;
   lastPersistedAtMs?: number;
 };
@@ -147,6 +150,7 @@ export function createGrantImportUploadJob(input: {
   tempFilePath: string;
   filename: string | null;
   actorUserId: string | null;
+  lockToken?: string | null;
 }): { jobId: string } {
   void loadPersistedJobsOnce();
   const id = crypto.randomUUID();
@@ -160,6 +164,7 @@ export function createGrantImportUploadJob(input: {
     tempFilePath: input.tempFilePath,
     filename: input.filename,
     actorUserId: input.actorUserId,
+    lockToken: input.lockToken ?? null,
   };
   JOBS.set(id, job);
   scheduleCleanup(job);
@@ -191,7 +196,7 @@ export function getGrantImportUploadJob(jobId: string): GrantImportUploadJobSnap
             void persistJob(hydrated, true);
             void runJob(hydrated).catch(() => {});
           }
-          const { tempFilePath, filename, actorUserId, cleanupTimer, lastPersistedAtMs, ...snap } = hydrated;
+          const { tempFilePath, filename, actorUserId, cleanupTimer, lastPersistedAtMs, lockToken, ...snap } = hydrated;
           return snap;
         }
       }
@@ -200,11 +205,21 @@ export function getGrantImportUploadJob(jobId: string): GrantImportUploadJobSnap
     }
     return null;
   }
-  const { tempFilePath, filename, actorUserId, cleanupTimer, ...snap } = job;
+  const { tempFilePath, filename, actorUserId, cleanupTimer, lockToken, ...snap } = job;
   return snap;
 }
 
 async function runJob(job: Job): Promise<void> {
+  // A job resumed after a restart carries a token from the old process — take the lock afresh.
+  if (!job.lockToken || globalThis.__grantImportRunLock?.token !== job.lockToken) {
+    const lock = job.actorUserId ? await acquireGrantImportRunLock('upload', job.actorUserId) : null;
+    job.lockToken = lock?.ok ? lock.token : null;
+  }
+  if (!job.lockToken) return runJobUnlocked(job);
+  return withGrantImportRunLock(job.lockToken, () => runJobUnlocked(job));
+}
+
+async function runJobUnlocked(job: Job): Promise<void> {
   job.status = 'running';
   job.pct = 1;
   job.message = 'Reading file';

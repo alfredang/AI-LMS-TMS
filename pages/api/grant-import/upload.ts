@@ -6,6 +6,7 @@ import os from 'os';
 import path from 'path';
 import { requireFinanceOrAdmin } from '@/lib/services/grantImport/requireFinanceOrAdmin';
 import { createGrantImportUploadJob } from '@/lib/services/grantImport/grantImportUploadJob';
+import { acquireGrantImportRunLock, releaseGrantImportRunLock } from '@/lib/services/grantImport/grantImportRunLock';
 
 export const config = {
   api: {
@@ -21,9 +22,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   let tempFilePath: string | null = null;
+  // Held from here until the background job finishes; released below only if no job was started.
+  let lockToken: string | null = null;
 
   try {
     const { actorUserId } = await requireFinanceOrAdmin(req);
+
+    const lock = await acquireGrantImportRunLock('upload', actorUserId);
+    if (!lock.ok) {
+      req.resume(); // drain the unread upload body
+      return res.status(409).json({ success: false, error: lock.message, busy: lock.holder });
+    }
+    lockToken = lock.token;
 
     const form = formidable({
       multiples: false,
@@ -69,7 +79,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       tempFilePath: first.filepath,
       filename: originalFilename,
       actorUserId,
+      lockToken,
     });
+    lockToken = null; // the job owns the lock now and releases it when it finishes
 
     return res.status(200).json({ success: true, data: { jobId } });
   } catch (e: unknown) {
@@ -77,6 +89,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(500).json({ success: false, error: msg });
   } finally {
     if (tempFilePath) fs.unlink(tempFilePath, () => {});
+    releaseGrantImportRunLock(lockToken);
   }
 }
 
