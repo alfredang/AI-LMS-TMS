@@ -97,10 +97,22 @@ export async function ensureClassCalendarEvent(courseRunId: string): Promise<Ens
     // One events.list across the whole window, reused for all dates.
     const timeMin = new Date(dates[0] + 'T00:00:00Z'); timeMin.setUTCDate(timeMin.getUTCDate() - 1);
     const timeMax = new Date(dates[dates.length - 1] + 'T00:00:00Z'); timeMax.setUTCDate(timeMax.getUTCDate() + 2);
+    // No `q:` text filter — Google's full-text search silently missed events whose
+    // titles differ from the run title (renamed course, "Day 2 - WSQ - …" prefixes,
+    // en-dashes/parentheses), so the adopt step saw nothing and CREATED a duplicate
+    // next to the CA/DA-created series. The window is a few days, so list it all.
     let events: calendar_v3.Schema$Event[] = [];
+    let listFailed = false;
     try {
-      events = (await calendar.events.list({ calendarId, timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString(), singleEvents: true, maxResults: 250, q: run.title })).data.items || [];
-    } catch (e) { /* will fall through to create */ }
+      events = (await calendar.events.list({ calendarId, timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString(), singleEvents: true, maxResults: 2500 })).data.items || [];
+    } catch (e) {
+      // A failed list (rate limit / transient 5xx) must NOT fall through to create —
+      // we cannot know what already exists, and a blind insert duplicates the class
+      // for every attendee. Keep/adopt still work from the durable mapping; creation
+      // is retried on the next run.
+      listFailed = true;
+      console.error(`❌ [ensureClassCalendarEvent] events.list failed for run=${run.course_run_id}; skipping event creation this pass:`, e instanceof Error ? e.message : e);
+    }
 
     // An event this run only KEEPS or ADOPTS (never creates fresh) may predate the
     // LMS entirely — manually made, or from an older sync pathway — and so never
@@ -158,7 +170,8 @@ export async function ensureClassCalendarEvent(courseRunId: string): Promise<Ens
           continue;
         }
 
-        // 3) create path
+        // 3) create path — only when we could actually see the calendar window
+        if (listFailed) { out.errors++; continue; }
         const created = await calendar.events.insert({
           calendarId,
           requestBody: {

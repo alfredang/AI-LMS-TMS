@@ -4,6 +4,23 @@ import { getGoogleCredentials } from '../google-auth/googleAuth';
 import { getTrainingPartnerIdentifiers } from '../trainingPartnerIdentifiers';
 import { calendarWritesAllowed } from '../calendar/calendarGuard';
 import * as crypto from 'crypto';
+import { extractEventRunId } from '../calendar/eventMatch';
+
+/** Record a created event in the durable per-date mapping so every other calendar
+ *  path (ensureClassCalendarEvent, Meet-link sync, cancel) finds it exactly. */
+async function registerCalendarEvent(runUuid: string, dateIso: string, eventId: string, baseEventId: string | null): Promise<void> {
+  if (!runUuid || !dateIso || !eventId) return;
+  try {
+    await pool.query(
+      `INSERT INTO course_run_calendar_event (course_run_id, event_date, google_event_id, base_event_id)
+       VALUES ($1::uuid, $2::date, $3, $4)
+       ON CONFLICT DO NOTHING`,
+      [runUuid, dateIso, eventId, baseEventId]
+    );
+  } catch (e) {
+    console.warn(`[calendar-sync] could not register event ${eventId} for run ${runUuid}:`, e instanceof Error ? e.message : e);
+  }
+}
 
 function stripPrefixes(title: string): string {
   if (!title) return '';
@@ -238,6 +255,12 @@ export async function addCaLearnerToCalendar(
       ...Array.from(recentCreatedEventsCache.values()),
     ];
 
+    const mappedEventIds = new Set<string>(
+      (await pool.query<{ google_event_id: string }>(
+        `SELECT google_event_id FROM course_run_calendar_event WHERE course_run_id::text = $1`, [resolvedUuid]
+      )).rows.map(r => r.google_event_id)
+    );
+
     const learnerEmailLower = learnerEmail.trim().toLowerCase();
 
     const missingDates: { date: string; dayNumber: number }[] = [];
@@ -255,10 +278,17 @@ export async function addCaLearnerToCalendar(
       const targetDate = sortedDates[i];
       const dayNumber = i + 1;
 
+      // Exact match first (event stamped with this run's Course Run ID, or in the
+      // durable mapping) — this is how events created by ensureClassCalendarEvent /
+      // the other sync are recognised even when the title wording differs (renamed
+      // course, "(GAI)" vs "(GenAI)", en-dashes). Title similarity is the fallback.
       const dateAndTitleMatches = allEvents.filter(evt => {
-        if (!titlesProbablyMatch(courseTitle, evt.summary || '')) return false;
         const evtDate = evt.start?.dateTime?.slice(0, 10) || evt.start?.date || '';
-        return evtDate === targetDate;
+        if (evtDate !== targetDate || evt.status === 'cancelled') return false;
+        if (evt.id && mappedEventIds.has(evt.id)) return true;
+        const evtRunId = extractEventRunId(evt);
+        if (ssgRunId && evtRunId) return evtRunId === String(ssgRunId).toLowerCase();
+        return titlesProbablyMatch(courseTitle, evt.summary || '');
       });
 
       const expectedDayRegex = new RegExp(`\\bday\\s*[-:]?\\s*${dayNumber}\\b`, 'i');
@@ -459,6 +489,7 @@ export async function addCaLearnerToCalendar(
           if (newEvent.data.id) {
             recentCreatedEventsCache.set(newEvent.data.id, newEvent.data);
             result.addedTo++;
+            await registerCalendarEvent(resolvedUuid, firstMissing.date, newEvent.data.id, null);
           }
         } else {
           // Multi-day course — create a recurring series anchored on the first
@@ -499,6 +530,7 @@ export async function addCaLearnerToCalendar(
               const instDate = instance.start?.dateTime?.slice(0, 10) || instance.start?.date || '';
               const missingObj = missingDates.find(m => m.date === instDate);
               if (missingObj && instance.id) {
+                await registerCalendarEvent(resolvedUuid, instDate, instance.id, newEvent.data.id);
                 const dayTitle = `Day ${missingObj.dayNumber} - ${baseTitle}`;
                 await calendar.events.patch({
                   calendarId,
