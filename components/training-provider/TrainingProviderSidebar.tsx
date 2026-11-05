@@ -15,7 +15,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const appVersion = useAppVersion();
 
     const templateViews = [View.OtpEmailTemplate, View.CertificateEmailTemplate, View.FeedbackEmailTemplate, View.PasswordResetEmailTemplate, View.WelcomeSigninEmailTemplate, View.BriefingOnAssessmentTemplate, View.TrainerInvitationEmailTemplate, View.MmsAccessEmailTemplate, View.TrainerResponseEmailTemplates, View.FinalCourseConfirmationEmailTemplate, View.CourseConfirmationEmailTemplate, View.CoursewareAttendanceEmailTemplate, View.CourseCompletionEmailTemplate, View.ProformaInvoiceEmailTemplate, View.PrivacyPolicy, View.AcceptableUsePolicy];
-    const cronJobsViews = [View.Scheduler, View.SchedulerSummary];
+    const cronJobsViews = [View.Scheduler, View.SchedulerSummary, View.GoogleAutomations];
     const [templatesOpen, setTemplatesOpen] = useState(templateViews.includes(currentView));
     const [workflowsOpen, setWorkflowsOpen] = useState(currentView === View.WorkflowGuides);
     const [wfTrainingOpen, setWfTrainingOpen] = useState(false);
@@ -49,6 +49,7 @@ const TrainingProviderSidebar: React.FC<TrainingProviderSidebarProps> = ({ onNav
     const cronJobsItems = [
         { view: View.SchedulerSummary, label: 'Schedule Summary', icon: IconName.ClipboardCheck },
         { view: View.Scheduler, label: 'Task Scheduler', icon: IconName.Calendar },
+        { view: View.GoogleAutomations, label: 'Google Automations', icon: IconName.Settings },
     ];
 
     const loggingItems = [

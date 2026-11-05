@@ -5,3 +5,7 @@ node_modules
 .next
 *.log
 README.md
+config/google-automations.private.json
+config/google-automations-review.private.json
+config/google-automations*.private.json
+.codex-tmp/google-automation-browser/

@@ -12,6 +12,7 @@ export enum View {
   ApiEndpoints = 'apiEndpoints',
   AdminManagement = 'adminManagement',
   Scheduler = 'scheduler',
+  GoogleAutomations = 'googleAutomations',
   SchedulerSummary = 'schedulerSummary',
   Webhooks = 'webhooks',
   GrantCalculator = 'grantCalculator',
@@ -147,6 +148,7 @@ export enum AdminPage {
   MicrosoftCertificate = 'microsoftCertificate',
   Calendar = 'calendar',
   Scheduler = 'scheduler',
+  GoogleAutomations = 'googleAutomations',
   SchedulerSummary = 'schedulerSummary',
   WorkflowGuides = 'workflowGuides',
   SoftwareCredentials = 'softwareCredentials',
@@ -197,6 +199,7 @@ export interface FeedbackFormResponse {
 }
 
 export enum DeveloperPage {
+  GoogleAutomations = 'googleAutomations',
   Dashboard = 'dashboard',
   CourseList = 'courseList',
   CourseImageGenerator = 'courseImageGenerator',

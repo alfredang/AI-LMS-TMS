@@ -1,5 +1,9 @@
 # AI-LMS-TMS
 
+Google Apps Script is an existing external automation tool. See the
+[Google Automations registry and source-editor guide](docs/google-automations.md)
+before developing overlapping Calendar, intake or communication processes.
+
 <p align="center">
   <strong>A comprehensive Learning Management System (LMS) and Training Management System (TMS) with AI capabilities, designed for Singapore's SkillsFuture training ecosystem.</strong>
 </p>

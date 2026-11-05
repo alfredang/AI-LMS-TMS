@@ -17,6 +17,9 @@ build/
 
 # Local settings (sensitive config, not uploaded to GitHub)
 config/local-settings.json
+config/google-automations.private.json
+config/google-automations-review.private.json
+config/google-automations*.private.json
 service-account.json
 
 # Backlog (local planning file, not shared)
@@ -170,6 +173,7 @@ n8nworkflows.md/
 # Playwright MCP / CLI session artifacts (logs + page snapshots)
 .playwright-cli/
 .playwright-mcp/
+.codex-tmp/google-automation-browser/
 .version
 
 # Tenant-specific seed data (contains plaintext credentials)

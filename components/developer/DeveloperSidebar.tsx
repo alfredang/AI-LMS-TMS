@@ -9,6 +9,7 @@ interface DeveloperSidebarProps {
 }
 
 const TOP_NAV_ITEMS: { page: DeveloperPage; label: string; icon: IconName }[] = [
+    { page: DeveloperPage.GoogleAutomations, label: 'Google Automations', icon: IconName.Settings },
     { page: DeveloperPage.CourseList, label: 'Course Management', icon: IconName.Courses },
     { page: DeveloperPage.CourseImageGenerator, label: 'Course Image Generator', icon: IconName.Create },
     { page: DeveloperPage.FundingValidity, label: 'Course Funding Validity', icon: IconName.Calendar },

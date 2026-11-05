@@ -20,6 +20,11 @@ const COMMIT_HASH = (() => {
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  // This runtime OAuth secret must be mounted on the server, never copied into
+  // a standalone artifact by Next's filesystem tracer during a local build.
+  outputFileTracingExcludes: {
+    '/**': ['./config/google-automations*.private.json'],
+  },
   typescript: {
     ignoreBuildErrors: true,
   },

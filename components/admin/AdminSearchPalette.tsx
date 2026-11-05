@@ -70,6 +70,7 @@ const ADMIN_ITEMS: AdminItem[] = [
 
   { id: AdminPage.Calendar, page: AdminPage.Calendar, label: 'View Calendar', section: 'Tools' },
   { id: AdminPage.Scheduler, page: AdminPage.Scheduler, label: 'Task Scheduler', section: 'Tools' },
+  { id: AdminPage.GoogleAutomations, page: AdminPage.GoogleAutomations, label: 'Google Automations', section: 'Tools', keywords: ['Apps Script', 'Google scripts', 'automation registry'] },
   { id: AdminPage.SchedulerSummary, page: AdminPage.SchedulerSummary, label: 'Schedule Summary', section: 'Tools' },
 
   { id: AdminPage.CreateCertificate, page: AdminPage.CreateCertificate, label: 'Create Certificate', section: 'Certificates' },

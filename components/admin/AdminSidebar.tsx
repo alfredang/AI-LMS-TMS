@@ -326,6 +326,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ onNavigate, onSelectWorkflo
 
             <NavSection title="Calendar & Crons" icon={IconName.Calendar} collapsed={collapsed} isOpen={openSections.calendar} onToggle={() => toggleSection('calendar')}>
                 <NavItem page={AdminPage.Scheduler} label="Task Scheduler" isSubItem />
+                <NavItem page={AdminPage.GoogleAutomations} label="Google Automations" isSubItem />
                 <NavItem page={AdminPage.SchedulerSummary} label="Schedule Summary" isSubItem />
             </NavSection>
 
