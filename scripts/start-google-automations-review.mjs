@@ -15,7 +15,7 @@ const child=spawn(process.execPath,[path.join(process.cwd(),'node_modules','next
   stdio:'inherit',windowsHide:true,
   env:{...process.env,NODE_ENV:'development',NODE_OPTIONS:'--max-old-space-size=8192',
     DATABASE_URL:databaseUrl.toString(),ENABLE_APP_SCHEDULER:'false',MMS_SYNC_ENABLED:'false',
-    GOOGLE_AUTOMATIONS_ENABLED:'true',GOOGLE_AUTOMATIONS_CONFIG_FILE:configFile,
+    GOOGLE_AUTOMATIONS_ENABLED:'true',GOOGLE_AUTOMATIONS_CONFIG_FILE:configFile,GOOGLE_AUTOMATIONS_CONFIG_B64:'',
     BASE_URL:'http://localhost:3004',NEXT_PUBLIC_BASE_URL:'http://localhost:3004',
     SCHEDULER_SECRET:randomBytes(32).toString('hex'),EXTERNAL_API_KEY_FOR_CLAWDBOT:randomBytes(32).toString('hex')},
 });
