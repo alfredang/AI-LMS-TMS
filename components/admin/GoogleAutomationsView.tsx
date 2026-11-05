@@ -3,6 +3,7 @@ import { Code2, ExternalLink, FileCode2, History, RefreshCw, Search, ShieldCheck
 import type { Project, ScriptFile } from '../../lib/googleAutomations/model';
 import { SourceEditor, SourceComparison } from './GoogleAutomationSource';
 import GoogleAutomationTriggers from './GoogleAutomationTriggers';
+import GoogleAutomationSetup from './GoogleAutomationSetup';
 
 type Access = { canView: boolean; canEdit: boolean; canPublish: boolean };
 type Change = { id: string; script_id: string; actor_id: string; reason: string; status: string; changed_files: string[]; created_at: string; applied_at: string | null; published_by: string | null };
@@ -92,7 +93,7 @@ export default function GoogleAutomationsView() {
     {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">{error}</div>}
     {notice && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{notice}</div>}
     {initialLoading && <p role="status">Loading automation registry…</p>}
-    {enabled===false && <div className="rounded-xl border border-slate-200 p-6 dark:border-slate-700"><h2 className="font-semibold">Connect Google Automations on this server</h2><p className="mt-2 text-sm">The dedicated Apps Script connection has not been configured. Ask your administrator to follow docs/google-automations.md and provision the private connection file. Existing Calendar and Gmail connections are separate.</p></div>}
+    {enabled===false && <GoogleAutomationSetup canEdit={access.canEdit} onConnected={loadRegistry}/>}
     {enabled && <div className="grid items-start gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
       <aside className="min-w-0 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
         <div className="border-b border-slate-200 p-4 dark:border-slate-700"><label className="mb-2 flex items-center gap-2 text-sm font-medium" htmlFor="automation-search"><Search size={16}/>Search {projects.length} projects</label><input id="automation-search" className={field} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Name, purpose or project ID"/></div>

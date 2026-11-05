@@ -6,6 +6,7 @@ import { googleGateway } from '@lib/googleAutomations/google';
 import { PgAutomationStore } from '@lib/googleAutomations/store';
 import { AutomationService } from '@lib/googleAutomations/service';
 import { TriggerService } from '@lib/googleAutomations/triggers';
+import { connectionStorageAvailable,normalizeImportedConnection,saveInitialConnection } from '@lib/googleAutomations/connectionStore';
 
 export const config = { api: { bodyParser: { sizeLimit: '5mb' }, responseLimit: '12mb' } };
 const str = (v: unknown, max: number) => {
@@ -23,13 +24,26 @@ async function handler(req: AuthedApiRequest, res: NextApiResponse) {
   const access = capabilities(user.roles,user.isService);
   if (!access.canView) return res.status(403).json({success:false,error:'Google Automations requires an Admin, Developer or Training Provider session.'});
   try {
+    const action = req.method === 'POST' ? req.body?.action : '';
     const connection = await readConfig();
+    if(req.method==='GET'&&req.query.view==='setup')return res.json({success:true,configured:!!connection,storageAvailable:connectionStorageAvailable(),canConfigure:access.canEdit&&!connection&&process.env.GOOGLE_AUTOMATIONS_ENABLED!=='false'});
+    if(req.method==='POST'&&action==='configure') {
+      if(!access.canEdit)throw new AutomationError(403,'Installing a connection requires an Admin or Developer session.');
+      if(process.env.GOOGLE_AUTOMATIONS_ENABLED==='false')throw new AutomationError(403,'Google Automations is disabled on this server.');
+      if(connection)throw new AutomationError(409,'A Google connection is already installed; setup cannot replace it.');
+      if(!connectionStorageAvailable())throw new AutomationError(503,'The existing server encryption secret is unavailable. Ask the server administrator to configure it.');
+      const candidate=normalizeImportedConnection(req.body?.connection);
+      if(req.body?.confirmAccount!==candidate.accountEmail)throw new AutomationError(400,'Confirm the Google account before installing this connection.');
+      await googleGateway(candidate).identity();
+      const {default:pool}=await import('@lib/db');
+      await saveInitialConnection(pool,candidate,user.id);
+      return res.json({success:true,accountEmail:candidate.accountEmail});
+    }
     if (!connection) {
       if (req.method === 'GET' && !req.query.view) return res.json({success:true,enabled:false,projects:[],capabilities:{...access,canPublish:false},connection:{configured:false},message:'Configure the dedicated Google Automations server connection to register and inspect projects.'});
       throw new AutomationError(503,'Google Automations is not configured on this TMS server.');
     }
     const canPublish = access.canPublish && connection.allowPublish;
-    const action = req.method === 'POST' ? req.body?.action : '';
     if (req.method === 'POST' && (!access.canEdit || (action === 'publish' && !canPublish))) throw new AutomationError(403,action === 'publish' ? 'Publishing is not permitted for this account or server.' : 'Editing requires an Admin or Developer session.');
     const { default: pool } = await import('@lib/db');
     const store = new PgAutomationStore(pool,connectionId(connection));

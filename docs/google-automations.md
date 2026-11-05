@@ -30,6 +30,29 @@ start as **Not verified**. No execution-history claims are inferred from source.
 
 ## Dedicated connection
 
+### Install through TMS without Coolify
+
+When no file/runtime connection exists, sign in as Admin or Developer and open
+Google Automations. Select the dedicated connection JSON, review the account and
+publishing setting, acknowledge installation and select Install Google connection.
+TMS verifies Google identity and `script.projects` access before saving. The entire
+connection (including the source-backup key) is encrypted in
+`google_automation_connection`; credentials are never returned to the browser.
+
+This uses a separate key derivation from the existing server
+`AI_OAUTH_ENCRYPTION_KEY` or `JWT_SECRET` (at least 32 characters), following the
+application's existing encrypted AI credential storage. If neither exists, setup
+fails closed and a server administrator must configure encryption. No new Google
+client or Coolify access is needed when that server secret is already configured.
+Back up the established server secret as well as the original source-backup key.
+Setup is bootstrap-only: it cannot overwrite an installed connection or change
+its backup key. Runtime configuration takes precedence over database configuration.
+Imported review logins/database passwords and helper credentials are stripped, and
+live trigger application remains disabled. Existing Calendar/Gmail settings are
+not updated. The additive migration is `create_google_automation_connection.sql`.
+
+### File or runtime-secret installation
+
 No new scope is required for source inspection and editing. Required APIs are
 Apps Script API and Drive API; OAuth scopes are `script.projects` and
 `drive.metadata.readonly`. This connection is independent of the existing TMS
