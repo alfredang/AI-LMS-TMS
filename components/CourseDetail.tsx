@@ -2765,7 +2765,7 @@ export const CourseDetail: React.FC = () => {
                         </div>
                     )}
 
-                    <div className="xl:grid xl:grid-cols-[320px_minmax(0,1fr)] xl:gap-8">
+                    <div className={`xl:grid ${userRole === UserRole.Trainer ? 'xl:grid-cols-[minmax(320px,1fr)_minmax(0,2fr)] xl:gap-6' : 'xl:grid-cols-[320px_minmax(0,1fr)] xl:gap-8'}`}>
                         {/* Desktop Sidebar */}
                         <aside className="hidden xl:block">
                             <Card className="">
