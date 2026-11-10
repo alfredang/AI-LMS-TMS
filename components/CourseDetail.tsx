@@ -1348,7 +1348,7 @@ const AnnouncementsSection: React.FC<{ userRole: UserRole, courseRunId: string, 
                                         </button>
                                     </span>
                                 ) : (
-                                    <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400">or drag a file here (max 50 MB)</span>
+                                    <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400">or drag a file here (max 50 MB) — saved to this class's cloud folder</span>
                                 )}
                             </div>
                             <button

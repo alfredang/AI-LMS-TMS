@@ -4,7 +4,8 @@
  *   <root> / <TGS-ref Course title> / Assessment Records / <session> / <learner>
  *
  * Shared by the manual Assessment Summary Record upload and the e-signed ASR
- * generator so both land in the same learner folder.
+ * generator so both land in the same learner folder. Class-level files (e.g.
+ * documents a trainer posts in Announcements) go in the session folder itself.
  */
 
 import type { drive_v3 } from 'googleapis';
@@ -33,13 +34,13 @@ async function getOrCreateFolder(drive: drive_v3.Drive, parentId: string, name: 
 }
 
 /**
- * Find or create the learner's folder under the course's Assessment Records.
+ * Find or create the class's session folder under the course's Assessment
+ * Records (or Assessment Records itself when the run has no dates).
  */
-export async function ensureLearnerAssessmentFolder(
+export async function ensureSessionAssessmentFolder(
     drive: drive_v3.Drive,
     rootFolderId: string,
     run: AssessmentRecordRun,
-    studentName: string,
 ): Promise<string> {
     const courseCode = run.courseCode || '';
     const courseName = run.courseTitle || '';
@@ -87,6 +88,18 @@ export async function ensureLearnerAssessmentFolder(
         }
     }
 
-    // 4. Learner folder
-    return getOrCreateFolder(drive, targetParentId, studentName);
+    return targetParentId;
+}
+
+/**
+ * Find or create the learner's folder under the course's Assessment Records.
+ */
+export async function ensureLearnerAssessmentFolder(
+    drive: drive_v3.Drive,
+    rootFolderId: string,
+    run: AssessmentRecordRun,
+    studentName: string,
+): Promise<string> {
+    const sessionFolderId = await ensureSessionAssessmentFolder(drive, rootFolderId, run);
+    return getOrCreateFolder(drive, sessionFolderId, studentName);
 }
