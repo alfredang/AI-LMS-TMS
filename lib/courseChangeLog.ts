@@ -25,6 +25,7 @@ const TRACKED_FIELDS: Record<string, string> = {
   renewedStatus: 'Renewal Status',
   tscTitle: 'TSC Title',
   tscCode: 'TSC Code',
+  caslSkills: 'CASL Skills',
 };
 
 /** The DB column backing each tracked field, for reading the pre-update values. */
@@ -40,6 +41,7 @@ const FIELD_COLUMNS: Record<string, string> = {
   renewedStatus: 'renewed_status',
   tscTitle: 'tsc_title',
   tscCode: 'tsc_code',
+  caslSkills: 'casl_skills',
 };
 
 /**

@@ -41,6 +41,13 @@ export async function register() {
             console.error('[Announcements] Failed to ensure course_announcement table:', err);
         }
 
+        try {
+            const { ensureCaslSkillsColumn } = await import('./lib/course-casl-skills-ensure-column');
+            await ensureCaslSkillsColumn();
+        } catch (err) {
+            console.error('[CASL] Failed to ensure course.casl_skills column:', err);
+        }
+
         // Warm up Gmail OAuth so the first user OTP request after a deploy hits
         // an already-refreshed access token. Without this, the cold OAuth
         // refresh adds 1–3s to the first send and occasionally fails outright,

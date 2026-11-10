@@ -57,6 +57,8 @@ interface Course {
     courseCode: string;
     tscTitle?: string;
     tscCode?: string;
+    /** CASL courses only — CASL has no TSC, its skill area is shown here instead. */
+    caslSkills?: string;
     courseRunId: string;
     daId?: string;
     trainingHours: number;
@@ -1740,8 +1742,11 @@ const CourseInfoPanel: React.FC<{ course: Course; userRole: UserRole }> = ({ cou
             <div className="space-y-4 text-sm">
                 <DetailRow label="Course Title" value={course.title} />
                 <DetailRow label="Course Ref Code" value={displayCourseCodes(course)} />
-                <DetailRow label="TSC Title" value={course.tscTitle || 'N/A'} />
-                <DetailRow label="TSC Code" value={course.tscCode || 'N/A'} />
+                <DetailRow label="TSC Title" value={course.courseType === 'CASL' ? 'NA' : (course.tscTitle || 'N/A')} />
+                <DetailRow label="TSC Code" value={course.courseType === 'CASL' ? 'NA' : (course.tscCode || 'N/A')} />
+                {course.courseType === 'CASL' && (
+                    <DetailRow label="CASL Skills" value={course.caslSkills || 'N/A'} />
+                )}
                 {(() => {
                     const start = course.fundingValidityStart ? new Date(course.fundingValidityStart) : null;
                     const expiry = course.fundingValidity ? new Date(course.fundingValidity) : null;
@@ -2503,6 +2508,7 @@ export const CourseDetail: React.FC = () => {
         courseRunId: effectiveDetail?.courseRunId || selectedCourse.courseRunId || selectedCourse.courseCode,
         tscTitle: effectiveDetail?.tscTitle,
         tscCode: effectiveDetail?.tscCode,
+        caslSkills: effectiveDetail?.caslSkills,
         trainingHours: effectiveDetail?.trainingHours || selectedCourse.trainingHours,
         assessmentHours: effectiveDetail?.assessmentHours || selectedCourse.assessmentHours,
         startDate: effectiveDetail?.startDate || selectedCourse.startDate,

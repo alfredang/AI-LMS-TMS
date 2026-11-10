@@ -294,6 +294,8 @@ export interface Course {
   courseType: 'WSQ' | 'CASL' | 'IBF' | 'Non-WSQ';
   tscTitle?: string;
   tscCode?: string;
+  /** CASL courses only: the skill area covered (CASL has no TSC; its TSC fields read 'NA'). */
+  caslSkills?: string;
   imageUrl?: string;
   modeOfLearning: string[];
   progressPercent?: number;
@@ -376,6 +378,8 @@ export interface CourseDetail {
   tgsRef: string;
   tscTitle: string;
   tscCode: string;
+  /** CASL courses only: the skill area covered (CASL has no TSC). */
+  caslSkills?: string;
   courseRunId: string;
   courseRunUuid: string;
   digitalAttendanceId: string;

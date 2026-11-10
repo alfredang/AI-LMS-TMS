@@ -3,6 +3,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
 import { recordCourseChanges } from '../../../lib/courseChangeLog';
+import { resolveTscFields } from '../../../lib/courseCaslSkills';
+import { ensureCaslSkillsColumn } from '../../../lib/course-casl-skills-ensure-column';
 import { recordRenamedTitle } from '../../../lib/courseCode';
 import { normalizeRenewStatus } from '../../../lib/courseRenewalStatus';
 import { isCourseValidityTpgEnabled } from '@lib/courseValidityFeature';
@@ -42,6 +44,8 @@ interface CourseData {
   courseDuration?: number; // Add this to match Course interface
   tscTitle: string;
   tscCode: string;
+  /** CASL courses only: the skill area, in place of a TSC Title (CASL has no TSC). */
+  caslSkills?: string | null;
   trainingHours: number;
   assessmentHours: number;
   modeOfLearning: string | string[]; // Accept both formats
@@ -305,6 +309,16 @@ async function handler(
       });
     }
 
+    // CASL courses have no TSC: their TSC fields are stored as 'NA' and the skill
+    // area goes to CASL Skills. Resolved before the change log reads courseData.
+    {
+      const tsc = resolveTscFields(courseData);
+      courseData.tscTitle = tsc.tscTitle as string;
+      courseData.tscCode = tsc.tscCode as string;
+      if (courseData.courseType === 'CASL') courseData.caslSkills = tsc.caslSkills;
+      else delete courseData.caslSkills;
+    }
+
     console.log('📊 Course data to update:', {
       title: courseData.title,
       assessments: courseData.assessments?.length || 0,
@@ -465,6 +479,9 @@ async function handler(
     }
 
     const enhancedCourseValidity = await isCourseValidityTpgEnabled();
+    // Ensure casl_skills exists BEFORE the transaction: the DDL runs on its own
+    // pool connection and would wait forever on this transaction's lock on course.
+    await ensureCaslSkillsColumn();
     // Start transaction
     const client = await pool.connect();
     
@@ -604,6 +621,13 @@ async function handler(
       // workflows resolve courses through their historical identities; leaving
       // the previous title marked current allows a later read/sync to restore it.
       await recordRenamedTitle(courseId, courseData.title, null, client);
+
+      if (courseData.caslSkills !== undefined) {
+        await client.query(
+          `UPDATE course SET casl_skills = $2 WHERE id = $1`,
+          [courseId, courseData.caslSkills]
+        );
+      }
 
       // Per-course favorite trainers (starred by admin/developer). Written
       // separately from the big positional UPDATE so the param list stays

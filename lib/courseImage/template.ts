@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { stripFundingPrefix } from '../../utils/courseBanner';
 
 // Official Tertiary "T" mark (512x512, transparent PNG) downloaded from
 // tertiaryinfotech.com's own R2 bucket. Paired with live-rendered wordmark
@@ -14,14 +15,10 @@ function getLogoDataUri(): string {
   return cachedLogoDataUri;
 }
 
-// Strip leading "WSQ", "WSQ -", "WSQ:" tokens so the visible title focuses on the
-// course subject (the WSQ chip is implicit for funded courses and already shown
-// elsewhere on the course page).
-export function cleanTitle(raw: string): string {
-  return raw
-    .replace(/^\s*WSQ\s*[:\-–—]?\s*/i, '')
-    .trim();
-}
+// Strip leading funding-scheme prefixes ("WSQ -", "IBF -", "CASL:" …) so the
+// visible title focuses on the course subject (the course type is already shown
+// as a chip elsewhere on the course page).
+export const cleanTitle = stripFundingPrefix;
 
 // Title font-size auto-fit: shorter titles get larger text. The CSS uses
 // `clamp`-like manual tiering so headless Chromium produces consistent output

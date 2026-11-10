@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { ensureCaslSkillsColumn } from '@lib/course-casl-skills-ensure-column';
 import { splitTrainerList } from '@/lib/trainerInvitations';
 
 interface LearningUnitRow {
@@ -54,6 +55,7 @@ async function handler(
 
   try {
     const { courseId } = req.query;
+    await ensureCaslSkillsColumn();
 
     if (!courseId) {
       return res.status(400).json({ message: 'Course ID is required' });
@@ -74,6 +76,7 @@ async function handler(
         c.new_course_code,
         c.tsc_title,
         c.tsc_code,
+        c.casl_skills,
         c.training_hours,
         c.assessment_hours,
         c.mode_of_learning,
@@ -212,6 +215,7 @@ async function handler(
       currentCourseCode: courseData.new_course_code || courseData.course_code || '',
       tscTitle: courseData.tsc_title,
       tscCode: courseData.tsc_code,
+      caslSkills: courseData.casl_skills || '',
       trainingHours: courseData.training_hours,
       assessmentHours: courseData.assessment_hours,
       modeOfLearning: courseData.mode_of_learning ? [courseData.mode_of_learning] : [],

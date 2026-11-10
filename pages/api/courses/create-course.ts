@@ -7,6 +7,8 @@ import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
 import { sanitizeGoogleLink } from '../../../lib/utils/sanitizeGoogleLink';
 import { resolveCourseIdByCode } from '../../../lib/courseCode';
+import { resolveTscFields } from '../../../lib/courseCaslSkills';
+import { ensureCaslSkillsColumn } from '../../../lib/course-casl-skills-ensure-column';
 
 // Configure multer for file uploads
 const storage: StorageEngine = multer.diskStorage({
@@ -84,6 +86,8 @@ interface CourseData {
   courseCode: string;
   tscTitle: string;
   tscCode: string;
+  /** CASL courses only: the skill area, in place of a TSC Title (CASL has no TSC). */
+  caslSkills?: string | null;
   trainingHours: number;
   assessmentHours: number;
   modeOfLearning: string;
@@ -175,6 +179,9 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
         finalValue: filesByFieldname?.trainerSlides ? `/uploads/slides/${filesByFieldname.trainerSlides[0].filename}` : courseData.trainerSlidesUrl || null
       });
 
+      // Ensure casl_skills exists BEFORE the transaction: the DDL runs on its own
+      // pool connection and would wait forever on this transaction's lock on course.
+      await ensureCaslSkillsColumn();
       // Begin database transaction
       const client = await pool.connect();
       
@@ -192,6 +199,9 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
             error: `Course code ${courseData.courseCode} already belongs to an existing course.`,
           });
         }
+
+        // CASL courses have no TSC: store 'NA' and keep the skill area in casl_skills.
+        const tsc = resolveTscFields(courseData);
 
         // 1. Insert course
         const courseInsertQuery = `
@@ -215,8 +225,8 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
           courseData.title,
           filesByFieldname?.courseImage ? `/uploads/images/${filesByFieldname.courseImage[0].filename}` : (courseData.imageUrl || null),
           courseData.courseCode,
-          courseData.tscTitle || null,
-          courseData.tscCode || null,
+          tsc.tscTitle,
+          tsc.tscCode,
           courseData.trainingHours || 0,
           courseData.assessmentHours || 0,
           courseData.modeOfLearning || 'Physical',
@@ -244,6 +254,10 @@ function handler(req: NextApiRequest & { files?: any }, res: NextApiResponse) {
         const courseResult = await client.query(courseInsertQuery, courseValues);
         const courseId = courseResult.rows[0].id;
         console.log('✅ Course created with ID:', courseId);
+
+        if (tsc.caslSkills) {
+          await client.query(`UPDATE course SET casl_skills = $2 WHERE id = $1`, [courseId, tsc.caslSkills]);
+        }
 
         // Safely attempt to set assessment_methods column
         // This column may not exist if the migration hasn't been run yet

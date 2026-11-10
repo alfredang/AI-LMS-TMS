@@ -1189,6 +1189,7 @@ export const LmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           tgsRef: trainerData.data.courseDetail.tgsRef,
           tscTitle: trainerData.data.courseDetail.tscTitle,
           tscCode: trainerData.data.courseDetail.tscCode,
+          caslSkills: trainerData.data.courseDetail.caslSkills,
           courseRunId: trainerData.data.courseDetail.courseRunId, // String format for display
           courseRunUuid: trainerData.data.courseDetail.courseRunUuid, // UUID format for API calls
           digitalAttendanceId: trainerData.data.courseDetail.digitalAttendanceId,

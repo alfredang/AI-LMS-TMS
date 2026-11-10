@@ -1,6 +1,7 @@
 import { withAuth } from '@lib/auth/withAuth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
+import { ensureCaslSkillsColumn } from '@lib/course-casl-skills-ensure-column';
 import { splitTrainerList } from '@/lib/trainerInvitations';
 import { isCourseValidityTpgEnabled } from '@lib/courseValidityFeature';
 
@@ -12,6 +13,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
+    await ensureCaslSkillsColumn();
     const enhanced = await isCourseValidityTpgEnabled();
     // JSON access keeps this query compatible with customer databases that do
     // not yet have the optional TPG/TRAQOM course columns.
@@ -31,6 +33,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           c.new_course_code,
           c.tsc_title,
           c.tsc_code,
+          c.casl_skills,
           c.course_type,
           c.image_url AS course_image,
           c.training_hours,
@@ -86,6 +89,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       courseType: row.course_type,
       tscTitle: row.tsc_title || '',
       tscCode: row.tsc_code || '',
+      caslSkills: row.casl_skills || '',
       imageUrl: row.course_image || null,
       modeOfLearning: row.mode_of_learning ? [row.mode_of_learning] : ['Hybrid'],
       scheduleId: row.schedule_id || null,
