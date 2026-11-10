@@ -1,4 +1,4 @@
-import { withAuth } from '@lib/auth/withAuth';
+import { AuthedApiRequest, withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
@@ -20,6 +20,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       success: false, 
       error: 'Missing required parameters: userId and courseId' 
     });
+  }
+
+  const authUser = (req as AuthedApiRequest).authUser!;
+  const privileged = authUser.isService || ['admin', 'trainingProvider', 'trainer', 'developer']
+    .some(role => authUser.roles.has(role));
+  if (!privileged && String(userId) !== authUser.id) {
+    return res.status(403).json({ success: false, error: 'You may only view your own certificate.' });
   }
 
   try {
@@ -53,4 +60,4 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-export default withAuth(handler);
+export default withAuth(handler, { roles: ['admin', 'trainingProvider', 'trainer', 'developer', 'learner'] });

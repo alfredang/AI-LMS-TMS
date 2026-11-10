@@ -6,7 +6,7 @@ interface EndpointDoc {
   path: string;
   title: string;
   description: string;
-  headers: { name: string; value: string; description: string }[];
+  headers: { name: string; value: string; description?: string }[];
   queryParams?: { name: string; type: string; required: boolean; description: string }[];
   bodyFields?: { name: string; type: string; required: boolean; description: string }[];
   exampleRequest?: string;
@@ -603,16 +603,47 @@ const sections: EndpointSection[] = [
         title: 'Auto: Create Certificates',
         description: 'Scheduler job. Generates + emails Certificate of Achievement PDFs (via Google Slides template + Gmail) for learners on course runs that ended in the last 7 days (or a specific end_date), meeting the configured attendance threshold (default 60%). Uses an atomic UPDATE claim on enrollment.certificate to prevent double-generation across concurrent runs.',
         headers: [
-          { name: 'Content-Type', value: 'application/json' },
+          { name: 'x-api-key', value: '<API_KEY>', description: 'EXTERNAL_API_KEY_FOR_CLAWDBOT (preferred for agents)' },
+          { name: 'Content-Type', value: 'application/json', description: 'Request body format' },
         ],
         bodyFields: [
-          { name: 'authKey', type: 'string', required: true, description: 'Must equal NEXT_PUBLIC_SCHEDULER_SECRET — this is the internal scheduler secret, not the external CLAWDBOT API key' },
+          { name: 'authKey', type: 'string', required: false, description: 'Server-side SCHEDULER_SECRET; omit when x-api-key is supplied. NEXT_PUBLIC_* secrets are never accepted.' },
           { name: 'date', type: 'string', required: false, description: 'YYYY-MM-DD to target a specific end_date instead of the rolling 7-day window' },
         ],
         exampleRequest: `curl -X POST "__BASE_URL__/api/external/auto-create-certificates" \\
+  -H "x-api-key: YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"authKey": "YOUR_SCHEDULER_SECRET"}'`,
+  -d '{}'`,
         exampleResponse: `{ "success": true, "runId": "<uuid>", "stats": { "totalGenerated": 5, "totalSkipped": 1, "totalErrors": 0 } }`,
+      },
+      {
+        method: 'POST',
+        path: '/api/external/certificates/issue',
+        title: 'Issue and Send One Learner Certificate',
+        description: 'Agent-safe certificate operation. Resolves one enrollment, reuses its issued PDF or generates and stores one, then emails the actual issued PDF. Duplicate sends are suppressed unless resend=true. For an explicit authorised issue/send request, use manual_override=true with the instruction in request_reason; cancellation is never overridable.',
+        headers: [
+          { name: 'x-api-key', value: '<API_KEY>', description: 'EXTERNAL_API_KEY_FOR_CLAWDBOT' },
+          { name: 'Content-Type', value: 'application/json', description: 'Request body format' },
+        ],
+        bodyFields: [
+          { name: 'enrollment_id', type: 'string', required: false, description: 'Internal enrollment UUID. Provide this, learner_email, or learner_name.' },
+          { name: 'learner_name', type: 'string', required: false, description: 'Exact learner name. Ambiguous names return candidates rather than guessing.' },
+          { name: 'learner_email', type: 'string', required: false, description: 'Learner email and explicit delivery address. Add a course identifier when the learner has multiple enrollments.' },
+          { name: 'course_run_id', type: 'string', required: false, description: 'Public/SSG course run ID or internal run UUID' },
+          { name: 'course_code', type: 'string', required: false, description: 'Exact current or original course code' },
+          { name: 'course_title', type: 'string', required: false, description: 'Exact course title' },
+          { name: 'course', type: 'string', required: false, description: 'Convenience course code or title search; ambiguous matches return 409 with candidates' },
+          { name: 'send_email', type: 'boolean', required: false, description: 'Default true. Set false to issue/store without emailing.' },
+          { name: 'resend', type: 'boolean', required: false, description: 'Default false. Must be true to email an already-delivered certificate again.' },
+          { name: 'dry_run', type: 'boolean', required: false, description: 'Resolve and validate without generating or emailing' },
+          { name: 'manual_override', type: 'boolean', required: false, description: 'Bypass class-time/attendance gates only after an explicit authorized instruction; cancellations remain blocked' },
+          { name: 'request_reason', type: 'string', required: false, description: 'Required and audited when manual_override=true' },
+        ],
+        exampleRequest: `curl -X POST "__BASE_URL__/api/external/certificates/issue" \\
+  -H "x-api-key: YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"learner_email":"kenny@example.com","course":"IoT","send_email":true,"manual_override":true,"request_reason":"Alfred explicitly requested certificate issue and delivery"}'`,
+        exampleResponse: `{ "success": true, "status": "sent", "enrollmentId": "<uuid>", "learnerEmail": "kenny@example.com", "courseTitle": "Internet of Things", "certificateUrl": "https://drive.google.com/file/d/.../view", "generated": true, "emailed": true, "gmailMessageId": "..." }`,
       },
       {
         method: 'POST',
@@ -1014,7 +1045,7 @@ const sections: EndpointSection[] = [
         method: 'GET',
         path: '/api/external/enrollments',
         title: 'List / Create Enrollments',
-        description: 'GET lists enrollments with filters (inactive statuses — admin removed / cancelled / withdrawn — always excluded). POST enrolls a learner into an existing course run, resolving the learner by email or ID; if no matching learner exists the response tells the caller to create one first via POST /api/external/learners. POST is an upsert on (user_id, course_run_id).',
+        description: 'GET lists enrollments with filters and includes certificate_status, certificate_url, and the internal/public run IDs (inactive statuses — admin removed / cancelled / withdrawn — always excluded). POST enrolls a learner into an existing course run, resolving the learner by email or ID; if no matching learner exists the response tells the caller to create one first via POST /api/external/learners. POST is an upsert on (user_id, course_run_id).',
         headers: [
           { name: 'x-api-key', value: '<API_KEY>', description: 'EXTERNAL_API_KEY_FOR_CLAWDBOT' },
         ],
@@ -1919,7 +1950,7 @@ const sections: EndpointSection[] = [
         method: 'POST',
         path: '/api/admin/send-certificate-sg',
         title: 'Send Certificate (SG)',
-        description: 'Generates a certificate from the training provider\'s Google Slides template and sends it via email to Singapore-based learners.',
+        description: 'Legacy email-only flow: generates a temporary PDF attachment but does not store it as the enrollment certificate. Agents should use /api/external/certificates/issue.',
         headers: [
           { name: 'Content-Type', value: 'application/json', description: 'Request body format' },
         ],
@@ -1936,7 +1967,7 @@ const sections: EndpointSection[] = [
         method: 'POST',
         path: '/api/admin/send-certificate-gh',
         title: 'Send Certificate (GH)',
-        description: 'Generates a certificate from the training provider\'s Google Slides template and sends it via email to Ghana-based learners.',
+        description: 'Legacy email-only flow: generates a temporary PDF attachment but does not store it as the enrollment certificate. Agents should use /api/external/certificates/issue.',
         headers: [
           { name: 'Content-Type', value: 'application/json', description: 'Request body format' },
         ],

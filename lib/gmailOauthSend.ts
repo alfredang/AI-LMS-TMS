@@ -142,6 +142,7 @@ function encodeMimeHeaderWord(value: string): string {
 
 export interface GmailSendOptions {
   to: string;
+  cc?: string | string[];
   subject: string;
   text?: string;
   html?: string;
@@ -150,6 +151,13 @@ export interface GmailSendOptions {
   /** For durable outboxes: never retry a send with an uncertain outcome. */
   avoidDuplicateRetry?: boolean;
   messageId?: string;
+  attachments?: GmailAttachment[];
+}
+
+export interface GmailAttachment {
+  filename: string;
+  contentType?: string;
+  content: Buffer;
 }
 
 export interface GmailSendResult {
@@ -160,19 +168,59 @@ export interface GmailSendResult {
   retryable?: boolean;
 }
 
+function cleanHeader(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim();
+}
+
 function buildRawMessage(creds: GmailCreds, options: GmailSendOptions): string {
   // Encode only the display-name part of From (the <email> must stay raw ASCII).
-  const fromHeader = options.from || `${encodeMimeHeaderWord(creds.fromName)} <${creds.emailUser}>`;
+  const fromHeader = cleanHeader(options.from || `${encodeMimeHeaderWord(creds.fromName)} <${creds.emailUser}>`);
   const html = options.html || (options.text ? `<pre style="font-family: Arial, sans-serif; font-size: 14px; color: #333; white-space: pre-wrap;">${options.text}</pre>` : '');
+  const cc = Array.isArray(options.cc) ? options.cc : options.cc?.split(',');
 
   const headers = [
     `From: ${fromHeader}`,
-    `To: ${options.to}`,
+    `To: ${cleanHeader(options.to)}`,
   ];
-  if (options.replyTo) headers.push(`Reply-To: ${options.replyTo}`);
+  if (cc?.length) headers.push(`Cc: ${cc.map(cleanHeader).filter(Boolean).join(', ')}`);
+  if (options.replyTo) headers.push(`Reply-To: ${cleanHeader(options.replyTo)}`);
   if (options.messageId) headers.push(`Message-ID: ${options.messageId}`);
+
+  if (options.attachments?.length) {
+    const boundary = `----LmsMixed${Date.now()}${Math.random().toString(16).slice(2)}`;
+    headers.push(
+      `Subject: ${encodeMimeHeaderWord(cleanHeader(options.subject))}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: 8bit',
+      '',
+      html,
+    );
+    for (const attachment of options.attachments) {
+      const filename = cleanHeader(attachment.filename).replace(/"/g, '');
+      headers.push(
+        '',
+        `--${boundary}`,
+        `Content-Type: ${attachment.contentType || 'application/octet-stream'}; name="${filename}"`,
+        `Content-Disposition: attachment; filename="${filename}"`,
+        'Content-Transfer-Encoding: base64',
+        '',
+        attachment.content.toString('base64').replace(/.{1,76}/g, '$&\r\n').trim(),
+      );
+    }
+    headers.push('', `--${boundary}--`);
+    return Buffer.from(headers.join('\r\n'))
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  }
+
   headers.push(
-    `Subject: ${encodeMimeHeaderWord(options.subject)}`,
+    `Subject: ${encodeMimeHeaderWord(cleanHeader(options.subject))}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8',
     'Content-Transfer-Encoding: 8bit',

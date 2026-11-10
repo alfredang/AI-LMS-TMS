@@ -315,6 +315,7 @@ GET  /api/external/get-course-run         # Get course run details
 GET  /api/external/list-course-runs       # List course runs (with filters)
 GET  /api/external/list-trainers          # List trainers (with filters)
 POST /api/external/auto-create-learners   # Auto-create learner accounts
+POST /api/external/certificates/issue     # Resolve, issue/store, and email one learner certificate
 POST /api/external/sync-course-run-dates  # Sync dates with SSG
 GET  /api/external/backfill-enrollments   # Preview enrollment backfill
 POST /api/external/backfill-enrollments   # Execute enrollment backfill
@@ -323,6 +324,9 @@ GET  /api/external/wsq-schedule-gap       # What course runs are missing, and wh
 GET  /api/external/wsq-sync-status        # Outcome of the last schedule sync
 POST /api/external/create-course-run      # BROKEN (27 Aug 2026) — SSG rejects the payload shape. Use wsq-submit-runs.
 ```
+
+Orion/OpenClaw certificate tool registration and operating procedure:
+[docs/orion-certificate-tool.md](docs/orion-certificate-tool.md).
 
 ### Authentication
 
