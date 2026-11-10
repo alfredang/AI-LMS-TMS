@@ -1,4 +1,5 @@
 import { displayCourseCodes } from '@lib/utils/courseCodes';
+import { isLabsUnit } from '@lib/courseLessonUnits';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLms } from '@contexts/LmsContext';
@@ -2548,7 +2549,7 @@ export const CourseDetail: React.FC = () => {
         practicalAssessmentPublished: userRole === UserRole.Admin || userRole === UserRole.Developer || userRole === UserRole.TrainingProvider
             ? true
             : effectiveDetail?.practicalAssessmentPublished ?? false,
-        topics: effectiveUnits?.map((unit, index) => ({
+        topics: effectiveUnits?.filter(unit => !isLabsUnit(unit.title)).map((unit, index) => ({
             id: unit.id || `topic-${index}`,
             title: unit.title,
             subtopics: unit.subtopics?.map((subtopic: any) => ({

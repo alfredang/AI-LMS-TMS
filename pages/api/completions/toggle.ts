@@ -2,6 +2,7 @@ import { withAuth } from '@lib/auth/withAuth';
 import { NextApiRequest, NextApiResponse } from 'next';
 import pool from '../../../lib/db';
 import { cors } from '../../../lib/cors';
+import { NOT_LABS_UNIT_SQL } from '../../../lib/courseLessonUnits';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (cors(req, res)) return;
@@ -65,7 +66,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
              ON st.id = sc.subtopic_id
              AND sc.user_id = $1
              AND sc.course_run_id = $2
-           WHERE cr.id = $2
+           WHERE cr.id = $2 AND ${NOT_LABS_UNIT_SQL}
          ) progress_stats
        )
        WHERE user_id = $1 AND course_run_id = $2`,
