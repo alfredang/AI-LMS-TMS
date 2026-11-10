@@ -386,6 +386,13 @@ async function seedDefaults() {
             api_endpoint: '/api/external/sync-learners-to-mailerlite',
         },
         {
+            id: 'sync_course_availability',
+            name: 'Sync SSG Course Availability to Website',
+            description: 'Daily SSG authority check: refreshes each TGS course support period and future published runs, stores the resulting availability in TMS, then hides or restores the matching Tertiary Courses SG listing. Runs daily at 6:30 AM SGT before customer emails.',
+            cron_expression: '30 6 * * *', // 6:30 AM SGT daily
+            api_endpoint: '/api/external/sync-course-availability',
+        },
+        {
             id: 'funding_renewal_reminder',
             name: 'Funding Renewal Reminder Email',
             description: 'Daily email listing funded courses whose funding validity has expired or expires within 1 month and are not yet marked as renewed on the Course Funding Validity page. Recipients come from the FUNDING_REMINDER_RECIPIENTS env var (comma-separated); tenants without it log a skipped run. No email is sent when nothing is pending. Runs daily at 8:00 AM SGT.',
@@ -546,6 +553,10 @@ function getDirectHandler(taskId: string): TaskHandler | undefined {
         });
         directHandlers.set('funding_renewal_reminder', async () => {
             const { runAutomation } = await import('../../pages/api/external/funding-renewal-reminder');
+            return runAutomation();
+        });
+        directHandlers.set('sync_course_availability', async () => {
+            const { runAutomation } = await import('../../pages/api/external/sync-course-availability');
             return runAutomation();
         });
         directHandlers.set('sync_trainers_to_calendar', async () => {

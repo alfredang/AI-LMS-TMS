@@ -1366,6 +1366,13 @@ CREATE TABLE public.course (
     course_outline text,
     course_fees_include_gst text,
     renewed_status text,
+    ssg_wsq_support_from date,
+    ssg_wsq_support_to date,
+    ssg_wsq_support_refreshed_at timestamp with time zone,
+    course_availability_status text,
+    course_availability_reason text,
+    course_availability_checked_at timestamp with time zone,
+    ssg_has_future_run boolean,
     practical_performance_assessment_link text,
     written_assessment_link text,
     trainers_list text,
@@ -4560,6 +4567,13 @@ CREATE INDEX idx_company_invoice_batch_company ON public.company_invoice_batch U
 --
 
 CREATE INDEX idx_company_invoice_batch_course ON public.company_invoice_batch USING btree (course_reference_number);
+
+
+--
+-- Name: course_availability_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX course_availability_status_idx ON public.course USING btree (course_availability_status) WHERE (course_code ~~ 'TGS-%'::text);
 
 
 --
