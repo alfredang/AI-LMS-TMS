@@ -122,6 +122,14 @@ const ReviewScoreCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
   if (reviews.length === 0) return <span className="text-on-surface-secondary">-</span>;
   const avg = Math.round((reviews.reduce((a, r) => a + r.score, 0) / reviews.length) * 10) / 10;
   const lowCount = reviews.filter((r) => r.score <= 2).length;
+  // Question headings come from the first review that carries them (all share one form).
+  const questions = (reviews.find((r) => r.ratings && r.ratings.length > 0)?.ratings || []).map((q) => q.label);
+  const questionAvg = (qi: number): number | null => {
+    const vals = reviews
+      .map((r) => r.ratings?.[qi]?.score)
+      .filter((v): v is number => typeof v === 'number');
+    return vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
+  };
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap tabular-nums">
       <span className={`font-semibold ${scoreColor(avg)}`}>{fmtScore(avg)}</span>
@@ -153,7 +161,7 @@ const ReviewScoreCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
               if (e.target === e.currentTarget) setOpen(false);
             }}
           >
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-sm max-h-[80vh] flex flex-col">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
               <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-default">
                 <div className="min-w-0">
                   <h2 className="text-lg font-semibold leading-tight">Learner Review Scores</h2>
@@ -173,21 +181,52 @@ const ReviewScoreCell: React.FC<{ row: PayoutRow }> = ({ row }) => {
                   <Icon name={IconName.X} className="w-5 h-5" />
                 </button>
               </div>
-              <ul className="overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700 px-5">
-                {reviews.map((r, i) => (
-                  <li key={i} className="flex items-center justify-between gap-3 py-2 text-sm">
-                    <span className="truncate" title={r.learner_name}>{r.learner_name}</span>
-                    <span className={`font-semibold tabular-nums ${scoreColor(r.score)}`}>{fmtScore(r.score)}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-default text-sm">
-                <span className="text-on-surface-secondary">Class average</span>
-                <span className={`font-semibold tabular-nums ${scoreColor(avg)}`}>{fmtScore(avg)}</span>
+              <div className="overflow-auto px-5">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-[11px] uppercase tracking-wider text-on-surface-secondary">
+                    <tr className="border-b border-default">
+                      <th className="py-2 pr-3 font-semibold">Learner</th>
+                      {questions.map((q, i) => (
+                        <th key={i} className="py-2 px-2 font-semibold text-center leading-tight">{q}</th>
+                      ))}
+                      <th className="py-2 pl-2 font-semibold text-right">Average</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                    {reviews.map((r, i) => (
+                      <tr key={i}>
+                        <td className="py-2 pr-3 max-w-[12rem] truncate" title={r.learner_name}>{r.learner_name}</td>
+                        {questions.map((_, qi) => {
+                          const v = r.ratings?.[qi]?.score;
+                          return (
+                            <td key={qi} className={`py-2 px-2 text-center tabular-nums ${v == null ? 'text-on-surface-secondary' : scoreColor(v)}`}>
+                              {v == null ? '-' : fmtScore(v)}
+                            </td>
+                          );
+                        })}
+                        <td className={`py-2 pl-2 text-right font-semibold tabular-nums ${scoreColor(r.score)}`}>{fmtScore(r.score)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-default">
+                      <td className="py-2 pr-3 text-on-surface-secondary">Class average</td>
+                      {questions.map((_, qi) => {
+                        const v = questionAvg(qi);
+                        return (
+                          <td key={qi} className={`py-2 px-2 text-center font-semibold tabular-nums ${v == null ? 'text-on-surface-secondary' : scoreColor(v)}`}>
+                            {v == null ? '-' : fmtScore(v)}
+                          </td>
+                        );
+                      })}
+                      <td className={`py-2 pl-2 text-right font-bold tabular-nums ${scoreColor(avg)}`}>{fmtScore(avg)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
-              <p className="px-5 pb-4 text-xs text-on-surface-secondary">
-                Each score is the learner's average of the 1–5 star questions. No trainer payment is made for
-                learners scoring 2 or below.
+              <p className="px-5 py-3 border-t border-default text-xs text-on-surface-secondary">
+                Each learner's average is the mean of their 1–5 star answers; the class average is the mean of the
+                learners' averages. No trainer payment is made for learners averaging 2 or below.
               </p>
             </div>
           </div>,
